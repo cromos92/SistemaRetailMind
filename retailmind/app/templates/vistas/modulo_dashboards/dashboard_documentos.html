@@ -1,0 +1,276 @@
+{% load static %}
+{% load humanize %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+:root {
+    --rm-primary: #405189;
+    --rm-success: #0ab39c;
+    --rm-warning: #f7b84b;
+    --rm-danger: #f06548;
+    --rm-info: #299cdb;
+    --rm-purple: #6559cc;
+    --rm-teal: #02a8b5;
+}
+.page-content { min-height: 100vh; padding: 70px 0 60px; background: #f3f3f9; }
+.dashboard-header {
+    background: linear-gradient(135deg, var(--rm-primary) 0%, var(--rm-info) 100%);
+    color: #fff; border-radius: 12px; padding: 24px 30px; margin-bottom: 24px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+}
+.dashboard-header h4 { margin: 0; font-weight: 600; font-size: 1.4rem; }
+.filter-section {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+}
+.filter-section input, .filter-section select {
+    padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3);
+    background: rgba(255,255,255,.15); color: #fff; font-size: .875rem;
+}
+.filter-section input::placeholder { color: rgba(255,255,255,.6); }
+.filter-section option { color: #333; }
+.btn-filter {
+    padding: 8px 20px; border-radius: 8px; border: none;
+    background: rgba(255,255,255,.25); color: #fff; cursor: pointer; font-weight: 500;
+    transition: background .2s;
+}
+.btn-filter:hover { background: rgba(255,255,255,.4); }
+.kpi-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+}
+.kpi-card {
+    background: #fff; border-radius: 12px; padding: 20px; position: relative;
+    overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); transition: transform .2s;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.kpi-card::before {
+    content:''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+}
+.kpi-primary::before { background: var(--rm-primary); }
+.kpi-success::before { background: var(--rm-success); }
+.kpi-warning::before { background: var(--rm-warning); }
+.kpi-danger::before { background: var(--rm-danger); }
+.kpi-info::before { background: var(--rm-info); }
+.kpi-purple::before { background: var(--rm-purple); }
+.kpi-teal::before { background: var(--rm-teal); }
+.kpi-icon { font-size: 2rem; opacity: .15; position: absolute; top: 14px; right: 14px; }
+.kpi-value { font-size: 1.6rem; font-weight: 700; color: #495057; margin-bottom: 4px; }
+.kpi-label { font-size: .8rem; color: #878a99; text-transform: uppercase; letter-spacing: .5px; }
+.kpi-trend { font-size: .75rem; margin-top: 6px; }
+.kpi-trend.up { color: var(--rm-success); }
+.kpi-trend.down { color: var(--rm-danger); }
+.chart-card {
+    background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    margin-bottom: 24px; overflow: hidden;
+}
+.chart-header {
+    padding: 16px 20px; border-bottom: 1px solid #e9ebec;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.chart-header h6 { margin: 0; font-weight: 600; color: #495057; }
+.chart-body { padding: 20px; }
+.chart-container { position: relative; height: 320px; }
+.chart-container-sm { position: relative; height: 260px; }
+.loading-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+    background: rgba(255,255,255,.8); display: flex; align-items: center; justify-content: center;
+}
+.spinner { width: 48px; height: 48px; border: 4px solid #e9ecef; border-top-color: var(--rm-primary);
+    border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+
+            <div class="dashboard-header">
+                <div>
+                    <h4><i class="ri-file-list-line me-2"></i>Dashboard Documentos / DTE</h4>
+                    <small>Indicadores de facturación electrónica y documentos tributarios</small>
+                </div>
+                <div class="filter-section">
+                    <input type="date" id="fechaInicio">
+                    <input type="date" id="fechaFin">
+                    <button class="btn-filter" onclick="cargarDatos()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
+                </div>
+            </div>
+
+            <div class="kpi-grid" id="kpiGrid">
+                <div class="kpi-card kpi-primary">
+                    <i class="ri-file-list-3-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiTotal">--</div>
+                    <div class="kpi-label">Total DTEs</div>
+                    <div class="kpi-trend" id="kpiVariacion"></div>
+                </div>
+                <div class="kpi-card kpi-success">
+                    <i class="ri-file-text-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiFacturas">--</div>
+                    <div class="kpi-label">Facturas Electrónicas</div>
+                </div>
+                <div class="kpi-card kpi-warning">
+                    <i class="ri-file-damage-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiNC">--</div>
+                    <div class="kpi-label">Notas de Crédito</div>
+                </div>
+                <div class="kpi-card kpi-info">
+                    <i class="ri-truck-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiGuias">--</div>
+                    <div class="kpi-label">Guías de Despacho</div>
+                </div>
+                <div class="kpi-card kpi-teal">
+                    <i class="ri-checkbox-circle-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiAceptados">--</div>
+                    <div class="kpi-label">% Aceptados SII</div>
+                </div>
+                <div class="kpi-card kpi-purple">
+                    <i class="ri-money-dollar-circle-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiMonto">--</div>
+                    <div class="kpi-label">Monto Total</div>
+                </div>
+                <div class="kpi-card kpi-danger">
+                    <i class="ri-receipt-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiBoletas">--</div>
+                    <div class="kpi-label">Boletas Electrónicas</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="chart-card">
+                        <div class="chart-header"><h6>Evolución Mensual de Documentos</h6></div>
+                        <div class="chart-body"><div class="chart-container"><canvas id="chartEvolucion"></canvas></div></div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="chart-card">
+                        <div class="chart-header"><h6>Distribución por Tipo</h6></div>
+                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartTipo"></canvas></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="chart-card">
+                        <div class="chart-header"><h6>Estado de Documentos</h6></div>
+                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartEstado"></canvas></div></div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="chart-card">
+                        <div class="chart-header"><h6>Top 10 Emisores por Monto</h6></div>
+                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartEmisores"></canvas></div></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+
+<script>
+let charts = {};
+const colores = ['#405189','#0ab39c','#f7b84b','#f06548','#299cdb','#6559cc','#02a8b5','#e83e8c','#2b8a3e','#adb5bd'];
+
+function initDates() {
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('fechaInicio').value = inicio.toISOString().split('T')[0];
+    document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
+}
+
+function formatMoney(n) {
+    return '$' + Math.round(n).toLocaleString('es-CL');
+}
+
+function cargarDatos() {
+    const params = new URLSearchParams({
+        fecha_inicio: document.getElementById('fechaInicio').value,
+        fecha_fin: document.getElementById('fechaFin').value,
+    });
+    $.get('/app/api/dashboard-documentos/datos/?' + params, function(r) {
+        if (!r.success) return;
+        const k = r.kpis;
+        $('#kpiTotal').text(k.total_dtes.toLocaleString());
+        $('#kpiFacturas').text(k.facturas.toLocaleString());
+        $('#kpiNC').text(k.notas_credito.toLocaleString());
+        $('#kpiGuias').text(k.guias.toLocaleString());
+        $('#kpiBoletas').text(k.boletas.toLocaleString());
+        $('#kpiAceptados').text(k.pct_aceptados + '%');
+        $('#kpiMonto').text(formatMoney(k.monto_total));
+        if (k.variacion_mes !== 0) {
+            const cls = k.variacion_mes > 0 ? 'up' : 'down';
+            const icon = k.variacion_mes > 0 ? 'ri-arrow-up-line' : 'ri-arrow-down-line';
+            $('#kpiVariacion').html('<i class="' + icon + '"></i> ' + Math.abs(k.variacion_mes) + '% vs mes anterior').attr('class','kpi-trend ' + cls);
+        }
+        renderCharts(r);
+    });
+}
+
+function renderCharts(data) {
+    Object.values(charts).forEach(c => c.destroy());
+
+    charts.evolucion = new Chart(document.getElementById('chartEvolucion'), {
+        type: 'bar',
+        data: {
+            labels: data.evolucion.map(e => e.mes),
+            datasets: [{
+                label: 'Cantidad',
+                data: data.evolucion.map(e => e.cantidad),
+                backgroundColor: 'rgba(64,81,137,.7)',
+                borderRadius: 6,
+                yAxisID: 'y',
+            }, {
+                label: 'Monto ($)',
+                data: data.evolucion.map(e => e.monto),
+                type: 'line',
+                borderColor: '#0ab39c',
+                backgroundColor: 'rgba(10,179,156,.1)',
+                fill: true,
+                tension: .4,
+                yAxisID: 'y1',
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, position: 'left' },
+                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
+            }
+        }
+    });
+
+    charts.tipo = new Chart(document.getElementById('chartTipo'), {
+        type: 'doughnut',
+        data: {
+            labels: data.por_tipo.map(t => t.tipo_documento),
+            datasets: [{ data: data.por_tipo.map(t => t.cantidad), backgroundColor: colores }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+
+    charts.estado = new Chart(document.getElementById('chartEstado'), {
+        type: 'doughnut',
+        data: {
+            labels: data.por_estado.map(e => e.estado_dte),
+            datasets: [{ data: data.por_estado.map(e => e.cantidad), backgroundColor: colores }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+
+    charts.emisores = new Chart(document.getElementById('chartEmisores'), {
+        type: 'bar',
+        data: {
+            labels: data.top_emisores.map(e => (e.emisor__nombre || '').substring(0, 20)),
+            datasets: [{ label: 'Monto', data: data.top_emisores.map(e => e.monto), backgroundColor: 'rgba(41,156,219,.7)', borderRadius: 6 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+    });
+}
+
+$(function() { initDates(); cargarDatos(); });
+</script>

@@ -36,6 +36,8 @@ from .models import (
     METODO_PAGO_TICKET_CHOICES,
 )
 from django.contrib.auth.decorators import login_required
+from app.decorators import requiere_permiso
+from app.models.permisos import PermisoRol
 from django.contrib.sessions.models import Session
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
@@ -652,10 +654,12 @@ def rechazar_recepcion_api(request):
             hoy = timezone.now()
             
             # Marcar movimientos de salida como RECHAZADOS
+            # Los movimientos de TRASPASO_SALIDA se guardan con estado COMPLETADO (el stock ya salió),
+            # por eso buscamos tanto PENDIENTE_RECEPCION como COMPLETADO
             Movimientos_Producto.objects.filter(
                 dte=dte,
                 concepto='TRASPASO_SALIDA',
-                estado='PENDIENTE_RECEPCION'
+                estado__in=['PENDIENTE_RECEPCION', 'COMPLETADO']
             ).update(
                 estado='RECHAZADO',
                 observaciones=F('observaciones') + f'\n❌ RECHAZADO: {motivo_rechazo}'
@@ -3406,8 +3410,8 @@ def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsabl
                 observaciones=f"Lote automático - {concepto} - {observaciones or ''}"
             )
         except Exception as e:
-            print(f"⚠️ Error creando lote FIFO: {str(e)}")
-            # No fallar el movimiento principal si falla la creación del lote
+            import logging
+            logging.getLogger('app').warning("Error creando lote FIFO: %s", e)
     
     return movimiento
 
@@ -4069,7 +4073,7 @@ def reporte_movimientos_kardex(request):
     producto_talla = get_object_or_404(Producto_Talla, id=producto_talla_id)
     movimientos = Movimientos_Producto.objects.filter(
         ProductoTalla=producto_talla
-    ).order_by('fecha', 'hora')
+    ).select_related('sucursal_destino').order_by('fecha', 'hora')
     if fecha_inicio:
         from django.utils.dateparse import parse_date
         movimientos = movimientos.filter(fecha__gte=parse_date(fecha_inicio))
@@ -4104,7 +4108,8 @@ def reporte_movimientos_kardex(request):
             'costo': m.costo,
             'precio': m.precio,
             'responsable': m.responsable,
-            'referencia': referencia
+            'referencia': referencia,
+            'sucursal_destino': m.sucursal_destino.alias if m.sucursal_destino else ''
         })
     return JsonResponse({
         'success': True,
@@ -4138,7 +4143,7 @@ def reporte_kardex_agrupado(request):
     # Obtener todos los movimientos del producto (todas las tallas)
     movimientos = Movimientos_Producto.objects.filter(
         ProductoTalla__producto=producto
-    ).select_related('ProductoTalla', 'dte', 'ticket').order_by('fecha', 'hora')
+    ).select_related('ProductoTalla', 'dte', 'ticket', 'sucursal_destino').order_by('fecha', 'hora')
     
     if fecha_inicio:
         from django.utils.dateparse import parse_date
@@ -4159,12 +4164,13 @@ def reporte_kardex_agrupado(request):
         'precio_promedio': 0,
         'responsable': None,
         'referencia': None,
+        'sucursal_destino': '',
         'movimientos_detalle': []
     })
     
     for m in movimientos:
         # Crear clave única por fecha + concepto + responsable
-        key = f"{m.fecha}_{m.concepto}_{m.responsable}"
+        key = f"{m.fecha}_{m.concepto}_{m.responsable}_{m.sucursal_destino_id or ''}"
         
         grupo = movimientos_agrupados[key]
         if not grupo['fecha']:
@@ -4173,6 +4179,7 @@ def reporte_kardex_agrupado(request):
             grupo['concepto'] = m.concepto
             grupo['tipo_movimiento'] = m.tipo_movimiento
             grupo['responsable'] = m.responsable
+            grupo['sucursal_destino'] = m.sucursal_destino.alias if m.sucursal_destino else ''
             
             # Enriquecer referencia
             referencia = m.referencia_externa or ''
@@ -4211,6 +4218,7 @@ def reporte_kardex_agrupado(request):
             'saldo': saldo_acumulado,
             'responsable': grupo['responsable'],
             'referencia': grupo['referencia'],
+            'sucursal_destino': grupo['sucursal_destino'],
             'detalle_tallas': grupo['movimientos_detalle']  # Para mostrar en tooltip o modal
         })
     
@@ -4698,11 +4706,17 @@ def verGestionCompras(request):
     except Productos_Atributos.DoesNotExist:
         marca = color = genero = None
     
+    sucursal_id = request.session.get('idSucursalActual')
+    puede_eliminar_compra = PermisoRol.tiene_permiso(
+        request.user, 'gestion_compras', 'puede_eliminar', sucursal_id=sucursal_id
+    )
+
     context = {
         'empresas': empresas,
         'id_atributo_marca': marca.id if marca else 0,
         'id_atributo_color': color.id if color else 0,
         'id_atributo_genero': genero.id if genero else 0,
+        'puede_eliminar_compra': puede_eliminar_compra,
     }
     return render(request, 'vistas/modulo_compras/gestionCompras.html', context)
  
@@ -5020,36 +5034,92 @@ def crear_compra(request):
 
 @login_required
 @require_POST
+@requiere_permiso('gestion_compras', 'puede_eliminar')
 def eliminar_compra(request):
     """
-    Soft delete de una compra - cambia estado a ELIMINADA en lugar de borrar de DB.
+    Soft delete de una compra con validaciones de seguridad.
+    - mode=check: retorna info de la compra sin eliminar (para el diálogo de confirmación)
+    - mode=delete + force=True: elimina aunque tenga productos (sin recepciones)
+    - Bloquea eliminación si hay productos recepcionados
+    - Requiere permiso 'puede_eliminar' en 'gestion_compras'
     """
     from django.utils import timezone
-    
+    from django.db.models import Sum, Count
+
     try:
         data = json.loads(request.body)
         compra_id = data.get('compra_id')
-        
+        mode = data.get('mode', 'delete')
+        force = data.get('force', False)
+
         if not compra_id:
             return JsonResponse({'success': False, 'error': 'ID de compra no proporcionado'}, status=400)
-        
+
         compra = get_object_or_404(Compras, id=compra_id)
-        
-        # Verificar si ya está eliminada
+
         if compra.estado == 'ELIMINADA':
             return JsonResponse({'success': False, 'error': 'Esta compra ya fue eliminada'}, status=400)
-        
-        # Soft delete: cambiar estado a ELIMINADA
+
+        productos = Compras_Producto.objects.filter(compras=compra)
+        total_productos = productos.count()
+
+        tallas_qs = Compras_Producto_Talla.objects.filter(compra_producto__compras=compra)
+        total_unidades = tallas_qs.aggregate(u=Sum('stock'))['u'] or 0
+        total_recepcionado = tallas_qs.aggregate(r=Sum('unidades_recibidas'))['r'] or 0
+
+        recepciones_count = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__compra_producto__compras=compra
+        ).count()
+
+        info = {
+            'compra_id': compra.id,
+            'nombre': compra.nombre,
+            'proveedor': compra.empresa.nombre if compra.empresa else '-',
+            'total_productos': total_productos,
+            'total_unidades': total_unidades,
+            'total_recepcionado': total_recepcionado,
+            'recepciones_count': recepciones_count,
+            'tiene_productos': total_productos > 0,
+            'tiene_recepciones': total_recepcionado > 0,
+        }
+
+        if mode == 'check':
+            return JsonResponse({'success': True, 'info': info})
+
+        if total_recepcionado > 0:
+            return JsonResponse({
+                'success': False,
+                'blocked': True,
+                'error': (
+                    f'No se puede eliminar: la compra "{compra.nombre}" tiene '
+                    f'{total_recepcionado} unidades ya recepcionadas en inventario. '
+                    f'Eliminarla causaría inconsistencia en el stock.'
+                ),
+                'info': info,
+            }, status=400)
+
+        if total_productos > 0 and not force:
+            return JsonResponse({
+                'success': False,
+                'needs_confirmation': True,
+                'error': (
+                    f'La compra "{compra.nombre}" tiene {total_productos} producto(s) '
+                    f'con {total_unidades} unidades cargadas (sin recepcionar). '
+                    f'¿Deseas eliminarla de todas formas?'
+                ),
+                'info': info,
+            }, status=409)
+
         compra.estado = 'ELIMINADA'
         compra.fecha_eliminacion = timezone.now()
         compra.eliminado_por = request.user.get_full_name() or request.user.username
         compra.save()
-        
+
         return JsonResponse({
             'success': True,
             'message': f'Compra "{compra.nombre}" marcada como eliminada correctamente'
         })
-        
+
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
     except Exception as e:
@@ -7173,9 +7243,14 @@ def guardar_recepcion(request):
         data = json.loads(request.body)
         compra_id = data.get('compra_id')
         recepciones = data.get('recepciones', [])
+        sucursal_destino_id = data.get('sucursal_destino_id')
 
         if not compra_id or not recepciones:
             return JsonResponse({'success': False, 'error': 'Datos incompletos'}, status=400)
+
+        sucursal_destino = None
+        if sucursal_destino_id:
+            sucursal_destino = Sucursal.objects.filter(id=sucursal_destino_id).first()
 
         for item in recepciones:
             compra_talla_id = item['compra_producto_talla_id']
@@ -7183,25 +7258,31 @@ def guardar_recepcion(request):
             factura_id = item.get('factura_id')
 
             compra_talla = Compras_Producto_Talla.objects.select_related('compra_producto').get(id=compra_talla_id)
+            compra_producto = compra_talla.compra_producto
 
-            # 🔁 Buscar si existe recepción para esta talla CON LA MISMA FACTURA
-            # Esto permite múltiples recepciones con diferentes facturas
             recepcion_existente = Productos_Recepcionados.objects.filter(
                 compra_producto_talla=compra_talla,
-                dte_id=factura_id  # Mismo talla + misma factura = actualizar
+                dte_id=factura_id,
             ).first()
 
             if recepcion_existente:
-                # Misma factura → actualizar cantidad
                 recepcion_existente.stockArribado = cantidad
+                recepcion_existente.es_reposicion = compra_producto.es_reposicion
+                recepcion_existente.precio_anterior = compra_producto.precio_anterior
+                recepcion_existente.precio_nuevo = compra_producto.precio_nuevo
+                if sucursal_destino:
+                    recepcion_existente.sucursal_destino = sucursal_destino
                 recepcion_existente.save()
             else:
-                # Nueva factura o primera recepción → crear nuevo registro
                 Productos_Recepcionados.objects.create(
                     compra_producto_talla=compra_talla,
                     producto_talla=None,
                     dte_id=factura_id,
-                    stockArribado=cantidad
+                    stockArribado=cantidad,
+                    es_reposicion=compra_producto.es_reposicion,
+                    precio_anterior=compra_producto.precio_anterior,
+                    precio_nuevo=compra_producto.precio_nuevo,
+                    sucursal_destino=sucursal_destino,
                 )
 
         return JsonResponse({'success': True})
@@ -7359,6 +7440,16 @@ def obtener_productos_para_crear(request):
         'dte'  # NUEVO: incluir relación con Dte
     ).all()
 
+    # ✅ Filtrar por sucursal activa: cada sucursal solo ve sus propias recepciones.
+    # Se incluyen también las filas sin sucursal_destino (registros legacy / migración)
+    # para no perder datos históricos.
+    sucursal_activa_id = request.session.get('idSucursalActual')
+    if sucursal_activa_id:
+        from django.db.models import Q
+        qs = qs.filter(
+            Q(sucursal_destino_id=sucursal_activa_id) | Q(sucursal_destino__isnull=True)
+        )
+
     if anio:
         qs = qs.filter(fecha__year=anio)
     if compra_id:
@@ -7502,10 +7593,17 @@ def detalle_producto_para_crear(request, producto_id):
     compra_producto = get_object_or_404(Compras_Producto, id=producto_id)
 
     # Obtener tallas recepcionadas sin producto_talla aún - AGRUPAR SOLO POR TALLA
+    # ✅ Filtrar por sucursal activa para no mezclar recepciones entre sucursales.
+    sucursal_activa_id = request.session.get('idSucursalActual')
+    from django.db.models import Q as _Q
+    filtro_sucursal = (
+        _Q(sucursal_destino_id=sucursal_activa_id) | _Q(sucursal_destino__isnull=True)
+        if sucursal_activa_id else _Q()
+    )
     recepcionadas = Productos_Recepcionados.objects.filter(
         compra_producto_talla__compra_producto=compra_producto,
         producto_talla__isnull=True
-    ).values('compra_producto_talla__talla').annotate(
+    ).filter(filtro_sucursal).values('compra_producto_talla__talla').annotate(
         stock=Sum('stockArribado')
     ).order_by('compra_producto_talla__talla')
 
@@ -7567,6 +7665,10 @@ def obtener_recepciones_producto(request, producto_id):
         recepciones = Productos_Recepcionados.objects.filter(
             compra_producto_talla__compra_producto=compra_producto,
             producto_talla__isnull=True  # Solo las que no han sido procesadas
+        ).filter(
+            # ✅ Solo recepciones de la sucursal activa (legacy sin sucursal incluidos)
+            Q(sucursal_destino_id=request.session.get('idSucursalActual')) |
+            Q(sucursal_destino__isnull=True)
         ).select_related(
             'compra_producto_talla',
             'dte'
@@ -9195,10 +9297,14 @@ def crear_producto_desde_recepcion(request):
             
             # Obtener TODAS las recepciones de esta talla agrupadas por DTE
             # Usar __in para buscar todas las variantes de formato
+            # ✅ Filtrar por sucursal activa para no mezclar cantidades entre sucursales
+            from django.db.models import Q as _Q3
             recepciones = Productos_Recepcionados.objects.filter(
                 compra_producto_talla__compra_producto_id=producto_compra_id,
                 compra_producto_talla__talla__in=variantes_talla,
                 producto_talla__isnull=True  # Solo las no procesadas
+            ).filter(
+                _Q3(sucursal_destino=sucursal) | _Q3(sucursal_destino__isnull=True)
             ).values('dte_id').annotate(
                 cantidad=Sum('stockArribado')
             )
@@ -9268,12 +9374,18 @@ def crear_producto_desde_recepcion(request):
             )
 
     # 5. Actualizar tabla de recepción de productos
+    # ✅ Filtrar por sucursal: solo vinculamos las filas de ESTA sucursal,
+    # no las de otras sucursales que puedan tener el mismo compra_producto_id.
     if producto_compra_id:
+        from django.db.models import Q as _Q2
         for pt, stock, talla in tallas:
+            filtro_sucursal_update = (
+                _Q2(sucursal_destino=sucursal) | _Q2(sucursal_destino__isnull=True)
+            )
             Productos_Recepcionados.objects.filter(
                 compra_producto_talla__compra_producto_id=producto_compra_id,
                 compra_producto_talla__talla=talla
-            ).update(producto_talla=pt)
+            ).filter(filtro_sucursal_update).update(producto_talla=pt)
 
     # ========== 6. SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ==========
     # Sincroniza automáticamente Y crea alertas para que las sucursales revisen el cambio
@@ -9801,6 +9913,7 @@ def obtener_movimientos_producto(request):
             'responsable': m.responsable,
             'dte': m.dte.numero_documento if m.dte else None,
             'referencia_externa': referencia,
+            'sucursal_destino': m.sucursal_destino.alias if m.sucursal_destino else '',
         })
     
     return JsonResponse({
@@ -9828,7 +9941,14 @@ def obtener_productos(request):
     q = request.GET.get('q', '').strip()
     page = int(request.GET.get('page', 1))
     page_size = min(int(request.GET.get('page_size', 20)), 100)
-    sucursal_id = request.session.get('idSucursalActual')
+    # Allow explicit sucursal_id override; 'todas' means skip filter
+    sucursal_id_param = request.GET.get('sucursal_id', '')
+    if sucursal_id_param == 'todas':
+        sucursal_id = None
+    elif sucursal_id_param:
+        sucursal_id = sucursal_id_param
+    else:
+        sucursal_id = request.session.get('idSucursalActual')
     productos = Producto_Talla.objects.select_related('producto')
     if sucursal_id:
         productos = productos.filter(producto__sucursal_id=sucursal_id)
@@ -9873,7 +9993,11 @@ def obtener_productos(request):
             'stock': stock,
             'costo': prod.costo,
             'sobreprecio': prod.sobreprecio,
-            'precioventa': prod.precioventa
+            'precioventa': prod.precioventa,
+            'producto_id': prod.id,
+            'sucursal_id': prod.sucursal_id,
+            'sucursal_nombre': prod.sucursal.alias if prod.sucursal else '',
+            'excluir_de_analitica': prod.excluir_de_analitica,
         })
     return JsonResponse({
         'results': results,
@@ -9897,6 +10021,9 @@ def reporte_despachos_por_proveedor(request):
     fecha_inicio = request.GET.get('fecha_inicio')
     fecha_fin = request.GET.get('fecha_fin')
     dte_numero = request.GET.get('dte_numero')
+    # Por defecto se excluye la facturación interna (emisor == receptor).
+    # El frontend puede pasar excluir_interna=false para incluirlas.
+    excluir_interna = request.GET.get('excluir_interna', 'true').lower() != 'false'
     
     # Parámetros de paginación
     page = int(request.GET.get('page', 1))
@@ -9919,7 +10046,12 @@ def reporte_despachos_por_proveedor(request):
     ).exclude(
         tipo_documento__in=TIPOS_DOCUMENTO_EXCLUIDOS
     ).select_related('emisor', 'receptor')
-    
+
+    # Excluir facturación interna: DTEs donde el emisor y receptor son la misma empresa.
+    # Estos son auto-facturaciones que distorsionan los KPIs de compras a proveedores.
+    if excluir_interna:
+        dtes_query = dtes_query.exclude(emisor_id=F('receptor_id'))
+
     # Aplicar filtros - Buscar por emisor (que es el proveedor en compras)
     if proveedor_id:
         dtes_query = dtes_query.filter(emisor_id=proveedor_id)
@@ -9972,7 +10104,12 @@ def reporte_despachos_por_proveedor(request):
         resumen_global['total_unidades_ingresadas'] = ingresos_globales['total_cantidad'] or 0
         resumen_global['total_unidades_despachadas'] = abs(egresos_globales['total_cantidad'] or 0)
         resumen_global['total_monto_compras'] = float(ingresos_globales['total_costo'] or 0)
-        
+
+        # Unidades totales comprometidas en DTEs y pendientes de ingreso
+        total_en_dtes = Dte_Productos.objects.filter(dte_id__in=all_dtes_ids).aggregate(t=Sum('stock'))['t'] or 0
+        resumen_global['total_unidades_en_dtes'] = total_en_dtes
+        resumen_global['total_unidades_pendientes'] = max(0, total_en_dtes - resumen_global['total_unidades_ingresadas'])
+
         # Calcular monto mínimo y máximo
         montos_dtes = dtes_query.aggregate(
             monto_min=Min('monto_con_iva'),
@@ -10012,7 +10149,11 @@ def reporte_despachos_por_proveedor(request):
         total_ingresado = ingresos['total_cantidad'] or 0
         total_despachado = abs(despachos['total_cantidad'] or 0)  # Valor absoluto porque egresos son negativos
         saldo_restante = total_ingresado - total_despachado
-        
+
+        # Unidades comprometidas en el DTE y pendientes de ingreso
+        unidades_en_dte = Dte_Productos.objects.filter(dte=dte).aggregate(t=Sum('stock'))['t'] or 0
+        unidades_pendientes_ingreso = max(0, unidades_en_dte - total_ingresado)
+
         # Calcular montos
         monto_ingresado = ingresos['total_costo'] or 0
         monto_despachado = abs(despachos['total_costo'] or 0)
@@ -10026,6 +10167,8 @@ def reporte_despachos_por_proveedor(request):
             'proveedor_id': dte.emisor.id if dte.emisor else None,
             'proveedor_nombre': dte.emisor.nombre if dte.emisor else 'Sin proveedor',
             'proveedor_rut': dte.emisor.rut if dte.emisor else '-',
+            'unidades_en_dte': unidades_en_dte,
+            'unidades_pendientes_ingreso': unidades_pendientes_ingreso,
             'total_ingresado': total_ingresado,
             'total_despachado': total_despachado,
             'saldo_restante': saldo_restante,
@@ -10040,6 +10183,7 @@ def reporte_despachos_por_proveedor(request):
         'success': True,
         'data': resultado,
         'resumen': resumen_global,
+        'excluir_interna': excluir_interna,
         'pagination': {
             'current_page': page,
             'total_pages': total_pages,
@@ -10905,50 +11049,48 @@ def crear_lote_producto(producto_talla, cantidad, costo_unitario, sobreprecio_un
     )
     
     return lote
-def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=None, 
+def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=None,
                        observaciones=None, referencia_externa=None):
     """
-    Consume stock usando metodología FIFO (First In, First Out)
-    Retorna el costo total consumido y los lotes utilizados
+    Consume lotes FIFO (First In, First Out) sin modificar stock ni crear movimientos.
+    Stock y movimientos los gestiona registrar_movimiento_producto (unico escritor).
+    Retorna (costo_total_consumido, lotes_utilizados).
     """
-    from .models import LoteProducto, Movimientos_Producto
-    
-    print(f"🔍 FIFO LLAMADO: SKU {producto_talla.sku}, Cantidad: {cantidad_requerida}, Ticket: {ticket.correlativo if ticket else 'N/A'}")
-    
+    from .models import LoteProducto
+
+    import logging
+    _fifo_logger = logging.getLogger('app')
+    _fifo_logger.info("FIFO: SKU %s, Cantidad: %s, Ticket: %s", producto_talla.sku, cantidad_requerida, ticket.correlativo if ticket else 'N/A')
+
     if cantidad_requerida <= 0:
         return 0, []
-    
-    # Obtener lotes disponibles ordenados por fecha de ingreso (FIFO)
+
     lotes_disponibles = LoteProducto.objects.filter(
         producto_talla=producto_talla,
         cantidad_disponible__gt=0,
         activo=True,
         agotado=False
     ).order_by('fecha_ingreso')
-    
+
     if not lotes_disponibles.exists():
         raise Exception(f'No hay stock disponible para {producto_talla.producto.articulo} - Talla {producto_talla.talla}')
-    
+
     cantidad_restante = cantidad_requerida
     costo_total_consumido = 0
     lotes_utilizados = []
-    
+
     for lote in lotes_disponibles:
         if cantidad_restante <= 0:
             break
-            
-        # Calcular cuánto podemos consumir de este lote
+
         cantidad_a_consumir = min(cantidad_restante, lote.cantidad_disponible)
-        
-        # Actualizar el lote
+
         lote.cantidad_disponible -= cantidad_a_consumir
         lote.save()
-        
-        # Calcular costo de esta porción
+
         costo_porcion = cantidad_a_consumir * lote.costo_unitario
         costo_total_consumido += costo_porcion
-        
-        # Registrar el detalle del consumo
+
         lotes_utilizados.append({
             'lote_id': lote.id,
             'cantidad_consumida': cantidad_a_consumir,
@@ -10957,49 +11099,14 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
             'fecha_ingreso_lote': lote.fecha_ingreso,
             'dte_origen': lote.dte.numero_documento if lote.dte else None
         })
-        
+
         cantidad_restante -= cantidad_a_consumir
-    
+
     if cantidad_restante > 0:
         raise Exception(f'Stock insuficiente. Faltan {cantidad_restante} unidades')
-    
-    # Actualizar stock del producto_talla
-    stock_antes_descuento = producto_talla.stock
-    producto_talla.stock -= cantidad_requerida
-    producto_talla.save()
-    print(f"🔍 FIFO DESCUENTO: SKU {producto_talla.sku} - Stock {stock_antes_descuento} → {producto_talla.stock} (Descontado: {cantidad_requerida})")
-    
-    # Crear movimiento de EGRESO en Movimientos_Producto
-    costo_promedio = costo_total_consumido // cantidad_requerida if cantidad_requerida > 0 else 0
-    
-    sucursal_origen_mov = ticket.sucursal if ticket and ticket.sucursal else getattr(producto_talla.producto, 'sucursal', None)
-    sobreprecio_mov = producto_talla.producto.sobreprecio if producto_talla.producto and hasattr(producto_talla.producto, 'sobreprecio') else 0
-    
-    # ✅ Determinar referencia externa: usar DTE si está disponible, si no usar correlativo del ticket
-    if referencia_externa:
-        ref_final = referencia_externa
-    elif ticket:
-        ref_final = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
-    else:
-        ref_final = None
-    
-    movimiento = Movimientos_Producto.objects.create(
-        ticket=ticket,
-        ProductoTalla=producto_talla,
-        sucursal_origen=sucursal_origen_mov,
-        cantidad=-cantidad_requerida,  # Negativo para EGRESO
-        costo=costo_promedio,
-        precio=producto_talla.producto.precioventa if producto_talla.producto else 0,
-        sobreprecio=sobreprecio_mov,
-        concepto='VENTA_TICKET' if ticket else 'VENTA_DIRECTA',
-        tipo_movimiento='EGRESO',
-        responsable=responsable if isinstance(responsable, str) else responsable.username,
-        observaciones=observaciones or f'Consumo FIFO - {cantidad_requerida} unidades',
-        referencia_externa=ref_final
-    )
-    
-    print(f"✓ Movimiento #{movimiento.id} creado: {movimiento.concepto} - Cantidad: {movimiento.cantidad} - SKU: {producto_talla.sku}")
-    
+
+    _fifo_logger.info("FIFO consumido: SKU %s, Costo total: %s, Lotes: %s", producto_talla.sku, costo_total_consumido, len(lotes_utilizados))
+
     return costo_total_consumido, lotes_utilizados
 
 def obtener_valor_inventario_fifo(producto_talla):
@@ -11176,12 +11283,8 @@ def crear_lote_manual(request):
             fecha_vencimiento=parse_date(fecha_vencimiento) if fecha_vencimiento else None,
             observaciones=observaciones
         )
-        
-        # Actualizar stock del producto
-        producto_talla.stock += cantidad
-        producto_talla.save()
-        
-        # Registrar movimiento
+
+        # registrar_movimiento_producto is the single writer of stock + movements
         registrar_movimiento_producto(
             producto_talla=producto_talla,
             concepto='AJUSTE_POSITIVO',
@@ -11223,13 +11326,10 @@ def ajustar_lote(request, lote_id):
         lote.cantidad_disponible = nueva_cantidad
         lote.observaciones = f"{lote.observaciones or ''}\nAjuste: {observaciones}"
         lote.save()
-        
-        # Actualizar stock del producto
+
         producto_talla = lote.producto_talla
-        producto_talla.stock += diferencia
-        producto_talla.save()
-        
-        # Registrar movimiento de ajuste
+
+        # registrar_movimiento_producto is the single writer of stock + movements
         responsable = request.session.get('nombreUsuario', 'Sistema')
         concepto = 'AJUSTE_POSITIVO' if diferencia > 0 else 'AJUSTE_NEGATIVO'
         
@@ -14751,25 +14851,10 @@ def emitir_dte(request):
         empresa_id = request.session.get('idEmpresaActual')
         
         if not sucursal_id or not empresa_id:
-            # Intentar obtener la primera sucursal disponible como fallback
-            try:
-                primera_sucursal = Sucursal.objects.first()
-                if primera_sucursal:
-                    sucursal_id = primera_sucursal.id
-                    empresa_id = primera_sucursal.empresa.id
-                    # Establecer en sesión
-                    request.session['idSucursalActual'] = sucursal_id
-                    request.session['idEmpresaActual'] = empresa_id
-                else:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'No hay sucursales configuradas en el sistema'
-                    }, status=400)
-            except Exception as e:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Error al obtener datos de sesión: {str(e)}'
-                }, status=400)
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa en la sesión. Selecciona una sucursal antes de emitir.'
+            }, status=400)
         
         # Obtener objetos según tipo de despacho
         emisor = get_object_or_404(Empresa, id=empresa_id)
@@ -14994,6 +15079,8 @@ def emitir_dte(request):
                 # Gestión de stock y movimientos según tipo de despacho
                 if metodo_despacho == 'externo':
                     # DESPACHO EXTERNO: Crear movimiento de egreso (venta a cliente)
+                    # Boleta = venta al público, Factura = venta mayorista
+                    concepto_venta = 'VENTA_PUBLICO' if 'BOLETA' in tipo_doc else 'VENTA_MAYORISTA'
                     Movimientos_Producto.objects.create(
                         dte=dte,
                         ProductoTalla=talla,
@@ -15003,7 +15090,7 @@ def emitir_dte(request):
                         costo=producto.costo,
                         sobreprecio=producto.sobreprecio,
                         precio=int(precio),
-                        concepto='VENTA_MAYORISTA',
+                        concepto=concepto_venta,
                         tipo_movimiento='EGRESO',
                         estado='COMPLETADO',
                         responsable=request.user.username,
@@ -15653,29 +15740,35 @@ def api_atributos_compras(request):
         atributos_data = {}
         
         # Obtener los atributos principales: Marca, Color, Género
-        # Usar claves normalizadas (sin tildes) para facilitar uso en JavaScript
+        # Cada entrada tiene (nombres_a_buscar[], clave_json)
         atributos_config = [
-            ('Marca', 'marca'),
-            ('Color', 'color'),
-            ('Género', 'genero'),  # Clave sin tilde
+            (['Marca'], 'marca'),
+            (['Color'], 'color'),
+            (['Género', 'Sexo'], 'genero'),
         ]
         
-        for nombre_db, clave_json in atributos_config:
-            try:
-                atributo = Productos_Atributos.objects.get(nombre__iexact=nombre_db)
-                opciones = AtributoOpcion.objects.filter(
-                    atributo=atributo
-                ).values_list('valor', flat=True).order_by('valor')
-                
-                atributos_data[clave_json] = {
-                    'id': atributo.id,
-                    'nombre': atributo.nombre,
-                    'opciones': list(opciones)
-                }
-            except Productos_Atributos.DoesNotExist:
+        for nombres_db, clave_json in atributos_config:
+            found = False
+            for nombre_db in nombres_db:
+                try:
+                    atributo = Productos_Atributos.objects.get(nombre__iexact=nombre_db)
+                    opciones = AtributoOpcion.objects.filter(
+                        atributo=atributo
+                    ).values_list('valor', flat=True).order_by('valor')
+                    
+                    atributos_data[clave_json] = {
+                        'id': atributo.id,
+                        'nombre': atributo.nombre,
+                        'opciones': list(opciones)
+                    }
+                    found = True
+                    break
+                except Productos_Atributos.DoesNotExist:
+                    continue
+            if not found:
                 atributos_data[clave_json] = {
                     'id': None,
-                    'nombre': nombre_db,
+                    'nombre': nombres_db[0],
                     'opciones': []
                 }
         
@@ -15734,16 +15827,21 @@ def descargar_formato_importacion_compras(request):
         import io
         
         # ========== OBTENER ATRIBUTOS DEL SISTEMA ==========
-        def get_atributo_opciones(nombre_atributo):
-            try:
-                atributo = Productos_Atributos.objects.get(nombre__iexact=nombre_atributo)
-                return list(AtributoOpcion.objects.filter(atributo=atributo).values_list('valor', flat=True).order_by('valor'))
-            except Productos_Atributos.DoesNotExist:
-                return []
+        def get_atributo_opciones(*nombres_atributo):
+            """Busca por múltiples nombres (fallback) y retorna TODAS las opciones."""
+            for nombre in nombres_atributo:
+                try:
+                    atributo = Productos_Atributos.objects.get(nombre__iexact=nombre)
+                    return list(AtributoOpcion.objects.filter(
+                        atributo=atributo
+                    ).values_list('valor', flat=True).order_by('valor'))
+                except Productos_Atributos.DoesNotExist:
+                    continue
+            return []
         
         marcas = get_atributo_opciones('Marca') or ['Nike', 'Adidas', 'Puma', 'Reebok', 'New Balance']
         colores = get_atributo_opciones('Color') or ['Negro', 'Blanco', 'Azul', 'Rojo', 'Gris']
-        generos = get_atributo_opciones('Género') or ['Hombre', 'Mujer', 'Unisex', 'Niño', 'Niña']
+        generos = get_atributo_opciones('Género', 'Sexo') or ['Hombre', 'Mujer', 'Unisex', 'Niño', 'Niña']
         
         # Obtener tallas únicas del sistema
         tallas_productos = list(Producto_Talla.objects.values_list('talla', flat=True).distinct())
@@ -15815,94 +15913,74 @@ def descargar_formato_importacion_compras(request):
                 cell.fill = example_fill
                 cell.border = thin_border
         
-        # ========== DATA VALIDATION (LISTAS DESPLEGABLES) ==========
-        NUM_FILAS = 200  # Filas con validación
-        
-        # Crear listas de opciones (máx ~50 valores por rendimiento)
-        marcas_str = ','.join(marcas[:50])
-        colores_str = ','.join(colores[:50])
-        generos_str = ','.join(generos[:50])
-        tallas_str = ','.join([str(t) for t in tallas[:60]])
-        
-        # Validación para Marca (columna C)
-        dv_marca = DataValidation(
-            type="list",
-            formula1=f'"{marcas_str}"',
-            allow_blank=True,
-            showDropDown=False,  # False = mostrar dropdown
-            showInputMessage=True,
-            showErrorMessage=False,  # Permite valores nuevos
-            promptTitle="Marca",
-            prompt="Selecciona una marca de la lista o escribe una nueva"
-        )
-        dv_marca.add(f'C2:C{NUM_FILAS}')
-        ws.add_data_validation(dv_marca)
-        
-        # Validación para Color (columna D)
-        dv_color = DataValidation(
-            type="list",
-            formula1=f'"{colores_str}"',
-            allow_blank=True,
-            showDropDown=False,
-            showInputMessage=True,
-            showErrorMessage=False,
-            promptTitle="Color",
-            prompt="Selecciona un color de la lista o escribe uno nuevo"
-        )
-        dv_color.add(f'D2:D{NUM_FILAS}')
-        ws.add_data_validation(dv_color)
-        
-        # Validación para Género (columna E)
-        dv_genero = DataValidation(
-            type="list",
-            formula1=f'"{generos_str}"',
-            allow_blank=True,
-            showDropDown=False,
-            showInputMessage=True,
-            showErrorMessage=False,
-            promptTitle="Género",
-            prompt="Selecciona un género de la lista o escribe uno nuevo"
-        )
-        dv_genero.add(f'E2:E{NUM_FILAS}')
-        ws.add_data_validation(dv_genero)
-        
-        # Validación para Talla (columna I)
-        dv_talla = DataValidation(
-            type="list",
-            formula1=f'"{tallas_str}"',
-            allow_blank=True,
-            showDropDown=False,
-            showInputMessage=True,
-            showErrorMessage=False,
-            promptTitle="Talla",
-            prompt="Selecciona una talla de la lista o escribe una nueva"
-        )
-        dv_talla.add(f'I2:I{NUM_FILAS}')
-        ws.add_data_validation(dv_talla)
-        
         # Fijar primera fila
         ws.freeze_panes = 'A2'
         
-        # ========== HOJA 2: VALORES VÁLIDOS ==========
+        # ========== HOJA OCULTA: FUENTE DE DATOS PARA DROPDOWNS ==========
+        # Excel limita formula1 inline a 255 chars, así que usamos rangos con nombre
+        ws_data = wb.create_sheet(title="_Datos")
+        
+        listas_config = [
+            ('A', 'marcas', marcas),
+            ('B', 'colores', colores),
+            ('C', 'generos', generos),
+            ('D', 'tallas', [str(t) for t in tallas]),
+        ]
+        
+        for col_letter, nombre, valores in listas_config:
+            for i, val in enumerate(valores):
+                ws_data.cell(row=i + 1, column=ord(col_letter) - 64, value=val)
+        
+        ws_data.sheet_state = 'hidden'
+        
+        # ========== DATA VALIDATION CON RANGOS (SIN LÍMITE DE 255 CHARS) ==========
+        NUM_FILAS = 200
+        
+        validaciones = [
+            ('C', 'A', len(marcas), "Marca", "Selecciona una marca o escribe una nueva"),
+            ('D', 'B', len(colores), "Color", "Selecciona un color o escribe uno nuevo"),
+            ('E', 'C', len(generos), "Género", "Selecciona un género o escribe uno nuevo"),
+            ('I', 'D', len(tallas), "Talla", "Selecciona una talla o escribe una nueva"),
+        ]
+        
+        for col_destino, col_fuente, cant, titulo, prompt_text in validaciones:
+            if cant > 0:
+                formula = f"_Datos!${col_fuente}$1:${col_fuente}${cant}"
+                dv = DataValidation(
+                    type="list",
+                    formula1=formula,
+                    allow_blank=True,
+                    showDropDown=False,
+                    showInputMessage=True,
+                    showErrorMessage=False,
+                    promptTitle=titulo,
+                    prompt=prompt_text
+                )
+                dv.add(f'{col_destino}2:{col_destino}{NUM_FILAS}')
+                ws.add_data_validation(dv)
+        
+        # ========== HOJA 2: VALORES VÁLIDOS (REFERENCIA VISIBLE) ==========
         ws_valores = wb.create_sheet(title="Valores Válidos")
         
-        # Título
         ws_valores.merge_cells('A1:D1')
-        ws_valores['A1'] = '📋 VALORES VÁLIDOS PARA ATRIBUTOS'
+        ws_valores['A1'] = 'VALORES VÁLIDOS PARA ATRIBUTOS'
         ws_valores['A1'].font = Font(bold=True, size=14)
         
         ws_valores.merge_cells('A2:D2')
-        ws_valores['A2'] = 'Usa estos valores o escribe nuevos. Los nuevos se crearán automáticamente.'
+        ws_valores['A2'] = 'Usa estos valores o escribe nuevos. Los nuevos se crearán automáticamente al importar.'
         ws_valores['A2'].font = Font(italic=True, color="666666")
         
-        # Headers de valores
-        val_headers = ['🏷️ MARCAS', '🎨 COLORES', '👤 GÉNEROS', '📏 TALLAS']
-        for col, header in enumerate(val_headers, 1):
+        val_headers = [
+            (f'MARCAS ({len(marcas)})', "E6F0FF"),
+            (f'COLORES ({len(colores)})', "E6FFE6"),
+            (f'GÉNEROS ({len(generos)})', "FFE6E6"),
+            (f'TALLAS ({len(tallas)})', "FFF0E6"),
+        ]
+        for col, (header, color) in enumerate(val_headers, 1):
             cell = ws_valores.cell(row=4, column=col, value=header)
             cell.font = Font(bold=True)
-            cell.fill = PatternFill(start_color="E6F0FF", end_color="E6F0FF", fill_type="solid")
+            cell.fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
         
-        # Datos
         max_rows = max(len(marcas), len(colores), len(generos), len(tallas))
         for i in range(max_rows):
             ws_valores.cell(row=5+i, column=1, value=marcas[i] if i < len(marcas) else '')
@@ -15910,7 +15988,6 @@ def descargar_formato_importacion_compras(request):
             ws_valores.cell(row=5+i, column=3, value=generos[i] if i < len(generos) else '')
             ws_valores.cell(row=5+i, column=4, value=str(tallas[i]) if i < len(tallas) else '')
         
-        # Anchos
         ws_valores.column_dimensions['A'].width = 25
         ws_valores.column_dimensions['B'].width = 20
         ws_valores.column_dimensions['C'].width = 15
@@ -16058,6 +16135,12 @@ def ticket_venta(request):
         'necesita_seleccionar_sucursal': not sucursal_actual,
         'tiene_correlativo': tiene_correlativo,
         'correlativo_info': correlativo_info,
+        'qz_config': {
+            'habilitado': getattr(sucursal_actual, 'usar_qz_tray', False) if sucursal_actual else False,
+            'nombre_impresora': (
+                getattr(sucursal_actual, 'nombre_impresora_termica', 'EPSON TM-T20II') or 'EPSON TM-T20II'
+            ) if sucursal_actual else 'EPSON TM-T20II',
+        },
     }
     
     return render(request, 'vistas/modulo_ventas/ticket_venta.html', context)
@@ -16975,7 +17058,8 @@ def _obtener_tipos_principales_correlativos():
         'GUIA',
         'NOTA DE CREDITO',
         'NOTA DE DEBITO',
-        'TICKET'
+        'TICKET',
+        'TICKET CAMBIO'
     ]
 
 
@@ -16994,6 +17078,8 @@ def _es_tipo_empresa(tipo_documento):
 
 def _rango_correlativo_por_tipo(tipo_documento):
     if tipo_documento == 'TICKET':
+        return 1, 999999
+    if tipo_documento == 'TICKET CAMBIO':
         return 1, 999999
     if tipo_documento in ['FACTURA ELECTRONICA', 'BOLETA ELECTRONICA', 'BOLETA PAPEL']:
         return 1, 100000
@@ -17274,6 +17360,7 @@ def guardar_correlativo(request):
         normalizaciones = {
             'COMPRA': 'COMPRA',
             'TICKET': 'TICKET',
+            'TICKET CAMBIO': 'TICKET CAMBIO',
             'TRASPASO': 'TRASPASO',
             'AJUSTE': 'AJUSTE'
         }
@@ -17567,9 +17654,57 @@ def obtener_existencias_reporte(request):
         productos_talla = productos_talla.order_by('producto__articulo', 'producto__sucursal__alias', 'talla')
         
         total_registros = productos_talla.count()
+        total_articulos = productos_talla.values('producto_id').distinct().count()
         total_paginas = (total_registros + por_pagina - 1) // por_pagina  # Redondeo hacia arriba
         
-        logger.info(f'Total productos_talla después de filtros: {total_registros}, páginas: {total_paginas}')
+        logger.info(f'Total productos_talla después de filtros: {total_registros}, artículos únicos: {total_articulos}, páginas: {total_paginas}')
+        
+        # ========== AGREGADOS GLOBALES (todo el dataset filtrado, independiente de paginación) ==========
+        from django.db.models import Count as DjCount
+        
+        # Stock total y conteos por estado a nivel de producto (agrupado por producto_id)
+        product_stocks = productos_talla.values('producto_id').annotate(
+            stock_producto=Sum('stock')
+        )
+        total_stock_global = int(productos_talla.aggregate(
+            total=Coalesce(Sum('stock'), Value(0, output_field=IntegerField()))
+        )['total'])
+        sin_stock_global = product_stocks.filter(stock_producto=0).count()
+        bajo_stock_global = product_stocks.filter(stock_producto__gt=0, stock_producto__lt=10).count()
+        
+        # Valor venta total (stock * precioventa)
+        valor_venta_global = float(
+            productos_talla.aggregate(
+                total=Coalesce(
+                    Sum(F('stock') * F('producto__precioventa')),
+                    Value(0, output_field=IntegerField())
+                )
+            )['total'] or 0
+        )
+        
+        # Valor FIFO total (lotes activos con cantidad disponible)
+        valor_fifo_global = float(
+            LoteProducto.objects.filter(
+                producto_talla__in=productos_talla,
+                cantidad_disponible__gt=0,
+                activo=True
+            ).aggregate(
+                total=Coalesce(
+                    Sum(F('cantidad_disponible') * F('costo_unitario')),
+                    Value(0, output_field=IntegerField())
+                )
+            )['total'] or 0
+        )
+        
+        kpis_globales = {
+            'total_stock': total_stock_global,
+            'sin_stock': sin_stock_global,
+            'bajo_stock': bajo_stock_global,
+            'valor_inventario_fifo': valor_fifo_global,
+            'valor_venta_total': valor_venta_global,
+        }
+        
+        logger.info(f'KPIs globales: stock={total_stock_global}, sin_stock={sin_stock_global}, bajo_stock={bajo_stock_global}, fifo={valor_fifo_global:.0f}, venta={valor_venta_global:.0f}')
         
         # ========== PAGINACIÓN ==========
         inicio = (pagina - 1) * por_pagina
@@ -17657,10 +17792,12 @@ def obtener_existencias_reporte(request):
             'existencias': existencias,
             'sucursales': sucursales,
             'categorias': categorias,
+            'kpis_globales': kpis_globales,
             'paginacion': {
                 'pagina_actual': pagina,
                 'por_pagina': por_pagina,
                 'total_registros': total_registros,
+                'total_articulos': total_articulos,
                 'total_paginas': total_paginas,
                 'tiene_siguiente': pagina < total_paginas,
                 'tiene_anterior': pagina > 1
@@ -18449,3 +18586,98 @@ def descartar_todas_notificaciones_dte(request):
             'success': False,
             'error': str(e)
         })
+
+
+# ================================================================
+# QZ TRAY — IMPRESIÓN TÉRMICA SILENCIOSA
+# ================================================================
+
+@login_required
+def qz_certificado(request):
+    """
+    Sirve el certificado digital público para que QZ Tray verifique
+    la firma de las peticiones del browser.
+    GET /app/qz/certificado/ → retorna digital-certificate.txt
+    """
+    from pathlib import Path
+    from django.conf import settings as django_settings
+
+    cert_path = Path(django_settings.QZ_CERTIFICATE_PATH)
+    if not cert_path.exists():
+        return HttpResponse(
+            '# Certificado QZ Tray no configurado.\n'
+            '# Ejecute: openssl req -newkey rsa:2048 -nodes -keyout private-key.pem '
+            '-x509 -days 3650 -out digital-certificate.txt',
+            content_type='text/plain',
+            status=404
+        )
+    return HttpResponse(cert_path.read_text(encoding='utf-8'), content_type='text/plain')
+
+
+@login_required
+def qz_firmar(request):
+    """
+    Firma el token que QZ Tray envía al browser para autenticar la conexión.
+    POST /app/qz/firmar/
+    Body: { "request": "<string_a_firmar>" }
+    Retorna: { "firma": "<base64>" }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    try:
+        import base64
+        from pathlib import Path
+        from django.conf import settings as django_settings
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.hazmat.backends import default_backend
+
+        data = json.loads(request.body)
+        mensaje = data.get('request', '')
+
+        key_path = Path(django_settings.QZ_PRIVATE_KEY_PATH)
+        if not key_path.exists():
+            return JsonResponse(
+                {'error': 'Clave privada no encontrada. Configure QZ Tray primero.'},
+                status=500
+            )
+
+        clave_privada = serialization.load_pem_private_key(
+            key_path.read_bytes(),
+            password=None,
+            backend=default_backend()
+        )
+        firma = clave_privada.sign(
+            mensaje.encode('utf-8'),
+            padding.PKCS1v15(),
+            hashes.SHA512()
+        )
+        return JsonResponse({'firma': base64.b64encode(firma).decode('utf-8')})
+
+    except ImportError:
+        return JsonResponse(
+            {'error': 'Librería cryptography no instalada. Ejecute: pip install cryptography'},
+            status=500
+        )
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def qz_config_sucursal(request):
+    """
+    GET /app/qz/config/ → devuelve la configuración QZ de la sucursal activa en sesión.
+    """
+    sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+    if not sucursal_id:
+        return JsonResponse({'habilitado': False, 'impresora': 'EPSON TM-T20II'})
+
+    try:
+        sucursal = Sucursal.objects.get(id=sucursal_id)
+        return JsonResponse({
+            'habilitado': getattr(sucursal, 'usar_qz_tray', False),
+            'impresora': getattr(sucursal, 'nombre_impresora_termica', 'EPSON TM-T20II') or 'EPSON TM-T20II',
+        })
+    except Sucursal.DoesNotExist:
+        return JsonResponse({'habilitado': False, 'impresora': 'EPSON TM-T20II'})

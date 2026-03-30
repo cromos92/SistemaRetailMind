@@ -39,8 +39,8 @@
 .dte-section {
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
-    padding: 24px;
-    margin-bottom: 24px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
     border: 1px solid var(--nexo-gray-300);
     box-shadow: var(--nexo-shadow-sm);
     transition: box-shadow var(--nexo-transition-normal);
@@ -54,18 +54,18 @@
     background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
     color: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
-    padding: 20px 24px;
-    margin-bottom: 24px;
+    padding: 12px 18px;
+    margin-bottom: 14px;
     box-shadow: var(--nexo-shadow-lg);
 }
 
 .method-selector {
     background: white;
     border: 2px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-lg);
-    padding: 20px;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 12px;
     cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -85,8 +85,7 @@
 
 .method-selector:hover {
     border-color: var(--nexo-primary);
-    box-shadow: 0 8px 20px rgba(0,102,255,0.2);
-    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0,102,255,0.15);
 }
 
 .method-selector:hover::before {
@@ -126,10 +125,10 @@
 }
 
 .method-selector i {
-    font-size: 2rem;
-    margin-bottom: 10px;
+    font-size: 1.4rem;
+    margin-bottom: 4px;
     color: var(--nexo-gray-500);
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
 }
 
 .method-selector:hover i {
@@ -328,7 +327,7 @@
 .product-search-section {
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
-    padding: 24px;
+    padding: 14px 18px;
     box-shadow: var(--nexo-shadow-md);
 }
 
@@ -377,7 +376,7 @@
 .detail-section {
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
-    padding: 24px;
+    padding: 14px 18px;
     box-shadow: var(--nexo-shadow-md);
 }
 
@@ -489,9 +488,9 @@
 /* Estilos del Wizard de Pasos */
 .wizard-steps {
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 15px;
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin-top: 10px;
 }
 
 .step-indicator {
@@ -511,8 +510,8 @@
 }
 
 .step-number {
-    width: 44px;
-    height: 44px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.25);
     color: white;
@@ -520,25 +519,25 @@
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    font-size: 16px;
-    margin-bottom: 8px;
+    font-size: 14px;
+    margin-bottom: 4px;
     transition: all 0.3s ease;
     border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
 .step-label {
     color: rgba(255, 255, 255, 0.85);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 500;
     transition: all 0.3s ease;
 }
 
 .step-line {
     flex: 1;
-    height: 3px;
+    height: 2px;
     background: rgba(255, 255, 255, 0.25);
-    margin: 0 15px;
-    margin-top: -20px;
+    margin: 0 10px;
+    margin-top: -14px;
     transition: all 0.3s ease;
     border-radius: 2px;
 }
@@ -582,16 +581,15 @@
 
 /* Indicadores de progreso en secciones - NEXO Style */
 .section-progress {
-    position: absolute;
-    top: 10px;
-    right: 15px;
+    display: inline-block;
     background: var(--nexo-primary-light);
     color: var(--nexo-primary);
-    padding: 6px 12px;
+    padding: 2px 10px;
     border-radius: 20px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     border: 1px solid rgba(0, 102, 255, 0.2);
+    margin-bottom: 4px;
 }
 
 .dte-section {
@@ -603,8 +601,8 @@
     display: flex;
     justify-content: between;
     gap: 10px;
-    margin-top: 24px;
-    padding: 20px 0;
+    margin-top: 14px;
+    padding: 12px 0;
     border-top: 1px solid var(--nexo-gray-300);
 }
 
@@ -774,12 +772,119 @@
 .table thead th {
     font-weight: 600;
     text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.5px;
+    font-size: 0.72rem;
+    letter-spacing: 0.3px;
 }
 
 .table tbody tr:hover {
     background-color: var(--nexo-primary-light) !important;
+}
+
+/* Compact table rows */
+.table-sm td, .table-sm th {
+    padding: 0.3rem 0.5rem;
+}
+
+/* Sticky totals panel */
+.totales-sticky {
+    position: sticky;
+    top: 60px;
+}
+
+/* Modal tallas: highlight row when qty entered */
+#tabla_modal_ventas_interna tr.talla-seleccionada {
+    background: rgba(0, 212, 170, 0.08) !important;
+    outline: 1px solid var(--nexo-accent);
+}
+
+/* Compact number input in modal */
+#tabla_modal_ventas_interna .cantidad-input {
+    min-width: 60px;
+    font-weight: 600;
+}
+
+/* Responsive modal: on small screens stack tarea section */
+@media (max-width: 576px) {
+    #modalTallas .modal-dialog {
+        margin: 0.25rem;
+        max-width: 100%;
+    }
+    #modalTallas .d-flex.flex-wrap {
+        gap: 0.4rem !important;
+    }
+    #select-patron-tarea {
+        min-width: 140px !important;
+    }
+}
+
+/* ===== POS LAYOUT — Pantalla 15" (optimizado) ===== */
+.pos-right-panel {
+    position: sticky;
+    top: 60px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--nexo-gray-300) transparent;
+}
+
+.pos-products-table {
+    max-height: calc(100vh - 340px);
+    min-height: 200px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.pos-cart-table {
+    max-height: calc(100vh - 560px);
+    min-height: 80px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.pos-right-panel::-webkit-scrollbar,
+.pos-products-table::-webkit-scrollbar,
+.pos-cart-table::-webkit-scrollbar {
+    width: 5px;
+}
+
+.pos-right-panel::-webkit-scrollbar-thumb,
+.pos-products-table::-webkit-scrollbar-thumb,
+.pos-cart-table::-webkit-scrollbar-thumb {
+    background: var(--nexo-gray-300);
+    border-radius: 10px;
+}
+
+/* Step-1: Method selectors más compactos en pantalla POS */
+@media (min-width: 992px) {
+    .method-selector {
+        padding: 8px 10px;
+    }
+    .method-selector i {
+        font-size: 1.2rem;
+    }
+    .dte-section {
+        padding: 10px 14px;
+        margin-bottom: 10px;
+    }
+    .dte-header {
+        padding: 8px 14px;
+        margin-bottom: 10px;
+    }
+}
+
+/* En móvil/tablet: deshabilitar sticky del panel derecho */
+@media (max-width: 991px) {
+    .pos-right-panel {
+        position: static;
+        max-height: none;
+        overflow-y: visible;
+    }
+    .pos-products-table {
+        max-height: 400px;
+    }
+    .pos-cart-table {
+        max-height: 200px;
+    }
 }
 </style>
 
@@ -807,33 +912,28 @@
         
         <!-- Header Principal con Wizard de Pasos -->
         <div class="dte-header">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h4 class="mb-1"><i class="bi bi-file-earmark-plus me-2"></i>Emisión de DTE</h4>
-                    <p class="mb-0 opacity-75">Sigue los pasos para generar tu documento</p>
+                    <h6 class="mb-0"><i class="bi bi-file-earmark-plus me-2"></i>Emisión de DTE</h6>
+                    <small class="opacity-75">{{ user.username }} &bull; {{ "now"|date:"d/m/Y" }}</small>
                 </div>
-                <div class="text-end">
-                    <small class="opacity-75">Fecha: {{ "now"|date:"d/m/Y" }}</small><br>
-                    <small class="opacity-75">Usuario: {{ user.username }}</small>
-                </div>
-            </div>
-            
-            <!-- Wizard de Pasos -->
-            <div class="wizard-steps">
-                <div class="step-indicator">
-                    <div class="step active" data-step="1">
-                        <div class="step-number">1</div>
-                        <div class="step-label">Configuración</div>
-                    </div>
-                    <div class="step-line"></div>
-                    <div class="step" data-step="2">
-                        <div class="step-number">2</div>
-                        <div class="step-label">Productos & Detalle</div>
-                    </div>
-                    <div class="step-line"></div>
-                    <div class="step" data-step="3">
-                        <div class="step-number">3</div>
-                        <div class="step-label">Emisión</div>
+        <div class="text-end">
+                    <!-- Wizard de Pasos compacto inline -->
+                    <div class="step-indicator gap-2" style="margin-top: 0;">
+                        <div class="step active" data-step="1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">Config.</div>
+                        </div>
+                        <div class="step-line" style="min-width: 40px; margin-top: -15px;"></div>
+                        <div class="step" data-step="2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Productos</div>
+                        </div>
+                        <div class="step-line" style="min-width: 40px; margin-top: -15px;"></div>
+                        <div class="step" data-step="3">
+                            <div class="step-number">3</div>
+                            <div class="step-label">Emisión</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -841,72 +941,49 @@
 
         <!-- Sección 1: Configuración del DTE -->
         <div class="dte-section fade-in step-content" id="step-1" data-step="1">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
                 <div>
                     <div class="section-progress">Paso 1 de 2</div>
-                    <h5 class="mb-1" style="color: var(--nexo-secondary); font-weight: 600;">
+                    <h6 class="mb-0" style="color: var(--nexo-secondary); font-weight: 600;">
                         <i class="bi bi-gear-fill me-2" style="color: var(--nexo-primary);"></i>Configuración del Documento
-                    </h5>
-                    <p class="text-muted mb-0 small">Define el tipo de operación y destino</p>
+                    </h6>
                 </div>
-            </div>
-            <!-- Guía rápida con estilo NEXO -->
-            <div class="mb-4 p-3" style="background: var(--nexo-primary-light); border-radius: var(--nexo-radius-md); border-left: 4px solid var(--nexo-primary);">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-lightbulb-fill me-3" style="font-size: 1.5rem; color: var(--nexo-primary);"></i>
-                    <div>
-                        <strong style="color: var(--nexo-secondary);">¿Cómo funciona?</strong>
-                        <p class="mb-0 small" style="color: var(--nexo-gray-700);">1. Elige el método de despacho → 2. Selecciona el tipo de documento → 3. Indica el destinatario</p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Alerta de selección pendiente con estilo NEXO -->
-            <div class="mb-4 p-3" id="alertSeleccionPendiente" style="background: rgba(255, 176, 32, 0.1); border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-warning);">
-                <div class="d-flex align-items-center">
-                    <div class="me-3" style="width: 48px; height: 48px; background: var(--nexo-warning); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-hand-index-thumb-fill" style="font-size: 1.3rem; color: white;"></i>
-                    </div>
-                    <div>
-                        <h6 class="mb-1 fw-bold" style="color: var(--nexo-secondary);">Selecciona para continuar</h6>
-                        <p class="mb-0 small" style="color: var(--nexo-gray-700);">Elige el <strong>Método de Despacho</strong> y el <strong>Tipo de Documento</strong> para habilitar el siguiente paso.</p>
-                    </div>
-                </div>
+                <span class="badge bg-danger" id="badgeMetodoDespacho" style="display:none">Requerido</span>
             </div>
 
             <div class="row">
-                <!-- Método de Despacho -->
-                <div class="col-md-5 mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <label class="form-label fw-bold mb-0" style="font-size: 1.1rem;">
-                            <i class="bi bi-1-circle-fill text-primary me-2"></i>Método de Despacho
+                <!-- Método de Despacho + Tipo de Documento en un row compacto -->
+                <div class="col-md-6 mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold mb-0">
+                            <i class="bi bi-1-circle-fill text-primary me-1"></i>Método de Despacho
                         </label>
-                        <span class="badge bg-danger" id="badgeMetodoDespacho">Requerido</span>
+                        <span class="badge bg-danger small" id="badgeMetodoDespachoVisible">Requerido</span>
                     </div>
-                    <div class="row g-3">
+                    <div class="row g-2">
                         <div class="col-6">
-                            <div class="method-selector shadow-sm" data-method="interno" style="min-height: 180px; border-width: 3px;">
-                                <div class="mb-2" style="font-size: 3rem; color: #6c757d;">
+                            <div class="method-selector shadow-sm" data-method="interno">
+                                <div class="mb-1" style="font-size: 1.5rem; color: #6c757d;">
                                     <i class="bi bi-building"></i>
                                 </div>
-                                <h5 class="fw-bold mb-2">Despacho Interno</h5>
-                                <p class="text-muted mb-2 small">Traspaso entre sucursales</p>
-                                <div class="mt-3 pt-3 border-top">
-                                    <small class="text-danger">
+                                <h6 class="fw-bold mb-1 small">Despacho Interno</h6>
+                                <p class="text-muted mb-0" style="font-size: 0.7rem;">Entre sucursales</p>
+                                <div class="mt-2 pt-1 border-top">
+                                    <small class="text-danger" style="font-size: 0.65rem;">
                                         <i class="bi bi-arrow-down-circle me-1"></i>Stock se reduce
                                     </small>
                                 </div>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="method-selector shadow-sm" data-method="externo" style="min-height: 180px; border-width: 3px;">
-                                <div class="mb-2" style="font-size: 3rem; color: #6c757d;">
+                            <div class="method-selector shadow-sm" data-method="externo">
+                                <div class="mb-1" style="font-size: 1.5rem; color: #6c757d;">
                                     <i class="bi bi-truck"></i>
                                 </div>
-                                <h5 class="fw-bold mb-2">Despacho Externo</h5>
-                                <p class="text-muted mb-2 small">Venta a cliente externo</p>
-                                <div class="mt-3 pt-3 border-top">
-                                    <small class="text-danger">
+                                <h6 class="fw-bold mb-1 small">Despacho Externo</h6>
+                                <p class="text-muted mb-0" style="font-size: 0.7rem;">Venta a cliente</p>
+                                <div class="mt-2 pt-1 border-top">
+                                    <small class="text-danger" style="font-size: 0.65rem;">
                                         <i class="bi bi-exclamation-triangle me-1"></i>Stock se reduce
                                     </small>
                                 </div>
@@ -915,49 +992,38 @@
                     </div>
                 </div>
 
-                <!-- Separador Visual con Flecha -->
-                <div class="col-md-2 flow-separator d-none d-md-flex">
-                    <div class="flow-divider">
-                        <div class="flow-divider-line"></div>
-                        <div class="flow-icon-circle">
-                            <i class="bi bi-arrow-right"></i>
-                        </div>
-                        <div class="flow-divider-line"></div>
-                    </div>
-                </div>
-
                 <!-- Tipo de Documento -->
-                <div class="col-md-5 mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <label class="form-label fw-bold mb-0" style="font-size: 1.1rem;">
-                            <i class="bi bi-2-circle-fill text-primary me-2"></i>Tipo de Documento
+                <div class="col-md-6 mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold mb-0">
+                            <i class="bi bi-2-circle-fill text-primary me-1"></i>Tipo de Documento
                         </label>
-                        <span class="badge bg-danger" id="badgeTipoDocumento">Requerido</span>
+                        <span class="badge bg-danger small" id="badgeTipoDocumento">Requerido</span>
                     </div>
-                    <div class="row g-3">
+                    <div class="row g-2">
                         <div class="col-6">
-                            <div class="method-selector shadow-sm" data-concept="factura" style="min-height: 180px; border-width: 3px;">
-                                <div class="mb-2" style="font-size: 3rem; color: #6c757d;">
+                            <div class="method-selector shadow-sm" data-concept="factura">
+                                <div class="mb-1" style="font-size: 1.5rem; color: #6c757d;">
                                     <i class="bi bi-receipt"></i>
                                 </div>
-                                <h5 class="fw-bold mb-2">Factura Electrónica</h5>
-                                <p class="text-muted mb-2 small">Documento con valor comercial</p>
-                                <div class="mt-3 pt-3 border-top">
-                                    <small class="text-success">
+                                <h6 class="fw-bold mb-1 small">Factura Electrónica</h6>
+                                <p class="text-muted mb-0" style="font-size: 0.7rem;">Con valor comercial</p>
+                                <div class="mt-2 pt-1 border-top">
+                                    <small class="text-success" style="font-size: 0.65rem;">
                                         <i class="bi bi-cash-coin me-1"></i>Genera cobro
                                     </small>
                                 </div>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="method-selector shadow-sm" data-concept="guia" style="min-height: 180px; border-width: 3px;">
-                                <div class="mb-2" style="font-size: 3rem; color: #6c757d;">
+                            <div class="method-selector shadow-sm" data-concept="guia">
+                                <div class="mb-1" style="font-size: 1.5rem; color: #6c757d;">
                                     <i class="bi bi-clipboard-check"></i>
                                 </div>
-                                <h5 class="fw-bold mb-2">Guía de Despacho</h5>
-                                <p class="text-muted mb-2 small">Solo documento de traslado</p>
-                                <div class="mt-3 pt-3 border-top">
-                                    <small class="text-muted">
+                                <h6 class="fw-bold mb-1 small">Guía de Despacho</h6>
+                                <p class="text-muted mb-0" style="font-size: 0.7rem;">Solo traslado</p>
+                                <div class="mt-2 pt-1 border-top">
+                                    <small class="text-muted" style="font-size: 0.65rem;">
                                         <i class="bi bi-clipboard me-1"></i>Sin cobro
                                     </small>
                                 </div>
@@ -967,110 +1033,84 @@
                 </div>
             </div>
 
-            <!-- Resumen de Selección - NEXO Style -->
-            <div id="resumenSeleccion" style="display: none; background: linear-gradient(135deg, rgba(0, 212, 170, 0.1) 0%, var(--nexo-primary-light) 100%); border-radius: var(--nexo-radius-lg); border: 2px solid var(--nexo-accent); padding: 20px; margin-bottom: 20px;">
-                <div class="d-flex align-items-center mb-3">
-                    <div style="width: 44px; height: 44px; background: var(--nexo-accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px;">
-                        <i class="bi bi-check-lg" style="font-size: 1.4rem; color: white;"></i>
+            <!-- Resumen de Selección - compacto -->
+            <div id="resumenSeleccion" style="display: none; background: rgba(0, 212, 170, 0.08); border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-accent); padding: 10px 14px; margin-bottom: 12px;">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <div style="width: 28px; height: 28px; background: var(--nexo-accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink:0;">
+                        <i class="bi bi-check-lg" style="font-size: 0.9rem; color: white;"></i>
                     </div>
-                    <h6 class="mb-0 fw-bold" style="color: var(--nexo-secondary);">Configuración Lista</h6>
-                </div>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div style="background: var(--nexo-white); padding: 16px; border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-gray-300);">
-                            <div class="d-flex align-items-center mb-2">
-                                <i class="bi bi-truck-front-fill me-2" style="color: var(--nexo-primary); font-size: 1.2rem;"></i>
-                                <strong style="color: var(--nexo-secondary);">Método:</strong>
-                            </div>
-                            <p class="mb-0 ms-4" id="resumenMetodo" style="color: var(--nexo-gray-700);">-</p>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div style="background: var(--nexo-white); padding: 16px; border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-gray-300);">
-                            <div class="d-flex align-items-center mb-2">
-                                <i class="bi bi-file-earmark-text-fill me-2" style="color: var(--nexo-primary); font-size: 1.2rem;"></i>
-                                <strong style="color: var(--nexo-secondary);">Documento:</strong>
-                            </div>
-                            <p class="mb-0 ms-4" id="resumenDocumento" style="color: var(--nexo-gray-700);">-</p>
-                        </div>
-                    </div>
-                </div>
-                <div style="margin-top: 16px; padding: 16px; background: var(--nexo-white); border-radius: var(--nexo-radius-md); border-left: 4px solid var(--nexo-primary);">
-                    <strong style="color: var(--nexo-secondary);"><i class="bi bi-box-seam-fill me-2" style="color: var(--nexo-primary);"></i>Impacto en Stock:</strong>
-                    <p class="mb-0 mt-2" id="resumenStock" style="color: var(--nexo-gray-700);">-</p>
+                    <span class="fw-semibold small" style="color: var(--nexo-secondary);">Configuración lista:</span>
+                    <span class="badge" style="background: var(--nexo-primary-light); color: var(--nexo-primary); border: 1px solid rgba(0,102,255,0.2);">
+                        <i class="bi bi-truck-front-fill me-1"></i><span id="resumenMetodo">-</span>
+                    </span>
+                    <span class="badge" style="background: var(--nexo-primary-light); color: var(--nexo-primary); border: 1px solid rgba(0,102,255,0.2);">
+                        <i class="bi bi-file-earmark-text-fill me-1"></i><span id="resumenDocumento">-</span>
+                    </span>
+                    <span class="text-muted small ms-auto"><i class="bi bi-box-seam me-1"></i><span id="resumenStock">-</span></span>
                 </div>
             </div>
 
-            <!-- Receptor/Destino Dinámico -->
-            <div class="row mt-3">
+            <!-- Receptor/Destino + Campos adicionales en un solo bloque compacto -->
+            <div class="row g-2 mt-2">
                 <!-- Para Despacho Externo: Empresa Cliente -->
-                <div class="col-md-8" id="receptorExternoContainer">
-                    <label for="receptorSelect" class="form-label fw-bold">
+                <div class="col-md-4" id="receptorExternoContainer" style="display: none;">
+                    <label for="receptorSelect" class="form-label fw-bold mb-1 small">
                         <i class="bi bi-building me-1"></i>Empresa Cliente
                     </label>
-                    <select id="receptorSelect" class="form-select">
+                    <select id="receptorSelect" class="form-select form-select-sm">
                         <option value="">Seleccionar empresa cliente...</option>
                     </select>
-                    <small class="text-muted">Empresa externa que recibirá el documento</small>
                 </div>
                 
                 <!-- Para Despacho Interno: Sucursal Destino -->
-                <div class="col-md-8" id="sucursalDestinoContainer" style="display: none;">
-                    <label for="sucursalDestinoSelect" class="form-label fw-bold">
+                <div class="col-md-4" id="sucursalDestinoContainer" style="display: none;">
+                    <label for="sucursalDestinoSelect" class="form-label fw-bold mb-1 small">
                         <i class="bi bi-building me-1"></i>Sucursal Destino
                     </label>
-                    <select id="sucursalDestinoSelect" class="form-select">
+                    <select id="sucursalDestinoSelect" class="form-select form-select-sm">
                         <option value="">Seleccionar sucursal destino...</option>
                     </select>
-                    <small class="text-muted">Sucursal interna que recibirá la mercadería</small>
                 </div>
                 
-                <div class="col-md-4">
-                    <label for="fechaEmision" class="form-label fw-bold">Fecha de Emisión</label>
-                    <input type="date" id="fechaEmision" class="form-control" value="">
+                <div class="col-md-2">
+                    <label for="fechaEmision" class="form-label fw-bold mb-1 small">Fecha Emisión</label>
+                    <input type="date" id="fechaEmision" class="form-control form-control-sm" value="">
                 </div>
-            </div>
-
-            <!-- Campos adicionales -->
-            <div class="row mt-3">
-                <div class="col-md-3">
-                    <label for="formaPago" class="form-label fw-bold">Forma de Pago</label>
-                    <select id="formaPago" class="form-select">
+                <div class="col-md-2">
+                    <label for="formaPago" class="form-label fw-bold mb-1 small">Forma de Pago</label>
+                    <select id="formaPago" class="form-select form-select-sm">
                         <option value="Credito">Crédito</option>
                         <option value="Contado">Contado</option>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="vendedor" class="form-label fw-bold">Vendedor</label>
-                    <input type="text" id="vendedor" class="form-control" value="9999" readonly>
-                    <small class="text-muted">Código del vendedor asignado</small>
+                <div class="col-md-1">
+                    <label for="vendedor" class="form-label fw-bold mb-1 small">Vendedor</label>
+                    <input type="text" id="vendedor" class="form-control form-control-sm" value="9999" readonly>
                 </div>
-                <div class="col-md-3">
-                    <label for="diasCredito" class="form-label fw-bold">Días Crédito</label>
-                    <input type="number" id="diasCredito" class="form-control" value="30" min="0" max="365">
-                    <small class="text-muted">Solo para forma de pago crédito</small>
+                <div class="col-md-1">
+                    <label for="diasCredito" class="form-label fw-bold mb-1 small">Días Créd.</label>
+                    <input type="number" id="diasCredito" class="form-control form-control-sm" value="30" min="0" max="365">
                 </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <label class="form-label fw-bold">Folio Documento</label>
-                        <div class="alert alert-info py-2 mb-0">
-                            <h5 class="mb-0">N° <span id="folio_unico">---</span></h5>
-                            <small>Se asignará automáticamente</small>
-                        </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold mb-1 small">Folio</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">N°</span>
+                        <input type="text" class="form-control text-center fw-bold" id="folio_unico" value="---" readonly style="background: #f0f8ff;">
                     </div>
+                    <small class="text-muted" style="font-size:0.65rem;">Asignado automáticamente</small>
                 </div>
             </div>
             
             <!-- Información adicional según tipo -->
             <div class="row mt-2">
                 <div class="col-12">
-                    <div id="infoDespachoInterno" class="alert alert-info" style="display: none;">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <strong>Despacho Interno:</strong> El documento quedará pendiente hasta que la sucursal destino lo confirme. La empresa se determina automáticamente según la sucursal seleccionada.
+                    <div id="infoDespachoInterno" class="alert alert-info py-2 mb-0 small" style="display: none;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Despacho Interno:</strong> El documento quedará pendiente hasta que la sucursal destino lo confirme.
                     </div>
-                    <div id="infoDespachoExterno" class="alert alert-success" style="display: none;">
-                        <i class="bi bi-check-circle me-2"></i>
-                        <strong>Despacho Externo:</strong> El documento se emitirá directamente y el stock se reducirá inmediatamente.
+                    <div id="infoDespachoExterno" class="alert alert-success py-2 mb-0 small" style="display: none;">
+                        <i class="bi bi-check-circle me-1"></i>
+                        <strong>Despacho Externo:</strong> El stock se reducirá inmediatamente al emitir.
                     </div>
                 </div>
             </div>
@@ -1081,7 +1121,7 @@
                     <!-- Primer paso, no hay botón anterior -->
                 </div>
                 <div class="wizard-nav-right">
-                    <button type="button" class="btn btn-nexo-primary btn-custom" id="btnSiguientePaso1" disabled>
+                    <button type="button" class="btn btn-nexo-primary btn-custom btn-sm px-4" id="btnSiguientePaso1" disabled>
                         Continuar a Productos <i class="bi bi-arrow-right-circle-fill ms-2"></i>
                     </button>
                 </div>
@@ -1090,195 +1130,153 @@
 
         <!-- Sección 2: Búsqueda, Selección de Productos y Emisión -->
         <div class="product-search-section fade-in step-content" id="step-2" data-step="2" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+
+            <!-- Header compact -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
                 <div>
                     <div class="section-progress">Paso 2 de 2</div>
-                    <h5 class="mb-1" style="color: var(--nexo-secondary); font-weight: 600;">
+                    <h6 class="mb-0" style="color: var(--nexo-secondary); font-weight: 600;">
                         <i class="bi bi-box-seam-fill me-2" style="color: var(--nexo-primary);"></i>Productos y Emisión
-                    </h5>
-                    <p class="text-muted mb-0 small">Selecciona productos, revisa el detalle y genera el documento</p>
+                    </h6>
                 </div>
-            </div>
-            <!-- Mensaje de éxito con estilo NEXO -->
-            <div class="mb-4 p-3" style="background: rgba(0, 212, 170, 0.1); border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-accent);">
-                <div class="d-flex align-items-center">
-                    <div class="me-3" style="width: 44px; height: 44px; background: var(--nexo-accent); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-check-lg" style="font-size: 1.4rem; color: white;"></i>
-                    </div>
-                    <div>
-                        <strong style="color: var(--nexo-secondary);">¡Configuración completa!</strong>
-                        <p class="mb-0 small" style="color: var(--nexo-gray-700);">Busca productos, selecciona las tallas y cantidades. El resumen se actualiza en tiempo real.</p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Filtros de búsqueda -->
-            <div class="row mb-3">
-                <div class="col-md-3">
-                    <label for="searchProduct" class="form-label">Buscar por Artículo</label>
-                    <div class="input-group">
-                        <input type="text" id="searchProduct" class="form-control" placeholder="SKU, descripción, marca...">
-                        <button class="btn btn-outline-secondary" type="button" id="btnSearchProduct">
-                            <i class="bi bi-search"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <label for="searchReference" class="form-label">Buscar por Referencia</label>
-                    <div class="input-group">
-                        <input type="text" id="searchReference" class="form-control" placeholder="Factura, DTE, código...">
-                        <button class="btn btn-outline-secondary" type="button" id="btnSearchReference">
-                            <i class="bi bi-file-text"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <label for="filterMarca" class="form-label">Marca</label>
-                    <select id="filterMarca" class="form-select">
-                        <option value="">Todas las marcas</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label for="filterCategoria" class="form-label">Categoría</label>
-                    <select id="filterCategoria" class="form-select">
-                        <option value="">Todas las categorías</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label for="filterTipoTalla" class="form-label">Tipo Talla</label>
-                    <select id="filterTipoTalla" class="form-select">
-                        <option value="">Todos</option>
-                        <option value="CL">CL</option>
-                        <option value="US">US</option>
-                        <option value="EU">EU</option>
-                        <option value="UK">UK</option>
-                        <option value="BR">BR</option>
-                        <option value="CM">CM</option>
-                    </select>
-                </div>
-            </div>
-            
-            <!-- Opción para incluir productos sin stock -->
-            <div class="row mb-3">
-                <div class="col-md-12">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="checkIncluirSinStock">
-                        <label class="form-check-label" for="checkIncluirSinStock">
-                            <i class="bi bi-box-seam me-1"></i>Incluir productos sin stock en la búsqueda
-                        </label>
-                        <small class="text-muted ms-2">(Por defecto solo se muestran productos con stock disponible)</small>
-                    </div>
-                </div>
+                <small class="text-muted" id="resumenConfigHeader"></small>
             </div>
 
-            <!-- Título de sección -->
-            <div class="row mb-3">
-                <div class="col-12">
-                    <h4 class="text-center text-primary">
-                        <i class="bi bi-box-seam me-2"></i>Lista de Productos en Existencia
-                    </h4>
-                </div>
-            </div>
+            <!-- Layout POS: panel izquierdo + panel derecho sticky -->
+            <div class="row g-2">
 
-            <!-- Tabla de productos expandida - NEXO Style -->
-            <div class="card mb-3" style="border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg); overflow: hidden;">
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table id="tabla_productos_busqueda" class="table table-hover mb-0">
-                            <thead style="background: var(--nexo-secondary); color: white;">
-                                <tr>
-                                    <th class="text-center py-3">Estado</th>
-                                    <th class="text-center py-3">Artículo</th>
-                                    <th class="text-center py-3">Descripción</th>
-                                    <th class="text-center py-3">Color</th>
-                                    <th class="text-center py-3">Marca</th>
-                                    <th class="text-center py-3">Sexo</th>
-                                    <th class="text-center py-3">Costo</th>
-                                    <th class="text-center py-3">Precio</th>
-                                    <th class="text-center py-3">Stock</th>
-                                    <th class="text-center py-3">Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody id="datos_tabla_productos">
-                                <tr>
-                                    <td colspan="10" class="text-center text-muted py-4">
-                                        <i class="bi bi-search me-2"></i>
-                                        Use los filtros para buscar productos
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                <!-- PANEL IZQUIERDO: búsqueda + tabla de productos + carrito detallado -->
+                <div class="col-lg-8 col-12">
+
+                    <!-- Filtros de búsqueda compactos -->
+                    <div class="row g-1 mb-2">
+                        <div class="col-md-4">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" id="searchProduct" class="form-control" placeholder="SKU, descripción, marca...">
+                                <button class="btn btn-outline-secondary" type="button" id="btnSearchProduct">Buscar</button>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="bi bi-file-text"></i></span>
+                                <input type="text" id="searchReference" class="form-control" placeholder="Factura, DTE, código...">
+                                <button class="btn btn-outline-secondary" type="button" id="btnSearchReference">Buscar</button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <select id="filterMarca" class="form-select form-select-sm">
+                                <option value="">Todas las marcas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select id="filterCategoria" class="form-select form-select-sm">
+                                <option value="">Todas las categorías</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <select id="filterTipoTalla" class="form-select form-select-sm">
+                                <option value="">Talla</option>
+                                <option value="CL">CL</option>
+                                <option value="US">US</option>
+                                <option value="EU">EU</option>
+                                <option value="UK">UK</option>
+                                <option value="BR">BR</option>
+                                <option value="CM">CM</option>
+                            </select>
+                        </div>
+                        <div class="col-auto d-flex align-items-center">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" id="checkIncluirSinStock">
+                                <label class="form-check-label small" for="checkIncluirSinStock">Sin stock</label>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Resultados de productos (mantener para compatibilidad) -->
-            <div id="productResults" class="mb-3" style="display: none;">
-                <div class="loading-spinner">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Buscando productos...</span>
+                    <!-- Tabla de productos - altura dinámica para pantalla POS -->
+                    <div class="card" style="border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg); overflow: hidden;">
+                        <div class="card-body p-0">
+                            <div class="table-responsive pos-products-table">
+                                <table id="tabla_productos_busqueda" class="table table-hover table-sm mb-0" style="font-size:0.78rem;">
+                                    <thead style="background: var(--nexo-secondary); color: white;">
+                                        <tr>
+                                            <th class="py-1" style="white-space:nowrap;">Artículo</th>
+                                            <th class="py-1">Descripción / Atributos</th>
+                                            <th class="text-end py-1">Costo</th>
+                                            <th class="text-end py-1">Precio</th>
+                                            <th class="text-center py-1">Stock</th>
+                                            <th class="text-center py-1">Agregar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="datos_tabla_productos">
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-4">
+                                                <i class="bi bi-search me-2"></i>
+                                                Use los filtros para buscar productos
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                    <p class="mt-2">Cargando productos...</p>
-                </div>
-                <div id="productList"></div>
-            </div>
 
-            <!-- Paginación -->
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="text-muted">
-                    <span id="productInfo">0 productos encontrados</span>
-                </div>
-                <div class="btn-group">
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnPrevProducts">
-                        <i class="bi bi-chevron-left"></i> Anterior
-                    </button>
-                    <span class="btn btn-outline-secondary btn-sm" id="pageInfoProducts">Página 1</span>
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnNextProducts">
-                        Siguiente <i class="bi bi-chevron-right"></i>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Sección de Detalle Integrada -->
-            <div class="mt-4" id="detalleSection" style="display: none;">
-                <div class="row">
-                    <div class="col-12">
+                    <!-- Resultados de productos (mantener para compatibilidad) -->
+                    <div id="productResults" class="mb-1" style="display: none;">
+                        <div class="loading-spinner">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Buscando productos...</span>
+                            </div>
+                            <p class="mt-2">Cargando productos...</p>
+                        </div>
+                        <div id="productList"></div>
+                    </div>
+
+                    <!-- Paginación -->
+                    <div class="d-flex justify-content-between align-items-center my-2">
+                        <div class="text-muted small">
+                            <i class="bi bi-search me-1 text-primary"></i><span id="productInfo">0 productos encontrados</span>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="btnPrevProducts">
+                                <i class="bi bi-chevron-left"></i> Anterior
+                            </button>
+                            <span class="btn btn-outline-secondary btn-sm" id="pageInfoProducts">Página 1</span>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="btnNextProducts">
+                                Siguiente <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Carrito con detalle por talla (expandible) -->
+                    <div id="detalleSection" style="display: none;">
                         <div class="card" style="border: 2px solid var(--nexo-accent); border-radius: var(--nexo-radius-lg); overflow: hidden;">
-                            <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white; border: none;">
-                                <div>
-                                    <h6 class="mb-0"><i class="bi bi-cart-check-fill me-2"></i>Detalle del Despacho</h6>
-                                    <small style="opacity: 0.9;">Productos listos para enviar</small>
+                            <div class="card-header d-flex justify-content-between align-items-center py-2 px-3" style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white; border: none;">
+                                <div class="d-flex align-items-center gap-2">
+                                    <h6 class="mb-0 small"><i class="bi bi-cart-check-fill me-1"></i>Detalle del Despacho</h6>
+                                    <span class="badge bg-white text-dark" id="totalProductos">0 líneas</span>
+                                    <span class="badge bg-white text-dark" id="totalUnidades">0 unidades</span>
+                                    <span class="d-none" id="totalArticulosResumen">0</span>
                                 </div>
-                                <div>
-                                    <button type="button" class="btn btn-sm" id="btnToggleDetalle" title="Ocultar/Mostrar detalle" style="background: rgba(255,255,255,0.2); color: white; border: none;">
+                                <div class="d-flex gap-1 align-items-center">
+                                    <button type="button" class="btn btn-sm" id="btnExpandirDetalleTallas" data-expanded="false"
+                                            style="background: rgba(255,255,255,0.2); color: white; border: none; font-size: 0.75rem;">
+                                        <i class="bi bi-chevron-down me-1"></i>Por talla
+                                    </button>
+                                    <button type="button" class="btn btn-sm" id="btnToggleDetalle" title="Ocultar/Mostrar detalle"
+                                            style="background: rgba(255,255,255,0.2); color: white; border: none;">
                                         <i class="bi bi-eye-slash"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm" id="btnLimpiarDetalle" style="display: none; background: rgba(255,77,77,0.3); color: white; border: 1px solid rgba(255,255,255,0.3);">
+                                        <i class="bi bi-trash me-1"></i>Limpiar
                                     </button>
                                 </div>
                             </div>
-                            <div class="card-body">
-                                <!-- Resumen de totales - siempre visible -->
-                                <div class="row mb-3">
-                                    <div class="col-md-8">
-                                        <div class="d-flex flex-wrap align-items-center gap-2">
-                                            <span class="badge bg-primary fs-6" id="totalProductos">0 ítems por línea</span>
-                                            <span class="badge bg-info fs-6" id="totalUnidades">0 unidades</span>
-                                            <span class="badge bg-secondary" id="totalArticulosResumen">Total artículos: 0</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4 text-end">
-                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnExpandirDetalleTallas" data-expanded="false">
-                                            <i class="bi bi-chevron-down me-1"></i>Ver detalle por talla/SKU
-                                        </button>
-                                        <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnLimpiarDetalle" style="display: none;">
-                                            <i class="bi bi-trash me-1"></i>Limpiar
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <!-- Tabla detallada - colapsada por defecto -->
+                            <div class="card-body p-0">
+                                <!-- Tabla detallada por talla/SKU - expandible -->
                                 <div id="detalleTallasContainer" style="display: none;">
-                                    <div class="table-responsive">
-                                        <table class="table table-hover table-sm" id="detalleTable">
+                                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                                        <table class="table table-hover table-sm mb-0" id="detalleTable">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th width="15%">Artículo</th>
@@ -1294,7 +1292,7 @@
                                             </thead>
                                             <tbody id="detalleBody">
                                                 <tr id="emptyRow">
-                                                    <td colspan="9" class="text-center text-muted py-4">
+                                                    <td colspan="9" class="text-center text-muted py-3">
                                                         <i class="bi bi-inbox display-6"></i>
                                                         <br>No hay productos seleccionados
                                                         <br><small>Busca y selecciona productos arriba</small>
@@ -1304,158 +1302,135 @@
                                         </table>
                                     </div>
                                 </div>
-                                
-                                <!-- Totales originales (ocultos pero mantenidos para compatibilidad) -->
+                                <!-- Totales ocultos (compatibilidad JS) -->
                                 <div style="display: none;">
                                     <span id="totalNeto">0</span>
                                     <span id="totalIva">0</span>
                                     <span id="totalFinal">0</span>
                                 </div>
-                                
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-            
-            <!-- Navegación del Wizard -->
-            <!-- Separador visual -->
-            <hr class="my-4">
-            
-            <!-- Sección de Resumen y Emisión (antes era Paso 3) -->
-            <!-- Mensaje de resumen - NEXO Style -->
-            <div class="mb-4 p-3" style="background: linear-gradient(135deg, var(--nexo-primary-light) 0%, rgba(0, 212, 170, 0.1) 100%); border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-primary);">
-                <div class="d-flex align-items-center">
-                    <div class="me-3" style="width: 44px; height: 44px; background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-accent) 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-clipboard-check-fill" style="font-size: 1.3rem; color: white;"></i>
-                    </div>
-                    <div>
-                        <strong style="color: var(--nexo-secondary);">Revisa y confirma</strong>
-                        <p class="mb-0 small" style="color: var(--nexo-gray-700);">Verifica los datos del documento antes de emitir. Una vez emitido, no se puede modificar.</p>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Resumen Final -->
-            <div class="row">
-                <div class="col-md-8">
-                    <!-- Resumen del Documento -->
-                    <div class="card mb-3">
-                        <div class="card-header">
-                            <h6 class="mb-0"><i class="bi bi-file-text me-2"></i>Resumen del Documento</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-6">
-                                    <strong>Tipo:</strong> <span id="resumenTipo">-</span><br>
-                                    <strong>Método:</strong> <span id="resumenMetodo">-</span><br>
-                                    <strong>Receptor:</strong> <span id="resumenReceptor">-</span>
+                </div><!-- /col-lg-8 -->
+
+                <!-- PANEL DERECHO: resumen + carrito + totales + emisión (sticky) -->
+                <div class="col-lg-4 col-12">
+                    <div class="pos-right-panel">
+
+                        <!-- Resumen de configuración compacto -->
+                        <div class="card mb-2" style="border: 1px solid var(--nexo-gray-300);">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex flex-wrap gap-2 align-items-center small">
+                                    <span><i class="bi bi-file-earmark-text me-1 text-primary"></i><strong>Tipo:</strong> <span id="resumenTipo">-</span></span>
+                                    <span class="vr mx-1" style="height:14px;"></span>
+                                    <span><i class="bi bi-truck-front me-1 text-primary"></i><strong>Método:</strong> <span id="resumenMetodo">-</span></span>
                                 </div>
-                                <div class="col-6">
-                                    <strong>Fecha:</strong> <span id="resumenFecha">-</span><br>
-                                    <strong>Artículos:</strong> <span id="resumenTotalArticulos">0</span><br>
-                                    <strong>Items:</strong> <span id="resumenProductos">0 items por línea</span><br>
-                                    <strong>Unidades:</strong> <span id="resumenUnidades">0 unidades</span>
+                                <div class="d-flex flex-wrap gap-2 align-items-center small mt-1">
+                                    <span><i class="bi bi-building me-1 text-primary"></i><strong>Receptor:</strong> <span id="resumenReceptor">-</span></span>
+                                    <span class="vr mx-1" style="height:14px;"></span>
+                                    <span><i class="bi bi-calendar me-1 text-muted"></i><span id="resumenFecha">-</span></span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 mt-1 pt-1 border-top">
+                                    <span class="badge bg-primary rounded-pill" id="resumenProductos">0 ítems</span>
+                                    <span class="badge bg-info rounded-pill" id="resumenUnidades">0 unid.</span>
+                                    <span class="d-none" id="resumenTotalArticulos">0</span>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Detalle de Productos -->
-                    <div class="card mb-3">
-                        <div class="card-header">
-                            <h6 class="mb-0"><i class="bi bi-list-ul me-2"></i>Productos a Despachar</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover" id="resumenProductosTable">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th width="20%">SKU</th>
-                                            <th width="35%">Producto</th>
-                                            <th width="20%">Tallas</th>
-                                            <th width="10%">Cantidad</th>
-                                            <th width="15%">Subtotal</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="resumenProductosBody">
-                                        <tr>
-                                            <td colspan="5" class="text-center text-muted py-3">
-                                                <i class="bi bi-inbox"></i> No hay productos para mostrar
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                        <!-- Carrito: lista resumida de productos seleccionados -->
+                        <div class="card mb-2">
+                            <div class="card-header py-1 px-3 d-flex justify-content-between align-items-center" style="background: var(--nexo-gray-100); border-bottom: 1px solid var(--nexo-gray-300);">
+                                <h6 class="mb-0 small fw-semibold"><i class="bi bi-cart3 me-1 text-primary"></i>Carrito</h6>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive pos-cart-table">
+                                    <table class="table table-sm table-hover mb-0" id="resumenProductosTable">
+                                        <thead class="table-light" style="position: sticky; top: 0;">
+                                            <tr>
+                                                <th class="py-1">SKU</th>
+                                                <th class="py-1">Producto</th>
+                                                <th class="py-1">Tallas</th>
+                                                <th class="py-1 text-center">Cant.</th>
+                                                <th class="py-1 text-end">Subtotal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="resumenProductosBody">
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted py-3 small">
+                                                    <i class="bi bi-inbox"></i> No hay productos
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Observaciones finales -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h6 class="mb-0"><i class="bi bi-chat-text me-2"></i>Observaciones</h6>
-                        </div>
-                        <div class="card-body">
-                            <textarea id="observacionesFinales" class="form-control" rows="3" placeholder="Observaciones adicionales del documento..."></textarea>
-                            <small class="text-muted">Las observaciones del detalle se copiarán automáticamente aquí.</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="card" style="border: none; border-radius: var(--nexo-radius-lg); overflow: hidden; box-shadow: var(--nexo-shadow-md);">
-                        <div class="card-header" style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); color: white; border: none;">
-                            <h6 class="mb-0" style="color: white;"><i class="bi bi-calculator-fill me-2"></i>Totales Finales</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Subtotal (Neto):</span>
-                                <span id="finalSubtotalNeto">$0</span>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>IVA (19%):</span>
-                                <span id="finalMontoIva">$0</span>
-                            </div>
-                            <hr>
-                            <div class="d-flex justify-content-between fw-bold fs-5">
-                                <span>Total:</span>
-                                <span id="finalMontoTotal">$0</span>
-                            </div>
-                            <div class="mt-2">
-                                <small class="text-muted">Total Unidades: <span id="finalTotalUnidades">0</span></small>
+                        <!-- Observaciones -->
+                        <div class="card mb-2">
+                            <div class="card-body py-2 px-3">
+                                <label class="form-label small fw-semibold mb-1">
+                                    <i class="bi bi-chat-text me-1"></i>Observaciones
+                                </label>
+                                <textarea id="observacionesFinales" class="form-control form-control-sm" rows="2"
+                                          placeholder="Observaciones adicionales del documento..."></textarea>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Botón principal de emisión - NEXO Style -->
-            <div class="row mt-4">
-                <div class="col-12">
-                    <button id="btnGenerarOperacion" type="button" class="btn w-100 py-3" style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white; border: none; border-radius: var(--nexo-radius-lg); font-weight: 600; font-size: 1.1rem; box-shadow: 0 6px 20px rgba(0, 212, 170, 0.35); transition: all 0.3s ease;">
-                        <i class="bi bi-send-fill me-2"></i>
-                        <span>Emitir Documento</span>
-                        <span id="spinner_btn" style="display:none" class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true"></span>
-                    </button>
-                </div>
-            </div>
+                        <!-- Totales -->
+                        <div class="card mb-2" style="border: none; border-radius: var(--nexo-radius-lg); overflow: hidden; box-shadow: var(--nexo-shadow-md);">
+                            <div class="card-header py-2 px-3" style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); color: white; border: none;">
+                                <h6 class="mb-0 small" style="color: white;"><i class="bi bi-calculator-fill me-2"></i>Totales Finales</h6>
+                            </div>
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between mb-1 small">
+                                    <span>Subtotal (Neto):</span>
+                                    <span id="finalSubtotalNeto">$0</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1 small">
+                                    <span>IVA (19%):</span>
+                                    <span id="finalMontoIva">$0</span>
+                                </div>
+                                <hr class="my-1">
+                                <div class="d-flex justify-content-between fw-bold align-items-start">
+                                    <span>Total:</span>
+                                    <div class="text-end">
+                                        <span id="finalMontoTotal" class="fs-5 text-primary">$0</span>
+                                        <div><small class="text-muted fw-normal"><span id="finalTotalUnidades">0</span> unidades</small></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-            <!-- Navegación del wizard - NEXO Style -->
-            <div class="wizard-navigation mt-3">
-                <div class="wizard-nav-left">
-                    <button type="button" class="btn btn-nexo-outline btn-custom" id="btnAnteriorPaso2">
-                        <i class="bi bi-arrow-left-circle me-1"></i> Volver a Configuración
-                    </button>
-                    <button type="button" class="btn btn-custom ms-2" id="btnLimpiar" style="background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); border: 1px solid var(--nexo-warning);">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Reiniciar
-                    </button>
-                </div>
-                <div class="wizard-nav-right">
-                    <button type="button" class="btn btn-custom me-2" id="btnPreview" style="background: var(--nexo-gray-100); color: var(--nexo-gray-700); border: 1px solid var(--nexo-gray-300);">
-                        <i class="bi bi-eye me-1"></i>Vista Previa
-                    </button>
-                </div>
-            </div>
+                        <!-- Botón principal de emisión -->
+                        <button id="btnGenerarOperacion" type="button" class="btn w-100 py-2 mb-2"
+                                style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white; border: none; border-radius: var(--nexo-radius-md); font-weight: 600; font-size: 0.95rem; box-shadow: 0 4px 14px rgba(0, 212, 170, 0.35); transition: all 0.3s ease;">
+                            <i class="bi bi-send-fill me-2"></i>
+                            <span>Emitir Documento</span>
+                            <span id="spinner_btn" style="display:none" class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true"></span>
+                        </button>
+
+                        <!-- Navegación: Volver / Reiniciar / Preview -->
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-nexo-outline btn-custom btn-sm flex-fill" id="btnAnteriorPaso2">
+                                <i class="bi bi-arrow-left-circle me-1"></i>Volver
+                            </button>
+                            <button type="button" class="btn btn-sm btn-custom flex-fill" id="btnLimpiar"
+                                    style="background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); border: 1px solid var(--nexo-warning);">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Reiniciar
+                            </button>
+                            <button type="button" class="btn btn-sm btn-custom" id="btnPreview"
+                                    style="background: var(--nexo-gray-100); color: var(--nexo-gray-700); border: 1px solid var(--nexo-gray-300);">
+                                <i class="bi bi-eye me-1"></i>Preview
+                            </button>
+                        </div>
+
+                    </div><!-- /pos-right-panel -->
+                </div><!-- /col-lg-4 -->
+
+            </div><!-- /row -->
         </div>
 
 
@@ -1464,181 +1439,155 @@
     </div>
 </div>
 
-<!-- Modal para selección de tallas -->
-<!-- Modal de Tallas - NEXO Style -->
+<!-- Modal para selección de tallas - REDISEÑADO -->
 <div class="modal fade" id="modalTallas" tabindex="-1" aria-labelledby="modalTallasLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content" style="border: none; border-radius: var(--nexo-radius-xl); overflow: hidden;">
-            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%); border: none;">
-                <h4 class="modal-title" style="color: white; font-weight: 600;" id="modalTallasLabel">
-                    <i class="bi bi-grid-3x3-gap-fill me-2"></i>Seleccionar Tallas
-                </h4>
+
+            <!-- HEADER: título + info del producto en una sola línea -->
+            <div class="modal-header py-2 px-3" style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); border: none;">
+                <div class="flex-grow-1 me-3">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <h5 class="modal-title mb-0" id="modalTallasLabel" style="color: white; font-weight: 600;">
+                            <i class="bi bi-grid-3x3-gap-fill me-2"></i>Seleccionar Tallas
+                        </h5>
+                    </div>
+                    <!-- Info del producto compacta en línea -->
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="badge fs-6 px-2" style="background: rgba(0,102,255,0.5);" id="art-modal">-</span>
+                        <span style="color: rgba(255,255,255,0.9); font-size: 0.82rem; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="art-modal_descripcion">-</span>
+                        <span class="badge" style="background: rgba(255,255,255,0.15); font-size: 0.75rem;">
+                            <i class="bi bi-palette me-1"></i><span id="art-modal_color">-</span>
+                        </span>
+                        <span class="badge" style="background: rgba(255,255,255,0.15); font-size: 0.75rem;">
+                            <i class="bi bi-award me-1"></i><span id="art-modal_marca">-</span>
+                        </span>
+                        <span class="badge px-2" style="background: rgba(0,212,170,0.4); color: white; font-size: 0.82rem; font-weight: 700;">
+                            <i class="bi bi-currency-dollar me-1"></i><span id="art-modal_preciointerno">-</span>
+                        </span>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body">
-                <!-- Información del Producto -->
-                <div class="row mb-3">
-                    <div class="col-md-2">
-                        <div class="card h-100">
-                            <div class="card-body text-center p-2">
-                                <h6 class="card-title text-primary mb-1">Artículo</h6>
-                                <h5 class="mb-0" id="art-modal"></h5>
-                            </div>
+
+            <div class="modal-body p-0">
+
+                <!-- SECCIÓN TAREA: compacta, informativa y clara -->
+                <div class="px-3 pt-3 pb-2" style="background: linear-gradient(135deg, rgba(0,212,170,0.06) 0%, rgba(0,102,255,0.04) 100%); border-bottom: 1px solid var(--nexo-gray-300);">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <!-- Título + badge -->
+                        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                            <i class="bi bi-lightning-charge-fill" style="color: var(--nexo-warning);"></i>
+                            <span class="fw-semibold small">Agregar por Tarea</span>
+                            <span class="badge bg-info ms-1" id="badge-tarea-info" style="font-size: 0.68rem;">0 tareas</span>
+                        </div>
+                        <!-- Patrón -->
+                        <div class="d-flex align-items-center gap-1">
+                            <label class="small text-muted mb-0 flex-shrink-0">Patrón:</label>
+                            <select id="select-patron-tarea" class="form-select form-select-sm" style="width: auto; min-width: 170px;">
+                                <option value="auto">🔍 Auto-detectar</option>
+                                <option value="calzado_adulto">👟 Calzado Adulto</option>
+                                <option value="calzado_deportivo">⚽ Calzado Deportivo</option>
+                                <option value="calzado_infantil">👶 Calzado Infantil</option>
+                                <option value="ropa_adulto">👕 Ropa Adulto (XS-XXL)</option>
+                                <option value="ropa_numerico">👔 Ropa Numérico (38-48)</option>
+                            </select>
+                        </div>
+                        <!-- Cantidad -->
+                        <div class="d-flex align-items-center gap-1">
+                            <label class="small text-muted mb-0 flex-shrink-0">Tareas:</label>
+                            <input type="number" id="input-cantidad-tareas" class="form-control form-control-sm text-center fw-bold" min="1" max="20" value="1" style="width: 60px;">
+                        </div>
+                        <!-- Botones de acción con tooltips descriptivos -->
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button type="button" class="btn btn-sm btn-success" id="btn-tarea-completa"
+                                    data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="Llena cada talla con la proporción exacta de la tarea (ej: 2 tareas = 2x el patrón de stock)">
+                                <i class="bi bi-check2-all me-1"></i>Tarea Completa
+                            </button>
+                            <button type="button" class="btn btn-sm btn-warning" id="btn-tarea-parcial"
+                                    data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="Llena con el máximo stock disponible respetando la proporción del patrón. Útil cuando no hay stock completo.">
+                                <i class="bi bi-check2 me-1"></i>Tarea Parcial
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-ver-patron"
+                                    data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="Ver distribución de tallas del patrón seleccionado">
+                                <i class="bi bi-diagram-3 me-1"></i>Ver Patrón
+                            </button>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="card h-100">
-                            <div class="card-body text-center p-2">
-                                <h6 class="card-title text-primary mb-1">Descripción</h6>
-                                <h6 class="mb-0" id="art-modal_descripcion"></h6>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card h-100">
-                            <div class="card-body text-center p-2">
-                                <h6 class="card-title text-primary mb-1">Color</h6>
-                                <h5 class="mb-0" id="art-modal_color"></h5>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card h-100">
-                            <div class="card-body text-center p-2">
-                                <h6 class="card-title text-primary mb-1">Marca</h6>
-                                <h5 class="mb-0" id="art-modal_marca"></h5>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card h-100">
-                            <div class="card-body text-center p-2">
-                                <h6 class="card-title text-primary mb-1">Precio Venta</h6>
-                                <h5 class="mb-0 text-success" id="art-modal_preciointerno"></h5>
-                            </div>
-                        </div>
+                    <!-- Info de tarea inline (sin ocupar mucho espacio) -->
+                    <div id="alert-tarea-info" class="mt-2 px-3 py-1 small rounded" style="display: none; background: rgba(13,110,253,0.08); border: 1px solid rgba(13,110,253,0.2); color: #084298;">
+                        <i class="bi bi-info-circle me-1"></i><span id="texto-info-tarea"></span>
                     </div>
                 </div>
 
-                <!-- Sección de Agregar Tarea - NEXO Style -->
-                <div class="card mb-3" style="border: 2px solid var(--nexo-accent); border-radius: var(--nexo-radius-lg); overflow: hidden;">
-                    <div class="card-header" style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white; border: none;">
-                        <h6 class="mb-0">
-                            <i class="bi bi-lightning-charge-fill me-2"></i>Agregar por Tarea
-                            <span class="badge ms-2" style="background: rgba(255,255,255,0.25); color: white;" id="badge-tarea-info">0 tareas detectadas</span>
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">
-                                    <i class="bi bi-diagram-3 me-1"></i>Patrón de Tarea
-                                </label>
-                                <select id="select-patron-tarea" class="form-select">
-                                    <option value="auto">🔍 Detectar Automáticamente</option>
-                                    <option value="calzado_adulto">👟 Calzado Adulto Estándar</option>
-                                    <option value="calzado_deportivo">⚽ Calzado Deportivo</option>
-                                    <option value="calzado_infantil">👶 Calzado Infantil</option>
-                                    <option value="ropa_adulto">👕 Ropa Adulto (XS-XXL)</option>
-                                    <option value="ropa_numerico">👔 Ropa Numérico (38-48)</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label fw-bold">
-                                    <i class="bi bi-calculator me-1"></i>Cantidad de Tareas
-                                </label>
-                                <input type="number" id="input-cantidad-tareas" class="form-control" min="1" max="10" value="1" placeholder="Ej: 2">
-                            </div>
-                            <div class="col-md-5">
-                                <label class="form-label fw-bold">Acciones</label>
-                                <div class="btn-group w-100" role="group">
-                                    <button type="button" class="btn btn-success" id="btn-tarea-completa">
-                                        <i class="bi bi-check2-all me-1"></i>Tarea Completa
-                                    </button>
-                                    <button type="button" class="btn btn-warning" id="btn-tarea-parcial">
-                                        <i class="bi bi-check2 me-1"></i>Tarea Parcial
-                                    </button>
-                                    <button type="button" class="btn btn-info" id="btn-ver-patron">
-                                        <i class="bi bi-eye me-1"></i>Ver Patrón
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Alerta informativa -->
-                        <div class="alert alert-info mt-3 mb-0" id="alert-tarea-info" style="display: none;">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <span id="texto-info-tarea"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tabla de Tallas - NEXO Style -->
-                <div class="table-responsive" style="border-radius: var(--nexo-radius-md); overflow: hidden; border: 1px solid var(--nexo-gray-300);">
-                    <table id="table_modal_prod" class="table table-hover mb-0">
-                        <thead style="background: var(--nexo-secondary); color: white;">
+                <!-- TABLA DE TALLAS - compacta, sticky header, scroll interno -->
+                <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+                    <table id="table_modal_prod" class="table table-hover table-sm mb-0">
+                        <thead style="background: var(--nexo-secondary); color: white; position: sticky; top: 0; z-index: 2;">
                             <tr>
-                                <th class="text-center py-3">ID</th>
-                                <th class="text-center py-3">SKU</th>
-                                <th class="text-center py-3">Talla</th>
-                                <th class="text-center py-3">Stock</th>
-                                <th class="text-center py-3" title="Unidades ya agregadas al despacho">
-                                    <i class="bi bi-truck-front-fill"></i> En Despacho
+                                <th class="text-center py-2">SKU</th>
+                                <th class="text-center py-2">Talla</th>
+                                <th class="text-center py-2" title="Stock total en bodega">
+                                    <i class="bi bi-box-seam"></i> Stock
                                 </th>
-                                <th class="text-center py-3">Disponible</th>
-                                <th class="text-center py-3">Precio</th>
-                                <th class="text-center py-3">Cantidad</th>
-                                <th class="text-center py-3">Subtotal</th>
-                                <th class="text-center py-3">Acción</th>
+                                <th class="text-center py-2" title="Unidades ya agregadas en este despacho">
+                                    <i class="bi bi-truck-front-fill"></i> Desp.
+                                </th>
+                                <th class="text-center py-2" title="Disponible para agregar ahora">
+                                    <i class="bi bi-check-circle"></i> Dispon.
+                                </th>
+                                <th class="text-end py-2">Precio</th>
+                                <th class="text-center py-2" style="width: 100px;">Cantidad</th>
+                                <th class="text-end py-2">Subtotal</th>
+                                <th class="text-center py-2" style="width: 44px;"></th>
                             </tr>
                         </thead>
                         <tbody id="tabla_modal_ventas_interna">
-                            <!-- Las tallas se cargarán aquí dinámicamente -->
                         </tbody>
                     </table>
                 </div>
 
-                <!-- Resumen de Selección -->
-                <div class="row mt-3">
-                    <div class="col-md-8">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <strong>Instrucciones:</strong> Ingrese la cantidad deseada para cada talla y use los botones de acción para agregar al detalle.
-                        </div>
+                <!-- BARRA DE RESUMEN EN VIVO -->
+                <div class="px-3 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2" style="background: var(--nexo-gray-100); border-top: 1px solid var(--nexo-gray-300);">
+                    <div class="d-flex gap-3 align-items-center flex-wrap">
+                        <span class="small">
+                            <i class="bi bi-layers text-primary me-1"></i>
+                            Tallas: <strong id="totalTallasModal">0</strong>
+                        </span>
+                        <span class="small">
+                            <i class="bi bi-boxes text-primary me-1"></i>
+                            Unidades: <strong id="totalUnidadesModal">0</strong>
+                        </span>
+                        <span class="small fw-bold" style="color: var(--nexo-accent);">
+                            <i class="bi bi-currency-dollar me-1"></i>
+                            Total: <strong id="totalMontoModal">$0</strong>
+                        </span>
                     </div>
-                    <div class="col-md-4">
-                        <div class="card">
-                            <div class="card-body">
-                                <h6 class="card-title">Resumen Selección</h6>
-                                <div class="d-flex justify-content-between">
-                                    <span>Total Tallas:</span>
-                                    <span id="totalTallasModal">0</span>
-                                </div>
-                                <div class="d-flex justify-content-between">
-                                    <span>Total Unidades:</span>
-                                    <span id="totalUnidadesModal">0</span>
-                                </div>
-                                <div class="d-flex justify-content-between fw-bold">
-                                    <span>Total Monto:</span>
-                                    <span id="totalMontoModal">$0</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <small class="text-muted d-none d-md-block">
+                        <i class="bi bi-hand-index me-1"></i>Ingresa cantidades en la tabla y usa <strong>Agregar Seleccionados</strong>
+                    </small>
                 </div>
+
             </div>
-            <div class="modal-footer" style="background: var(--nexo-gray-100); border-top: 1px solid var(--nexo-gray-300);">
-                <button type="button" class="btn btn-nexo-success" id="btnAgregarSeleccionados">
-                    <i class="bi bi-plus-circle-fill me-1"></i>Agregar Seleccionados
-                </button>
-                <button type="button" class="btn btn-nexo-primary" id="btnAgregarTodo">
-                    <i class="bi bi-box-arrow-in-down me-1"></i>Agregar Todo
-                </button>
-                <button type="button" class="btn" id="btnLimpiarModal" style="background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); border: 1px solid var(--nexo-warning);">
-                    <i class="bi bi-arrow-clockwise me-1"></i>Limpiar
-                </button>
-                <button type="button" class="btn" data-bs-dismiss="modal" style="background: var(--nexo-gray-100); color: var(--nexo-gray-700); border: 1px solid var(--nexo-gray-300);">
+
+            <!-- FOOTER con botones ordenados por prioridad -->
+            <div class="modal-footer py-2 px-3 gap-2" style="background: white; border-top: 1px solid var(--nexo-gray-300);">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
                     <i class="bi bi-x-lg me-1"></i>Cerrar
+                </button>
+                <button type="button" class="btn btn-outline-warning btn-sm" id="btnLimpiarModal">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Limpiar Cant.
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="btnAgregarTodo"
+                        title="Llena automáticamente todas las tallas con su stock disponible">
+                    <i class="bi bi-arrow-bar-down me-1"></i>Agregar Todo Stock
+                </button>
+                <button type="button" class="btn btn-success px-4" id="btnAgregarSeleccionados">
+                    <i class="bi bi-plus-circle-fill me-1"></i>Agregar Seleccionados
+                    <span class="badge bg-white text-success ms-1" id="badgeCountSeleccionados">0</span>
                 </button>
             </div>
         </div>
@@ -1915,26 +1864,18 @@ function initializeEventListeners() {
             
             // Actualizar badge
             $('#badgeMetodoDespacho').removeClass('bg-danger').addClass('bg-success').text('✓ Seleccionado');
+            $('#badgeMetodoDespachoVisible').removeClass('bg-danger').addClass('bg-success').text('✓ Listo');
             
-            // Mostrar/ocultar campos según el método
+            // Ocultar ambos contenedores al cambiar método — se mostrarán al completar ambas selecciones
+            $('#sucursalDestinoContainer').slideUp(300);
+            $('#receptorExternoContainer').slideUp(300);
+            $('#infoDespachoInterno').slideUp(300);
+            $('#infoDespachoExterno').slideUp(300);
+            
             if (type === 'interno') {
-                // Despacho interno: mostrar sucursales, ocultar empresas
-                $('#receptorExternoContainer').slideUp(300);
-                $('#sucursalDestinoContainer').slideDown(300);
-                $('#infoDespachoExterno').slideUp(300);
-                $('#infoDespachoInterno').slideDown(300);
-                
-                // Limpiar y cargar datos
                 $('#receptorSelect').val('');
                 loadSucursalesDestino();
             } else {
-                // Despacho externo: mostrar empresas, ocultar sucursales
-                $('#sucursalDestinoContainer').slideUp(300);
-                $('#receptorExternoContainer').slideDown(300);
-                $('#infoDespachoInterno').slideUp(300);
-                $('#infoDespachoExterno').slideDown(300);
-                
-                // Limpiar y cargar datos
                 $('#sucursalDestinoSelect').val('');
                 loadReceptores();
             }
@@ -1953,7 +1894,7 @@ function initializeEventListeners() {
             $('#badgeTipoDocumento').removeClass('bg-danger').addClass('bg-success').text('✓ Seleccionado');
             
             // Si es despacho interno y ya hay sucursales cargadas, recargar con el nuevo filtro
-            if (selectedMethod === 'interno' && $('#sucursalDestinoContainer').is(':visible')) {
+            if (selectedMethod === 'interno') {
                 loadSucursalesDestino();
             }
             
@@ -2089,13 +2030,13 @@ function initializeWizardNavigation() {
             // Colapsar
             container.slideUp(300);
             icon.removeClass('bi-chevron-up').addClass('bi-chevron-down');
-            $(this).html('<i class="bi bi-chevron-down me-1"></i>Ver detalle por talla/SKU');
+            $(this).html('<i class="bi bi-chevron-down me-1"></i>Por talla');
             $(this).data('expanded', false);
         } else {
             // Expandir
             container.slideDown(300);
             icon.removeClass('bi-chevron-down').addClass('bi-chevron-up');
-            $(this).html('<i class="bi bi-chevron-up me-1"></i>Ocultar detalle por talla/SKU');
+            $(this).html('<i class="bi bi-chevron-up me-1"></i>Ocultar tallas');
             $(this).data('expanded', true);
         }
     });
@@ -2132,6 +2073,7 @@ function goToStep(step) {
         // Acciones específicas por paso
         if (step === 2) {
             searchProducts(); // Cargar productos automáticamente al entrar al paso de productos
+            setTimeout(() => $('#searchProduct').focus(), 350); // Auto-focus en el buscador
         }
     });
 }
@@ -2491,37 +2433,36 @@ function actualizarResumenSeleccion() {
             '<span class="text-info fw-bold">📋 Guía de Despacho</span> (Solo traslado)';
         $('#resumenDocumento').html(documentoTexto);
         
-        // Actualizar impacto en stock
+        // Actualizar impacto en stock — texto compacto en línea
         let impactoStock = '';
         if (selectedMethod === 'interno') {
-            impactoStock = `
-                <div class="alert alert-danger mb-0 border-danger">
-                    <i class="bi bi-arrow-down-circle me-2"></i>
-                    El <strong>stock se reducirá INMEDIATAMENTE</strong> en la sucursal origen.
-                    <br><small class="text-muted mt-2 d-block">
-                        📤 <strong>Salida inmediata:</strong> El stock de la sucursal origen se reduce al emitir el documento.
-                        <br>📥 <strong>Ingreso pendiente:</strong> La sucursal destino debe recepcionar el documento para aumentar su stock.
-                        <br>📋 Estado: <strong>PENDIENTE DE RECEPCIÓN</strong> hasta que se confirme en destino.
-                    </small>
-                </div>
-            `;
+            impactoStock = '<span class="badge bg-warning text-dark"><i class="bi bi-arrow-left-right me-1"></i>Stock origen: inmediato · destino: pendiente recepción</span>';
         } else {
-            impactoStock = `
-                <div class="alert alert-danger mb-0 border-danger">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    El <strong>stock se reducirá INMEDIATAMENTE</strong> usando el método FIFO (First In, First Out).
-                    <br><small class="text-muted mt-2 d-block">
-                        📉 El movimiento quedará registrado como <strong>VENTA COMPLETADA</strong> y el stock disponible disminuirá de inmediato.
-                    </small>
-                </div>
-            `;
+            impactoStock = '<span class="badge bg-danger"><i class="bi bi-dash-circle me-1"></i>Stock se reduce al emitir (FIFO)</span>';
         }
         $('#resumenStock').html(impactoStock);
+        
+        // Mostrar el contenedor correcto según el método
+        if (selectedMethod === 'interno') {
+            $('#receptorExternoContainer').slideUp(300);
+            $('#sucursalDestinoContainer').slideDown(300);
+            $('#infoDespachoExterno').slideUp(300);
+            $('#infoDespachoInterno').slideDown(300);
+        } else {
+            $('#sucursalDestinoContainer').slideUp(300);
+            $('#receptorExternoContainer').slideDown(300);
+            $('#infoDespachoInterno').slideUp(300);
+            $('#infoDespachoExterno').slideDown(300);
+        }
     } else {
         // Mostrar alerta de pendiente
         $('#alertSeleccionPendiente').slideDown(300);
-        // Ocultar resumen
+        // Ocultar resumen y contenedores de receptor/destino
         $('#resumenSeleccion').slideUp(300);
+        $('#sucursalDestinoContainer').slideUp(300);
+        $('#receptorExternoContainer').slideUp(300);
+        $('#infoDespachoInterno').slideUp(300);
+        $('#infoDespachoExterno').slideUp(300);
     }
 }
 
@@ -3029,7 +2970,7 @@ function searchProducts() {
     // Mostrar loading en la tabla también
     $('#datos_tabla_productos').html(`
         <tr>
-            <td colspan="10" class="text-center py-4">
+            <td colspan="6" class="text-center py-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Buscando productos...</span>
                 </div>
@@ -3157,7 +3098,7 @@ function displayProductsInTable(products) {
     if (!products || products.length === 0) {
         tbody.append(`
             <tr>
-                <td colspan="10" class="text-center text-muted py-4">
+                <td colspan="6" class="text-center text-muted py-4">
                     <i class="bi bi-search me-2"></i>
                     No se encontraron productos con los filtros aplicados
                 </td>
@@ -3187,53 +3128,42 @@ function displayProductsInTable(products) {
             stockEnDespacho += parseInt(cantidadInput.val()) || 0;
         });
         
-        // Determinar estado y badge
-        let estadoTexto, estadoBadge, estadoClass;
+        // Determinar clase de fila según stock en despacho
+        let estadoClass;
         
         if (stockEnDespacho === 0) {
-            // Sin usar
-            estadoTexto = 'Disponible';
-            estadoBadge = 'bg-success';
             estadoClass = '';
         } else if (stockEnDespacho < stockTotal) {
-            // Parcialmente usado
-            estadoTexto = 'Agregado Parcial';
-            estadoBadge = 'bg-warning text-dark';
             estadoClass = 'table-warning';
         } else {
-            // Completamente usado (todo el stock)
-            estadoTexto = 'Agregado Completo';
-            estadoBadge = 'bg-danger';
             estadoClass = 'table-danger';
         }
         
-        console.log(`📊 Producto ${product.id}: Stock total: ${stockTotal}, En despacho: ${stockEnDespacho}, Estado: ${estadoTexto}`);
+        console.log(`📊 Producto ${product.id}: Stock total: ${stockTotal}, En despacho: ${stockEnDespacho}`);
         
+        // Badges visuales de atributos (solo los que no son '-')
+        const attrBadges = [
+            color !== '-' ? `<span class="badge bg-info text-dark" style="font-size:0.65rem;">${color}</span>` : '',
+            marca !== '-' ? `<span class="badge bg-primary" style="font-size:0.65rem;">${marca}</span>` : '',
+            sexo  !== '-' ? `<span class="badge bg-secondary" style="font-size:0.65rem;">${sexo}</span>`  : '',
+        ].filter(Boolean).join(' ');
+
         const rowHtml = `
             <tr data-product-id="${product.id}" class="${estadoClass}">
-                <td class="text-center">
-                    <span class="badge ${estadoBadge}">${estadoTexto}</span>
-                    ${stockEnDespacho > 0 ? `<br><small class="text-muted">${stockEnDespacho}/${stockTotal}</small>` : ''}
+                <td class="align-middle fw-semibold" style="white-space:nowrap;">${product.articulo}</td>
+                <td class="align-middle" style="max-width:200px;">
+                    <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${descripcion}">${descripcion}</div>
+                    ${attrBadges ? `<div class="mt-1">${attrBadges}</div>` : ''}
                 </td>
-                <td>${product.articulo}</td>
-                <td>${descripcion}</td>
-                <td class="text-center">
-                    <span class="badge bg-info">${color}</span>
+                <td class="text-end align-middle" style="white-space:nowrap;">$${parseInt(costo).toLocaleString()}</td>
+                <td class="text-end align-middle fw-bold text-success" style="white-space:nowrap;">$${parseInt(precioVenta).toLocaleString()}</td>
+                <td class="text-center align-middle">
+                    <span class="badge rounded-pill ${stockTotal <= 0 ? 'bg-danger' : stockTotal <= 4 ? 'bg-warning text-dark' : 'bg-success'} px-2" style="font-size:0.8rem;min-width:2rem;">${stockTotal}</span>
+                    ${stockEnDespacho > 0 ? `<div class="text-muted" style="font-size:0.65rem;">${stockEnDespacho} en doc.</div>` : ''}
                 </td>
-                <td class="text-center">
-                    <span class="badge bg-primary">${marca}</span>
-                </td>
-                <td class="text-center">
-                    <span class="badge bg-secondary">${sexo}</span>
-                </td>
-                <td class="text-end">$${parseInt(costo).toLocaleString()}</td>
-                <td class="text-end text-success fw-bold">$${parseInt(precioVenta).toLocaleString()}</td>
-                <td class="text-center">
-                    <span class="badge ${stockTotal <= 0 ? 'bg-danger' : stockTotal <= 4 ? 'bg-warning text-dark' : 'bg-success'} fs-4 px-3 py-2">${stockTotal}</span>
-                </td>
-                <td class="text-center">
-                    <button class="btn btn-primary btn-sm" onclick="selectProduct(${product.id})" title="Ver tallas disponibles">
-                        <i class="bi bi-eye me-1"></i>Ver Tallas
+                <td class="text-center align-middle">
+                    <button class="btn btn-success btn-sm py-0 px-2" onclick="selectProduct(${product.id})" title="Agregar al documento">
+                        <i class="bi bi-plus-lg"></i>
                     </button>
                 </td>
             </tr>
@@ -3304,6 +3234,13 @@ function selectProduct(productId) {
     
     // Mostrar modal
     $('#modalTallas').modal('show');
+    
+    // Inicializar tooltips del modal al mostrar
+    setTimeout(() => {
+        $('#modalTallas [data-bs-toggle="tooltip"]').each(function() {
+            new bootstrap.Tooltip(this, { trigger: 'hover' });
+        });
+    }, 300);
 }
 
 // Función helper para obtener el precio correcto según el tipo de despacho
@@ -3422,40 +3359,41 @@ function loadTallasDisponibles(product) {
         
         const rowHtml = `
             <tr data-talla-id="${talla.id || index}" data-sku="${talla.sku || ''}" data-stock="${stockTotal}" 
-                data-en-despacho="${cantidadEnDespacho}" data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}">
-                <td class="text-center">${talla.id || index}</td>
-                <td class="text-center fw-bold">${talla.sku || '-'}</td>
+                data-en-despacho="${cantidadEnDespacho}" data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}"
+                ${disponibleParaAgregar === 0 ? 'style="opacity:0.55;"' : ''}>
+                <td class="text-center fw-bold sku-cell" style="font-size:0.78rem;">${talla.sku || '-'}</td>
                 <td class="text-center">
-                    <span class="badge bg-primary">${talla.talla || '-'}</span>
+                    <span class="badge bg-primary talla-badge">${talla.talla || '-'}</span>
                 </td>
                 <td class="text-center">
                     <span class="badge bg-info">${stockTotal}</span>
                 </td>
                 <td class="text-center">
-                    <span class="badge ${badgeEnDespacho}" title="Unidades ya agregadas al despacho">
-                        ${cantidadEnDespacho > 0 ? cantidadEnDespacho : '-'}
+                    <span class="badge ${badgeEnDespacho}" title="Unidades ya en este despacho">
+                        ${cantidadEnDespacho > 0 ? cantidadEnDespacho : '–'}
                     </span>
                 </td>
                 <td class="text-center">
-                    <span class="badge ${badgeDisponible}" title="Stock disponible para agregar">
+                    <span class="badge ${badgeDisponible}" title="Disponible para agregar">
                         ${disponibleParaAgregar}
                     </span>
                 </td>
-                <td class="text-end">$${precioAUsar.toLocaleString()}</td>
+                <td class="text-end" style="font-size:0.82rem;">$${precioAUsar.toLocaleString()}</td>
                 <td class="text-center">
-                    <input type="number" class="form-control form-control-sm cantidad-input" 
+                    <input type="number" class="form-control form-control-sm cantidad-input text-center" 
                            min="0" max="${disponibleParaAgregar}" value="0" 
                            data-talla-id="${talla.id || index}" data-precio="${precioAUsar}" 
                            data-sku="${talla.sku || ''}" data-disponible="${disponibleParaAgregar}"
-                           data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}">
-                    ${disponibleParaAgregar === 0 ? '<small class="text-danger d-block">Sin stock</small>' : ''}
+                           data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}"
+                           ${disponibleParaAgregar === 0 ? 'disabled' : ''}
+                           style="padding: 2px 4px;">
                 </td>
-                <td class="text-end subtotal-cell">$0</td>
+                <td class="text-end subtotal-cell" style="font-size:0.82rem;">$0</td>
                 <td class="text-center">
-                    <button class="btn btn-success btn-sm" 
+                    <button class="btn btn-success btn-sm px-2 py-1" 
                             onclick="agregarTallaIndividual(${talla.id || index})"
-                            ${disponibleParaAgregar === 0 ? 'disabled title="Sin stock disponible"' : ''}>
-                        <i class="bi bi-plus"></i>
+                            ${disponibleParaAgregar === 0 ? 'disabled title="Sin stock"' : 'title="Agregar esta talla"'}>
+                        <i class="bi bi-plus-lg"></i>
                     </button>
                 </td>
             </tr>
@@ -3468,11 +3406,27 @@ function loadTallasDisponibles(product) {
         const cantidad = parseInt($(this).val()) || 0;
         const precio = parseInt($(this).data('precio')) || 0;
         const subtotal = cantidad * precio;
+        const row = $(this).closest('tr');
         
-        $(this).closest('tr').find('.subtotal-cell').text(`$${subtotal.toLocaleString()}`);
+        row.find('.subtotal-cell').text(subtotal > 0 ? `$${subtotal.toLocaleString()}` : '$0');
+        
+        // Resaltar fila si hay cantidad ingresada
+        if (cantidad > 0) {
+            row.addClass('talla-seleccionada');
+        } else {
+            row.removeClass('talla-seleccionada');
+        }
         
         // Actualizar resumen del modal
         updateModalSummary();
+    }).off('keydown').on('keydown', function(e) {
+        // Enter key: agregar talla individual
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const tallaId = $(this).data('talla-id');
+            if (tallaId) agregarTallaIndividual(tallaId);
+        }
+        // Tab: mover al siguiente input
     });
 }
 
@@ -3569,9 +3523,9 @@ function getSelectedTallasFromModal() {
         
         if (cantidad > 0) {
             const tallaId = row.data('talla-id');
-            const sku = row.find('td:nth-child(2)').text().trim();
-            const talla = row.find('td:nth-child(3) .badge').text().trim();
-            const stock = parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+            const sku = row.data('sku') || row.find('.sku-cell').text().trim();
+            const talla = row.find('.talla-badge').text().trim();
+            const stock = parseInt(row.data('stock')) || 0;
             const precio = parseInt(row.find('.cantidad-input').data('precio')) || 0;
             
             selectedTallas.push({
@@ -3916,9 +3870,9 @@ function agregarTallaIndividual(tallaId) {
     // ═══════════════════════════════════════════════════════════════
     // CORRECCIÓN: Obtener datos desde data-attributes (más confiable)
     // ═══════════════════════════════════════════════════════════════
-    const sku = row.data('sku') || row.find('td:nth-child(2)').text().trim();
-    const talla = row.find('td:nth-child(3) .badge').text().trim();
-    const stock = parseInt(row.data('stock')) || parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+    const sku = row.data('sku') || row.find('.sku-cell').text().trim();
+    const talla = row.find('.talla-badge').text().trim();
+    const stock = parseInt(row.data('stock')) || parseInt(row.find('.badge.bg-info').first().text()) || 0;
     const cantidadEnDespacho = parseInt(row.data('en-despacho')) || 0;
     const disponible = parseInt(row.find('.cantidad-input').data('disponible')) || 0;
     const precio = parseInt(row.find('.cantidad-input').data('precio')) || 0;
@@ -4021,6 +3975,16 @@ function updateModalSummary() {
     $('#totalTallasModal').text(totalTallas);
     $('#totalUnidadesModal').text(totalUnidades);
     $('#totalMontoModal').text(`$${totalMonto.toLocaleString()}`);
+    
+    // Actualizar badge del botón Agregar Seleccionados
+    const badge = $('#badgeCountSeleccionados');
+    if (totalUnidades > 0) {
+        badge.text(totalUnidades).show();
+        $('#btnAgregarSeleccionados').removeClass('btn-outline-success').addClass('btn-success');
+    } else {
+        badge.text('0');
+        $('#btnAgregarSeleccionados').removeClass('btn-success').addClass('btn-outline-success');
+    }
 }
 
 // Función duplicada eliminada - ver la versión completa arriba (línea ~3467)
@@ -4471,11 +4435,19 @@ function clearAll() {
             $('#sucursalDestinoSelect').val('');
             $('#fechaEmision').val(new Date().toISOString().split('T')[0]);
             
+            // Reiniciar badges de selección
+            $('#badgeMetodoDespacho, #badgeMetodoDespachoVisible').removeClass('bg-success').addClass('bg-danger').text('Pendiente');
+            $('#badgeTipoDocumento').removeClass('bg-success').addClass('bg-danger').text('Pendiente');
+            
             // Ocultar contenedores dinámicos
             $('#sucursalDestinoContainer').hide();
-            $('#receptorExternoContainer').show();
+            $('#receptorExternoContainer').hide();
             $('#infoDespachoInterno').hide();
             $('#infoDespachoExterno').hide();
+            $('#resumenSeleccion').hide();
+            $('#resumenStock').html('-');
+            $('#resumenMetodo').html('-');
+            $('#resumenDocumento').html('-');
             $('#detalleBody').empty().append(`
                 <tr id="emptyRow">
                     <td colspan="7" class="text-center text-muted py-4">
@@ -5243,12 +5215,12 @@ function actualizarInfoTarea() {
     const patronSeleccionado = $('#select-patron-tarea').val();
     const cantidadTareas = parseInt($('#input-cantidad-tareas').val()) || 1;
     
-    // Obtener tallas del modal actual
+    // Obtener tallas del modal actual usando data-* y clases semánticas
     const tallasConStock = [];
     $('#tabla_modal_ventas_interna tr[data-talla-id]').each(function() {
         const row = $(this);
-        const talla = row.find('td:nth-child(3) .badge').text().trim();
-        const stock = parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+        const talla = row.find('.talla-badge').text().trim();
+        const stock = parseInt(row.data('stock')) || 0;
         
         if (stock > 0) {
             tallasConStock.push({ talla: talla, stock: stock });
@@ -5326,12 +5298,12 @@ function actualizarInfoTarea() {
 function mostrarPatronDetectado() {
     const patronSeleccionado = $('#select-patron-tarea').val();
     
-    // Obtener tallas del modal actual
+    // Obtener tallas del modal actual usando data-* y clases semánticas
     const tallasConStock = [];
     $('#tabla_modal_ventas_interna tr[data-talla-id]').each(function() {
         const row = $(this);
-        const talla = row.find('td:nth-child(3) .badge').text().trim();
-        const stock = parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+        const talla = row.find('.talla-badge').text().trim();
+        const stock = parseInt(row.data('stock')) || 0;
         
         if (stock > 0) {
             tallasConStock.push({ talla: talla, stock: stock });
@@ -5419,8 +5391,8 @@ function aplicarTareaCompleta() {
     $('#tabla_modal_ventas_interna tr[data-talla-id]').each(function() {
         const row = $(this);
         const tallaId = row.data('talla-id');
-        const talla = row.find('td:nth-child(3) .badge').text().trim();
-        const stock = parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+        const talla = row.find('.talla-badge').text().trim();
+        const stock = parseInt(row.data('stock')) || 0;
         const input = row.find('.cantidad-input');
         
         tallasInfo.push({ 
@@ -5494,8 +5466,8 @@ function aplicarTareaParcial() {
     $('#tabla_modal_ventas_interna tr[data-talla-id]').each(function() {
         const row = $(this);
         const tallaId = row.data('talla-id');
-        const talla = row.find('td:nth-child(3) .badge').text().trim();
-        const stock = parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+        const talla = row.find('.talla-badge').text().trim();
+        const stock = parseInt(row.data('stock')) || 0;
         const input = row.find('.cantidad-input');
         
         tallasInfo.push({ 

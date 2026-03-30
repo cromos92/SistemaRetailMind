@@ -34,15 +34,15 @@
 .nexo-dashboard {
     background: var(--nexo-gray-100);
     min-height: 100vh;
-    padding: 1.5rem;
+    padding: 1.1rem;
 }
 
 .nexo-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
     border-bottom: 1px solid var(--nexo-gray-300);
 }
 
@@ -88,8 +88,8 @@
 .nexo-kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 @media (max-width: 1200px) {
@@ -107,7 +107,7 @@
 .nexo-kpi-card {
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-xl);
-    padding: 1.5rem;
+    padding: 1.1rem 1.25rem;
     box-shadow: var(--nexo-shadow-md);
     transition: all 0.25s ease;
     position: relative;
@@ -141,13 +141,13 @@
 }
 
 .nexo-kpi-icon {
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 42px;
     border-radius: var(--nexo-radius-lg);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
 }
 
 .nexo-kpi-icon.ventas { background: rgba(0, 212, 170, 0.15); color: var(--nexo-accent); }
@@ -170,11 +170,11 @@
 .nexo-kpi-trend.stable { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
 
 .nexo-kpi-value {
-    font-size: 2rem;
+    font-size: 1.6rem;
     font-weight: 800;
     color: var(--nexo-secondary);
     line-height: 1;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.2rem;
 }
 
 .nexo-kpi-label {
@@ -186,8 +186,8 @@
 }
 
 .nexo-kpi-footer {
-    margin-top: 1rem;
-    padding-top: 1rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
     border-top: 1px solid var(--nexo-gray-100);
     display: flex;
     justify-content: space-between;
@@ -297,8 +297,8 @@
 .nexo-modules-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 @media (max-width: 1200px) {
@@ -353,7 +353,7 @@
 }
 
 .nexo-module-body {
-    padding: 1.5rem;
+    padding: 1rem 1.25rem;
 }
 
 .nexo-stats-row {
@@ -930,6 +930,26 @@
             </div>
         </div>
 
+        <!-- ===== Charts Visuales ===== -->
+        <div class="row mb-4">
+            <div class="col-lg-7">
+                <div class="nexo-table-card" style="padding:20px;">
+                    <div class="nexo-table-header" style="border:none;padding:0 0 12px;">
+                        <span class="nexo-table-title"><i class="ri-line-chart-line text-primary"></i> Ventas por Hora (Hoy)</span>
+                    </div>
+                    <div style="position:relative;height:260px;"><canvas id="chartVentasHora"></canvas></div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="nexo-table-card" style="padding:20px;">
+                    <div class="nexo-table-header" style="border:none;padding:0 0 12px;">
+                        <span class="nexo-table-title"><i class="ri-bar-chart-fill text-warning"></i> Top 5 Productos</span>
+                    </div>
+                    <div style="position:relative;height:260px;"><canvas id="chartTopProductos"></canvas></div>
+                </div>
+            </div>
+        </div>
+
         <!-- ===== Fila de Tablas ===== -->
         <div class="row">
             
@@ -1105,28 +1125,81 @@
 </div>
 
 <script>
-// ========== Auto-refresh cada 5 minutos ==========
-setInterval(function() {
-    // Refresh silencioso de datos (podría ser AJAX en el futuro)
-    console.log('Dashboard actualizado:', new Date().toLocaleTimeString());
-}, 300000);
+setInterval(function() {}, 300000);
 
-// ========== Formato de números ==========
 document.addEventListener('DOMContentLoaded', function() {
-    // Formatear números grandes
-document.querySelectorAll('.nexo-kpi-value, .nexo-stat-value, .nexo-module-badge').forEach(function(el) {
-    let text = el.textContent.trim();
-    if (text.includes('$')) {
-        let digits = text.replace(/[^\d]/g, '');
-        let num = parseInt(digits, 10);
-        if (!isNaN(num)) {
-            el.textContent = '$' + num.toLocaleString('es-CL');
+    document.querySelectorAll('.nexo-kpi-value, .nexo-stat-value, .nexo-module-badge').forEach(function(el) {
+        let text = el.textContent.trim();
+        if (text.includes('$')) {
+            let digits = text.replace(/[^\d]/g, '');
+            let num = parseInt(digits, 10);
+            if (!isNaN(num)) {
+                el.textContent = '$' + num.toLocaleString('es-CL');
+            }
         }
+    });
+
+    // Chart: Ventas por Hora
+    var ventasPorHora = {{ ventas.ventas_por_hora|safe }};
+    if (ventasPorHora && ventasPorHora.length > 0) {
+        new Chart(document.getElementById('chartVentasHora'), {
+            type: 'line',
+            data: {
+                labels: ventasPorHora.map(function(v) { return v.hora + ':00'; }),
+                datasets: [{
+                    label: 'Monto ($)',
+                    data: ventasPorHora.map(function(v) { return v.monto; }),
+                    borderColor: '#0066FF',
+                    backgroundColor: 'rgba(0,102,255,.1)',
+                    fill: true,
+                    tension: .4,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#0066FF',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { callback: function(v) { return '$' + v.toLocaleString('es-CL'); } } },
+                    x: { ticks: { maxTicksLimit: 12 } }
+                }
+            }
+        });
     }
-});
+
+    // Chart: Top 5 Productos
+    {% if top_productos %}
+    var topData = [
+        {% for p in top_productos|slice:":5" %}
+        { nombre: "{{ p.producto|truncatechars:20 }}", unidades: {{ p.unidades }}, monto: {{ p.monto|floatformat:0 }} }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    if (topData.length > 0) {
+        new Chart(document.getElementById('chartTopProductos'), {
+            type: 'bar',
+            data: {
+                labels: topData.map(function(p) { return p.nombre; }),
+                datasets: [{
+                    label: 'Unidades',
+                    data: topData.map(function(p) { return p.unidades; }),
+                    backgroundColor: ['#0066FF','#00D4AA','#FFB020','#FF4D4D','#6559cc'],
+                    borderRadius: 8,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true } }
+            }
+        });
+    }
+    {% endif %}
 });
 
-// ========== Animación del botón refresh ==========
 document.getElementById('refreshBtn').addEventListener('click', function() {
     this.classList.add('loading');
 });

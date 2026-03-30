@@ -867,7 +867,23 @@ def debug_user_empresas(request):
 @login_required
 def gestion_creditos_documentos(request):
     """Vista principal para gestión de créditos a trabajadores desde módulo documentos"""
-    return render(request, 'vistas/modulo_administracion/gestion_creditos.html')
+    sucursal_id = request.session.get('idSucursalActual')
+    sucursal_actual = None
+    if sucursal_id:
+        try:
+            from .models import Sucursal
+            sucursal_actual = Sucursal.objects.get(id=sucursal_id)
+        except Exception:
+            pass
+    context = {
+        'qz_config': {
+            'habilitado': getattr(sucursal_actual, 'usar_qz_tray', False) if sucursal_actual else False,
+            'nombre_impresora': (
+                getattr(sucursal_actual, 'nombre_impresora_termica', 'EPSON TM-T20II') or 'EPSON TM-T20II'
+            ) if sucursal_actual else 'EPSON TM-T20II',
+        },
+    }
+    return render(request, 'vistas/modulo_administracion/gestion_creditos.html', context)
 
 
 @login_required

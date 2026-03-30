@@ -912,9 +912,143 @@
     #fullscreenLoader {
         backdrop-filter: blur(4px);
     }
-    
+
     #fullscreenLoader .spinner-border {
         color: #405189 !important;
+    }
+
+    /* ============================================== */
+    /* EMPTY STATE                                    */
+    /* ============================================== */
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--nexo-gray-500);
+    }
+
+    .empty-state i {
+        font-size: 48px;
+        color: var(--nexo-gray-300);
+        display: block;
+        margin-bottom: 12px;
+    }
+
+    .empty-state h5 {
+        color: var(--nexo-gray-700);
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .empty-state p {
+        font-size: 14px;
+        max-width: 360px;
+        margin: 0 auto;
+    }
+
+    /* ============================================== */
+    /* POS 15" - RESPONSIVE (1024px - 1440px)        */
+    /* ============================================== */
+    @media (min-width: 1024px) and (max-width: 1440px) {
+        /* Main table - compact but readable */
+        #tablaRecepciones .table th {
+            font-size: 11px;
+            padding: 10px 8px;
+        }
+
+        #tablaRecepciones .table td {
+            font-size: 13px;
+            padding: 10px 8px;
+        }
+
+        /* Product list in modal - use more vertical space on 15" */
+        #listaProductosRecepcion {
+            max-height: calc(46vh) !important;
+        }
+
+        /* Modal product table - compact columns */
+        #listaProductosRecepcion .table th,
+        #listaProductosRecepcion .table td {
+            font-size: 12px;
+            padding: 8px 6px;
+        }
+
+        /* Summary cards in sidebar */
+        .resumen-card .card-body {
+            padding: 14px;
+        }
+
+        .section-title {
+            font-size: 13px;
+        }
+
+        /* Header */
+        .recepcion-header {
+            padding: 16px 20px;
+        }
+
+        .recepcion-header h4 {
+            font-size: 20px;
+        }
+
+        /* Filter section */
+        .filter-section label {
+            font-size: 12px;
+        }
+
+        .filter-section .form-control,
+        .filter-section .form-select {
+            font-size: 13px;
+            height: 36px;
+        }
+
+        /* Action buttons in modal */
+        #accionesRapidas .btn {
+            font-size: 13px;
+            padding: 7px 14px;
+        }
+
+        /* Real-time summary */
+        #resumenOK, #resumenParcial, #resumenDanado, #resumenFaltante {
+            font-size: 18px;
+        }
+    }
+
+    /* ============================================== */
+    /* POS - LARGER TOUCH TARGETS                    */
+    /* ============================================== */
+    @media (min-width: 1024px) {
+        /* Bigger checkbox for POS use */
+        .producto-checkbox {
+            width: 22px !important;
+            height: 22px !important;
+        }
+
+        /* Wider quantity input for easy entry */
+        .cantidad-recepcionada {
+            width: 80px !important;
+            min-height: 34px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        /* Bigger detallar button */
+        .btn-detallar {
+            min-width: 32px;
+            min-height: 32px;
+            padding: 4px 8px;
+        }
+
+        /* Larger action buttons in modal footer */
+        .modal-footer .btn {
+            min-height: 38px;
+            font-size: 14px;
+        }
+
+        /* Main table action buttons */
+        #tablaRecepciones .btn {
+            min-height: 34px;
+        }
     }
 </style>
 
@@ -1129,7 +1263,7 @@
 
 <!-- Modal detalle documento MEJORADO -->
 <div class="modal fade" id="modalDetalleDocumento" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <div>
@@ -1229,26 +1363,23 @@
                 </div>
 
                 <!-- Lista de Productos con Scroll -->
-                <div style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 1px solid #dee2e6; border-radius: 8px;" id="listaProductosRecepcion">
+                <div style="max-height: calc(45vh); overflow-y: auto; overflow-x: auto; border: 1px solid #dee2e6; border-radius: 8px;" id="listaProductosRecepcion">
                     <table class="table table-hover mb-0">
                         <thead class="sticky-top bg-white" style="top: 0; z-index: 10;">
                             <tr>
                                 <th style="width: 50px;">OK</th>
-                                <th style="width: 120px;">SKU</th>
-                                <th>Producto</th>
-                                <th style="width: 120px;">Artículo</th>
-                                <th style="width: 100px;">Color</th>
-                                <th style="width: 100px;">Marca</th>
-                                <th style="width: 80px;">Talla</th>
-                                <th style="width: 100px;" class="text-center">Esperado</th>
-                                <th style="width: 100px;" class="text-center">Recibido</th>
-                                <th style="width: 80px;">Estado</th>
-                                <th style="width: 50px;"></th>
+                                <th style="width: 110px;">SKU</th>
+                                <th>Producto / Detalle</th>
+                                <th style="width: 70px;">Talla</th>
+                                <th style="width: 90px;" class="text-center">Esperado</th>
+                                <th style="width: 90px;" class="text-center">Recibido</th>
+                                <th style="width: 90px;">Estado</th>
+                                <th style="width: 44px;"></th>
                             </tr>
                         </thead>
                         <tbody id="productosVerificacionBody">
                             <tr>
-                                <td colspan="11" class="text-center text-muted py-4">Cargando productos...</td>
+                                <td colspan="8" class="text-center text-muted py-4">Cargando productos...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1725,7 +1856,7 @@ function cargarRecepciones(forzarActualizacion = false) {
 
     $('#recepcionesBody').html(`
         <tr>
-            <td colspan="6" class="text-center py-4">
+            <td colspan="7" class="text-center py-4">
                 <div class="spinner-border text-success" role="status">
                     <span class="visually-hidden">Cargando...</span>
                 </div>
@@ -1759,7 +1890,7 @@ function cargarRecepciones(forzarActualizacion = false) {
     }).fail(xhr => {
         $('#recepcionesBody').html(`
             <tr>
-                <td colspan="6" class="text-center py-4 text-muted">
+                <td colspan="7" class="text-center py-4 text-muted">
                     <i class="bi bi-exclamation-triangle text-warning me-2"></i>
                     Error al cargar recepciones: ${xhr.responseJSON ? xhr.responseJSON.error : 'Error inesperado'}
                 </td>
@@ -1936,7 +2067,7 @@ function llenarDetalleDocumento(doc) {
     $('#observacionesGenerales').val('');
     
     if (!doc.detalle || !doc.detalle.length) {
-        $('#productosVerificacionBody').html('<tr><td colspan="11" class="text-center text-muted">Sin productos</td></tr>');
+        $('#productosVerificacionBody').html('<tr><td colspan="8" class="text-center text-muted">Sin productos</td></tr>');
         return;
     }
     
@@ -1969,25 +2100,9 @@ function renderizarProductosVerificacion() {
     
     const busqueda = $('#buscarProductoModal').val().toLowerCase().trim();
     
-    // ✅ DEBUG: Log para verificar búsqueda
-    console.log('🔍 Búsqueda activa:', busqueda || '(sin filtro)');
-    console.log('📦 Total productos:', productosVerificacion.length);
-    
     let productosVisibles = 0;
     
     productosVerificacion.forEach((prod, index) => {
-        // ✅ DEBUG: Log detallado de cada producto
-        if (busqueda) {
-            console.log(`Producto ${index}:`, {
-                sku: prod.sku,
-                descripcion: prod.descripcion,
-                articulo: prod.articulo,
-                marca: prod.marca,
-                color: prod.color,
-                talla: prod.talla
-            });
-        }
-        
         // Filtrar por búsqueda (incluye SKU, descripción, artículo, color, marca y talla)
         const coincide = !busqueda || 
             (prod.sku && prod.sku.toLowerCase().includes(busqueda)) ||
@@ -2035,16 +2150,16 @@ function renderizarProductosVerificacion() {
                            data-index="${index}" ${prod.marcado_ok ? 'checked' : ''}>
                 </td>
                 <td><small class="font-monospace">${skuMostrar}</small></td>
-                <td><small>${descripcionMostrar}</small></td>
-                <td><small>${articuloMostrar}</small></td>
-                <td><small>${colorMostrar}</small></td>
-                <td><small>${marcaMostrar}</small></td>
+                <td>
+                    <small class="d-block fw-semibold">${descripcionMostrar}</small>
+                    <small class="text-muted">${articuloMostrar !== '-' ? articuloMostrar : ''}${colorMostrar !== '-' ? ' · ' + colorMostrar : ''}${marcaMostrar !== '-' ? ' · ' + marcaMostrar : ''}</small>
+                </td>
                 <td class="text-center"><span class="badge bg-secondary">${tallaMostrar}</span></td>
                 <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
                 <td class="text-center">
                     <input type="number" class="form-control form-control-sm text-center cantidad-recepcionada" 
                            data-index="${index}" value="${prod.cantidad_recepcionada}" 
-                           min="0" max="${prod.cantidad_esperada}" style="width: 70px;"
+                           min="0" max="${prod.cantidad_esperada}" style="width: 80px;"
                            ${prod.marcado_ok ? 'disabled' : ''}>
                 </td>
                 <td>${estadoBadge}</td>
@@ -2059,11 +2174,8 @@ function renderizarProductosVerificacion() {
         `);
     });
     
-    // ✅ DEBUG: Log de resultados
-    console.log('✅ Productos visibles:', productosVisibles);
-    
     if (tbody.children().length === 0) {
-        tbody.html('<tr><td colspan="11" class="text-center text-muted">No se encontraron productos</td></tr>');
+        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron productos</td></tr>');
     }
     
     // Bind events
@@ -2313,8 +2425,7 @@ function abrirObservacionMasiva() {
                 textarea.removeAttribute('readonly');
                 setTimeout(() => {
                     textarea.focus();
-                    textarea.click(); // Forzar click para activar
-                    console.log('✅ Textarea Observación Masiva enfocado:', textarea);
+                    textarea.click();
                 }, 150);
             }
             
@@ -2923,8 +3034,9 @@ function procesarRecepcion(incluirProblemas) {
         recepcion_completa: !incluirProblemas
     };
     
-    const $btn = incluirProblemas ? $('#btnRecepcionarParcial') : $('#btnConfirmarRecepcion');
+    const $btn = $('#btnConfirmarRecepcion');
     $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Procesando...');
+    $('#btnRechazarRecepcion').prop('disabled', true);
     
     $.ajax({
         url: '/app/dte/confirmar_recepcion/',
@@ -2983,8 +3095,10 @@ function procesarRecepcion(incluirProblemas) {
         });
     }).always(() => {
         $btn.prop('disabled', false);
+        $('#btnRechazarRecepcion').prop('disabled', false);
         $('#btnConfirmarRecepcion').html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa');
         $('#btnRecepcionarParcial').html('<i class="bi bi-exclamation-triangle me-1"></i>Recepcionar con Problemas');
+        actualizarResumenVerificacion();
     });
 }
 
@@ -3168,8 +3282,7 @@ function rehabilitarDTE(dteId, numeroDocumento) {
                 textarea.removeAttribute('readonly');
                 setTimeout(() => {
                     textarea.focus();
-                    textarea.click(); // Forzar click para activar
-                    console.log('✅ Textarea Rehabilitación enfocado:', textarea);
+                    textarea.click();
                 }, 150);
             }
         }

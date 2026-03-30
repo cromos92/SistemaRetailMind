@@ -278,23 +278,31 @@
     .modal-xxl { max-width: 1800px; }
 }
 
-/* Tabla de recepción */
-#tablaRecepcionProductos {
-    font-size: 0.875rem;
+@media (max-width: 991.98px) {
+    .modal-xxl,
+    #modalRecepcionProductos .modal-dialog {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0.5rem;
+    }
+    #modalRecepcionProductos .modal-body { padding: 6px !important; }
+    .recepcion-toolbar .ms-auto { flex-basis: 100%; justify-content: flex-end; margin-top: 4px; }
+}
+@media (max-width: 767.98px) {
+    #modalRecepcionProductos .modal-title { font-size: 0.85rem; }
+    .acciones-masivas-bar .input-group { width: 100% !important; }
+    #tablaRecepcionProductos { font-size: 0.72rem; }
+    #tablaRecepcionProductos th { font-size: 0.65rem !important; padding: 3px 2px !important; }
+    #tablaRecepcionProductos td { padding: 2px; }
 }
 
-#tablaRecepcionProductos thead {
-    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%) !important;
-}
-
+/* Tabla de recepción - compacta */
+#tablaRecepcionProductos { font-size: 0.82rem; }
+#tablaRecepcionProductos thead { background: linear-gradient(135deg, #405189 0%, #4a5d99 100%) !important; }
 #tablaRecepcionProductos th {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    background: transparent !important;
-    color: white !important;
-    border: none;
+    font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.3px; background: transparent !important;
+    color: white !important; border: none; padding: 5px 6px;
 }
 
 /* Vista agrupada mejorada */
@@ -351,8 +359,8 @@
 }
 
 .badge-stock-total {
-    font-size: 0.9rem;
-    padding: 0.4em 0.75em;
+    font-size: 0.75rem;
+    padding: 0.3em 0.6em;
     background: #1a1a2e !important;
 }
 
@@ -412,23 +420,260 @@
     color: white;
 }
 
-/* Responsive para controles */
-@media (max-width: 768px) {
-    .pagination-controls .row > div {
-        margin-bottom: 0.75rem;
+/* ==================== RESPONSIVE COMPLETO ==================== */
+
+/* --- Tablet landscape (≤1200px) --- */
+@media (max-width: 1199.98px) {
+    #tablaCompras .col-hide-xl {
+        display: none;
     }
-    
+}
+
+/* --- Tablet portrait (≤992px) --- */
+@media (max-width: 991.98px) {
+    .card-header .row {
+        flex-direction: column;
+        gap: 12px !important;
+    }
+    .card-header .col-auto,
+    .card-header .col.text-end {
+        width: 100%;
+    }
+    .card-header .col.text-end .d-flex {
+        justify-content: flex-start !important;
+    }
+
+    #tablaCompras .col-hide-lg {
+        display: none;
+    }
+    #tablaCompras thead th {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.7rem;
+    }
+    #tablaCompras tbody td {
+        padding: 0.65rem 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    .resumen-flotante {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 14px;
+    }
+    .resumen-flotante .stat-item {
+        flex: 1 1 auto;
+        min-width: 80px;
+    }
+    .resumen-flotante .stat-value {
+        font-size: 1rem;
+    }
+}
+
+/* --- Mobile landscape / small tablet (≤768px) --- */
+@media (max-width: 767.98px) {
+    .page-content {
+        padding: 0.5rem !important;
+    }
+    .card-body {
+        padding: 12px;
+    }
+
+    .pagination-controls {
+        padding: 12px;
+    }
+    .pagination-controls .row > div {
+        margin-bottom: 0.5rem;
+    }
+    .pagination-controls .input-group {
+        flex-wrap: nowrap;
+    }
     .pagination-controls .btn-group {
         width: 100%;
     }
-    
     .pagination-controls .btn-group .btn {
         flex: 1;
     }
-    
+
+    .card-header .d-flex.justify-content-end {
+        flex-wrap: wrap;
+        gap: 6px !important;
+    }
     .card-header .btn {
         padding: 0.4rem 0.75rem;
         font-size: 0.8rem;
+    }
+    .card-header .input-group {
+        width: 140px !important;
+    }
+
+    #tablaCompras .col-hide-md {
+        display: none;
+    }
+    #tablaCompras thead th {
+        font-size: 0.65rem;
+        padding: 0.6rem 0.4rem;
+        letter-spacing: 0;
+    }
+    #tablaCompras thead th i {
+        display: none;
+    }
+    #tablaCompras tbody td {
+        font-size: 0.78rem;
+        padding: 0.5rem 0.4rem;
+    }
+
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.4rem;
+        font-size: 0.7rem;
+    }
+
+    .modal-footer .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .modal-footer .d-flex.justify-content-between small {
+        text-align: center;
+    }
+    .modal-footer .d-flex.justify-content-between .d-flex.gap-2 {
+        width: 100%;
+        justify-content: stretch;
+    }
+    .modal-footer .d-flex.justify-content-between .d-flex.gap-2 .btn {
+        flex: 1;
+    }
+
+    .acciones-masivas-bar {
+        padding: 10px 12px;
+    }
+    .acciones-masivas-bar .btn {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+    }
+}
+
+/* --- Mobile portrait (≤576px) --- */
+@media (max-width: 575.98px) {
+    .page-content {
+        padding: 0.25rem !important;
+    }
+    .card {
+        border-radius: 10px !important;
+    }
+    .card-body {
+        padding: 8px;
+    }
+
+    .card-header .row.align-items-center.gy-3 > .col-auto:first-child .icon-box {
+        display: none;
+    }
+    .card-header h5 {
+        font-size: 1rem;
+    }
+    .card-header small {
+        font-size: 0.7rem;
+    }
+    .card-header .input-group {
+        width: 120px !important;
+    }
+    .card-header .btn {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    .card-header .btn .d-none.d-lg-inline {
+        display: none !important;
+    }
+
+    .pagination-controls {
+        padding: 8px;
+        border-radius: 8px;
+    }
+    #searchCompras {
+        font-size: 0.8rem;
+    }
+    .pagination-controls small.text-muted {
+        display: none;
+    }
+    .page-info {
+        min-width: 100px;
+        font-size: 0.75rem;
+        padding: 0.3rem 0.5rem;
+    }
+
+    #tablaCompras .col-hide-sm {
+        display: none;
+    }
+    #tablaCompras thead th {
+        font-size: 0.6rem;
+        padding: 0.5rem 0.3rem;
+    }
+    #tablaCompras tbody td {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.3rem;
+    }
+
+    .btn-group-sm .btn {
+        padding: 0.2rem 0.35rem;
+        font-size: 0.65rem;
+    }
+    .td-actions .btn-group {
+        flex-wrap: wrap;
+        gap: 2px;
+    }
+
+    .table-responsive {
+        max-height: 400px !important;
+    }
+
+    .resumen-flotante {
+        flex-direction: column;
+        text-align: center;
+        gap: 4px;
+        padding: 8px 12px;
+        border-radius: 8px 8px 0 0;
+    }
+    .resumen-flotante .stat-value {
+        font-size: 0.9rem;
+    }
+    .resumen-flotante .stat-label {
+        font-size: 0.6rem;
+    }
+
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+    .modal-dialog.modal-lg,
+    .modal-dialog.modal-xl {
+        max-width: calc(100% - 1rem);
+    }
+    .modal-body {
+        padding: 12px !important;
+    }
+    .modal-body .row.g-3 {
+        --bs-gutter-x: 0.5rem;
+        --bs-gutter-y: 0.5rem;
+    }
+
+    .input-cantidad-wrapper .form-control {
+        width: 55px;
+        font-size: 0.85rem;
+        padding: 6px 2px;
+    }
+    .btn-cantidad-rapida {
+        width: 24px;
+        height: 24px;
+        font-size: 0.6rem;
+    }
+
+    #csvPreviewSection .table th,
+    #csvPreviewSection .table td {
+        font-size: 0.7rem;
+        padding: 0.3rem;
+    }
+    .csv-upload-zone .card-body {
+        padding: 1.5rem !important;
+    }
+    .csv-upload-zone .display-1 {
+        font-size: 3rem !important;
     }
 }
 
@@ -485,99 +730,52 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
-/* Input de cantidad mejorado */
+/* Input de cantidad compacto */
 .input-cantidad-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 4px;
+    position: relative; display: flex; align-items: center; gap: 2px;
 }
-
 .input-cantidad-wrapper .form-control {
-    text-align: center;
-    font-weight: 700;
-    font-size: 1rem;
-    padding: 8px 4px;
-    border-radius: 8px;
-    border: 2px solid #dee2e6;
-    transition: all 0.2s ease;
-    width: 70px;
+    text-align: center; font-weight: 700; font-size: 0.82rem;
+    padding: 3px 2px; border-radius: 6px; border: 1px solid #dee2e6;
+    transition: all 0.2s ease; width: 56px;
 }
-
 .input-cantidad-wrapper .form-control:focus {
-    border-color: #0ab39c;
-    box-shadow: 0 0 0 3px rgba(10, 179, 156, 0.2);
+    border-color: #0ab39c; box-shadow: 0 0 0 2px rgba(10,179,156,0.2);
 }
-
 .input-cantidad-wrapper .form-control.has-value {
-    background: linear-gradient(135deg, #e6fff9 0%, #d4f7f0 100%);
-    border-color: #0ab39c;
+    background: #e6fff9; border-color: #0ab39c;
 }
 
-/* Botones de cantidad rapida */
 .btn-cantidad-rapida {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.15s ease;
+    width: 22px; height: 22px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 700; border-radius: 4px;
+    border: none; cursor: pointer; transition: all 0.15s ease;
 }
+.btn-cantidad-rapida:hover { transform: scale(1.1); }
+.btn-max { background: linear-gradient(135deg, #0ab39c, #099885); color: white; }
+.btn-mitad { background: linear-gradient(135deg, #405189, #364574); color: white; }
+.btn-clear { background: #f8d7da; color: #721c24; }
 
-.btn-cantidad-rapida:hover {
-    transform: scale(1.1);
-}
-
-.btn-max {
-    background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);
-    color: white;
-}
-
-.btn-mitad {
-    background: linear-gradient(135deg, #405189 0%, #364574 100%);
-    color: white;
-}
-
-.btn-clear {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-/* Input factura mejorado */
-.input-factura-wrapper {
-    position: relative;
-}
-
+.input-factura-wrapper { position: relative; }
 .input-factura-wrapper .form-control {
-    padding-right: 30px;
-    border-radius: 8px;
-    border: 2px solid #dee2e6;
-    font-weight: 500;
+    padding-right: 24px; border-radius: 6px;
+    border: 1px solid #dee2e6; font-weight: 500; font-size: 0.78rem;
 }
-
 .input-factura-wrapper .form-control:focus {
-    border-color: #405189;
-    box-shadow: 0 0 0 3px rgba(64, 81, 137, 0.2);
+    border-color: #405189; box-shadow: 0 0 0 2px rgba(64,81,137,0.2);
 }
-
 .input-factura-wrapper .form-control.has-factura {
-    background: linear-gradient(135deg, #e8eaf6 0%, #dde1f0 100%);
-    border-color: #405189;
+    background: #e8eaf6; border-color: #405189;
 }
 
 .input-factura-wrapper .factura-icon {
     position: absolute;
-    right: 8px;
+    right: 6px;
     top: 50%;
     transform: translateY(-50%);
     color: #405189;
-    font-size: 0.85rem;
+    font-size: 0.7rem;
 }
 
 /* Fila con datos ingresados */
@@ -968,7 +1166,7 @@
                     <table class="table table-hover align-middle mb-0" id="tablaCompras">
                         <thead>
                             <tr>
-                                <th style="width: 60px;">
+                                <th class="col-hide-sm" style="width: 60px;">
                                     <span class="d-flex align-items-center">
                                         <i class="bi bi-hash me-1"></i>ID
                                     </span>
@@ -983,22 +1181,22 @@
                                         <i class="bi bi-tag me-1"></i>Nombre
                                     </span>
                                 </th>
-                                <th>
+                                <th class="col-hide-md">
                                     <span class="d-flex align-items-center">
                                         <i class="bi bi-calendar-range me-1"></i>Temporada
                                     </span>
                                 </th>
-                                <th>
+                                <th class="col-hide-sm">
                                     <span class="d-flex align-items-center">
                                         <i class="bi bi-calendar-check me-1"></i>Fecha
                                     </span>
                                 </th>
-                                <th class="text-end">
+                                <th class="text-end col-hide-md">
                                     <span class="d-flex align-items-center justify-content-end">
                                         <i class="bi bi-currency-dollar me-1"></i>Costo
                                     </span>
                                 </th>
-                                <th class="text-center">
+                                <th class="text-center col-hide-sm">
                                     <span class="d-flex align-items-center justify-content-center">
                                         <i class="bi bi-box-seam me-1"></i>Uds.
                                     </span>
@@ -1008,12 +1206,12 @@
                                         <i class="bi bi-check2-circle me-1"></i>Recep.
                                     </span>
                                 </th>
-                                <th>
+                                <th class="col-hide-lg">
                                     <span class="d-flex align-items-center">
                                         <i class="bi bi-person me-1"></i>Responsable
                                     </span>
                                 </th>
-                                <th class="text-center" style="width: 150px;">Acciones</th>
+                                <th class="text-center" style="min-width: 100px;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyCompras">
@@ -1151,16 +1349,16 @@
                         
                         <!-- Footer con estilo del proyecto -->
                         <div class="modal-footer border-0 py-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
-                            <div class="d-flex justify-content-between w-100 align-items-center">
-                                <small style="color: #405189;">
+                            <div class="d-flex justify-content-between w-100 align-items-center flex-wrap gap-2">
+                                <small class="d-none d-sm-block" style="color: #405189;">
                                     <i class="bi bi-info-circle me-1"></i>
                                     Los campos marcados son obligatorios
                                 </small>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal" style="border-radius: 10px;">
-                                        <i class="bi bi-x-lg me-1"></i>Cancelar
+                                <div class="d-flex gap-2 flex-grow-1 flex-sm-grow-0 justify-content-end">
+                                    <button type="button" class="btn btn-outline-secondary px-3 px-sm-4" data-bs-dismiss="modal" style="border-radius: 10px;">
+                                        <i class="bi bi-x-lg me-1"></i><span class="d-none d-sm-inline">Cancelar</span><span class="d-sm-none">No</span>
                                     </button>
-                                    <button type="submit" class="btn text-white px-4" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; border-radius: 10px;">
+                                    <button type="submit" class="btn text-white px-3 px-sm-4" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; border-radius: 10px;">
                                         <i class="bi bi-check2-circle me-1"></i>Crear Compra
                                     </button>
                                 </div>
@@ -1380,67 +1578,6 @@
             background-color: rgba(25, 135, 84, 0.15) !important;
         }
         
-        #modalRecepcionProductos .table tbody tr.row-producto-padre {
-            background-color: #f0f7ff;
-            border-left: 3px solid #405189;
-        }
-        
-        #modalRecepcionProductos .table tbody tr.row-talla-hijo {
-            background-color: #fafafa;
-            font-size: 0.85rem;
-        }
-        
-        #modalRecepcionProductos .input-recepcion {
-            width: 70px;
-            text-align: center;
-            border-radius: 6px;
-            border: 1px solid #ced4da;
-            padding: 4px 8px;
-            transition: all 0.2s ease;
-        }
-        
-        #modalRecepcionProductos .input-recepcion:focus {
-            border-color: #198754;
-            box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.15);
-            outline: none;
-        }
-        
-        #modalRecepcionProductos .input-recepcion.has-value {
-            background-color: #d1e7dd;
-            border-color: #198754;
-            font-weight: 600;
-        }
-        
-        #modalRecepcionProductos .select-factura {
-            min-width: 160px;
-            font-size: 0.85rem;
-            border-radius: 6px;
-            padding: 4px 8px;
-        }
-        
-        #modalRecepcionProductos .select-factura.is-valid {
-            border-color: #198754;
-            background-color: #d1e7dd;
-        }
-        
-        #modalRecepcionProductos .select-factura.is-invalid {
-            border-color: #dc3545;
-            background-color: #f8d7da;
-        }
-        
-        #modalRecepcionProductos .btn-aplicar-todo {
-            padding: 4px 10px;
-            font-size: 0.8rem;
-            border-radius: 6px;
-        }
-        
-        #modalRecepcionProductos .badge-talla {
-            font-size: 0.8rem;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-        
         #modalRecepcionProductos .sticky-top {
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
@@ -1465,70 +1602,70 @@
             transition: width 0.4s ease;
         }
         
-        /* Estilos input cantidad recepción */
-        #modalRecepcionProductos input[type="number"].cantidad-recepcion {
-            width: 65px;
-            text-align: center;
-            border-radius: 8px;
-            border: 2px solid #dee2e6;
-            padding: 6px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
+        /* ========== MODAL RECEPCIÓN - ESTILOS COMPACTOS ========== */
+        #modalRecepcionProductos .modal-content { border-radius: 10px; }
+        #modalRecepcionProductos .modal-header { min-height: 0; }
+        #modalRecepcionProductos .modal-body { padding: 8px !important; }
+        #modalRecepcionProductos .modal-footer { padding: 6px 12px !important; }
+
+        .recepcion-toolbar { font-size: 0.8rem; }
+        .recepcion-toolbar .form-control,
+        .recepcion-toolbar .form-select,
+        .recepcion-toolbar .btn { font-size: 0.78rem; }
         
-        #modalRecepcionProductos input[type="number"].cantidad-recepcion:focus {
-            border-color: #198754;
-            box-shadow: 0 0 0 3px rgba(25,135,84,0.2);
+        .acciones-masivas-bar { 
+            border-radius: 6px; 
+            background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);
         }
-        
-        #modalRecepcionProductos input[type="number"].cantidad-recepcion.filled {
-            background-color: #d1e7dd;
-            border-color: #198754;
-            color: #0f5132;
+
+        #modalRecepcionProductos .table-sm th,
+        #modalRecepcionProductos .table-sm td { padding: 4px 6px; }
+
+        #modalRecepcionProductos input[type="number"].cantidad-recepcion,
+        #modalRecepcionProductos input[type="number"].recepcionado-input {
+            width: 58px; text-align: center; border-radius: 6px;
+            border: 1px solid #dee2e6; padding: 3px 4px; font-weight: 600;
+            font-size: 0.82rem; transition: all 0.2s;
         }
-        
-        /* Select factura mejorado */
-        #modalRecepcionProductos select.factura-select {
-            border-radius: 8px;
-            border: 2px solid #dee2e6;
-            padding: 6px 10px;
-            font-size: 0.85rem;
-            min-width: 150px;
-            transition: all 0.2s;
+        #modalRecepcionProductos input[type="number"].cantidad-recepcion:focus,
+        #modalRecepcionProductos input[type="number"].recepcionado-input:focus {
+            border-color: #198754; box-shadow: 0 0 0 2px rgba(25,135,84,0.2);
         }
-        
-        #modalRecepcionProductos select.factura-select:focus {
-            border-color: #0d6efd;
-            box-shadow: 0 0 0 3px rgba(13,110,253,0.2);
+        #modalRecepcionProductos input[type="number"].cantidad-recepcion.filled,
+        #modalRecepcionProductos input[type="number"].recepcionado-input.filled {
+            background-color: #d1e7dd; border-color: #198754; color: #0f5132;
         }
-        
-        #modalRecepcionProductos select.factura-select.selected {
-            background-color: #cfe2ff;
-            border-color: #0d6efd;
+
+        #modalRecepcionProductos .factura-datalist-input {
+            font-size: 0.78rem; padding: 3px 6px;
         }
-        
-        /* Estilo para botones de modo de vista */
+
         .btn-vista {
-            border-color: #405189;
-            color: #405189;
-            transition: all 0.2s ease;
+            border-color: #405189; color: #405189; transition: all 0.2s ease;
         }
-        
         .btn-vista:hover {
-            background-color: rgba(64, 81, 137, 0.1);
-            border-color: #405189;
-            color: #405189;
+            background-color: rgba(64, 81, 137, 0.1); border-color: #405189; color: #405189;
         }
-        
-        /* Botón activo (seleccionado) - texto blanco */
         .btn-check:checked + .btn-vista {
-            background-color: #405189;
-            border-color: #405189;
-            color: white !important;
+            background-color: #405189; border-color: #405189; color: white !important;
         }
+        .btn-check:checked + .btn-vista i { color: white !important; }
         
-        .btn-check:checked + .btn-vista i {
-            color: white !important;
+        #modalRecepcionProductos .producto-grupo td { padding: 5px 6px; font-size: 0.8rem; }
+        #modalRecepcionProductos .talla-detalle td { padding: 3px 6px; font-size: 0.78rem; }
+        
+        #modalRecepcionProductos .input-cantidad-wrapper { position: relative; display: inline-flex; align-items: center; }
+        #modalRecepcionProductos .btn-cantidad-rapida { 
+            font-size: 0.65rem; padding: 0 3px; background: none; border: none; 
+            cursor: pointer; opacity: 0.6; transition: opacity 0.2s;
+        }
+        #modalRecepcionProductos .btn-cantidad-rapida:hover { opacity: 1; }
+        
+        @media (max-width: 1400px) {
+            .recep-col-extra { display: none; }
+        }
+        @media (max-width: 1100px) {
+            .recep-col-desc { display: none; }
         }
         </style>
 
@@ -1537,318 +1674,136 @@
             <div class="modal-dialog modal-xxl modal-dialog-centered" style="max-width: 96%; width: 96%;">
                 <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
                     
-                    <!-- Header con gradiente Estilo Chat Proyecto -->
-                    <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
-                        <div class="d-flex align-items-center gap-3 w-100">
-                            <div class="rounded-3 d-flex align-items-center justify-content-center" style="width: 54px; height: 54px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
-                                <i class="bi bi-box-seam-fill fs-3 text-white"></i>
-                            </div>
+                    <!-- Header compacto -->
+                    <div class="modal-header border-0 text-white py-2 px-3" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
+                        <div class="d-flex align-items-center gap-2 w-100">
+                            <i class="bi bi-box-seam-fill fs-5 text-white"></i>
                             <div class="flex-grow-1">
-                                <h5 class="modal-title mb-0 fw-bold text-white" id="modalRecepcionLabel">
-                                    <i class="bi bi-clipboard-check me-2"></i>Recepción de Productos
-                                </h5>
-                                <small class="text-white opacity-75" id="recepcionSubtitulo">Gestiona la entrada de mercadería</small>
+                                <h6 class="modal-title mb-0 fw-bold text-white" id="modalRecepcionLabel">Recepción de Productos</h6>
+                                <small class="text-white opacity-75" style="font-size: 0.7rem;" id="recepcionSubtitulo">Gestiona la entrada de mercadería</small>
                             </div>
-                            <!-- Indicador de progreso en header -->
-                            <div class="d-flex align-items-center gap-3 me-3">
-                                <div class="text-center px-3 py-2 rounded-3" style="background: rgba(255,255,255,0.15);">
-                                    <div class="small text-white opacity-75">Pendientes</div>
-                                    <div class="fw-bold fs-5 text-white" id="headerPendientes">0</div>
-                                </div>
-                                <div class="text-center px-3 py-2 rounded-3" style="background: rgba(255,255,255,0.25);">
-                                    <div class="small text-white opacity-75">Recepcionados</div>
-                                    <div class="fw-bold fs-5 text-white" id="headerRecepcionados">0</div>
-                                </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge rounded-pill px-2 py-1" style="background: rgba(255,255,255,0.15); font-size: 0.75rem;">
+                                    <i class="bi bi-hourglass-split me-1"></i><span id="headerPendientes">0</span> pend.
+                                </span>
+                                <span class="badge rounded-pill px-2 py-1" style="background: rgba(255,255,255,0.25); font-size: 0.75rem;">
+                                    <i class="bi bi-check-circle me-1"></i><span id="headerRecepcionados">0</span> recep.
+                                </span>
                             </div>
                         </div>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        <button type="button" class="btn-close btn-close-white ms-2" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                     </div>
 
-                    <div class="modal-body p-4" style="background: #f8f9fa;">
+                    <div class="modal-body p-2" style="background: #f8f9fa;">
                         <input type="hidden" id="globalIDCompraRecepcion">
                         
-                        <!-- Indicador de carga mejorado -->
-                        <div id="recepcionLoader" class="text-center py-5" style="display: none;">
-                            <div class="spinner-grow text-success" style="width: 3rem; height: 3rem;" role="status">
+                        <!-- Indicador de carga -->
+                        <div id="recepcionLoader" class="text-center py-4" style="display: none;">
+                            <div class="spinner-grow text-success" style="width: 2rem; height: 2rem;" role="status">
                                 <span class="visually-hidden">Cargando...</span>
                             </div>
-                            <p class="mt-3 text-muted fs-5">Cargando productos de la compra...</p>
+                            <p class="mt-2 text-muted">Cargando productos...</p>
                         </div>
                         
-                        <!-- ========== BARRA DE ACCIONES MASIVAS ========== -->
-                        <div class="acciones-masivas-bar mb-3">
-                            <div class="row align-items-center g-3">
-                                <!-- Acciones masivas izquierda -->
-                                <div class="col-lg-6">
-                                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                                        <span class="text-white fw-bold me-2">
-                                            <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Acciones Masivas:
-                                        </span>
-                                        <button type="button" class="btn btn-success btn-sm" id="btnRecepcionarTodo" 
-                                                title="Marca todas las cantidades pendientes como recibidas">
-                                            <i class="bi bi-check-all me-1"></i>Recepcionar Todo
-                                        </button>
-                                        <button type="button" class="btn btn-warning btn-sm text-dark" id="btnRecepcionarMitad"
-                                                title="Marca la mitad de cada cantidad pendiente">
-                                            <i class="bi bi-percent me-1"></i>50%
-                                        </button>
-                                        <div class="vr mx-2 bg-secondary opacity-50" style="height: 30px;"></div>
-                                        <div class="input-group input-group-sm" style="width: 220px;">
-                                            <span class="input-group-text bg-primary text-white border-0">
-                                                <i class="bi bi-receipt"></i>
-                                            </span>
-                                            <input type="text" class="form-control" id="facturaGlobalMasiva" 
-                                                   placeholder="Factura para todos..." list="facturas-global-list">
-                                            <datalist id="facturas-global-list"></datalist>
-                                            <button class="btn btn-primary" type="button" id="btnAplicarFacturaGlobal" title="Aplicar factura a todos los productos">
-                                                <i class="bi bi-arrow-right-circle"></i>
-                                            </button>
-                                        </div>
-                                        <button type="button" class="btn btn-outline-light btn-sm" id="btnLimpiarTodo"
-                                                title="Limpiar todas las cantidades y facturas ingresadas">
-                                            <i class="bi bi-eraser me-1"></i>Limpiar
-                                        </button>
-                                    </div>
+                        <!-- ========== TOOLBAR UNIFICADA ========== -->
+                        <div class="recepcion-toolbar mb-2">
+                            <!-- Fila 1: Búsqueda + Vista + Filtro + Paginación -->
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                <div class="input-group input-group-sm" style="max-width: 280px;">
+                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" class="form-control border-start-0 ps-0" id="searchRecepcion" placeholder="Buscar producto, marca, talla...">
+                                    <button class="btn btn-primary" type="button" id="btnSearchRecepcion"><i class="bi bi-search"></i></button>
                                 </div>
-                                <!-- Resumen rápido derecha -->
-                                <div class="col-lg-6">
-                                    <div class="d-flex justify-content-end align-items-center gap-4">
-                                        <div class="text-center">
-                                            <div class="small text-white-50">Por Recepcionar</div>
-                                            <div class="text-white fw-bold fs-5" id="quickStatPendientes">0</div>
-                                        </div>
-                                        <div class="text-center">
-                                            <div class="small text-white-50">Ingresados</div>
-                                            <div class="text-success fw-bold fs-5" id="quickStatIngresados">0</div>
-                                        </div>
-                                        <div class="text-center px-3 py-1 rounded" style="background: rgba(10,179,156,0.2);">
-                                            <div class="small text-white-50">Total $</div>
-                                            <div class="text-warning fw-bold fs-5" id="quickStatMonto">$0</div>
-                                        </div>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaAgrupada" autocomplete="off" checked>
+                                    <label class="btn btn-outline-primary btn-vista" for="vistaAgrupada" title="Vista agrupada"><i class="bi bi-grid-3x3-gap"></i></label>
+                                    <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaDetallada" autocomplete="off">
+                                    <label class="btn btn-outline-primary btn-vista" for="vistaDetallada" title="Vista detallada"><i class="bi bi-list-ul"></i></label>
+                                </div>
+                                <select class="form-select form-select-sm" id="filtroEstadoRecepcion" style="width: 140px;">
+                                    <option value="">Todo</option>
+                                    <option value="pendientes">Pendientes</option>
+                                    <option value="parciales">Parciales</option>
+                                    <option value="completos">Completos</option>
+                                </select>
+                                <div class="ms-auto d-flex align-items-center gap-2">
+                                    <span class="badge bg-primary rounded-pill" style="font-size: 0.7rem;">
+                                        <span id="totalProductosRecepcion">0</span> prod.
+                                    </span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary py-0 px-1" id="btnPrevPage"><i class="bi bi-chevron-left"></i></button>
+                                        <span class="btn btn-light disabled py-0 px-2" id="pageInfo" style="font-size: 0.7rem;">Pág 1</span>
+                                        <button type="button" class="btn btn-outline-secondary py-0 px-1" id="btnNextPage"><i class="bi bi-chevron-right"></i></button>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- ========== BARRA DE HERRAMIENTAS ========== -->
-                        <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; border-left: 4px solid #405189 !important;">
-                            <div class="card-body py-3">
-                                <div class="row align-items-center g-3">
-                                    <!-- Tipo de vista -->
-                                    <div class="col-lg-3">
-                                        <label class="small fw-bold mb-2 d-block" style="color: #405189;">
-                                            <i class="bi bi-eye me-1"></i>Modo de Vista
-                                        </label>
-                                        <div class="btn-group w-100" role="group">
-                                            <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaAgrupada" autocomplete="off" checked>
-                                            <label class="btn btn-outline-primary btn-vista btn-sm" for="vistaAgrupada">
-                                                <i class="bi bi-grid-3x3-gap me-1"></i>Agrupada
-                                            </label>
-                                            
-                                            <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaDetallada" autocomplete="off">
-                                            <label class="btn btn-outline-primary btn-vista btn-sm" for="vistaDetallada">
-                                                <i class="bi bi-list-ul me-1"></i>Detallada
-                                            </label>
-                                        </div>
+                            <!-- Fila 2: Acciones masivas -->
+                            <div class="acciones-masivas-bar p-2">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-success btn-sm py-1" id="btnRecepcionarTodo" title="Recepcionar todas las cantidades pendientes">
+                                        <i class="bi bi-check-all me-1"></i>Todo
+                                    </button>
+                                    <button type="button" class="btn btn-warning btn-sm py-1 text-dark" id="btnRecepcionarMitad" title="Recepcionar 50%">
+                                        <i class="bi bi-percent"></i> 50%
+                                    </button>
+                                    <div class="input-group input-group-sm" style="width: 200px;">
+                                        <span class="input-group-text bg-primary text-white border-0 py-0"><i class="bi bi-receipt"></i></span>
+                                        <input type="text" class="form-control py-1" id="facturaGlobalMasiva" placeholder="Factura global..." list="facturas-global-list">
+                                        <datalist id="facturas-global-list"></datalist>
+                                        <button class="btn btn-primary py-0" type="button" id="btnAplicarFacturaGlobal" title="Aplicar factura a todos"><i class="bi bi-arrow-right-circle"></i></button>
                                     </div>
-                                    
-                                    <!-- Búsqueda -->
-                                    <div class="col-lg-4">
-                                        <label class="small fw-bold mb-2 d-block" style="color: #405189;">
-                                            <i class="bi bi-search me-1"></i>Buscar Producto
-                                        </label>
-                                        <div class="input-group input-group-sm">
-                                            <span class="input-group-text bg-white border-end-0" style="border-color: #405189;">
-                                                <i class="bi bi-search" style="color: #405189;"></i>
-                                            </span>
-                                            <input type="text" class="form-control border-start-0 ps-0" id="searchRecepcion" 
-                                                   placeholder="Buscar producto, marca, talla..." style="border-color: #405189;">
-                                            <button class="btn btn-primary" type="button" id="btnSearchRecepcion" style="border-radius: 0 8px 8px 0;">
-                                                <i class="bi bi-search"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Filtros rápidos -->
-                                    <div class="col-lg-3">
-                                        <label class="small fw-bold mb-2 d-block" style="color: #405189;">
-                                            <i class="bi bi-funnel me-1"></i>Filtrar por Estado
-                                        </label>
-                                        <select class="form-select form-select-sm" id="filtroEstadoRecepcion" style="border-color: #405189;">
-                                            <option value="">Todos</option>
-                                            <option value="pendientes">Solo Pendientes</option>
-                                            <option value="parciales">Solo Parciales</option>
-                                            <option value="completos">Solo Completos</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <!-- Acciones -->
-                                    <div class="col-lg-2 text-end">
-                                        <label class="small fw-bold mb-2 d-block" style="color: #405189;">
-                                            <i class="bi bi-gear me-1"></i>Opciones
-                                        </label>
-                                        <button type="button" class="btn btn-outline-info btn-sm" id="btnRecargarFacturas" 
-                                                data-bs-toggle="tooltip" title="Recargar facturas disponibles">
-                                            <i class="bi bi-arrow-clockwise"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Card de ayuda compacta - Colapsada por defecto -->
-                        <div class="alert alert-light border-0 py-2 px-3 mb-3 d-flex align-items-center justify-content-between" 
-                             style="border-radius: 8px; background: linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 100%); border-left: 3px solid #0ab39c !important;">
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-info-circle text-primary me-2"></i>
-                                <small class="text-muted">
-                                    <strong class="text-primary">Tip:</strong> Usa 
-                                    <span class="badge bg-success btn-sm mx-1"><i class="bi bi-arrow-up-circle-fill"></i></span> para cantidad máxima,
-                                    <span class="badge bg-primary btn-sm mx-1">½</span> para 50%, o
-                                    <span class="badge bg-warning text-dark btn-sm mx-1">Recepcionar Todo</span> arriba para aplicar masivamente.
-                                </small>
-                            </div>
-                            <a href="#" class="text-decoration-none small" data-bs-toggle="collapse" data-bs-target="#ayudaRecepcion" style="color: #405189;">
-                                <i class="bi bi-question-circle me-1"></i>Más ayuda
-                            </a>
-                        </div>
-                        <div class="collapse mb-3" id="ayudaRecepcion">
-                            <div class="card border-0 shadow-sm" style="border-radius: 10px;">
-                                <div class="card-body py-2 px-3">
-                                    <div class="row small">
-                                        <div class="col-md-4">
-                                            <i class="bi bi-check-circle-fill text-success me-1"></i>
-                                            <strong>Facturas:</strong> Solo aparecen las pendientes del proveedor.
-                                        </div>
-                                        <div class="col-md-4">
-                                            <i class="bi bi-calculator text-info me-1"></i>
-                                            <strong>Parcial:</strong> Puedes recepcionar menos unidades.
-                                        </div>
-                                        <div class="col-md-4">
-                                            <i class="bi bi-arrow-clockwise text-primary me-1"></i>
-                                            <strong>Actualizar:</strong> Usa el botón si creaste una factura nueva.
-                                        </div>
+                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnLimpiarTodo" title="Limpiar todo"><i class="bi bi-eraser"></i></button>
+                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnRecargarFacturas" title="Recargar facturas"><i class="bi bi-arrow-clockwise"></i></button>
+                                    <div class="ms-auto d-flex align-items-center gap-3 text-white" style="font-size: 0.75rem;">
+                                        <span><i class="bi bi-hourglass-split text-warning me-1"></i><strong id="quickStatPendientes">0</strong> pend.</span>
+                                        <span><i class="bi bi-check-circle text-success me-1"></i><strong id="quickStatIngresados">0</strong> ingr.</span>
+                                        <span class="badge rounded-pill" style="background: rgba(10,179,156,0.3);"><strong id="quickStatMonto">$0</strong></span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- Tabla de productos -->
-                        <div class="card border-0 shadow-sm" style="border-radius: 12px;">
+                        <div class="card border-0 shadow-sm" style="border-radius: 8px;">
                             <div class="card-body p-0">
-                                <!-- Paginación superior -->
-                                <div class="d-flex justify-content-between align-items-center p-3 border-bottom bg-light" style="border-radius: 12px 12px 0 0;">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="badge bg-primary rounded-pill px-3 py-2">
-                                            <i class="bi bi-box me-1"></i>
-                                            <span id="totalProductosRecepcion">0</span> productos
-                                        </span>
-                                    </div>
-                                    <div class="btn-group btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-outline-primary" id="btnPrevPage">
-                                            <i class="bi bi-chevron-left"></i>
-                                        </button>
-                                        <span class="btn btn-light disabled" id="pageInfo" style="min-width: 100px;">Página 1</span>
-                                        <button type="button" class="btn btn-outline-primary" id="btnNextPage">
-                                            <i class="bi bi-chevron-right"></i>
-                                        </button>
-                                    </div>
-                                </div>
                                 
-                                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
-                                    <table class="table table-hover align-middle mb-0" id="tablaRecepcionProductos">
+                                <div class="table-responsive" style="max-height: calc(100vh - 280px); min-height: 300px; overflow-y: auto;">
+                                    <table class="table table-hover table-sm align-middle mb-0" id="tablaRecepcionProductos">
                                         <thead class="sticky-top" style="z-index: 10; background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
-                                            <tr class="text-center" style="font-size: 0.85rem;">
-                                                <th class="py-3 text-white" style="min-width: 180px;">
-                                                    <i class="bi bi-box-seam me-1"></i>Artículo
-                                                </th>
-                                                <th class="text-white" style="min-width: 120px;">Descripción</th>
-                                                <th class="text-white" style="width: 100px;">
-                                                    <i class="bi bi-award me-1"></i>Marca
-                                                </th>
-                                                <th class="text-white" style="width: 80px;">
-                                                    <i class="bi bi-palette me-1"></i>Color
-                                                </th>
-                                                <th class="text-white" style="width: 80px;">
-                                                    <i class="bi bi-gender-ambiguous me-1"></i>Género
-                                                </th>
-                                                <th class="text-white" style="width: 80px;">
-                                                    <i class="bi bi-cash me-1"></i>Costo
-                                                </th>
-                                                <th class="text-white" style="width: 80px;">
-                                                    <i class="bi bi-tag me-1"></i>Precio
-                                                </th>
-                                                <th class="text-white" style="width: 70px;">
-                                                    <i class="bi bi-boxes me-1"></i>Stock
-                                                </th>
-                                                <th class="text-white" style="width: 100px;">
-                                                    <i class="bi bi-rulers me-1"></i>Talla
-                                                </th>
-                                                <th class="text-white" style="width: 120px; background: rgba(10, 179, 156, 0.3);">
-                                                    <i class="bi bi-check2-square me-1"></i>Cantidad
-                                                </th>
-                                                <th class="text-white" style="min-width: 200px; background: rgba(10, 179, 156, 0.3);">
-                                                    <i class="bi bi-receipt me-1"></i>Factura Proveedor
-                                                </th>
-                                                <th class="text-white" style="width: 120px;">
-                                                    <i class="bi bi-info-circle me-1"></i>Estado
-                                                </th>
+                                            <tr class="text-center" style="font-size: 0.78rem;">
+                                                <th class="py-2 text-white" style="min-width: 150px;">Artículo</th>
+                                                <th class="text-white recep-col-desc">Descripción</th>
+                                                <th class="text-white" style="width: 80px;">Marca</th>
+                                                <th class="text-white recep-col-extra" style="width: 70px;">Color</th>
+                                                <th class="text-white recep-col-extra" style="width: 70px;">Género</th>
+                                                <th class="text-white" style="width: 70px;">Costo</th>
+                                                <th class="text-white" style="width: 70px;">Precio</th>
+                                                <th class="text-white" style="width: 55px;">Stock</th>
+                                                <th class="text-white" style="width: 80px;">Talla</th>
+                                                <th class="text-white" style="width: 100px; background: rgba(10,179,156,0.3);">Cantidad</th>
+                                                <th class="text-white" style="min-width: 160px; background: rgba(10,179,156,0.3);">Factura</th>
+                                                <th class="text-white" style="width: 100px;">Estado</th>
                                             </tr>
                                         </thead>
-                                        <tbody class="text-center" style="font-size: 0.9rem;"></tbody>
+                                        <tbody class="text-center" style="font-size: 0.82rem;"></tbody>
                                     </table>
                                 </div>
                                 
-                                <!-- Footer con totales -->
-                                <div class="border-top bg-light p-3" style="border-radius: 0 0 12px 12px;">
-                                    <div class="row align-items-center">
-                                        <div class="col-md-6">
-                                            <div class="d-flex gap-4">
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <div class="rounded-circle bg-warning bg-opacity-25 p-2">
-                                                        <i class="bi bi-hourglass-split text-warning"></i>
-                                                    </div>
-                                                    <div>
-                                                        <div class="small text-muted">Pendientes</div>
-                                                        <div class="fw-bold" id="statPendientes">0 unidades</div>
-                                                    </div>
-                                                </div>
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <div class="rounded-circle bg-success bg-opacity-25 p-2">
-                                                        <i class="bi bi-check-circle text-success"></i>
-                                                    </div>
-                                                    <div>
-                                                        <div class="small text-muted">Recepcionados</div>
-                                                        <div class="fw-bold text-success" id="statRecepcionados">0 unidades</div>
-                                                    </div>
+                                <!-- Footer compacto con totales + progreso -->
+                                <div class="border-top bg-light px-3 py-2" style="border-radius: 0 0 8px 8px;">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <span class="small text-muted"><i class="bi bi-hourglass-split text-warning me-1"></i>Pend: <strong id="statPendientes">0</strong></span>
+                                        <span class="small text-muted"><i class="bi bi-check-circle text-success me-1"></i>Recep: <strong class="text-success" id="statRecepcionados">0</strong></span>
+                                        <span class="small text-muted"><i class="bi bi-boxes me-1"></i>Total: <strong id="totalParesRecepcionados">0</strong></span>
+                                        <span class="small text-muted"><i class="bi bi-cash-stack text-success me-1"></i>Inv: <strong class="text-success" id="totalCostoRecepcionado">$0</strong></span>
+                                        <div class="flex-grow-1 d-flex align-items-center gap-2 ms-2">
+                                            <div class="progress flex-grow-1" style="height: 6px; border-radius: 3px;">
+                                                <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
+                                                     role="progressbar" id="progresoRecepcionBar" 
+                                                     style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div class="col-md-6 text-end">
-                                            <div class="d-flex justify-content-end gap-4">
-                                                <div>
-                                                    <div class="small text-muted">Total Unidades</div>
-                                                    <div class="fw-bold fs-5" id="totalParesRecepcionados">0</div>
-                                                </div>
-                                                <div>
-                                                    <div class="small text-muted">Inversión</div>
-                                                    <div class="fw-bold fs-5 text-success" id="totalCostoRecepcionado">$0</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Barra de progreso -->
-                                    <div class="mt-3">
-                                        <div class="d-flex justify-content-between small text-muted mb-1">
-                                            <span>Progreso de recepción</span>
-                                            <span id="progresoRecepcionPct">0%</span>
-                                        </div>
-                                        <div class="progress" style="height: 8px; border-radius: 4px;">
-                                            <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
-                                                 role="progressbar" id="progresoRecepcionBar" 
-                                                 style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                                            </div>
+                                            <small class="text-muted fw-bold" id="progresoRecepcionPct" style="min-width: 30px;">0%</small>
                                         </div>
                                     </div>
                                 </div>
@@ -1856,22 +1811,13 @@
                         </div>
                     </div>
 
-                    <!-- Footer mejorado - Estilo Chat Proyecto -->
-                    <div class="modal-footer border-0 py-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
-                        <div class="d-flex justify-content-between w-100 align-items-center">
-                            <div class="small" style="color: #405189;">
-                                <i class="bi bi-info-circle me-1"></i>
-                                Los productos recepcionados se agregarán automáticamente al inventario
-                            </div>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal" style="border-radius: 10px;">
-                                    <i class="bi bi-x-lg me-1"></i>Cancelar
-                                </button>
-                                <button type="button" class="btn px-4 shadow-sm text-white" id="btnGuardarRecepcion" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; border-radius: 10px;">
-                                    <i class="bi bi-check2-circle me-1"></i>Guardar Recepción
-                                </button>
-                            </div>
-                        </div>
+                    <!-- Footer compacto -->
+                    <div class="modal-footer border-0 py-2 px-3" style="background: #eef0f3;">
+                        <small class="text-muted me-auto"><i class="bi bi-info-circle me-1"></i>Se agregarán automáticamente al inventario</small>
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancelar</button>
+                        <button type="button" class="btn btn-sm px-3 text-white" id="btnGuardarRecepcion" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none;">
+                            <i class="bi bi-check2-circle me-1"></i>Guardar Recepción
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2255,6 +2201,9 @@ function hideGlobalLoader() {
     $('#fullscreenLoader').fadeOut(100);
 }
 
+// Permisos del usuario
+const PUEDE_ELIMINAR_COMPRA = {{ puede_eliminar_compra|yesno:"true,false" }};
+
 // IDs de atributos del sistema (Marca, Color, Género)
 const ID_ATRIBUTO_MARCA = parseInt("{{ id_atributo_marca|default:0 }}");
 const ID_ATRIBUTO_COLOR = parseInt("{{ id_atributo_color|default:0 }}");
@@ -2634,7 +2583,7 @@ const GestionCompras = (function() {
                 currentSearch = data.search || '';
                 
                 // Actualizar controles de paginación
-                $('#pageInfo').text(`Página ${data.pagination.page} de ${data.pagination.total_pages}`);
+                $('#pageInfo').text(`${data.pagination.page}/${data.pagination.total_pages}`);
                 $('#btnPrevPage').prop('disabled', !data.pagination.has_previous);
                 $('#btnNextPage').prop('disabled', !data.pagination.has_next);
                 
@@ -2712,57 +2661,44 @@ const GestionCompras = (function() {
             const filaGrupo = `
 <tr class="producto-grupo ${recepcionadoTotal > 0 ? 'table-warning' : ''}" data-grupo="${grupoId}">
     <td>
-        <i class="bi bi-chevron-right expand-icon me-2"></i>
+        <i class="bi bi-chevron-right expand-icon me-1"></i>
         <strong>${resaltarBusqueda(producto.nombre || '-', search)}</strong>
-        ${recepcionadoTotal > 0 ? '<br><small class="text-success"><i class="bi bi-check-circle-fill"></i> Con recepciones</small>' : ''}
+        ${recepcionadoTotal > 0 ? ' <small class="text-success"><i class="bi bi-check-circle-fill"></i></small>' : ''}
     </td>
-    <td>${resaltarBusqueda(producto.descripcion || '-', search)}</td>
+    <td class="recep-col-desc">${resaltarBusqueda(producto.descripcion || '-', search)}</td>
     <td>${resaltarBusqueda(producto.marca || '-', search)}</td>
-    <td>${resaltarBusqueda(producto.color || '-', search)}</td>
-    <td>${resaltarBusqueda(producto.genero || '-', search)}</td>
+    <td class="recep-col-extra">${resaltarBusqueda(producto.color || '-', search)}</td>
+    <td class="recep-col-extra">${resaltarBusqueda(producto.genero || '-', search)}</td>
     <td>$${(producto.costo || 0).toLocaleString()}</td>
     <td>$${(producto.precio || 0).toLocaleString()}</td>
     <td>
         <span class="badge ${badgeClass} badge-stock-total">${badgeText}</span>
-        <br><small class="text-muted">${producto.tallas.length} talla(s)</small>
+        <small class="text-muted d-block" style="font-size:0.65rem">${producto.tallas.length} t.</small>
     </td>
     <td>
         <input type="number" class="form-control form-control-sm recepcion-masiva-input"
                data-grupo="${grupoId}" data-stock-total="${stockTotal}"
-               placeholder="Recepcionar ${stockTotal} unidades"
-               max="${stockTotal}">
+               placeholder="${stockTotal}" max="${stockTotal}" style="width:60px">
     </td>
     <td>
         <div class="input-group input-group-sm">
             <input type="text" class="form-control factura-masiva-input" 
-                   list="${datalistIdProducto}" 
-                   data-grupo="${grupoId}"
-                   placeholder="Seleccionar factura..."
-                   title="Escribe para buscar facturas del proveedor">
-            <span class="input-group-text bg-light" style="font-size: 0.7rem;">
-                <i class="bi bi-receipt"></i>
-            </span>
+                   list="${datalistIdProducto}" data-grupo="${grupoId}"
+                   placeholder="Factura..." style="font-size:0.75rem">
+            <button type="button" class="btn btn-sm text-white aplicar-masivo px-2" data-grupo="${grupoId}" 
+                    style="background:#405189;border:none;font-size:0.7rem" title="Aplicar a tallas">
+                <i class="bi bi-check-all"></i>
+            </button>
         </div>
-        <datalist id="${datalistIdProducto}">
-            ${facturaOptions}
-        </datalist>
-        <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">
-            <i class="bi bi-info-circle me-1"></i>Facturas pendientes del proveedor
-        </small>
+        <datalist id="${datalistIdProducto}">${facturaOptions}</datalist>
     </td>
-    <td>
-        <button type="button" class="btn btn-sm text-white aplicar-masivo" data-grupo="${grupoId}" 
-                style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none;"
-                title="Aplicar cantidad y factura a todas las tallas de este producto">
-            <i class="bi bi-check-all"></i> Aplicar
-        </button>
-    </td>
+    <td></td>
     <td>
         ${recepcionadoTotal >= stockTotal 
-            ? '<span class="badge bg-success"><i class="bi bi-check2-all"></i> Completo</span>'
+            ? '<span class="badge bg-success" style="font-size:0.65rem"><i class="bi bi-check2-all"></i> OK</span>'
             : (recepcionadoTotal > 0 
-                ? `<span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> ${recepcionadoTotal}/${stockTotal}</span>`
-                : '<span class="badge bg-secondary"><i class="bi bi-dash"></i> Pendiente</span>')
+                ? `<span class="badge bg-warning text-dark" style="font-size:0.65rem"><i class="bi bi-clock"></i> ${recepcionadoTotal}/${stockTotal}</span>`
+                : '<span class="badge bg-secondary" style="font-size:0.65rem">Pend.</span>')
         }
     </td>
 </tr>`;
@@ -2799,89 +2735,48 @@ const GestionCompras = (function() {
                 
                 const filaTalla = `
 <tr class="talla-detalle ${tallaCompleta ? 'table-success' : (tieneRecepcion ? 'table-warning' : '')}" data-grupo="${grupoId}" style="display: none;">
-    <td class="ps-5">
-        ${tallaCompleta ? '<i class="bi bi-check-circle-fill text-success me-1"></i>' : ''}
-        ${tieneRecepcion && !tallaCompleta ? '<i class="bi bi-clock-fill text-warning me-1"></i>' : ''}
-        ↳ Talla <strong>${resaltarBusqueda(talla.talla || '-', search)}</strong>
-        ${badgeAgrupados}
-        ${tieneRecepcion ? `<span class="text-muted ms-2">(${talla.recepcionado}/${talla.stock})</span>` : ''}
-        ${pendiente > 0 && tieneRecepcion ? `<span class="badge bg-warning text-dark ms-1">Faltan ${pendiente}</span>` : ''}
+    <td class="ps-4 text-start">
+        ${tallaCompleta ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}
+        ${tieneRecepcion && !tallaCompleta ? '<i class="bi bi-clock-fill text-warning"></i>' : ''}
+        ↳ <strong>${resaltarBusqueda(talla.talla || '-', search)}</strong>${badgeAgrupados}
+        ${tieneRecepcion ? ` <span class="text-muted">(${talla.recepcionado}/${talla.stock})</span>` : ''}
     </td>
-    <td colspan="7" class="text-start ps-3">
+    <td colspan="7" class="text-start" style="font-size:0.72rem">
         ${tieneRecepcion && talla.facturas_asociadas && talla.facturas_asociadas.length > 0 
-            ? `<div class="d-flex flex-wrap gap-1 align-items-center">
-                 <small class="text-muted me-1"><i class="bi bi-clock-history"></i> Recepciones:</small>
-                 ${talla.facturas_asociadas.map(f => 
-                    `<span class="badge bg-light text-dark border" style="font-size: 0.7rem;">
-                        <i class="bi bi-receipt text-primary me-1"></i>F:${f.numero} → <strong>${f.cantidad}</strong> uds
-                    </span>`
-                 ).join('')}
-               </div>`
-            : (tieneRecepcion 
-                ? `<small class="text-muted"><i class="bi bi-info-circle me-1"></i>Recepcionado: ${talla.recepcionado} unidades</small>` 
-                : '')
+            ? talla.facturas_asociadas.map(f => 
+                `<span class="badge bg-light text-dark border me-1" style="font-size:0.6rem">F:${f.numero}→${f.cantidad}</span>`
+              ).join('')
+            : (tieneRecepcion ? `<small class="text-muted">${talla.recepcionado} uds recep.</small>` : '')
         }
     </td>
-    <td>
-        <div class="text-center">
-            <strong>${talla.stock || 0}</strong>
-            ${pendiente > 0 ? `<br><small class="text-warning">Pend: ${pendiente}</small>` : ''}
-        </div>
-    </td>
+    <td><strong>${talla.stock || 0}</strong>${pendiente > 0 ? `<small class="text-warning d-block" style="font-size:0.6rem">P:${pendiente}</small>` : ''}</td>
     <td>
         <div class="input-cantidad-wrapper">
-            <button type="button" class="btn-cantidad-rapida btn-max" 
-                    onclick="aplicarCantidadRapida(this, 'max')" title="Máximo">
-                <i class="bi bi-arrow-up-circle-fill"></i>
-            </button>
+            <button type="button" class="btn-cantidad-rapida btn-max" onclick="aplicarCantidadRapida(this, 'max')" title="Máx"><i class="bi bi-arrow-up-circle-fill"></i></button>
             <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
-                   data-ids='${tallaIdsStr}'
-                   data-grupo="${grupoId}"
-                   data-stock="${talla.stock}"
-                   data-recepcionado="${talla.recepcionado || 0}"
-                   data-max="${pendiente > 0 ? pendiente : talla.stock}"
+                   data-ids='${tallaIdsStr}' data-grupo="${grupoId}" data-stock="${talla.stock}"
+                   data-recepcionado="${talla.recepcionado || 0}" data-max="${pendiente > 0 ? pendiente : talla.stock}"
                    value="${pendiente > 0 ? '' : (talla.recepcionado || '')}"
-                   max="${pendiente > 0 ? pendiente : talla.stock}"
-                   min="0"
-                   placeholder="${pendiente > 0 ? pendiente : talla.stock}">
-            <button type="button" class="btn-cantidad-rapida btn-mitad" 
-                    onclick="aplicarCantidadRapida(this, 'mitad')" title="50%">
-                ½
-            </button>
+                   max="${pendiente > 0 ? pendiente : talla.stock}" min="0" placeholder="${pendiente > 0 ? pendiente : talla.stock}">
+            <button type="button" class="btn-cantidad-rapida btn-mitad" onclick="aplicarCantidadRapida(this, 'mitad')" title="50%">½</button>
         </div>
-        <span class="indicador-ingresado badge-cantidad-ingresada" style="display: none;"></span>
+        <span class="indicador-ingresado badge-cantidad-ingresada" style="display:none"></span>
     </td>
     <td>
         <div class="input-factura-wrapper">
             <input type="text" class="form-control form-control-sm factura-datalist-input ${selectedFacturaValue ? 'has-factura' : ''}" 
-                   list="${datalistId}" 
-                   data-ids='${tallaIdsStr}'
-                   data-grupo="${grupoId}"
-                   value="${selectedFacturaValue}"
-                   placeholder="Factura...">
+                   list="${datalistId}" data-ids='${tallaIdsStr}' data-grupo="${grupoId}"
+                   value="${selectedFacturaValue}" placeholder="Factura...">
             <i class="bi bi-receipt factura-icon"></i>
         </div>
-        <span class="indicador-factura badge bg-primary text-white mt-1" style="display: none; font-size: 0.65rem;"></span>
-        <datalist id="${datalistId}">
-            ${facturaOptions}
-        </datalist>
+        <datalist id="${datalistId}">${facturaOptions}</datalist>
     </td>
     <td>
         ${tallaCompleta 
-            ? '<span class="badge bg-success"><i class="bi bi-check2-all"></i> Listo</span>' 
+            ? '<span class="badge bg-success" style="font-size:0.6rem"><i class="bi bi-check2-all"></i> OK</span>' 
             : (tieneRecepcion 
-                ? `<div class="d-flex flex-wrap gap-1">
-                     <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Parcial</span>
-                     ${(talla.facturas_asociadas && talla.facturas_asociadas.length > 0) 
-                        ? talla.facturas_asociadas.map(f => 
-                            `<span class="badge bg-primary" style="font-size: 0.6rem;" title="Factura ${f.numero}: ${f.cantidad} unidades">
-                                <i class="bi bi-receipt me-1"></i>${f.numero}/${f.cantidad}
-                            </span>`
-                          ).join('')
-                        : `<span class="badge bg-info" style="font-size: 0.65rem;"><i class="bi bi-box-seam me-1"></i>${talla.recepcionado} uds</span>`
-                     }
-                   </div>`
-                : '<span class="badge bg-secondary"><i class="bi bi-dash"></i></span>')
+                ? `<span class="badge bg-warning text-dark" style="font-size:0.6rem">${talla.recepcionado}/${talla.stock}</span>`
+                : '<span class="badge bg-secondary" style="font-size:0.6rem"><i class="bi bi-dash"></i></span>')
         }
     </td>
 </tr>`;
@@ -3014,17 +2909,15 @@ const GestionCompras = (function() {
             const fila = `
 <tr class="talla-detalle ${completo ? 'table-success' : (tieneRecepcion ? 'table-warning' : '')}">
     <td>${resaltarBusqueda(item.nombre || '-', search)}</td>
-    <td>${resaltarBusqueda(item.descripcion || '-', search)}</td>
+    <td class="recep-col-desc">${resaltarBusqueda(item.descripcion || '-', search)}</td>
     <td>${resaltarBusqueda(item.marca || '-', search)}</td>
-    <td>${resaltarBusqueda(item.color || '-', search)}</td>
-    <td>${resaltarBusqueda(item.genero || '-', search)}</td>
+    <td class="recep-col-extra">${resaltarBusqueda(item.color || '-', search)}</td>
+    <td class="recep-col-extra">${resaltarBusqueda(item.genero || '-', search)}</td>
     <td>$${(item.costo || 0).toLocaleString()}</td>
     <td>$${(item.precio || 0).toLocaleString()}</td>
     <td>
-        <div class="text-center">
-            <strong>${item.stock || 0}</strong>
-            ${pendiente > 0 && tieneRecepcion ? `<br><small class="text-warning">Pend: ${pendiente}</small>` : ''}
-        </div>
+        <strong>${item.stock || 0}</strong>
+        ${pendiente > 0 && tieneRecepcion ? `<small class="text-warning d-block" style="font-size:0.65rem">P:${pendiente}</small>` : ''}
     </td>
     <td>
         ${resaltarBusqueda(item.talla || '-', search)}
@@ -4340,47 +4233,50 @@ function resetCSVUpload() {
                         console.log(`✅ Compras cargadas en ${loadTime}s - ${response.compras.length} de ${response.pagination.total_count} compras encontradas`);
                         
                         response.compras.forEach(function (compra) {
+                            const estadoBadge = compra.unidades == 0
+                                ? '<span class="badge bg-danger ms-1">Falta Compra</span>'
+                                : (compra.recepcionado >= compra.unidades
+                                    ? '<span class="badge bg-success ms-1">Completado</span>'
+                                    : '<span class="badge bg-warning text-dark ms-1">Pendiente</span>');
+                            const diasBadge = `<span class="badge ${compra.dias_temporada > 30 ? 'bg-success' : (compra.dias_temporada > 0 ? 'bg-warning text-dark' : 'bg-danger')}">${compra.dias_temporada > 0 ? compra.dias_temporada + ' días' : 'Finalizada'}</span>`;
                             const fila = `
 <tr>
-    <td class="text-nowrap">${compra.id}</td>
-    <td class="text-nowrap">${resaltarBusquedaCompras(compra.proveedor ?? '-', search)}</td>
-    <td class="text-nowrap">${resaltarBusquedaCompras(compra.nombre, search)}</td>
-   <td class="text-nowrap">
-    ${resaltarBusquedaCompras(compra.temporada, search)}
-    <br>
-    <span class="badge ${compra.dias_temporada > 30 ? 'bg-success' : (compra.dias_temporada > 0 ? 'bg-warning text-dark' : 'bg-danger')}">
-        ${compra.dias_temporada > 0 ? compra.dias_temporada + ' días restantes' : 'Finalizada'}
-    </span>
-</td>
-
-    <td class="text-nowrap">${compra.fecha}</td>
-    <td class="text-nowrap">$${compra.costo_total.toLocaleString()}</td>
-    <td class="text-nowrap">${compra.unidades}</td>
-    <td class="text-nowrap">
-        ${compra.recepcionado}
-        ${compra.unidades == 0 ? '<span class="badge bg-danger ms-1">Falta Compra</span>' : (compra.recepcionado >= compra.unidades ? '<span class="badge bg-success ms-1">Completado</span>' : '<span class="badge bg-warning text-dark ms-1">Pendiente</span>')}
+    <td class="text-nowrap col-hide-sm">${compra.id}</td>
+    <td>${resaltarBusquedaCompras(compra.proveedor ?? '-', search)}</td>
+    <td>
+        ${resaltarBusquedaCompras(compra.nombre, search)}
+        <span class="d-md-none d-block mt-1">${diasBadge} ${estadoBadge}</span>
     </td>
-    <td class="text-nowrap">${resaltarBusquedaCompras(compra.responsable, search)}</td>
-   <td>
-    <div class="btn-group btn-group-sm">
-        <a class="btn btn-soft-primary" href="#" data-bs-toggle="modal" data-bs-target="#modalImportarCSV" data-id="${compra.id}" title="Cargar CSV">
-            <i class="bi bi-upload"></i>
-        </a>
-        <a class="btn btn-soft-info agregar-producto-manual" href="#" data-id="${compra.id}" data-bs-toggle="modal" data-bs-target="#modalProductoManual" title="Agregar Producto">
-            <i class="bi bi-plus"></i>
-        </a>
-        <a class="btn btn-soft-success gestionar-compra" href="#" data-id="${compra.id}" title="Gestionar/Recepcionar">
-            <i class="bi bi-box-seam"></i>
-        </a>
-        ${compra.recepcionado > 0 ? `<a class="btn btn-soft-warning editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}" title="Editar Recepciones">
-            <i class="bi bi-pencil-square"></i>
-        </a>` : ''}
-        <a class="btn btn-soft-danger eliminar-compra" href="#" data-id="${compra.id}" title="Eliminar">
-            <i class="bi bi-trash"></i>
-        </a>
-    </div>
-</td>
-
+    <td class="col-hide-md">
+        ${resaltarBusquedaCompras(compra.temporada, search)}<br>${diasBadge}
+    </td>
+    <td class="text-nowrap col-hide-sm">${compra.fecha}</td>
+    <td class="text-nowrap col-hide-md text-end">$${compra.costo_total.toLocaleString()}</td>
+    <td class="text-nowrap text-center col-hide-sm">${compra.unidades}</td>
+    <td class="text-nowrap text-center">
+        ${compra.recepcionado}
+        <span class="d-none d-md-inline">${estadoBadge}</span>
+    </td>
+    <td class="col-hide-lg">${resaltarBusquedaCompras(compra.responsable, search)}</td>
+    <td class="td-actions">
+        <div class="btn-group btn-group-sm flex-wrap">
+            <a class="btn btn-soft-primary" href="#" data-bs-toggle="modal" data-bs-target="#modalImportarCSV" data-id="${compra.id}" title="Cargar CSV">
+                <i class="bi bi-upload"></i>
+            </a>
+            <a class="btn btn-soft-info agregar-producto-manual" href="#" data-id="${compra.id}" data-bs-toggle="modal" data-bs-target="#modalProductoManual" title="Agregar Producto">
+                <i class="bi bi-plus"></i>
+            </a>
+            <a class="btn btn-soft-success gestionar-compra" href="#" data-id="${compra.id}" title="Gestionar/Recepcionar">
+                <i class="bi bi-box-seam"></i>
+            </a>
+            ${compra.recepcionado > 0 ? `<a class="btn btn-soft-warning editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}" title="Editar Recepciones">
+                <i class="bi bi-pencil-square"></i>
+            </a>` : ''}
+            ${PUEDE_ELIMINAR_COMPRA ? `<a class="btn btn-soft-danger eliminar-compra" href="#" data-id="${compra.id}" title="Eliminar">
+                <i class="bi bi-trash"></i>
+            </a>` : ''}
+        </div>
+    </td>
 </tr>`;
                             tbody.append(fila);
                         });
@@ -4471,40 +4367,109 @@ function resetCSVUpload() {
         e.preventDefault();
         const compraId = $(this).data('id');
 
-        Swal.fire({
-            title: '¿Estás seguro?',
-            text: "Esta acción no se puede deshacer.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: GestionCompras.urls.eliminarCompra,
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ compra_id: compraId }),
-                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                    success: function(data) {
-                        if (data.success) {
-                            Swal.fire('Eliminada', 'La compra fue eliminada correctamente.', 'success');
-                            // Recargar la tabla con el año seleccionado
-                            const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
-                            cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
-                        } else {
-                            Swal.fire('Error', 'No se pudo eliminar la compra.', 'error');
-                        }
-                    },
-                    error: function(xhr) {
-                        Swal.fire('Error', 'Algo salió mal.', 'error');
-                    }
+        $.ajax({
+            url: GestionCompras.urls.eliminarCompra,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ compra_id: compraId, mode: 'check' }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(data) {
+                if (!data.success) return;
+                const info = data.info;
+
+                if (info.tiene_recepciones) {
+                    Swal.fire({
+                        title: 'Eliminación bloqueada',
+                        html: `<div class="text-start">
+                            <p>La compra <strong>"${info.nombre}"</strong> no se puede eliminar porque tiene productos ya recepcionados en inventario.</p>
+                            <div class="alert alert-danger py-2 small mb-2">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                Eliminarla causaría inconsistencia en el stock del sistema.
+                            </div>
+                            <table class="table table-sm table-bordered mb-0 small">
+                                <tr><td>Proveedor</td><td class="fw-bold">${info.proveedor}</td></tr>
+                                <tr><td>Productos</td><td>${info.total_productos}</td></tr>
+                                <tr><td>Unidades totales</td><td>${info.total_unidades}</td></tr>
+                                <tr><td class="text-danger">Recepcionadas</td><td class="fw-bold text-danger">${info.total_recepcionado}</td></tr>
+                            </table>
+                        </div>`,
+                        icon: 'error',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#405189',
+                    });
+                    return;
+                }
+
+                if (info.tiene_productos) {
+                    Swal.fire({
+                        title: 'Compra con productos cargados',
+                        html: `<div class="text-start">
+                            <p>La compra <strong>"${info.nombre}"</strong> tiene productos cargados que aún no fueron recepcionados.</p>
+                            <table class="table table-sm table-bordered mb-2 small">
+                                <tr><td>Proveedor</td><td class="fw-bold">${info.proveedor}</td></tr>
+                                <tr><td>Productos</td><td>${info.total_productos}</td></tr>
+                                <tr><td>Unidades sin recepcionar</td><td class="fw-bold text-warning">${info.total_unidades}</td></tr>
+                            </table>
+                            <p class="mb-0 text-muted small"><i class="bi bi-info-circle me-1"></i>Al eliminar se perderán los productos cargados en esta compra.</p>
+                        </div>`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#405189',
+                        confirmButtonText: 'Sí, eliminar compra',
+                        cancelButtonText: 'Cancelar'
+                    }).then((result) => {
+                        if (result.isConfirmed) ejecutarEliminacion(compraId, true);
+                    });
+                    return;
+                }
+
+                Swal.fire({
+                    title: '¿Eliminar compra?',
+                    html: `<p>Se eliminará la compra <strong>"${info.nombre}"</strong> (${info.proveedor}).</p><p class="text-muted small mb-0">La compra está vacía, no tiene productos cargados.</p>`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#405189',
+                    confirmButtonText: 'Eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) ejecutarEliminacion(compraId, false);
                 });
+            },
+            error: function(xhr) {
+                const resp = xhr.responseJSON;
+                Swal.fire('Error', resp?.error || 'No se pudo verificar la compra.', 'error');
             }
         });
     });
+
+    function ejecutarEliminacion(compraId, force) {
+        $.ajax({
+            url: GestionCompras.urls.eliminarCompra,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ compra_id: compraId, mode: 'delete', force: force }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(data) {
+                if (data.success) {
+                    Swal.fire('Eliminada', data.message, 'success');
+                    const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
+                    cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
+                } else {
+                    Swal.fire('Error', data.error || 'No se pudo eliminar la compra.', 'error');
+                }
+            },
+            error: function(xhr) {
+                const resp = xhr.responseJSON;
+                if (resp?.blocked) {
+                    Swal.fire('Bloqueado', resp.error, 'error');
+                } else {
+                    Swal.fire('Error', resp?.error || 'Algo salió mal.', 'error');
+                }
+            }
+        });
+    }
 
     let compraIdActual = null;
 
@@ -4643,8 +4608,8 @@ function resetCSVUpload() {
         const pendientes = totalStockTotal - totalRecepcionadoFinal;
         
         // Actualizar estadísticas
-        $('#statPendientes').text(`${Math.max(0, pendientes).toLocaleString()} unidades`);
-        $('#statRecepcionados').text(`${totalRecepcionadoFinal.toLocaleString()} unidades`);
+        $('#statPendientes').text(Math.max(0, pendientes).toLocaleString());
+        $('#statRecepcionados').text(totalRecepcionadoFinal.toLocaleString());
         
         // Actualizar header
         $('#headerPendientes').text(Math.max(0, pendientes).toLocaleString());

@@ -109,157 +109,144 @@
     color: var(--nexo-white);
 }
 
-/* ========== KPIs GRID ========== */
-.kpis-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 20px;
-    margin-bottom: 24px;
-}
-
-.kpi-card {
+/* ========== KPIs STRIP COMPACTO ========== */
+.kpis-strip {
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
-    padding: 20px 24px;
     box-shadow: var(--nexo-shadow-sm);
     border: 1px solid var(--nexo-gray-300);
-    transition: var(--nexo-transition-normal);
-    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
     overflow: hidden;
 }
 
-.kpi-card:hover {
-    box-shadow: var(--nexo-shadow-md);
-    transform: translateY(-2px);
+.kpi-item {
+    flex: 1 1 0;
+    min-width: 120px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-right: 1px solid var(--nexo-gray-100);
+    transition: background var(--nexo-transition-fast);
 }
+.kpi-item:last-child { border-right: none; }
+.kpi-item:hover { background: var(--nexo-gray-100); }
 
-.kpi-card .kpi-icon {
-    width: 44px;
-    height: 44px;
+.kpi-item-icon {
+    width: 34px;
+    height: 34px;
     border-radius: var(--nexo-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
+    flex-shrink: 0;
+    font-size: 1rem;
 }
+.kpi-item-icon.primary  { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.kpi-item-icon.success  { background: rgba(0,212,170,0.15); color: var(--nexo-success); }
+.kpi-item-icon.warning  { background: rgba(255,176,32,0.15); color: var(--nexo-warning); }
+.kpi-item-icon.info     { background: rgba(0,102,255,0.1);  color: var(--nexo-info); }
+.kpi-item-icon.error    { background: rgba(255,77,77,0.1);  color: var(--nexo-error); }
+.kpi-item-icon.accent   { background: rgba(0,212,170,0.15); color: var(--nexo-accent); }
+.kpi-item-icon.secondary{ background: rgba(26,26,46,0.08);  color: var(--nexo-secondary); }
 
-.kpi-card .kpi-icon i {
+.kpi-item-value {
     font-size: 1.25rem;
-}
-
-.kpi-card .kpi-icon.primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
-.kpi-card .kpi-icon.success { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
-.kpi-card .kpi-icon.warning { background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); }
-.kpi-card .kpi-icon.info { background: rgba(0, 102, 255, 0.1); color: var(--nexo-info); }
-.kpi-card .kpi-icon.error { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); }
-.kpi-card .kpi-icon.accent { background: rgba(0, 212, 170, 0.15); color: var(--nexo-accent); }
-.kpi-card .kpi-icon.secondary { background: rgba(26, 26, 46, 0.08); color: var(--nexo-secondary); }
-
-.kpi-card .kpi-value {
-    font-size: 1.85rem;
     font-weight: 700;
     color: var(--nexo-gray-900);
     line-height: 1.2;
-    margin-bottom: 4px;
+    white-space: nowrap;
 }
 
-.kpi-card .kpi-label {
-    font-size: 0.8rem;
+.kpi-item-label {
+    font-size: 0.68rem;
     font-weight: 600;
     color: var(--nexo-gray-500);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.kpi-card .kpi-trend {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 4px 8px;
-    border-radius: var(--nexo-radius-sm);
-}
-
-.kpi-card .kpi-trend.up { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
-.kpi-card .kpi-trend.down { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
-.kpi-card .kpi-trend.neutral { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
-
-/* ========== INDICADORES DESTACADOS ========== */
-.indicadores-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    margin-bottom: 24px;
-}
-
-@media (max-width: 1200px) {
-    .indicadores-row {
-        grid-template-columns: repeat(2, 1fr);
-    }
+    letter-spacing: 0.4px;
+    white-space: nowrap;
 }
 
 @media (max-width: 768px) {
-    .indicadores-row {
-        grid-template-columns: 1fr;
-    }
+    .kpi-item { min-width: 50%; border-bottom: 1px solid var(--nexo-gray-100); }
 }
 
-.indicador-card {
+/* ========== INDICADORES STRIP COMPACTO ========== */
+.indicadores-strip {
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
-    padding: 24px;
     box-shadow: var(--nexo-shadow-sm);
     border: 1px solid var(--nexo-gray-300);
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    overflow: hidden;
 }
 
-.indicador-card .indicador-header {
+.indicador-item {
+    flex: 1 1 0;
+    min-width: 180px;
+    padding: 10px 16px;
+    border-right: 1px solid var(--nexo-gray-100);
+}
+.indicador-item:last-child { border-right: none; }
+
+.indicador-item-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 4px;
 }
 
-.indicador-card .indicador-title {
-    font-size: 0.85rem;
+.indicador-item-label {
+    font-size: 0.68rem;
     font-weight: 600;
-    color: var(--nexo-gray-700);
+    color: var(--nexo-gray-500);
     text-transform: uppercase;
     letter-spacing: 0.3px;
 }
 
-.indicador-card .indicador-value-large {
-    font-size: 2.25rem;
+.indicador-item-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 5px;
+}
+
+.indicador-item-value {
+    font-size: 1.15rem;
     font-weight: 700;
     color: var(--nexo-gray-900);
-    margin-bottom: 8px;
+    line-height: 1;
 }
 
-.indicador-card .indicador-bar {
-    height: 8px;
+.indicador-item-sub {
+    font-size: 0.68rem;
+    color: var(--nexo-gray-500);
+    white-space: nowrap;
+}
+
+.indicador-mini-bar {
+    height: 4px;
     background: var(--nexo-gray-100);
-    border-radius: var(--nexo-radius-sm);
+    border-radius: 2px;
     overflow: hidden;
-    margin-top: 12px;
 }
 
-.indicador-card .indicador-bar-fill {
+.indicador-mini-bar-fill {
     height: 100%;
-    border-radius: var(--nexo-radius-sm);
+    border-radius: 2px;
     transition: width 0.6s ease;
 }
+.indicador-mini-bar-fill.primary { background: var(--nexo-primary); }
+.indicador-mini-bar-fill.success { background: var(--nexo-success); }
+.indicador-mini-bar-fill.warning { background: var(--nexo-warning); }
+.indicador-mini-bar-fill.error   { background: var(--nexo-error); }
 
-.indicador-card .indicador-bar-fill.success { background: var(--nexo-success); }
-.indicador-card .indicador-bar-fill.warning { background: var(--nexo-warning); }
-.indicador-card .indicador-bar-fill.error { background: var(--nexo-error); }
-.indicador-card .indicador-bar-fill.primary { background: var(--nexo-primary); }
-
-.indicador-card .indicador-legend {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 12px;
-    font-size: 0.8rem;
-    color: var(--nexo-gray-500);
+@media (max-width: 768px) {
+    .indicador-item { min-width: 50%; border-bottom: 1px solid var(--nexo-gray-100); }
 }
 
 /* ========== SECCIÓN DE FILTROS ========== */
@@ -398,19 +385,29 @@
 .table-nexo {
     margin-bottom: 0;
     width: 100%;
+    table-layout: fixed;
 }
 
 .table-nexo thead th {
     background: var(--nexo-secondary);
     color: var(--nexo-white);
     font-weight: 600;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 14px 16px;
+    letter-spacing: 0.4px;
+    padding: 10px 12px;
     border: none;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+
+.table-nexo thead th:nth-child(1) { width: 22%; }
+.table-nexo thead th:nth-child(2) { width: 16%; }
+.table-nexo thead th:nth-child(3) { width: 9%; }
+.table-nexo thead th:nth-child(4) { width: 16%; }
+.table-nexo thead th:nth-child(5) { width: 22%; }
+.table-nexo thead th:nth-child(6) { width: 15%; }
 
 .table-nexo tbody tr {
     transition: var(--nexo-transition-fast);
@@ -422,11 +419,91 @@
 }
 
 .table-nexo tbody td {
-    padding: 14px 16px;
+    padding: 8px 12px;
     vertical-align: middle;
-    font-size: 0.875rem;
+    font-size: 0.82rem;
     color: var(--nexo-gray-900);
     border: none;
+    overflow: hidden;
+}
+
+/* Badge compacto para etiquetas de celda */
+.badge-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-right: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    min-width: 36px;
+    text-align: center;
+}
+.badge-tag.primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.badge-tag.info    { background: rgba(0,102,255,0.1);       color: #2563eb; }
+.badge-tag.success { background: rgba(0,212,170,0.15);      color: #059669; }
+.badge-tag.warning { background: rgba(255,176,32,0.15);     color: #92400e; }
+.badge-tag.error   { background: rgba(255,77,77,0.12);      color: var(--nexo-error); }
+.badge-tag.light   { background: var(--nexo-gray-100);      color: var(--nexo-gray-700); }
+
+.unidades-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 2px;
+    white-space: nowrap;
+}
+.unidades-row:last-child { margin-bottom: 0; }
+
+.monto-principal {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--nexo-gray-900);
+}
+.monto-secundario {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    margin-top: 1px;
+}
+.monto-saldo {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.estados-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+}
+
+.proveedor-nombre {
+    font-weight: 600;
+    font-size: 0.82rem;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+.proveedor-rut {
+    font-size: 0.72rem;
+    color: var(--nexo-gray-500);
+    white-space: nowrap;
+}
+
+.dte-num {
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+.dte-tipo {
+    font-size: 0.7rem;
+    color: var(--nexo-gray-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    display: block;
 }
 
 /* Badges NEXO */
@@ -595,123 +672,113 @@
         </div>
         
         <!-- ========== KPIs PRINCIPALES ========== -->
-        <div class="kpis-container">
-            <!-- KPI: Proveedores -->
-            <div class="kpi-card">
-                <div class="kpi-icon primary">
-                    <i class="bi bi-building"></i>
+        <div class="kpis-strip">
+            <div class="kpi-item">
+                <div class="kpi-item-icon primary"><i class="bi bi-building"></i></div>
+                <div>
+                    <div class="kpi-item-value" id="totalProveedores">-</div>
+                    <div class="kpi-item-label">Proveedores</div>
                 </div>
-                <div class="kpi-value" id="totalProveedores">-</div>
-                <div class="kpi-label">Proveedores Activos</div>
             </div>
-            
-            <!-- KPI: DTEs -->
-            <div class="kpi-card">
-                <div class="kpi-icon info">
-                    <i class="bi bi-file-earmark-text"></i>
+            <div class="kpi-item">
+                <div class="kpi-item-icon info"><i class="bi bi-file-earmark-text"></i></div>
+                <div>
+                    <div class="kpi-item-value" id="totalDtes">-</div>
+                    <div class="kpi-item-label">Docs DTE</div>
                 </div>
-                <div class="kpi-value" id="totalDtes">-</div>
-                <div class="kpi-label">Documentos DTE</div>
             </div>
-            
-            <!-- KPI: Unidades Ingresadas -->
-            <div class="kpi-card">
-                <div class="kpi-icon success">
-                    <i class="bi bi-box-seam"></i>
+            <div class="kpi-item">
+                <div class="kpi-item-icon warning"><i class="bi bi-hourglass-split"></i></div>
+                <div>
+                    <div class="kpi-item-value" id="totalPendienteIngreso">-</div>
+                    <div class="kpi-item-label">Pares por Ingresar</div>
                 </div>
-                <div class="kpi-value" id="totalIngresado">-</div>
-                <div class="kpi-label">Unidades Ingresadas</div>
             </div>
-            
-            <!-- KPI: Unidades Despachadas -->
-            <div class="kpi-card">
-                <div class="kpi-icon warning">
-                    <i class="bi bi-send"></i>
+            <div class="kpi-item">
+                <div class="kpi-item-icon success"><i class="bi bi-box-seam"></i></div>
+                <div>
+                    <div class="kpi-item-value" id="totalIngresado">-</div>
+                    <div class="kpi-item-label">Pares Ingresados</div>
                 </div>
-                <div class="kpi-value" id="totalDespachado">-</div>
-                <div class="kpi-label">Unidades Despachadas</div>
             </div>
-            
-            <!-- KPI: Saldo Disponible -->
-            <div class="kpi-card">
-                <div class="kpi-icon accent">
-                    <i class="bi bi-archive"></i>
+            <div class="kpi-item">
+                <div class="kpi-item-icon error"><i class="bi bi-send"></i></div>
+                <div>
+                    <div class="kpi-item-value" id="totalDespachado">-</div>
+                    <div class="kpi-item-label">Pares Despachados</div>
                 </div>
-                <div class="kpi-value" id="totalSaldo">-</div>
-                <div class="kpi-label">Saldo Disponible</div>
             </div>
-            
-            <!-- KPI: Monto Total -->
-            <div class="kpi-card">
-                <div class="kpi-icon secondary">
-                    <i class="bi bi-currency-dollar"></i>
+            <div class="kpi-item">
+                <div class="kpi-item-icon accent"><i class="bi bi-archive"></i></div>
+                <div>
+                    <div class="kpi-item-value" id="totalSaldo">-</div>
+                    <div class="kpi-item-label">Saldo Stock</div>
                 </div>
-                <div class="kpi-value" id="montoTotal">-</div>
-                <div class="kpi-label">Monto Total Compras</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-item-icon secondary"><i class="bi bi-currency-dollar"></i></div>
+                <div>
+                    <div class="kpi-item-value" id="montoTotal">-</div>
+                    <div class="kpi-item-label">Monto Compras</div>
+                </div>
             </div>
         </div>
         
         <!-- ========== INDICADORES CLAVE ========== -->
-        <div class="indicadores-row">
-            <!-- Indicador: Rotación de Inventario -->
-            <div class="indicador-card">
-                <div class="indicador-header">
-                    <span class="indicador-title">
-                        <i class="bi bi-arrow-repeat me-2" style="color: var(--nexo-primary);"></i>
-                        Rotación de Inventario
-                    </span>
-                    <span class="badge-nexo primary" id="rotacionBadge">-</span>
+        <div class="indicadores-strip">
+            <!-- Rotación -->
+            <div class="indicador-item">
+                <div class="indicador-item-top">
+                    <span class="indicador-item-label"><i class="bi bi-arrow-repeat me-1" style="color:var(--nexo-primary);"></i>Rotación</span>
+                    <span class="badge-nexo primary" id="rotacionBadge" style="font-size:0.6rem;padding:2px 6px;">-</span>
                 </div>
-                <div class="indicador-value-large" id="rotacionValor">0%</div>
-                <p class="text-muted mb-0" style="font-size: 0.8rem;">Porcentaje de mercadería despachada vs ingresada</p>
-                <div class="indicador-bar">
-                    <div class="indicador-bar-fill primary" id="rotacionBar" style="width: 0%;"></div>
+                <div class="indicador-item-row">
+                    <span class="indicador-item-value" id="rotacionValor">0%</span>
+                    <span class="indicador-item-sub" id="rotacionDetalle">0 de 0</span>
                 </div>
-                <div class="indicador-legend">
-                    <span>Despachado</span>
-                    <span id="rotacionDetalle">0 de 0 unidades</span>
+                <div class="indicador-mini-bar">
+                    <div class="indicador-mini-bar-fill primary" id="rotacionBar" style="width:0%;"></div>
                 </div>
             </div>
-            
-            <!-- Indicador: Estado de Pagos -->
-            <div class="indicador-card">
-                <div class="indicador-header">
-                    <span class="indicador-title">
-                        <i class="bi bi-credit-card me-2" style="color: var(--nexo-success);"></i>
-                        Estado de Pagos
-                    </span>
-                    <span class="badge-nexo success" id="pagosBadge">-</span>
+            <!-- Pagos -->
+            <div class="indicador-item">
+                <div class="indicador-item-top">
+                    <span class="indicador-item-label"><i class="bi bi-credit-card me-1" style="color:var(--nexo-success);"></i>Pagos DTEs</span>
+                    <span class="badge-nexo success" id="pagosBadge" style="font-size:0.6rem;padding:2px 6px;">-</span>
                 </div>
-                <div class="indicador-value-large" id="pagosValor">0%</div>
-                <p class="text-muted mb-0" style="font-size: 0.8rem;">Porcentaje de DTEs pagados</p>
-                <div class="indicador-bar">
-                    <div class="indicador-bar-fill success" id="pagosBar" style="width: 0%;"></div>
+                <div class="indicador-item-row">
+                    <span class="indicador-item-value" id="pagosValor">0%</span>
+                    <span class="indicador-item-sub" id="pagosDetalle">0 de 0</span>
                 </div>
-                <div class="indicador-legend">
-                    <span>Pagados</span>
-                    <span id="pagosDetalle">0 de 0 DTEs</span>
+                <div class="indicador-mini-bar">
+                    <div class="indicador-mini-bar-fill success" id="pagosBar" style="width:0%;"></div>
                 </div>
             </div>
-            
-            <!-- Indicador: Valor Promedio por DTE -->
-            <div class="indicador-card">
-                <div class="indicador-header">
-                    <span class="indicador-title">
-                        <i class="bi bi-graph-up me-2" style="color: var(--nexo-warning);"></i>
-                        Valor Promedio por DTE
-                    </span>
+            <!-- Valor Promedio -->
+            <div class="indicador-item">
+                <div class="indicador-item-top">
+                    <span class="indicador-item-label"><i class="bi bi-graph-up me-1" style="color:var(--nexo-warning);"></i>Valor Prom.</span>
                 </div>
-                <div class="indicador-value-large" id="promedioValor">$0</div>
-                <p class="text-muted mb-0" style="font-size: 0.8rem;">Promedio de monto por documento</p>
-                <div class="row mt-3">
-                    <div class="col-6">
-                        <small class="text-muted d-block">Monto Mínimo</small>
-                        <strong id="montoMinimo">$0</strong>
-                    </div>
-                    <div class="col-6 text-end">
-                        <small class="text-muted d-block">Monto Máximo</small>
-                        <strong id="montoMaximo">$0</strong>
-                    </div>
+                <div class="indicador-item-row">
+                    <span class="indicador-item-value" id="promedioValor">$0</span>
+                </div>
+                <div class="indicador-item-sub" style="display:flex;justify-content:space-between;">
+                    <span>Mín: <strong id="montoMinimo">$0</strong></span>
+                    <span>Máx: <strong id="montoMaximo">$0</strong></span>
+                </div>
+            </div>
+            <!-- Por Ingresar -->
+            <div class="indicador-item">
+                <div class="indicador-item-top">
+                    <span class="indicador-item-label"><i class="bi bi-hourglass-split me-1" style="color:var(--nexo-warning);"></i>Por Ingresar</span>
+                    <span class="badge-nexo warning" id="pendienteBadge" style="font-size:0.6rem;padding:2px 6px;color:#92400e;">-</span>
+                </div>
+                <div class="indicador-item-row">
+                    <span class="indicador-item-value" id="pendienteValor" style="color:var(--nexo-warning);">0</span>
+                    <span class="indicador-item-sub" id="pendienteDetalle">0 de 0 pares</span>
+                </div>
+                <div class="indicador-mini-bar">
+                    <div class="indicador-mini-bar-fill warning" id="pendienteBar" style="width:0%;"></div>
                 </div>
             </div>
         </div>
@@ -751,6 +818,17 @@
                             <i class="bi bi-x-circle me-1"></i> Limpiar
                         </button>
                     </div>
+                    <div class="mt-2 d-flex align-items-center gap-2">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="chkExcluirInterna" checked>
+                            <label class="form-check-label" for="chkExcluirInterna" style="font-size:0.78rem; color:var(--nexo-gray-700); cursor:pointer;">
+                                Excluir facturación interna
+                            </label>
+                        </div>
+                        <span data-bs-toggle="tooltip" title="Excluye DTEs donde el emisor y receptor son la misma empresa (auto-facturaciones internas que distorsionan los KPIs)">
+                            <i class="bi bi-info-circle" style="color:var(--nexo-gray-500); font-size:0.85rem;"></i>
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -769,17 +847,12 @@
                     <table class="table table-nexo" id="tablaReporteProveedor">
                         <thead class="text-center">
                             <tr>
-                                <th class="text-start">Proveedor</th>
-                                <th>DTE</th>
+                                <th class="text-start">Proveedor / RUT</th>
+                                <th class="text-start">DTE / Tipo</th>
                                 <th>Fecha</th>
-                                <th>Ingresado</th>
-                                <th>Despachado</th>
-                                <th>Saldo</th>
-                                <th>Monto Ingreso</th>
-                                <th>Monto Despacho</th>
-                                <th>Valor Saldo</th>
-                                <th>Estado DTE</th>
-                                <th>Estado Pago</th>
+                                <th>Pares</th>
+                                <th>Montos</th>
+                                <th>Estado</th>
                             </tr>
                         </thead>
                         <tbody class="text-center" id="tablaBody">
@@ -850,6 +923,7 @@ function cargarReporteProveedor(page = 1) {
         fecha_inicio: $('#filtroFechaInicioReporte').val(),
         fecha_fin: $('#filtroFechaFinReporte').val(),
         dte_numero: $('#filtroDteReporte').val().trim(),
+        excluir_interna: $('#chkExcluirInterna').is(':checked') ? 'true' : 'false',
         page: page,
         page_size: pageSizeReporte
     };
@@ -888,7 +962,7 @@ function mostrarLoading() {
     let skeleton = '';
     for (let i = 0; i < 5; i++) {
         skeleton += `<tr>
-            <td colspan="11"><div class="skeleton" style="height: 20px; width: 100%;"></div></td>
+            <td colspan="6"><div class="skeleton" style="height: 20px; width: 100%;"></div></td>
         </tr>`;
     }
     tbody.html(skeleton);
@@ -911,7 +985,7 @@ function mostrarReporteProveedor(data, pagination) {
     if (data.length === 0) {
         tbody.append(`
             <tr>
-                <td colspan="11">
+                <td colspan="6">
                     <div class="empty-state">
                         <i class="bi bi-inbox"></i>
                         <h5>Sin resultados</h5>
@@ -944,22 +1018,32 @@ function mostrarReporteProveedor(data, pagination) {
         const fila = `
             <tr>
                 <td class="text-start">
-                    <strong>${item.proveedor_nombre}</strong>
-                    <br><small class="text-muted">${item.proveedor_rut}</small>
+                    <div class="proveedor-nombre" title="${item.proveedor_nombre}">${item.proveedor_nombre}</div>
+                    <span class="proveedor-rut">${item.proveedor_rut}</span>
+                </td>
+                <td class="text-start">
+                    <span class="dte-num">${item.dte_numero}</span>
+                    <span class="dte-tipo" title="${item.dte_tipo}">${item.dte_tipo}</span>
+                </td>
+                <td class="text-center text-nowrap">${formatearFecha(item.fecha_emision)}</td>
+                <td>
+                    ${item.unidades_en_dte > 0 ? `<div class="unidades-row"><span class="badge-tag light">DTE</span>${formatearNumero(item.unidades_en_dte)}</div>` : ''}
+                    ${item.unidades_pendientes_ingreso > 0 ? `<div class="unidades-row"><span class="badge-tag warning">Pend</span><strong style="color:var(--nexo-warning);">${formatearNumero(item.unidades_pendientes_ingreso)}</strong></div>` : ''}
+                    <div class="unidades-row"><span class="badge-tag primary">Ing</span>${formatearNumero(item.total_ingresado)}</div>
+                    <div class="unidades-row"><span class="badge-tag info">Desp</span>${formatearNumero(item.total_despachado)}</div>
+                    <div class="unidades-row"><span class="badge-tag ${saldoClass}">Saldo</span><strong>${formatearNumero(item.saldo_restante)}</strong></div>
+                </td>
+                <td class="text-end">
+                    <div class="monto-principal">$${formatearNumero(item.monto_ingresado)}</div>
+                    <div class="monto-secundario">Desp: $${formatearNumero(item.monto_despachado)}</div>
+                    <div class="monto-saldo" style="color: var(--nexo-${saldoClass === 'success' ? 'success' : saldoClass === 'warning' ? 'warning' : 'gray-500'});">Saldo: $${formatearNumero(item.monto_restante)}</div>
                 </td>
                 <td>
-                    <strong>${item.dte_numero}</strong>
-                    <br><small class="text-muted">${item.dte_tipo}</small>
+                    <div class="estados-cell">
+                        <span class="badge-nexo ${estadoDteClass}" style="font-size:0.7rem; padding:4px 7px;">${item.estado_dte}</span>
+                        <span class="badge-nexo ${estadoPagoClass}" style="font-size:0.7rem; padding:4px 7px;">${item.estado_pago}</span>
+                    </div>
                 </td>
-                <td>${formatearFecha(item.fecha_emision)}</td>
-                <td><span class="badge-nexo primary">${item.total_ingresado}</span></td>
-                <td><span class="badge-nexo info">${item.total_despachado}</span></td>
-                <td><span class="badge-nexo ${saldoClass}">${item.saldo_restante}</span></td>
-                <td><strong>$${formatearNumero(item.monto_ingresado)}</strong></td>
-                <td><strong>$${formatearNumero(item.monto_despachado)}</strong></td>
-                <td><span class="badge-nexo-outline ${saldoClass}">$${formatearNumero(item.monto_restante)}</span></td>
-                <td><span class="badge-nexo ${estadoDteClass}">${item.estado_dte}</span></td>
-                <td><span class="badge-nexo ${estadoPagoClass}">${item.estado_pago}</span></td>
             </tr>`;
         tbody.append(fila);
     });
@@ -974,6 +1058,7 @@ function mostrarKPIsDesdeResumen(resumen) {
     $('#totalDtes').text(resumen.total_dtes || 0);
     $('#totalIngresado').text(formatearNumero(resumen.total_unidades_ingresadas || 0));
     $('#totalDespachado').text(formatearNumero(resumen.total_unidades_despachadas || 0));
+    $('#totalPendienteIngreso').text(formatearNumero(resumen.total_unidades_pendientes || 0));
     
     const saldo = (resumen.total_unidades_ingresadas || 0) - (resumen.total_unidades_despachadas || 0);
     $('#totalSaldo').text(formatearNumero(saldo));
@@ -988,7 +1073,7 @@ function calcularIndicadoresDesdeResumen(resumen) {
     
     $('#rotacionValor').text(rotacion.toFixed(1) + '%');
     $('#rotacionBar').css('width', Math.min(rotacion, 100) + '%');
-    $('#rotacionDetalle').text(`${formatearNumero(totalDespachado)} de ${formatearNumero(totalIngresado)} unidades`);
+    $('#rotacionDetalle').text(`${formatearNumero(totalDespachado)} de ${formatearNumero(totalIngresado)}`);
     
     let rotacionStatus = 'Bajo';
     if (rotacion >= 70) rotacionStatus = 'Alto';
@@ -1002,7 +1087,7 @@ function calcularIndicadoresDesdeResumen(resumen) {
     
     $('#pagosValor').text(porcentajePagos.toFixed(1) + '%');
     $('#pagosBar').css('width', porcentajePagos + '%');
-    $('#pagosDetalle').text(`${dtesPagados} de ${totalDtes} DTEs`);
+    $('#pagosDetalle').text(`${dtesPagados} de ${totalDtes}`);
     
     let pagosStatus = 'Pendiente';
     if (porcentajePagos >= 80) pagosStatus = 'Al día';
@@ -1019,6 +1104,20 @@ function calcularIndicadoresDesdeResumen(resumen) {
     $('#promedioValor').text('$' + formatearNumero(resumen.monto_promedio || 0));
     $('#montoMinimo').text('$' + formatearNumero(resumen.monto_minimo || 0));
     $('#montoMaximo').text('$' + formatearNumero(resumen.monto_maximo || 0));
+
+    // 4. Pares por Ingresar
+    const totalEnDtes = resumen.total_unidades_en_dtes || 0;
+    const pendientes = resumen.total_unidades_pendientes || 0;
+    const porcentajePendiente = totalEnDtes > 0 ? ((pendientes / totalEnDtes) * 100) : 0;
+    
+    $('#pendienteValor').text(formatearNumero(pendientes));
+    $('#pendienteBar').css('width', Math.min(porcentajePendiente, 100) + '%');
+    $('#pendienteDetalle').text(`${formatearNumero(pendientes)} de ${formatearNumero(totalEnDtes)}`);
+    
+    let pendienteStatus = 'OK';
+    if (pendientes > 0 && porcentajePendiente > 50) pendienteStatus = 'Alto';
+    else if (pendientes > 0) pendienteStatus = 'Parcial';
+    $('#pendienteBadge').text(pendienteStatus);
 }
 
 // === CÁLCULO DE KPIs (fallback si no hay resumen) ===
@@ -1044,6 +1143,10 @@ function calcularKPIs(data) {
     const totalDespachado = data.reduce((sum, item) => sum + (parseFloat(item.total_despachado) || 0), 0);
     $('#totalDespachado').text(formatearNumero(totalDespachado));
     
+    // Pares pendientes
+    const totalPendiente = data.reduce((sum, item) => sum + (parseFloat(item.unidades_pendientes_ingreso) || 0), 0);
+    $('#totalPendienteIngreso').text(formatearNumero(totalPendiente));
+    
     // Saldo total
     const totalSaldo = totalIngresado - totalDespachado;
     $('#totalSaldo').text(formatearNumero(totalSaldo));
@@ -1067,7 +1170,7 @@ function calcularIndicadores(data) {
     
     $('#rotacionValor').text(rotacion.toFixed(1) + '%');
     $('#rotacionBar').css('width', Math.min(rotacion, 100) + '%');
-    $('#rotacionDetalle').text(`${formatearNumero(totalDespachado)} de ${formatearNumero(totalIngresado)} unidades`);
+    $('#rotacionDetalle').text(`${formatearNumero(totalDespachado)} de ${formatearNumero(totalIngresado)}`);
     
     // Badge de rotación
     let rotacionStatus = 'Bajo';
@@ -1082,7 +1185,7 @@ function calcularIndicadores(data) {
     
     $('#pagosValor').text(porcentajePagos.toFixed(1) + '%');
     $('#pagosBar').css('width', porcentajePagos + '%');
-    $('#pagosDetalle').text(`${dtesPagados} de ${totalDtes} DTEs`);
+    $('#pagosDetalle').text(`${dtesPagados} de ${totalDtes}`);
     
     // Badge de pagos
     let pagosStatus = 'Pendiente';
@@ -1106,21 +1209,36 @@ function calcularIndicadores(data) {
     $('#promedioValor').text('$' + formatearNumero(promedio));
     $('#montoMinimo').text('$' + formatearNumero(minimo));
     $('#montoMaximo').text('$' + formatearNumero(maximo));
+
+    // 4. Pares por ingresar
+    const totalEnDtes = data.reduce((sum, item) => sum + (parseFloat(item.unidades_en_dte) || 0), 0);
+    const pendientes = data.reduce((sum, item) => sum + (parseFloat(item.unidades_pendientes_ingreso) || 0), 0);
+    const porcentajePendiente = totalEnDtes > 0 ? ((pendientes / totalEnDtes) * 100) : 0;
+    
+    $('#pendienteValor').text(formatearNumero(pendientes));
+    $('#pendienteBar').css('width', Math.min(porcentajePendiente, 100) + '%');
+    $('#pendienteDetalle').text(`${formatearNumero(pendientes)} de ${formatearNumero(totalEnDtes)}`);
+    
+    let pendienteStatus = 'OK';
+    if (pendientes > 0 && porcentajePendiente > 50) pendienteStatus = 'Alto';
+    else if (pendientes > 0) pendienteStatus = 'Parcial';
+    $('#pendienteBadge').text(pendienteStatus);
 }
 
 function resetKPIs() {
-    $('#totalProveedores, #totalDtes, #totalIngresado, #totalDespachado, #totalSaldo').text('-');
+    $('#totalProveedores, #totalDtes, #totalIngresado, #totalDespachado, #totalSaldo, #totalPendienteIngreso').text('-');
     $('#montoTotal').text('$0');
 }
 
 function resetIndicadores() {
     $('#rotacionValor, #pagosValor').text('0%');
-    $('#rotacionBar, #pagosBar').css('width', '0%');
-    $('#rotacionDetalle').text('0 de 0 unidades');
-    $('#pagosDetalle').text('0 de 0 DTEs');
+    $('#rotacionBar, #pagosBar, #pendienteBar').css('width', '0%');
+    $('#rotacionDetalle').text('0 de 0');
+    $('#pagosDetalle').text('0 de 0');
     $('#promedioValor, #montoMinimo, #montoMaximo').text('$0');
-    $('#rotacionBadge').text('-');
-    $('#pagosBadge').text('-');
+    $('#rotacionBadge, #pagosBadge, #pendienteBadge').text('-');
+    $('#pendienteValor').text('0');
+    $('#pendienteDetalle').text('0 de 0');
 }
 
 // === PAGINACIÓN ===
@@ -1193,6 +1311,7 @@ $(document).ready(function() {
         $('#filtroProveedorReporte').val('').trigger('change');
         $('#filtroFechaInicioReporte, #filtroFechaFinReporte').val('').addClass('fecha-vacia');
         $('#filtroDteReporte').val('');
+        $('#chkExcluirInterna').prop('checked', true);
         cargarReporteProveedor(1);
     });
     
@@ -1228,6 +1347,15 @@ $(document).ready(function() {
             cargarReporteProveedor(1);
         }
     });
+
+    // Toggle facturación interna
+    $('#chkExcluirInterna').on('change', function() {
+        cargarReporteProveedor(1);
+    });
+
+    // Inicializar tooltips Bootstrap
+    const tooltipEls = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipEls.forEach(el => new bootstrap.Tooltip(el));
 });
 
 // === EXPORTAR EXCEL ===
@@ -1243,10 +1371,10 @@ function exportarExcel() {
     }
     
     // Crear datos para CSV
-    let csv = 'Proveedor,RUT,DTE,Tipo,Fecha,Ingresado,Despachado,Saldo,Monto Ingreso,Monto Despacho,Monto Saldo,Estado DTE,Estado Pago\n';
+    let csv = 'Proveedor,RUT,DTE,Tipo,Fecha,En DTE,Pendiente Ingreso,Ingresado,Despachado,Saldo,Monto Ingreso,Monto Despacho,Monto Saldo,Estado DTE,Estado Pago\n';
     
     datosReporte.forEach(item => {
-        csv += `"${item.proveedor_nombre}","${item.proveedor_rut}","${item.dte_numero}","${item.dte_tipo}","${item.fecha_emision}",${item.total_ingresado},${item.total_despachado},${item.saldo_restante},${item.monto_ingresado},${item.monto_despachado},${item.monto_restante},"${item.estado_dte}","${item.estado_pago}"\n`;
+        csv += `"${item.proveedor_nombre}","${item.proveedor_rut}","${item.dte_numero}","${item.dte_tipo}","${item.fecha_emision}",${item.unidades_en_dte || 0},${item.unidades_pendientes_ingreso || 0},${item.total_ingresado},${item.total_despachado},${item.saldo_restante},${item.monto_ingresado},${item.monto_despachado},${item.monto_restante},"${item.estado_dte}","${item.estado_pago}"\n`;
     });
     
     // Descargar

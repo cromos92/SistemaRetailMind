@@ -61,7 +61,7 @@ class Command(BaseCommand):
             creditos = CreditoTrabajador.objects.filter(numero_credito=numero).order_by('id')
             for i, c in enumerate(creditos, 1):
                 self.stdout.write(
-                    f'     [{i}] ID: {c.id} | {c.trabajador.nombre[:30]:30} | '
+                    f'     [{i}] ID: {c.id} | {c.nombre_beneficiario[:30]:30} | '
                     f'${c.monto_solicitado:>10,.0f} | {c.get_estado_display()}'
                 )
         

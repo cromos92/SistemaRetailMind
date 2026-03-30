@@ -26,7 +26,7 @@ from app.models import (
     Cotizacion, Cotizacion_Detalle,
     Requerimiento,
 )
-from empresa_management.models import Cliente, Proveedor
+from app.models import Cliente, Proveedor
 
 
 class AssistantTools:
@@ -1155,10 +1155,10 @@ class AssistantTools:
         )
         
         creditos = []
-        for c in queryset.select_related('trabajador').order_by('-fecha_solicitud')[:20]:
+        for c in queryset.select_related('beneficiario').order_by('-fecha_solicitud')[:20]:
             creditos.append({
                 "numero": c.numero_credito,
-                "trabajador": c.trabajador.nombre if c.trabajador else "N/A",
+                "trabajador": c.nombre_beneficiario,
                 "tipo": c.get_tipo_credito_display(),
                 "monto_aprobado": self._format_currency(c.monto_aprobado or 0),
                 "monto_pagado": self._format_currency(c.monto_pagado),

@@ -14,19 +14,9 @@ import json
 import csv
 from datetime import datetime, timedelta
 
-# Importar modelos de app (donde están las empresas reales)
-from app.models import Empresa, Sucursal
-
-# Importar modelos locales si existen
-try:
-    from .models import ContactoEmpresa, Cliente, Proveedor, LogEmpresa, LogCliente
-except ImportError:
-    # Si no existen estos modelos, crear clases vacías para evitar errores
-    ContactoEmpresa = None
-    Cliente = None
-    Proveedor = None
-    LogEmpresa = None
-    LogCliente = None
+from app.models import (
+    Empresa, Sucursal, ContactoEmpresa, LogEmpresa,
+)
 
 # Utilidad interna para sanitizar valores de campos CharField
 def _clean_char_field(value):
@@ -126,12 +116,12 @@ def lista_empresas(request):
                 'correoAdministrador': empresa.correoAdministrador or '',
                 'direccion': empresa.direccion or '',
                 'ciudad': empresa.ciudad or '',
-                'region': '',  # No existe en app.models
-                'codigo_postal': '',  # No existe en app.models
-                'sitio_web': '',  # No existe en app.models
-                'activo': True,  # Asumir que todas están activas
-                'fecha_creacion': None,  # No existe en app.models
-                'fecha_actualizacion': None,  # No existe en app.models
+                'region': empresa.region or '',
+                'codigo_postal': empresa.codigo_postal or '',
+                'sitio_web': empresa.sitio_web or '',
+                'activo': empresa.activo,
+                'fecha_creacion': empresa.created_at.isoformat() if empresa.created_at else None,
+                'fecha_actualizacion': empresa.updated_at.isoformat() if empresa.updated_at else None,
                 'num_sucursales': num_sucursales,
                 'num_contactos': num_contactos,
             })
@@ -687,12 +677,12 @@ def detalle_empresa(request, empresa_id):
     empresa = get_object_or_404(Empresa, id=empresa_id)
     
     # Obtener datos relacionados
-    sucursales = empresa.sucursales.all()
-    contactos = empresa.contactos.all()
-    clientes = empresa.clientes.all()
+    sucursales = empresa.sucursales_app.all()
+    contactos = empresa.contactos_crm.all()
+    clientes = empresa.clientes_crm.all()
     
     # Obtener logs recientes
-    logs = empresa.logs.all()[:10]
+    logs = empresa.logs_crm.all()[:10]
     
     context = {
         'empresa': empresa,
@@ -1009,17 +999,17 @@ def dashboard_empresas(request):
     # Empresas creadas en los últimos 30 días
     fecha_limite = timezone.now().date() - timedelta(days=30)
     empresas_recientes = Empresa.objects.filter(
-        fecha_creacion__gte=fecha_limite
+        created_at__date__gte=fecha_limite
     ).count()
     
     # Top 5 empresas con más sucursales
     top_empresas_sucursales = Empresa.objects.annotate(
-        num_sucursales=Count('sucursales')
+        num_sucursales=Count('sucursales_app')
     ).filter(num_sucursales__gt=0).order_by('-num_sucursales')[:5]
     
     # Empresas sin contactos
     empresas_sin_contactos = Empresa.objects.filter(
-        contactos__isnull=True
+        contactos_crm__isnull=True
     ).count()
     
     context = {
@@ -1179,13 +1169,13 @@ def obtener_empresa(request, empresa_id):
                 'telefono': empresa.contacto1 or '',
                 'direccion': empresa.direccion or '',
                 'ciudad': empresa.ciudad or '',
-                'region': '',  # No existe en app.models
-                'codigo_postal': '',  # No existe en app.models
-                'sitio_web': '',  # No existe en app.models
-                'representante_legal': '',  # No existe en app.models
-                'activo': True,  # Asumir que todas están activas
-                'fecha_creacion': None,  # No existe en app.models
-                'fecha_actualizacion': None,  # No existe en app.models
+                'region': empresa.region or '',
+                'codigo_postal': empresa.codigo_postal or '',
+                'sitio_web': empresa.sitio_web or '',
+                'representante_legal': '',
+                'activo': empresa.activo,
+                'fecha_creacion': empresa.created_at.isoformat() if empresa.created_at else None,
+                'fecha_actualizacion': empresa.updated_at.isoformat() if empresa.updated_at else None,
                 'num_sucursales': num_sucursales,
                 'num_contactos': num_contactos,
                 'correoVendedor': empresa.correoVendedor or '',

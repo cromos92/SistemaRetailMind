@@ -1169,8 +1169,8 @@ def validar_rut_chileno(request):
 def buscar_cliente_por_rut(request):
     """Buscar cliente por RUT en la base de datos"""
     try:
-        from empresa_management.models import Cliente
-        
+        from app.models import Cliente
+
         rut = request.GET.get('rut', '').strip()
         
         if not rut:
@@ -1219,8 +1219,8 @@ def buscar_cliente_por_rut(request):
 def crear_cliente_rapido(request):
     """Crear cliente rápido desde formulario de requerimientos"""
     try:
-        from empresa_management.models import Cliente
-        
+        from app.models import Cliente
+
         data = json.loads(request.body)
         
         # Validar campos requeridos

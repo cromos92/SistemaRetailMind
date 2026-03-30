@@ -695,6 +695,212 @@
         animation: countUp 0.5s ease forwards;
     }
 
+    /* ========== SEARCH BAR ========== */
+    .permisos-search-bar {
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .permisos-search-bar input {
+        width: 100%;
+        padding: 12px 16px 12px 44px;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        background: var(--nexo-white);
+    }
+
+    .permisos-search-bar input:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.12);
+        outline: none;
+    }
+
+    .permisos-search-bar i {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--nexo-gray-500);
+        font-size: 1.1rem;
+    }
+
+    .permisos-search-bar .search-clear {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--nexo-gray-500);
+        cursor: pointer;
+        display: none;
+        font-size: 1.1rem;
+    }
+
+    .permisos-search-bar .search-clear.visible {
+        display: block;
+    }
+
+    .opcion-row.search-hidden {
+        display: none !important;
+    }
+
+    .modulo-card.search-hidden {
+        display: none !important;
+    }
+
+    /* ========== MODULE COUNTER BADGE ========== */
+    .modulo-counter {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 20px;
+        margin-left: 8px;
+    }
+
+    .modulo-counter.all-enabled {
+        background: rgba(0, 212, 170, 0.15);
+        color: #00B090;
+    }
+
+    .modulo-counter.partial {
+        background: rgba(255, 176, 32, 0.15);
+        color: #CC8C00;
+    }
+
+    .modulo-counter.none-enabled {
+        background: rgba(255, 77, 77, 0.15);
+        color: #CC3D3D;
+    }
+
+    /* ========== PERMISSION ITEM COLORS ========== */
+    .permiso-item[data-tipo="puede_ver"].active {
+        background: rgba(0, 102, 255, 0.1);
+        border-color: var(--nexo-primary);
+    }
+    .permiso-item[data-tipo="puede_ver"].active label {
+        color: var(--nexo-primary);
+    }
+
+    .permiso-item[data-tipo="puede_crear"].active {
+        background: rgba(0, 212, 170, 0.12);
+        border-color: var(--nexo-success);
+    }
+    .permiso-item[data-tipo="puede_crear"].active label {
+        color: #00B090;
+    }
+
+    .permiso-item[data-tipo="puede_editar"].active {
+        background: rgba(255, 176, 32, 0.12);
+        border-color: var(--nexo-warning);
+    }
+    .permiso-item[data-tipo="puede_editar"].active label {
+        color: #CC8C00;
+    }
+
+    .permiso-item[data-tipo="puede_eliminar"].active {
+        background: rgba(255, 77, 77, 0.12);
+        border-color: var(--nexo-error);
+    }
+    .permiso-item[data-tipo="puede_eliminar"].active label {
+        color: #CC3D3D;
+    }
+
+    .permiso-item[data-tipo="puede_exportar"].active {
+        background: rgba(124, 58, 237, 0.1);
+        border-color: #7C3AED;
+    }
+    .permiso-item[data-tipo="puede_exportar"].active label {
+        color: #7C3AED;
+    }
+
+    .permiso-item[data-tipo="puede_aprobar"].active {
+        background: rgba(6, 182, 212, 0.1);
+        border-color: #06B6D4;
+    }
+    .permiso-item[data-tipo="puede_aprobar"].active label {
+        color: #06B6D4;
+    }
+
+    /* ========== UNSAVED CHANGES INDICATOR ========== */
+    .unsaved-indicator {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 1050;
+        background: linear-gradient(135deg, var(--nexo-warning) 0%, #FF8C00 100%);
+        color: white;
+        padding: 14px 24px;
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: 0 8px 24px rgba(255, 176, 32, 0.4);
+        display: none;
+        align-items: center;
+        gap: 12px;
+        font-weight: 600;
+        animation: slideUp 0.3s ease;
+    }
+
+    .unsaved-indicator.visible {
+        display: flex;
+    }
+
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .unsaved-indicator .btn {
+        background: white;
+        color: var(--nexo-warning);
+        border: none;
+        font-weight: 700;
+        padding: 6px 16px;
+        border-radius: var(--nexo-radius-md);
+    }
+
+    .unsaved-indicator .btn:hover {
+        background: var(--nexo-gray-100);
+    }
+
+    /* ========== DISABLED PERMISO ========== */
+    .disabled-permiso {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+
+    /* ========== SUMMARY ROW ========== */
+    .permisos-summary-row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #EEEEF1 100%);
+        border-radius: var(--nexo-radius-md);
+        margin-bottom: 16px;
+    }
+
+    .summary-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .summary-badge.ver { background: rgba(0,102,255,0.1); color: var(--nexo-primary); }
+    .summary-badge.crear { background: rgba(0,212,170,0.12); color: #00B090; }
+    .summary-badge.editar { background: rgba(255,176,32,0.12); color: #CC8C00; }
+    .summary-badge.eliminar { background: rgba(255,77,77,0.12); color: #CC3D3D; }
+    .summary-badge.exportar { background: rgba(124,58,237,0.1); color: #7C3AED; }
+    .summary-badge.aprobar { background: rgba(6,182,212,0.1); color: #06B6D4; }
+
     /* ========== RESPONSIVE ========== */
     @media (max-width: 992px) {
         .permisos-group {
@@ -706,6 +912,13 @@
             flex-direction: column;
             align-items: flex-start;
             gap: 12px;
+        }
+
+        .unsaved-indicator {
+            left: 24px;
+            right: 24px;
+            bottom: 16px;
+            justify-content: center;
         }
     }
 </style>
@@ -935,6 +1148,24 @@
                                 <div id="listaUsuariosRol">
                                     <!-- Users will be loaded here -->
                                 </div>
+                            </div>
+
+                            <!-- Search Bar -->
+                            <div class="permisos-search-bar mt-3">
+                                <i class="ri-search-line"></i>
+                                <input type="text" id="searchPermisos" placeholder="Buscar opción por nombre (ej: ventas, productos, reportes...)">
+                                <button class="search-clear" id="searchClear" onclick="limpiarBusqueda()"><i class="ri-close-line"></i></button>
+                            </div>
+
+                            <!-- Permission Summary -->
+                            <div class="permisos-summary-row" id="permisosSummary" style="display: none;">
+                                <span class="text-muted small me-1"><i class="ri-bar-chart-2-line me-1"></i>Resumen:</span>
+                                <span class="summary-badge ver"><i class="ri-eye-line"></i> Ver: <strong id="sumVer">0</strong></span>
+                                <span class="summary-badge crear"><i class="ri-add-line"></i> Crear: <strong id="sumCrear">0</strong></span>
+                                <span class="summary-badge editar"><i class="ri-edit-line"></i> Editar: <strong id="sumEditar">0</strong></span>
+                                <span class="summary-badge eliminar"><i class="ri-delete-bin-line"></i> Eliminar: <strong id="sumEliminar">0</strong></span>
+                                <span class="summary-badge exportar"><i class="ri-download-line"></i> Exportar: <strong id="sumExportar">0</strong></span>
+                                <span class="summary-badge aprobar"><i class="ri-check-double-line"></i> Aprobar: <strong id="sumAprobar">0</strong></span>
                             </div>
 
                             <!-- Quick Actions -->
@@ -1465,10 +1696,20 @@
     }
 </style>
 
+<!-- Unsaved Changes Floating Indicator -->
+<div class="unsaved-indicator" id="unsavedIndicator">
+    <i class="ri-error-warning-line" style="font-size: 1.3rem;"></i>
+    <span>Tienes cambios sin guardar</span>
+    <button class="btn btn-sm" onclick="document.getElementById('btnGuardarTodo').click()">
+        <i class="ri-save-line me-1"></i> Guardar
+    </button>
+</div>
+
 <script>
 let rolActual = null;
 let permisosModificados = {};
 let usuariosRolActual = [];
+let hayModificaciones = false;
 
 // Load permissions when role is selected
 document.getElementById('rolSelector').addEventListener('change', function() {
@@ -1673,6 +1914,7 @@ function renderizarPermisos(modulos) {
                         <i class="${modulo.icono || 'ri-folder-line'}"></i>
                     </div>
                     <h6 class="modulo-name">${modulo.nombre}</h6>
+                    <span class="modulo-counter partial">-/-</span>
                 </div>
                 <div class="modulo-toggle">
                     <i class="ri-arrow-down-s-line"></i>
@@ -1734,6 +1976,11 @@ function renderizarPermisos(modulos) {
     document.querySelectorAll('.permiso-check:checked').forEach(checkbox => {
         checkbox.closest('.permiso-item').classList.add('active');
     });
+    
+    // Initialize module counters and summary
+    actualizarTodosContadoresModulos();
+    actualizarResumenPermisos();
+    ocultarIndicadorCambios();
 }
 
 function renderizarOpcion(opcion, esSubopcion) {
@@ -1741,7 +1988,7 @@ function renderizarOpcion(opcion, esSubopcion) {
     const rowClass = esSubopcion ? 'opcion-row sub-opcion' : 'opcion-row';
     
     return `
-        <div class="${rowClass}">
+        <div class="${rowClass}" data-opcion-nombre="${opcion.nombre.toLowerCase()}" data-opcion-codigo="${opcion.codigo || ''}">
             <div class="opcion-info">
                 <div class="opcion-icon">
                     <i class="${opcion.icono || 'ri-file-line'}"></i>
@@ -1749,53 +1996,53 @@ function renderizarOpcion(opcion, esSubopcion) {
                 <span class="opcion-nombre">${opcion.nombre}</span>
             </div>
             <div class="permisos-group">
-                <div class="permiso-item ${permisos.puede_ver ? 'active' : ''}">
+                <div class="permiso-item ${permisos.puede_ver ? 'active' : ''}" data-tipo="puede_ver" title="Puede ver esta opción en el menú">
                     <input type="checkbox" class="permiso-check" 
                            id="ver-${opcion.id}"
                            data-opcion-id="${opcion.id}" 
                            data-permiso="puede_ver"
                            ${permisos.puede_ver ? 'checked' : ''}>
-                    <label for="ver-${opcion.id}">Ver</label>
+                    <label for="ver-${opcion.id}"><i class="ri-eye-line me-1"></i>Ver</label>
                 </div>
-                <div class="permiso-item ${permisos.puede_crear ? 'active' : ''}">
+                <div class="permiso-item ${permisos.puede_crear ? 'active' : ''}" data-tipo="puede_crear" title="Puede crear nuevos registros">
                     <input type="checkbox" class="permiso-check" 
                            id="crear-${opcion.id}"
                            data-opcion-id="${opcion.id}" 
                            data-permiso="puede_crear"
                            ${permisos.puede_crear ? 'checked' : ''}>
-                    <label for="crear-${opcion.id}">Crear</label>
+                    <label for="crear-${opcion.id}"><i class="ri-add-line me-1"></i>Crear</label>
                 </div>
-                <div class="permiso-item ${permisos.puede_editar ? 'active' : ''}">
+                <div class="permiso-item ${permisos.puede_editar ? 'active' : ''}" data-tipo="puede_editar" title="Puede editar registros existentes">
                     <input type="checkbox" class="permiso-check" 
                            id="editar-${opcion.id}"
                            data-opcion-id="${opcion.id}" 
                            data-permiso="puede_editar"
                            ${permisos.puede_editar ? 'checked' : ''}>
-                    <label for="editar-${opcion.id}">Editar</label>
+                    <label for="editar-${opcion.id}"><i class="ri-edit-line me-1"></i>Editar</label>
                 </div>
-                <div class="permiso-item ${permisos.puede_eliminar ? 'active' : ''}">
+                <div class="permiso-item ${permisos.puede_eliminar ? 'active' : ''}" data-tipo="puede_eliminar" title="Puede eliminar registros">
                     <input type="checkbox" class="permiso-check" 
                            id="eliminar-${opcion.id}"
                            data-opcion-id="${opcion.id}" 
                            data-permiso="puede_eliminar"
                            ${permisos.puede_eliminar ? 'checked' : ''}>
-                    <label for="eliminar-${opcion.id}">Eliminar</label>
+                    <label for="eliminar-${opcion.id}"><i class="ri-delete-bin-line me-1"></i>Eliminar</label>
                 </div>
-                <div class="permiso-item ${permisos.puede_exportar ? 'active' : ''}">
+                <div class="permiso-item ${permisos.puede_exportar ? 'active' : ''}" data-tipo="puede_exportar" title="Puede exportar datos">
                     <input type="checkbox" class="permiso-check" 
                            id="exportar-${opcion.id}"
                            data-opcion-id="${opcion.id}" 
                            data-permiso="puede_exportar"
                            ${permisos.puede_exportar ? 'checked' : ''}>
-                    <label for="exportar-${opcion.id}">Exportar</label>
+                    <label for="exportar-${opcion.id}"><i class="ri-download-line me-1"></i>Exportar</label>
                 </div>
-                <div class="permiso-item ${permisos.puede_aprobar ? 'active' : ''}">
+                <div class="permiso-item ${permisos.puede_aprobar ? 'active' : ''}" data-tipo="puede_aprobar" title="Puede aprobar operaciones (cambios de precio, devoluciones, etc.)">
                     <input type="checkbox" class="permiso-check" 
                            id="aprobar-${opcion.id}"
                            data-opcion-id="${opcion.id}" 
                            data-permiso="puede_aprobar"
                            ${permisos.puede_aprobar ? 'checked' : ''}>
-                    <label for="aprobar-${opcion.id}">Aprobar</label>
+                    <label for="aprobar-${opcion.id}"><i class="ri-check-double-line me-1"></i>Aprobar</label>
                 </div>
             </div>
         </div>
@@ -1811,6 +2058,79 @@ function marcarCambio(event) {
         permisosModificados[opcionId] = {};
     }
     permisosModificados[opcionId][permiso] = valor;
+    
+    mostrarIndicadorCambios();
+    actualizarResumenPermisos();
+    actualizarContadorModulo(event.target);
+}
+
+function mostrarIndicadorCambios() {
+    hayModificaciones = true;
+    document.getElementById('unsavedIndicator').classList.add('visible');
+}
+
+function ocultarIndicadorCambios() {
+    hayModificaciones = false;
+    document.getElementById('unsavedIndicator').classList.remove('visible');
+}
+
+function actualizarResumenPermisos() {
+    const summary = document.getElementById('permisosSummary');
+    if (!summary) return;
+    summary.style.display = 'flex';
+    
+    const tipos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
+    const ids = ['sumVer', 'sumCrear', 'sumEditar', 'sumEliminar', 'sumExportar', 'sumAprobar'];
+    
+    tipos.forEach((tipo, i) => {
+        const total = document.querySelectorAll(`.permiso-check[data-permiso="${tipo}"]`).length;
+        const checked = document.querySelectorAll(`.permiso-check[data-permiso="${tipo}"]:checked`).length;
+        document.getElementById(ids[i]).textContent = `${checked}/${total}`;
+    });
+}
+
+function actualizarContadorModulo(checkbox) {
+    const moduloBody = checkbox.closest('.modulo-body');
+    if (!moduloBody) return;
+    const moduloCard = moduloBody.closest('.modulo-card');
+    if (!moduloCard) return;
+    
+    const counter = moduloCard.querySelector('.modulo-counter');
+    if (!counter) return;
+    
+    const totalVer = moduloBody.querySelectorAll('[data-permiso="puede_ver"]').length;
+    const checkedVer = moduloBody.querySelectorAll('[data-permiso="puede_ver"]:checked').length;
+    
+    counter.textContent = `${checkedVer}/${totalVer}`;
+    counter.className = 'modulo-counter';
+    if (checkedVer === totalVer) {
+        counter.classList.add('all-enabled');
+    } else if (checkedVer === 0) {
+        counter.classList.add('none-enabled');
+    } else {
+        counter.classList.add('partial');
+    }
+}
+
+function actualizarTodosContadoresModulos() {
+    document.querySelectorAll('.modulo-card').forEach(card => {
+        const body = card.querySelector('.modulo-body');
+        const counter = card.querySelector('.modulo-counter');
+        if (!body || !counter) return;
+        
+        const totalVer = body.querySelectorAll('[data-permiso="puede_ver"]').length;
+        const checkedVer = body.querySelectorAll('[data-permiso="puede_ver"]:checked').length;
+        
+        counter.textContent = `${checkedVer}/${totalVer}`;
+        counter.className = 'modulo-counter';
+        if (checkedVer === totalVer) {
+            counter.classList.add('all-enabled');
+        } else if (checkedVer === 0) {
+            counter.classList.add('none-enabled');
+        } else {
+            counter.classList.add('partial');
+        }
+    });
 }
 
 // Quick action: SELECCIONAR TODOS los permisos de TODA la página
@@ -1958,6 +2278,9 @@ function desmarcarTodos() {
                 permisosModificados[opcionId][permiso] = false;
             });
             toastr.info('Se desmarcaron todos los permisos', '', {timeOut: 2000});
+            mostrarIndicadorCambios();
+            actualizarResumenPermisos();
+            actualizarTodosContadoresModulos();
         }
     });
 }
@@ -2070,6 +2393,7 @@ function guardarConfiguracion(limiteDescuento) {
                 showConfirmButton: false
             });
             permisosModificados = {};
+            ocultarIndicadorCambios();
         } else {
             Swal.fire('Error', data.mensaje || 'Error al guardar', 'error');
         }
@@ -3062,6 +3386,100 @@ document.getElementById('btnConfirmarImportarSucursal').addEventListener('click'
         Swal.fire('Error', 'Error de conexión al importar permisos', 'error');
     });
 });
+
+// ========== SEARCH / FILTER FUNCTIONALITY ==========
+document.getElementById('searchPermisos').addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    const clearBtn = document.getElementById('searchClear');
+    
+    clearBtn.classList.toggle('visible', query.length > 0);
+    
+    if (query === '') {
+        document.querySelectorAll('.opcion-row').forEach(row => row.classList.remove('search-hidden'));
+        document.querySelectorAll('.modulo-card').forEach(card => card.classList.remove('search-hidden'));
+        return;
+    }
+    
+    document.querySelectorAll('.modulo-card').forEach(card => {
+        let hasVisibleOption = false;
+        const body = card.querySelector('.modulo-body');
+        if (!body) return;
+        
+        body.querySelectorAll('.opcion-row').forEach(row => {
+            const nombre = row.dataset.opcionNombre || '';
+            const codigo = row.dataset.opcionCodigo || '';
+            const match = nombre.includes(query) || codigo.includes(query);
+            row.classList.toggle('search-hidden', !match);
+            if (match) hasVisibleOption = true;
+        });
+        
+        const moduloName = card.querySelector('.modulo-name');
+        const moduloMatch = moduloName && moduloName.textContent.toLowerCase().includes(query);
+        
+        if (moduloMatch) {
+            body.querySelectorAll('.opcion-row').forEach(row => row.classList.remove('search-hidden'));
+            hasVisibleOption = true;
+        }
+        
+        card.classList.toggle('search-hidden', !hasVisibleOption);
+    });
+});
+
+function limpiarBusqueda() {
+    const searchInput = document.getElementById('searchPermisos');
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input'));
+    searchInput.focus();
+}
+
+// Unsaved changes warning on page leave
+window.addEventListener('beforeunload', function(e) {
+    if (hayModificaciones) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+// Update counters on quick actions
+const originalMarcarTodos = marcarTodos;
+marcarTodos = function(tipo, valor) {
+    originalMarcarTodos(tipo, valor);
+    mostrarIndicadorCambios();
+    actualizarResumenPermisos();
+    actualizarTodosContadoresModulos();
+};
+
+const originalSeleccionarTodosPermisos = seleccionarTodosPermisos;
+seleccionarTodosPermisos = function() {
+    originalSeleccionarTodosPermisos();
+    mostrarIndicadorCambios();
+    actualizarResumenPermisos();
+    actualizarTodosContadoresModulos();
+};
+
+const originalSeleccionarTodoModulo = seleccionarTodoModulo;
+seleccionarTodoModulo = function(moduloId) {
+    originalSeleccionarTodoModulo(moduloId);
+    mostrarIndicadorCambios();
+    actualizarResumenPermisos();
+    actualizarTodosContadoresModulos();
+};
+
+const originalDesmarcarModulo = desmarcarModulo;
+desmarcarModulo = function(moduloId) {
+    originalDesmarcarModulo(moduloId);
+    mostrarIndicadorCambios();
+    actualizarResumenPermisos();
+    actualizarTodosContadoresModulos();
+};
+
+const originalMarcarModulo = marcarModulo;
+marcarModulo = function(moduloId, tipo, valor) {
+    originalMarcarModulo(moduloId, tipo, valor);
+    mostrarIndicadorCambios();
+    actualizarResumenPermisos();
+    actualizarTodosContadoresModulos();
+};
 </script>
 
 {% include 'layout/footer.html' %}

@@ -367,29 +367,31 @@
         background: white;
     }
     
-    /* KPI Cards estilizadas */
+    /* KPI Cards estilizadas - compactas */
     .kpi-card {
-        border-radius: 12px;
+        border-radius: 8px;
         border: none;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
         overflow: hidden;
     }
     
     .kpi-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
     }
     
     .kpi-card .card-body {
-        padding: 12px 16px;
+        padding: 8px 10px !important;
     }
     
-    .kpi-card i.fs-4 {
-        transition: transform 0.3s ease;
-    }
-    
-    .kpi-card:hover i.fs-4 {
-        transform: scale(1.1);
+    .kpi-icon-sm {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
     }
 
     /* Estilos para controles de filtros */
@@ -970,90 +972,88 @@
     <div class="page-content">
     <div class="container-fluid">
 
-        <!-- ========== KPI CARDS ESTILO CHAT ========== -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="card border-0" style="border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);">
-                    <div class="card-body p-3">
-                        <div class="row g-2">
-                            <!-- Productos Pendientes -->
-                            <div class="col-md-2 col-6">
-                                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%); border-left: 4px solid #405189;">
-                                    <div class="card-body text-center py-2">
-                                        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #405189 0%, #364574 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="bi bi-clock-history fs-5 text-white"></i>
-                                        </div>
-                                        <h4 class="mb-0 fw-bold" id="totalPendientes" style="color: #405189;">0</h4>
-                                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Pendientes</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Productos Creados -->
-                            <div class="col-md-2 col-6">
-                                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); border-left: 4px solid #0ab39c;">
-                                    <div class="card-body text-center py-2">
-                                        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="bi bi-check-circle fs-5 text-white"></i>
-                                        </div>
-                                        <h4 class="mb-0 fw-bold" id="totalCreados" style="color: #0ab39c;">0</h4>
-                                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Creados</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Stock Total -->
-                            <div class="col-md-2 col-6">
-                                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb;">
-                                    <div class="card-body text-center py-2">
-                                        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="bi bi-boxes fs-5 text-white"></i>
-                                        </div>
-                                        <h4 class="mb-0 fw-bold" id="totalStock" style="color: #299cdb;">0</h4>
-                                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Stock Total</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Valor Total -->
-                            <div class="col-md-2 col-6">
-                                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b;">
-                                    <div class="card-body text-center py-2">
-                                        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="bi bi-currency-dollar fs-5 text-white"></i>
-                                        </div>
-                                        <h4 class="mb-0 fw-bold" id="valorTotal" style="color: #f0a500;">$0</h4>
-                                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Valor Total</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Valor FIFO -->
-                            <div class="col-md-2 col-6">
-                                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border-left: 4px solid #e91e63;">
-                                    <div class="card-body text-center py-2">
-                                        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="bi bi-graph-up fs-5 text-white"></i>
-                                        </div>
-                                        <h4 class="mb-0 fw-bold" id="valorFIFO" style="color: #e91e63;">$0</h4>
-                                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Valor FIFO</p>
-                                        <small class="text-muted" id="diferenciaFIFO" style="font-size: 0.65rem;">Sin diferencia</small>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Total Productos -->
-                            <div class="col-md-2 col-6">
-                                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-left: 4px solid #9c27b0;">
-                                    <div class="card-body text-center py-2">
-                                        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="bi bi-box-seam fs-5 text-white"></i>
-                                        </div>
-                                        <h4 class="mb-0 fw-bold" id="totalProductos" style="color: #9c27b0;">0</h4>
-                                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Total Productos</p>
-                                    </div>
-                                </div>
-                            </div>
+        <!-- ========== KPI CARDS COMPACTAS ========== -->
+        <div class="row g-2 mb-3">
+            <!-- Pendientes -->
+            <div class="col-md-2 col-6">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%); border-left: 3px solid #405189;">
+                    <div class="card-body d-flex align-items-center gap-2">
+                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #405189 0%, #364574 100%);">
+                            <i class="bi bi-clock-history text-white" style="font-size:13px;"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="fw-bold lh-1" id="totalPendientes" style="color:#405189; font-size:1.05rem;">0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Pendientes</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Creados -->
+            <div class="col-md-2 col-6">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); border-left: 3px solid #0ab39c;">
+                    <div class="card-body d-flex align-items-center gap-2">
+                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);">
+                            <i class="bi bi-check-circle text-white" style="font-size:13px;"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="fw-bold lh-1" id="totalCreados" style="color:#0ab39c; font-size:1.05rem;">0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Creados</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Stock Total -->
+            <div class="col-md-2 col-6">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid #299cdb;">
+                    <div class="card-body d-flex align-items-center gap-2">
+                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);">
+                            <i class="bi bi-boxes text-white" style="font-size:13px;"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="fw-bold lh-1" id="totalStock" style="color:#299cdb; font-size:1.05rem;">0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Stock Total</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Valor Total -->
+            <div class="col-md-2 col-6">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #ffbe0b;">
+                    <div class="card-body d-flex align-items-center gap-2">
+                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);">
+                            <i class="bi bi-currency-dollar text-white" style="font-size:13px;"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="fw-bold lh-1 text-truncate" id="valorTotal" style="color:#f0a500; font-size:0.9rem;">$0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Valor Total</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Valor FIFO -->
+            <div class="col-md-2 col-6">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border-left: 3px solid #e91e63;">
+                    <div class="card-body d-flex align-items-center gap-2">
+                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%);">
+                            <i class="bi bi-graph-up text-white" style="font-size:13px;"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="fw-bold lh-1 text-truncate" id="valorFIFO" style="color:#e91e63; font-size:0.9rem;">$0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Valor FIFO <span id="diferenciaFIFO"></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Total Productos -->
+            <div class="col-md-2 col-6">
+                <div class="kpi-card card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-left: 3px solid #9c27b0;">
+                    <div class="card-body d-flex align-items-center gap-2">
+                        <div class="kpi-icon-sm" style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);">
+                            <i class="bi bi-box-seam text-white" style="font-size:13px;"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="fw-bold lh-1" id="totalProductos" style="color:#9c27b0; font-size:1.05rem;">0</div>
+                            <div class="text-muted lh-1" style="font-size:0.68rem;">Total Productos</div>
                         </div>
                     </div>
                 </div>
@@ -2060,11 +2060,51 @@
                         </div>
                     </div>
                     
+                    <!-- Toolbar: Sucursal + acciones masivas globales -->
+                    <div class="d-flex flex-wrap gap-2 align-items-end mb-2 p-2 rounded" style="background:#f0f2f5;">
+                        <div>
+                            <label class="form-label mb-1 small fw-semibold text-secondary"><i class="bi bi-building me-1"></i>Filtrar sucursal / bodega</label>
+                            <select class="form-select form-select-sm" id="filtroSucursalEditar" style="min-width:180px;">
+                                <option value="todas">— Todas las sucursales —</option>
+                            </select>
+                        </div>
+                        <div id="panelAccionSucursal" style="display:none;">
+                            <label class="form-label mb-1 small fw-semibold text-secondary d-block">Acción sobre esta sucursal</label>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-danger" id="btnExcluirSucursal" title="Excluir todos los productos de esta sucursal de la analítica">
+                                    <i class="bi bi-eye-slash me-1"></i>Excluir todos
+                                </button>
+                                <button class="btn btn-outline-success" id="btnIncluirSucursal" title="Incluir todos los productos de esta sucursal en la analítica">
+                                    <i class="bi bi-eye me-1"></i>Incluir todos
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ms-auto d-flex flex-column align-items-end gap-1">
+                            <!-- Toggle propagación -->
+                            <div class="d-flex align-items-center gap-2 py-1 px-2 rounded" style="background:#e8f4fd; border:1px solid #b6d4f5;">
+                                <input class="form-check-input m-0" type="checkbox" id="chkPropagar" checked>
+                                <label class="form-check-label small fw-semibold text-primary mb-0" for="chkPropagar" style="cursor:pointer;">
+                                    <i class="bi bi-arrow-repeat me-1"></i>Aplicar en <strong>todas las sucursales</strong> del artículo
+                                </label>
+                            </div>
+                            <!-- Acción global -->
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                    <i class="bi bi-sliders me-1"></i>Todas las sucursales
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><button class="dropdown-item text-danger" id="btnExcluirTodasAnalitica"><i class="bi bi-eye-slash me-2"></i>Excluir TODAS de Analítica</button></li>
+                                    <li><button class="dropdown-item text-success" id="btnIncluirTodasAnalitica"><i class="bi bi-eye me-2"></i>Incluir TODAS en Analítica</button></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Filtros Rápidos -->
-                    <div class="row mb-3">
+                    <div class="row mb-2">
                         <div class="col-md-12">
                             <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-outline-primary" data-filtro="todos">
+                                <button type="button" class="btn btn-outline-primary active" data-filtro="todos">
                                     <i class="fas fa-list"></i> Todos
                                 </button>
                                 <button type="button" class="btn btn-outline-success" data-filtro="con_stock">
@@ -2074,9 +2114,31 @@
                                     <i class="fas fa-exclamation-triangle"></i> Sin Stock
                                 </button>
                                 <button type="button" class="btn btn-outline-warning" data-filtro="bajo_stock">
-                                    <i class="fas fa-battery-quarter"></i> Stock Bajo
+                                    <i class="fas fa-battery-quarter"></i> Bajo Stock
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Barra de selección masiva (visible al marcar checkboxes) -->
+                    <div id="barraSeleccionMasiva" class="alert alert-primary d-flex align-items-center gap-3 mb-2 py-2 px-3" style="display:none!important; border-radius:8px;">
+                        <i class="bi bi-check2-square fs-5"></i>
+                        <div>
+                            <strong id="textoProductosSeleccionados">0 seleccionados</strong>
+                            <div id="hintPropagar" class="small text-primary-emphasis" style="font-size:.78rem;">
+                                <i class="bi bi-arrow-repeat me-1"></i>Se aplicará a <u>todas las sucursales</u> del artículo
+                            </div>
+                        </div>
+                        <div class="ms-auto d-flex gap-2">
+                            <button class="btn btn-sm btn-danger" id="btnExcluirSeleccionados">
+                                <i class="bi bi-eye-slash me-1"></i>Excluir de Analítica
+                            </button>
+                            <button class="btn btn-sm btn-success" id="btnIncluirSeleccionados">
+                                <i class="bi bi-eye me-1"></i>Incluir en Analítica
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" id="btnDeseleccionarTodo">
+                                <i class="bi bi-x me-1"></i>Desmarcar
+                            </button>
                         </div>
                     </div>
                     
@@ -2576,27 +2638,27 @@ function showError(msg) {
                         : `<span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Pendiente</span>`;
 
                     const boton = !p.creado
-                        ? `<div class="btn-group-vertical btn-group-sm" role="group">
+                        ? `<div class="btn-group btn-group-sm" role="group">
                                <button class="btn btn-success abrir-crear-producto"
                                    data-id="${p.producto_id}" title="Crear producto">
-                               <i class="bi bi-plus-circle me-1"></i> Crear
+                               <i class="bi bi-plus-circle"></i>
                                </button>
                                <button class="btn btn-outline-warning btn-editar-recepcion"
                                    data-id="${p.producto_id}" data-nombre="${p.nombre}" title="Editar Recepción">
-                               <i class="bi bi-pencil-square me-1"></i> Editar Recepción
+                               <i class="bi bi-pencil-square"></i>
                                </button>
                            </div>`
-                        : `<span class="text-muted"><i class="bi bi-check2-all"></i> Completado</span>`;
+                        : `<span class="text-muted small"><i class="bi bi-check2-all"></i></span>`;
 
                     // Información FIFO (si el producto está creado)
                     let infoFIFO = '';
                     if (p.creado && p.producto_talla_id) {
                         infoFIFO = `
-                            <div class="d-flex flex-column gap-1">
-                                <button class="btn btn-sm btn-outline-info" onclick="verLotesFIFO(${p.producto_talla_id})" title="Ver Lotes FIFO">
+                            <div class="d-flex flex-column gap-1 align-items-center">
+                                <button class="btn btn-sm btn-outline-info py-0 px-1" onclick="verLotesFIFO(${p.producto_talla_id})" title="Ver Lotes FIFO" style="font-size:0.7rem;">
                                     <i class="bi bi-graph-up"></i> FIFO
                                 </button>
-                                <small class="text-muted">ID: ${p.producto_talla_id}</small>
+                                <small class="text-muted" style="font-size:0.65rem;">ID:${p.producto_talla_id}</small>
                             </div>`;
                     } else {
                         infoFIFO = '<span class="text-muted">-</span>';
@@ -9127,6 +9189,12 @@ $('#btnConfirmarActualizacion').on('click', function() {
             $('#edit_precioventa').val(producto.precioventa);
             $('#edit_precioSugerido').val(producto.precioSugerido);
             
+            // Estado analítica
+            const excluir = producto.excluir_de_analitica === true;
+            $('#edit_excluir_de_analitica').prop('checked', excluir);
+            $('#labelExcluirAnalitica').text(excluir ? 'Excluido' : 'Incluido');
+            $('#alertExcluirAnalitica').removeClass('alert-light alert-warning').addClass(excluir ? 'alert-warning' : 'alert-light');
+            
             // Inicializar Select2 y cargar TODAS las opciones
             inicializarSelect2Edicion(producto);
             
@@ -9135,9 +9203,15 @@ $('#btnConfirmarActualizacion').on('click', function() {
             cargarVariacionesEnTabla(variaciones);
         };
         
+        // Listener toggle analítica
+        $(document).on('change', '#edit_excluir_de_analitica', function() {
+            const excluido = $(this).is(':checked');
+            $('#labelExcluirAnalitica').text(excluido ? 'Excluido' : 'Incluido');
+            $('#alertExcluirAnalitica').removeClass('alert-light alert-warning').addClass(excluido ? 'alert-warning' : 'alert-light');
+        });
+        
         // Función auxiliar para inicializar Select2 en modal de edición
-        function inicializarSelect2EnModalEdicion($select, placeholder) {
-            if ($select.hasClass('select2-hidden-accessible')) {
+        function inicializarSelect2EnModalEdicion($select, placeholder) {            if ($select.hasClass('select2-hidden-accessible')) {
                 try {
                     $select.select2('destroy');
                 } catch(e) {
@@ -9353,7 +9427,8 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 sobreprecio: parseInt($('#edit_sobreprecio').val()) || 0,
                 precioventa: parseInt($('#edit_precioventa').val()) || 0,
                 precioSugerido: parseInt($('#edit_precioSugerido').val()) || 0,
-                propagar_sucursales: propagarSucursales
+                propagar_sucursales: propagarSucursales,
+                excluir_de_analitica: $('#edit_excluir_de_analitica').is(':checked'),
             };
             
             Swal.fire({ 
@@ -9597,6 +9672,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
     $('#btnEdicionProductos').on('click', function() {
         $('#modalBusquedaEdicionProductos').modal('show');
         $('#inputBuscarProductoEditar').focus();
+        cargarSucursalesEnFiltroEditar();
     });
 
     // Buscar productos
@@ -9614,6 +9690,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // Limpiar búsqueda
     $('#btnLimpiarBusquedaProducto').on('click', function() {
         $('#inputBuscarProductoEditar').val('');
+        $('#filtroSucursalEditar').val('todas').trigger('change');
         $('#resultadosBusquedaProductos').html(`
             <div class="alert alert-info text-center">
                 <i class="fas fa-info-circle me-2"></i>
@@ -9635,12 +9712,13 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // Función para buscar productos
     function buscarProductosParaEditar(filtro = '') {
         const termino = $('#inputBuscarProductoEditar').val().trim();
+        const sucursalId = $('#filtroSucursalEditar').val() || 'todas';
         
-        if (!termino && !filtro) {
+        if (!termino && !filtro && sucursalId === 'todas') {
             Swal.fire({
                 icon: 'warning',
                 title: 'Búsqueda vacía',
-                text: 'Ingrese un término de búsqueda o use un filtro'
+                text: 'Ingrese un término de búsqueda, seleccione una sucursal o use un filtro'
             });
             return;
         }
@@ -9660,8 +9738,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
             url: '/app/obtener_productos/',
             type: 'GET',
             data: {
-                q: termino,  // La API usa 'q' no 'search'
-                page_size: 50
+                q: termino,
+                page_size: 50,
+                sucursal_id: sucursalId
             },
             success: function(response) {
                 // La API devuelve { results: [...], pagination: {...} }
@@ -9669,6 +9748,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     // Convertir resultados de Producto_Talla a Productos agrupados
                     const productosAgrupados = agruparProductosTallas(response.results);
                     mostrarResultadosProductos(productosAgrupados, filtro);
+                    // Actualizar contador en panel de acciones masivas
+                    if (sucursalId !== 'todas') {
+                        $('#conteoProductosSucursal').text(`(${productosAgrupados.length} productos encontrados)`);
+                    }
                 } else {
                     $('#resultadosBusquedaProductos').html(`
                         <div class="alert alert-danger">
@@ -9687,6 +9770,217 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 `);
             }
         });
+    }
+
+    // Cargar sucursales en el selector del modal de edición
+    function cargarSucursalesEnFiltroEditar() {
+        const $select = $('#filtroSucursalEditar');
+        if ($select.find('option').length > 1) return;
+        $.ajax({
+            url: '/app/api/sucursales/listar/',
+            method: 'GET',
+            success: function(response) {
+                (response.sucursales || []).forEach(function(suc) {
+                    $select.append(`<option value="${suc.id}">${suc.alias}</option>`);
+                });
+            }
+        });
+    }
+
+    // Al cambiar sucursal: mostrar/ocultar botones y auto-buscar
+    $('#filtroSucursalEditar').on('change', function() {
+        const val = $(this).val();
+        if (val === 'todas') {
+            $('#panelAccionSucursal').hide();
+        } else {
+            $('#panelAccionSucursal').show();
+        }
+        resetearSeleccion();
+        buscarProductosParaEditar();
+    });
+
+    // ── Acciones masivas por sucursal ──────────────────────────────────────
+    $(document).on('click', '#btnExcluirSucursal', function() {
+        const suc = $('#filtroSucursalEditar');
+        ejecutarAccionAnalitica({ sucursal_id: suc.val() }, true, `Excluir todos los productos de <strong>${suc.find(':selected').text()}</strong> de la analítica`);
+    });
+    $(document).on('click', '#btnIncluirSucursal', function() {
+        const suc = $('#filtroSucursalEditar');
+        ejecutarAccionAnalitica({ sucursal_id: suc.val() }, false, `Incluir todos los productos de <strong>${suc.find(':selected').text()}</strong> en la analítica`);
+    });
+    $(document).on('click', '#btnExcluirTodasAnalitica', function() {
+        ejecutarAccionAnalitica({ sucursal_id: 'todas' }, true, 'Excluir <strong>TODOS los productos de TODAS las sucursales</strong> de la analítica');
+    });
+    $(document).on('click', '#btnIncluirTodasAnalitica', function() {
+        ejecutarAccionAnalitica({ sucursal_id: 'todas' }, false, 'Incluir <strong>TODOS los productos de TODAS las sucursales</strong> en la analítica');
+    });
+
+    // ── Acciones masivas sobre selección de checkboxes ────────────────────
+    $(document).on('click', '#btnExcluirSeleccionados', function() {
+        const ids = obtenerIdsSeleccionados();
+        if (!ids.length) return;
+        const propagar = $('#chkPropagar').is(':checked');
+        const sufijo = propagar ? ' <small class="text-muted">(todas las sucursales del artículo)</small>' : '';
+        ejecutarAccionAnalitica({ producto_ids: ids, propagar: propagar }, true,
+            `Excluir <strong>${ids.length} producto(s)</strong> de la analítica${sufijo}`);
+    });
+    $(document).on('click', '#btnIncluirSeleccionados', function() {
+        const ids = obtenerIdsSeleccionados();
+        if (!ids.length) return;
+        const propagar = $('#chkPropagar').is(':checked');
+        const sufijo = propagar ? ' <small class="text-muted">(todas las sucursales del artículo)</small>' : '';
+        ejecutarAccionAnalitica({ producto_ids: ids, propagar: propagar }, false,
+            `Incluir <strong>${ids.length} producto(s)</strong> en la analítica${sufijo}`);
+    });
+    $(document).on('click', '#btnDeseleccionarTodo', function() {
+        resetearSeleccion();
+    });
+
+    // ── Toggle individual por fila ─────────────────────────────────────────
+    $(document).on('click', '.btn-toggle-analitica', function() {
+        const $btn = $(this);
+        const productoId = $btn.data('producto-id');
+        const excluido = $btn.data('excluido') === true || $btn.data('excluido') === 'true';
+        const nuevoEstado = !excluido;
+        const propagar = $('#chkPropagar').is(':checked');
+        $btn.prop('disabled', true);
+        $.ajax({
+            url: '/app/productos/excluir-analitica-masivo/',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ producto_ids: [productoId], excluir: nuevoEstado, propagar: propagar }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    if (propagar) {
+                        // Actualizar TODOS los toggles de filas con el mismo artículo visibles
+                        buscarProductosParaEditar();
+                    } else {
+                        $btn.data('excluido', nuevoEstado);
+                        $btn.attr('title', nuevoEstado ? 'Click para incluir en analítica' : 'Click para excluir de analítica');
+                        $btn.html(nuevoEstado
+                            ? '<span class="badge bg-warning text-dark" style="cursor:pointer;"><i class="bi bi-eye-slash me-1"></i>Excluido</span>'
+                            : '<span class="badge bg-success" style="cursor:pointer;"><i class="bi bi-eye me-1"></i>Incluido</span>'
+                        );
+                        $btn.prop('disabled', false);
+                    }
+                    // Mostrar toast rápido
+                    const msg = propagar
+                        ? `${response.cantidad} registros actualizados (todas las sucursales)`
+                        : (nuevoEstado ? 'Excluido de analítica' : 'Incluido en analítica');
+                    mostrarToastAnalitica(nuevoEstado, msg);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: response.error, timer: 2000 });
+                    $btn.prop('disabled', false);
+                }
+            },
+            error: function() {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Error al conectar', timer: 2000 });
+                $btn.prop('disabled', false);
+            }
+        });
+    });
+
+    // ── Select-all checkbox ────────────────────────────────────────────────
+    $(document).on('change', '#selectAllProductos', function() {
+        const checked = $(this).is(':checked');
+        $('.chk-producto').prop('checked', checked);
+        actualizarBarraSeleccion();
+    });
+    $(document).on('change', '.chk-producto', function() {
+        actualizarBarraSeleccion();
+        const total = $('.chk-producto').length;
+        const selected = $('.chk-producto:checked').length;
+        $('#selectAllProductos').prop('indeterminate', selected > 0 && selected < total);
+        $('#selectAllProductos').prop('checked', selected === total && total > 0);
+    });
+
+    function obtenerIdsSeleccionados() {
+        return $('.chk-producto:checked').map(function() { return parseInt($(this).val()); }).get();
+    }
+
+    function actualizarBarraSeleccion() {
+        const n = $('.chk-producto:checked').length;
+        const propagar = $('#chkPropagar').is(':checked');
+        if (n > 0) {
+            $('#textoProductosSeleccionados').text(n + ' producto' + (n > 1 ? 's' : '') + ' seleccionado' + (n > 1 ? 's' : ''));
+            $('#hintPropagar').toggle(propagar);
+            $('#barraSeleccionMasiva').css('display', 'flex');
+        } else {
+            $('#barraSeleccionMasiva').css('display', 'none');
+        }
+    }
+
+    // Actualizar hint cuando cambia el checkbox de propagación
+    $('#chkPropagar').on('change', function() {
+        const n = $('.chk-producto:checked').length;
+        if (n > 0) {
+            $('#hintPropagar').toggle($(this).is(':checked'));
+        }
+    });
+
+    function resetearSeleccion() {
+        $('.chk-producto').prop('checked', false);
+        $('#selectAllProductos').prop('checked', false).prop('indeterminate', false);
+        $('#barraSeleccionMasiva').css('display', 'none');
+    }
+
+    // ── Función central para ejecutar acciones sobre analítica ─────────────
+    function ejecutarAccionAnalitica(payload, excluir, mensajeHtml) {
+        Swal.fire({
+            title: excluir ? 'Excluir de Analítica' : 'Incluir en Analítica',
+            html: `¿Confirmar acción?<br><span class="text-secondary" style="font-size:.9rem">${mensajeHtml}</span>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: excluir ? '#dc3545' : '#28a745',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: excluir ? '<i class="bi bi-eye-slash me-1"></i>Sí, excluir' : '<i class="bi bi-eye me-1"></i>Sí, incluir',
+            cancelButtonText: 'Cancelar'
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            payload.excluir = excluir;
+            $.ajax({
+                url: '/app/productos/excluir-analitica-masivo/',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload),
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.success) {
+                        const detalleHtml = response.propagado
+                            ? `<strong>${response.cantidad}</strong> registros actualizados en todas las sucursales`
+                            : `<strong>${response.cantidad}</strong> producto(s) actualizado(s)`;
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Listo',
+                            html: detalleHtml,
+                            timer: 2500,
+                            timerProgressBar: true,
+                            showConfirmButton: false
+                        });
+                        resetearSeleccion();
+                        buscarProductosParaEditar();
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Error', text: response.error });
+                    }
+                },
+                error: function() {
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Error al conectar con el servidor' });
+                }
+            });
+        });
+    }
+
+    function mostrarToastAnalitica(excluido, mensaje) {
+        const $toast = $(`
+            <div style="position:fixed;bottom:24px;right:24px;z-index:9999;min-width:280px;"
+                 class="alert ${excluido ? 'alert-warning' : 'alert-success'} shadow d-flex align-items-center gap-2 py-2 px-3">
+                <i class="bi ${excluido ? 'bi-eye-slash' : 'bi-eye'} fs-5"></i>
+                <span>${mensaje}</span>
+            </div>
+        `).appendTo('body');
+        setTimeout(() => $toast.fadeOut(400, function() { $(this).remove(); }), 2800);
     }
 
     // Agrupar Producto_Talla por Producto
@@ -9709,6 +10003,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 // Crear nuevo producto
                 productosMap.set(clave, {
                     id: item.id, // Usaremos el ID de la primera talla
+                    producto_id: item.producto_id || item.id,
                     codigo: codigo,
                     nombre: nombre || 'Sin nombre',
                     categoria: '', // No disponible en esta API
@@ -9720,7 +10015,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     precioventa: item.precioventa || 0,
                     tallas_count: 0,
                     tallas: [],
-                    activo: true
+                    activo: true,
+                    excluir_de_analitica: item.excluir_de_analitica || false,
+                    sucursal_nombre: item.sucursal_nombre || '',
                 });
             }
             
@@ -9765,82 +10062,60 @@ $('#btnConfirmarActualizacion').on('click', function() {
         }
 
         let html = `
-            <div class="table-responsive">
-                <table class="table table-hover table-striped" id="tablaResultadosBusqueda">
-                    <thead style="background: #405189;">
+            <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
+                <table class="table table-hover table-sm align-middle" id="tablaResultadosBusqueda">
+                    <thead style="background:#405189; position:sticky; top:0; z-index:1;">
                         <tr>
-                            <th class="text-white">Código</th>
-                            <th class="text-white">Nombre</th>
-                            <th class="text-white">Marca</th>
-                            <th class="text-white">Color</th>
-                            <th class="text-white">Género</th>
-                            <th class="text-white">Precio</th>
-                            <th class="text-white">Stock</th>
-                            <th class="text-white">Tallas / SKU</th>
-                            <th class="text-white" width="180">Acciones</th>
+                            <th style="width:36px;" class="text-white text-center">
+                                <input type="checkbox" id="selectAllProductos" class="form-check-input" title="Seleccionar todo">
+                            </th>
+                            <th class="text-white">Nombre / Código</th>
+                            <th class="text-white">Sucursal</th>
+                            <th class="text-white text-end">Precio</th>
+                            <th class="text-white text-center">Stock</th>
+                            <th class="text-white text-center" style="width:110px;">Analítica</th>
+                            <th class="text-white text-center" style="width:60px;">Editar</th>
                         </tr>
                     </thead>
                     <tbody>
         `;
 
-        productosFiltrados.forEach((producto, index) => {
-            const stockClass = producto.stock_total === 0 ? 'text-danger' : 
+        productosFiltrados.forEach((producto) => {
+            const stockClass = producto.stock_total === 0 ? 'text-danger' :
                               producto.stock_total < 5 ? 'text-warning' : 'text-success';
-            
-            // Formatear precio
             const precioFormateado = new Intl.NumberFormat('es-CL', {
-                style: 'currency',
-                currency: 'CLP',
-                minimumFractionDigits: 0
+                style: 'currency', currency: 'CLP', minimumFractionDigits: 0
             }).format(producto.precioventa);
-
-            // Crear lista de tallas con SKU y stock
-            const tallasData = JSON.stringify(producto.tallas).replace(/"/g, '&quot;');
-            
-            // Preview de tallas (primeras 3)
-            let tallasPreview = '';
-            if (producto.tallas && producto.tallas.length > 0) {
-                const primeras3 = producto.tallas.slice(0, 3);
-                tallasPreview = primeras3.map(t => 
-                    '<span class="badge bg-light text-dark me-1">' + t.talla + ' <small class="text-muted">(' + t.stock + ')</small></span>'
-                ).join('');
-                if (producto.tallas.length > 3) {
-                    tallasPreview += '<span class="badge bg-secondary">+' + (producto.tallas.length - 3) + '</span>';
-                }
-            }
+            const marcaBadge = (producto.marca && producto.marca !== '-')
+                ? `<span class="badge bg-light text-dark border ms-1" style="font-size:.7rem;">${producto.marca}</span>` : '';
 
             html += `
                 <tr>
-                    <td><code class="bg-light px-2 py-1 rounded">${producto.codigo || 'N/A'}</code></td>
-                    <td><strong>${producto.nombre}</strong></td>
-                    <td><span class="badge bg-primary-subtle text-primary">${producto.marca || '-'}</span></td>
-                    <td><span class="badge bg-info-subtle text-info">${producto.color || '-'}</span></td>
-                    <td>${producto.genero || '-'}</td>
-                    <td><strong class="text-success">${precioFormateado}</strong></td>
-                    <td class="${stockClass}">
-                        <strong>${producto.stock_total}</strong> <small>unid.</small>
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input chk-producto" value="${producto.producto_id}">
                     </td>
                     <td>
-                        ${tallasPreview}
-                        <button class="btn btn-sm btn-outline-info ms-1" 
-                                onclick='verTallasProducto(${JSON.stringify(producto.tallas)}, "${producto.nombre}")' 
-                                title="Ver todas las tallas">
-                            <i class="bi bi-eye"></i>
+                        <div class="fw-semibold">${producto.nombre}${marcaBadge}</div>
+                        <code class="text-muted" style="font-size:.75rem;">${producto.codigo || '-'}</code>
+                    </td>
+                    <td><small class="text-muted">${producto.sucursal_nombre || '-'}</small></td>
+                    <td class="text-end fw-bold text-success">${precioFormateado}</td>
+                    <td class="text-center ${stockClass} fw-bold">${producto.stock_total}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-link p-0 btn-toggle-analitica"
+                                data-producto-id="${producto.producto_id}"
+                                data-excluido="${producto.excluir_de_analitica}"
+                                title="${producto.excluir_de_analitica ? 'Click para incluir en analítica' : 'Click para excluir de analítica'}"
+                                style="text-decoration:none;">
+                            ${producto.excluir_de_analitica
+                                ? '<span class="badge bg-warning text-dark" style="cursor:pointer;"><i class="bi bi-eye-slash me-1"></i>Excluido</span>'
+                                : '<span class="badge bg-success" style="cursor:pointer;"><i class="bi bi-eye me-1"></i>Incluido</span>'}
                         </button>
                     </td>
-                    <td>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-warning" 
-                                    onclick="editarProductoCompleto(${producto.id});" 
-                                    title="Editar producto">
-                                <i class="bi bi-pencil"></i> Editar
-                            </button>
-                            <button class="btn btn-info" 
-                                    onclick="window.open('/app/lotes_producto/${producto.id}/', '_blank')" 
-                                    title="Ver lotes FIFO">
-                                <i class="bi bi-stack"></i>
-                            </button>
-                        </div>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-warning" onclick="editarProductoCompleto(${producto.id});" title="Editar producto">
+                            <i class="bi bi-pencil"></i>
+                        </button>
                     </td>
                 </tr>
             `;
@@ -9850,17 +10125,17 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     </tbody>
                 </table>
             </div>
-            <div class="mt-3 d-flex justify-content-between align-items-center">
+            <div class="mt-2 d-flex justify-content-between align-items-center">
                 <small class="text-muted">Mostrando ${productosFiltrados.length} de ${productos.length} productos</small>
                 <div class="d-flex gap-2">
-                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Con stock</span>
-                    <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Stock bajo</span>
-                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Sin stock</span>
+                    <span class="badge bg-success"><i class="bi bi-eye me-1"></i>Incluido en analítica</span>
+                    <span class="badge bg-warning text-dark"><i class="bi bi-eye-slash me-1"></i>Excluido de analítica</span>
                 </div>
             </div>
         `;
 
         $('#resultadosBusquedaProductos').html(html);
+        resetearSeleccion();
     }
     
     // Función para ver tallas de un producto

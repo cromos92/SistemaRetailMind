@@ -20,9 +20,25 @@ from decimal import Decimal
 
 from .models import (
     CreditoTrabajador, PagoCreditoTrabajador, FirmaCreditoTrabajador,
-    Vendedor, Empresa, Sucursal, EmpresaUser,
-    ESTADO_CREDITO_CHOICES, TIPO_CREDITO_CHOICES, METODO_PAGO_TICKET_CHOICES
+    Cliente, Empresa, Sucursal, EmpresaUser,
+    ESTADO_CREDITO_CHOICES, TIPO_CREDITO_CHOICES, TIPO_BENEFICIARIO_CHOICES,
+    METODO_PAGO_TICKET_CHOICES,
 )
+
+
+def _serializar_beneficiario(credito):
+    """Serializa el beneficiario (Cliente) de un crédito."""
+    if credito.beneficiario:
+        b = credito.beneficiario
+        return {
+            'id': b.id,
+            'nombre': b.nombre_completo,
+            'rut': b.rut or '',
+            'codigo_vendedor': '',
+            'empresa': b.empresa.nombre if b.empresa else '',
+            'tipo': credito.tipo_beneficiario,
+        }
+    return {'id': None, 'nombre': 'Sin asignar', 'rut': '', 'codigo_vendedor': '', 'empresa': '', 'tipo': ''}
 
 
 # ========== GESTIÓN DE CRÉDITOS ==========
@@ -30,7 +46,23 @@ from .models import (
 @login_required
 def gestion_creditos(request):
     """Vista principal para gestión de créditos a trabajadores"""
-    return render(request, 'vistas/modulo_administracion/gestion_creditos.html')
+    sucursal_id = request.session.get('idSucursalActual')
+    sucursal_actual = None
+    if sucursal_id:
+        try:
+            from .models import Sucursal
+            sucursal_actual = Sucursal.objects.get(id=sucursal_id)
+        except Exception:
+            pass
+    context = {
+        'qz_config': {
+            'habilitado': getattr(sucursal_actual, 'usar_qz_tray', False) if sucursal_actual else False,
+            'nombre_impresora': (
+                getattr(sucursal_actual, 'nombre_impresora_termica', 'EPSON TM-T20II') or 'EPSON TM-T20II'
+            ) if sucursal_actual else 'EPSON TM-T20II',
+        },
+    }
+    return render(request, 'vistas/modulo_administracion/gestion_creditos.html', context)
 
 
 @login_required
@@ -63,11 +95,13 @@ def crear_credito_trabajador(request):
                 'error': 'No hay empresa o sucursal activa en la sesión'
             }, status=400)
         
-        # Validar trabajador
-        trabajador = get_object_or_404(Vendedor, id=trabajador_id)
+        # Validar beneficiario (Cliente)
+        beneficiario = get_object_or_404(Cliente, id=trabajador_id)
         empresa = get_object_or_404(Empresa, id=empresa_actual_id)
         sucursal = get_object_or_404(Sucursal, id=sucursal_actual_id)
         
+        tipo_beneficiario = data.get('tipo_beneficiario', 'EMPLEADO')
+
         # Validar monto
         try:
             monto_solicitado = Decimal(str(monto_solicitado))
@@ -81,7 +115,8 @@ def crear_credito_trabajador(request):
         
         # Crear crédito directamente ACTIVO (sin aprobación)
         credito = CreditoTrabajador.objects.create(
-            trabajador=trabajador,
+            beneficiario=beneficiario,
+            tipo_beneficiario=tipo_beneficiario,
             empresa_origen=empresa,
             sucursal=sucursal,
             tipo_credito=tipo_credito,
@@ -112,7 +147,7 @@ def crear_credito_trabajador(request):
             'credito_id': credito.id,
             'numero_credito': credito.numero_credito,
             'monto_aprobado': float(credito.monto_aprobado),
-            'trabajador': credito.trabajador.nombre,
+            'trabajador': credito.nombre_beneficiario,
             'imprimir_url': f'/app/api/creditos/imprimir-voucher/{credito.id}/'
         })
         
@@ -178,7 +213,7 @@ def cargar_creditos_trabajadores(request):
         # Construir queryset base
         queryset = CreditoTrabajador.objects.filter(
             empresa_origen_id=empresa_actual_id
-        ).select_related('trabajador', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por')
+        ).select_related('beneficiario', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por')
         
         # Aplicar filtros de fecha (DD/MM/YYYY o DD-MM-YYYY)
         fecha_inicio = normalize_fecha(fecha_inicio)
@@ -192,7 +227,7 @@ def cargar_creditos_trabajadores(request):
             queryset = queryset.filter(estado=estado)
         
         if trabajador_id:
-            queryset = queryset.filter(trabajador_id=trabajador_id)
+            queryset = queryset.filter(beneficiario_id=trabajador_id)
         
         if tipo_credito:
             queryset = queryset.filter(tipo_credito=tipo_credito)
@@ -203,9 +238,9 @@ def cargar_creditos_trabajadores(request):
         if trabajador_texto:
             texto = trabajador_texto.strip()
             queryset = queryset.filter(
-                Q(trabajador__nombre__icontains=texto) |
-                Q(trabajador__rut__icontains=texto) |
-                Q(trabajador__codigo_vendedor__icontains=texto)
+                Q(beneficiario__nombre__icontains=texto) |
+                Q(beneficiario__apellido__icontains=texto) |
+                Q(beneficiario__rut__icontains=texto)
             )
 
         if sucursal_texto:
@@ -271,13 +306,7 @@ def cargar_creditos_trabajadores(request):
             creditos_data.append({
                 'id': credito.id,
                 'numero_credito': credito.numero_credito,
-                'trabajador': {
-                    'id': credito.trabajador.id,
-                    'nombre': credito.trabajador.nombre,
-                    'rut': credito.trabajador.rut,
-                    'codigo_vendedor': credito.trabajador.codigo_vendedor,
-                    'empresa': credito.trabajador.empresa.nombre if credito.trabajador.empresa else credito.trabajador.empresa_display
-                },
+                'trabajador': _serializar_beneficiario(credito),
                 'empresa': {
                     'id': credito.empresa_origen.id,
                     'nombre': credito.empresa_origen.nombre,
@@ -384,13 +413,7 @@ def detalle_credito_trabajador(request, credito_id):
         credito_data = {
             'id': credito.id,
             'numero_credito': credito.numero_credito,
-            'trabajador': {
-                'id': credito.trabajador.id,
-                'nombre': credito.trabajador.nombre,
-                'rut': credito.trabajador.rut,
-                'codigo_vendedor': credito.trabajador.codigo_vendedor,
-                'correo': credito.trabajador.correo
-            },
+            'trabajador': _serializar_beneficiario(credito),
             'empresa_origen': {
                 'id': credito.empresa_origen.id,
                 'nombre': credito.empresa_origen.nombre,
@@ -888,35 +911,34 @@ def registrar_firma_credito(request):
 @login_required
 @require_GET
 def obtener_trabajadores_credito(request):
-    """Obtener lista de trabajadores/vendedores para créditos"""
+    """Obtener lista de clientes disponibles para créditos"""
     try:
-        # Obtener vendedores activos
-        vendedores = Vendedor.objects.filter(
-            nombre__isnull=False
-        ).exclude(nombre='').order_by('nombre')
+        clientes = Cliente.objects.filter(
+            nombre__isnull=False, activo=True,
+        ).exclude(nombre='').select_related('empresa').order_by('apellido', 'nombre')
         
-        vendedores_data = []
-        for vendedor in vendedores:
-            # Calcular créditos activos
+        clientes_data = []
+        for cli in clientes:
             creditos_activos = CreditoTrabajador.objects.filter(
-                trabajador=vendedor,
+                beneficiario=cli,
                 estado__in=['ACTIVO', 'APROBADO']
             ).count()
             
-            vendedores_data.append({
-                'id': vendedor.id,
-                'nombre': vendedor.nombre,
-                'rut': vendedor.rut or '',
-                'codigo_vendedor': vendedor.codigo_vendedor,
-                'correo': vendedor.correo or '',
+            clientes_data.append({
+                'id': cli.id,
+                'nombre': cli.nombre_completo,
+                'rut': cli.rut or '',
+                'codigo_vendedor': '',
+                'correo': cli.email or '',
                 'creditos_activos': creditos_activos,
-                'empresa': vendedor.empresa.nombre if vendedor.empresa else vendedor.empresa_display,
-                'empresa_id': vendedor.empresa.id if vendedor.empresa else None
+                'empresa': cli.empresa.nombre if cli.empresa else '',
+                'empresa_id': cli.empresa.id if cli.empresa else None,
+                'tipo_cliente': cli.tipo_cliente,
             })
         
         return JsonResponse({
             'success': True,
-            'trabajadores': vendedores_data
+            'trabajadores': clientes_data
         })
         
     except Exception as e:
@@ -929,17 +951,16 @@ def obtener_trabajadores_credito(request):
 @login_required
 @require_POST
 def crear_trabajador_credito(request):
-    """Crear un nuevo trabajador/vendedor para créditos"""
+    """Crear un nuevo cliente/beneficiario para créditos"""
     try:
         data = json.loads(request.body)
         
         nombre = data.get('nombre', '').strip()
         rut = data.get('rut', '').strip()
-        codigo_vendedor = data.get('codigo_vendedor', '').strip()
         correo = data.get('correo', '').strip()
         fecha_nacimiento = data.get('fecha_nacimiento')
-        sucursales_ids = data.get('sucursales', [])  # Lista de IDs de sucursales (puede estar vacía)
-        empresa_id = data.get('empresa_id')  # ID de empresa (opcional)
+        empresa_id = data.get('empresa_id')
+        tipo_cliente = data.get('tipo_cliente', 'EMPLEADO')
         
         if not nombre:
             return JsonResponse({
@@ -947,21 +968,14 @@ def crear_trabajador_credito(request):
                 'error': 'El nombre es requerido'
             }, status=400)
         
-        if not codigo_vendedor:
-            return JsonResponse({
-                'success': False,
-                'error': 'El código de trabajador es requerido'
-            }, status=400)
+        if rut:
+            existente = Cliente.objects.filter(rut__iexact=rut).first()
+            if existente:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Ya existe un cliente con RUT "{rut}": {existente.nombre_completo}'
+                }, status=400)
         
-        # Verificar si ya existe el código de vendedor (case insensitive)
-        if Vendedor.objects.filter(codigo_vendedor__iexact=codigo_vendedor).exists():
-            existente = Vendedor.objects.filter(codigo_vendedor__iexact=codigo_vendedor).first()
-            return JsonResponse({
-                'success': False,
-                'error': f'Ya existe un trabajador con el código "{codigo_vendedor}": {existente.nombre}'
-            }, status=400)
-        
-        # Convertir fecha si viene en formato DD-MM-YYYY
         fecha_nacimiento_parsed = None
         if fecha_nacimiento:
             try:
@@ -970,57 +984,45 @@ def crear_trabajador_credito(request):
                     fecha_nacimiento_parsed = f"{partes[2]}-{partes[1]}-{partes[0]}"
                 else:
                     fecha_nacimiento_parsed = fecha_nacimiento
-            except:
+            except Exception:
                 pass
         
-        # Obtener empresa - si viene empresa_id usarlo, sino usar la empresa de la sesión
         empresa = None
         if empresa_id:
-            try:
-                empresa = Empresa.objects.get(id=empresa_id)
-            except Empresa.DoesNotExist:
-                pass
-        
+            empresa = Empresa.objects.filter(id=empresa_id).first()
         if not empresa:
-            # Usar empresa de la sesión como fallback
             empresa_actual_id = request.session.get('idEmpresaActual')
             if empresa_actual_id:
-                try:
-                    empresa = Empresa.objects.get(id=empresa_actual_id)
-                except Empresa.DoesNotExist:
-                    pass
+                empresa = Empresa.objects.filter(id=empresa_actual_id).first()
         
-        # Crear el nuevo vendedor/trabajador
-        vendedor = Vendedor.objects.create(
-            nombre=nombre,
+        partes_nombre = nombre.split(None, 1)
+        primer_nombre = partes_nombre[0]
+        apellido = partes_nombre[1] if len(partes_nombre) > 1 else ''
+
+        cliente = Cliente.objects.create(
+            nombre=primer_nombre,
+            apellido=apellido,
             rut=rut or None,
-            codigo_vendedor=codigo_vendedor,
-            correo=correo or None,
+            email=correo or None,
             fecha_nacimiento=fecha_nacimiento_parsed,
-            empresa=empresa
+            empresa=empresa,
+            tipo_cliente=tipo_cliente,
+            activo=True,
+            created_by=request.user,
         )
-        
-        # Asociar a las sucursales seleccionadas (si hay)
-        if sucursales_ids:
-            sucursales = Sucursal.objects.filter(id__in=sucursales_ids)
-            vendedor.sucursales.set(sucursales)
-        # Si no se seleccionó ninguna sucursal, no se asocia a ninguna (queda vacío)
-        
-        # Obtener nombres de sucursales asignadas para mostrar
-        sucursales_asignadas = list(vendedor.sucursales.values_list('alias', flat=True))
         
         return JsonResponse({
             'success': True,
-            'message': 'Trabajador creado exitosamente',
+            'message': 'Beneficiario creado exitosamente',
             'trabajador': {
-                'id': vendedor.id,
-                'nombre': vendedor.nombre,
-                'rut': vendedor.rut or '',
-                'codigo_vendedor': vendedor.codigo_vendedor,
-                'correo': vendedor.correo or '',
-                'sucursales': sucursales_asignadas,
-                'empresa': vendedor.empresa.nombre if vendedor.empresa else None,
-                'empresa_id': vendedor.empresa.id if vendedor.empresa else None
+                'id': cliente.id,
+                'nombre': cliente.nombre_completo,
+                'rut': cliente.rut or '',
+                'codigo_vendedor': '',
+                'correo': cliente.email or '',
+                'sucursales': [],
+                'empresa': cliente.empresa.nombre if cliente.empresa else None,
+                'empresa_id': cliente.empresa.id if cliente.empresa else None,
             }
         })
         
@@ -1032,24 +1034,24 @@ def crear_trabajador_credito(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Error al crear trabajador: {str(e)}'
+            'error': f'Error al crear beneficiario: {str(e)}'
         }, status=500)
 
 
 @login_required
 @require_GET
 def validar_codigo_trabajador(request):
-    """Verificar si un código de trabajador ya existe"""
+    """Verificar si un RUT de cliente ya existe"""
     codigo = request.GET.get('codigo', '').strip()
     
     if not codigo:
         return JsonResponse({'exists': False})
     
-    exists = Vendedor.objects.filter(codigo_vendedor__iexact=codigo).exists()
+    exists = Cliente.objects.filter(rut__iexact=codigo).exists()
     existente = None
     if exists:
-        v = Vendedor.objects.filter(codigo_vendedor__iexact=codigo).first()
-        existente = {'nombre': v.nombre, 'codigo': v.codigo_vendedor}
+        c = Cliente.objects.filter(rut__iexact=codigo).first()
+        existente = {'nombre': c.nombre_completo, 'codigo': c.rut}
     
     return JsonResponse({
         'exists': exists,
@@ -1183,16 +1185,15 @@ def reporte_creditos_trabajadores(request):
                 creditos_vencidos.append({
                     'id': credito.id,
                     'numero_credito': credito.numero_credito,
-                    'trabajador': credito.trabajador.nombre,
+                    'trabajador': credito.nombre_beneficiario,
                     'monto_pendiente': credito.saldo_pendiente,
                     'dias_vencido': abs(credito.dias_para_vencimiento),
                     'fecha_vencimiento': credito.fecha_vencimiento.strftime('%d/%m/%Y')
                 })
         
-        # Top trabajadores con más créditos
         from django.db.models import Count
-        top_trabajadores = creditos.values(
-            'trabajador__nombre', 'trabajador__id'
+        top_beneficiarios = creditos.values(
+            'beneficiario__nombre', 'beneficiario__apellido', 'beneficiario__id'
         ).annotate(
             total_creditos=Count('id'),
             total_monto=Sum('monto_aprobado')
@@ -1210,12 +1211,12 @@ def reporte_creditos_trabajadores(request):
             'creditos_vencidos': creditos_vencidos,
             'top_trabajadores': [
                 {
-                    'trabajador_id': item['trabajador__id'],
-                    'trabajador': item['trabajador__nombre'],
+                    'trabajador_id': item['beneficiario__id'],
+                    'trabajador': f"{item['beneficiario__nombre'] or ''} {item['beneficiario__apellido'] or ''}".strip(),
                     'total_creditos': item['total_creditos'],
                     'total_monto': float(item['total_monto'] or 0)
                 }
-                for item in top_trabajadores
+                for item in top_beneficiarios
             ]
         }
         
@@ -1234,319 +1235,227 @@ def reporte_creditos_trabajadores(request):
 @login_required
 @require_GET
 def imprimir_voucher_credito(request, credito_id):
-    """Generar voucher térmico de crédito con código de barras y espacios para firmas"""
+    """Generar voucher térmico de crédito — 80 mm, una sola página, diseño compacto."""
     try:
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
-        
-        # Generar HTML para impresión térmica (80mm)
-        html_template = f"""
-<!DOCTYPE html>
-<html>
+
+        rut_benef     = (credito.beneficiario.rut if credito.beneficiario else '') or 'N/A'
+        nombre_auth   = credito.autorizado_por.get_full_name() or credito.autorizado_por.username
+        valor_cuota   = f"${credito.valor_cuota:,.0f}" if credito.valor_cuota else '-'
+        interes_row   = (
+            f'<div class="cell"><div class="lbl">Interés</div>'
+            f'<div class="val">{float(credito.tasa_interes):.1f}%</div></div>'
+            if credito.tasa_interes > 0 else ''
+        )
+        sucursal_dir  = credito.sucursal.direccion or ''
+        aval_bloque   = ''
+        if credito.requiere_aval:
+            aval_bloque = f'''
+<div class="firma-bloque">
+    <div class="ftipo">Aval Garante</div>
+    <div class="fnombre">{credito.aval_nombre}<br><span class="fpeq">RUT: {credito.aval_rut}</span></div>
+    <div class="flinea">Firma Aval</div>
+</div>'''
+
+        motivo_texto  = credito.motivo_solicitud[:200]
+        fecha_imp     = timezone.now().strftime('%d/%m/%Y %H:%M')
+
+        html = f"""<!DOCTYPE html>
+<html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voucher Crédito {credito.numero_credito}</title>
-    <style>
-        @page {{
-            size: 80mm auto;
-            margin: 0;
-        }}
-        
-        * {{
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-        }}
-        
-        body {{
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 14px;
-            margin: 0;
-            padding: 5mm 4mm;
-            line-height: 1.4;
-            color: #000;
-            background: #fff;
-        }}
-        
-        .center {{ text-align: center; }}
-        .bold {{ font-weight: 900; }}
-        .large {{ font-size: 20px; font-weight: 900; }}
-        .xlarge {{ font-size: 24px; font-weight: 900; }}
-        .medium {{ font-size: 16px; font-weight: 700; }}
-        .small {{ font-size: 12px; }}
-        
-        .header {{
-            text-align: center;
-            margin-bottom: 10px;
-        }}
-        
-        .barcode-container {{
-            text-align: center;
-            margin: 12px 0;
-            padding: 8px 0;
-            border-top: 3px solid #000;
-            border-bottom: 3px solid #000;
-        }}
-        
-        .barcode {{
-            margin: 8px auto;
-        }}
-        
-        .separator {{
-            border-top: 2px solid #000;
-            margin: 12px 0;
-        }}
-        
-        .separator-light {{
-            border-top: 1px dashed #000;
-            margin: 8px 0;
-        }}
-        
-        .info-row {{
-            margin: 8px 0;
-            font-size: 15px;
-            line-height: 1.6;
-        }}
-        
-        .info-label {{
-            font-weight: 700;
-            display: inline-block;
-            width: 45%;
-        }}
-        
-        .info-value {{
-            font-weight: 900;
-            display: inline-block;
-            width: 53%;
-            text-align: right;
-        }}
-        
-        .monto-destacado {{
-            text-align: center;
-            font-size: 28px;
-            font-weight: 900;
-            margin: 15px 0;
-            padding: 15px;
-            border: 4px double #000;
-            background: #f5f5f5;
-        }}
-        
-        .firma-section {{
-            margin-top: 15px;
-            page-break-inside: avoid;
-        }}
-        
-        .firma-box {{
-            border: 3px solid #000;
-            padding: 12px;
-            margin: 12px 0;
-            min-height: 70px;
-            background: #fff;
-        }}
-        
-        .firma-titulo {{
-            font-size: 13px;
-            font-weight: 900;
-            margin-bottom: 5px;
-        }}
-        
-        .firma-linea {{
-            border-top: 2px solid #000;
-            margin-top: 50px;
-            padding-top: 8px;
-            text-align: center;
-            font-size: 12px;
-            font-weight: 700;
-            line-height: 1.5;
-        }}
-        
-        .footer {{
-            margin-top: 15px;
-            text-align: center;
-            font-size: 10px;
-            color: #000;
-            font-weight: 600;
-        }}
-        
-        @media print {{
-            body {{
-                padding: 5mm 3mm;
-            }}
-            .no-print {{
-                display: none;
-            }}
-        }}
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<meta charset="UTF-8">
+<title>Voucher {credito.numero_credito}</title>
+<style>
+@page {{
+    size: 80mm auto;
+    margin: 0;
+}}
+*, *::before, *::after {{
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0; padding: 0;
+}}
+body {{
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.5px;
+    line-height: 1.35;
+    color: #000;
+    background: #fff;
+    width: 80mm;
+    padding: 3mm 3mm 2mm;
+}}
+
+/* ── separadores ── */
+.sep  {{ border-top: 1.5px solid #000; margin: 3px 0; }}
+.sep2 {{ border-top: 2px solid #000;   margin: 3px 0; }}
+.dash {{ border-top: 1px dashed #555;  margin: 2px 0; }}
+
+/* ── cabecera ── */
+.hdr-empresa  {{ font-size: 13px; font-weight: 900; text-align: center; letter-spacing: .3px; }}
+.hdr-sucursal {{ font-size: 9px;  font-weight: 600; text-align: center; color: #333; }}
+.hdr-titulo   {{ font-size: 11px; font-weight: 900; text-align: center; letter-spacing: .6px; padding: 2px 0; }}
+
+/* ── código de barras ── */
+.bc-wrap {{ text-align: center; padding: 2px 0; }}
+.bc-num  {{ font-size: 10.5px; font-weight: 900; letter-spacing: 1.5px; margin-top: 1px; }}
+
+/* ── monto destacado ── */
+.monto-box {{
+    text-align: center;
+    padding: 5px 3px 4px;
+    background: #111;
+    color: #fff;
+    margin: 3px 0;
+}}
+.monto-lbl {{ font-size: 8px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }}
+.monto-val {{ font-size: 24px; font-weight: 900; line-height: 1.15; }}
+.monto-saldo {{
+    display: flex; justify-content: space-between;
+    font-size: 8.5px; padding: 2px 3px;
+    background: #eee; margin: 0 0 3px;
+}}
+.monto-saldo .pen {{ font-weight: 900; }}
+
+/* ── sección título ── */
+.stit {{
+    font-size: 8px; font-weight: 900; text-transform: uppercase;
+    letter-spacing: .5px; background: #ddd;
+    padding: 1px 3px; margin: 3px 0 2px;
+}}
+
+/* ── grilla de datos 2 columnas ── */
+.grid2 {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 8px;
+    margin: 3px 0;
+}}
+.cell .lbl {{ font-size: 8px; color: #555; text-transform: uppercase; font-weight: 600; }}
+.cell .val {{ font-size: 11px; font-weight: 700; }}
+.cell .val.em {{ font-size: 12px; font-weight: 900; }}
+
+/* ── motivo ── */
+.motivo {{ font-size: 10px; line-height: 1.4; margin: 2px 0 3px; }}
+
+/* ── firmas: una por fila ── */
+.firma-bloque {{
+    border: 1px solid #000;
+    padding: 4px 5px;
+    margin: 3px 0;
+}}
+.ftipo   {{ font-size: 8px; font-weight: 900; text-transform: uppercase; margin-bottom: 2px; }}
+.fnombre {{ font-size: 10px; font-weight: 700; margin-bottom: 22px; }}
+.fpeq    {{ font-size: 8.5px; font-weight: 400; }}
+.flinea  {{
+    border-top: 1px solid #000;
+    padding-top: 2px;
+    font-size: 8px; font-weight: 700;
+    text-align: center; text-transform: uppercase;
+}}
+
+/* ── footer ── */
+.footer {{
+    text-align: center; font-size: 8px; color: #333;
+    margin-top: 3px; line-height: 1.5;
+}}
+
+@media print {{ .no-print {{ display: none; }} }}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 </head>
 <body>
-    <!-- HEADER -->
-    <div class="header">
-        <div class="xlarge">{credito.empresa_origen.nombre.upper()}</div>
-        <div class="medium" style="margin-top: 5px;">{credito.sucursal.alias}</div>
-        <div class="separator"></div>
-        <div class="large" style="margin: 8px 0;">VOUCHER CRÉDITO</div>
-        <div class="large" style="margin: 5px 0;">TRABAJADOR</div>
-    </div>
-    
-    <!-- CÓDIGO DE BARRAS -->
-    <div class="barcode-container">
-        <svg id="barcode"></svg>
-        <div class="xlarge" style="margin-top: 8px; letter-spacing: 2px;">{credito.numero_credito}</div>
-    </div>
-    
-    <!-- INFORMACIÓN DEL TRABAJADOR -->
-    <div class="separator"></div>
-    <div class="large center" style="margin: 12px 0;">DATOS TRABAJADOR</div>
-    
-    <div class="info-row">
-        <span class="info-label">Nombre:</span>
-        <span class="info-value">{credito.trabajador.nombre}</span>
-    </div>
-    
-    <div class="info-row">
-        <span class="info-label">RUT:</span>
-        <span class="info-value">{credito.trabajador.rut or 'N/A'}</span>
-    </div>
-    
-    <div class="info-row">
-        <span class="info-label">Código:</span>
-        <span class="info-value">{credito.trabajador.codigo_vendedor}</span>
-    </div>
-    
-    <!-- INFORMACIÓN DEL CRÉDITO -->
-    <div class="separator"></div>
-    <div class="large center" style="margin: 12px 0;">DETALLES CRÉDITO</div>
-    
-    <div class="info-row">
-        <span class="info-label">Tipo:</span><br>
-        <span class="info-value">{credito.get_tipo_credito_display()}</span>
-    </div>
-    
-    <div class="info-row">
-        <span class="info-label">Emisión:</span><br>
-        <span class="info-value">{credito.fecha_solicitud.strftime('%d/%m/%Y')}</span>
-    </div>
-    
-    <div class="info-row">
-        <span class="info-label">Vencimiento:</span><br>
-        <span class="info-value bold">{credito.fecha_vencimiento.strftime('%d/%m/%Y')}</span>
-    </div>
-    
-    <div class="info-row">
-        <span class="info-label">Cuotas:</span><br>
-        <span class="info-value">{credito.numero_cuotas}</span>
-    </div>
-    
-    {f'''<div class="info-row">
-        <span class="info-label">Interés:</span><br>
-        <span class="info-value">{float(credito.tasa_interes):.1f}%</span>
-    </div>''' if credito.tasa_interes > 0 else ''}
-    
-    <!-- MONTO -->
-    <div class="separator"></div>
-    <div class="monto-destacado">
-        MONTO APROBADO<br>
-        <span style="font-size: 36px;">${credito.monto_aprobado:,.0f}</span>
-    </div>
-    
-    <!-- MOTIVO -->
-    <div class="separator-light"></div>
-    <div class="bold" style="font-size: 14px; margin-bottom: 5px;">MOTIVO:</div>
-    <div style="margin: 5px 0; font-size: 13px; line-height: 1.4;">
-        {credito.motivo_solicitud[:180]}
-    </div>
-    
-    <!-- SECCIÓN DE FIRMAS -->
-    <div class="separator"></div>
-    <div class="firma-section">
-        <div class="large center" style="margin-bottom: 12px;">FIRMAS</div>
-        
-        <!-- Firma Autorizador -->
-        <div class="firma-box">
-            <div class="firma-titulo">AUTORIZADO POR:</div>
-            <div class="firma-linea">
-                {credito.autorizado_por.get_full_name() or credito.autorizado_por.username}<br>
-                <strong>FIRMA Y TIMBRE</strong>
-            </div>
-        </div>
-        
-        <!-- Firma Trabajador -->
-        <div class="firma-box">
-            <div class="firma-titulo">RECIBÍ CONFORME:</div>
-            <div class="firma-linea">
-                <strong>{credito.trabajador.nombre}</strong><br>
-                RUT: {credito.trabajador.rut or 'N/A'}<br>
-                <strong>FIRMA TRABAJADOR</strong>
-            </div>
-        </div>
-        
-        {f'''<!-- Firma Aval -->
-        <div class="firma-box">
-            <div class="firma-titulo">AVAL GARANTE:</div>
-            <div class="firma-linea">
-                <strong>{credito.aval_nombre}</strong><br>
-                RUT: {credito.aval_rut}<br>
-                <strong>FIRMA AVAL</strong>
-            </div>
-        </div>''' if credito.requiere_aval else ''}
-    </div>
-    
-    <!-- CONDICIONES -->
-    <div class="separator-light"></div>
-    <div style="margin-top: 10px; font-size: 11px;">
-        <div class="bold center" style="font-size: 13px; margin-bottom: 8px;">CONDICIONES:</div>
-        <div style="margin: 5px 0; padding: 0 8px; line-height: 1.5;">
-            • Compromiso de pago del trabajador<br>
-            • Descuentos vía nómina mensual<br>
-            • Documento con validez legal<br>
-            • Firmado por ambas partes
-        </div>
-    </div>
-    
-    <!-- FOOTER -->
-    <div class="separator-light"></div>
-    <div class="footer">
-        <div style="margin: 4px 0;"><strong>{timezone.now().strftime('%d/%m/%Y %H:%M')}</strong></div>
-        <div style="margin: 4px 0;">Usuario: <strong>{request.user.username}</strong></div>
-        <div style="margin: 4px 0;">Doc ID: <strong>{credito.numero_credito}</strong></div>
-    </div>
-    
-    <script>
-        // Generar código de barras más grande
-        JsBarcode("#barcode", "{credito.numero_credito}", {{
-            format: "CODE128",
-            width: 3,
-            height: 80,
-            displayValue: false,
-            margin: 5,
-            fontSize: 18,
-            fontOptions: "bold"
-        }});
-        
-        // Auto-imprimir al cargar
-        window.onload = function() {{
-            // Esperar a que el código de barras se genere
-            setTimeout(function() {{
-                window.print();
-            }}, 500);
-        }};
-    </script>
-    
-    <!-- Botón para reimprimir (solo en pantalla) -->
-    <div class="no-print" style="text-align: center; margin-top: 20px;">
-        <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
-            🖨️ Reimprimir
-        </button>
-        <button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">
-            ✖ Cerrar
-        </button>
-    </div>
+
+<!-- ══ CABECERA ══ -->
+<div class="hdr-empresa">{credito.empresa_origen.nombre.upper()}</div>
+<div class="hdr-sucursal">{credito.sucursal.alias}{(' — ' + sucursal_dir) if sucursal_dir else ''}</div>
+<div class="sep2"></div>
+<div class="hdr-titulo">◆ VOUCHER CRÉDITO TRABAJADOR ◆</div>
+<div class="sep2"></div>
+
+<!-- ══ CÓDIGO DE BARRAS ══ -->
+<div class="bc-wrap">
+    <svg id="barcode"></svg>
+    <div class="bc-num">{credito.numero_credito}</div>
+</div>
+<div class="sep"></div>
+
+<!-- ══ MONTO ══ -->
+<div class="monto-box">
+    <div class="monto-lbl">Monto Aprobado</div>
+    <div class="monto-val">${credito.monto_aprobado:,.0f}</div>
+</div>
+<div class="monto-saldo">
+    <span>Pagado: <strong>${credito.monto_pagado:,.0f}</strong></span>
+    <span class="pen">Saldo: ${credito.saldo_pendiente:,.0f}</span>
+</div>
+
+<!-- ══ BENEFICIARIO ══ -->
+<div class="stit">Beneficiario</div>
+<div class="grid2">
+    <div class="cell"><div class="lbl">Nombre</div><div class="val">{credito.nombre_beneficiario}</div></div>
+    <div class="cell"><div class="lbl">RUT</div><div class="val">{rut_benef}</div></div>
+    <div class="cell"><div class="lbl">Tipo</div><div class="val">{credito.get_tipo_beneficiario_display()}</div></div>
+    <div class="cell"><div class="lbl">Estado</div><div class="val em">{credito.get_estado_display()}</div></div>
+</div>
+
+<!-- ══ DETALLE CRÉDITO ══ -->
+<div class="dash"></div>
+<div class="stit">Detalle Crédito</div>
+<div class="grid2">
+    <div class="cell"><div class="lbl">Tipo</div><div class="val">{credito.get_tipo_credito_display()}</div></div>
+    <div class="cell"><div class="lbl">Emisión</div><div class="val">{credito.fecha_solicitud.strftime('%d/%m/%Y')}</div></div>
+    <div class="cell"><div class="lbl">Vencimiento</div><div class="val em">{credito.fecha_vencimiento.strftime('%d/%m/%Y')}</div></div>
+    <div class="cell"><div class="lbl">Cuotas</div><div class="val">{credito.numero_cuotas}</div></div>
+    {interes_row}
+    <div class="cell"><div class="lbl">Valor cuota</div><div class="val">{valor_cuota}</div></div>
+    <div class="cell"><div class="lbl">Autorizado por</div><div class="val">{nombre_auth}</div></div>
+</div>
+
+<!-- ══ MOTIVO ══ -->
+<div class="dash"></div>
+<div class="stit">Motivo</div>
+<div class="motivo">{motivo_texto}</div>
+
+<!-- ══ FIRMAS ══ -->
+<div class="sep"></div>
+<div class="stit">Firmas</div>
+<div class="firma-bloque">
+    <div class="ftipo">Autorizado por</div>
+    <div class="fnombre">{nombre_auth}</div>
+    <div class="flinea">Firma y Timbre</div>
+</div>
+<div class="firma-bloque">
+    <div class="ftipo">Recibí conforme</div>
+    <div class="fnombre">{credito.nombre_beneficiario}<br><span class="fpeq">RUT: {rut_benef}</span></div>
+    <div class="flinea">Firma Beneficiario</div>
+</div>
+{aval_bloque}
+
+<!-- ══ FOOTER ══ -->
+<div class="dash"></div>
+<div class="footer">
+    Emitido: <strong>{fecha_imp}</strong> &nbsp;·&nbsp; Usuario: <strong>{request.user.username}</strong><br>
+    Doc: <strong>{credito.numero_credito}</strong> &nbsp;·&nbsp; Sistema RetailMind
+</div>
+
+<script>
+    JsBarcode("#barcode", "{credito.numero_credito}", {{
+        format: "CODE128",
+        width: 2,
+        height: 48,
+        displayValue: false,
+        margin: 2
+    }});
+    window.onload = function() {{
+        setTimeout(function() {{ window.print(); }}, 400);
+    }};
+</script>
 </body>
-</html>
-        """
-        
-        return HttpResponse(html_template, content_type='text/html')
-        
+</html>"""
+
+        return HttpResponse(html, content_type='text/html; charset=utf-8')
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -1571,7 +1480,7 @@ def validar_codigo_credito(request):
         # Buscar crédito por código
         try:
             credito = CreditoTrabajador.objects.select_related(
-                'trabajador', 'empresa_origen', 'sucursal'
+                'beneficiario', 'empresa_origen', 'sucursal'
             ).get(numero_credito=codigo_credito)
         except CreditoTrabajador.DoesNotExist:
             return JsonResponse({
@@ -1611,12 +1520,7 @@ def validar_codigo_credito(request):
             'credito': {
                 'id': credito.id,
                 'numero_credito': credito.numero_credito,
-                'trabajador': {
-                    'id': credito.trabajador.id,
-                    'nombre': credito.trabajador.nombre,
-                    'rut': credito.trabajador.rut or 'N/A',
-                    'codigo_vendedor': credito.trabajador.codigo_vendedor
-                },
+                'trabajador': _serializar_beneficiario(credito),
                 'monto_aprobado': float(credito.monto_aprobado),
                 'monto_usado': float(credito.monto_pagado),
                 'saldo_disponible': float(credito.saldo_pendiente),

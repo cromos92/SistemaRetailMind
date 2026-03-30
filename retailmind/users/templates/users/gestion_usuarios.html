@@ -198,13 +198,16 @@
     /* Tabla con estilos Nexo */
     .table-responsive {
         border-radius: var(--nexo-radius-lg);
-        overflow: hidden;
+        overflow-x: auto;
+        overflow-y: visible;
         border: 1px solid var(--nexo-gray-300);
+        -webkit-overflow-scrolling: touch;
     }
     
     #tablaUsuarios {
         margin: 0;
         border-collapse: collapse;
+        min-width: 900px;
     }
     
     #tablaUsuarios thead,
@@ -223,6 +226,13 @@
         border: none !important;
         white-space: nowrap;
     }
+
+    #tablaUsuarios thead th:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 3;
+        background: var(--nexo-secondary) !important;
+    }
     
     #tablaUsuarios tbody td {
         vertical-align: middle;
@@ -230,6 +240,22 @@
         color: var(--nexo-gray-700);
         padding: 12px;
         border-bottom: 1px solid var(--nexo-gray-300);
+    }
+
+    #tablaUsuarios tbody td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 1;
+        background: var(--nexo-white);
+        border-left: 1px solid var(--nexo-gray-300);
+    }
+
+    #tablaUsuarios tbody td:last-child.dropdown-open {
+        z-index: 100;
+    }
+
+    #tablaUsuarios tbody tr:hover td:last-child {
+        background: var(--nexo-primary-light);
     }
     
     #tablaUsuarios tbody tr:hover {
@@ -340,6 +366,106 @@
         background: #E69A00;
     }
     
+    .btn-action.btn-success {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+    }
+
+    .btn-action.btn-success:hover {
+        background: #00B090;
+    }
+
+    .btn-action.btn-danger {
+        background: var(--nexo-error);
+        color: var(--nexo-white);
+    }
+
+    .btn-action.btn-danger:hover {
+        background: #E63E3E;
+    }
+
+    /* Dropdown de acciones */
+    .dropdown-acciones .dropdown-toggle {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        padding: 6px 12px;
+        font-size: 13px;
+        font-weight: 500;
+        transition: var(--nexo-transition-fast);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .dropdown-acciones .dropdown-toggle:hover,
+    .dropdown-acciones .dropdown-toggle:focus {
+        background: var(--nexo-primary-dark);
+        box-shadow: 0 2px 8px rgba(0, 102, 255, 0.3);
+    }
+
+    .dropdown-acciones .dropdown-toggle::after {
+        margin-left: 4px;
+    }
+
+    .dropdown-acciones .dropdown-menu {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        box-shadow: var(--nexo-shadow-xl);
+        padding: 8px 0;
+        min-width: 220px;
+        animation: dropdownFadeIn 0.15s ease;
+        z-index: 1050;
+        position: fixed !important;
+    }
+
+    @keyframes dropdownFadeIn {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .dropdown-acciones .dropdown-item {
+        padding: 8px 16px;
+        font-size: 13px;
+        color: var(--nexo-gray-700);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: var(--nexo-transition-fast);
+    }
+
+    .dropdown-acciones .dropdown-item:hover {
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+
+    .dropdown-acciones .dropdown-item i {
+        font-size: 16px;
+        width: 20px;
+        text-align: center;
+    }
+
+    .dropdown-acciones .dropdown-item.text-danger:hover {
+        background: rgba(255, 77, 77, 0.08);
+        color: var(--nexo-error);
+    }
+
+    .dropdown-acciones .dropdown-item.text-success:hover {
+        background: rgba(0, 212, 170, 0.08);
+        color: #00B090;
+    }
+
+    .dropdown-acciones .dropdown-item.text-warning:hover {
+        background: rgba(255, 176, 32, 0.08);
+        color: #E69A00;
+    }
+
+    .dropdown-acciones .dropdown-divider {
+        margin: 4px 0;
+        border-color: var(--nexo-gray-300);
+    }
+
     .acciones-column {
         min-width: 140px;
         white-space: nowrap;
@@ -554,7 +680,20 @@
         font-size: 13px;
     }
 
-    /* Responsive */
+    /* Responsive - tablet */
+    @media (max-width: 1200px) {
+        #tablaUsuarios {
+            min-width: 800px;
+        }
+
+        #tablaUsuarios thead th,
+        #tablaUsuarios tbody td {
+            padding: 10px 8px;
+            font-size: 13px;
+        }
+    }
+
+    /* Responsive - mobile */
     @media (max-width: 768px) {
         .page-header {
             padding: 16px;
@@ -563,14 +702,70 @@
         .page-header h3 {
             font-size: 18px;
         }
+
+        .page-header .d-flex {
+            flex-direction: column;
+            align-items: stretch !important;
+        }
+
+        .page-header .d-flex .d-flex {
+            justify-content: center;
+        }
         
         .kpi-row {
             grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .kpi-card {
+            padding: 14px;
         }
         
         .btn-action {
             width: 30px;
             height: 30px;
+        }
+
+        .card-body {
+            padding: 12px;
+        }
+
+        #tablaUsuarios {
+            min-width: 700px;
+        }
+
+        #tablaUsuarios thead th {
+            font-size: 11px;
+            padding: 10px 6px;
+        }
+
+        #tablaUsuarios tbody td {
+            font-size: 12px;
+            padding: 8px 6px;
+        }
+
+        .dropdown-acciones .dropdown-toggle {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+
+        .dropdown-acciones .dropdown-menu {
+            min-width: 200px;
+        }
+
+        .badge-rol {
+            font-size: 10px;
+            padding: 4px 8px;
+        }
+
+        .user-status {
+            font-size: 11px;
+            padding: 4px 8px;
+        }
+
+        .dataTables_wrapper .row.mb-3 {
+            flex-direction: column;
+            gap: 8px;
         }
     }
     
@@ -1276,14 +1471,20 @@ $.ajaxSetup({
 
 $(document).ready(function() {
     cargarUsuarios();
+
+    // ========== FIX Z-INDEX DROPDOWN SOBRE STICKY COLUMNS ==========
+    $(document).on('show.bs.dropdown', '.dropdown-acciones', function() {
+        $(this).closest('td').addClass('dropdown-open');
+    });
+    $(document).on('hidden.bs.dropdown', '.dropdown-acciones', function() {
+        $(this).closest('td').removeClass('dropdown-open');
+    });
     
     // ========== LIMPIAR MODALES AL CERRAR ==========
-    // Limpiar modal de crear usuario cuando se cierra
     $('#modalCrearUsuario').on('hidden.bs.modal', function() {
         limpiarModalCrear();
     });
     
-    // Limpiar modal de editar usuario cuando se cierra
     $('#modalEditarUsuario').on('hidden.bs.modal', function() {
         limpiarModalEditar();
     });
@@ -1373,17 +1574,36 @@ function inicializarDataTable(usuarios) {
             ? '<span class="ms-2 text-success" title="PIN activo"><i class="ri-shield-check-line"></i></span>'
             : '';
         
+        const toggleIcon = usuario.es_activo ? 'ri-user-unfollow-line' : 'ri-user-follow-line';
+        const toggleText = usuario.es_activo ? 'Desactivar Usuario' : 'Activar Usuario';
+        const toggleClass = usuario.es_activo ? 'text-warning' : 'text-success';
+        const safeNombre = (usuario.first_name + ' ' + usuario.last_name).replace(/'/g, "\\'");
+        const safeEmail = (usuario.email || '').replace(/'/g, "\\'");
+
         const acciones = `
-            <div class="d-flex justify-content-start">
-                <button class="btn btn-sm btn-primary btn-action" onclick="editarUsuario(${usuario.id})" title="Editar Usuario">
-                    <i class="ri-edit-line"></i>
+            <div class="dropdown dropdown-acciones">
+                <button class="btn btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false">
+                    <i class="ri-more-2-fill"></i> Acciones
                 </button>
-                <button class="btn btn-sm btn-info btn-action" onclick="resetearPassword(${usuario.id})" title="Resetear Contraseña">
-                    <i class="ri-key-line"></i>
-                </button>
-                <button class="btn btn-sm btn-warning btn-action" onclick="toggleEstado(${usuario.id})" title="${usuario.es_activo ? 'Desactivar' : 'Activar'} Usuario">
-                    <i class="ri-toggle-line"></i>
-                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="editarUsuario(${usuario.id})">
+                        <i class="ri-edit-line text-primary"></i> Editar Usuario
+                    </a></li>
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="cambiarRolRapido(${usuario.id}, '${safeNombre}', '${usuario.rol}')">
+                        <i class="ri-shield-user-line text-info"></i> Cambiar Rol
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="resetearPassword(${usuario.id})">
+                        <i class="ri-key-line text-primary"></i> Resetear Contraseña
+                    </a></li>
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="reenviarCredenciales(${usuario.id}, '${safeNombre}', '${safeEmail}')">
+                        <i class="ri-mail-send-line text-success"></i> Reenviar Credenciales
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item ${toggleClass}" href="javascript:void(0)" onclick="toggleEstado(${usuario.id})">
+                        <i class="${toggleIcon}"></i> ${toggleText}
+                    </a></li>
+                </ul>
             </div>
         `;
         
@@ -1409,13 +1629,21 @@ function inicializarDataTable(usuarios) {
         pageLength: 10,
         lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
         order: [[0, 'asc']],
-        responsive: true,
+        responsive: false,
+        scrollX: false,
+        autoWidth: false,
         dom: '<"row mb-3"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
         columnDefs: [
-            { targets: [3, 5, 7], orderable: false }
+            { targets: [3, 5, 7], orderable: false },
+            { targets: 7, width: '130px', className: 'text-center' }
         ],
         drawCallback: function() {
             $('[title]').tooltip({ trigger: 'hover' });
+            document.querySelectorAll('.dropdown-acciones .dropdown-toggle').forEach(function(el) {
+                if (!bootstrap.Dropdown.getInstance(el)) {
+                    new bootstrap.Dropdown(el, { popperConfig: { strategy: 'fixed' } });
+                }
+            });
         }
     });
 }
@@ -2276,11 +2504,180 @@ function copiarPassword(password) {
     navigator.clipboard.writeText(password).then(() => {
         toastr.success('Contraseña copiada al portapapeles');
     }).catch(() => {
-        // Fallback para navegadores antiguos
         const input = document.getElementById('passwordTemp');
         input.select();
         document.execCommand('copy');
         toastr.success('Contraseña copiada al portapapeles');
+    });
+}
+
+function cambiarRolRapido(usuarioId, nombreCompleto, rolActual) {
+    const roles = {
+        'vendedor': 'Vendedor',
+        'cajero': 'Cajero',
+        'jefe_local': 'Jefe Local',
+        'administracion': 'Administración',
+        'administrador': 'Administrador'
+    };
+
+    let opcionesHtml = '';
+    for (const [value, label] of Object.entries(roles)) {
+        const selected = value === rolActual ? 'selected' : '';
+        opcionesHtml += `<option value="${value}" ${selected}>${label}</option>`;
+    }
+
+    Swal.fire({
+        title: 'Cambiar Rol',
+        html: `
+            <p class="mb-3">Cambiar rol de <strong>${nombreCompleto}</strong></p>
+            <div class="text-start">
+                <label class="form-label"><strong>Rol actual:</strong> <span class="badge bg-secondary">${roles[rolActual] || rolActual}</span></label>
+                <select class="form-control mt-2" id="selectNuevoRol">
+                    ${opcionesHtml}
+                </select>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0066FF',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: '<i class="ri-check-line me-1"></i> Cambiar Rol',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const nuevoRol = document.getElementById('selectNuevoRol').value;
+            if (nuevoRol === rolActual) {
+                Swal.showValidationMessage('Seleccione un rol diferente al actual');
+                return false;
+            }
+            return nuevoRol;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Cambiando rol...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            $.ajax({
+                url: '{% url "users:cambiar_rol_usuario" %}',
+                method: 'POST',
+                data: JSON.stringify({
+                    user_id: usuarioId,
+                    nuevo_rol: result.value
+                }),
+                contentType: 'application/json',
+                success: function(response) {
+                    Swal.close();
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Rol actualizado',
+                            html: response.mensaje,
+                            confirmButtonColor: '#0066FF',
+                            timer: 3000,
+                            timerProgressBar: true
+                        });
+                        cargarUsuarios();
+                    } else {
+                        mostrarError(response.error || 'Error al cambiar rol');
+                    }
+                },
+                error: function(xhr) {
+                    Swal.close();
+                    const error = xhr.responseJSON ? xhr.responseJSON.error : 'Error de conexión';
+                    mostrarError(error);
+                }
+            });
+        }
+    });
+}
+
+function reenviarCredenciales(usuarioId, nombreCompleto, email) {
+    Swal.fire({
+        title: 'Reenviar Credenciales',
+        html: `
+            <div class="text-start">
+                <p>Se generará una <strong>nueva contraseña temporal</strong> y se enviará por correo a:</p>
+                <div class="alert alert-info">
+                    <i class="ri-user-line me-2"></i><strong>${nombreCompleto}</strong><br>
+                    <i class="ri-mail-line me-2"></i>${email}
+                </div>
+                <div class="alert alert-warning mb-0">
+                    <i class="ri-alert-line me-2"></i>
+                    <strong>Atención:</strong> La contraseña actual del usuario será reemplazada.
+                </div>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#00D4AA',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: '<i class="ri-mail-send-line me-1"></i> Enviar Credenciales',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Enviando credenciales...',
+                html: 'Generando contraseña y enviando correo',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            $.ajax({
+                url: '{% url "users:reenviar_credenciales" 0 %}'.replace('0', usuarioId),
+                method: 'POST',
+                contentType: 'application/json',
+                success: function(response) {
+                    Swal.close();
+                    if (response.success) {
+                        if (response.nueva_password && response.email_enviado === false) {
+                            Swal.fire({
+                                title: 'Contraseña generada',
+                                html: `
+                                    <div class="text-start">
+                                        <div class="alert alert-warning">
+                                            <i class="ri-alert-line me-2"></i>
+                                            <strong>Email no configurado</strong><br>
+                                            No se pudo enviar el correo. Comparte la contraseña manualmente.
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <p class="mb-2"><strong>Nueva contraseña temporal:</strong></p>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" value="${response.nueva_password}" id="passwordTempReenvio" readonly style="font-family: monospace; font-weight: bold;">
+                                                <button class="btn btn-primary" onclick="copiarPassword('${response.nueva_password}')" type="button">
+                                                    <i class="ri-clipboard-line"></i> Copiar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `,
+                                icon: 'warning',
+                                width: 550,
+                                confirmButtonText: 'Entendido',
+                                confirmButtonColor: '#0066FF'
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Credenciales enviadas',
+                                html: `<p>${response.message}</p>`,
+                                confirmButtonColor: '#0066FF',
+                                timer: 4000,
+                                timerProgressBar: true
+                            });
+                        }
+                    } else {
+                        mostrarError(response.error || 'Error al reenviar credenciales');
+                    }
+                },
+                error: function(xhr) {
+                    Swal.close();
+                    const error = xhr.responseJSON ? xhr.responseJSON.error : 'Error de conexión';
+                    mostrarError(error);
+                }
+            });
+        }
     });
 }
 

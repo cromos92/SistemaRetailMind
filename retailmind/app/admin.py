@@ -12,6 +12,12 @@ from .models import (
     Empresa,
     Sucursal,
     EmpresaUser,
+    ContactoEmpresa,
+    Cliente,
+    Proveedor,
+    LogEmpresa,
+    LogCliente,
+    Producto,
 )
 
 # Importar admins de sincronización desktop
@@ -355,5 +361,83 @@ class HistorialRequerimientoAdmin(admin.ModelAdmin):
     readonly_fields = ['fecha']
     
     def has_add_permission(self, request):
-        # No permitir crear manualmente (se crea automáticamente)
+        return False
+
+
+# ========== CRM: CONTACTOS, CLIENTES, PROVEEDORES, LOGS ==========
+
+@admin.register(ContactoEmpresa)
+class ContactoEmpresaAdmin(admin.ModelAdmin):
+    list_display = ['empresa', 'nombre', 'cargo', 'email', 'telefono', 'tipo_contacto', 'activo']
+    list_filter = ['tipo_contacto', 'activo']
+    search_fields = ['nombre', 'email', 'empresa__nombre']
+
+
+@admin.register(Cliente)
+class ClienteAdmin(admin.ModelAdmin):
+    list_display = ['nombre_completo', 'rut', 'email', 'telefono', 'tipo_cliente', 'empresa', 'activo']
+    list_filter = ['tipo_cliente', 'activo', 'genero']
+    search_fields = ['nombre', 'apellido', 'rut', 'email']
+    readonly_fields = ['created_at', 'updated_at']
+
+    def nombre_completo(self, obj):
+        return f"{obj.nombre} {obj.apellido}"
+    nombre_completo.short_description = 'Nombre'
+
+
+@admin.register(Proveedor)
+class ProveedorAdmin(admin.ModelAdmin):
+    list_display = ['empresa', 'codigo_proveedor', 'categoria', 'dias_credito', 'calificacion', 'activo']
+    list_filter = ['activo', 'categoria', 'calificacion']
+    search_fields = ['codigo_proveedor', 'empresa__nombre']
+
+
+@admin.register(LogEmpresa)
+class LogEmpresaAdmin(admin.ModelAdmin):
+    list_display = ['empresa', 'accion', 'usuario', 'fecha', 'ip_address']
+    list_filter = ['accion', 'fecha']
+    search_fields = ['empresa__nombre', 'descripcion']
+    readonly_fields = ['empresa', 'usuario', 'accion', 'descripcion', 'datos_anteriores', 'datos_nuevos', 'fecha', 'ip_address', 'user_agent']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Producto)
+class ProductoAdmin(admin.ModelAdmin):
+    list_display = ['articulo', 'sucursal', 'costo', 'precioventa', 'excluir_de_analitica']
+    list_filter = ['excluir_de_analitica', 'sucursal', 'categoria']
+    search_fields = ['articulo', 'descripcion']
+    list_editable = ['excluir_de_analitica']
+    fieldsets = (
+        ('Datos Básicos', {
+            'fields': ('articulo', 'descripcion', 'categoria', 'sucursal')
+        }),
+        ('Atributos', {
+            'fields': ('atributo1', 'atributo2', 'atributo3', 'atributo4')
+        }),
+        ('Precios', {
+            'fields': ('costo', 'sobreprecio', 'precioventa', 'precioSugerido')
+        }),
+        ('Analítica', {
+            'fields': ('excluir_de_analitica',),
+            'description': 'Marcado como "Excluir" → no aparece en dashboards, predicciones ni KPIs.'
+        }),
+    )
+
+
+@admin.register(LogCliente)
+class LogClienteAdmin(admin.ModelAdmin):
+    list_display = ['cliente', 'accion', 'usuario', 'fecha', 'ip_address']
+    list_filter = ['accion', 'fecha']
+    search_fields = ['cliente__nombre', 'cliente__apellido', 'descripcion']
+    readonly_fields = ['cliente', 'usuario', 'accion', 'descripcion', 'datos_anteriores', 'datos_nuevos', 'fecha', 'ip_address', 'user_agent']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False

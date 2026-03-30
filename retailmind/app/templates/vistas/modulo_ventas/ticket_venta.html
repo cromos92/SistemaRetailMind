@@ -51,6 +51,11 @@
     --nexo-transition-normal: 250ms ease;
 }
 
+/* Prevent focused inputs from hiding under sticky bottom bar */
+html {
+    scroll-padding-bottom: 110px;
+}
+
 /* ========== PAGE CONTENT ========== */
 .page-content {
     background: linear-gradient(135deg, var(--nexo-bg-secondary, #F5F5F7) 0%, var(--nexo-white) 100%) !important;
@@ -591,6 +596,301 @@ div[style*="border: 1px solid #000"] {
     border-color: var(--nexo-primary);
     box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.1);
 }
+
+/* ==================== POS SCREEN OPTIMIZATION ====================
+   Optimizado para terminales POS 15" (1366×768 / 1920×1080)
+   ================================================================ */
+
+/* --- Contenedor principal POS --- */
+.pos-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-bottom: 90px;
+}
+
+/* --- Barra de info compacta (top) --- */
+.pos-info-bar {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4e 100%) !important;
+    border: none !important;
+    border-radius: var(--nexo-radius-md) !important;
+    box-shadow: var(--nexo-shadow-md) !important;
+}
+.pos-info-bar .card-body {
+    padding: 9px 16px !important;
+}
+.pos-info-item {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+.pos-info-label {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255,255,255,0.5);
+    font-weight: 600;
+}
+.pos-info-value {
+    font-size: 0.88rem;
+    color: #ffffff;
+    font-weight: 700;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pos-info-sep {
+    color: rgba(255,255,255,0.2);
+    font-size: 1.3rem;
+    align-self: center;
+}
+
+/* --- Layout 2 columnas: entrada + lista --- */
+.pos-main-layout {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 0.75rem;
+    align-items: start;
+}
+
+/* --- Panel izquierdo: entrada de producto --- */
+.pos-entry-panel .card { height: auto; }
+.pos-entry-panel .card-body { overflow: visible; }
+
+.pos-sku-input {
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.3px !important;
+    border-width: 2px !important;
+}
+.pos-sku-input:focus {
+    border-color: var(--nexo-primary) !important;
+    box-shadow: 0 0 0 4px rgba(0,102,255,0.15) !important;
+}
+
+.pos-add-btn {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    padding: 0.65rem 1rem !important;
+}
+
+/* --- Panel derecho: tabla de productos --- */
+.pos-list-panel .card { height: 100%; }
+
+.pos-table-wrapper {
+    overflow-y: auto;
+    max-height: calc(100vh - 380px);
+    min-height: 220px;
+}
+
+.pos-table th,
+.pos-table td {
+    font-size: 0.82rem !important;
+    padding: 5px 7px !important;
+    vertical-align: middle !important;
+}
+.pos-table .cantidad-producto {
+    width: 64px !important;
+    padding: 3px 5px !important;
+    font-size: 0.85rem !important;
+    text-align: center;
+}
+.pos-table .eliminar-producto {
+    padding: 3px 7px !important;
+    font-size: 0.75rem !important;
+}
+
+/* --- Barra inferior sticky: totales + imprimir --- */
+.pos-bottom-bar {
+    position: sticky !important;
+    bottom: 0;
+    z-index: 100;
+    background: #ffffff !important;
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.12) !important;
+    border-top: 3px solid var(--nexo-primary) !important;
+    border-radius: 0 !important;
+}
+.pos-bottom-bar .card-body {
+    padding: 10px 16px !important;
+}
+.pos-total-item {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+.pos-total-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    color: var(--nexo-gray-500);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+.pos-total-value {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--nexo-secondary);
+}
+.pos-total-money {
+    font-size: 1.5rem !important;
+    color: var(--nexo-success) !important;
+    letter-spacing: -0.5px;
+}
+.pos-total-sep {
+    color: var(--nexo-gray-300);
+    font-size: 1.4rem;
+    align-self: center;
+    margin: 0 0.25rem;
+}
+.pos-print-btn {
+    min-width: 200px !important;
+    height: 54px !important;
+    font-size: 1.05rem !important;
+    font-weight: 700 !important;
+}
+
+/* Badge de items en info bar */
+#badgeItemCount {
+    font-size: 0.82rem;
+    padding: 5px 10px;
+}
+
+/* Vendedores: compactos en pantallas POS */
+@media screen and (max-width: 1440px) {
+    .vendedores-grid {
+        grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+        gap: 0.55rem;
+    }
+    .vendedores-container { max-height: 300px; }
+    .vendedor-card-body { padding: 0.8rem 0.65rem; }
+    .vendedor-avatar {
+        width: 42px; height: 42px;
+        font-size: 1.05rem; margin-bottom: 0.45rem;
+    }
+    .vendedor-nombre { font-size: 0.83rem; }
+    .page-title-box h4 { font-size: 1.2rem !important; }
+    .page-title-box { padding-top: 6px !important; padding-bottom: 4px !important; }
+    .breadcrumb { margin-bottom: 0 !important; font-size: 0.82rem; }
+}
+
+/* Ajuste en pantallas de 1200px */
+@media screen and (max-width: 1250px) {
+    .pos-main-layout { grid-template-columns: 310px 1fr; }
+}
+
+/* Stack vertical en pantallas muy pequeñas */
+@media screen and (max-width: 1024px) {
+    .pos-main-layout { grid-template-columns: 1fr; }
+    .pos-table-wrapper { max-height: 320px; }
+    .pos-bottom-bar { position: relative !important; }
+}
+
+/* ===== ACCESOS RÁPIDOS ===== */
+.accesos-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 5px;
+}
+@media screen and (max-width: 1400px) { .accesos-grid { grid-template-columns: repeat(8, 1fr); } }
+@media screen and (max-width: 900px)  { .accesos-grid { grid-template-columns: repeat(6, 1fr); } }
+@media screen and (max-width: 600px)  { .accesos-grid { grid-template-columns: repeat(4, 1fr); } }
+
+.acceso-card {
+    position: relative;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 4px;
+    text-align: center;
+    cursor: pointer;
+    background: #fff;
+    transition: all 0.18s ease;
+    min-height: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+}
+.acceso-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    border-color: #0066FF;
+}
+.acceso-card.con-producto {
+    border-color: #cbd5e1;
+    background: linear-gradient(145deg, #f8faff, #fff);
+}
+.acceso-card.con-producto:hover {
+    border-color: #0066FF;
+    background: linear-gradient(145deg, #e6f0ff, #f0f7ff);
+}
+.acceso-card.sin-producto {
+    border: 1.5px dashed #d1d5db;
+    background: #f9fafb;
+    color: #9ca3af;
+}
+.acceso-card.sin-producto:hover {
+    border-color: #6b7280;
+    background: #f3f4f6;
+}
+.acceso-card.en-config {
+    border-color: #f59e0b !important;
+    background: #fffbeb !important;
+}
+.acceso-card.en-config:hover {
+    border-color: #d97706 !important;
+    box-shadow: 0 4px 12px rgba(245,158,11,0.3) !important;
+}
+.acceso-nombre {
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #1e293b;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    width: 100%;
+    margin-bottom: 2px;
+}
+.acceso-talla {
+    font-size: 0.6rem;
+    background: #e2e8f0;
+    color: #475569;
+    border-radius: 3px;
+    padding: 0 4px;
+    margin-bottom: 2px;
+    display: inline-block;
+}
+.acceso-precio {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #0066FF;
+}
+.acceso-num {
+    position: absolute;
+    top: 2px;
+    left: 3px;
+    font-size: 0.55rem;
+    color: #cbd5e1;
+    font-weight: 700;
+}
+.acceso-sin-icon {
+    font-size: 1.3rem;
+    color: #d1d5db;
+    line-height: 1;
+}
+.acceso-config-icon {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    font-size: 0.75rem;
+    color: #f59e0b;
+    display: none;
+}
+.modo-config-activo .acceso-config-icon { display: block; }
+.modo-config-activo .acceso-card { cursor: cell; }
 </style>
 
 <div class="page-content">
@@ -721,191 +1021,249 @@ div[style*="border: 1px solid #000"] {
                 </div>
             </div>
 
-            <!-- Sección Crear Ticket (oculta inicialmente) -->
-            <div class="row mt-4" id="seccionCrearTicket" style="display: none;">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0 text-center">
-                                <i class="ri-receipt-line me-2"></i>
-                                Crear Ticket de Venta
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <!-- Información del Ticket -->
-                            <div class="row mb-4">
-                                <div class="col-md-3">
-                                    <label class="form-control bg-dark text-white">
-                                        <b>Vendedor</b>
-                                        <h6 id="ticketVendedor">-</h6>
-                                    </label>
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-control bg-dark text-white">
-                                        <b>Código</b>
-                                        <h6 id="ticketCodigo">-</h6>
-                                    </label>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-control bg-dark text-white">
-                                        <b>Sucursal</b>
-                                        <h6 id="ticketSucursal">
-                                            {% if sucursal_actual %}
-                                                {{ sucursal_actual.alias }}
-                                            {% else %}
-                                                Sin sucursal - Selecciona una
-                                            {% endif %}
-                                        </h6>
-                                    </label>
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-control bg-dark text-white">
-                                        <b>Fecha</b>
-                                        <h6 id="ticketFecha">{{ "now"|date:"Y-m-d" }}</h6>
-                                    </label>
-                                </div>
-                                <div class="col-md-2">
-                                    <button type="button" class="btn btn-warning btn-sm w-100" id="btnCambiarVendedor">
-                                        <i class="ri-arrow-left-line me-1"></i>
-                                        Cambiar Vendedor
-                                    </button>
-                                </div>
+            <!-- Sección Crear Ticket (oculta inicialmente) — layout POS 2 columnas -->
+            <div id="seccionCrearTicket" style="display: none;" class="pos-container mt-3">
+
+                <!-- Barra de info compacta -->
+                <div class="pos-info-bar card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <div class="pos-info-item">
+                                <span class="pos-info-label">Vendedor</span>
+                                <span class="pos-info-value" id="ticketVendedor">-</span>
                             </div>
-
-                            <hr>
-
-                            <!-- Formulario de Producto -->
-                            <div class="row mb-4">
-                                <div class="col-md-2">
-                                    <div class="form-control p-1">
-                                        <label class="text-center d-block"><b>SKU</b></label>
-                                        <input type="number" class="form-control text-center" id="skuProducto" placeholder="SKU" autofocus>
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    <div class="form-control p-1">
-                                        <label class="text-center d-block"><b>Artículo</b></label>
-                                        <input type="text" class="form-control text-center" id="articuloProducto" disabled>
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    <div class="form-control p-1">
-                                        <label class="text-center d-block"><b>Descripción</b></label>
-                                        <input type="text" class="form-control text-center" id="descripcionProducto" disabled>
-                                    </div>
-                                </div>
-                                <div class="col-md-1">
-                                    <div class="form-control p-1">
-                                        <label class="text-center d-block"><b>Marca</b></label>
-                                        <input type="text" class="form-control text-center" id="marcaProducto" disabled>
-                                    </div>
-                                </div>
-                                <div class="col-md-1">
-                                    <div class="form-control p-1">
-                                        <label class="text-center d-block"><b>Talla</b></label>
-                                        <input type="text" class="form-control text-center" id="tallaProducto" disabled>
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    <div class="form-control p-1">
-                                        <label class="text-center d-block"><b>Precio</b></label>
-                                        <input type="number" class="form-control text-center" id="precioProducto">
-                                        <input type="hidden" id="precioOriginal">
-                                    </div>
-                                </div>
-                                <div class="col-md-1">
-                                    <div class="form-control p-1">
-                                        <label class="text-center d-block"><b>Cantidad</b></label>
-                                        <input type="number" class="form-control text-center" id="cantidadProducto" value="1" min="1" step="1">
-                                    </div>
-                                </div>
-                                <div class="col-md-1">
-                                    <div class="form-control p-1">
-                                        <label class="text-center d-block"><b>Stock</b></label>
-                                        <input type="number" class="form-control text-center" id="stockProducto" disabled>
-                                    </div>
-                                </div>
+                            <div class="pos-info-sep">|</div>
+                            <div class="pos-info-item">
+                                <span class="pos-info-label">Código</span>
+                                <span class="pos-info-value" id="ticketCodigo">-</span>
                             </div>
-
-                            <!-- Botones de Acción -->
-                            <div class="row mb-4">
-                                <div class="col-12 d-flex justify-content-end gap-2">
-                                    <button type="button" class="btn btn-info" id="btnBuscarArticulo">
-                                        <i class="ri-search-line me-1"></i>
-                                        Buscar Artículo
-                                    </button>
-                                    <button type="button" class="btn btn-success" id="btnAgregarProducto">
-                                        <i class="ri-add-line me-1"></i>
-                                        Agregar al Ticket
-                                    </button>
-                                    <button type="button" class="btn btn-warning" id="btnLimpiarFormulario">
-                                        <i class="ri-eraser-line me-1"></i>
-                                        Limpiar
-                                    </button>
-                                </div>
+                            <div class="pos-info-sep">|</div>
+                            <div class="pos-info-item">
+                                <span class="pos-info-label">Sucursal</span>
+                                <span class="pos-info-value" id="ticketSucursal">
+                                    {% if sucursal_actual %}{{ sucursal_actual.alias }}{% else %}Sin sucursal — Selecciona una{% endif %}
+                                </span>
                             </div>
-
-                            <!-- Lista de Productos del Ticket -->
-                            <div class="row">
-                                <div class="col-12">
-                                    <h5 class="text-center mb-3">
-                                        <b>Lista de Productos a Vender</b>
-                                    </h5>
-                                    <hr>
-                                    <div class="table-responsive">
-                                        <table class="table table-striped table-bordered">
-                                            <thead class="table-dark">
-                                                <tr>
-                                                    <th>SKU</th>
-                                                    <th>Artículo</th>
-                                                    <th>Descripción</th>
-                                                    <th>Marca</th>
-                                                    <th>Talla</th>
-                                                    <th>Stock</th>
-                                                    <th>Precio</th>
-                                                    <th>Cantidad</th>
-                                                    <th>Subtotal</th>
-                                                    <th>Acción</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="tbodyTicket">
-                                                <!-- Los productos se agregarán aquí -->
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <!-- Totales -->
-                                    <div class="row mt-3">
-                                        <div class="col-md-8"></div>
-                                        <div class="col-md-2">
-                                            <label class="text-center d-block">
-                                                <b>Total Items</b>
-                                                <input type="number" id="totalItems" class="form-control text-center" value="0" disabled>
-                                            </label>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <label class="text-center d-block">
-                                                <b>Total Ticket</b>
-                                                <input type="number" id="totalTicket" class="form-control text-center" value="0" disabled>
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <!-- Botón Imprimir -->
-                                    <div class="row mt-4">
-                                        <div class="col-12">
-                                            <button type="button" class="btn btn-success btn-lg w-100" id="btnImprimirTicket">
-                                                <i class="ri-printer-line me-2"></i>
-                                                Imprimir Ticket
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div class="pos-info-sep">|</div>
+                            <div class="pos-info-item">
+                                <span class="pos-info-label">Fecha</span>
+                                <span class="pos-info-value" id="ticketFecha">{% now "d/m/Y H:i" %}</span>
+                            </div>
+                            <div class="ms-auto d-flex align-items-center gap-2">
+                                <span class="badge bg-light text-dark border" id="badgeItemCount">
+                                    <i class="ri-shopping-cart-line me-1"></i>0 items
+                                </span>
+                                <button type="button" class="btn btn-warning btn-sm" id="btnCambiarVendedor">
+                                    <i class="ri-arrow-left-line me-1"></i>Cambiar Vendedor
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+
+                <!-- ===== ACCESOS RÁPIDOS ===== -->
+                <div id="panelAccesosRapidos" class="card mb-2">
+                    <div class="card-header py-2 d-flex align-items-center justify-content-between gap-2" style="background:linear-gradient(90deg,#fffbeb,#fff);">
+                        <span style="font-size:0.82rem;font-weight:600;">
+                            <i class="ri-apps-2-line text-warning me-1"></i>Accesos Rápidos
+                            <small class="text-muted ms-1" style="font-weight:400;font-size:0.72rem;">— click = agrega 1 al ticket</small>
+                        </span>
+                        <div class="d-flex gap-1 align-items-center">
+                            <button id="btnConfigAccesos" class="btn btn-sm btn-outline-secondary"
+                                    style="font-size:0.72rem;" title="Configurar accesos rápidos">
+                                <i class="ri-settings-3-line me-1"></i>Configurar
+                            </button>
+                            <button id="btnToggleAccesos" class="btn btn-sm btn-outline-light border"
+                                    style="font-size:0.72rem;" title="Ocultar/Mostrar">
+                                <i class="ri-arrow-up-s-line" id="iconoToggleAccesos"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="cuerpoAccesosRapidos" class="card-body py-2 px-2">
+                        <div id="alertaConfigAccesos" class="d-none mb-2">
+                            <div class="alert alert-warning py-1 px-2 mb-0" style="font-size:0.78rem;">
+                                <i class="ri-edit-2-line me-1"></i><strong>Modo Configurar:</strong>
+                                Haz click en cualquier tarjeta para asignarle un producto. Click en
+                                <strong>Guardar</strong> cuando termines.
+                            </div>
+                        </div>
+                        <div id="gridAccesosRapidos" class="accesos-grid">
+                            <!-- Generado por JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layout POS: entrada (izq) + lista (der) -->
+                <div class="pos-main-layout">
+
+                    <!-- PANEL IZQUIERDO: Entrada de producto -->
+                    <div class="pos-entry-panel">
+                        <div class="card">
+                            <div class="card-header py-2 d-flex align-items-center justify-content-between gap-2">
+                                <h6 class="card-title mb-0">
+                                    <i class="ri-barcode-line text-primary me-2"></i>Agregar Producto
+                                    <small class="text-muted ms-1 d-none d-xl-inline" style="font-weight:400;font-size:0.72rem;">
+                                        <kbd>Enter</kbd> agrega · <kbd>F3</kbd> busca · <kbd>F2</kbd> modo rápido · <kbd>Esc</kbd> limpia
+                                    </small>
+                                </h6>
+                                <button type="button" id="btnModoRapido" class="btn btn-sm btn-outline-secondary"
+                                        title="Modo Rápido (F2): SKU + Enter = agrega de inmediato, foco vuelve al SKU"
+                                        style="font-size:0.72rem;white-space:nowrap;">
+                                    <i class="ri-flashlight-line me-1"></i>Modo Bolsa <kbd style="font-size:0.65rem;">F2</kbd>
+                                </button>
+                            </div>
+                            <div class="card-body">
+
+                                <!-- SKU / código de barras -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold mb-1">
+                                        <i class="ri-qr-code-line me-1 text-primary"></i>SKU / Código de barras
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control pos-sku-input"
+                                               id="skuProducto" placeholder="Escanear o ingresar SKU…" autofocus>
+                                        <button class="btn btn-info" type="button" id="btnBuscarArticulo" title="Buscar artículo [F3]">
+                                            <i class="ri-search-line"></i>
+                                            <span class="d-none d-xl-inline ms-1">Buscar</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Banner: producto cargado (visible sólo cuando hay producto listo) -->
+                                <div id="productoSeleccionadoBanner" class="d-none mb-3 rounded p-2 px-3"
+                                     style="background:linear-gradient(90deg,#e6f9f4,#f0fdf9);border-left:4px solid var(--nexo-success);box-shadow:0 2px 8px rgba(0,212,170,0.13);">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="ri-checkbox-circle-fill fs-4" style="color:var(--nexo-success);flex-shrink:0;"></i>
+                                        <div style="overflow:hidden;">
+                                            <div class="fw-bold text-truncate" id="bannerNombreProducto" style="font-size:0.92rem;color:#065f46;"></div>
+                                            <div class="text-truncate" id="bannerInfoProducto" style="font-size:0.75rem;color:#047857;"></div>
+                                        </div>
+                                        <span class="badge ms-auto" style="background:var(--nexo-success);font-size:0.7rem;white-space:nowrap;">
+                                            <i class="ri-keyboard-line me-1"></i>Enter = Agregar
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Info del producto (sólo lectura) -->
+                                <div class="d-flex align-items-center gap-2 mb-3 px-2 py-2 rounded border bg-light" style="min-height:48px;">
+                                    <div class="flex-grow-1 overflow-hidden">
+                                        <div id="articuloProducto" class="fw-semibold text-truncate lh-sm" style="font-size:.82rem; color:var(--nexo-dark);">—</div>
+                                        <div id="descripcionProducto" class="text-muted text-truncate lh-sm" style="font-size:.72rem;">—</div>
+                                    </div>
+                                    <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+                                        <span id="marcaProducto" class="badge bg-secondary-subtle text-secondary fw-normal" style="font-size:.7rem; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</span>
+                                        <span id="tallaProducto" class="badge bg-primary-subtle text-primary fw-bold px-2" style="font-size:.75rem; min-width:36px; text-align:center;">—</span>
+                                    </div>
+                                </div>
+
+                                <!-- Precio · Cantidad · Stock -->
+                                <div class="row g-2 mb-3">
+                                    <div class="col-4">
+                                        <label class="form-label form-label-sm fw-bold mb-1" style="color:var(--nexo-success);">
+                                            <i class="ri-price-tag-3-line"></i> Precio
+                                        </label>
+                                        <input type="number" class="form-control form-control-sm fw-bold text-center"
+                                               id="precioProducto" placeholder="$0"
+                                               style="border-color:var(--nexo-success);color:var(--nexo-success);">
+                                        <input type="hidden" id="precioOriginal">
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label form-label-sm fw-bold mb-1" style="color:var(--nexo-primary);">
+                                            <i class="ri-add-line"></i> Cantidad
+                                        </label>
+                                        <input type="number" class="form-control form-control-sm fw-bold text-center"
+                                               id="cantidadProducto" value="1" min="1" step="1"
+                                               style="font-size:1.05rem;border-color:var(--nexo-primary);color:var(--nexo-primary);">
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label form-label-sm fw-semibold text-muted mb-1">
+                                            <i class="ri-archive-line"></i> Stock
+                                        </label>
+                                        <input type="number" class="form-control form-control-sm text-center"
+                                               id="stockProducto" disabled placeholder="—">
+                                    </div>
+                                </div>
+
+                                <!-- Botones agregar / limpiar -->
+                                <div class="d-grid gap-2">
+                                    <button type="button" class="btn btn-success pos-add-btn" id="btnAgregarProducto">
+                                        <i class="ri-add-circle-fill me-2"></i>Agregar al Ticket
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarFormulario">
+                                        <i class="ri-eraser-line me-1"></i>Limpiar formulario
+                                    </button>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div><!-- /pos-entry-panel -->
+
+                    <!-- PANEL DERECHO: Lista de productos -->
+                    <div class="pos-list-panel">
+                        <div class="card">
+                            <div class="card-header py-2">
+                                <h6 class="card-title mb-0">
+                                    <i class="ri-list-check text-primary me-2"></i>Productos del Ticket
+                                </h6>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="pos-table-wrapper">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped table-bordered mb-0 pos-table">
+                                            <thead class="table-dark" style="position:sticky;top:0;z-index:2;">
+                                                <tr>
+                                                    <th class="text-center">SKU</th>
+                                                    <th>Artículo</th>
+                                                    <th class="d-none d-xxl-table-cell">Descripción</th>
+                                                    <th class="d-none d-xl-table-cell">Marca</th>
+                                                    <th class="text-center">Talla</th>
+                                                    <th class="d-none d-xl-table-cell text-center">Stock</th>
+                                                    <th class="text-end">Precio</th>
+                                                    <th class="text-center">Cant.</th>
+                                                    <th class="text-end">Subtotal</th>
+                                                    <th class="text-center" style="width:40px;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbodyTicket">
+                                                <tr>
+                                                    <td colspan="10" class="text-center text-muted py-4">
+                                                        <i class="ri-shopping-cart-line" style="font-size:2rem;display:block;opacity:0.25;margin-bottom:0.4rem;"></i>
+                                                        Sin productos — escanea o busca un artículo
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- /pos-list-panel -->
+
+                </div><!-- /pos-main-layout -->
+
+                <!-- Barra inferior sticky: totales + imprimir -->
+                <div class="pos-bottom-bar card mt-2">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <div class="pos-total-item">
+                                <span class="pos-total-label">Items totales</span>
+                                <input type="number" id="totalItems" class="form-control form-control-sm text-center"
+                                       value="0" disabled style="width:70px;font-weight:800;">
+                            </div>
+                            <div class="pos-total-sep">|</div>
+                            <div class="pos-total-item flex-grow-1">
+                                <span class="pos-total-label">Total a cobrar</span>
+                                <input type="number" id="totalTicket" class="form-control form-control-sm text-center pos-total-money"
+                                       value="0" disabled style="max-width:240px;font-weight:900;font-size:1.4rem;color:var(--nexo-success);border-color:var(--nexo-success);">
+                            </div>
+                            <button type="button" class="btn btn-success pos-print-btn" id="btnImprimirTicket">
+                                <i class="ri-printer-fill me-2"></i>Imprimir Ticket
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /pos-container -->
 
         </div>
         <!-- container-fluid -->
@@ -1018,16 +1376,15 @@ div[style*="border: 1px solid #000"] {
                                 <th class="sortable" data-sort="articulo" style="cursor: pointer;">
                                     Artículo <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th class="sortable" data-sort="descripcion" style="cursor: pointer;">
-                                    Descripción <i class="ri-arrow-up-down-line"></i>
-                                </th>
                                 <th class="sortable" data-sort="marca" style="cursor: pointer;">
                                     Marca <i class="ri-arrow-up-down-line"></i>
                                 </th>
                                 <th class="sortable" data-sort="color" style="cursor: pointer;">
                                     Color <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th>Talla</th>
+                                <th class="sortable" data-sort="descripcion" style="cursor: pointer;">
+                                    Descripción <i class="ri-arrow-up-down-line"></i>
+                                </th>
                                 <th class="col-sucursal" style="display: none;">Sucursal</th>
                                 <th class="sortable" data-sort="stock" style="cursor: pointer;">
                                     Stock <i class="ri-arrow-up-down-line"></i>
@@ -1040,7 +1397,7 @@ div[style*="border: 1px solid #000"] {
                         </thead>
                         <tbody id="tbodyBusquedaProductos">
                             <tr>
-                                <td colspan="10" class="text-center text-muted py-4">
+                                <td colspan="9" class="text-center text-muted py-4">
                                     <i class="ri-filter-line" style="font-size: 2rem;"></i>
                                     <br>
                                     Ingresa un criterio de búsqueda y presiona "Buscar productos".
@@ -1069,7 +1426,7 @@ $(document).ready(function() {
     let filtroTablaTimer = null;
     const MENSAJE_BUSQUEDA_DEFAULT = `
         <tr>
-            <td colspan="10" class="text-center text-muted py-4">
+            <td colspan="9" class="text-center text-muted py-4">
                 <i class="ri-filter-line" style="font-size: 2rem;"></i>
                 <br>
                 Ingresa un criterio de búsqueda y presiona "Buscar productos".
@@ -1195,6 +1552,7 @@ $(document).ready(function() {
     let contadorProductos = 0;
     let paginaActual = 1;
     let totalPaginas = 1;
+    let modoRapido = false;  // Modo Bolsa: SKU+Enter agrega directo y vuelve al SKU
 
     // Función para seleccionar vendedor
     function seleccionarVendedor(vendedor) {
@@ -1207,6 +1565,12 @@ $(document).ready(function() {
         // Ocultar sección de vendedores y mostrar sección de crear ticket
         $('#seccionVendedores').hide();
         $('#seccionCrearTicket').show();
+
+        // Actualizar fecha/hora al momento de abrir el ticket
+        const ahora = new Date();
+        const fechaHora = ahora.toLocaleDateString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric'})
+                        + ' ' + ahora.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'});
+        $('#ticketFecha').text(fechaHora);
         
         // Enfocar en el campo SKU
         setTimeout(() => {
@@ -1275,14 +1639,31 @@ $(document).ready(function() {
         });
     });
 
-    // Buscar producto por SKU
-    $('#skuProducto').on('keypress', function(e) {
-        if (e.which === 13) { // Enter
-            buscarProductoPorSku();
+    // Buscar producto por SKU (Enter en campo SKU)
+    $('#skuProducto').on('keydown', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            const productoYaCargado = $('#articuloProducto').text().trim() !== '—' && $('#precioProducto').val();
+
+            if (modoRapido) {
+                // Modo Bolsa: si el producto está cargado, agrega directo; si no, busca y luego agrega
+                if (productoYaCargado) {
+                    agregarProductoAlTicket();
+                } else {
+                    buscarProductoPorSku(/* autoAdd= */ true);
+                }
+            } else {
+                // Flujo normal: si hay producto cargado, navega a precio; si no, busca
+                if (productoYaCargado) {
+                    setTimeout(function() { $('#precioProducto').focus().select(); }, 50);
+                } else {
+                    buscarProductoPorSku();
+                }
+            }
         }
     });
 
-    // Navegación con Enter: Precio -> Cantidad
+    // Navegación con Enter: Precio -> Cantidad (o agrega directo en modo rápido)
     $('#precioProducto').on('keypress', function(e) {
         if (e.which === 13) {
             e.preventDefault();
@@ -1299,7 +1680,19 @@ $(document).ready(function() {
                 $('#precioProducto').val(precioOriginal);
                 return;
             }
-            $('#cantidadProducto').focus().select();
+            if (modoRapido) {
+                agregarProductoAlTicket();
+            } else {
+                $('#cantidadProducto').focus().select();
+            }
+        }
+    });
+
+    // Enter en Cantidad -> agregar al ticket directamente
+    $('#cantidadProducto').on('keydown', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            agregarProductoAlTicket();
         }
     });
 
@@ -1319,7 +1712,7 @@ $(document).ready(function() {
         }
     });
 
-    function buscarProductoPorSku() {
+    function buscarProductoPorSku(autoAdd) {
         const sku = $('#skuProducto').val().trim();
         if (!sku) {
             Swal.fire('Error', 'Ingresa un SKU válido', 'error');
@@ -1333,14 +1726,29 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     const producto = response.producto;
-                    $('#articuloProducto').val(producto.articulo);
-                    $('#descripcionProducto').val(producto.descripcion);
-                    $('#marcaProducto').val(producto.marca || '-');
-                    $('#tallaProducto').val(producto.talla);
+                    $('#articuloProducto').text(producto.articulo);
+                    $('#descripcionProducto').text(producto.descripcion);
+                    $('#marcaProducto').text(producto.marca || '-');
+                    $('#tallaProducto').text(producto.talla);
                     $('#precioProducto').val(producto.precio_venta);
                     $('#precioOriginal').val(producto.precio_venta);
                     $('#stockProducto').val(producto.stock);
-                    $('#precioProducto').focus().select();
+                    // Mostrar banner de producto cargado
+                    $('#bannerNombreProducto').text(producto.articulo + (producto.talla ? ' — ' + producto.talla : ''));
+                    $('#bannerInfoProducto').text(
+                        'SKU: ' + sku +
+                        '  |  Precio: $' + (parseFloat(producto.precio_venta || 0).toLocaleString('es-CL')) +
+                        '  |  Stock: ' + (producto.stock || 0)
+                    );
+                    $('#productoSeleccionadoBanner').removeClass('d-none');
+
+                    if (autoAdd || modoRapido) {
+                        // Modo Bolsa: agrega directo con la cantidad actual
+                        agregarProductoAlTicket();
+                    } else {
+                        // Flujo normal: foco en precio
+                        setTimeout(function() { $('#precioProducto').focus().select(); }, 80);
+                    }
                 } else {
                     Swal.fire('Producto no encontrado', response.message, 'warning');
                     limpiarFormularioProducto();
@@ -1359,10 +1767,10 @@ $(document).ready(function() {
 
     function agregarProductoAlTicket() {
         const sku = $('#skuProducto').val().trim();
-        const articulo = $('#articuloProducto').val();
-        const descripcion = $('#descripcionProducto').val();
-        const marca = $('#marcaProducto').val();
-        const talla = $('#tallaProducto').val();
+        const articulo = $('#articuloProducto').text().trim();
+        const descripcion = $('#descripcionProducto').text().trim();
+        const marca = $('#marcaProducto').text().trim();
+        const talla = $('#tallaProducto').text().trim();
         const precio = parseFloat($('#precioProducto').val()) || 0;
         const precioOriginal = parseFloat($('#precioOriginal').val()) || 0;
         const cantidad = parseInt($('#cantidadProducto').val());
@@ -1590,23 +1998,37 @@ $(document).ready(function() {
         const tbody = $('#tbodyTicket');
         tbody.empty();
 
+        if (productosTicket.length === 0) {
+            tbody.html(`<tr>
+                <td colspan="10" class="text-center text-muted py-4">
+                    <i class="ri-shopping-cart-line" style="font-size:2rem;display:block;opacity:0.25;margin-bottom:0.4rem;"></i>
+                    Sin productos — escanea o busca un artículo
+                </td>
+            </tr>`);
+            return;
+        }
+
         productosTicket.forEach(producto => {
             const fila = `
                 <tr>
-                    <td>${producto.sku}</td>
-                    <td>${producto.articulo}</td>
-                    <td>${producto.descripcion}</td>
-                    <td>${producto.marca}</td>
-                    <td>${producto.talla}</td>
-                    <td>${producto.stock}</td>
-                    <td>$${producto.precio.toLocaleString()}</td>
+                    <td class="text-center"><small>${producto.sku}</small></td>
                     <td>
-                        <input type="number" class="form-control text-center cantidad-producto" 
-                               data-id="${producto.id}" value="${producto.cantidad}" min="1" max="${producto.stock}">
+                        <div class="fw-semibold" style="line-height:1.2;">${producto.articulo}</div>
+                        <div class="text-muted d-xl-none" style="font-size:0.75rem;">${producto.marca} | ${producto.talla}</div>
                     </td>
-                    <td>$${producto.subtotal.toLocaleString()}</td>
-                    <td>
-                        <button class="btn btn-danger btn-sm eliminar-producto" data-id="${producto.id}">
+                    <td class="d-none d-xxl-table-cell"><small class="text-muted">${producto.descripcion}</small></td>
+                    <td class="d-none d-xl-table-cell"><small>${producto.marca}</small></td>
+                    <td class="text-center"><span class="badge bg-secondary">${producto.talla || '—'}</span></td>
+                    <td class="d-none d-xl-table-cell text-center"><small>${producto.stock}</small></td>
+                    <td class="text-end"><small>$${producto.precio.toLocaleString()}</small></td>
+                    <td class="text-center">
+                        <input type="number" class="form-control form-control-sm text-center cantidad-producto" 
+                               data-id="${producto.id}" value="${producto.cantidad}" min="1" max="${producto.stock}"
+                               style="width:64px;">
+                    </td>
+                    <td class="text-end fw-bold">$${producto.subtotal.toLocaleString()}</td>
+                    <td class="text-center">
+                        <button class="btn btn-danger btn-sm eliminar-producto" data-id="${producto.id}" title="Eliminar">
                             <i class="ri-delete-bin-line"></i>
                         </button>
                     </td>
@@ -1722,19 +2144,22 @@ $(document).ready(function() {
         
         $('#totalItems').val(totalItems);
         $('#totalTicket').val(totalTicket);
+        // Actualizar badge de items en la barra de info
+        $('#badgeItemCount').html(`<i class="ri-shopping-cart-line me-1"></i>${totalItems} item${totalItems !== 1 ? 's' : ''}`);
     }
 
     // Limpiar formulario de producto
     function limpiarFormularioProducto() {
         $('#skuProducto').val('');
-        $('#articuloProducto').val('');
-        $('#descripcionProducto').val('');
-        $('#marcaProducto').val('');
-        $('#tallaProducto').val('');
+        $('#articuloProducto').text('—');
+        $('#descripcionProducto').text('—');
+        $('#marcaProducto').text('—');
+        $('#tallaProducto').text('—');
         $('#precioProducto').val('');
         $('#precioOriginal').val('');
         $('#cantidadProducto').val(1);
         $('#stockProducto').val('');
+        $('#productoSeleccionadoBanner').addClass('d-none');
     }
 
     // Botón limpiar formulario
@@ -1742,6 +2167,205 @@ $(document).ready(function() {
         limpiarFormularioProducto();
         $('#skuProducto').focus();
     });
+
+    // F3 → abrir búsqueda de artículos
+    $(document).on('keydown', function(e) {
+        if (e.key === 'F3' && $('#seccionCrearTicket').is(':visible')) {
+            e.preventDefault();
+            $('#btnBuscarArticulo').click();
+        }
+
+        // F2 → toggle Modo Bolsa (agregar rápido)
+        if (e.key === 'F2' && $('#seccionCrearTicket').is(':visible')) {
+            e.preventDefault();
+            $('#btnModoRapido').click();
+        }
+
+        // Escape → limpiar formulario y volver al SKU
+        if (e.key === 'Escape' && $('#seccionCrearTicket').is(':visible')) {
+            const $foco = $(document.activeElement);
+            const enPanelEntrada = $foco.closest('.pos-entry-panel').length > 0;
+            if (enPanelEntrada) {
+                e.preventDefault();
+                limpiarFormularioProducto();
+                $('#skuProducto').focus();
+            }
+        }
+    });
+
+    // Toggle Modo Bolsa
+    $('#btnModoRapido').on('click', function() {
+        modoRapido = !modoRapido;
+        if (modoRapido) {
+            $(this)
+                .removeClass('btn-outline-secondary')
+                .addClass('btn-warning')
+                .html('<i class="ri-flashlight-fill me-1"></i>Modo Bolsa ON <kbd style="font-size:0.65rem;">F2</kbd>');
+        } else {
+            $(this)
+                .removeClass('btn-warning')
+                .addClass('btn-outline-secondary')
+                .html('<i class="ri-flashlight-line me-1"></i>Modo Bolsa <kbd style="font-size:0.65rem;">F2</kbd>');
+        }
+        $('#skuProducto').focus();
+    });
+
+    // ==================== ACCESOS RÁPIDOS ====================
+
+    const SUCURSAL_ID_ACCESOS = {% if sucursal_actual %}{{ sucursal_actual.id }}{% else %}'default'{% endif %};
+    const LS_KEY_ACCESOS = `pos_accesos_${SUCURSAL_ID_ACCESOS}`;
+    const TOTAL_SLOTS = 12;
+
+    let quickPickSlots = Array(TOTAL_SLOTS).fill(null);  // null = slot vacío
+    let modoConfigAccesos = false;
+    let slotEnConfiguracion = null;  // índice del slot que se está configurando
+    let panelAccesosVisible = true;
+
+    // --- Cargar desde localStorage ---
+    function cargarAccesosRapidos() {
+        try {
+            const guardado = localStorage.getItem(LS_KEY_ACCESOS);
+            if (guardado) quickPickSlots = JSON.parse(guardado);
+            if (!Array.isArray(quickPickSlots) || quickPickSlots.length !== TOTAL_SLOTS) {
+                quickPickSlots = Array(TOTAL_SLOTS).fill(null);
+            }
+        } catch(e) {
+            quickPickSlots = Array(TOTAL_SLOTS).fill(null);
+        }
+    }
+
+    function guardarAccesosRapidos() {
+        localStorage.setItem(LS_KEY_ACCESOS, JSON.stringify(quickPickSlots));
+    }
+
+    // --- Renderizar grilla ---
+    function renderizarAccesosRapidos() {
+        const grid = $('#gridAccesosRapidos');
+        grid.empty();
+        quickPickSlots.forEach(function(slot, idx) {
+            let card;
+            if (slot) {
+                const precio = parseFloat(slot.precio || 0).toLocaleString('es-CL');
+                const talla = slot.talla && slot.talla !== 'Sin talla' ? slot.talla : '';
+                card = `
+                <div class="acceso-card con-producto" data-slot="${idx}" title="${slot.articulo}${talla ? ' — ' + talla : ''} · $${precio}">
+                    <span class="acceso-num">${idx + 1}</span>
+                    <i class="ri-edit-2-line acceso-config-icon"></i>
+                    <div class="acceso-nombre">${slot.articulo}</div>
+                    ${talla ? `<span class="acceso-talla">${talla}</span>` : ''}
+                    <div class="acceso-precio">$${precio}</div>
+                </div>`;
+            } else {
+                card = `
+                <div class="acceso-card sin-producto" data-slot="${idx}" title="Slot ${idx + 1} — Click para asignar producto">
+                    <span class="acceso-num">${idx + 1}</span>
+                    <i class="ri-edit-2-line acceso-config-icon"></i>
+                    <i class="ri-add-circle-line acceso-sin-icon"></i>
+                </div>`;
+            }
+            grid.append(card);
+        });
+        // Aplicar clase de modo config
+        if (modoConfigAccesos) {
+            grid.addClass('modo-config-activo');
+        } else {
+            grid.removeClass('modo-config-activo');
+        }
+    }
+
+    // --- Click en tarjeta ---
+    $(document).on('click', '.acceso-card', function() {
+        const idx = parseInt($(this).data('slot'));
+        if (modoConfigAccesos) {
+            // Modo configurar: abrir modal de búsqueda para asignar
+            slotEnConfiguracion = idx;
+            $('#btnBuscarArticulo').click();  // reutiliza el modal existente
+        } else {
+            // Modo normal: agregar 1 al ticket
+            const slot = quickPickSlots[idx];
+            if (!slot) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Slot vacío',
+                    text: 'Haz click en "Configurar" para asignar un producto a este acceso rápido.',
+                    timer: 2500,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+                return;
+            }
+            // Buscar producto por SKU para obtener stock actualizado y agregar
+            $.ajax({
+                url: '{% url "buscar_producto_por_sku" %}',
+                method: 'GET',
+                data: { sku: slot.sku },
+                success: function(response) {
+                    if (response.success) {
+                        const p = response.producto;
+                        agregarNuevoProductoAlTicket(
+                            p.sku || slot.sku,
+                            p.articulo || slot.articulo,
+                            p.descripcion || slot.descripcion || '',
+                            p.marca || slot.marca || '',
+                            p.talla || slot.talla || '',
+                            parseFloat(p.precio_venta || slot.precio),
+                            1,
+                            p.stock
+                        );
+                        actualizarTablaTicket();
+                        actualizarTotales();
+                    } else {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Sin stock',
+                            text: response.error || `${slot.articulo} no tiene stock disponible`,
+                            timer: 2000,
+                            showConfirmButton: false,
+                            toast: true,
+                            position: 'top-end'
+                        });
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error', 'No se pudo verificar el stock del producto', 'error');
+                }
+            });
+        }
+    });
+
+    // --- Toggle show/hide panel ---
+    $('#btnToggleAccesos').on('click', function() {
+        panelAccesosVisible = !panelAccesosVisible;
+        if (panelAccesosVisible) {
+            $('#cuerpoAccesosRapidos').slideDown(200);
+            $('#iconoToggleAccesos').removeClass('ri-arrow-down-s-line').addClass('ri-arrow-up-s-line');
+        } else {
+            $('#cuerpoAccesosRapidos').slideUp(200);
+            $('#iconoToggleAccesos').removeClass('ri-arrow-up-s-line').addClass('ri-arrow-down-s-line');
+        }
+    });
+
+    // --- Toggle modo configurar ---
+    $('#btnConfigAccesos').on('click', function() {
+        modoConfigAccesos = !modoConfigAccesos;
+        if (modoConfigAccesos) {
+            $(this).removeClass('btn-outline-secondary').addClass('btn-warning')
+                   .html('<i class="ri-save-line me-1"></i>Guardar');
+            $('#alertaConfigAccesos').removeClass('d-none');
+        } else {
+            $(this).removeClass('btn-warning').addClass('btn-outline-secondary')
+                   .html('<i class="ri-settings-3-line me-1"></i>Configurar');
+            $('#alertaConfigAccesos').addClass('d-none');
+            slotEnConfiguracion = null;
+            guardarAccesosRapidos();
+        }
+        renderizarAccesosRapidos();
+    });
+
+    // --- Inicializar ---
+    cargarAccesosRapidos();
+    renderizarAccesosRapidos();
 
     // ==================== MODAL BÚSQUEDA DE PRODUCTOS ====================
 
@@ -1764,10 +2388,6 @@ $(document).ready(function() {
         console.log('Abriendo modal de búsqueda con sucursal ID:', sucursalActualId);
         
         $('#modalBusquedaProductos').modal('show');
-        setTimeout(() => {
-            $('#filtroBusqueda').focus();
-        }, 300);
-
         resetearBusquedaModal();
     });
 
@@ -1853,6 +2473,10 @@ $(document).ready(function() {
     // Cargar marcas al abrir el modal
     $('#modalBusquedaProductos').on('show.bs.modal', function() {
         cargarMarcas();
+    });
+
+    $('#modalBusquedaProductos').on('shown.bs.modal', function() {
+        $('#filtroBusqueda').val('').focus();
     });
 
     $('#filtroMarcaTexto').on('input', function() {
@@ -1970,7 +2594,7 @@ $(document).ready(function() {
         // Mostrar loading en la tabla
         $('#tbodyBusquedaProductos').html(`
             <tr>
-                <td colspan="10" class="text-center py-4">
+                <td colspan="9" class="text-center py-4">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Cargando...</span>
                     </div>
@@ -1992,7 +2616,7 @@ $(document).ready(function() {
                 } else {
                     $('#tbodyBusquedaProductos').html(`
                         <tr>
-                            <td colspan="10" class="text-center text-danger py-4">
+                            <td colspan="9" class="text-center text-danger py-4">
                                 <i class="ri-error-warning-line" style="font-size: 2rem;"></i>
                                 <br>
                                 ${response.error || 'Error al buscar productos'}
@@ -2004,7 +2628,7 @@ $(document).ready(function() {
             error: function() {
                 $('#tbodyBusquedaProductos').html(`
                     <tr>
-                        <td colspan="10" class="text-center text-danger py-4">
+                        <td colspan="9" class="text-center text-danger py-4">
                             <i class="ri-wifi-off-line" style="font-size: 2rem;"></i>
                             <br>
                             Error de conexión
@@ -2029,7 +2653,7 @@ $(document).ready(function() {
             $('#filtroTablaResultados').prop('disabled', true);
             tbody.html(`
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-4">
+                    <td colspan="9" class="text-center text-muted py-4">
                         <i class="ri-inbox-line" style="font-size: 2rem;"></i>
                         <br>
                         No se encontraron productos con los criterios especificados
@@ -2065,13 +2689,15 @@ $(document).ready(function() {
                         '';
                     
                     const fila = `
-                        <tr>
+                        <tr class="${stockDisponible <= 0 ? 'table-secondary opacity-75' : ''}">
                             <td><strong>${tallaStock.sku || '-'}</strong></td>
                             <td>${producto.articulo || '-'}</td>
-                            <td>${producto.descripcion || '-'}</td>
                             <td>${marca}</td>
                             <td>${color}</td>
-                            <td><span class="badge bg-info">${tallaStock.talla || '-'}</span></td>
+                            <td>
+                                <span class="text-truncate d-inline-block" style="max-width:180px;" title="${producto.descripcion || ''}">${producto.descripcion || '-'}</span>
+                                ${tallaStock.talla ? `<br><span class="badge bg-secondary" style="font-size:0.65rem;">${tallaStock.talla}</span>` : ''}
+                            </td>
                             ${colSucursal}
                             <td>
                                 <span class="badge ${stockDisponible > 0 ? 'bg-success' : 'bg-danger'}">
@@ -2080,18 +2706,21 @@ $(document).ready(function() {
                             </td>
                             <td><strong>$${precioFormateado}</strong></td>
                             <td>
-                                <button class="btn btn-sm btn-primary seleccionar-producto" 
-                                        data-sku="${tallaStock.sku || ''}"
-                                        data-articulo="${producto.articulo || ''}"
-                                        data-descripcion="${producto.descripcion || ''}"
-                                        data-marca="${marca}"
-                                        data-talla="${tallaStock.talla || ''}"
-                                        data-precio="${precioVenta}"
-                                        data-stock="${stockDisponible}"
-                                        ${stockDisponible <= 0 ? 'disabled' : ''}>
-                                    <i class="ri-add-line"></i>
-                                    Seleccionar
-                                </button>
+                                ${stockDisponible > 0
+                                    ? `<button class="btn btn-sm btn-primary seleccionar-producto" 
+                                               data-sku="${tallaStock.sku || ''}"
+                                               data-articulo="${producto.articulo || ''}"
+                                               data-descripcion="${producto.descripcion || ''}"
+                                               data-marca="${marca}"
+                                               data-talla="${tallaStock.talla || ''}"
+                                               data-precio="${precioVenta}"
+                                               data-stock="${stockDisponible}">
+                                           <i class="ri-add-line"></i> Seleccionar
+                                       </button>`
+                                    : `<button class="btn btn-sm btn-outline-secondary" disabled title="Sin stock disponible">
+                                           <i class="ri-close-circle-line"></i> Sin stock
+                                       </button>`
+                                }
                             </td>
                         </tr>
                     `;
@@ -2100,7 +2729,7 @@ $(document).ready(function() {
             } else {
                 tbody.append(`
                     <tr>
-                        <td colspan="10" class="text-center text-muted py-2">
+                        <td colspan="9" class="text-center text-muted py-2">
                             <small>El producto ${producto.articulo || ''} no tiene tallas con stock en esta sucursal</small>
                         </td>
                     </tr>
@@ -2182,32 +2811,73 @@ $(document).ready(function() {
             stock: $(this).data('stock')
         };
 
-        // Llenar formulario
+        // ── Si viene de un slot de acceso rápido en modo configuración ──
+        if (slotEnConfiguracion !== null) {
+            quickPickSlots[slotEnConfiguracion] = {
+                sku: producto.sku,
+                articulo: producto.articulo,
+                descripcion: producto.descripcion,
+                marca: producto.marca,
+                talla: producto.talla,
+                precio: producto.precio
+            };
+            guardarAccesosRapidos();
+            renderizarAccesosRapidos();
+            slotEnConfiguracion = null;
+            $('#modalBusquedaProductos').modal('hide');
+            Swal.fire({
+                icon: 'success',
+                title: 'Acceso asignado',
+                text: `${producto.articulo}${producto.talla ? ' — ' + producto.talla : ''} asignado al acceso rápido`,
+                toast: true,
+                position: 'top-end',
+                timer: 2000,
+                showConfirmButton: false
+            });
+            return;
+        }
+
+        // ── Flujo normal: llenar formulario ──
         $('#skuProducto').val(producto.sku || '');
-        $('#articuloProducto').val(producto.articulo || '');
-        $('#descripcionProducto').val(producto.descripcion || '');
-        $('#marcaProducto').val(producto.marca || '-');
-        $('#tallaProducto').val(producto.talla || '');
+        $('#articuloProducto').text(producto.articulo || '—');
+        $('#descripcionProducto').text(producto.descripcion || '—');
+        $('#marcaProducto').text(producto.marca || '-');
+        $('#tallaProducto').text(producto.talla || '—');
         $('#precioProducto').val(producto.precio || 0);
         $('#precioOriginal').val(producto.precio || 0);
         $('#stockProducto').val(producto.stock || 0);
         $('#cantidadProducto').val(1);
 
-        // Cerrar modal
-        $('#modalBusquedaProductos').modal('hide');
+        // Mostrar banner de producto cargado
+        $('#bannerNombreProducto').text(producto.articulo + (producto.talla ? ' — ' + producto.talla : ''));
+        $('#bannerInfoProducto').text(
+            'SKU: ' + (producto.sku || '—') +
+            '  |  Precio: $' + (parseFloat(producto.precio || 0).toLocaleString('es-CL')) +
+            '  |  Stock: ' + (producto.stock || 0)
+        );
+        $('#productoSeleccionadoBanner').removeClass('d-none');
 
-        // Enfocar el input de precio después de cerrar el modal
-        setTimeout(function() {
-            $('#precioProducto').focus().select();
-        }, 500);
-
+        // Toast que NO roba el foco
         Swal.fire({
             icon: 'success',
             title: 'Producto seleccionado',
-            text: `${producto.articulo} - ${producto.talla}`,
-            timer: 1500,
+            text: producto.articulo + (producto.talla ? ' – ' + producto.talla : ''),
+            toast: true,
+            position: 'top-end',
+            timer: 2000,
+            timerProgressBar: true,
             showConfirmButton: false
         });
+
+        // Cerrar modal y enfocar cantidad cuando termine la animación
+        $('#modalBusquedaProductos').one('hidden.bs.modal', function() {
+            setTimeout(function() {
+                const $cant = $('#cantidadProducto');
+                $cant.focus().select();
+                $cant[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 80);
+        });
+        $('#modalBusquedaProductos').modal('hide');
     });
 
     // Imprimir ticket
@@ -2275,7 +2945,7 @@ $(document).ready(function() {
                 Swal.fire({
                     icon: 'success',
                     title: '¡Ticket creado!',
-                    text: `Ticket #${response.ticket_id} creado exitosamente`,
+                    text: `Ticket de Venta #${response.ticket_id || response.correlativo} creado exitosamente`,
                     confirmButtonText: 'OK'
                 }).then(() => {
                     resetearVistaTicket();
@@ -2328,20 +2998,36 @@ $(document).ready(function() {
     // Función para imprimir en impresora térmica
     /**
      * IMPRESIÓN OPTIMIZADA PARA IMPRESORA TÉRMICA 80MM
-     * - Ancho: 80mm (papel térmico estándar)
-     * - Fuentes: Agrandadas para mejor legibilidad
-     * - Espaciado: Optimizado para claridad
-     * - Código de barras: Visible y escaneable
-     * - Cierre automático después de imprimir
+     * Intenta primero con QZ Tray (silencioso).
+     * Si QZ Tray no está disponible o no está habilitado, usa window.print() como fallback.
      */
-    function imprimirTicketTermico(ticketData) {
+    async function imprimirTicketTermico(ticketData) {
+        if (QZ_CONFIG.habilitado) {
+            const exito = await imprimirConQZ(ticketData);
+            if (exito) return;
+            // QZ falló — preguntar si continuar con window.print()
+            const res = await Swal.fire({
+                icon: 'warning',
+                title: 'QZ Tray no disponible',
+                text: 'No se pudo conectar con QZ Tray. ¿Desea imprimir con el diálogo del navegador?',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, imprimir igual',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0066FF',
+            });
+            if (!res.isConfirmed) return;
+        }
+        // Fallback: window.print() (comportamiento original)
+        imprimirConWindowPrint(ticketData);
+    }
+
+    function imprimirConWindowPrint(ticketData) {
         const ticketHtml = generarHtmlTicket(ticketData);
         
         // Crear ventana popup optimizada para ticket térmico (72mm ≈ 272px en 96 DPI)
         const ventanaImpresion = window.open('', '_blank', 'width=280,height=600,left=200,top=100');
         
         if (!ventanaImpresion) {
-            // Si el navegador bloqueó el popup, intentar imprimir en la misma ventana
             Swal.fire({
                 icon: 'warning',
                 title: 'Popup bloqueado',
@@ -2350,7 +3036,6 @@ $(document).ready(function() {
                 showConfirmButton: false
             });
             
-            // Imprimir en la misma ventana como alternativa
             const contenidoOriginal = document.body.innerHTML;
             document.body.innerHTML = ticketHtml;
             window.print();
@@ -2362,17 +3047,14 @@ $(document).ready(function() {
         ventanaImpresion.document.write(ticketHtml);
         ventanaImpresion.document.close();
 
-        // Esperar a que se cargue el contenido y se genere el código de barras
         setTimeout(function() {
             ventanaImpresion.focus();
             ventanaImpresion.print();
             
-            // Cerrar automáticamente la ventana después de imprimir
-            // Esperar un poco más para asegurar que se envió a la impresora
             setTimeout(function() {
                 ventanaImpresion.close();
             }, 500);
-        }, 1000); // Dar 1 segundo para que se genere el código de barras
+        }, 1000);
     }
 
     function generarHtmlTicket(ticketData) {
@@ -2382,486 +3064,754 @@ $(document).ready(function() {
         const cliente = ticketData.cliente || {};
         const totales = ticketData.totales || {};
 
-        const formatearMoneda = (valor) => {
-            const numero = parseInt(valor, 10) || 0;
-            return numero.toLocaleString('es-CL');
-        };
+        const fmt = (v) => (parseInt(v, 10) || 0).toLocaleString('es-CL');
+        const trunc = (t, n) => String(t || '').substring(0, n);
 
-        // Función para truncar texto según caracteres disponibles
-        const truncar = (texto, max) => {
-            return String(texto || '').substring(0, max);
-        };
-
-        const productosHtml = productos.map((producto) => {
-            const cant = producto.cantidad || 0;
-            const sku = producto.sku || '';
-            const articulo = truncar(producto.articulo, 28);  // Optimizado para 80mm
-            const desc = truncar(producto.descripcion, 22);    // Descripción más amplia
-            const talla = truncar(producto.talla || '-', 6);   // Talla completa
-            const precio = formatearMoneda(producto.precio_unitario || producto.precio || 0);
-            const subtotal = formatearMoneda(producto.subtotal || 0);
+        // Líneas de productos — layout retail optimizado
+        const productosHtml = productos.map((p) => {
+            const cant      = p.cantidad || 0;
+            const sku       = p.sku || '';
+            const nombre    = trunc(p.articulo, 36);
+            const desc      = trunc(p.descripcion, 36);
+            const talla     = trunc(p.talla || '', 8);
+            const precioU   = fmt(p.precio_unitario || p.precio || 0);
+            const subtotal  = fmt(p.subtotal || 0);
+            const mostrarDesc = desc && desc.toLowerCase() !== nombre.toLowerCase();
 
             return `
-                <div class="item">
-                    <div class="item-line1">
-                        <span class="cant">${cant}x</span>
-                        <span class="nombre">${articulo}</span>
-                    </div>
-                    <div class="item-sku-talla">
-                        <span class="sku-label">SKU:</span><span class="sku-value">${sku}</span>
-                        <span class="talla-label">Talla:</span><span class="talla-value">${talla}</span>
-                    </div>
-                    <div class="item-line3">
-                        <span class="precio-unit">$${precio} c/u</span>
-                        <span class="subtotal">$${subtotal}</span>
-                    </div>
-                </div>
-            `;
+<div class="item">
+  <div class="i-nombre">
+    <span class="i-cant">${cant}x</span>
+    <span class="i-art">${nombre}</span>
+  </div>
+  ${mostrarDesc ? `<div class="i-desc">${desc}</div>` : ''}
+  <div class="i-meta">
+    <span class="i-sku">SKU: ${sku}</span>${talla ? `<span class="i-talla">${talla}</span>` : ''}
+  </div>
+  <div class="i-precios">
+    <span class="i-punit">$${precioU} c/u</span>
+    <span class="i-sub">$${subtotal}</span>
+  </div>
+</div>`;
         }).join('');
 
-        return `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Ticket #${ticketData.correlativo || ''}</title>
-                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
-                <style>
-                    /* === OPTIMIZADO PARA IMPRESORA TÉRMICA 80MM === */
-                    * { 
-                        margin: 0; 
-                        padding: 0; 
-                        box-sizing: border-box; 
-                    }
-                    
-                    body {
-                        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-                        font-size: 12px;
-                        width: 72mm;
-                        max-width: 72mm;
-                        padding: 1mm 3mm;
-                        margin: 0 auto;
-                        background: #fff;
-                        color: #000;
-                        line-height: 1.5;
-                        -webkit-print-color-adjust: exact;
-                        print-color-adjust: exact;
-                        box-sizing: border-box;
-                        overflow-wrap: break-word;
-                        word-wrap: break-word;
-                        font-weight: 500;
-                        letter-spacing: 0.3px;
-                    }
-                    
-                    /* Código de barras - Optimizado para pistola lectora 80mm */
-                    .barcode-container {
-                        text-align: center;
-                        margin: 8px 0 10px 0;
-                        padding: 8px 2px;
-                        background: #ffffff;
-                    }
-                    
-                    .barcode-container svg {
-                        max-width: 100%;
-                        height: auto;
-                        display: block;
-                        margin: 5px auto;
-                    }
-                    
-                    .barcode-title {
-                        font-size: 10px;
-                        font-weight: 700;
-                        margin-bottom: 5px;
-                        color: #000;
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                    }
-                    
-                    /* Header - OPTIMIZADO PARA 80MM */
-                    .header {
-                        text-align: center;
-                        margin-bottom: 8px;
-                        padding: 0 2px 8px 2px;
-                        border-bottom: 2px dashed #000;
-                    }
-                    
-                    .header strong {
-                        font-size: 16px;
-                        font-weight: 900;
-                        display: block;
-                        margin-bottom: 4px;
-                        letter-spacing: 0.5px;
-                        word-wrap: break-word;
-                    }
-                    
-                    .header div {
-                        font-size: 12px;
-                        line-height: 1.4;
-                        margin: 2px 0;
-                        word-wrap: break-word;
-                        font-weight: 600;
-                    }
-                    
-                    /* Información general - OPTIMIZADO */
-                    .info {
-                        font-size: 12px;
-                        margin-bottom: 8px;
-                        line-height: 1.5;
-                        padding: 0 2px;
-                    }
-                    
-                    .info-row {
-                        display: flex;
-                        justify-content: space-between;
-                        margin: 4px 0;
-                        gap: 8px;
-                        font-size: 12px;
-                    }
-                    
-                    .info-row strong {
-                        min-width: 70px;
-                        font-weight: 700;
-                        flex-shrink: 0;
-                    }
-                    
-                    .info-row span {
-                        text-align: right;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                        white-space: nowrap;
-                        font-weight: 600;
-                    }
-                    
-                    .separador {
-                        border-top: 2px dashed #000;
-                        margin: 8px 0;
-                        height: 0;
-                    }
-                    
-                    /* Items/Productos - OPTIMIZADO PARA 80MM */
-                    .items {
-                        margin: 8px 0;
-                        padding: 0 2px;
-                    }
-                    
-                    .item {
-                        margin-bottom: 8px;
-                        font-size: 12px;
-                        border-bottom: 1px dashed #999;
-                        padding-bottom: 6px;
-                    }
-                    
-                    .item-line1 {
-                        display: flex;
-                        gap: 6px;
-                        font-weight: bold;
-                        margin-bottom: 4px;
-                        font-size: 13px;
-                    }
-                    
-                    .item-line1 .cant {
-                        min-width: 28px;
-                        flex-shrink: 0;
-                        font-size: 14px;
-                        font-weight: 900;
-                    }
-                    
-                    .item-line1 .nombre {
-                        flex: 1;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-                        white-space: nowrap;
-                        font-weight: 700;
-                    }
-                    
-                    /* SKU y Talla destacados */
-                    .item-sku-talla {
-                        margin-left: 28px;
-                        font-size: 13px;
-                        color: #000;
-                        margin-bottom: 4px;
-                        font-weight: 700;
-                        display: flex;
-                        gap: 8px;
-                        flex-wrap: wrap;
-                    }
-                    
-                    .item-sku-talla .sku-label,
-                    .item-sku-talla .talla-label {
-                        font-weight: 600;
-                        color: #333;
-                    }
-                    
-                    .item-sku-talla .sku-value {
-                        font-weight: 900;
-                        font-size: 14px;
-                        letter-spacing: 0.5px;
-                    }
-                    
-                    .item-sku-talla .talla-value {
-                        font-weight: 900;
-                        font-size: 15px;
-                        background: #000;
-                        color: #fff;
-                        padding: 1px 6px;
-                        border-radius: 3px;
-                    }
-                    
-                    .item-line3 {
-                        margin-left: 28px;
-                        display: flex;
-                        justify-content: space-between;
-                        font-size: 12px;
-                        margin-top: 4px;
-                        gap: 8px;
-                    }
-                    
-                    .item-line3 .precio-unit {
-                        font-weight: 600;
-                        font-size: 12px;
-                    }
-                    
-                    .item-line3 .subtotal {
-                        font-weight: 900;
-                        font-size: 15px;
-                        white-space: nowrap;
-                        letter-spacing: 0.5px;
-                    }
-                    
-                    /* Totales - OPTIMIZADO PARA LEGIBILIDAD */
-                    .totales {
-                        border-top: 3px solid #000;
-                        padding: 8px 2px 0 2px;
-                        margin-top: 8px;
-                        font-size: 13px;
-                    }
-                    
-                    .totales-row {
-                        display: flex;
-                        justify-content: space-between;
-                        margin: 4px 0;
-                        font-weight: 600;
-                        gap: 10px;
-                        font-size: 13px;
-                    }
-                    
-                    .totales-row span:last-child {
-                        white-space: nowrap;
-                        font-weight: 700;
-                        font-size: 14px;
-                    }
-                    
-                    .totales .total-final {
-                        font-size: 18px;
-                        font-weight: 900;
-                        border-top: 3px solid #000;
-                        padding-top: 8px;
-                        margin-top: 8px;
-                        letter-spacing: 0.5px;
-                    }
-                    
-                    .totales .total-final span:last-child {
-                        font-size: 20px;
-                    }
-                    
-                    /* Footer - OPTIMIZADO */
-                    .footer {
-                        text-align: center;
-                        margin-top: 10px;
-                        padding: 8px 2px 0 2px;
-                        border-top: 2px dashed #000;
-                        font-size: 11px;
-                        line-height: 1.6;
-                    }
-                    
-                    .footer div {
-                        margin: 3px 0;
-                        word-wrap: break-word;
-                        font-weight: 500;
-                    }
-                    
-                    .footer strong {
-                        font-size: 13px;
-                        font-weight: 800;
-                    }
-                    
-                    /* Optimizaciones para impresión térmica 80mm */
-                    @media print {
-                        body { 
-                            width: 72mm;
-                            max-width: 72mm;
-                            padding: 1mm 2mm;
-                            margin: 0 auto;
-                            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-                            -webkit-font-smoothing: none;
-                            text-rendering: optimizeLegibility;
-                        }
-                        @page { 
-                            size: 80mm auto; 
-                            margin: 0 4mm;
-                        }
-                        
-                        /* Evitar saltos de página en elementos */
-                        .item, .info-row, .totales-row, .barcode-container {
-                            page-break-inside: avoid;
-                        }
-                        
-                        /* Asegurar que el texto sea nítido y oscuro */
-                        * {
-                            -webkit-print-color-adjust: exact;
-                            print-color-adjust: exact;
-                            color: #000 !important;
-                        }
-                        
-                        /* Texto más grueso para impresión térmica */
-                        body, .item, .info-row, .totales-row {
-                            font-weight: 600 !important;
-                        }
-                        
-                        .item-sku-talla .sku-value,
-                        .item-sku-talla .talla-value,
-                        .item-line3 .subtotal,
-                        .totales .total-final {
-                            font-weight: 900 !important;
-                        }
-                        
-                        /* Fondo blanco para talla en impresión */
-                        .item-sku-talla .talla-value {
-                            background: #fff !important;
-                            color: #000 !important;
-                            border: 2px solid #000 !important;
-                            font-weight: 900 !important;
-                        }
-                        
-                        /* Asegurar que nada se salga */
-                        .item-line1, .item-sku-talla, .item-line3, .info-row, .totales-row {
-                            max-width: 100%;
-                            overflow: hidden;
-                        }
-                        
-                        /* Código de barras para impresión */
-                        .barcode-container {
-                            background: #ffffff !important;
-                            padding: 6px 2px !important;
-                        }
-                        
-                        .barcode-container svg {
-                            height: auto !important;
-                            max-height: 50px !important;
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <!-- Código de barras del ticket -->
-                <div class="barcode-container">
-                    <div class="barcode-title">Ticket de Venta</div>
-                    <svg id="barcode"></svg>
-                </div>
-                
-                <div class="separador"></div>
-                
-                <!-- Encabezado empresa/sucursal -->
-                <div class="header">
-                    <strong>${sucursal.empresa || 'SUCURSAL'}</strong>
-                    <div>${sucursal.alias || ''}</div>
-                    ${sucursal.direccion ? '<div>' + sucursal.direccion + '</div>' : ''}
-                    ${sucursal.rut_empresa ? '<div>RUT: ' + sucursal.rut_empresa + '</div>' : ''}
-                </div>
+        return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Ticket de Venta #${ticketData.correlativo || ticketData.ticket_id || ''}</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+<style>
+/* ================================================================
+   TICKET TERMICO 80mm  |  Retail-optimized typography
+   ----------------------------------------------------------------
+   Fuente base : Courier New (monospace nativo — máxima compat.)
+   Tamaño base : 11px  →  ~42 chars/línea en papel de 76mm
+   DPI impres. : 203 DPI (estándar término térmico directo)
+   Ancho imprim: 76mm  (80mm papel – 2mm margen c/lado)
+   ================================================================ */
 
-                <!-- Información del ticket -->
-                <div class="info">
-                    <div class="info-row">
-                        <strong>Ticket:</strong>
-                        <span>#${ticketData.correlativo || ticketData.ticket_id || ''}</span>
-                    </div>
-                    <div class="info-row">
-                        <strong>Fecha:</strong>
-                        <span>${ticketData.fecha || new Date().toLocaleDateString('es-CL')}</span>
-                    </div>
-                    <div class="info-row">
-                        <strong>Hora:</strong>
-                        <span>${ticketData.hora || new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'})}</span>
-                    </div>
-                    ${vendedor.nombre ? '<div class="info-row"><strong>Vendedor:</strong><span>' + truncar(vendedor.nombre, 14) + ' (' + (vendedor.codigo || '') + ')' + '</span></div>' : ''}
-                    ${cliente.nombre ? '<div class="info-row"><strong>Cliente:</strong><span>' + truncar(cliente.nombre, 22) + '</span></div>' : ''}
-                    ${cliente.rut && !cliente.nombre ? '<div class="info-row"><strong>RUT:</strong><span>' + cliente.rut + '</span></div>' : ''}
-                </div>
+* { margin:0; padding:0; box-sizing:border-box; }
 
-                <div class="separador"></div>
+@page {
+    size: 80mm auto;
+    margin: 0 2mm;
+}
 
-                <!-- Productos -->
-                <div class="items">
-                    ${productosHtml || '<div style="text-align:center;font-size:8px;">Sin productos</div>'}
-                </div>
+body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+    width: 76mm;
+    max-width: 76mm;
+    margin: 0 auto;
+    padding: 2mm 1mm 4mm 1mm;
+    background: #fff;
+    color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
 
-                <!-- Totales -->
-                <div class="totales">
-                    <div class="totales-row">
-                        <span>Items:</span>
-                        <span>${totales.items || 0}</span>
-                    </div>
-                    ${totales.subtotal && totales.descuento ? '<div class="totales-row"><span>Subtotal:</span><span>$' + formatearMoneda(totales.subtotal) + '</span></div>' : ''}
-                    ${totales.descuento ? '<div class="totales-row"><span>Descuento:</span><span>-$' + formatearMoneda(totales.descuento) + '</span></div>' : ''}
-                    <div class="totales-row total-final">
-                        <span>TOTAL:</span>
-                        <span>$${formatearMoneda(totales.total)}</span>
-                    </div>
-                </div>
+/* ---- SEPARADORES ---- */
+.sep { border:none; height:0; margin:4px 0; }
+.sep-d { border-top: 1px dashed #000; }
+.sep-s { border-top: 1px solid  #000; }
+.sep-D { border-top: 2px solid  #000; }
 
-                <!-- Footer -->
-                <div class="footer">
-                    <div><strong>¡GRACIAS POR SU COMPRA!</strong></div>
-                    ${sucursal.politica_cambios ? '<div>' + sucursal.politica_cambios + '</div>' : '<div>Cambios hasta 15 días</div>'}
-                    <div>* Sin devolución de dinero</div>
-                    ${sucursal.telefono ? '<div>Tel: ' + sucursal.telefono + '</div>' : ''}
-                    <div style="margin-top:5px;font-size:10px;color:#333;font-weight:bold;">Nexo POS</div>
-                </div>
-                
-                <script>
-                    var ticketId = "${ticketData.correlativo || ticketData.ticket_id || '000000'}";
-                    function generarCodigoBarras() {
-                        if (typeof JsBarcode !== "undefined") {
-                            try {
-                                // Configuración para impresora térmica 80mm - LEGIBLE por pistola
-                                JsBarcode("#barcode", ticketId, {
-                                    format: "CODE128",      // Estándar compatible con pistolas
-                                    width: 1.8,             // Ancho de barra óptimo para térmica 80mm
-                                    height: 50,             // Altura compacta pero legible
-                                    displayValue: true,     // Mostrar número debajo
-                                    fontSize: 14,           // Tamaño texto legible
-                                    fontOptions: "bold",    // Negrita
-                                    font: "monospace",      // Fuente monoespaciada
-                                    textMargin: 5,          // Espacio entre barras y texto
-                                    margin: 10,             // Zona silenciosa (quiet zone)
-                                    marginTop: 5,
-                                    marginBottom: 5,
-                                    background: "#ffffff",  // Fondo blanco
-                                    lineColor: "#000000"    // Barras negras
-                                });
-                            } catch (e) {
-                                console.error("Error generando código de barras:", e);
-                                document.getElementById("barcode").innerHTML = "<p style=\\"font-size:18px;font-weight:bold;padding:15px;\\">" + ticketId + "<\\/p>";
-                            }
-                        } else {
-                            console.warn("JsBarcode no está disponible");
-                            document.getElementById("barcode").innerHTML = "<p style=\\"font-size:18px;font-weight:bold;padding:15px;\\">TICKET #" + ticketId + "<\\/p>";
-                        }
-                    }
-                    if (document.readyState === "loading") {
-                        document.addEventListener("DOMContentLoaded", generarCodigoBarras);
-                    } else {
-                        generarCodigoBarras();
-                    }
-                    window.addEventListener("load", function() {
-                        setTimeout(generarCodigoBarras, 100);
-                    });
-                <\/script>
-            </body>
-            </html>
-        `;
+/* ---- CABECERA EMPRESA ---- */
+.hdr { text-align:center; padding-bottom:4px; }
+.hdr-empresa {
+    display:block;
+    font-size:17px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:1.5px;
+    line-height:1.2;
+    margin-bottom:2px;
+}
+.hdr-sucursal {
+    display:block;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:0.3px;
+    margin-bottom:2px;
+}
+.hdr-meta {
+    display:block;
+    font-size:10px;
+    font-weight:400;
+    line-height:1.45;
+}
+
+/* ---- NÚMERO DE TICKET ---- */
+.ticket-num {
+    text-align:center;
+    font-size:14px;
+    font-weight:900;
+    letter-spacing:0;
+    padding:4px 0 3px 0;
+    text-transform:uppercase;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:clip;
+}
+
+/* ---- FILAS DE INFO (fecha, vendedor…) ---- */
+.info-row {
+    display:flex;
+    justify-content:space-between;
+    font-size:11px;
+    line-height:1.35;
+    margin:2px 0;
+}
+.info-row .lbl { font-weight:700; min-width:62px; flex-shrink:0; }
+.info-row .val { font-weight:600; text-align:right; }
+
+/* ---- CABECERA DE COLUMNAS ITEMS ---- */
+.col-hdr {
+    display:flex;
+    justify-content:space-between;
+    font-size:9px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    padding:3px 0 2px 0;
+    border-top:1px solid #000;
+    border-bottom:1px solid #000;
+    margin:4px 0 3px 0;
+}
+
+/* ---- ÍTEM / PRODUCTO ---- */
+.item {
+    margin-bottom:5px;
+    padding-bottom:4px;
+    border-bottom:1px dashed #888;
+    font-size:11px;
+}
+.item:last-child { border-bottom:none; margin-bottom:2px; }
+
+/* Línea 1: cant × nombre */
+.i-nombre {
+    display:flex;
+    align-items:flex-start;
+    gap:4px;
+    margin-bottom:1px;
+}
+.i-cant {
+    font-size:14px;
+    font-weight:900;
+    min-width:24px;
+    flex-shrink:0;
+    line-height:1.2;
+}
+.i-art {
+    font-size:13px;
+    font-weight:800;
+    line-height:1.25;
+    flex:1;
+    text-transform:uppercase;
+    letter-spacing:0.2px;
+}
+
+/* Línea 2: descripción */
+.i-desc {
+    font-size:10px;
+    font-weight:400;
+    margin-left:28px;
+    line-height:1.3;
+    color:#111;
+    margin-bottom:1px;
+}
+
+/* Línea 3: SKU + talla */
+.i-meta {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-left:28px;
+    font-size:10px;
+    font-weight:600;
+    margin-bottom:2px;
+    letter-spacing:0.2px;
+}
+/* talla con borde — sin relleno negro (térmica no garantiza áreas sólidas) */
+.i-talla {
+    font-size:11px;
+    font-weight:900;
+    border:1.5px solid #000;
+    padding:0 4px;
+    letter-spacing:0.5px;
+    line-height:1.3;
+}
+
+/* Línea 4: precio unitario · subtotal */
+.i-precios {
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-left:28px;
+    margin-top:1px;
+}
+.i-punit {
+    font-size:10px;
+    font-weight:500;
+    color:#222;
+}
+.i-sub {
+    font-size:15px;
+    font-weight:900;
+    letter-spacing:0.3px;
+    white-space:nowrap;
+}
+
+/* ---- SUBTOTALES ---- */
+.tot-row {
+    display:flex;
+    justify-content:space-between;
+    font-size:11px;
+    font-weight:600;
+    margin:2px 0;
+    line-height:1.35;
+}
+.tot-row .tv {
+    font-weight:700;
+    text-align:right;
+    white-space:nowrap;
+}
+
+/* ---- TOTAL FINAL — caja doble borde ---- */
+.total-box {
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    border-top:3px solid #000;
+    border-bottom:3px solid #000;
+    padding:6px 2px;
+    margin:5px 0 4px 0;
+}
+.total-box .tb-lbl {
+    font-size:16px;
+    font-weight:900;
+    letter-spacing:2px;
+    text-transform:uppercase;
+}
+.total-box .tb-val {
+    font-size:22px;
+    font-weight:900;
+    letter-spacing:0.5px;
+}
+
+/* ---- CÓDIGO DE BARRAS ---- */
+.bc-wrap {
+    text-align:center;
+    padding:5px 0 4px 0;
+}
+.bc-wrap svg {
+    max-width:100%;
+    height:auto;
+    display:block;
+    margin:0 auto;
+}
+
+/* ---- PIE / FOOTER ---- */
+.footer {
+    text-align:center;
+    font-size:10px;
+    font-weight:500;
+    line-height:1.5;
+    padding-top:4px;
+}
+.footer .f-gracias {
+    display:block;
+    font-size:13px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:0.8px;
+    margin-bottom:3px;
+}
+.footer .f-aviso {
+    font-size:10px;
+    font-weight:600;
+}
+.footer .f-pos {
+    display:block;
+    font-size:8px;
+    font-weight:400;
+    letter-spacing:1px;
+    margin-top:5px;
+    text-transform:uppercase;
+    color:#444;
+}
+
+/* ---- IMPRESIÓN ---- */
+@media print {
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color: #000 !important;
+    }
+    body { width:76mm; padding:0 1mm; font-size:11px; }
+    .item, .info-row, .tot-row, .total-box { page-break-inside:avoid; }
+    .bc-wrap svg { max-height:52px !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- CABECERA EMPRESA -->
+<div class="hdr">
+    <span class="hdr-empresa">${sucursal.empresa || 'TIENDA'}</span>
+    ${sucursal.alias ? `<span class="hdr-sucursal">${sucursal.alias}</span>` : ''}
+    ${sucursal.direccion ? `<span class="hdr-meta">${sucursal.direccion}</span>` : ''}
+    ${sucursal.rut_empresa ? `<span class="hdr-meta">RUT: ${sucursal.rut_empresa}</span>` : ''}
+    ${sucursal.telefono ? `<span class="hdr-meta">Tel.: ${sucursal.telefono}</span>` : ''}
+</div>
+
+<hr class="sep sep-D">
+
+<!-- TIPO Y NÚMERO DE TICKET -->
+<div style="text-align:center;font-size:12px;font-weight:700;letter-spacing:1px;margin-bottom:2px;">TICKET DE VENTA</div>
+<div class="ticket-num">N&#xB0;&nbsp;${ticketData.correlativo || ticketData.ticket_id || '------'}</div>
+
+<hr class="sep sep-d">
+
+<!-- DATOS DEL TICKET -->
+<div class="info-block">
+    <div class="info-row">
+        <span class="lbl">Fecha:</span>
+        <span class="val">${ticketData.fecha || new Date().toLocaleDateString('es-CL')}</span>
+    </div>
+    <div class="info-row">
+        <span class="lbl">Hora:</span>
+        <span class="val">${ticketData.hora || new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</span>
+    </div>
+    ${vendedor.nombre ? `<div class="info-row"><span class="lbl">Vendedor:</span><span class="val">${trunc(vendedor.nombre,20)} (${vendedor.codigo||''})</span></div>` : ''}
+    ${cliente.nombre ? `<div class="info-row"><span class="lbl">Cliente:</span><span class="val">${trunc(cliente.nombre,22)}</span></div>` : ''}
+    ${cliente.rut   ? `<div class="info-row"><span class="lbl">RUT:</span><span class="val">${cliente.rut}</span></div>` : ''}
+</div>
+
+<!-- COLUMNAS DE ITEMS -->
+<div class="col-hdr">
+    <span>CANT &nbsp; ARTÍCULO</span>
+    <span>TOTAL</span>
+</div>
+
+<!-- PRODUCTOS -->
+<div class="items">
+    ${productosHtml || '<div style="text-align:center;padding:6px 0;font-size:11px;">Sin productos</div>'}
+</div>
+
+<hr class="sep sep-s">
+
+<!-- TOTALES PARCIALES -->
+<div class="totales">
+    <div class="tot-row">
+        <span>Artículos:</span>
+        <span class="tv">${totales.items || 0}</span>
+    </div>
+    ${totales.subtotal && totales.descuento ? `<div class="tot-row"><span>Subtotal:</span><span class="tv">$${fmt(totales.subtotal)}</span></div>` : ''}
+    ${totales.descuento ? `<div class="tot-row"><span>Descuento:</span><span class="tv">- $${fmt(totales.descuento)}</span></div>` : ''}
+</div>
+
+<!-- TOTAL FINAL -->
+<div class="total-box">
+    <span class="tb-lbl">TOTAL</span>
+    <span class="tb-val">$${fmt(totales.total)}</span>
+</div>
+
+<!-- CÓDIGO DE BARRAS -->
+<div class="bc-wrap">
+    <svg id="barcode"></svg>
+</div>
+
+<hr class="sep sep-d">
+
+<!-- FOOTER -->
+<div class="footer">
+    <span class="f-gracias">¡Gracias por su compra!</span>
+    ${sucursal.politica_cambios ? `<div class="f-aviso">${sucursal.politica_cambios}</div>` : '<div class="f-aviso">Cambios con boleta hasta 15 días</div>'}
+    <div class="f-aviso">Sin devolución de dinero en efectivo</div>
+    <span class="f-pos">&#9632; NEXO POS &#9632;</span>
+</div>
+
+<script>
+    var ticketId = "${ticketData.correlativo || ticketData.ticket_id || '000000'}";
+    function genBarcode() {
+        if (typeof JsBarcode === "undefined") {
+            document.getElementById("barcode").outerHTML =
+                '<p style="text-align:center;font-size:15px;font-weight:900;padding:8px 0;letter-spacing:2px;">#' + ticketId + '</p>';
+            return;
+        }
+        try {
+            JsBarcode("#barcode", ticketId, {
+                format:       "CODE128",
+                width:        1.8,       /* barras angostas → caben bien en 76mm */
+                height:       50,        /* altura legible para pistola/escáner   */
+                displayValue: true,
+                fontSize:     12,
+                fontOptions:  "bold",
+                font:         "Courier New",
+                textMargin:   4,
+                margin:       8,         /* quiet zone mín. recomendado           */
+                background:   "#ffffff",
+                lineColor:    "#000000"
+            });
+        } catch(e) {
+            document.getElementById("barcode").outerHTML =
+                '<p style="text-align:center;font-size:15px;font-weight:900;padding:8px 0;letter-spacing:2px;">#' + ticketId + '</p>';
+        }
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", genBarcode);
+    } else {
+        genBarcode();
+    }
+    window.addEventListener("load", function(){ setTimeout(genBarcode, 80); });
+<\/script>
+</body>
+</html>`;
     }
 
+
 });
+</script>
+
+<!-- ================================================================
+     QZ TRAY — MÓDULO DE IMPRESIÓN TÉRMICA SILENCIOSA
+     Epson TM-T20II | 80mm | CP1252 | 48 columnas Font A
+     ================================================================ -->
+<script>
+/* ── Configuración global inyectada por Django ──────────────────── */
+const QZ_CONFIG = {
+    habilitado:     {{ qz_config.habilitado|yesno:"true,false" }},
+    impresora:      "{{ qz_config.nombre_impresora|escapejs }}",
+    urlCertificado: "{% url 'qz_certificado' %}",
+    urlFirmar:      "{% url 'qz_firmar' %}",
+    csrfToken:      document.querySelector('[name=csrfmiddlewaretoken]')
+                        ? document.querySelector('[name=csrfmiddlewaretoken]').value : '',
+};
+
+/* ── Estado de conexión ─────────────────────────────────────────── */
+let qzConectado = false;
+let qzIntentandoConectar = false;
+let qzFirmaConfigurada = false;
+
+/* ── Cargar qz-tray.js dinámicamente desde CDN ──────────────────── */
+function cargarQzTray() {
+    return new Promise(function(resolve) {
+        if (typeof qz !== 'undefined') { resolve(); return; }
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js';
+        script.onload = resolve;
+        script.onerror = function() {
+            console.warn('[QZ] No se pudo cargar qz-tray.js desde CDN');
+            resolve();
+        };
+        document.head.appendChild(script);
+    });
+}
+
+/* ── Configurar firma del certificado (solo una vez) ────────────── */
+function configurarFirmaQz() {
+    if (qzFirmaConfigurada) return;
+    qzFirmaConfigurada = true;
+
+    qz.security.setCertificatePromise(function(resolve, reject) {
+        fetch(QZ_CONFIG.urlCertificado)
+            .then(function(r) { return r.text(); })
+            .then(resolve)
+            .catch(reject);
+    });
+
+    qz.security.setSignatureAlgorithm('SHA512');
+
+    qz.security.setSignaturePromise(function(toSign) {
+        return function(resolve, reject) {
+            fetch(QZ_CONFIG.urlFirmar, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': QZ_CONFIG.csrfToken,
+                },
+                body: JSON.stringify({ request: toSign })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { resolve(data.firma); })
+            .catch(reject);
+        };
+    });
+}
+
+/* ── Conectar a QZ Tray con reintentos automáticos ──────────────── */
+async function conectarQzTray() {
+    if (qzConectado || qzIntentandoConectar) return;
+    qzIntentandoConectar = true;
+    try {
+        if (qz.websocket.isActive()) {
+            qzConectado = true;
+            qzIntentandoConectar = false;
+            return;
+        }
+        await qz.websocket.connect({ retries: 3, delay: 1 });
+        qzConectado = true;
+        console.log('[QZ] Conectado a', QZ_CONFIG.impresora);
+
+        qz.websocket.setClosedCallbacks(function() {
+            qzConectado = false;
+            console.warn('[QZ] Conexión perdida. Reintentando en 5 segundos...');
+            setTimeout(conectarQzTray, 5000);
+        });
+    } catch (err) {
+        console.warn('[QZ] No se pudo conectar:', err.message || err);
+        qzConectado = false;
+    } finally {
+        qzIntentandoConectar = false;
+    }
+}
+
+/* ── Constantes ESC/POS ─────────────────────────────────────────── */
+const _ESC = '\x1B', _GS = '\x1D', _LF = '\x0A';
+const ESCPOS = {
+    INIT:            _ESC + '@',
+    CHARSET_CP1252:  _ESC + 't\x10',
+    ALIGN_LEFT:      _ESC + 'a\x00',
+    ALIGN_CENTER:    _ESC + 'a\x01',
+    BOLD_ON:         _ESC + 'E\x01',
+    BOLD_OFF:        _ESC + 'E\x00',
+    DOUBLE_SIZE_ON:  _GS  + '!\x11',
+    DOUBLE_SIZE_OFF: _GS  + '!\x00',
+    CUT_PARTIAL:     _GS  + 'V\x41\x03',
+    FEED_3:          _ESC + 'd\x03',
+    // Código de barras
+    BAR_HEIGHT:      _GS  + 'h\x50',       // Alto = 80 puntos
+    BAR_WIDTH:       _GS  + 'w\x02',       // Ancho módulo = 2
+    BAR_HRI_BELOW:   _GS  + 'H\x02',       // HRI (texto) debajo del barcode
+    BAR_FONT_A:      _GS  + 'f\x00',       // Fuente HRI = A
+};
+
+/* ── Helpers de formato (48 columnas Font A) ────────────────────── */
+const COLS = 48;
+
+function padL(t, n) { return String(t || '').substring(0, n).padEnd(n, ' '); }
+function padR(t, n) { return String(t || '').substring(0, n).padStart(n, ' '); }
+function sep(c, n)  { return (c || '-').repeat(n || COLS) + _LF; }
+function fmtCLP(v)  { return '$' + (parseInt(v, 10) || 0).toLocaleString('es-CL'); }
+
+/* Línea "LABEL   valor" — valor ocupa todo el espacio restante sin corte forzado */
+function infoRow(label, value) {
+    const lbl  = String(label || '') + ' ';
+    const val  = String(value || '').substring(0, COLS - lbl.length);
+    return lbl + val + _LF;
+}
+
+/* Línea de dos columnas fijas: izquierda + derecha alineada */
+function col2(izq, der, nDer) {
+    const nd = nDer || 14;
+    return padL(izq, COLS - nd) + padR(der, nd) + _LF;
+}
+
+/* ── Generar array de comandos ESC/POS ──────────────────────────── */
+function generarEscPos(ticketData) {
+    // El backend retorna ticket_id (no correlativo) y la empresa
+    // está embebida dentro del objeto sucursal
+    const sucursal = ticketData.sucursal  || {};
+    const vendedor = ticketData.vendedor  || {};
+    const totales  = ticketData.totales   || {};
+    const cliente  = ticketData.cliente   || {};
+    const productos= ticketData.productos || [];
+
+    // Nombre de empresa viene en sucursal.empresa (string)
+    const empresaNombre = String(sucursal.empresa   || 'MI EMPRESA');
+    const empresaRut    = String(sucursal.rut_empresa || '');
+
+    // Número de ticket: el backend lo retorna como ticket_id
+    const numT = String(ticketData.ticket_id || ticketData.correlativo || 0).padStart(8, '0');
+
+    // Fecha: combinar fecha + hora del backend, o fecha sola
+    let fechaStr = '';
+    if (ticketData.fecha && ticketData.hora) {
+        fechaStr = ticketData.fecha + ' ' + ticketData.hora.substring(0, 5);
+    } else if (ticketData.fecha) {
+        fechaStr = ticketData.fecha;
+    } else {
+        fechaStr = new Date().toLocaleString('es-CL', {
+            day:'2-digit', month:'2-digit', year:'numeric',
+            hour:'2-digit', minute:'2-digit'
+        });
+    }
+
+    const c = [];
+
+    // ── Inicialización ──
+    c.push(ESCPOS.INIT, ESCPOS.CHARSET_CP1252);
+
+    // ── Cabecera empresa ──
+    c.push(ESCPOS.ALIGN_CENTER);
+    c.push(ESCPOS.BOLD_ON);
+    c.push(empresaNombre.toUpperCase().substring(0, COLS) + _LF);
+    c.push(ESCPOS.BOLD_OFF);
+    if (sucursal.alias)     c.push(sucursal.alias.toUpperCase().substring(0, COLS) + _LF);
+    if (sucursal.direccion) c.push(sucursal.direccion.substring(0, COLS) + _LF);
+    if (empresaRut)         c.push('RUT: ' + empresaRut + _LF);
+    if (sucursal.telefono)  c.push('Tel: ' + sucursal.telefono + _LF);
+    c.push(sep('='));
+
+    // ── Número de ticket (doble tamaño) ──
+    // Separar en dos líneas: con double-size solo hay ~24 columnas disponibles
+    // y "TICKET DE VENTA N° 00000000" (27 chars) excede ese límite.
+    c.push(ESCPOS.DOUBLE_SIZE_ON, ESCPOS.BOLD_ON);
+    c.push('TICKET DE VENTA' + _LF);
+    c.push('N\xB0 ' + numT + _LF);
+    c.push(ESCPOS.DOUBLE_SIZE_OFF, ESCPOS.BOLD_OFF);
+    c.push(sep('-'));
+
+    // ── Datos del ticket — infoRow garantiza que el valor no se corte ──
+    c.push(ESCPOS.ALIGN_LEFT);
+    c.push(infoRow('Fecha:',    fechaStr));
+    c.push(infoRow('Vendedor:', String(vendedor.nombre || '')));
+    if (String(cliente.nombre || '').trim())
+        c.push(infoRow('Cliente:', String(cliente.nombre)));
+    if (String(cliente.rut || '').trim())
+        c.push(infoRow('RUT:', String(cliente.rut)));
+    if (ticketData.metodo_pago_principal)
+        c.push(infoRow('Pago:', ticketData.metodo_pago_principal));
+    c.push(sep('='));
+
+    // ── Cabecera de columnas ──
+    c.push(ESCPOS.BOLD_ON);
+    c.push(padL('CANT', 5) + padL('DESCRIPCION', 29) + padR('TOTAL', 10) + _LF);
+    c.push(ESCPOS.BOLD_OFF);
+    c.push(sep('-'));
+
+    // ── Líneas de productos ──
+    productos.forEach(function(p) {
+        const cant   = String(p.cantidad || p.stock || 1);
+        const nombre = String(p.articulo || p.nombre || '').toUpperCase().substring(0, 29);
+        const subT   = p.subtotal || ((p.cantidad || p.stock || 1) * (p.precio_unitario || p.precio || 0));
+        const total  = fmtCLP(subT);
+        const precU  = fmtCLP(p.precio_unitario || p.precio || 0);
+        const sku    = p.sku ? 'SKU:' + p.sku : '';
+
+        c.push(padR(cant, 4) + ' ' + padL(nombre, 29) + padR(total, 10) + _LF);
+        c.push('     ' + padL(sku, 15) + padL('P/U: ' + precU, 19) + _LF);
+    });
+
+    c.push(sep('='));
+
+    // ── Totales ──
+    const subtotal  = totales.subtotal  || ticketData.subtotal  || 0;
+    const descuento = totales.descuento || ticketData.descuento || 0;
+    const total     = totales.total     || ticketData.total     || 0;
+    // IVA incluido en el precio (Chile, precio final incluye IVA)
+    const iva       = Math.round(total - total / 1.19);
+
+    if (descuento > 0) {
+        c.push(col2('Subtotal s/desc:', fmtCLP(subtotal)));
+        c.push(col2('Descuento:',       '-' + fmtCLP(descuento)));
+        c.push(sep('-'));
+    }
+    c.push(col2('IVA incluido (19%):', fmtCLP(iva), 14));
+    c.push(sep('-'));
+
+    // TOTAL en doble tamaño centrado
+    c.push(ESCPOS.ALIGN_CENTER);
+    c.push(ESCPOS.DOUBLE_SIZE_ON, ESCPOS.BOLD_ON);
+    c.push('TOTAL: ' + fmtCLP(total) + _LF);
+    c.push(ESCPOS.DOUBLE_SIZE_OFF, ESCPOS.BOLD_OFF);
+    c.push(sep('='));
+
+    // ── Código de barras CODE128 nativo (TM-T20II) ──
+    // Configurar altura, ancho y posición del HRI antes de imprimir
+    c.push(ESCPOS.ALIGN_CENTER);
+    c.push(_LF);
+    c.push(ESCPOS.BAR_HEIGHT);         // Alto = 80 pts
+    c.push(ESCPOS.BAR_WIDTH);          // Módulo = 2x
+    c.push(ESCPOS.BAR_HRI_BELOW);      // Texto debajo
+    c.push(ESCPOS.BAR_FONT_A);         // Fuente A
+
+    // GS k \x49 [longitud] {B[datos]
+    // {B indica Code Set B (caracteres ASCII imprimibles)
+    const barcodeData = '{B' + numT;
+    c.push(_GS + 'k\x49' + String.fromCharCode(barcodeData.length) + barcodeData);
+    c.push(_LF);
+
+    c.push(sep('-'));
+
+    // ── Pie de página ──
+    c.push(ESCPOS.ALIGN_CENTER);
+    c.push('*** GRACIAS POR SU COMPRA ***' + _LF);
+
+    c.push(ESCPOS.FEED_3);
+    c.push(ESCPOS.CUT_PARTIAL);
+
+    return c;
+}
+
+/* ── Imprimir con QZ Tray ───────────────────────────────────────── */
+async function imprimirConQZ(ticketData) {
+    try {
+        await cargarQzTray();
+
+        if (typeof qz === 'undefined') {
+            console.warn('[QZ] qz-tray.js no disponible');
+            return false;
+        }
+
+        configurarFirmaQz();
+
+        if (!qz.websocket.isActive()) {
+            await conectarQzTray();
+        }
+
+        if (!qzConectado) return false;
+
+        const config = qz.configs.create(QZ_CONFIG.impresora, {
+            encoding: 'CP1252',
+            copies: 1,
+        });
+
+        const datos = generarEscPos(ticketData);
+        await qz.print(config, datos);
+
+        console.log('[QZ] Ticket enviado a "' + QZ_CONFIG.impresora + '"');
+        return true;
+
+    } catch (err) {
+        console.error('[QZ] Error al imprimir:', err);
+        return false;
+    }
+}
+
+/* ── Iniciar conexión QZ en segundo plano al cargar la página ───── */
+if (QZ_CONFIG.habilitado) {
+    cargarQzTray().then(function() {
+        if (typeof qz !== 'undefined') {
+            configurarFirmaQz();
+            conectarQzTray();
+        }
+    });
+}
 </script>

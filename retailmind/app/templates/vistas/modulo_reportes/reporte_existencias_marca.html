@@ -1,7 +1,11 @@
 {% load static %}
 
-{% include 'layout/header.html' %}
-{% include 'layout/menu.html' %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<link href="{% static 'libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css' %}" rel="stylesheet">
+<link href="{% static 'libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css' %}" rel="stylesheet">
 
 <div class="page-content">
     <div class="container-fluid">
@@ -102,9 +106,9 @@
     /* ========== KPI DASHBOARD ========== */
     .nexo-kpi-dashboard {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 20px;
-        padding: 24px 40px;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 12px;
+        padding: 14px 40px;
         background: var(--nexo-white);
         border-bottom: 1px solid var(--nexo-gray-300);
     }
@@ -112,8 +116,8 @@
     .nexo-kpi-card {
         background: var(--nexo-white);
         border: 1px solid var(--nexo-gray-300);
-        border-radius: var(--nexo-radius-lg);
-        padding: 20px;
+        border-radius: var(--nexo-radius-md);
+        padding: 12px 14px;
         position: relative;
         transition: var(--nexo-transition-fast);
         overflow: hidden;
@@ -140,14 +144,14 @@
     .nexo-kpi-card.kpi-error::before { background: var(--nexo-error); }
 
     .nexo-kpi-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: var(--nexo-radius-md);
+        width: 32px;
+        height: 32px;
+        border-radius: var(--nexo-radius-sm);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.25rem;
-        margin-bottom: 12px;
+        font-size: 1rem;
+        margin-bottom: 8px;
     }
 
     .nexo-kpi-icon.icon-primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
@@ -156,25 +160,25 @@
     .nexo-kpi-icon.icon-error { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); }
 
     .nexo-kpi-label {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 600;
         color: var(--nexo-gray-500);
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
     }
 
     .nexo-kpi-value {
-        font-size: 1.75rem;
+        font-size: 1.35rem;
         font-weight: 700;
         color: var(--nexo-gray-900);
         line-height: 1.2;
     }
 
     .nexo-kpi-meta {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         color: var(--nexo-gray-500);
-        margin-top: 4px;
+        margin-top: 2px;
     }
 
     .nexo-kpi-trend {
@@ -725,87 +729,68 @@
         gap: 4px;
     }
 
-    /* ========== VISTA LISTA COMPACTA ========== */
-    .nexo-productos-list {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+    /* ========== TABLA LISTA COMPACTA ========== */
+    .nexo-list-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.82rem;
     }
 
-    .nexo-producto-row {
-        display: grid;
-        grid-template-columns: 1fr 100px 80px 80px 70px;
-        gap: 12px;
-        align-items: center;
-        background: var(--nexo-white);
-        border: 1px solid var(--nexo-gray-300);
-        border-radius: var(--nexo-radius-sm);
-        padding: 8px 12px;
-        font-size: 0.8rem;
-        transition: var(--nexo-transition-fast);
-    }
-
-    .nexo-producto-row:hover {
-        background: var(--nexo-primary-light);
-        border-color: var(--nexo-primary);
-    }
-
-    .nexo-producto-row .producto-info {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-    }
-
-    .nexo-producto-row .producto-articulo {
-        font-weight: 600;
-        color: var(--nexo-gray-900);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .nexo-producto-row .producto-detalle {
-        font-size: 0.7rem;
-        color: var(--nexo-gray-500);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .nexo-producto-row .producto-precio {
-        text-align: right;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.75rem;
-    }
-
-    .nexo-producto-row .producto-stock {
-        text-align: center;
-    }
-
-    /* ========== HEADER DE LISTA ========== */
-    .nexo-list-header {
-        display: grid;
-        grid-template-columns: 1fr 100px 80px 80px 70px;
-        gap: 12px;
-        padding: 8px 12px;
+    .nexo-list-table thead tr {
         background: var(--nexo-secondary);
         color: var(--nexo-white);
+    }
+
+    .nexo-list-table thead th {
+        padding: 9px 12px;
         font-size: 0.7rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        border-radius: var(--nexo-radius-sm);
-        margin-bottom: 4px;
+        white-space: nowrap;
+        border: none;
     }
 
-    .nexo-list-header span:not(:first-child) {
-        text-align: center;
+    .nexo-list-table thead th:first-child { text-align: left; }
+    .nexo-list-table thead th:not(:first-child) { text-align: right; }
+    .nexo-list-table thead th:last-child { text-align: center; }
+
+    .nexo-list-table tbody tr {
+        border-bottom: 1px solid var(--nexo-gray-300);
+        transition: var(--nexo-transition-fast);
     }
 
-    .nexo-list-header span:nth-child(2),
-    .nexo-list-header span:nth-child(3) {
-        text-align: right;
+    .nexo-list-table tbody tr:nth-child(even) {
+        background: var(--nexo-gray-100);
+    }
+
+    .nexo-list-table tbody tr:hover {
+        background: var(--nexo-primary-light) !important;
+    }
+
+    .nexo-list-table td {
+        padding: 8px 12px;
+        vertical-align: middle;
+    }
+
+    .nexo-list-table td:first-child { text-align: left; }
+    .nexo-list-table td:not(:first-child) { text-align: right; }
+    .nexo-list-table td:last-child { text-align: center; }
+
+    .td-articulo-name {
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+    }
+
+    .td-articulo-sub {
+        font-size: 0.7rem;
+        color: var(--nexo-gray-500);
+        margin-top: 2px;
+    }
+
+    .td-mono {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.78rem;
     }
 
     /* ========== TOGGLE VISTA ========== */
@@ -947,6 +932,12 @@
     }
 
     /* ========== RESPONSIVE ========== */
+    @media (max-width: 1400px) {
+        .nexo-kpi-dashboard {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
     @media (max-width: 1200px) {
         .nexo-header,
         .nexo-kpi-dashboard,
@@ -975,7 +966,7 @@
         }
 
         .nexo-kpi-dashboard {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(3, 1fr);
         }
 
         .nexo-marca-stats {
@@ -1079,7 +1070,7 @@
             </div>
             <div class="nexo-kpi-label">Stock Bajo</div>
             <div class="nexo-kpi-value" id="kpi-bajo">-</div>
-            <div class="nexo-kpi-meta">SKUs con 5-10 unidades</div>
+            <div class="nexo-kpi-meta">SKUs con 5 a 9 unidades</div>
         </div>
 
         <div class="nexo-kpi-card kpi-error">
@@ -1133,17 +1124,6 @@
             </select>
         </div>
 
-        <div class="nexo-control-group" style="min-width: 120px; max-width: 140px;">
-            <label class="nexo-control-label">Límite</label>
-            <select id="filtro-limite" class="nexo-select">
-                <option value="100">100 productos</option>
-                <option value="250">250 productos</option>
-                <option value="500" selected>500 productos</option>
-                <option value="1000">1000 productos</option>
-                <option value="2000">2000 productos</option>
-            </select>
-        </div>
-
         <div class="nexo-btn-group">
             <button class="nexo-btn nexo-btn-secondary" onclick="limpiarFiltros()">
                 <i class="ri-delete-bin-line"></i> Limpiar
@@ -1187,30 +1167,44 @@
         </div>
         
         <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
-            <span class="nexo-quick-label">Vista:</span>
-            <div class="nexo-view-toggle">
-                <button class="nexo-view-btn active" onclick="cambiarVista('lista')" data-view="lista">
-                    <i class="ri-list-check"></i> Lista
-                </button>
-                <button class="nexo-view-btn" onclick="cambiarVista('cards')" data-view="cards">
-                    <i class="ri-layout-grid-line"></i> Cards
-                </button>
-            </div>
         </div>
     </div>
 
     <!-- ========== CONTENIDO REPORTE ========== -->
-    <div class="nexo-content" id="contenido-reporte">
-        <div class="nexo-empty-state">
-            <div class="nexo-empty-icon">📊</div>
-            <div class="nexo-empty-title">Reporte de Existencias</div>
-            <div class="nexo-empty-text">
-                Haz clic en <strong>"Buscar"</strong> para cargar los productos de tu sucursal.<br>
-                <small style="color: var(--nexo-gray-500);">Puedes filtrar por marca, departamento o buscar un artículo específico.</small>
+    <div class="nexo-content" style="padding: 16px 40px 40px;">
+        <!-- Estado inicial / mensajes -->
+        <div id="estado-mensaje">
+            <div class="nexo-empty-state">
+                <div class="nexo-empty-icon">📊</div>
+                <div class="nexo-empty-title">Reporte de Existencias</div>
+                <div class="nexo-empty-text">
+                    Haz clic en <strong>"Buscar"</strong> para cargar los productos de tu sucursal.<br>
+                    <small style="color: var(--nexo-gray-500);">Puedes filtrar por marca, departamento o buscar un artículo específico.</small>
+                </div>
+                <button class="nexo-btn nexo-btn-primary" onclick="cargarReporte()" style="margin-top: 20px;">
+                    <i class="ri-search-line"></i> Cargar Productos
+                </button>
             </div>
-            <button class="nexo-btn nexo-btn-primary" onclick="cargarReporte()" style="margin-top: 20px;">
-                <i class="ri-search-line"></i> Cargar Productos
-            </button>
+        </div>
+
+        <!-- Tabla DataTables -->
+        <div id="contenedor-tabla" style="display:none; background:#fff; border-radius:8px; padding:16px 20px; border:1px solid var(--nexo-gray-300); box-shadow: var(--nexo-shadow-sm);">
+            <table id="tabla-existencias" class="table table-sm table-hover table-bordered" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Artículo</th>
+                        <th>Marca</th>
+                        <th>Color</th>
+                        <th>Departamento</th>
+                        <th>Sucursal</th>
+                        <th>Costo</th>
+                        <th>P. Venta</th>
+                        <th>Stock</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -1220,7 +1214,7 @@ let datosCompletos = [];
 let todasLasMarcas = [];
 let sucursalesDisponibles = [];
 let filtroActivo = 'todos';
-let vistaActual = 'lista';
+let dt = null;
 const SUCURSAL_ACTUAL_ID = '{{ sucursal_actual_id|default:"" }}';
 const SUCURSAL_ACTUAL_ALIAS = '{{ sucursal_actual.alias|default:"" }}';
 
@@ -1261,22 +1255,76 @@ function mostrarAlertaFiltro(mostrar) {
     }
 }
 
-// ========== CAMBIAR VISTA ==========
-function cambiarVista(vista) {
-    vistaActual = vista;
-    
-    // Actualizar botones
-    document.querySelectorAll('.nexo-view-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.view === vista) {
-            btn.classList.add('active');
-        }
-    });
-    
-    // Re-renderizar si hay datos
-    if (datosCompletos.length > 0) {
-        renderizarReporte(datosCompletos);
+// ========== INICIALIZAR DATATABLE ==========
+function inicializarDataTable() {
+    if (dt) {
+        dt.destroy();
+        dt = null;
     }
+    dt = $('#tabla-existencias').DataTable({
+        language: {
+            emptyTable:     'Sin datos para mostrar',
+            info:           'Mostrando _START_ a _END_ de _TOTAL_ productos',
+            infoEmpty:      'Sin productos',
+            infoFiltered:   '(filtrado de _MAX_ total)',
+            lengthMenu:     'Mostrar _MENU_ productos',
+            loadingRecords: 'Cargando...',
+            processing:     'Procesando...',
+            search:         'Buscar:',
+            zeroRecords:    'No se encontraron productos',
+            paginate: {
+                first:    'Primero',
+                last:     'Último',
+                next:     'Siguiente',
+                previous: 'Anterior'
+            }
+        },
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
+        responsive: true,
+        order: [[1, 'asc'], [0, 'asc']],
+        columns: [
+            { data: 'articulo', title: 'Artículo' },
+            { data: 'marca', title: 'Marca' },
+            { data: 'color', title: 'Color' },
+            { data: 'departamento', title: 'Departamento' },
+            { data: 'sucursal_alias', title: 'Sucursal' },
+            {
+                data: 'costo', title: 'Costo',
+                render: (d, type) => type === 'display' ? '$' + formatearNumero(d) : d,
+                className: 'text-end'
+            },
+            {
+                data: 'precio_venta', title: 'P. Venta',
+                render: (d, type) => type === 'display' ? '<strong>$' + formatearNumero(d) + '</strong>' : d,
+                className: 'text-end'
+            },
+            {
+                data: 'total_stock', title: 'Stock',
+                render: (d, type) => {
+                    if (type === 'display') {
+                        return `<span class="stock-badge ${getStockClass(d)}">${d}</span>`;
+                    }
+                    return d;
+                },
+                className: 'text-center'
+            },
+            {
+                data: 'total_stock', title: 'Estado',
+                render: (d, type) => {
+                    if (type === 'display') {
+                        if (d < 5) return '<span class="badge rounded-pill" style="background:#FF4D4D;font-size:0.7rem;">Crítico</span>';
+                        if (d < 10) return '<span class="badge rounded-pill" style="background:#FFB020;font-size:0.7rem;">Bajo</span>';
+                        return '<span class="badge rounded-pill" style="background:#00D4AA;font-size:0.7rem;">OK</span>';
+                    }
+                    if (d < 5) return 'critico';
+                    if (d < 10) return 'bajo';
+                    return 'ok';
+                },
+                className: 'text-center'
+            }
+        ]
+    });
 }
 
 // ========== CARGAR FILTROS ==========
@@ -1424,15 +1472,14 @@ function filtroRapido(tipo) {
 
 // ========== CARGAR REPORTE ==========
 async function cargarReporte(forzarSinFiltro = false) {
-    const contenido = document.getElementById('contenido-reporte');
-    const limite = document.getElementById('filtro-limite').value;
+    const limite = 5000;
     
     // Validar filtros (pero permitir sin filtro con confirmación)
     if (!tieneFiltroValido() && !forzarSinFiltro) {
         // Preguntar si quiere cargar sin filtro
         const confirmar = confirm(
             '⚠️ No has seleccionado ningún filtro.\n\n' +
-            `Se cargarán los primeros ${limite} productos de tu sucursal.\n` +
+            'Se cargarán todos los productos de tu sucursal.\n' +
             'Esto puede tomar unos segundos.\n\n' +
             '¿Deseas continuar?'
         );
@@ -1447,7 +1494,7 @@ async function cargarReporte(forzarSinFiltro = false) {
     mostrarLoading(
         true, 
         sinFiltro ? 'Cargando productos...' : 'Buscando productos...', 
-        sinFiltro ? `Obteniendo ${limite} productos de tu sucursal` : 'Aplicando filtros seleccionados'
+        sinFiltro ? 'Obteniendo todos los productos de tu sucursal' : 'Aplicando filtros seleccionados'
     );
     
     try {
@@ -1495,7 +1542,9 @@ async function cargarReporte(forzarSinFiltro = false) {
             }
         } else if (data.requiere_filtro) {
             mostrarAlertaFiltro(true);
-            contenido.innerHTML = `
+            document.getElementById('contenedor-tabla').style.display = 'none';
+            document.getElementById('estado-mensaje').style.display = 'block';
+            document.getElementById('estado-mensaje').innerHTML = `
                 <div class="nexo-empty-state">
                     <div class="nexo-empty-icon">⚙️</div>
                     <div class="nexo-empty-title">Filtro Requerido</div>
@@ -1503,7 +1552,9 @@ async function cargarReporte(forzarSinFiltro = false) {
                 </div>
             `;
         } else {
-            contenido.innerHTML = `
+            document.getElementById('contenedor-tabla').style.display = 'none';
+            document.getElementById('estado-mensaje').style.display = 'block';
+            document.getElementById('estado-mensaje').innerHTML = `
                 <div class="nexo-empty-state">
                     <div class="nexo-empty-icon">⚠️</div>
                     <div class="nexo-empty-title">Error al cargar</div>
@@ -1514,7 +1565,9 @@ async function cargarReporte(forzarSinFiltro = false) {
     } catch (error) {
         mostrarLoading(false);
         console.error('Error:', error);
-        contenido.innerHTML = `
+        document.getElementById('contenedor-tabla').style.display = 'none';
+        document.getElementById('estado-mensaje').style.display = 'block';
+        document.getElementById('estado-mensaje').innerHTML = `
             <div class="nexo-empty-state">
                 <div class="nexo-empty-icon">❌</div>
                 <div class="nexo-empty-title">Error de conexión</div>
@@ -1564,9 +1617,7 @@ function actualizarKPIs(datos) {
 
 // ========== RENDERIZAR REPORTE ==========
 function renderizarReporte(datos) {
-    const contenido = document.getElementById('contenido-reporte');
-    
-    // Aplicar filtro activo
+    // Aplicar filtro rápido activo
     let datosFiltrados = datos;
     if (filtroActivo === 'critico') {
         datosFiltrados = datos.filter(d => d.total_stock < 5);
@@ -1575,223 +1626,33 @@ function renderizarReporte(datos) {
     } else if (filtroActivo === 'ok') {
         datosFiltrados = datos.filter(d => d.total_stock >= 10);
     }
-    
-    if (!datosFiltrados || datosFiltrados.length === 0) {
-        contenido.innerHTML = `
+
+    // Aplanar campo sucursal para la tabla
+    const datosPlanos = datosFiltrados.map(item => ({
+        ...item,
+        sucursal_alias: Object.keys(item.sucursales || {})[0] || '-'
+    }));
+
+    if (!dt) {
+        inicializarDataTable();
+    }
+
+    dt.clear();
+    dt.rows.add(datosPlanos);
+    dt.draw();
+
+    // Mostrar tabla / ocultar mensaje
+    document.getElementById('estado-mensaje').style.display = datosPlanos.length === 0 ? 'block' : 'none';
+    document.getElementById('contenedor-tabla').style.display = datosPlanos.length === 0 ? 'none' : 'block';
+
+    if (datosPlanos.length === 0) {
+        document.getElementById('estado-mensaje').innerHTML = `
             <div class="nexo-empty-state">
                 <div class="nexo-empty-icon">📦</div>
                 <div class="nexo-empty-title">Sin resultados</div>
-                <div class="nexo-empty-text">
-                    No se encontraron productos ${filtroActivo !== 'todos' ? 'con el filtro aplicado' : 'con stock'}.
-                    Intenta cambiar los filtros o verifica el inventario.
-                </div>
-            </div>
-        `;
-        return;
+                <div class="nexo-empty-text">No se encontraron productos ${filtroActivo !== 'todos' ? 'con el filtro rápido aplicado' : 'con stock'}.</div>
+            </div>`;
     }
-    
-    // Agrupar por marca
-    const porMarca = {};
-    datosFiltrados.forEach(item => {
-        const marca = item.marca || 'Sin Marca';
-        if (!porMarca[marca]) {
-            porMarca[marca] = [];
-        }
-        porMarca[marca].push(item);
-    });
-    
-    // Renderizar según vista
-    let html = '';
-    Object.keys(porMarca).sort().forEach(marca => {
-        if (vistaActual === 'cards') {
-            html += renderizarMarcaCards(marca, porMarca[marca]);
-        } else {
-            html += renderizarMarcaLista(marca, porMarca[marca]);
-        }
-    });
-    
-    contenido.innerHTML = html;
-}
-
-// ========== CALCULAR STATS DE MARCA ==========
-function calcularStatsMarca(productos) {
-    let totalStock = 0;
-    let totalSKUs = productos.length;
-    let valorInventario = 0;
-    let valorVenta = 0;
-    let stockCritico = 0;
-    let stockBajo = 0;
-    
-    productos.forEach(p => {
-        totalStock += p.total_stock;
-        valorInventario += p.costo * p.total_stock;
-        valorVenta += p.precio_venta * p.total_stock;
-        if (p.total_stock < 5) stockCritico++;
-        else if (p.total_stock < 10) stockBajo++;
-    });
-    
-    const margenPromedio = valorInventario > 0 ? ((valorVenta - valorInventario) / valorInventario * 100).toFixed(1) : 0;
-    
-    let estadoMarca = 'Óptimo';
-    let estadoColor = 'text-success';
-    if (stockCritico > totalSKUs * 0.3) {
-        estadoMarca = 'Crítico';
-        estadoColor = 'text-error';
-    } else if (stockBajo + stockCritico > totalSKUs * 0.2) {
-        estadoMarca = 'Atención';
-        estadoColor = 'text-warning';
-    }
-    
-    return { totalStock, totalSKUs, valorInventario, valorVenta, stockCritico, stockBajo, margenPromedio, estadoMarca, estadoColor };
-}
-
-// ========== RENDERIZAR MARCA - VISTA LISTA (COMPACTA) ==========
-function renderizarMarcaLista(marca, productos) {
-    const stats = calcularStatsMarca(productos);
-    
-    let html = `
-        <div class="nexo-marca-section">
-            <div class="nexo-marca-header">
-                <div class="nexo-marca-title">
-                    <h3>${marca}</h3>
-                    <span class="nexo-marca-badge" style="background: rgba(0,102,255,0.2); color: var(--nexo-primary);">
-                        ${stats.totalSKUs} SKUs
-                    </span>
-                </div>
-                <div class="nexo-marca-stats">
-                    <div class="nexo-marca-stat">
-                        <span class="nexo-marca-stat-label">Stock</span>
-                        <span class="nexo-marca-stat-value">${formatearNumero(stats.totalStock)}</span>
-                    </div>
-                    <div class="nexo-marca-stat">
-                        <span class="nexo-marca-stat-label">Valor</span>
-                        <span class="nexo-marca-stat-value">$${formatearNumero(stats.valorInventario)}</span>
-                    </div>
-                    <div class="nexo-marca-stat">
-                        <span class="nexo-marca-stat-label">Estado</span>
-                        <span class="nexo-marca-stat-value ${stats.estadoColor}">${stats.estadoMarca}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="padding: 12px;">
-                <div class="nexo-list-header">
-                    <span>Artículo / Color</span>
-                    <span>Costo</span>
-                    <span>Precio</span>
-                    <span>Sucursal</span>
-                    <span>Stock</span>
-                </div>
-                <div class="nexo-productos-list">
-    `;
-    
-    productos.forEach(p => {
-        const stockClass = getStockClass(p.total_stock);
-        const sucursalNombre = Object.keys(p.sucursales)[0] || '-';
-        
-        html += `
-            <div class="nexo-producto-row">
-                <div class="producto-info">
-                    <span class="producto-articulo">${p.articulo}</span>
-                    <span class="producto-detalle">${p.color} · ${p.departamento}</span>
-                </div>
-                <div class="producto-precio">$${formatearNumero(p.costo)}</div>
-                <div class="producto-precio" style="color: var(--nexo-primary); font-weight: 600;">$${formatearNumero(p.precio_venta)}</div>
-                <div class="producto-detalle" style="text-align: center;">${sucursalNombre}</div>
-                <div class="producto-stock"><span class="stock-badge ${stockClass}">${p.total_stock}</span></div>
-            </div>
-        `;
-    });
-    
-    html += `
-                </div>
-            </div>
-            
-            <div class="nexo-marca-totals">
-                <div class="nexo-marca-total-item">
-                    <span class="nexo-marca-total-label">Total:</span>
-                    <span class="nexo-marca-total-value">${formatearNumero(stats.totalStock)} uds</span>
-                </div>
-                <div class="nexo-marca-total-item">
-                    <span class="nexo-marca-total-label">Inversión:</span>
-                    <span class="nexo-marca-total-value">$${formatearNumero(stats.valorInventario)}</span>
-                </div>
-                <div class="nexo-marca-total-item">
-                    <span class="nexo-marca-total-label">Valor Venta:</span>
-                    <span class="nexo-marca-total-value" style="color: var(--nexo-success);">$${formatearNumero(stats.valorVenta)}</span>
-                </div>
-                <div class="nexo-marca-total-item">
-                    <span class="nexo-marca-total-label">Margen:</span>
-                    <span class="nexo-marca-total-value">${stats.margenPromedio}%</span>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    return html;
-}
-
-// ========== RENDERIZAR MARCA - VISTA CARDS ==========
-function renderizarMarcaCards(marca, productos) {
-    const stats = calcularStatsMarca(productos);
-    
-    let html = `
-        <div class="nexo-marca-section">
-            <div class="nexo-marca-header">
-                <div class="nexo-marca-title">
-                    <h3>${marca}</h3>
-                    <span class="nexo-marca-badge" style="background: rgba(0,102,255,0.2); color: var(--nexo-primary);">
-                        ${stats.totalSKUs} SKUs · ${formatearNumero(stats.totalStock)} uds
-                    </span>
-                </div>
-                <div class="nexo-marca-stats">
-                    <div class="nexo-marca-stat">
-                        <span class="nexo-marca-stat-label">Valor</span>
-                        <span class="nexo-marca-stat-value">$${formatearNumero(stats.valorInventario)}</span>
-                    </div>
-                    <div class="nexo-marca-stat">
-                        <span class="nexo-marca-stat-label">Margen</span>
-                        <span class="nexo-marca-stat-value ${stats.margenPromedio >= 30 ? 'text-success' : 'text-warning'}">${stats.margenPromedio}%</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="padding: 12px;">
-                <div class="nexo-productos-grid">
-    `;
-    
-    productos.forEach(p => {
-        const stockClass = getStockClass(p.total_stock);
-        const sucursalNombre = Object.keys(p.sucursales)[0] || '-';
-        
-        html += `
-            <div class="nexo-producto-card">
-                <div class="nexo-producto-header">
-                    <span class="nexo-producto-nombre">${p.articulo}</span>
-                    <span class="nexo-producto-stock-badge ${stockClass}">${p.total_stock}</span>
-                </div>
-                <div class="nexo-producto-meta">
-                    <span class="nexo-producto-tag">${p.color}</span>
-                    <span class="nexo-producto-tag">${p.departamento}</span>
-                </div>
-                <div class="nexo-producto-precios">
-                    <span class="nexo-producto-costo">Costo: $${formatearNumero(p.costo)}</span>
-                    <span class="nexo-producto-precio">$${formatearNumero(p.precio_venta)}</span>
-                </div>
-                <div class="nexo-producto-sucursal">
-                    <i class="ri-map-pin-2-line"></i> ${sucursalNombre}
-                </div>
-            </div>
-        `;
-    });
-    
-    html += `
-                </div>
-            </div>
-        </div>
-    `;
-    
-    return html;
 }
 
 // ========== HELPERS ==========
@@ -1822,7 +1683,7 @@ async function exportarExcel() {
         const deptId = document.getElementById('filtro-departamento').value;
         const busqueda = document.getElementById('busqueda-articulo').value.trim();
         const sucursalId = document.getElementById('filtro-sucursal').value;
-        const limite = document.getElementById('filtro-limite').value;
+        const limite = 5000;
         
         let url = '/app/api/exportar-existencias-marca-excel/';
         const params = new URLSearchParams();
@@ -1854,7 +1715,11 @@ function limpiarFiltros() {
     datosCompletos = [];
     document.getElementById('btn-exportar').disabled = true;
     
-    document.getElementById('contenido-reporte').innerHTML = `
+    // Destruir DataTable y mostrar estado inicial
+    if (dt) { dt.destroy(); dt = null; }
+    document.getElementById('contenedor-tabla').style.display = 'none';
+    document.getElementById('estado-mensaje').style.display = 'block';
+    document.getElementById('estado-mensaje').innerHTML = `
         <div class="nexo-empty-state">
             <div class="nexo-empty-icon">🔍</div>
             <div class="nexo-empty-title">Listo para Analizar</div>

@@ -35,10 +35,29 @@ def tiene_permiso(context, codigo_opcion, tipo_permiso='puede_ver'):
     )
 
 
+@register.simple_tag(takes_context=True)
+def puede_ver_opcion_tag(context, codigo_opcion):
+    """
+    Tag que verifica si el usuario puede ver una opción (por rol Y por sucursal).
+    
+    Uso en template:
+        {% puede_ver_opcion_tag 'dashboard_ventas' as puede_ver %}
+        {% if puede_ver %}...{% endif %}
+    """
+    request = context.get('request')
+    if not request or not request.user.is_authenticated:
+        return False
+    
+    sucursal_id = request.session.get('idSucursalActual')
+    return PermisoRol.tiene_permiso(request.user, codigo_opcion, 'puede_ver', sucursal_id=sucursal_id)
+
+
 @register.filter
 def puede_ver_opcion(user, codigo_opcion):
     """
-    Filtro para verificar si el usuario puede ver una opción
+    Filtro para verificar si el usuario puede ver una opción.
+    NOTE: This filter cannot access the request/session, so it only checks role permissions.
+    The middleware handles sucursal-level blocking at the URL level.
     
     Uso en template:
         {% if user|puede_ver_opcion:'dashboard_ventas' %}

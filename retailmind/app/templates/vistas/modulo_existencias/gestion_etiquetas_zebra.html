@@ -442,6 +442,175 @@
     font-size: 1rem;
 }
 
+/* ========== MODAL IMPRIMIR ========== */
+.modal-header-print {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
+    color: var(--nexo-white);
+}
+
+.modal-preview-panel {
+    background: var(--nexo-gray-100);
+    border-left: 1px solid var(--nexo-gray-300);
+}
+
+.quantity-stepper {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    overflow: hidden;
+}
+
+.quantity-stepper button {
+    background: var(--nexo-gray-100);
+    border: none;
+    padding: 4px 10px;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--nexo-gray-700);
+    transition: var(--nexo-transition-fast);
+}
+
+.quantity-stepper button:hover {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.quantity-stepper input {
+    width: 52px;
+    text-align: center;
+    border: none;
+    border-left: 1px solid var(--nexo-gray-300);
+    border-right: 1px solid var(--nexo-gray-300);
+    padding: 4px 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--nexo-secondary);
+}
+
+.quantity-stepper input:focus {
+    outline: none;
+    background: var(--nexo-primary-light);
+}
+
+/* SKU search result rows - hover updates preview */
+.sku-result-row {
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.sku-result-row:hover {
+    background: var(--nexo-primary-light) !important;
+}
+
+.sku-result-row.sku-selected {
+    background: var(--nexo-primary-light);
+    border-left: 3px solid var(--nexo-primary);
+}
+
+/* Ya impreso badge en tabla productos */
+.badge-impreso {
+    background: rgba(0, 212, 170, 0.12);
+    color: #007a63;
+    border: 1px solid rgba(0, 212, 170, 0.3);
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.badge-nuevo {
+    background: rgba(139,139,155,0.1);
+    color: #666;
+    border: 1px solid rgba(139,139,155,0.25);
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+/* Modal print summary footer */
+.modal-print-summary {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.modal-print-summary .stat {
+    text-align: center;
+}
+
+.modal-print-summary .stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    display: block;
+    line-height: 1;
+}
+
+.modal-print-summary .stat-label {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+}
+.nexo-card-body-collapsible {
+    transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.25s ease;
+    overflow: hidden;
+}
+
+.nexo-card-body-collapsible.collapsed {
+    max-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    opacity: 0;
+}
+
+.nexo-card-header-toggle {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nexo-toggle-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: var(--nexo-white);
+    border-radius: var(--nexo-radius-sm);
+    padding: 3px 10px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+    white-space: nowrap;
+}
+
+.nexo-toggle-btn:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+/* ========== SORT INDICATOR ========== */
+.sort-active {
+    color: var(--nexo-primary) !important;
+}
+
+th.sort-asc::after { content: ' ↑'; font-size: 0.7em; opacity: 0.7; }
+th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-primary); }
+
+/* ========== DOCUMENTOS TABLE - dynamic height ========== */
+.docs-table-wrapper {
+    overflow-y: auto;
+    max-height: 42vh;
+    min-height: 220px;
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
     .nexo-page {
@@ -455,6 +624,10 @@
     .nexo-table thead th,
     .nexo-table tbody td {
         padding: 8px 10px;
+    }
+    
+    .docs-table-wrapper {
+        max-height: 320px;
     }
 }
 </style>
@@ -479,66 +652,23 @@
         </div>
     </div>
 
-    <div class="row g-4">
-        <!-- Panel Izquierdo: Documentos -->
-        <div class="col-lg-5">
-            <!-- Búsqueda Rápida de SKU -->
-            <div class="nexo-card mb-4">
-                <div class="nexo-card-header" style="background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);">
-                    <h5><i class="ri-search-line"></i> Imprimir SKU Específico</h5>
-                </div>
-                <div class="nexo-card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-7">
-                            <label class="form-label small">Buscar por SKU o Artículo</label>
-                            <input type="text" id="busquedaSkuRapida" class="form-control" 
-                                placeholder="Ingrese SKU o nombre..." 
-                                onkeyup="debounceSkuSearch(event)">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">Cantidad</label>
-                            <input type="number" id="cantidadSkuRapida" class="form-control" 
-                                value="1" min="1" max="999">
-                        </div>
-                        <div class="col-md-2">
-                            <button class="nexo-btn nexo-btn-primary w-100" onclick="buscarSkuRapido()">
-                                <i class="ri-search-line"></i>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Resultados de búsqueda rápida -->
-                    <div id="resultadosSkuRapido" class="mt-3" style="display: none;">
-                        <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
-                            <table class="nexo-table">
-                                <thead>
-                                    <tr>
-                                        <th>SKU</th>
-                                        <th>Artículo</th>
-                                        <th>Talla</th>
-                                        <th>Precio</th>
-                                        <th>Etiq.</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaSkuRapido"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
+    <!-- ===== FILA 1: Documentos Disponibles (ancho completo) ===== -->
+    <div class="row g-3 mb-3">
+        <div class="col-12">
             <div class="nexo-card">
                 <div class="nexo-card-header">
-                    <h5><i class="ri-file-list-3-line"></i> Documentos Disponibles</h5>
+                    <h5>
+                        <i class="ri-file-list-3-line"></i> Documentos Disponibles
+                        <span id="docCount" class="nexo-badge" style="background:rgba(255,255,255,0.2);color:#fff;font-size:0.7rem;margin-left:6px;"></span>
+                    </h5>
                 </div>
                 <div class="nexo-card-body">
-                    <!-- Filtros -->
-                    <div class="nexo-filters">
-                        <div class="row g-3">
-                            <div class="col-md-6">
+                    <!-- Filtros en línea horizontal -->
+                    <div class="nexo-filters mb-3">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-xl-2 col-md-4">
                                 <label class="form-label">Sucursal</label>
-                                <select id="filtroSucursal" class="form-select" onchange="cargarDocumentos()">
+                                <select id="filtroSucursal" class="form-select form-select-sm" onchange="cargarDocumentos()">
                                     <option value="">Todas</option>
                                     {% for sucursal in sucursales %}
                                     <option value="{{ sucursal.id }}" {% if sucursal.id == sucursal_actual_id %}selected{% endif %}>
@@ -547,46 +677,47 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Fuente Datos</label>
-                                <select id="filtroFuente" class="form-select" onchange="cargarDocumentos()">
-                                    <option value="postgres">PostgreSQL (RetailMind)</option>
-                                    <option value="mysql">MySQL (HoldingTebes)</option>
+                            <div class="col-xl-2 col-md-4">
+                                <label class="form-label">Fuente</label>
+                                <select id="filtroFuente" class="form-select form-select-sm" onchange="cargarDocumentos()">
+                                    <option value="postgres">PostgreSQL</option>
+                                    <option value="mysql">MySQL</option>
                                 </select>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Tipo Documento</label>
-                                <select id="filtroTipo" class="form-select" onchange="cargarDocumentos()">
+                            <div class="col-xl-2 col-md-4">
+                                <label class="form-label">Tipo</label>
+                                <select id="filtroTipo" class="form-select form-select-sm" onchange="cargarDocumentos()">
                                     <option value="todos">Todos</option>
-                                    <option value="compra">Facturas de Compra</option>
+                                    <option value="compra">Facturas Compra</option>
                                     <option value="traspaso">Traspasos DTE</option>
                                     <option value="traspaso_interno">Traspasos Internos</option>
                                 </select>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-xl-2 col-md-4">
                                 <label class="form-label">Desde</label>
-                                <input type="date" id="filtroFechaInicio" class="form-control" onchange="cargarDocumentos()">
+                                <input type="date" id="filtroFechaInicio" class="form-control form-control-sm" onchange="cargarDocumentos()">
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-xl-2 col-md-4">
                                 <label class="form-label">Hasta</label>
-                                <input type="date" id="filtroFechaFin" class="form-control" onchange="cargarDocumentos()">
+                                <input type="date" id="filtroFechaFin" class="form-control form-control-sm" onchange="cargarDocumentos()">
                             </div>
-                            <div class="col-12">
+                            <div class="col-xl-2 col-md-4">
                                 <label class="form-label">Buscar</label>
-                                <input type="text" id="filtroSearch" class="form-control" placeholder="Número de documento o proveedor..." onkeyup="debounceSearch()">
+                                <input type="text" id="filtroSearch" class="form-control form-control-sm" placeholder="N° doc o proveedor..." onkeyup="debounceSearch()">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Lista de Documentos -->
-                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Tabla de Documentos -->
+                    <div class="docs-table-wrapper">
                         <table class="nexo-table">
                             <thead>
                                 <tr>
                                     <th>Tipo</th>
-                                    <th>N° Doc</th>
-                                    <th>Fecha</th>
-                                    <th>Origen</th>
+                                    <th>N° Documento</th>
+                                    <th class="sort-desc" title="Ordenado por fecha DTE, más reciente primero">Fecha DTE</th>
+                                    <th>Origen / Proveedor</th>
+                                    <th>Destino</th>
                                     <th>Productos</th>
                                     <th>Estado</th>
                                     <th></th>
@@ -594,7 +725,7 @@
                             </thead>
                             <tbody id="tablaDocumentos">
                                 <tr>
-                                    <td colspan="7" class="text-center py-4">
+                                    <td colspan="8" class="text-center py-4">
                                         <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
                                         <p class="mt-2 mb-0 text-muted">Cargando documentos...</p>
                                     </td>
@@ -618,108 +749,70 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Panel Derecho: Productos y Etiquetas -->
-        <div class="col-lg-7">
-            <!-- Información del Documento Seleccionado -->
-            <div class="nexo-card mb-4" id="cardDocumentoSeleccionado" style="display: none;">
-                <div class="nexo-card-header">
-                    <h5><i class="ri-file-text-line"></i> <span id="tituloDocumento">Documento Seleccionado</span></h5>
+    <!-- ===== FILA 2: SKU Rápido + Vista Previa ===== -->
+    <div class="row g-3">
+        <!-- Búsqueda Rápida de SKU -->
+        <div class="col-lg-5">
+            <div class="nexo-card">
+                <div class="nexo-card-header" style="background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);">
+                    <h5><i class="ri-search-line"></i> Imprimir SKU Específico</h5>
                 </div>
                 <div class="nexo-card-body">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <div class="nexo-stats-card">
-                                <div class="nexo-stats-icon primary">
-                                    <i class="ri-box-3-line"></i>
-                                </div>
-                                <div class="nexo-stats-content">
-                                    <h4 id="statTotalProductos">0</h4>
-                                    <p>Productos</p>
-                                </div>
-                            </div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-7">
+                            <label class="form-label small">Buscar por SKU o Artículo</label>
+                            <input type="text" id="busquedaSkuRapida" class="form-control" 
+                                placeholder="Ingrese SKU o nombre..." 
+                                onkeyup="debounceSkuSearch(event)">
                         </div>
-                        <div class="col-md-4">
-                            <div class="nexo-stats-card">
-                                <div class="nexo-stats-icon success">
-                                    <i class="ri-price-tag-3-line"></i>
-                                </div>
-                                <div class="nexo-stats-content">
-                                    <h4 id="statTotalEtiquetas">0</h4>
-                                    <p>Etiquetas a imprimir</p>
-                                </div>
-                            </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Cantidad</label>
+                            <input type="number" id="cantidadSkuRapida" class="form-control" 
+                                value="1" min="1" max="999">
                         </div>
-                        <div class="col-md-4">
-                            <div class="nexo-stats-card">
-                                <div class="nexo-stats-icon warning">
-                                    <i class="ri-checkbox-multiple-line"></i>
-                                </div>
-                                <div class="nexo-stats-content">
-                                    <h4 id="statSeleccionados">0</h4>
-                                    <p>Seleccionados</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Alertas -->
-                    <div id="alertasContainer"></div>
-
-                    <!-- Acciones -->
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <button class="nexo-btn nexo-btn-outline" onclick="seleccionarTodos(true)">
-                                <i class="ri-checkbox-multiple-line"></i> Seleccionar Todos
-                            </button>
-                            <button class="nexo-btn nexo-btn-outline" onclick="seleccionarTodos(false)">
-                                <i class="ri-checkbox-blank-line"></i> Deseleccionar
+                        <div class="col-md-2">
+                            <button class="nexo-btn nexo-btn-primary w-100" onclick="buscarSkuRapido()">
+                                <i class="ri-search-line"></i>
                             </button>
                         </div>
-                        <button class="nexo-btn nexo-btn-success nexo-btn-lg" onclick="imprimirEtiquetas()" id="btnImprimir" disabled>
-                            <i class="ri-printer-line"></i> Imprimir Etiquetas
-                        </button>
                     </div>
-
-                    <!-- Tabla de Productos -->
-                    <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
-                        <table class="nexo-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 40px;">
-                                        <input type="checkbox" id="checkAll" onchange="toggleAll(this)">
-                                    </th>
-                                    <th>SKU</th>
-                                    <th>Artículo</th>
-                                    <th>Marca</th>
-                                    <th>Talla</th>
-                                    <th>Color</th>
-                                    <th>Precio</th>
-                                    <th>Cant.</th>
-                                    <th>Etiquetas</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tablaProductos">
-                                <tr>
-                                    <td colspan="9" class="text-center py-4">
-                                        <i class="ri-price-tag-3-line" style="font-size: 3rem; color: var(--nexo-gray-300);"></i>
-                                        <p class="mt-2 mb-0 text-muted">Seleccione un documento para ver sus productos</p>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <!-- Resultados de búsqueda rápida -->
+                    <div id="resultadosSkuRapido" class="mt-3" style="display: none;">
+                        <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                            <table class="nexo-table">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Talla</th>
+                                        <th>Precio</th>
+                                        <th>Etiq.</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaSkuRapido"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Preview de Etiqueta -->
+        <!-- Vista Previa de Etiqueta -->
+        <div class="col-lg-7">
             <div class="nexo-card">
-                <div class="nexo-card-header">
+                <div class="nexo-card-header nexo-card-header-toggle" onclick="toggleVistaPrevia()">
                     <h5><i class="ri-eye-line"></i> Vista Previa de Etiqueta</h5>
+                    <button class="nexo-toggle-btn" id="btnTogglePrevia" onclick="event.stopPropagation(); toggleVistaPrevia()">
+                        <i class="ri-eye-off-line" id="iconTogglePrevia"></i>
+                        <span id="textoTogglePrevia">Ocultar</span>
+                    </button>
                 </div>
-                <div class="nexo-card-body">
+                <div class="nexo-card-body nexo-card-body-collapsible" id="bodyVistaPrevia" style="max-height: 600px; opacity: 1;">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-5">
                             <div class="etiqueta-preview">
                                 <div class="etiqueta-preview-box" id="previewEtiqueta">
                                     <div style="font-size: 10px;">
@@ -750,7 +843,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-7">
                             <h6 class="text-muted mb-3">Configuración de Impresión</h6>
                             <div class="mb-3">
                                 <label class="form-label small">Fecha de Impresión</label>
@@ -767,6 +860,231 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL: DOCUMENTO (Productos del DTE) ========== -->
+<div class="modal fade" id="modalDocumento" tabindex="-1" aria-labelledby="modalDocumentoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%); color: var(--nexo-white);">
+                <div>
+                    <h5 class="modal-title mb-0" id="modalDocumentoLabel">
+                        <i class="ri-file-text-line me-2" style="color: var(--nexo-accent);"></i>
+                        <span id="tituloDocumento">Documento</span>
+                    </h5>
+                    <small id="docSubtitulo" class="opacity-75"></small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Stats -->
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="nexo-stats-card">
+                            <div class="nexo-stats-icon primary"><i class="ri-box-3-line"></i></div>
+                            <div class="nexo-stats-content">
+                                <h4 id="statTotalProductos">0</h4>
+                                <p>Productos en doc.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="nexo-stats-card">
+                            <div class="nexo-stats-icon success"><i class="ri-price-tag-3-line"></i></div>
+                            <div class="nexo-stats-content">
+                                <h4 id="statTotalEtiquetas">0</h4>
+                                <p>Etiquetas selec.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="nexo-stats-card">
+                            <div class="nexo-stats-icon warning"><i class="ri-checkbox-multiple-line"></i></div>
+                            <div class="nexo-stats-content">
+                                <h4 id="statSeleccionados">0</h4>
+                                <p>Seleccionados</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alertas historial -->
+                <div id="alertasContainer"></div>
+
+                <!-- Acciones -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex gap-2">
+                        <button class="nexo-btn nexo-btn-outline" onclick="seleccionarTodos(true)">
+                            <i class="ri-checkbox-multiple-line"></i> Todos
+                        </button>
+                        <button class="nexo-btn nexo-btn-outline" onclick="seleccionarTodos(false)">
+                            <i class="ri-checkbox-blank-line"></i> Ninguno
+                        </button>
+                    </div>
+                    <div class="text-muted small" id="docSeleccionInfo"></div>
+                </div>
+
+                <!-- Tabla de Productos -->
+                <div class="table-responsive" style="max-height: 55vh; overflow-y: auto;">
+                    <table class="nexo-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 36px;">
+                                    <input type="checkbox" id="checkAll" onchange="toggleAll(this)">
+                                </th>
+                                <th>SKU</th>
+                                <th>Artículo</th>
+                                <th>Marca</th>
+                                <th>Talla</th>
+                                <th>Color</th>
+                                <th>Precio</th>
+                                <th>Cant.</th>
+                                <th>Etiquetas</th>
+                                <th title="Etiquetas impresas anteriormente">Prev.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaProductos">
+                            <tr>
+                                <td colspan="10" class="text-center py-4">
+                                    <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
+                                    <p class="mt-2 mb-0 text-muted">Cargando productos...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
+                    <i class="ri-close-line"></i> Cerrar
+                </button>
+                <button class="nexo-btn nexo-btn-success nexo-btn-lg" onclick="abrirModalDesdeDocumento()" id="btnImprimir" disabled>
+                    <i class="ri-printer-line"></i> Revisar e Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL: REVISAR E IMPRIMIR ========== -->
+<div class="modal fade" id="modalImprimir" tabindex="-1" aria-labelledby="modalImprimirLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header modal-header-print">
+                <h5 class="modal-title" id="modalImprimirLabel">
+                    <i class="ri-printer-line me-2" style="color: var(--nexo-accent);"></i>
+                    Revisar e Imprimir Etiquetas
+                    <span class="ms-2" id="modalDocTitulo" style="font-weight:400; font-size:0.9rem; opacity:0.8;"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="d-flex" style="min-height: 420px;">
+                    <!-- Columna izquierda: tabla de productos -->
+                    <div class="flex-grow-1 p-3" style="overflow-y: auto; max-height: 60vh;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 fw-semibold">Productos seleccionados</h6>
+                            <div class="d-flex gap-2">
+                                <span class="nexo-badge nexo-badge-info" id="modalResumenProductos">0 productos</span>
+                                <span class="nexo-badge nexo-badge-success" id="modalResumenEtiquetas">0 etiquetas</span>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="nexo-table" id="modalTablaProductos">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Talla</th>
+                                        <th>Precio</th>
+                                        <th>Etiquetas</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modalProductosList"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Columna derecha: preview + config -->
+                    <div class="modal-preview-panel p-3 flex-shrink-0" style="width: 280px;">
+                        <p class="text-muted small fw-semibold mb-2 text-uppercase" style="letter-spacing:.5px;">Vista Previa</p>
+                        <div class="etiqueta-preview mb-3">
+                            <div class="etiqueta-preview-box" id="modalPreviewBox">
+                                <div style="font-size: 10px;">
+                                    <div class="d-flex justify-content-between">
+                                        <span id="mprevSucursal">SUCURSAL</span>
+                                        <span id="mprevDesc">DESCRIPCIÓN</span>
+                                    </div>
+                                    <div class="text-center my-2">
+                                        <div style="border:1px solid #000;height:36px;display:flex;align-items:center;justify-content:center;font-size:8px;">
+                                            |||||||||||||||||||
+                                        </div>
+                                        <strong style="font-size:13px;" id="mprevSku">0000000</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span id="mprevArt">ARTICULO</span>
+                                        <strong style="font-size:13px;" id="mprevPrecio">$0</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <span>G/F <span id="mprevFactura">00000</span></span>
+                                        <strong style="font-size:15px;" id="mprevTalla">00</strong>
+                                        <span id="mprevMarca">MARCA</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between" style="font-size:9px;">
+                                        <span id="mprevFecha">01-01-2026</span>
+                                        <span id="mprevColor">COLOR</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="text-muted small fw-semibold mb-2 text-uppercase" style="letter-spacing:.5px;">Configuración</p>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Fecha de impresión</label>
+                            <input type="date" id="modalFechaImpresion" class="form-control form-control-sm" onchange="sincronizarFechaModal()">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small mb-1">Sucursal (etiqueta)</label>
+                            <input type="text" id="modalSucursalEtiqueta" class="form-control form-control-sm" maxlength="8" placeholder="Máx. 8 car." oninput="sincronizarSucursalModal()">
+                        </div>
+
+                        <!-- Resumen totales -->
+                        <div class="modal-print-summary">
+                            <div class="stat">
+                                <span class="stat-value" id="modalStatProductos">0</span>
+                                <span class="stat-label">Productos</span>
+                            </div>
+                            <div class="vr"></div>
+                            <div class="stat">
+                                <span class="stat-value text-success" id="modalStatEtiquetas">0</span>
+                                <span class="stat-label">Etiquetas</span>
+                            </div>
+                            <div class="vr"></div>
+                            <div class="stat">
+                                <span class="stat-value" id="modalStatFilas">0</span>
+                                <span class="stat-label">Filas ZPL</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div id="modalAlertaImpresora" class="nexo-alert nexo-alert-warning small py-1 px-2 mb-0 me-auto" style="display:none;">
+                    <i class="ri-alert-line"></i> Sin impresora — conecta Zebra Browser Print
+                </div>
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
+                    <i class="ri-close-line"></i> Cancelar
+                </button>
+                <button type="button" class="nexo-btn nexo-btn-success nexo-btn-lg" id="btnConfirmarImprimir" onclick="confirmarImpresionModal()">
+                    <i class="ri-printer-line"></i> Confirmar e Imprimir
+                    <span id="btnConfirmarTotal" class="ms-1 opacity-75 small"></span>
+                </button>
             </div>
         </div>
     </div>
@@ -956,7 +1274,7 @@ async function cargarDocumentos() {
     const tbody = document.getElementById('tablaDocumentos');
     tbody.innerHTML = `
         <tr>
-            <td colspan="6" class="text-center py-4">
+            <td colspan="8" class="text-center py-4">
                 <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
                 <p class="mt-2 mb-0 text-muted">Cargando documentos...</p>
             </td>
@@ -984,7 +1302,7 @@ async function cargarDocumentos() {
         } else {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="text-center py-4 text-danger">
+                    <td colspan="8" class="text-center py-4 text-danger">
                         <i class="ri-error-warning-line" style="font-size: 2rem;"></i>
                         <p class="mt-2 mb-0">${data.error || 'Error al cargar documentos'}</p>
                     </td>
@@ -993,14 +1311,14 @@ async function cargarDocumentos() {
         }
     } catch (error) {
         console.error('Error:', error);
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center py-4 text-danger">
-                    <i class="ri-wifi-off-line" style="font-size: 2rem;"></i>
-                    <p class="mt-2 mb-0">Error de conexión</p>
-                </td>
-            </tr>
-        `;
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-danger">
+                        <i class="ri-wifi-off-line" style="font-size: 2rem;"></i>
+                        <p class="mt-2 mb-0">Error de conexión</p>
+                    </td>
+                </tr>
+            `;
     }
 }
 
@@ -1010,7 +1328,7 @@ function renderizarDocumentos(documentos) {
     if (!documentos || documentos.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-4">
+                <td colspan="8" class="text-center py-4">
                     <i class="ri-file-search-line" style="font-size: 3rem; color: var(--nexo-gray-300);"></i>
                     <p class="mt-2 mb-0 text-muted">No se encontraron documentos</p>
                 </td>
@@ -1021,6 +1339,7 @@ function renderizarDocumentos(documentos) {
     
     tbody.innerHTML = documentos.map(doc => `
         <tr class="doc-row ${documentoSeleccionado?.id === doc.id && documentoSeleccionado?.tipo === doc.tipo ? 'selected' : ''}" 
+            data-tipo="${doc.tipo}" data-doc-id="${doc.id}"
             onclick="seleccionarDocumento('${doc.tipo}', ${doc.id})" style="cursor: pointer;">
             <td>
                 <span class="nexo-badge ${doc.tipo === 'DTE_COMPRA' ? 'nexo-badge-info' : 'nexo-badge-success'}">
@@ -1029,7 +1348,8 @@ function renderizarDocumentos(documentos) {
             </td>
             <td><strong>${doc.numero}</strong></td>
             <td>${doc.fecha}</td>
-            <td title="${doc.origen}">${doc.origen.substring(0, 15)}${doc.origen.length > 15 ? '...' : ''}</td>
+            <td title="${doc.origen}">${doc.origen.substring(0, 25)}${doc.origen.length > 25 ? '...' : ''}</td>
+            <td title="${doc.destino || ''}">${(doc.destino || '-').substring(0, 15)}</td>
             <td><span class="nexo-badge nexo-badge-warning">${doc.total_productos} uds</span></td>
             <td>
                 ${doc.ya_impreso ? `
@@ -1057,6 +1377,11 @@ function actualizarPaginacion(pagination) {
         `Mostrando página ${pagination.current_page} de ${pagination.total_pages} (${pagination.total_items} documentos)`;
     document.getElementById('btnPrevPage').disabled = !pagination.has_previous;
     document.getElementById('btnNextPage').disabled = !pagination.has_next;
+
+    const badge = document.getElementById('docCount');
+    if (badge) {
+        badge.textContent = pagination.total_items > 0 ? `${pagination.total_items} docs` : '';
+    }
 }
 
 function cambiarPagina(direccion) {
@@ -1076,143 +1401,185 @@ function debounceSearch() {
     }, 300);
 }
 
-// ========== BÚSQUEDA RÁPIDA DE SKU ==========
-let skuSearchTimeout = null;
-let productosSkuRapido = [];
+// ========== MODAL DE IMPRESIÓN ==========
 
-function debounceSkuSearch(event) {
-    if (event.key === 'Enter') {
-        buscarSkuRapido();
-        return;
-    }
-    if (skuSearchTimeout) clearTimeout(skuSearchTimeout);
-    skuSearchTimeout = setTimeout(() => {
-        const termino = document.getElementById('busquedaSkuRapida').value.trim();
-        if (termino.length >= 2) {
-            buscarSkuRapido();
-        }
-    }, 400);
+let modalProductos = [];  // Productos cargados en el modal
+let modalContexto = null; // { tipo, id, numero } del documento origen
+
+function abrirModalImprimir(productos, contexto = null) {
+    modalProductos = productos.map(p => ({ ...p })); // copia
+    modalContexto = contexto;
+
+    // Título
+    const titulo = contexto ? `— ${contexto.tipo_display || contexto.tipo} #${contexto.numero}` : '— SKU Manual';
+    document.getElementById('modalDocTitulo').textContent = titulo;
+
+    // Sincronizar fecha y sucursal desde los campos del panel
+    const fechaPanel = document.getElementById('fechaImpresion');
+    const sucursalPanel = document.getElementById('sucursalEtiqueta');
+    document.getElementById('modalFechaImpresion').value = fechaPanel?.value || new Date().toISOString().split('T')[0];
+    document.getElementById('modalSucursalEtiqueta').value = sucursalPanel?.value || '';
+
+    renderizarModalProductos();
+    actualizarModalResumen();
+
+    // Alerta impresora
+    const alertaEl = document.getElementById('modalAlertaImpresora');
+    alertaEl.style.display = printerDevice ? 'none' : 'flex';
+
+    // Preview del primer producto
+    if (modalProductos.length > 0) actualizarModalPreview(modalProductos[0]);
+
+    const modal = new bootstrap.Modal(document.getElementById('modalImprimir'));
+    modal.show();
 }
 
-async function buscarSkuRapido() {
-    const termino = document.getElementById('busquedaSkuRapida').value.trim();
-    const sucursalId = document.getElementById('filtroSucursal').value || '';
-    
-    if (termino.length < 2) {
-        document.getElementById('resultadosSkuRapido').style.display = 'none';
+function renderizarModalProductos() {
+    const tbody = document.getElementById('modalProductosList');
+    if (!modalProductos || modalProductos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-muted">Sin productos</td></tr>`;
         return;
     }
-    
-    try {
-        const params = new URLSearchParams({
-            termino: termino,
-            sucursal_id: sucursalId,
-            fuente: obtenerFuenteActual()
-        });
-        
-        const response = await fetch(`/app/etiquetas/buscar-producto/?${params}`);
-        const data = await response.json();
-        
-        if (data.success) {
-            productosSkuRapido = data.productos;
-            renderizarResultadosSkuRapido(data.productos);
-            document.getElementById('resultadosSkuRapido').style.display = 'block';
-        } else {
-            console.error('Error en búsqueda:', data.error);
-        }
-    } catch (error) {
-        console.error('Error de conexión:', error);
-    }
-}
 
-function renderizarResultadosSkuRapido(productos) {
-    const tbody = document.getElementById('tablaSkuRapido');
-    const cantidadDefault = parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
-    
-    if (!productos || productos.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center py-3 text-muted">
-                    No se encontraron productos
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = productos.map((prod, index) => `
-        <tr>
-            <td><code style="font-size: 0.85rem;">${prod.sku}</code></td>
-            <td title="${prod.descripcion}">${prod.articulo.substring(0, 15)}</td>
-            <td><strong>${prod.talla}</strong></td>
+    tbody.innerHTML = modalProductos.map((prod, idx) => `
+        <tr class="sku-result-row" onclick="actualizarModalPreview(modalProductos[${idx}])">
+            <td><code style="font-size:.82rem;">${prod.sku}</code></td>
+            <td title="${prod.descripcion || prod.articulo}">${(prod.articulo || '').substring(0, 18)}</td>
+            <td><strong>${prod.talla || '—'}</strong></td>
             <td>$${formatearPrecio(prod.precio)}</td>
-            <td style="width: 70px;">
-                <input type="number" class="quantity-input sku-rapido-cantidad" 
-                    data-index="${index}" value="${cantidadDefault}" min="1" max="999"
-                    style="width: 60px;">
+            <td>
+                <div class="quantity-stepper">
+                    <button type="button" onclick="event.stopPropagation(); cambiarCantidadModal(${idx}, -1)">−</button>
+                    <input type="number" min="0" max="999"
+                        value="${prod.cantidad_etiquetas ?? prod.cantidad ?? 1}"
+                        onchange="event.stopPropagation(); setCantidadModal(${idx}, this.value)"
+                        onclick="event.stopPropagation()">
+                    <button type="button" onclick="event.stopPropagation(); cambiarCantidadModal(${idx}, 1)">+</button>
+                </div>
             </td>
             <td>
-                <button class="nexo-btn nexo-btn-success" 
-                    onclick="imprimirSkuRapido(${index})" 
-                    title="Imprimir etiqueta">
-                    <i class="ri-printer-line"></i>
+                <button class="nexo-btn" style="padding:3px 8px; background:rgba(255,77,77,0.1); color:#cc3d3d; border:1px solid rgba(255,77,77,0.2);"
+                    onclick="event.stopPropagation(); eliminarDeModal(${idx})" title="Quitar">
+                    <i class="ri-delete-bin-line"></i>
                 </button>
             </td>
         </tr>
     `).join('');
 }
 
-async function imprimirSkuRapido(index) {
+function cambiarCantidadModal(idx, delta) {
+    const actual = parseInt(modalProductos[idx].cantidad_etiquetas ?? modalProductos[idx].cantidad ?? 1);
+    modalProductos[idx].cantidad_etiquetas = Math.max(0, actual + delta);
+    renderizarModalProductos();
+    actualizarModalResumen();
+    actualizarModalPreview(modalProductos[idx]);
+}
+
+function setCantidadModal(idx, val) {
+    modalProductos[idx].cantidad_etiquetas = Math.max(0, parseInt(val) || 0);
+    actualizarModalResumen();
+}
+
+function eliminarDeModal(idx) {
+    modalProductos.splice(idx, 1);
+    renderizarModalProductos();
+    actualizarModalResumen();
+    if (modalProductos.length > 0) actualizarModalPreview(modalProductos[0]);
+}
+
+function actualizarModalResumen() {
+    const total = modalProductos.reduce((s, p) => s + (p.cantidad_etiquetas ?? p.cantidad ?? 0), 0);
+    const filas = Math.ceil(total / 2);
+    document.getElementById('modalResumenProductos').textContent = `${modalProductos.length} producto${modalProductos.length !== 1 ? 's' : ''}`;
+    document.getElementById('modalResumenEtiquetas').textContent = `${total} etiqueta${total !== 1 ? 's' : ''}`;
+    document.getElementById('modalStatProductos').textContent = modalProductos.length;
+    document.getElementById('modalStatEtiquetas').textContent = total;
+    document.getElementById('modalStatFilas').textContent = filas;
+    document.getElementById('btnConfirmarTotal').textContent = total > 0 ? `(${total})` : '';
+    document.getElementById('btnConfirmarImprimir').disabled = !printerDevice || total === 0;
+}
+
+function actualizarModalPreview(producto) {
+    if (!producto) return;
+    const fecha = document.getElementById('modalFechaImpresion').value;
+    const sucursal = document.getElementById('modalSucursalEtiqueta').value || producto.sucursal || '';
+    document.getElementById('mprevSucursal').textContent = sucursal.substring(0, 8);
+    document.getElementById('mprevDesc').textContent = (producto.descripcion || producto.articulo || '').substring(0, 22);
+    document.getElementById('mprevSku').textContent = producto.sku;
+    document.getElementById('mprevArt').textContent = (producto.articulo || '').substring(0, 14);
+    document.getElementById('mprevPrecio').textContent = '$' + formatearPrecio(producto.precio);
+    document.getElementById('mprevFactura').textContent = producto.factura || modalContexto?.id || '';
+    document.getElementById('mprevTalla').textContent = producto.talla || '';
+    document.getElementById('mprevMarca').textContent = (producto.marca || '').substring(0, 8);
+    document.getElementById('mprevColor').textContent = (producto.color || '').substring(0, 10);
+    document.getElementById('mprevFecha').textContent = fecha ? formatearFecha(fecha) : new Date().toLocaleDateString('es-CL');
+}
+
+function sincronizarFechaModal() {
+    if (modalProductos.length > 0) actualizarModalPreview(modalProductos[0]);
+    // También actualizar campo del panel principal
+    const val = document.getElementById('modalFechaImpresion').value;
+    const panelFecha = document.getElementById('fechaImpresion');
+    if (panelFecha) panelFecha.value = val;
+}
+
+function sincronizarSucursalModal() {
+    if (modalProductos.length > 0) actualizarModalPreview(modalProductos[0]);
+    const val = document.getElementById('modalSucursalEtiqueta').value;
+    const panelSuc = document.getElementById('sucursalEtiqueta');
+    if (panelSuc) panelSuc.value = val;
+}
+
+async function confirmarImpresionModal() {
     if (!printerDevice) {
-        alert('No hay impresora conectada. Verifica que Zebra Browser Print esté ejecutándose.');
+        Swal.fire({ icon: 'warning', title: 'Sin impresora', text: 'Conecta Zebra Browser Print e intenta de nuevo.', confirmButtonColor: '#0066FF' });
         return;
     }
-    
-    const producto = productosSkuRapido[index];
-    const cantidadInput = document.querySelector(`.sku-rapido-cantidad[data-index="${index}"]`);
-    const cantidad = parseInt(cantidadInput?.value) || 1;
-    
-    // Configurar producto con cantidad de etiquetas
-    producto.cantidad_etiquetas = cantidad;
-    producto.cantidad = cantidad;
-    producto.seleccionado = true;
-    
-    mostrarLoading(`Imprimiendo ${cantidad} etiqueta(s)...`);
-    
+
+    const seleccionados = modalProductos.filter(p => (p.cantidad_etiquetas ?? p.cantidad ?? 0) > 0);
+    if (seleccionados.length === 0) {
+        Swal.fire({ icon: 'info', title: 'Sin etiquetas', text: 'Todas las cantidades son 0.', confirmButtonColor: '#0066FF' });
+        return;
+    }
+
+        // Cerrar modal y mostrar loading
+        bootstrap.Modal.getInstance(document.getElementById('modalImprimir'))?.hide();
+        bootstrap.Modal.getInstance(document.getElementById('modalDocumento'))?.hide();
+        mostrarLoading('Generando etiquetas...');
+
     try {
-        const fechaInput = document.getElementById('fechaImpresion');
-        const fecha = fechaInput.value ? formatearFecha(fechaInput.value) : new Date().toLocaleDateString('es-CL');
-        const sucursal = document.getElementById('sucursalEtiqueta').value || producto.sucursal || '';
-        
+        const fecha = document.getElementById('modalFechaImpresion').value
+            ? formatearFecha(document.getElementById('modalFechaImpresion').value)
+            : new Date().toLocaleDateString('es-CL');
+        const sucursal = document.getElementById('modalSucursalEtiqueta').value;
+
+        const productosEnviar = seleccionados.map(p => ({
+            ...p,
+            sucursal: sucursal || p.sucursal,
+            cantidad_etiquetas: p.cantidad_etiquetas ?? p.cantidad
+        }));
+
         const response = await fetch('/app/etiquetas/generar-datos/', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
             body: JSON.stringify({
-                productos: [{
-                    ...producto,
-                    sucursal: sucursal,
-                    cantidad_etiquetas: cantidad
-                }],
+                productos: productosEnviar,
                 fecha_impresion: fecha,
-                numero_documento: '',
+                numero_documento: modalContexto ? String(modalContexto.numero || '') : '',
                 sucursal: sucursal,
-                tipo_origen: 'MANUAL',
-                documento_id: null
+                tipo_origen: modalContexto?.tipo || 'MANUAL',
+                documento_id: modalContexto?.id || null
             })
         });
-        
+
         const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Error al generar etiqueta');
-        }
-        
-        // Generar y enviar ZPL
+        if (!data.success) throw new Error(data.error || 'Error al generar etiquetas');
+
+        if (data.alertas?.length > 0) mostrarAlertas(data.alertas);
+
+        document.getElementById('loadingText').textContent = `Enviando ${data.total_etiquetas} etiquetas...`;
         const zpl = generarZPL(data.etiquetas);
-        
+
         const printResponse = await fetch(ZEBRA_URL + '/write', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1229,89 +1596,192 @@ async function imprimirSkuRapido(index) {
                 data: zpl
             })
         });
-        
+
+        ocultarLoading();
+
         if (printResponse.ok) {
-            ocultarLoading();
-            
-            // Mostrar mensaje de éxito
             Swal.fire({
                 icon: 'success',
-                title: '¡Impreso!',
-                text: `${cantidad} etiqueta(s) de SKU ${producto.sku} enviadas a la impresora`,
-                timer: 2000,
+                title: '¡Listo!',
+                html: `<strong>${data.total_etiquetas}</strong> etiqueta(s) enviadas a la impresora.<br><small class="text-muted">${data.total_filas} filas ZPL generadas.</small>`,
+                timer: 3000,
                 showConfirmButton: false
             });
+            // Recargar tabla de documentos para actualizar estado
+            cargarDocumentos();
+            // Marcar como impreso en la tabla de productos
+            if (modalContexto) seleccionarDocumento(modalContexto.tipo, modalContexto.id);
         } else {
-            throw new Error('Error en respuesta de impresora');
+            throw new Error('Error en respuesta de impresora: ' + printResponse.status);
         }
-        
+
     } catch (error) {
-        console.error('Error al imprimir:', error);
         ocultarLoading();
-        
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: `Error al imprimir: ${error.message}`
-        });
+        Swal.fire({ icon: 'error', title: 'Error al imprimir', text: error.message });
     }
+}
+
+let skuSearchTimeout = null;
+let productosSkuRapido = [];
+
+function debounceSkuSearch(event) {
+    if (event.key === 'Enter') { buscarSkuRapido(); return; }
+    if (skuSearchTimeout) clearTimeout(skuSearchTimeout);
+    skuSearchTimeout = setTimeout(() => {
+        const t = document.getElementById('busquedaSkuRapida').value.trim();
+        if (t.length >= 2) buscarSkuRapido();
+    }, 400);
+}
+
+async function buscarSkuRapido() {
+    const termino = document.getElementById('busquedaSkuRapida').value.trim();
+    const sucursalId = document.getElementById('filtroSucursal').value || '';
+    if (termino.length < 2) { document.getElementById('resultadosSkuRapido').style.display = 'none'; return; }
+
+    try {
+        const params = new URLSearchParams({ termino, sucursal_id: sucursalId, fuente: obtenerFuenteActual() });
+        const response = await fetch(`/app/etiquetas/buscar-producto/?${params}`);
+        const data = await response.json();
+        if (data.success) {
+            productosSkuRapido = data.productos;
+            renderizarResultadosSkuRapido(data.productos);
+            document.getElementById('resultadosSkuRapido').style.display = 'block';
+        }
+    } catch (error) { console.error('Error búsqueda SKU:', error); }
+}
+
+function renderizarResultadosSkuRapido(productos) {
+    const tbody = document.getElementById('tablaSkuRapido');
+    const cantDefault = parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
+
+    if (!productos || productos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-muted">Sin resultados</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = productos.map((prod, index) => `
+        <tr class="sku-result-row" 
+            onmouseenter="actualizarPreview({...productosSkuRapido[${index}], cantidad_etiquetas: getCantSkuRapido(${index})})"
+            onclick="abrirModalDesdeSkuRapido(${index})">
+            <td><code style="font-size:.82rem;">${prod.sku}</code></td>
+            <td title="${prod.descripcion || prod.articulo}">${prod.articulo.substring(0, 14)}</td>
+            <td><strong>${prod.talla}</strong></td>
+            <td>$${formatearPrecio(prod.precio)}</td>
+            <td onclick="event.stopPropagation()">
+                <div class="quantity-stepper">
+                    <button type="button" onclick="ajustarCantSkuRapido(${index}, -1)">−</button>
+                    <input type="number" class="sku-rapido-cantidad" data-index="${index}"
+                        value="${cantDefault}" min="1" max="999">
+                    <button type="button" onclick="ajustarCantSkuRapido(${index}, 1)">+</button>
+                </div>
+            </td>
+            <td>
+                <button class="nexo-btn nexo-btn-success" 
+                    onclick="event.stopPropagation(); abrirModalDesdeSkuRapido(${index})"
+                    title="Revisar e Imprimir">
+                    <i class="ri-printer-line"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function getCantSkuRapido(index) {
+    const el = document.querySelector(`.sku-rapido-cantidad[data-index="${index}"]`);
+    return parseInt(el?.value) || 1;
+}
+
+function ajustarCantSkuRapido(index, delta) {
+    const el = document.querySelector(`.sku-rapido-cantidad[data-index="${index}"]`);
+    if (el) { el.value = Math.max(1, (parseInt(el.value) || 1) + delta); }
+}
+
+function abrirModalDesdeSkuRapido(index) {
+    const prod = { ...productosSkuRapido[index] };
+    const cant = getCantSkuRapido(index);
+    prod.cantidad_etiquetas = cant;
+    prod.seleccionado = true;
+    const sucursal = document.getElementById('sucursalEtiqueta')?.value || prod.sucursal || '';
+    prod.sucursal = sucursal;
+    abrirModalImprimir([prod], null);
+}
+
+// mantener compatibilidad (ya no se usa directo)
+async function imprimirSkuRapido(index) {
+    abrirModalDesdeSkuRapido(index);
 }
 
 // ========== FUNCIONES DE PRODUCTOS ==========
 
 async function seleccionarDocumento(tipo, id) {
-    mostrarLoading('Cargando productos...');
-    
+    // Abrir modal en estado de carga
+    document.getElementById('tituloDocumento').textContent = 'Cargando...';
+    document.getElementById('docSubtitulo').textContent = '';
+    document.getElementById('tablaProductos').innerHTML = `
+        <tr>
+            <td colspan="10" class="text-center py-4">
+                <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
+                <p class="mt-2 mb-0 text-muted">Cargando productos...</p>
+            </td>
+        </tr>`;
+    document.getElementById('alertasContainer').innerHTML = '';
+    document.getElementById('btnImprimir').disabled = true;
+
+    const modalDoc = new bootstrap.Modal(document.getElementById('modalDocumento'));
+    modalDoc.show();
+
     documentoSeleccionado = { tipo, id };
-    
-    // Marcar documento seleccionado
+
+    // Marcar fila seleccionada en la tabla de documentos
     document.querySelectorAll('.doc-row').forEach(row => row.classList.remove('selected'));
-    event?.target?.closest('tr')?.classList.add('selected');
-    
+    document.querySelectorAll('.doc-row').forEach(row => {
+        if (row.dataset.tipo === tipo && row.dataset.docId === String(id)) row.classList.add('selected');
+    });
+
     try {
         const params = new URLSearchParams({ fuente: obtenerFuenteActual() });
         const response = await fetch(`/app/etiquetas/productos-documento/${tipo}/${id}/?${params}`);
         const data = await response.json();
-        
+
         if (data.success) {
             productosDocumento = data.productos;
-            
-            // Mostrar panel de productos
-            document.getElementById('cardDocumentoSeleccionado').style.display = 'block';
-            document.getElementById('tituloDocumento').textContent = 
-                `${data.documento.tipo_display || tipo} #${data.documento.numero}`;
-            
+
+            // Título del modal
+            const titulo = `${data.documento.tipo_display || tipo} #${data.documento.numero}`;
+            document.getElementById('tituloDocumento').textContent = titulo;
+            document.getElementById('docSubtitulo').textContent =
+                `${data.documento.fecha || ''}${data.documento.proveedor ? ' · ' + data.documento.proveedor : ''}`;
+
             // Actualizar sucursal para etiquetas
-            document.getElementById('sucursalEtiqueta').value = 
+            document.getElementById('sucursalEtiqueta').value =
                 data.documento.sucursal_destino || data.productos[0]?.sucursal || '';
-            
+
             renderizarProductos();
             actualizarEstadisticas();
-            
-            // Mostrar historial de impresiones previas si existe
-            if (data.ya_impreso && data.impresiones_previas && data.impresiones_previas.length > 0) {
-                const impresionesHtml = data.impresiones_previas.map(imp => 
+
+            // Historial impresiones previas
+            if (data.ya_impreso && data.impresiones_previas?.length > 0) {
+                const badges = data.impresiones_previas.map(imp =>
                     `<span class="nexo-badge nexo-badge-info me-2 mb-1">
-                        <i class="ri-printer-fill"></i> ${imp.fecha} - ${imp.usuario} (${imp.total_etiquetas} etiq.)
-                    </span>`
+                        <i class="ri-printer-fill"></i> ${imp.fecha} — ${imp.usuario} (${imp.total_etiquetas} etiq.)
+                     </span>`
                 ).join('');
-                
                 mostrarAlertas([{
                     tipo: 'info',
-                    mensaje: `<strong><i class="ri-history-line"></i> Este documento ya fue impreso ${data.impresiones_previas.length} vez(es):</strong><br>
-                        <div class="mt-2">${impresionesHtml}</div>`
+                    mensaje: `<strong><i class="ri-history-line"></i> Impreso ${data.impresiones_previas.length} vez(ces) anteriormente:</strong>
+                              <div class="mt-2">${badges}</div>`
                 }]);
             } else {
                 mostrarAlertas([]);
             }
         } else {
-            alert(data.error || 'Error al cargar productos');
+            Swal.fire({ icon: 'error', title: 'Error', text: data.error || 'Error al cargar productos', confirmButtonColor: '#0066FF' });
+            modalDoc.hide();
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error de conexión al cargar productos');
-    } finally {
-        ocultarLoading();
+        Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo cargar el documento.', confirmButtonColor: '#0066FF' });
+        modalDoc.hide();
     }
 }
 
@@ -1331,22 +1801,31 @@ function renderizarProductos() {
     }
     
     tbody.innerHTML = productosDocumento.map((prod, index) => `
-        <tr class="${prod.seleccionado ? 'selected' : ''}">
-            <td>
+        <tr class="${prod.seleccionado ? 'selected' : ''} sku-result-row"
+            onmouseenter="actualizarPreview(productosDocumento[${index}])"
+            onclick="toggleProducto(${index})">
+            <td onclick="event.stopPropagation()">
                 <input type="checkbox" class="producto-check" data-index="${index}" 
                     ${prod.seleccionado ? 'checked' : ''} onchange="toggleProducto(${index})">
             </td>
             <td><code>${prod.sku}</code></td>
-            <td title="${prod.descripcion}">${prod.articulo.substring(0, 12)}</td>
+            <td title="${prod.descripcion}">${prod.articulo.substring(0, 14)}</td>
             <td>${prod.marca}</td>
             <td><strong>${prod.talla}</strong></td>
             <td>${prod.color}</td>
             <td>$${formatearPrecio(prod.precio)}</td>
             <td>${prod.cantidad}</td>
-            <td>
+            <td onclick="event.stopPropagation()">
                 <input type="number" class="quantity-input etiquetas-input" data-index="${index}"
                     value="${prod.cantidad_etiquetas || prod.cantidad}" min="0" max="999"
                     onchange="actualizarCantidadEtiquetas(${index}, this.value)">
+            </td>
+            <td>
+                ${prod.ya_impreso
+                    ? `<span class="badge-impreso" title="${prod.etiquetas_impresas} etiq. en ${prod.veces_impreso} sesión(es) previas">
+                            <i class="ri-printer-fill"></i> ${prod.etiquetas_impresas}×
+                       </span>`
+                    : `<span class="badge-nuevo">Nuevo</span>`}
             </td>
         </tr>
     `).join('');
@@ -1388,6 +1867,11 @@ function actualizarEstadisticas() {
     document.getElementById('statTotalProductos').textContent = productosDocumento.length;
     document.getElementById('statTotalEtiquetas').textContent = totalEtiquetas;
     document.getElementById('statSeleccionados').textContent = seleccionados.length;
+
+    const infoEl = document.getElementById('docSeleccionInfo');
+    if (infoEl) infoEl.textContent = seleccionados.length > 0
+        ? `${seleccionados.length} producto(s) · ${totalEtiquetas} etiqueta(s)`
+        : '';
     
     actualizarBotonImprimir();
 }
@@ -1450,121 +1934,23 @@ function mostrarAlertas(alertas) {
 
 // ========== FUNCIÓN DE IMPRESIÓN ==========
 
-async function imprimirEtiquetas() {
-    if (!printerDevice) {
-        alert('No hay impresora conectada. Verifica que Zebra Browser Print esté ejecutándose.');
-        return;
-    }
-    
+function abrirModalDesdeDocumento() {
     const seleccionados = productosDocumento.filter(p => p.seleccionado);
     if (seleccionados.length === 0) {
-        alert('No hay productos seleccionados para imprimir.');
+        Swal.fire({ icon: 'info', title: 'Sin selección', text: 'Selecciona al menos un producto.', confirmButtonColor: '#0066FF' });
         return;
     }
-    
-    mostrarLoading('Generando etiquetas...');
-    
-    try {
-        // Obtener datos de configuración
-        const fechaInput = document.getElementById('fechaImpresion');
-        const fecha = fechaInput.value ? formatearFecha(fechaInput.value) : new Date().toLocaleDateString('es-CL');
-        const sucursal = document.getElementById('sucursalEtiqueta').value;
-        const numeroDoc = documentoSeleccionado ? productosDocumento[0]?.factura : '';
-        
-        // Preparar datos para el servidor
-        const productosParaEnviar = seleccionados.map(p => ({
-            ...p,
-            sucursal: sucursal || p.sucursal,
-            cantidad_etiquetas: p.cantidad_etiquetas || p.cantidad
-        }));
-        
-        // Obtener datos formateados del servidor
-        const response = await fetch('/app/etiquetas/generar-datos/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                productos: productosParaEnviar,
-                fecha_impresion: fecha,
-                numero_documento: numeroDoc,
-                sucursal: sucursal,
-                tipo_origen: documentoSeleccionado?.tipo || 'MANUAL',
-                documento_id: documentoSeleccionado?.id || null
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Error al generar datos de etiquetas');
-        }
-        
-        // Mostrar alertas si hay
-        if (data.alertas && data.alertas.length > 0) {
-            mostrarAlertas(data.alertas);
-        }
-        
-        // Confirmar impresión
-        const totalEtiquetas = data.total_etiquetas;
-        const totalFilas = data.total_filas;
-        
-        if (totalEtiquetas > 100) {
-            const confirmar = confirm(`Se van a imprimir ${totalEtiquetas} etiquetas (${totalFilas} filas). ¿Desea continuar?`);
-            if (!confirmar) {
-                ocultarLoading();
-                return;
-            }
-        }
-        
-        // Generar ZPL
-        document.getElementById('loadingText').textContent = `Enviando ${totalEtiquetas} etiquetas a impresora...`;
-        const zpl = generarZPL(data.etiquetas);
-        
-        console.log('ZPL generado:', zpl.substring(0, 500) + '...');
-        
-        // Enviar a impresora
-        const printResponse = await fetch(ZEBRA_URL + '/write', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                device: {
-                    uid: printerDevice.uid,
-                    connection: printerDevice.connection,
-                    deviceType: printerDevice.deviceType,
-                    provider: printerDevice.provider,
-                    manufacturer: printerDevice.manufacturer,
-                    name: printerDevice.name,
-                    version: printerDevice.version
-                },
-                data: zpl
-            })
-        });
-        
-        if (printResponse.ok) {
-            ocultarLoading();
-            
-            // Mostrar mensaje de éxito
-            mostrarAlertas([{
-                tipo: 'success',
-                mensaje: `✅ ${totalEtiquetas} etiquetas enviadas a la impresora correctamente.`
-            }]);
-            
-            console.log('✅ Etiquetas impresas correctamente');
-        } else {
-            throw new Error('Error en respuesta de impresora: ' + printResponse.status);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error al imprimir:', error);
-        ocultarLoading();
-        
-        mostrarAlertas([{
-            tipo: 'error',
-            mensaje: `Error al imprimir: ${error.message}`
-        }]);
-    }
+    const contexto = documentoSeleccionado ? {
+        tipo: documentoSeleccionado.tipo,
+        id: documentoSeleccionado.id,
+        numero: productosDocumento[0]?.factura || documentoSeleccionado.id,
+        tipo_display: document.getElementById('tituloDocumento')?.textContent || ''
+    } : null;
+    abrirModalImprimir(seleccionados, contexto);
+}
+
+async function imprimirEtiquetas() {
+    abrirModalDesdeDocumento();
 }
 
 // ========== FUNCIONES AUXILIARES ==========
@@ -1604,6 +1990,27 @@ function mostrarLoading(texto = 'Cargando...') {
 
 function ocultarLoading() {
     document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// ========== TOGGLE VISTA PREVIA ==========
+
+let previaVisible = true;
+
+function toggleVistaPrevia() {
+    previaVisible = !previaVisible;
+    const body = document.getElementById('bodyVistaPrevia');
+    const icon = document.getElementById('iconTogglePrevia');
+    const texto = document.getElementById('textoTogglePrevia');
+
+    if (previaVisible) {
+        body.classList.remove('collapsed');
+        icon.className = 'ri-eye-off-line';
+        texto.textContent = 'Ocultar';
+    } else {
+        body.classList.add('collapsed');
+        icon.className = 'ri-eye-line';
+        texto.textContent = 'Mostrar';
+    }
 }
 
 // ========== INICIALIZACIÓN ==========

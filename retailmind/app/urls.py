@@ -41,6 +41,9 @@ from .views_modulo_ventas import (
     obtener_transacciones_dia,
     agregar_deposito_arqueo,
     eliminar_deposito_bancario,
+    declarar_deposito,
+    confirmar_deposito,
+    obtener_depositos_pendientes,
     listar_arqueos,
     crear_arqueo,
     guardar_conteo_fisico,
@@ -195,6 +198,8 @@ from .views_modulo_cotizaciones import (
     cargar_cotizacion_como_ticket,
     # API de envío por correo
     enviar_cotizacion_correo,
+    # Despacho diferido
+    asignar_sku_pendiente,
 )
 from .views_edicion_productos import (
     # Edición de productos
@@ -205,6 +210,7 @@ from .views_edicion_productos import (
     obtener_historial_movimientos,
     eliminar_variacion,
     obtener_producto_desde_talla,
+    excluir_analitica_masivo,
 )
 from .views_modulo_requerimientos import (
     # Vistas principales
@@ -273,10 +279,36 @@ from .views_transbank_sdk import (
     cerrar_dia,
 )
 from .views_dashboard_mejorado import (
-    # Dashboard Integral Mejorado
     dashboard_integral_mejorado,
     obtener_metricas_dashboard_integral,
     exportar_dashboard_integral_excel,
+)
+from .views_dashboards_kpi import (
+    dashboard_documentos,
+    api_dashboard_documentos,
+    dashboard_caja,
+    api_dashboard_caja,
+    dashboard_requerimientos,
+    api_dashboard_requerimientos,
+    dashboard_crm,
+    api_dashboard_crm,
+)
+from .views_prediccion_compras import (
+    dashboard_prediccion,
+    api_prediccion_resumen,
+    api_prediccion_clasificacion,
+    api_prediccion_sugerencias,
+    api_prediccion_alertas_velocidad,
+    api_prediccion_alertas_quiebre,
+    api_prediccion_producto_detalle,
+    api_prediccion_aprobar_sugerencia,
+    api_prediccion_recalcular,
+    api_prediccion_configuracion,
+    api_prediccion_categorias_disponibles,
+    api_prediccion_analisis_categoria,
+    api_prediccion_analisis_marca,
+    api_prediccion_analisis_proveedor,
+    api_prediccion_marca_articulos,
 )
 from django.urls import path
 from django.conf.urls.static import static
@@ -407,6 +439,7 @@ urlpatterns = [
     path('productos/variacion/ajustar-stock/<int:variacion_id>/', ajustar_stock, name='ajustar_stock'),
     path('productos/variacion/historial/<int:variacion_id>/', obtener_historial_movimientos, name='obtener_historial_movimientos'),
     path('productos/variacion/eliminar/<int:variacion_id>/', eliminar_variacion, name='eliminar_variacion'),
+    path('productos/excluir-analitica-masivo/', excluir_analitica_masivo, name='excluir_analitica_masivo'),
     
     # ========== NUEVAS URLs PARA MOVIMIENTOS ==========
      
@@ -548,6 +581,11 @@ urlpatterns = [
     path('api/tickets/anular/', anular_ticket_pendiente, name='anular_ticket_pendiente'),
     path('ticket-pago-pos/', ticket_pago_pos, name='ticket_pago_pos'),
 
+    # ========== QZ TRAY — IMPRESIÓN TÉRMICA ==========
+    path('qz/certificado/', views.qz_certificado, name='qz_certificado'),
+    path('qz/firmar/', views.qz_firmar, name='qz_firmar'),
+    path('qz/config/', views.qz_config_sucursal, name='qz_config_sucursal'),
+
     # ========== NUEVO POS DASHBOARD ==========
     path('pos-dashboard/', pos_dashboard, name='pos_dashboard'),
     path('api/dashboard/stats/', dashboard_stats, name='dashboard_stats'),
@@ -580,6 +618,9 @@ urlpatterns = [
     path('api/cuadratura/transacciones-dia/', obtener_transacciones_dia, name='obtener_transacciones_dia'),
     path('api/cuadratura/agregar-deposito/', agregar_deposito_arqueo, name='agregar_deposito_arqueo'),
     path('api/cuadratura/eliminar-deposito/', eliminar_deposito_bancario, name='eliminar_deposito_bancario'),
+    path('api/cuadratura/deposito/declarar/', declarar_deposito, name='declarar_deposito'),
+    path('api/cuadratura/deposito/<int:deposito_id>/confirmar/', confirmar_deposito, name='confirmar_deposito'),
+    path('api/cuadratura/deposito/pendientes/', obtener_depositos_pendientes, name='obtener_depositos_pendientes'),
     
     # URLs para arqueo mejorado
     path('api/arqueos/', listar_arqueos, name='listar_arqueos'),
@@ -730,6 +771,7 @@ urlpatterns = [
     # APIs de acciones
     path('api/cotizaciones/anular/', anular_cotizacion, name='anular_cotizacion'),
     path('api/cotizaciones/convertir-factura/', convertir_cotizacion_factura, name='convertir_cotizacion_factura'),
+    path('api/cotizaciones/asignar-sku-pendiente/', asignar_sku_pendiente, name='asignar_sku_pendiente'),
     
     # APIs de integración POS
     path('api/cotizaciones/cargar-como-ticket/<int:cotizacion_id>/', cargar_cotizacion_como_ticket, name='cargar_cotizacion_como_ticket'),
@@ -836,6 +878,7 @@ urlpatterns = [
     path('api/reportes/vendedores/', views_modulo_reportes.obtener_vendedores_reporte, name='obtener_vendedores_reporte'),
     path('api/reportes/sucursales/', views_modulo_reportes.obtener_sucursales_reporte, name='obtener_sucursales_reporte'),
     path('api/reportes/comparativa-mensual/', views_modulo_reportes.obtener_comparativa_mensual, name='obtener_comparativa_mensual'),
+    path('api/reportes/documentos-vendedor/', views_modulo_reportes.obtener_documentos_vendedor_reporte, name='obtener_documentos_vendedor_reporte'),
     path('reportes/documentos-emitidos/', views_modulo_reportes.ver_documentos_emitidos, name='ver_documentos_emitidos'),
     path('api/reportes/documentos-emitidos/', views_modulo_reportes.obtener_documentos_emitidos, name='obtener_documentos_emitidos'),
     path('api/reportes/documentos-emitidos-excel/', views_modulo_reportes.exportar_documentos_emitidos_excel, name='exportar_documentos_emitidos_excel'),
@@ -844,7 +887,12 @@ urlpatterns = [
     path('reportes/compras/', views_modulo_reportes.ver_reporte_compras, name='ver_reporte_compras'),
     path('api/reporte-compras/', views_modulo_reportes.api_reporte_compras, name='api_reporte_compras'),
     path('api/exportar-reporte-compras-excel/', views_modulo_reportes.exportar_reporte_compras_excel, name='exportar_reporte_compras_excel'),
-    
+    path('api/rendimiento-compras/', views_modulo_reportes.api_rendimiento_compras, name='api_rendimiento_compras'),
+
+    # Reportes mejorados: recepciones y despachos con datos reales
+    path('api/reporte-recepciones-detallado/', views_modulo_reportes.api_reporte_recepciones_detallado, name='api_reporte_recepciones_detallado'),
+    path('api/reporte-despachos-detallado/', views_modulo_reportes.api_reporte_despachos_detallado, name='api_reporte_despachos_detallado'),
+
     # Reporte de existencias por marca
     path('reportes/existencias-marca/', views_modulo_reportes.ver_reporte_existencias_marca, name='ver_reporte_existencias_marca'),
     path('api/reporte-existencias-marca/', views_modulo_reportes.obtener_reporte_existencias_marca, name='obtener_reporte_existencias_marca'),
@@ -854,6 +902,7 @@ urlpatterns = [
     path('reportes/existencias-sucursal/', views_modulo_reportes.ver_reporte_existencias_sucursal, name='ver_reporte_existencias_sucursal'),
     path('api/reporte-existencias-sucursal/', views_modulo_reportes.obtener_reporte_existencias_sucursal, name='obtener_reporte_existencias_sucursal'),
     path('api/exportar-existencias-sucursal-excel/', views_modulo_reportes.exportar_existencias_sucursal_excel, name='exportar_existencias_sucursal_excel'),
+    path('api/exportar-existencias-sucursal-pdf/', views_modulo_reportes.exportar_existencias_sucursal_pdf, name='exportar_existencias_sucursal_pdf'),
     
     # Reporte de movimientos por sucursal (Inicial vs Restante)
     path('reportes/movimientos-sucursal/', views_modulo_reportes.ver_reporte_movimientos_sucursal, name='ver_reporte_movimientos_sucursal'),
@@ -925,12 +974,10 @@ urlpatterns = [
     path('permisos/importar-sucursal/', importar_permisos_sucursal, name='importar_permisos_sucursal'),
 
     # ========== DASHBOARD INTEGRAL MEJORADO ==========
-    # Vista principal del dashboard integral
     path('dashboard-integral/', dashboard_integral_mejorado, name='dashboard_integral_mejorado'),
-    
-    # APIs del dashboard
     path('api/dashboard-integral/metricas/', obtener_metricas_dashboard_integral, name='obtener_metricas_dashboard_integral'),
     path('api/dashboard-integral/exportar/', exportar_dashboard_integral_excel, name='exportar_dashboard_integral_excel'),
+    path('obtener_metricas_dashboard_integral/', obtener_metricas_dashboard_integral, name='obtener_metricas_dashboard_integral_legacy'),
 
     # ========== MÓDULO DE GESTIÓN DE INVENTARIOS (TOMA FÍSICA) ==========
     # Vistas principales
@@ -984,5 +1031,35 @@ urlpatterns = [
     # APIs auxiliares
     path('etiquetas/sucursales/', views_etiquetas_zebra.obtener_sucursales_usuario, name='obtener_sucursales_etiquetas'),
     path('etiquetas/buscar-producto/', views_etiquetas_zebra.buscar_producto_etiqueta, name='buscar_producto_etiqueta'),
+
+    # ========== DASHBOARDS KPI (nuevos) ==========
+    path('dashboard-documentos/', dashboard_documentos, name='dashboard_documentos'),
+    path('api/dashboard-documentos/datos/', api_dashboard_documentos, name='api_dashboard_documentos'),
+
+    path('dashboard-caja/', dashboard_caja, name='dashboard_caja'),
+    path('api/dashboard-caja/datos/', api_dashboard_caja, name='api_dashboard_caja'),
+
+    path('dashboard-requerimientos/', dashboard_requerimientos, name='dashboard_requerimientos'),
+    path('api/dashboard-requerimientos/datos/', api_dashboard_requerimientos, name='api_dashboard_requerimientos'),
+
+    path('dashboard-crm/', dashboard_crm, name='dashboard_crm'),
+    path('api/dashboard-crm/datos/', api_dashboard_crm, name='api_dashboard_crm'),
+
+    # ========== MÓDULO DE PREDICCIÓN DE COMPRAS ==========
+    path('prediccion/', dashboard_prediccion, name='dashboard_prediccion'),
+    path('api/prediccion/resumen/', api_prediccion_resumen, name='api_prediccion_resumen'),
+    path('api/prediccion/clasificacion/', api_prediccion_clasificacion, name='api_prediccion_clasificacion'),
+    path('api/prediccion/sugerencias/', api_prediccion_sugerencias, name='api_prediccion_sugerencias'),
+    path('api/prediccion/alertas-velocidad/', api_prediccion_alertas_velocidad, name='api_prediccion_alertas_velocidad'),
+    path('api/prediccion/alertas-quiebre/', api_prediccion_alertas_quiebre, name='api_prediccion_alertas_quiebre'),
+    path('api/prediccion/producto/<int:producto_id>/', api_prediccion_producto_detalle, name='api_prediccion_producto_detalle'),
+    path('api/prediccion/aprobar-sugerencia/', api_prediccion_aprobar_sugerencia, name='api_prediccion_aprobar_sugerencia'),
+    path('api/prediccion/recalcular/', api_prediccion_recalcular, name='api_prediccion_recalcular'),
+    path('api/prediccion/configuracion/', api_prediccion_configuracion, name='api_prediccion_configuracion'),
+    path('api/prediccion/categorias-disponibles/', api_prediccion_categorias_disponibles, name='api_prediccion_categorias_disponibles'),
+    path('api/prediccion/analisis-categoria/', api_prediccion_analisis_categoria, name='api_prediccion_analisis_categoria'),
+    path('api/prediccion/analisis-marca/', api_prediccion_analisis_marca, name='api_prediccion_analisis_marca'),
+    path('api/prediccion/analisis-proveedor/', api_prediccion_analisis_proveedor, name='api_prediccion_analisis_proveedor'),
+    path('api/prediccion/marca-articulos/', api_prediccion_marca_articulos, name='api_prediccion_marca_articulos'),
 
 ]

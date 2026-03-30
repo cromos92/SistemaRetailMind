@@ -253,6 +253,85 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 #   EMAIL_HOST_PASSWORD=xxxx-xxxx-xxxx-xxxx  # App Password de Gmail
 #   DEFAULT_FROM_EMAIL=tu-email@gmail.com
 
+# ========== LOGGING ==========
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name} {module}.{funcName}:{lineno} - {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '[{levelname}] {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file_app': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'app.log',
+            'maxBytes': 5 * 1024 * 1024,  # 5 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'file_errors': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'errors.log',
+            'maxBytes': 5 * 1024 * 1024,
+            'backupCount': 10,
+            'formatter': 'verbose',
+            'level': 'ERROR',
+        },
+    },
+    'loggers': {
+        'app': {
+            'handlers': ['console', 'file_app', 'file_errors'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'users': {
+            'handlers': ['console', 'file_app', 'file_errors'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'empresa_management': {
+            'handlers': ['console', 'file_app', 'file_errors'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'assistant': {
+            'handlers': ['console', 'file_app', 'file_errors'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console', 'file_errors'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'file_errors'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file_errors'],
+        'level': 'WARNING',
+    },
+}
+
+# Crear directorio de logs si no existe
+import os as _os
+_logs_dir = BASE_DIR / 'logs'
+if not _logs_dir.exists():
+    _os.makedirs(_logs_dir, exist_ok=True)
+
 # Configuración de seguridad
 PASSWORD_RESET_TIMEOUT = 86400  # 24 horas
 SESSION_COOKIE_AGE = 3600  # 1 hora
@@ -262,6 +341,12 @@ SESSION_SAVE_EVERY_REQUEST = True
 # Configuración de archivos de medios
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# ========== QZ TRAY — IMPRESIÓN TÉRMICA SILENCIOSA ==========
+# Generar con: openssl req -newkey rsa:2048 -nodes -keyout private-key.pem
+#              -x509 -days 3650 -out digital-certificate.txt
+QZ_PRIVATE_KEY_PATH = BASE_DIR / 'retailmind' / 'certs' / 'private-key.pem'
+QZ_CERTIFICATE_PATH = BASE_DIR / 'retailmind' / 'certs' / 'digital-certificate.txt'
 
 # Configuración de Django REST Framework
 REST_FRAMEWORK = {
@@ -275,7 +360,7 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.MultiPartParser',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -287,8 +372,8 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),  # 7 días para app desktop
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # 30 días
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=12),  # 12 horas - el refresh token renueva
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # 7 días con rotación automática
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
@@ -318,8 +403,8 @@ SIMPLE_JWT = {
 DESKTOP_API_CONFIG = {
     'VERSION_MINIMA_APP': '1.0.0',
     'MAX_TICKETS_OFFLINE': 1000,
-    'DIAS_EXPIRACION_TOKEN': 7,
-    'DIAS_EXPIRACION_REFRESH': 30,
+    'HORAS_EXPIRACION_TOKEN': 12,
+    'DIAS_EXPIRACION_REFRESH': 7,
     'TIMESTAMP_TOLERANCE_MINUTES': 5,
 }
 
@@ -339,15 +424,18 @@ ASSISTANT_MAX_MESSAGES_PER_SESSION = 50  # Máximo de mensajes por sesión
 ASSISTANT_SESSION_TIMEOUT_HOURS = 24  # Tiempo de vida de una sesión
 
 # ========== CONFIGURACIÓN CORS PARA APP DESKTOP (NEXO POS) ==========
-# Permitir conexiones desde la app Tauri desktop
-CORS_ALLOW_ALL_ORIGINS = True  # Para desarrollo
-
-# Para producción, especificar orígenes permitidos:
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:1420",  # Tauri dev server
-#     "tauri://localhost",      # Tauri production
-#     "https://tauri.localhost",
-# ]
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:1420",      # Tauri dev server
+        "tauri://localhost",          # Tauri production
+        "https://tauri.localhost",    # Tauri https
+        "https://retail.webappsolutions.cl",
+    ]
+    if 'RAILWAY_PUBLIC_DOMAIN' in os.environ:
+        CORS_ALLOWED_ORIGINS.append(f"https://{os.environ['RAILWAY_PUBLIC_DOMAIN']}")
 
 CORS_ALLOW_CREDENTIALS = True
 

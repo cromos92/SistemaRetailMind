@@ -241,6 +241,7 @@
                                                                 <th class="text-center">N° Documentos</th>
                                                                 <th class="text-end">Ticket Promedio</th>
                                                                 <th class="text-center">% Participación</th>
+                                                                <th class="text-center">Detalle</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -386,17 +387,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const sucursalActivaNombre = '{{ sucursal_activa_nombre|default:"" }}';
     const esSuperuser = {{ es_superuser|yesno:"true,false" }};
 
-    // Cargar sucursales y vendedores
+    // Cargar sucursales primero; vendedores y datos se cargan desde dentro de cargarSucursales()
     cargarSucursales();
-    cargarVendedores();
-    
-    // Cargar datos iniciales (después de que se carguen las sucursales)
-    // Se llamará desde cargarSucursales una vez seleccionada la sucursal activa
 
     // Event listeners
     document.getElementById('btnFiltrar').addEventListener('click', cargarDatos);
     document.getElementById('filtroSucursal').addEventListener('change', function() {
-        cargarVendedores(); // Recargar vendedores según sucursal
+        cargarVendedores();
+        cargarDatos(); // Actualizar gráficas al cambiar sucursal
     });
     document.getElementById('btnExportarVendedores').addEventListener('click', exportarVendedoresExcel);
     document.getElementById('btnPDFVendedores').addEventListener('click', exportarVendedoresPDF);
@@ -473,7 +471,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.warn('No hay sucursales disponibles');
                     }
                     
-                    // Cargar datos después de seleccionar sucursal
+                    // Cargar vendedores filtrados por sucursal activa, luego cargar datos
+                    cargarVendedores();
                     cargarDatos();
                 } else {
                     console.error('Error en respuesta:', data.error);
@@ -756,6 +755,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td class="text-center">
                         <span class="badge bg-primary">${vendedor.participacion.toFixed(1)}%</span>
                     </td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-info" 
+                                onclick="verDocumentosVendedor(${vendedor.id}, '${vendedor.nombre.replace(/'/g, "\\'")}')"
+                                title="Ver documentos del período">
+                            <i class="ri-file-list-2-line"></i>
+                        </button>
+                    </td>
                 </tr>
             `;
             tbody.innerHTML += row;
@@ -822,11 +828,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Crear gráficos de vendedores
     function crearGraficosVendedores(datos) {
+        const top10 = datos.slice(0, 10); // Limitar a top 10 para el gráfico de barras
+
         // Gráfico de barras - Top Vendedores
         const optionsBarras = {
             series: [{
                 name: 'Ventas',
-                data: datos.map(v => v.ventas)
+                data: top10.map(v => v.ventas)
             }],
             chart: {
                 type: 'bar',
@@ -856,7 +864,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             xaxis: {
-                categories: datos.map(v => v.nombre),
+                categories: top10.map(v => v.nombre),
                 labels: {
                     rotate: -45,
                     style: {
@@ -887,14 +895,15 @@ document.addEventListener('DOMContentLoaded', function() {
         chartTopVendedores = new ApexCharts(document.querySelector("#chartTopVendedores"), optionsBarras);
         chartTopVendedores.render();
 
-        // Gráfico circular - Participación
+        // Gráfico circular - Participación (top 10 para legibilidad)
+        const top10Donut = datos.slice(0, 10);
         const optionsDonut = {
-            series: datos.map(v => v.participacion),
+            series: top10Donut.map(v => v.participacion),
             chart: {
                 type: 'donut',
                 height: 350
             },
-            labels: datos.map(v => v.nombre),
+            labels: top10Donut.map(v => v.nombre),
             colors: ['#4154f1', '#2eca6a', '#ff771d', '#f1416c', '#7239ea', '#50cd89'],
             legend: {
                 position: 'bottom'
@@ -1215,7 +1224,110 @@ function verDetalleSucursal(id) {
         timer: 2000
     });
 }
-</script>
+
+function verDocumentosVendedor(vendedorId, vendedorNombre) {
+    const tipoFiltro = document.getElementById('tipoFiltroFecha').value;
+    const sucursal = document.getElementById('filtroSucursal').value;
+    let params = `vendedor_id=${vendedorId}`;
+    if (sucursal) params += `&sucursal_id=${sucursal}`;
+    if (tipoFiltro === 'mes') {
+        params += `&mes=${document.getElementById('filtroMes').value}`;
+    } else if (tipoFiltro === 'fecha') {
+        params += `&fecha=${document.getElementById('filtroFecha').value}`;
+    } else if (tipoFiltro === 'rango') {
+        params += `&fecha_inicio=${document.getElementById('filtroFechaInicio').value}&fecha_fin=${document.getElementById('filtroFechaFin').value}`;
+    }
+
+    document.getElementById('modalVendedorNombre').textContent = vendedorNombre;
+    document.getElementById('modalDocsCuerpo').innerHTML = `
+        <tr><td colspan="7" class="text-center py-4">
+            <div class="spinner-border spinner-border-sm text-primary me-2"></div> Cargando documentos...
+        </td></tr>`;
+    document.getElementById('modalDocsTotal').textContent = '';
+    document.getElementById('modalDocsCantidad').textContent = '';
+
+    const modal = new bootstrap.Modal(document.getElementById('modalDocumentosVendedor'));
+    modal.show();
+
+    fetch(`/app/api/reportes/documentos-vendedor/?${params}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                document.getElementById('modalDocsCuerpo').innerHTML =
+                    `<tr><td colspan="7" class="text-center text-danger">${data.error}</td></tr>`;
+                return;
+            }
+            const docs = data.documentos;
+            const fmt = n => new Intl.NumberFormat('es-CL').format(n);
+            if (docs.length === 0) {
+                document.getElementById('modalDocsCuerpo').innerHTML =
+                    '<tr><td colspan="7" class="text-center text-muted py-3">Sin documentos en este período</td></tr>';
+            } else {
+                const badgeOrigen = o => o === 'DTE'
+                    ? '<span class="badge bg-info text-dark">DTE</span>'
+                    : '<span class="badge bg-secondary">TICKET</span>';
+                document.getElementById('modalDocsCuerpo').innerHTML = docs.map(d => `
+                    <tr>
+                        <td>${badgeOrigen(d.origen)}</td>
+                        <td>${d.tipo}</td>
+                        <td class="fw-semibold">${d.numero}</td>
+                        <td>${d.fecha}</td>
+                        <td>${d.cliente}</td>
+                        <td>${d.sucursal}</td>
+                        <td class="text-end fw-semibold text-success">$${fmt(d.monto)}</td>
+                    </tr>`).join('');
+            }
+            document.getElementById('modalDocsTotal').textContent = '$' + fmt(data.total);
+            document.getElementById('modalDocsCantidad').textContent = data.cantidad + ' doc(s)';
+        })
+        .catch(() => {
+            document.getElementById('modalDocsCuerpo').innerHTML =
+                '<tr><td colspan="7" class="text-center text-danger">Error de conexión</td></tr>';
+        });
+}</script>
+
+<!-- Modal: Documentos del Vendedor -->
+<div class="modal fade" id="modalDocumentosVendedor" tabindex="-1" aria-labelledby="modalDocumentosVendedorLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title text-white" id="modalDocumentosVendedorLabel">
+                    <i class="ri-file-list-2-line me-2"></i>
+                    Documentos de: <span id="modalVendedorNombre" class="fw-bold text-white"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped align-middle mb-0">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Origen</th>
+                                <th>Tipo</th>
+                                <th>N° Doc.</th>
+                                <th>Fecha</th>
+                                <th>Cliente</th>
+                                <th>Sucursal</th>
+                                <th class="text-end">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalDocsCuerpo">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <div class="text-muted">
+                    <i class="ri-file-copy-line me-1"></i>
+                    Total documentos: <strong id="modalDocsCantidad">-</strong>
+                </div>
+                <div class="fs-5 fw-bold text-success">
+                    Total: <span id="modalDocsTotal">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <style>
 .card {

@@ -90,82 +90,53 @@
             </div>
         </div>
 
-        <!-- Estadísticas Rápidas - NEXO Style -->
-        <div class="row g-3 mb-4">
-            <div class="col-md-3">
-                <div class="nexo-card nexo-stat-card">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="nexo-avatar nexo-avatar-primary">
-                                    <i class="ri-file-text-line"></i>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="nexo-stat-label">Total Cotizaciones</p>
-                                <h4 class="nexo-stat-value" id="totalCotizaciones">
-                                    <span class="counter-value">0</span>
-                                </h4>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Estadísticas Rápidas - Barra Compacta -->
+        <div class="nexo-stats-bar mb-4">
+            <div class="nexo-stat-pill">
+                <i class="ri-file-text-line" style="color: var(--nexo-primary); font-size: 1.1rem;"></i>
+                <div>
+                    <div class="nexo-stat-pill-label">Total</div>
+                    <div class="nexo-stat-pill-value" id="totalCotizaciones"><span class="counter-value">0</span></div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="nexo-card nexo-stat-card">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="nexo-avatar nexo-avatar-success">
-                                    <i class="ri-checkbox-circle-line"></i>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="nexo-stat-label">Vigentes</p>
-                                <h4 class="nexo-stat-value" id="totalVigentes">
-                                    <span class="counter-value">0</span>
-                                </h4>
-                            </div>
-                        </div>
-                    </div>
+            <div class="nexo-stat-divider"></div>
+            <div class="nexo-stat-pill">
+                <i class="ri-checkbox-circle-line" style="color: var(--nexo-success); font-size: 1.1rem;"></i>
+                <div>
+                    <div class="nexo-stat-pill-label">Vigentes</div>
+                    <div class="nexo-stat-pill-value" id="totalVigentes"><span class="counter-value">0</span></div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="nexo-card nexo-stat-card">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="nexo-avatar nexo-avatar-info">
-                                    <i class="ri-money-dollar-circle-line"></i>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="nexo-stat-label">Monto Total</p>
-                                <h4 class="nexo-stat-value" id="montoTotal">
-                                    <span class="counter-value">$0</span>
-                                </h4>
-                            </div>
-                        </div>
-                    </div>
+            <div class="nexo-stat-divider"></div>
+            <div class="nexo-stat-pill">
+                <i class="ri-money-dollar-circle-line" style="color: var(--nexo-info); font-size: 1.1rem;"></i>
+                <div>
+                    <div class="nexo-stat-pill-label">Monto Total</div>
+                    <div class="nexo-stat-pill-value" id="montoTotal"><span class="counter-value">$0</span></div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="nexo-card nexo-stat-card">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="nexo-avatar nexo-avatar-warning">
-                                    <i class="ri-file-list-line"></i>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="nexo-stat-label">Facturadas</p>
-                                <h4 class="nexo-stat-value" id="totalFacturadas">
-                                    <span class="counter-value">0</span>
-                                </h4>
-                            </div>
-                        </div>
-                    </div>
+            <div class="nexo-stat-divider"></div>
+            <div class="nexo-stat-pill">
+                <i class="ri-file-list-line" style="color: var(--nexo-warning); font-size: 1.1rem;"></i>
+                <div>
+                    <div class="nexo-stat-pill-label">Facturadas</div>
+                    <div class="nexo-stat-pill-value" id="totalFacturadas"><span class="counter-value">0</span></div>
+                </div>
+            </div>
+            <div class="nexo-stat-divider"></div>
+            <div class="nexo-stat-pill">
+                <i class="ri-close-circle-line" style="color: var(--nexo-error); font-size: 1.1rem;"></i>
+                <div>
+                    <div class="nexo-stat-pill-label">Anuladas</div>
+                    <div class="nexo-stat-pill-value" id="totalAnuladas"><span class="counter-value">0</span></div>
+                </div>
+            </div>
+            <div class="nexo-stat-divider"></div>
+            <div class="nexo-stat-pill" style="flex: 1.5;">
+                <i class="ri-store-2-line" style="color: var(--nexo-gray-500); font-size: 1.1rem;"></i>
+                <div>
+                    <div class="nexo-stat-pill-label">Sucursal Activa</div>
+                    <div class="nexo-stat-pill-value" style="font-size: 0.9rem; color: var(--nexo-primary);">{{ sucursal_actual }}</div>
                 </div>
             </div>
         </div>
@@ -461,15 +432,15 @@
 
 <!-- Modal Detalle Cotización - NEXO Style -->
 <div class="modal fade" id="modalDetalleCotizacion" tabindex="-1">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content nexo-modal">
-            <div class="modal-header nexo-modal-header">
-                <h5 class="modal-title" id="tituloDetalleCotizacion" style="color: white;">
+    <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 900px;">
+        <div class="modal-content nexo-modal" style="border-radius: 14px; overflow: hidden;">
+            <div class="modal-header nexo-modal-header" style="padding: 0.7rem 1.1rem;">
+                <h5 class="modal-title" id="tituloDetalleCotizacion" style="color: white; font-size: 1rem; font-weight: 700;">
                     <i class="ri-file-text-line me-2"></i> Detalle de Cotización
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-0">
+            <div class="modal-body p-0" style="max-height: 82vh; overflow-y: auto;">
                 <div id="contenidoDetalleCotizacion">
                     <div class="text-center py-5">
                         <div class="spinner-border" style="color: var(--nexo-primary);" role="status">
@@ -479,20 +450,20 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer nexo-modal-footer">
-                <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
+            <div class="modal-footer" style="background: #F8F9FC; border-top: 1px solid #E8EAF0; padding: 0.6rem 1rem; gap: 0.5rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-sm" style="background:#fff;border:1px solid #D1D5DB;color:#4B5563;border-radius:7px;padding:5px 14px;" data-bs-dismiss="modal">
                     <i class="ri-close-line me-1"></i> Cerrar
                 </button>
-                <button type="button" class="nexo-btn-info" onclick="imprimirCotizacion()">
+                <button type="button" class="btn btn-sm" style="background:#EEF4FF;border:1px solid #C0D0F0;color:#0052CC;border-radius:7px;padding:5px 14px;" onclick="imprimirCotizacion()">
                     <i class="ri-printer-line me-1"></i> Imprimir
                 </button>
-                <button type="button" class="nexo-btn-success" onclick="descargarPDF()">
-                    <i class="ri-download-line me-1"></i> Descargar PDF
+                <button type="button" class="btn btn-sm" style="background:#00D4AA;color:#fff;border:none;border-radius:7px;padding:5px 14px;font-weight:600;" onclick="descargarPDF()">
+                    <i class="ri-download-line me-1"></i> PDF
                 </button>
-                <button type="button" class="nexo-btn-primary" id="btnEnviarCorreo" onclick="enviarCotizacionPorCorreo()">
-                    <i class="ri-mail-send-line me-1"></i> Enviar por Correo
+                <button type="button" class="btn btn-sm" style="background:#0066FF;color:#fff;border:none;border-radius:7px;padding:5px 14px;font-weight:600;" id="btnEnviarCorreo" onclick="enviarCotizacionPorCorreo()">
+                    <i class="ri-mail-send-line me-1"></i> Correo
                 </button>
-                <button type="button" class="nexo-btn-warning" id="btnConvertirFactura" onclick="convertirAFactura()">
+                <button type="button" class="btn btn-sm" id="btnConvertirFactura" style="background:#FFB020;color:#1A1A2E;border:none;border-radius:7px;padding:5px 14px;font-weight:600;" onclick="convertirAFactura()">
                     <i class="ri-file-list-3-line me-1"></i> Convertir a Factura
                 </button>
             </div>
@@ -504,92 +475,86 @@
 <div class="modal fade" id="modalBuscarProducto" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content nexo-modal">
-            <div class="modal-header nexo-modal-header">
-                <div>
-                    <h5 class="modal-title mb-1" style="color: white;">
-                        <i class="ri-shopping-bag-3-line me-2"></i> Buscar y Seleccionar Producto
-                    </h5>
-                    <small style="color: rgba(255,255,255,0.8);">
-                        Busque productos del inventario para agregar a la cotización. Visualice costo, precio y margen de cada producto.
-                    </small>
+            <div class="modal-header nexo-modal-header" style="padding: 0.75rem 1.25rem;">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <div>
+                        <h5 class="modal-title mb-0" style="color: white; font-size: 1rem;">
+                            <i class="ri-shopping-bag-3-line me-2"></i> Buscar y Seleccionar Producto
+                        </h5>
+                        <small style="color: rgba(255,255,255,0.7); font-size: 11px;">
+                            SKU, nombre, marca o talla — costo y margen visibles para cotizar correctamente
+                        </small>
+                    </div>
+                    <span class="badge" style="background: rgba(255,255,255,0.2); color: white; font-size: 11px; font-weight: 500; padding: 5px 10px; border-radius: 20px;">
+                        <i class="ri-store-2-line me-1"></i>Stock: {{ sucursal_actual }}
+                    </span>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <!-- Barra de búsqueda mejorada -->
-                <div class="nexo-search-box mb-3">
-                    <label class="nexo-form-label mb-2">
-                        <i class="ri-search-line me-1" style="color: var(--nexo-primary);"></i>
-                        Buscar producto por SKU, nombre, marca o talla
-                    </label>
-                    <div class="input-group input-group-lg">
-                        <input type="text" class="form-control nexo-input" id="buscarProductoInput"
-                               placeholder="Ej: 123456, Nike, Polera, XL..."
-                               onkeypress="if(event.key === 'Enter') { event.preventDefault(); buscarProductos(); }"
-                               style="font-size: 16px; border-right: none;">
-                        <button class="nexo-btn-primary px-4" onclick="buscarProductos()" style="border-radius: 0 8px 8px 0;">
-                            <i class="ri-search-line me-1"></i> Buscar
-                        </button>
+            <div class="modal-body" style="padding: 0.75rem 1rem;">
+                <!-- Barra de búsqueda + filtros en una sola línea -->
+                <div class="d-flex gap-2 mb-2 align-items-end flex-wrap">
+                    <div style="flex: 1; min-width: 240px;">
+                        <label class="nexo-form-label mb-1" style="font-size: 11px;">
+                            <i class="ri-search-line me-1" style="color: var(--nexo-primary);"></i>
+                            Buscar producto (escribe para buscar automáticamente)
+                        </label>
+                        <div class="input-group">
+                            <input type="text" class="form-control nexo-input" id="buscarProductoInput"
+                                   placeholder="SKU, nombre, marca o talla..."
+                                   autocomplete="off"
+                                   style="font-size: 14px;">
+                            <button class="nexo-btn-primary px-3" onclick="buscarProductos(1)" style="border-radius: 0 8px 8px 0; font-size: 13px;">
+                                <i class="ri-search-line"></i>
+                            </button>
+                        </div>
                     </div>
-                </div>
-                
-                <!-- Filtros de Stock -->
-                <div class="d-flex justify-content-between align-items-center mb-3 p-2" style="background: var(--nexo-bg-secondary); border-radius: var(--nexo-radius-md);">
-                    <div class="d-flex align-items-center gap-3">
-                        <span style="color: var(--nexo-text-secondary); font-size: 13px; font-weight: 500;">
-                            <i class="ri-filter-3-line me-1"></i> Filtrar por stock:
+                    <div class="d-flex align-items-center gap-2" style="padding-bottom: 1px;">
+                        <span style="color: var(--nexo-text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap;">
+                            <i class="ri-filter-3-line me-1"></i>Stock:
                         </span>
                         <div class="btn-group" role="group">
                             <input type="radio" class="btn-check" name="filtroStock" id="stockTodos" value="todos" checked>
-                            <label class="btn btn-sm btn-outline-secondary" for="stockTodos" style="font-size: 12px;">
-                                Todos
-                            </label>
-                            
+                            <label class="btn btn-sm btn-outline-secondary" for="stockTodos" style="font-size: 12px; padding: 4px 10px;">Todos</label>
                             <input type="radio" class="btn-check" name="filtroStock" id="stockConStock" value="con_stock">
-                            <label class="btn btn-sm btn-outline-success" for="stockConStock" style="font-size: 12px;">
+                            <label class="btn btn-sm btn-outline-success" for="stockConStock" style="font-size: 12px; padding: 4px 10px;">
                                 <i class="ri-checkbox-circle-line"></i> Con Stock
                             </label>
-                            
                             <input type="radio" class="btn-check" name="filtroStock" id="stockSinStock" value="sin_stock">
-                            <label class="btn btn-sm btn-outline-danger" for="stockSinStock" style="font-size: 12px;">
+                            <label class="btn btn-sm btn-outline-danger" for="stockSinStock" style="font-size: 12px; padding: 4px 10px;">
                                 <i class="ri-close-circle-line"></i> Sin Stock
                             </label>
                         </div>
+                        <div class="d-flex align-items-center gap-2" style="margin-left: 4px;">
+                            <span style="color: var(--nexo-success); font-size: 11px;"><i class="ri-checkbox-circle-fill"></i> Buen</span>
+                            <span style="color: var(--nexo-warning); font-size: 11px;"><i class="ri-error-warning-fill"></i> Bajo</span>
+                            <span style="color: var(--nexo-error); font-size: 11px;"><i class="ri-close-circle-fill"></i> Pérdida</span>
+                        </div>
                     </div>
-                    <small>
-                        <span style="color: var(--nexo-success);"><i class="ri-checkbox-circle-fill"></i> Buen margen</span>
-                        <span style="color: var(--nexo-warning); margin-left: 8px;"><i class="ri-error-warning-fill"></i> Bajo</span>
-                        <span style="color: var(--nexo-error); margin-left: 8px;"><i class="ri-close-circle-fill"></i> Pérdida</span>
-                    </small>
                 </div>
 
-                <!-- Filtro rápido en tabla (aparece cuando hay resultados) -->
+                <!-- Filtro rápido (aparece cuando hay resultados) -->
                 <div id="filtroRapidoContainer" style="display: none;" class="mb-2">
-                    <div class="input-group input-group-sm">
+                    <div class="input-group input-group-sm" style="max-width: 360px;">
                         <span class="input-group-text" style="background: white; border-color: var(--nexo-gray-300);">
-                            <i class="ri-filter-2-line" style="color: var(--nexo-primary);"></i>
+                            <i class="ri-filter-2-line" style="color: var(--nexo-primary); font-size: 12px;"></i>
                         </span>
                         <input type="text" class="form-control" id="filtroRapidoTabla" 
-                               placeholder="Filtrar en resultados: SKU, nombre, talla..." 
+                               placeholder="Filtrar resultados actuales..."
                                oninput="filtrarResultadosTabla()"
-                               style="border-color: var(--nexo-gray-300);">
-                        <button class="btn btn-outline-secondary" type="button" onclick="limpiarFiltroRapido()" title="Limpiar filtro">
+                               style="border-color: var(--nexo-gray-300); font-size: 12px;">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limpiarFiltroRapido()" title="Limpiar filtro">
                             <i class="ri-close-line"></i>
                         </button>
                     </div>
-                    <small style="color: var(--nexo-text-muted); font-size: 10px;">
-                        <i class="ri-information-line"></i> Filtra los resultados actuales sin nueva búsqueda
-                    </small>
                 </div>
 
-                <!-- Resultados de búsqueda -->
-                <div id="resultadosBusquedaProductos" class="nexo-search-results" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg); background: var(--nexo-bg-secondary);">
-                    <div class="text-center py-5">
-                        <i class="ri-shopping-bag-3-line" style="font-size: 56px; color: var(--nexo-gray-300);"></i>
-                        <p style="color: var(--nexo-text-secondary); font-weight: 500;" class="mt-3 mb-1">Busque un producto</p>
-                        <small style="color: var(--nexo-text-muted);">
-                            Escriba el SKU, nombre, marca o talla del producto
-                        </small>
+                <!-- Resultados de búsqueda - tabla compacta -->
+                <div id="resultadosBusquedaProductos" style="max-height: 500px; overflow-y: auto; border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg); background: var(--nexo-bg-secondary);">
+                    <div class="text-center py-4">
+                        <i class="ri-shopping-bag-3-line" style="font-size: 48px; color: var(--nexo-gray-300);"></i>
+                        <p style="color: var(--nexo-text-secondary); font-weight: 500;" class="mt-2 mb-1">Busque un producto</p>
+                        <small style="color: var(--nexo-text-muted);">Escriba el SKU, nombre, marca o talla</small>
                     </div>
                 </div>
             </div>
@@ -692,6 +657,60 @@
         </div>
     </div>
 </div>
+
+<!-- ===== MODAL ASIGNAR SKU A ÍTEMS PENDIENTES (DESPACHO DIFERIDO) ===== -->
+<div class="modal fade" id="modalAsignarSku" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content nexo-modal">
+            <div class="modal-header" style="background-color:#FF8C00;color:white;">
+                <h5 class="modal-title">
+                    <i class="ri-truck-line me-2"></i> Asignar SKU — Despacho Diferido
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="asignarSkuCotizacionInfo" class="nexo-alert mb-3" style="background:rgba(255,140,0,.1);border-color:#FF8C00;color:#7a4200;"></div>
+                <div id="asignarSkuItemsContainer">
+                    <div class="text-center py-4">
+                        <div class="spinner-border" style="color:#FF8C00;" role="status"></div>
+                        <p class="mt-2 text-muted">Cargando ítems pendientes...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer nexo-modal-footer">
+                <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ===== MODAL ASIGNAR SKU ===== */
+.asignar-sku-item {
+    border: 1px solid var(--nexo-border-light);
+    border-radius: var(--nexo-radius-md);
+    padding: 14px;
+    margin-bottom: 12px;
+    background: var(--nexo-bg-secondary);
+}
+.asignar-sku-item.resuelto {
+    border-color: var(--nexo-success);
+    background: rgba(0, 212, 170, .06);
+}
+.asignar-sku-search-result {
+    border: 1px solid var(--nexo-border-light);
+    border-radius: var(--nexo-radius-sm);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: background var(--nexo-transition-fast);
+    font-size: 13px;
+}
+.asignar-sku-search-result:hover {
+    background: var(--nexo-primary-light);
+}
+</style>
 
 <style>
 /* ========================================
@@ -1224,24 +1243,159 @@
     background-color: var(--nexo-primary-light);
 }
 
-/* ===== NEXO PRODUCTO CARD (Búsqueda mejorada) ===== */
-.nexo-producto-card {
+/* ===== NEXO STATS BAR ===== */
+.nexo-stats-bar {
     background: var(--nexo-white);
     border: 1px solid var(--nexo-gray-300);
     border-radius: var(--nexo-radius-lg);
-    padding: 12px 16px;
+    padding: 0.6rem 1rem;
+    display: flex;
+    align-items: center;
+    box-shadow: var(--nexo-shadow-sm);
+    flex-wrap: wrap;
+    gap: 0;
+}
+.nexo-stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.25rem 1.25rem;
+    flex: 1;
+    min-width: 120px;
+}
+.nexo-stat-divider {
+    width: 1px;
+    height: 36px;
+    background: var(--nexo-gray-300);
+    flex-shrink: 0;
+}
+.nexo-stat-pill-label {
+    color: var(--nexo-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+.nexo-stat-pill-value {
+    color: var(--nexo-text-primary);
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* ===== NEXO PRODUCTO ROW (Búsqueda compacta) ===== */
+.nexo-prod-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--nexo-gray-100);
     cursor: pointer;
-    transition: var(--nexo-transition-fast);
+    transition: background 0.15s ease;
+    background: var(--nexo-white);
+}
+.nexo-prod-row:last-child {
+    border-bottom: none;
+}
+.nexo-prod-row:hover {
+    background: var(--nexo-primary-light);
+}
+.nexo-prod-row:hover .nexo-prod-add-btn {
+    background: var(--nexo-primary-dark) !important;
+}
+.nexo-prod-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: 10px;
+}
+.nexo-prod-info {
+    flex: 1;
+    min-width: 0;
+}
+.nexo-prod-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nexo-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+.nexo-prod-meta {
+    font-size: 11px;
+    color: var(--nexo-text-muted);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 1px;
+}
+.nexo-prod-badge {
+    background: var(--nexo-gray-100);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--nexo-text-secondary);
+}
+.nexo-prod-precio-col {
+    text-align: right;
+    min-width: 80px;
+    padding: 0 10px;
+}
+.nexo-prod-precio-val {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nexo-primary);
+}
+.nexo-prod-precio-lbl {
+    font-size: 9px;
+    color: var(--nexo-text-muted);
+    text-transform: uppercase;
+    display: block;
+}
+.nexo-prod-stock-col {
+    text-align: center;
+    min-width: 55px;
+    padding: 0 6px;
+}
+.nexo-prod-margen-col {
+    text-align: center;
+    min-width: 58px;
+    padding: 0 6px;
+}
+.nexo-prod-add-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--nexo-primary);
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    margin-left: 6px;
+    transition: background 0.15s ease;
 }
 
-.nexo-producto-card:hover {
-    border-color: var(--nexo-primary);
-    box-shadow: var(--nexo-shadow-md);
-    transform: translateY(-2px);
-}
-
-.nexo-producto-card:hover .btn {
-    background-color: var(--nexo-primary-dark) !important;
+/* Cabecera de la tabla de productos */
+.nexo-prod-table-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    background: var(--nexo-gray-100);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--nexo-text-muted);
 }
 
 .nexo-margen-indicator {
@@ -1534,6 +1688,7 @@ document.addEventListener('DOMContentLoaded', function() {
         editarCotizacion: (id) => `{% url "editar_cotizacion" cotizacion_id=0 %}`.replace('/0/', `/${id}/`),
         anularCotizacion: '{% url "anular_cotizacion" %}',
         convertirFactura: '{% url "convertir_cotizacion_factura" %}',
+        asignarSkuPendiente: '{% url "asignar_sku_pendiente" %}',
         buscarProductos: '{% url "buscar_productos_cotizacion" %}',
         listarClientes: '{% url "empresas_clientes" %}',
         crearCliente: '{% url "crear_cliente_cotizacion" %}',
@@ -1558,7 +1713,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function configurarEventos() {
-        // Búsqueda en tiempo real
+        // Búsqueda en tiempo real en listado de cotizaciones
         let timeout;
         document.getElementById('buscarTexto').addEventListener('input', function() {
             clearTimeout(timeout);
@@ -1566,6 +1721,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 paginaActual = 1;
                 cargarCotizaciones();
             }, 500);
+        });
+
+        // Auto-search con debounce en modal de productos
+        let busquedaTimeout;
+        const inputBuscarProd = document.getElementById('buscarProductoInput');
+        if (inputBuscarProd) {
+            inputBuscarProd.addEventListener('input', function() {
+                clearTimeout(busquedaTimeout);
+                if (this.value.trim().length >= 2) {
+                    busquedaTimeout = setTimeout(() => buscarProductos(1), 450);
+                }
+            });
+            // Enter sigue funcionando
+            inputBuscarProd.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    clearTimeout(busquedaTimeout);
+                    buscarProductos(1);
+                }
+            });
+        }
+
+        // Auto-refresh al cambiar filtro de stock
+        document.querySelectorAll('input[name="filtroStock"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const q = document.getElementById('buscarProductoInput');
+                if (q && q.value.trim().length >= 2) {
+                    buscarProductos(1);
+                }
+            });
         });
     }
 
@@ -2020,6 +2205,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <i class="ri-checkbox-circle-fill"></i> FACTURADA
                             </span>
                             ${cot.numero_factura ? `<div style="font-size: 10px; color: var(--nexo-text-muted); margin-top: 2px;">${cot.numero_factura}</div>` : ''}
+                            ${cot.tiene_despacho_pendiente ? `
+                                <div style="margin-top:3px;">
+                                    <span class="nexo-badge" style="background:rgba(255,140,0,.15);color:#FF8C00;font-size:10px;">
+                                        <i class="ri-truck-line"></i> Despacho pendiente
+                                    </span>
+                                </div>
+                            ` : ''}
                         ` : `
                             <span class="${obtenerClaseEstado(cot.estado)}">${cot.estado}</span>
                         `}
@@ -2037,6 +2229,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <i class="ri-close-line"></i>
                                 </button>
                             ` : ''}
+                            ${cot.tiene_despacho_pendiente ? `
+                                <button class="btn btn-action" style="background-color:#FF8C00;color:white;border-color:#FF8C00;" onclick="abrirModalAsignarSku(${cot.id})" title="Asignar SKU a ítems pendientes de despacho">
+                                    <i class="ri-truck-line"></i>
+                                </button>
+                            ` : ''}
                         </div>
                     </td>
                 </tr>
@@ -2049,6 +2246,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('totalVigentes').querySelector('.counter-value').textContent = stats.vigentes || 0;
         document.getElementById('montoTotal').querySelector('.counter-value').textContent = formatearMoneda(stats.monto_total || 0);
         document.getElementById('totalFacturadas').querySelector('.counter-value').textContent = stats.facturadas || 0;
+        const elAnuladas = document.getElementById('totalAnuladas');
+        if (elAnuladas) elAnuladas.querySelector('.counter-value').textContent = stats.anuladas || 0;
     }
 
     function actualizarPaginacion() {
@@ -2316,115 +2515,71 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderizarProductos(productos, paginacion = null) {
         const contenedor = document.getElementById('resultadosBusquedaProductos');
         
-        contenedor.innerHTML = productos.map(prod => {
-            // Escapar comillas para evitar errores en onclick
-            const nombreEscapado = (prod.nombre || 'Sin nombre').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            
-            // Crear string de búsqueda para filtrado (incluye descripción)
+        // Cabecera de la tabla compacta
+        const header = `
+            <div class="nexo-prod-table-header">
+                <div style="width:10px; margin-right:18px;"></div>
+                <div style="flex:1;">Producto / SKU / Marca / Talla</div>
+                <div style="min-width:80px; text-align:right; padding-right:10px;">Precio</div>
+                <div style="min-width:55px; text-align:center;">Stock</div>
+                <div style="min-width:58px; text-align:center;">Margen</div>
+                <div style="width:36px;"></div>
+            </div>`;
+
+        const rows = productos.map(prod => {
             const searchData = `${prod.sku || ''} ${prod.nombre || ''} ${prod.descripcion || ''} ${prod.marca || ''} ${prod.talla || ''}`.toLowerCase();
             
-            // Determinar color de stock
-            const stockColor = prod.stock > 10 ? 'var(--nexo-success)' : 
-                              prod.stock > 0 ? 'var(--nexo-warning)' : 'var(--nexo-error)';
-            const stockIcon = prod.stock > 0 ? 'ri-checkbox-circle-line' : 'ri-close-circle-line';
-            
-            // Determinar color de margen (rentabilidad)
+            // Color del dot de margen
             const margen = prod.margen_porcentaje || 0;
-            let margenColor, margenIcon, margenLabel;
+            let margenColor, margenLabel;
             if (margen >= 30) {
                 margenColor = 'var(--nexo-success)';
-                margenIcon = 'ri-arrow-up-circle-fill';
-                margenLabel = 'Buen margen';
+                margenLabel = `${margen}%`;
             } else if (margen >= 15) {
                 margenColor = 'var(--nexo-warning)';
-                margenIcon = 'ri-arrow-right-circle-fill';
-                margenLabel = 'Margen medio';
+                margenLabel = `${margen}%`;
             } else if (margen > 0) {
                 margenColor = '#FF8C00';
-                margenIcon = 'ri-arrow-down-circle-fill';
-                margenLabel = 'Margen bajo';
+                margenLabel = `${margen}%`;
             } else {
                 margenColor = 'var(--nexo-error)';
-                margenIcon = 'ri-error-warning-fill';
-                margenLabel = 'Sin margen';
+                margenLabel = `${margen}%`;
             }
-            
-            // Crear JSON seguro para onclick
-            const prodData = JSON.stringify({
-                id: prod.id,
-                nombre: prod.nombre,
-                precio: prod.precio,
-                costo: prod.costo,
-                margen: margen
-            }).replace(/"/g, '&quot;');
+
+            // Color de stock
+            const stockColor = prod.stock > 10 ? 'var(--nexo-success)' :
+                               prod.stock > 0  ? 'var(--nexo-warning)' : 'var(--nexo-error)';
+
+            const talla = prod.talla && prod.talla !== 'N/A' ? `<span class="nexo-prod-badge">${prod.talla}</span>` : '';
+            const marca = prod.marca ? `<span class="nexo-prod-badge">${prod.marca}</span>` : '';
+            const skuBadge = prod.sku ? `<span class="nexo-prod-badge" style="background:var(--nexo-primary-light);color:var(--nexo-primary);">${prod.sku}</span>` : '';
 
             return `
-                <div class="nexo-producto-card mb-2" data-search="${searchData}" onclick='seleccionarProductoConDatos(${JSON.stringify(prod).replace(/'/g, "&#39;")})'>
-                    <div class="row align-items-center">
-                        <!-- Info Principal -->
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center">
-                                <div class="nexo-margen-indicator me-3" style="background-color: ${margenColor}15; border-left: 4px solid ${margenColor}; padding: 8px 12px; border-radius: 0 8px 8px 0;">
-                                    <i class="${margenIcon}" style="color: ${margenColor}; font-size: 20px;"></i>
-                                </div>
-                                <div style="flex: 1; min-width: 0;">
-                                    <strong style="color: var(--nexo-text-primary); font-size: 14px;">${prod.nombre || 'Sin nombre'}</strong>
-                                    ${prod.descripcion ? `<p style="color: var(--nexo-text-muted); font-size: 11px; margin: 2px 0 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${(prod.descripcion || '').replace(/"/g, '&quot;')}"><i class="ri-file-text-line"></i> ${prod.descripcion}</p>` : ''}
-                                    <div class="mt-1">
-                                        <span class="nexo-badge" style="background-color: var(--nexo-primary-light); color: var(--nexo-primary); font-size: 11px;">
-                                            <i class="ri-barcode-line"></i> ${prod.sku || 'N/A'}
-                                        </span>
-                                        <span class="nexo-badge ms-1" style="background-color: var(--nexo-gray-100); color: var(--nexo-text-secondary); font-size: 11px;">
-                                            ${prod.marca || 'Sin marca'}
-                                        </span>
-                                        <span class="nexo-badge ms-1" style="background-color: var(--nexo-gray-100); color: var(--nexo-text-secondary); font-size: 11px;">
-                                            <i class="ri-ruler-line"></i> ${prod.talla || 'N/A'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Precios y Costos -->
-                        <div class="col-md-3">
-                            <div class="row text-center">
-                                <div class="col-6">
-                                    <small style="color: var(--nexo-text-muted); font-size: 10px; display: block;">COSTO</small>
-                                    <span style="color: var(--nexo-text-secondary); font-weight: 500;">${formatearMoneda(prod.costo || 0)}</span>
-                                </div>
-                                <div class="col-6">
-                                    <small style="color: var(--nexo-text-muted); font-size: 10px; display: block;">PV. LISTA</small>
-                                    <span style="color: var(--nexo-primary); font-weight: 600;">${formatearMoneda(prod.precio || 0)}</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Margen y Stock -->
-                        <div class="col-md-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="text-center">
-                                    <div style="background-color: ${margenColor}15; padding: 6px 12px; border-radius: 8px;">
-                                        <span style="color: ${margenColor}; font-weight: 700; font-size: 16px;">${margen}%</span>
-                                        <small style="color: ${margenColor}; display: block; font-size: 10px;">${margenLabel}</small>
-                                    </div>
-                                </div>
-                                <div class="text-center ms-2">
-                                    <span style="color: ${stockColor}; font-weight: 600;">
-                                        <i class="${stockIcon}"></i> ${prod.stock}
-                                    </span>
-                                    <small style="color: var(--nexo-text-muted); display: block; font-size: 10px;">Stock</small>
-                                </div>
-                                <div class="ms-2">
-                                    <button class="btn btn-sm" style="background-color: var(--nexo-primary); color: white; border-radius: 8px;" title="Seleccionar">
-                                        <i class="ri-add-line"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                <div class="nexo-prod-row" data-search="${searchData}" onclick='seleccionarProductoConDatos(${JSON.stringify(prod).replace(/'/g, "&#39;")})'>
+                    <span class="nexo-prod-dot" style="background:${margenColor};"></span>
+                    <div class="nexo-prod-info">
+                        <div class="nexo-prod-name">${prod.nombre || 'Sin nombre'}${prod.descripcion ? ` <small style="font-weight:400;color:var(--nexo-text-muted);">— ${prod.descripcion.substring(0,40)}${prod.descripcion.length>40?'…':''}</small>` : ''}</div>
+                        <div class="nexo-prod-meta">${skuBadge}${marca}${talla}</div>
                     </div>
-                </div>
-            `;
+                    <div class="nexo-prod-precio-col">
+                        <span class="nexo-prod-precio-lbl">P. Venta</span>
+                        <span class="nexo-prod-precio-val">${formatearMoneda(prod.precio || 0)}</span>
+                    </div>
+                    <div class="nexo-prod-stock-col">
+                        <span style="color:${stockColor}; font-weight:600; font-size:13px;">${prod.stock}</span>
+                        <span class="nexo-prod-precio-lbl" style="display:block;">uds</span>
+                    </div>
+                    <div class="nexo-prod-margen-col">
+                        <span style="color:${margenColor}; font-weight:700; font-size:13px;">${margenLabel}</span>
+                        <span class="nexo-prod-precio-lbl" style="display:block;">margen</span>
+                    </div>
+                    <button class="nexo-prod-add-btn" title="Agregar" onclick="event.stopPropagation(); seleccionarProductoConDatos(${JSON.stringify(prod).replace(/'/g, "&#39;")})">
+                        <i class="ri-add-line"></i>
+                    </button>
+                </div>`;
         }).join('');
+
+        contenedor.innerHTML = header + `<div id="nexo-prod-rows">${rows}</div>`;
         
         // Agregar paginación si existe
         if (paginacion && paginacion.total_paginas > 1) {
@@ -2520,34 +2675,32 @@ document.addEventListener('DOMContentLoaded', function() {
     
     window.filtrarResultadosTabla = function() {
         const filtro = document.getElementById('filtroRapidoTabla').value.toLowerCase().trim();
-        const cards = document.querySelectorAll('#resultadosBusquedaProductos .nexo-producto-card');
+        const rows = document.querySelectorAll('#resultadosBusquedaProductos .nexo-prod-row');
         let visibles = 0;
         
-        cards.forEach(card => {
-            const searchData = card.getAttribute('data-search') || '';
-            
+        rows.forEach(row => {
+            const searchData = row.getAttribute('data-search') || '';
             if (!filtro || searchData.includes(filtro)) {
-                card.style.display = '';
+                row.style.display = '';
                 visibles++;
             } else {
-                card.style.display = 'none';
+                row.style.display = 'none';
             }
         });
         
-        // Mostrar mensaje si no hay resultados
         const noResultsMsg = document.getElementById('noFilterResults');
         if (visibles === 0 && filtro) {
             if (!noResultsMsg) {
                 const contenedor = document.getElementById('resultadosBusquedaProductos');
                 const msg = document.createElement('div');
                 msg.id = 'noFilterResults';
-                msg.className = 'text-center py-4';
+                msg.className = 'text-center py-3';
                 msg.innerHTML = `
-                    <i class="ri-filter-off-line" style="font-size: 32px; color: var(--nexo-warning);"></i>
-                    <p style="color: var(--nexo-text-muted); margin-top: 8px;">
-                        No hay productos que coincidan con "<strong>${filtro}</strong>"
+                    <i class="ri-filter-off-line" style="font-size: 28px; color: var(--nexo-warning);"></i>
+                    <p style="color: var(--nexo-text-muted); margin-top: 6px; font-size: 13px;">
+                        Sin resultados para "<strong>${filtro}</strong>"
                     </p>
-                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="limpiarFiltroRapido()">
+                    <button class="btn btn-sm btn-outline-primary" onclick="limpiarFiltroRapido()">
                         <i class="ri-refresh-line me-1"></i> Mostrar todos
                     </button>
                 `;
@@ -3071,262 +3224,214 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function mostrarDetalleCotizacion(cot) {
-        document.getElementById('tituloDetalleCotizacion').innerHTML = `
-            <i class="ri-file-text-line me-2" style="color: white;"></i> Detalle de Cotización
-        `;
-        document.getElementById('tituloDetalleCotizacion').style.color = 'white';
-
         const diasRestantes = calcularDiasRestantes(cot.fecha_validez);
-        
-        // Determinar color según estado
-        let estadoColor = 'var(--nexo-success)';
-        let estadoBg = 'rgba(34, 197, 94, 0.1)';
-        if (cot.estado === 'VENCIDA') {
-            estadoColor = 'var(--nexo-error)';
-            estadoBg = 'rgba(239, 68, 68, 0.1)';
-        } else if (cot.estado === 'FACTURADA') {
-            estadoColor = 'var(--nexo-primary)';
-            estadoBg = 'rgba(0, 102, 255, 0.1)';
-        } else if (cot.estado === 'ANULADA') {
-            estadoColor = 'var(--nexo-gray-500)';
-            estadoBg = 'rgba(107, 114, 128, 0.1)';
-        }
-        
-        const html = `
-            <!-- Encabezado Hero -->
-            <div style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, var(--nexo-primary) 100%); padding: 2rem; color: white;">
-                <div class="row align-items-center">
-                    <div class="col-md-7">
-                        <div class="d-flex align-items-center mb-2">
-                            <div style="background: rgba(255,255,255,0.2); padding: 12px; border-radius: 12px; margin-right: 16px;">
-                                <i class="ri-file-text-line" style="font-size: 28px;"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0" style="font-weight: 700; letter-spacing: -0.5px;">${cot.numero_cotizacion}</h3>
-                                <span style="opacity: 0.8; font-size: 14px;">
-                                    <i class="ri-building-2-line me-1"></i> ${cot.cliente_nombre}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center gap-3 mt-3">
-                            <span style="background: ${estadoBg}; color: ${estadoColor}; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;">
-                                <i class="ri-checkbox-circle-fill me-1"></i> ${cot.estado}
-                            </span>
-                            <span style="opacity: 0.9; font-size: 13px;">
-                                <i class="ri-calendar-check-line me-1"></i> Emitida: ${formatearFecha(cot.fecha_emision)}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="col-md-5 text-end">
-                        <div style="background: rgba(255,255,255,0.15); border-radius: 16px; padding: 20px; backdrop-filter: blur(10px);">
-                            <span style="font-size: 13px; opacity: 0.8; display: block; margin-bottom: 4px; color: white;">MONTO TOTAL</span>
-                            <h2 style="font-weight: 700; margin: 0; font-size: 32px; color: white;">${formatearMoneda(cot.monto_total)}</h2>
-                            <small style="opacity: 0.7; color: white;">IVA incluido</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Barra de Validez -->
-            <div style="background: ${diasRestantes >= 0 ? 'linear-gradient(90deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05))' : 'linear-gradient(90deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05))'}; padding: 12px 24px; border-bottom: 1px solid var(--nexo-gray-200);">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span style="color: ${diasRestantes >= 0 ? 'var(--nexo-success)' : 'var(--nexo-error)'}; font-weight: 500;">
-                        <i class="ri-time-line me-2"></i>
-                        ${diasRestantes >= 0 
-                            ? `Válida hasta: ${formatearFecha(cot.fecha_validez)} (${diasRestantes} días restantes)`
-                            : `VENCIDA - Expiró el ${formatearFecha(cot.fecha_validez)}`
-                        }
-                    </span>
-                    <span style="color: var(--nexo-text-muted); font-size: 12px;">
-                        <i class="ri-calendar-2-line me-1"></i> Validez: ${cot.dias_validez} días
-                    </span>
-                </div>
-            </div>
+        // ── Paleta por estado ──────────────────────────────────────────────
+        const estadoPaleta = {
+            'VIGENTE':   { color: '#00A060', bg: 'rgba(0,160,96,.12)',  badge: '#00D4AA', icon: 'ri-checkbox-circle-fill',  label: 'Vigente'   },
+            'VENCIDA':   { color: '#CC2200', bg: 'rgba(204,34,0,.1)',   badge: '#FF4D4D', icon: 'ri-time-line',             label: 'Vencida'   },
+            'FACTURADA': { color: '#0052CC', bg: 'rgba(0,82,204,.1)',   badge: '#0066FF', icon: 'ri-file-list-3-line',      label: 'Facturada' },
+            'ANULADA':   { color: '#555566', bg: 'rgba(85,85,102,.1)',  badge: '#8A8A9A', icon: 'ri-close-circle-fill',     label: 'Anulada'   },
+        };
+        const ep = estadoPaleta[cot.estado] || estadoPaleta['VIGENTE'];
 
-            <div class="row g-0">
-                <!-- Columna izquierda: Cliente e Info -->
-                <div class="col-md-4" style="border-right: 1px solid var(--nexo-gray-200); background: var(--nexo-bg-secondary);">
-                    <!-- Info Cliente -->
-                    <div class="p-4">
-                        <h6 style="color: var(--nexo-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">
-                            <i class="ri-building-line me-1"></i> Cliente
-                        </h6>
-                        <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                            <h5 style="color: var(--nexo-text-primary); margin-bottom: 12px; font-weight: 600;">${cot.cliente_nombre}</h5>
-                            <div style="font-size: 13px;">
-                                <p style="color: var(--nexo-text-secondary); margin-bottom: 8px;">
-                                    <i class="ri-profile-line me-2" style="color: var(--nexo-primary);"></i>
-                                    <strong>RUT:</strong> ${cot.cliente_rut}
-                                </p>
-                                ${cot.cliente_email ? `
-                                <p style="color: var(--nexo-text-secondary); margin-bottom: 8px;">
-                                    <i class="ri-mail-line me-2" style="color: var(--nexo-primary);"></i>
-                                    <strong>Email:</strong> 
-                                    <a href="mailto:${cot.cliente_email}" style="color: var(--nexo-primary); text-decoration: none;">${cot.cliente_email}</a>
-                                </p>
-                                ` : `
-                                <p style="color: var(--nexo-warning); margin-bottom: 8px; font-size: 12px;">
-                                    <i class="ri-alert-line me-2"></i> Sin email registrado
-                                </p>
-                                `}
-                                ${cot.cliente_telefono ? `
-                                <p style="color: var(--nexo-text-secondary); margin-bottom: 0;">
-                                    <i class="ri-phone-line me-2" style="color: var(--nexo-primary);"></i>
-                                    <strong>Tel:</strong> ${cot.cliente_telefono}
-                                </p>
-                                ` : ''}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Resumen de Montos -->
-                    <div class="p-4 pt-0">
-                        <h6 style="color: var(--nexo-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">
-                            <i class="ri-money-dollar-circle-line me-1"></i> Desglose
-                        </h6>
-                        <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                            <div class="d-flex justify-content-between mb-2" style="font-size: 14px;">
-                                <span style="color: var(--nexo-text-secondary);">Subtotal</span>
-                                <span style="color: var(--nexo-text-primary);">${formatearMoneda(cot.subtotal)}</span>
-                            </div>
-                            ${cot.descuento > 0 ? `
-                            <div class="d-flex justify-content-between mb-2" style="font-size: 14px;">
-                                <span style="color: var(--nexo-text-secondary);">Descuento</span>
-                                <span style="color: var(--nexo-success);">-${formatearMoneda(cot.descuento)}</span>
-                            </div>
-                            ` : ''}
-                            <div class="d-flex justify-content-between mb-2" style="font-size: 14px;">
-                                <span style="color: var(--nexo-text-secondary);">IVA (19%)</span>
-                                <span style="color: var(--nexo-text-primary);">${formatearMoneda(cot.impuesto)}</span>
-                            </div>
-                            <hr style="margin: 12px 0; border-color: var(--nexo-gray-200);">
-                            <div class="d-flex justify-content-between" style="font-size: 16px; font-weight: 700;">
-                                <span style="color: var(--nexo-text-primary);">TOTAL</span>
-                                <span style="color: var(--nexo-primary);">${formatearMoneda(cot.monto_total)}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Columna derecha: Items -->
-                <div class="col-md-8">
-                    <div class="p-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 style="color: var(--nexo-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin: 0;">
-                                <i class="ri-shopping-cart-line me-1"></i> Productos / Servicios
-                            </h6>
-                            <span class="nexo-badge" style="background: var(--nexo-primary-light); color: var(--nexo-primary);">
-                                ${cot.items.length} item${cot.items.length !== 1 ? 's' : ''}
-                            </span>
-                        </div>
-
-                        <!-- Items Cards -->
-                        <div style="max-height: 350px; overflow-y: auto;">
-                            ${cot.items.map((item, index) => `
-                                <div style="background: white; border: 1px solid var(--nexo-gray-200); border-radius: 12px; padding: 16px; margin-bottom: 12px; transition: all 0.2s ease;">
-                                    <div class="row align-items-center">
-                                        <div class="col-auto">
-                                            <div style="background: var(--nexo-primary-light); color: var(--nexo-primary); width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700;">
-                                                ${index + 1}
-                                            </div>
-                                        </div>
-                                        <div class="col">
-                                            <h6 style="color: var(--nexo-text-primary); margin-bottom: 4px; font-weight: 600;">${item.descripcion}</h6>
-                                            <div class="d-flex align-items-center gap-2">
-                                                ${(item.skus_asociados && item.skus_asociados.length > 0) ? 
-                                                    item.skus_asociados.map((sku, i) => `
-                                                        <div class="d-flex align-items-center gap-1 ${i > 0 ? 'mt-1' : ''}">
-                                                            <span class="nexo-badge" style="background: var(--nexo-success); color: white; font-size: 10px;">
-                                                                <i class="ri-checkbox-circle-fill me-1"></i> ${sku.nombre}
-                                                            </span>
-                                                            <span class="nexo-badge" style="background: var(--nexo-gray-100); color: var(--nexo-text-secondary); font-size: 10px;">
-                                                                SKU: ${sku.sku}
-                                                            </span>
-                                                            <span class="nexo-badge" style="background: var(--nexo-primary-light); color: var(--nexo-primary); font-size: 10px;">
-                                                                Talla: ${sku.talla}
-                                                            </span>
-                                                            <span class="nexo-badge" style="background: var(--nexo-warning); color: white; font-size: 10px;">
-                                                                x${sku.cantidad}
-                                                            </span>
-                                                        </div>
-                                                    `).join('')
-                                                : item.producto_data ? `
-                                                    <span class="nexo-badge" style="background: var(--nexo-success); color: white; font-size: 10px;">
-                                                        <i class="ri-checkbox-circle-fill me-1"></i> ${item.producto_data.nombre}
-                                                    </span>
-                                                    <span class="nexo-badge" style="background: var(--nexo-gray-100); color: var(--nexo-text-secondary); font-size: 10px;">
-                                                        SKU: ${item.producto_data.sku}
-                                                    </span>
-                                                    <span class="nexo-badge" style="background: var(--nexo-primary-light); color: var(--nexo-primary); font-size: 10px;">
-                                                        Talla: ${item.producto_data.talla}
-                                                    </span>
-                                                ` : item.producto_nombre && item.producto_nombre !== 'Producto sin nombre' ? `
-                                                    <span class="nexo-badge" style="background: var(--nexo-success); color: white; font-size: 10px;">
-                                                        <i class="ri-checkbox-circle-fill me-1"></i> ${item.producto_nombre}
-                                                    </span>
-                                                    ${item.producto_sku && item.producto_sku !== 'N/A' ? `
-                                                        <span class="nexo-badge" style="background: var(--nexo-gray-100); color: var(--nexo-text-secondary); font-size: 10px;">
-                                                            SKU: ${item.producto_sku}
-                                                        </span>
-                                                    ` : ''}
-                                                ` : `
-                                                    <span class="nexo-badge" style="background: var(--nexo-gray-100); color: var(--nexo-text-muted); font-size: 10px;">
-                                                        <i class="ri-draft-line me-1"></i> Producto manual
-                                                    </span>
-                                                `}
-                                                ${item.tiene_stock ? `
-                                                    <span style="color: var(--nexo-success); font-size: 11px;">
-                                                        <i class="ri-checkbox-circle-line"></i> Stock: ${item.stock_disponible}
-                                                    </span>
-                                                ` : ''}
-                                            </div>
-                                        </div>
-                                        <div class="col-auto text-center" style="min-width: 80px;">
-                                            <span style="background: var(--nexo-bg-secondary); padding: 6px 14px; border-radius: 8px; font-weight: 600; color: var(--nexo-text-primary);">
-                                                x${item.cantidad}
-                                            </span>
-                                        </div>
-                                        <div class="col-auto text-end" style="min-width: 100px;">
-                                            <small style="color: var(--nexo-text-muted); display: block; font-size: 11px;">c/u ${formatearMoneda(item.precio_unitario)}</small>
-                                            <strong style="color: var(--nexo-primary); font-size: 16px;">${formatearMoneda(item.cantidad * item.precio_unitario)}</strong>
-                                        </div>
-                                    </div>
-                                    ${item.observaciones ? `
-                                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--nexo-gray-200);">
-                                            <small style="color: var(--nexo-text-muted);">
-                                                <i class="ri-sticky-note-line me-1"></i> ${item.observaciones}
-                                            </small>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <!-- Descripción y Observaciones -->
-                    ${cot.descripcion || cot.observaciones ? `
-                    <div class="p-4 pt-0">
-                        ${cot.descripcion ? `
-                        <div style="background: var(--nexo-bg-secondary); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
-                            <h6 style="color: var(--nexo-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
-                                <i class="ri-file-text-line me-1"></i> Descripción
-                            </h6>
-                            <p style="color: var(--nexo-text-primary); margin: 0; font-size: 14px;">${cot.descripcion}</p>
-                        </div>
-                        ` : ''}
-                        ${cot.observaciones ? `
-                        <div style="background: rgba(234, 179, 8, 0.1); border-radius: 12px; padding: 16px; border-left: 4px solid var(--nexo-warning);">
-                            <h6 style="color: var(--nexo-warning); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
-                                <i class="ri-alert-line me-1"></i> Observaciones
-                            </h6>
-                            <p style="color: var(--nexo-text-primary); margin: 0; font-size: 14px;">${cot.observaciones}</p>
-                        </div>
-                        ` : ''}
-                    </div>
-                    ` : ''}
-                </div>
-            </div>
+        // ── Actualizar título del modal ────────────────────────────────────
+        document.getElementById('tituloDetalleCotizacion').innerHTML = `
+            <i class="ri-file-text-line me-2"></i>${cot.numero_cotizacion}
+            <span style="margin-left:10px; background:rgba(255,255,255,.2); border-radius:20px; padding:3px 10px; font-size:12px; font-weight:500;">${ep.label}</span>
         `;
+
+        // ── Helper: renderizar SKUs de un ítem ────────────────────────────
+        function renderSkus(item) {
+            if (item.skus_asociados && item.skus_asociados.length > 0) {
+                return item.skus_asociados.map(s => `
+                    <span style="display:inline-flex;align-items:center;gap:4px;background:#f0f4ff;border:1px solid #c8d9ff;border-radius:5px;padding:2px 7px;font-size:10px;color:#0052CC;margin:1px 2px 1px 0;">
+                        <i class="ri-barcode-line"></i>${s.sku}
+                        <span style="color:#777;font-weight:400;">|</span>${s.nombre}
+                        <span style="color:#777;font-weight:400;">T:</span>${s.talla}
+                        <span style="background:#0066FF;color:#fff;border-radius:3px;padding:0 4px;font-size:9px;">×${s.cantidad}</span>
+                    </span>`).join('');
+            }
+            if (item.producto_data) {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;background:#f0f4ff;border:1px solid #c8d9ff;border-radius:5px;padding:2px 7px;font-size:10px;color:#0052CC;">
+                    <i class="ri-barcode-line"></i>${item.producto_data.sku} | ${item.producto_data.nombre} T:${item.producto_data.talla}
+                </span>`;
+            }
+            if (item.producto_nombre && item.producto_nombre !== 'Producto sin nombre') {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;background:#f0f4ff;border:1px solid #c8d9ff;border-radius:5px;padding:2px 7px;font-size:10px;color:#0052CC;">
+                    <i class="ri-barcode-line"></i>${item.producto_sku && item.producto_sku !== 'N/A' ? item.producto_sku+' | ' : ''}${item.producto_nombre}
+                </span>`;
+            }
+            return `<span style="font-size:10px;color:#aaa;"><i class="ri-draft-line me-1"></i>Ítem libre</span>`;
+        }
+
+        const html = `
+        <!-- ═══ CABECERA COMPACTA ═══════════════════════════════════════════ -->
+        <div style="background:linear-gradient(120deg,#1A1A2E 0%,#0052CC 100%);padding:1rem 1.4rem 0;position:relative;overflow:hidden;">
+            <!-- Textura sutil -->
+            <div style="position:absolute;top:-30px;right:-30px;width:160px;height:160px;background:rgba(255,255,255,.04);border-radius:50%;pointer-events:none;"></div>
+            <div style="position:absolute;bottom:-50px;right:80px;width:120px;height:120px;background:rgba(255,255,255,.03);border-radius:50%;pointer-events:none;"></div>
+
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <!-- Número + cliente + estado -->
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span style="background:rgba(255,255,255,.15);border-radius:6px;padding:4px 8px;font-size:11px;color:rgba(255,255,255,.7);letter-spacing:.5px;">COTIZACIÓN</span>
+                        <span style="background:${ep.bg};color:${ep.badge};border:1px solid ${ep.badge}44;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;">
+                            <i class="${ep.icon} me-1"></i>${ep.label}
+                        </span>
+                    </div>
+                    <h3 style="color:#fff;font-weight:800;font-size:1.5rem;margin:0 0 4px;letter-spacing:-.3px;">${cot.numero_cotizacion}</h3>
+                    <div style="color:rgba(255,255,255,.75);font-size:13px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <span><i class="ri-building-2-line me-1"></i>${cot.cliente_nombre}</span>
+                        <span style="opacity:.5;">|</span>
+                        <span><i class="ri-calendar-line me-1"></i>Emitida ${formatearFecha(cot.fecha_emision)}</span>
+                    </div>
+                </div>
+                <!-- Monto destacado -->
+                <div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:10px 20px;text-align:right;backdrop-filter:blur(8px);">
+                    <div style="color:rgba(255,255,255,.65);font-size:10px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:2px;">Monto Total</div>
+                    <div style="color:#fff;font-size:1.6rem;font-weight:800;line-height:1;">${formatearMoneda(cot.monto_total)}</div>
+                    <div style="color:rgba(255,255,255,.5);font-size:10px;">IVA incluido · ${cot.items.length} ítem${cot.items.length!==1?'s':''}</div>
+                </div>
+            </div>
+
+            <!-- Barra de validez pegada al fondo del header -->
+            <div style="margin:0 -1.4rem;margin-top:.75rem;background:${diasRestantes>=5?'rgba(0,212,170,.15)':diasRestantes>=0?'rgba(255,176,32,.15)':'rgba(255,77,77,.18)'};padding:6px 1.4rem;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,.08);">
+                <span style="font-size:12px;font-weight:600;color:${diasRestantes>=5?'#4DFFC4':diasRestantes>=0?'#FFD060':'#FF7070'};">
+                    <i class="ri-time-line me-1"></i>
+                    ${diasRestantes>=0
+                        ? `Válida hasta <strong>${formatearFecha(cot.fecha_validez)}</strong> — ${diasRestantes} día${diasRestantes!==1?'s':''} restante${diasRestantes!==1?'s':''}`
+                        : `<strong>VENCIDA</strong> · Expiró el ${formatearFecha(cot.fecha_validez)}`
+                    }
+                </span>
+                <span style="font-size:11px;color:rgba(255,255,255,.45);"><i class="ri-hourglass-line me-1"></i>Validez: ${cot.dias_validez} días</span>
+            </div>
+        </div>
+
+        <!-- ═══ CUERPO: 3 COLUMNAS ════════════════════════════════════════ -->
+        <div style="display:grid;grid-template-columns:200px 1fr;min-height:0;">
+
+            <!-- ─── SIDEBAR IZQUIERDO ──────────────────────────────────── -->
+            <div style="background:#F8F9FC;border-right:1px solid #E8EAF0;padding:1rem;display:flex;flex-direction:column;gap:.75rem;font-size:13px;">
+
+                <!-- Cliente -->
+                <div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8A8A9A;margin-bottom:6px;">
+                        <i class="ri-building-line me-1"></i>Cliente
+                    </div>
+                    <div style="background:#fff;border:1px solid #E8EAF0;border-radius:8px;padding:10px;">
+                        <div style="font-weight:700;color:#1A1A2E;font-size:12px;margin-bottom:6px;line-height:1.3;">${cot.cliente_nombre}</div>
+                        <div style="color:#6B7280;font-size:11px;margin-bottom:3px;"><i class="ri-profile-line me-1 text-primary"></i>${cot.cliente_rut}</div>
+                        ${cot.cliente_email ? `
+                        <div style="color:#6B7280;font-size:11px;margin-bottom:3px;word-break:break-all;">
+                            <i class="ri-mail-line me-1 text-primary"></i>
+                            <a href="mailto:${cot.cliente_email}" style="color:#0066FF;text-decoration:none;">${cot.cliente_email}</a>
+                        </div>` : `<div style="color:#FFB020;font-size:10px;"><i class="ri-alert-line me-1"></i>Sin email</div>`}
+                        ${cot.cliente_telefono ? `<div style="color:#6B7280;font-size:11px;"><i class="ri-phone-line me-1 text-primary"></i>${cot.cliente_telefono}</div>` : ''}
+                    </div>
+                </div>
+
+                <!-- Desglose financiero -->
+                <div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8A8A9A;margin-bottom:6px;">
+                        <i class="ri-money-dollar-circle-line me-1"></i>Desglose
+                    </div>
+                    <div style="background:#fff;border:1px solid #E8EAF0;border-radius:8px;padding:10px;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:12px;">
+                            <span style="color:#6B7280;">Neto</span>
+                            <span style="color:#1A1A2E;font-weight:500;">${formatearMoneda(cot.subtotal)}</span>
+                        </div>
+                        ${cot.descuento > 0 ? `
+                        <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:12px;">
+                            <span style="color:#6B7280;">Descuento</span>
+                            <span style="color:#00A060;font-weight:500;">−${formatearMoneda(cot.descuento)}</span>
+                        </div>` : ''}
+                        <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+                            <span style="color:#6B7280;">IVA 19%</span>
+                            <span style="color:#1A1A2E;font-weight:500;">${formatearMoneda(cot.impuesto)}</span>
+                        </div>
+                        <div style="border-top:2px solid #E8EAF0;padding-top:8px;display:flex;justify-content:space-between;">
+                            <span style="color:#1A1A2E;font-weight:700;font-size:13px;">TOTAL</span>
+                            <span style="color:#0066FF;font-weight:800;font-size:15px;">${formatearMoneda(cot.monto_total)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meta info -->
+                ${cot.descripcion || cot.observaciones ? `
+                <div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8A8A9A;margin-bottom:6px;">
+                        <i class="ri-sticky-note-line me-1"></i>Notas
+                    </div>
+                    ${cot.descripcion ? `
+                    <div style="background:#fff;border:1px solid #E8EAF0;border-radius:8px;padding:9px;margin-bottom:6px;">
+                        <p style="color:#4A4A5A;font-size:11px;margin:0;line-height:1.5;">${cot.descripcion}</p>
+                    </div>` : ''}
+                    ${cot.observaciones ? `
+                    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:9px;border-left:3px solid #FFB020;">
+                        <p style="color:#92400E;font-size:11px;margin:0;line-height:1.5;">${cot.observaciones}</p>
+                    </div>` : ''}
+                </div>` : ''}
+            </div>
+
+            <!-- ─── TABLA DE ÍTEMS ──────────────────────────────────────── -->
+            <div style="overflow-y:auto;max-height:420px;background:#fff;">
+                <!-- Cabecera tabla -->
+                <div style="display:grid;grid-template-columns:28px 1fr 52px 90px 70px 80px;gap:0;padding:7px 12px;background:#F0F4FF;border-bottom:2px solid #D0DBFF;position:sticky;top:0;z-index:2;">
+                    <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;">#</div>
+                    <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;">Descripción / SKUs</div>
+                    <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;text-align:center;">Cant.</div>
+                    <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;text-align:right;padding-right:8px;">P. Unit.</div>
+                    <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;text-align:center;">Stock</div>
+                    <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;text-align:right;padding-right:10px;">Subtotal</div>
+                </div>
+
+                <!-- Filas de ítems -->
+                ${cot.items.map((item, idx) => {
+                    const subtotalItem = item.cantidad * item.precio_unitario;
+                    const stockOk = item.tiene_stock;
+                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#FAFBFF';
+                    return `
+                    <div style="display:grid;grid-template-columns:28px 1fr 52px 90px 70px 80px;gap:0;padding:8px 12px;background:${rowBg};border-bottom:1px solid #EEF0F8;transition:background .15s;" onmouseover="this.style.background='#EEF4FF'" onmouseout="this.style.background='${rowBg}'">
+                        <!-- N° -->
+                        <div style="display:flex;align-items:flex-start;padding-top:2px;">
+                            <span style="background:#E6F0FF;color:#0066FF;width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">${idx+1}</span>
+                        </div>
+                        <!-- Descripción + SKUs -->
+                        <div style="padding-right:8px;">
+                            <div style="font-weight:600;color:#1A1A2E;font-size:13px;margin-bottom:3px;line-height:1.3;">${item.descripcion}</div>
+                            <div style="line-height:1.6;">${renderSkus(item)}</div>
+                            ${item.observaciones ? `<div style="margin-top:4px;color:#9CA3AF;font-size:10px;"><i class="ri-sticky-note-line me-1"></i>${item.observaciones}</div>` : ''}
+                        </div>
+                        <!-- Cantidad -->
+                        <div style="text-align:center;padding-top:2px;">
+                            <span style="background:#F3F4F6;border:1px solid #D1D5DB;border-radius:5px;padding:2px 8px;font-weight:700;font-size:13px;color:#1A1A2E;">${item.cantidad}</span>
+                        </div>
+                        <!-- Precio unitario -->
+                        <div style="text-align:right;padding-right:8px;padding-top:3px;font-size:12px;color:#4B5563;">${formatearMoneda(item.precio_unitario)}</div>
+                        <!-- Stock -->
+                        <div style="text-align:center;padding-top:3px;">
+                            ${stockOk !== undefined
+                                ? stockOk
+                                    ? `<span style="color:#00A060;font-size:11px;font-weight:600;"><i class="ri-checkbox-circle-fill"></i> ${item.stock_disponible||''}</span>`
+                                    : `<span style="color:#EF4444;font-size:11px;font-weight:600;"><i class="ri-close-circle-fill"></i> 0</span>`
+                                : '<span style="color:#9CA3AF;font-size:10px;">—</span>'
+                            }
+                        </div>
+                        <!-- Subtotal -->
+                        <div style="text-align:right;padding-right:10px;padding-top:2px;font-weight:700;font-size:13px;color:#0066FF;">${formatearMoneda(subtotalItem)}</div>
+                    </div>`;
+                }).join('')}
+
+                <!-- Fila de totales -->
+                <div style="padding:10px 12px;background:#F0F4FF;border-top:2px solid #D0DBFF;display:flex;justify-content:flex-end;gap:24px;align-items:center;position:sticky;bottom:0;">
+                    <span style="font-size:12px;color:#6B7280;">Neto: <strong style="color:#1A1A2E;">${formatearMoneda(cot.subtotal)}</strong></span>
+                    <span style="font-size:12px;color:#6B7280;">IVA: <strong style="color:#1A1A2E;">${formatearMoneda(cot.impuesto)}</strong></span>
+                    <span style="font-size:14px;font-weight:800;color:#0066FF;">TOTAL: ${formatearMoneda(cot.monto_total)}</span>
+                </div>
+            </div>
+        </div>`;
 
         document.getElementById('contenidoDetalleCotizacion').innerHTML = html;
         
@@ -3354,12 +3459,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Actualizar estado del botón según SKU y stock
             if (cotizacionInfo) {
                 if (cotizacionInfo.items_sin_sku > 0) {
-                    btnFacturar.disabled = false; // Habilitado para mostrar mensaje
-                    btnFacturar.innerHTML = '<i class="ri-error-warning-line me-1"></i> Faltan SKUs';
-                    btnFacturar.title = `${cotizacionInfo.items_sin_sku} producto(s) sin SKU asociado`;
-                    btnFacturar.className = 'nexo-btn-secondary';
-                    btnFacturar.style.backgroundColor = '';
-                    btnFacturar.style.borderColor = '';
+                    btnFacturar.disabled = false;
+                    btnFacturar.innerHTML = `<i class="ri-truck-line me-1"></i> Facturar (${cotizacionInfo.items_sin_sku} pend.)`;
+                    btnFacturar.title = `${cotizacionInfo.items_sin_sku} ítem(s) sin SKU: se facturará con despacho diferido`;
+                    btnFacturar.className = 'nexo-btn-warning';
+                    btnFacturar.style.backgroundColor = '#FF8C00';
+                    btnFacturar.style.borderColor = '#FF8C00';
                 } else if (cotizacionInfo.items_sin_stock > 0) {
                     btnFacturar.disabled = false; // Habilitado para mostrar mensaje
                     btnFacturar.innerHTML = '<i class="ri-alert-line me-1"></i> Sin Stock';
@@ -3417,29 +3522,36 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Validar SKUs asociados
+        // Ítems sin SKU → ofrecer despacho diferido en lugar de bloquear
         if (cotizacionInfo && cotizacionInfo.items_sin_sku > 0) {
             Swal.fire({
-                title: '<i class="ri-error-warning-line text-warning"></i> No se puede facturar',
+                title: '<i class="ri-truck-line" style="color:#FF8C00"></i> Despacho Diferido',
                 html: `
                     <div class="text-start">
-                        <p class="mb-3 text-danger">
-                            <i class="ri-close-circle-line"></i> 
-                            <strong>${cotizacionInfo.items_sin_sku} producto(s) no tienen SKU asociado</strong>
-                        </p>
-                        <p class="text-muted">
-                            Debe asociar un SKU a todos los productos de la cotización antes de poder facturarla.
-                        </p>
+                        <p class="mb-2">Cotización: <strong>${cotizacionActual.numero_cotizacion}</strong></p>
+                        <p class="mb-3">Total: <strong>$${(cotizacionActual.monto_total||0).toLocaleString('es-CL')}</strong></p>
+                        <div class="alert py-2" style="background:rgba(255,140,0,.1);border-color:#FF8C00;color:#7a4200;">
+                            <i class="ri-information-line"></i>
+                            <strong>${cotizacionInfo.items_sin_sku} ítem(s)</strong> no tienen SKU asignado.<br>
+                            <small>Puedes facturar ahora y asignar el stock cuando los productos lleguen.</small>
+                        </div>
                         <hr>
-                        <p class="small">
-                            <i class="ri-lightbulb-line"></i> 
-                            Haga clic en "Editar" para asociar los SKUs faltantes.
+                        <p class="small text-muted">
+                            <i class="ri-lightbulb-line"></i>
+                            Al confirmar, la cotización quedará FACTURADA con estado de <strong>Despacho Pendiente</strong>.
+                            Cuando ingresen los productos al inventario, podrás asignarlos desde esta misma vista.
                         </p>
                     </div>
                 `,
                 icon: 'warning',
-                confirmButtonText: 'Entendido',
-                confirmButtonColor: '#ffc107'
+                showCancelButton: true,
+                confirmButtonText: '<i class="ri-truck-line"></i> Facturar con Despacho Diferido',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#FF8C00',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    ejecutarFacturacion(cotizacionActual.id, true);
+                }
             });
             return;
         }
@@ -3485,7 +3597,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="text-start">
                     <p class="mb-3">Cotización: <strong>${cotizacionActual.numero_cotizacion}</strong></p>
                     <p class="mb-3">Cliente: <strong>${cotizacionActual.cliente_nombre}</strong></p>
-                    <p class="mb-3">Total: <strong>$${cotizacionActual.monto_total.toLocaleString('es-CL')}</strong></p>
+                    <p class="mb-3">Total: <strong>$${(cotizacionActual.monto_total||0).toLocaleString('es-CL')}</strong></p>
                     <div class="alert alert-success py-2 mb-3">
                         <i class="ri-checkbox-circle-line"></i> Todos los productos tienen SKU y stock suficiente
                     </div>
@@ -3507,15 +3619,38 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                // Cerrar modal de detalle
-                bootstrap.Modal.getInstance(document.getElementById('modalDetalleCotizacion')).hide();
-                
-                // Redirigir al POS Dashboard con el ID de la cotización
-                // El POS abrirá automáticamente el modal de cotizaciones y cargará esta
-                window.location.href = `/app/pos-dashboard/?cotizacion_id=${cotizacionActual.id}`;
+                ejecutarFacturacion(cotizacionActual.id, false);
             }
         });
     };
+
+    // Ejecuta la conversión a factura y redirige al POS
+    function ejecutarFacturacion(cotizacionId, forzarConPendientes) {
+        fetch(apiUrls.convertirFactura, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({
+                cotizacion_id: cotizacionId,
+                forzar_con_pendientes: forzarConPendientes,
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalDetalleCotizacion'))?.hide();
+                window.location.href = `/app/pos-dashboard/?cotizacion_id=${cotizacionId}`;
+            } else if (data.requiere_confirmacion) {
+                // No debería ocurrir aquí (ya se confirmó arriba), pero por seguridad:
+                mostrarError(data.message || 'Se requiere confirmación adicional');
+            } else {
+                mostrarError(data.error || 'Error al convertir cotización');
+            }
+        })
+        .catch(() => mostrarError('Error de conexión al facturar'));
+    }
 
     window.anularCotizacion = function(cotizacionId) {
         if (confirm('¿Está seguro de anular esta cotización?')) {
@@ -4499,6 +4634,204 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // ===================================================================
+    // DESPACHO DIFERIDO — Asignar SKU a ítems pendientes post-factura
+    // ===================================================================
+
+    window.abrirModalAsignarSku = function(cotizacionId) {
+        const cot = cotizacionesData.find(c => c.id === cotizacionId);
+        const infoEl = document.getElementById('asignarSkuCotizacionInfo');
+        const container = document.getElementById('asignarSkuItemsContainer');
+
+        // Info header
+        if (cot) {
+            infoEl.innerHTML = `
+                <i class="ri-truck-line me-1"></i>
+                Cotización <strong>${cot.numero_cotizacion}</strong> — Cliente: <strong>${cot.cliente_nombre}</strong><br>
+                <small>Asigna un SKU a cada ítem sin stock. Al confirmar se descuenta el inventario y queda registrado el movimiento.</small>
+            `;
+        }
+
+        // Mostrar spinner
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border" style="color:#FF8C00;" role="status"></div>
+                <p class="mt-2 text-muted">Cargando ítems pendientes...</p>
+            </div>`;
+
+        new bootstrap.Modal(document.getElementById('modalAsignarSku')).show();
+
+        // Cargar detalle de cotización para obtener ítems pendientes
+        fetch(apiUrls.detalleCotizacion(cotizacionId))
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) { container.innerHTML = `<div class="alert alert-danger">${data.error}</div>`; return; }
+                const items = (data.cotizacion.items || []).filter(item =>
+                    (!item.tiene_sku || item.es_producto_pendiente) && !item.sku_asignado_post_factura
+                );
+                if (items.length === 0) {
+                    container.innerHTML = `
+                        <div class="nexo-alert nexo-alert-success">
+                            <i class="ri-checkbox-circle-line me-1"></i> Todos los ítems ya tienen SKU asignado. ¡Despacho completado!
+                        </div>`;
+                    return;
+                }
+                renderAsignarSkuItems(items, cotizacionId);
+            })
+            .catch(() => { container.innerHTML = `<div class="alert alert-danger">Error al cargar ítems</div>`; });
+    };
+
+    function renderAsignarSkuItems(items, cotizacionId) {
+        const container = document.getElementById('asignarSkuItemsContainer');
+        let html = `<p class="text-muted small mb-3"><i class="ri-information-line"></i> Busca el SKU correspondiente a cada ítem y confirma para descontar stock.</p>`;
+        items.forEach((item, idx) => {
+            const itemId = `sku-item-${item.id}`;
+            html += `
+            <div class="asignar-sku-item" id="${itemId}">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <strong style="font-size:14px;">${item.descripcion || item.nombre_producto_pendiente || 'Ítem sin nombre'}</strong>
+                        ${item.sku_producto_pendiente && item.sku_producto_pendiente !== 'N/A'
+                            ? `<span class="nexo-badge ms-1" style="background:var(--nexo-gray-100);color:var(--nexo-text-secondary);">SKU esperado: ${item.sku_producto_pendiente}</span>`
+                            : ''}
+                    </div>
+                    <span class="nexo-badge" style="background:rgba(255,140,0,.15);color:#FF8C00;">
+                        x${item.cantidad} unidades
+                    </span>
+                </div>
+                <div class="input-group input-group-sm mb-2">
+                    <span class="input-group-text"><i class="ri-search-line"></i></span>
+                    <input type="text" class="form-control" placeholder="Buscar SKU, nombre, marca, talla..."
+                           id="search-${item.id}"
+                           oninput="buscarSkuParaItem(${item.id}, this.value)">
+                </div>
+                <div id="results-${item.id}" class="mb-2" style="max-height:160px;overflow-y:auto;"></div>
+                <div id="selected-${item.id}" style="display:none;" class="p-2 mb-2" style="background:var(--nexo-primary-light);border-radius:var(--nexo-radius-sm);">
+                    <!-- Producto seleccionado -->
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="form-label mb-0 small">Cantidad a despachar:</label>
+                    <input type="number" class="form-control form-control-sm" id="qty-${item.id}"
+                           value="${item.cantidad}" min="1" max="${item.cantidad}" style="width:80px;">
+                    <button class="nexo-btn-primary btn-sm" onclick="confirmarAsignarSku(${item.id}, ${cotizacionId})"
+                            id="btn-asignar-${item.id}" disabled style="font-size:12px;">
+                        <i class="ri-check-line me-1"></i> Asignar y Despachar
+                    </button>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    // Debounce para búsqueda en modal
+    const _skuSearchTimers = {};
+    window.buscarSkuParaItem = function(itemId, query) {
+        clearTimeout(_skuSearchTimers[itemId]);
+        const resultsEl = document.getElementById(`results-${itemId}`);
+        if (!query || query.length < 2) { resultsEl.innerHTML = ''; return; }
+        resultsEl.innerHTML = `<div class="text-muted small p-1"><i class="ri-loader-2-line"></i> Buscando...</div>`;
+        _skuSearchTimers[itemId] = setTimeout(() => {
+            fetch(apiUrls.buscarProductos + '?' + new URLSearchParams({ q: query, stock: 'con_stock' }))
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success || !data.productos.length) {
+                        resultsEl.innerHTML = `<div class="text-muted small p-1">Sin resultados</div>`;
+                        return;
+                    }
+                    resultsEl.innerHTML = data.productos.slice(0, 8).map(p => `
+                        <div class="asignar-sku-search-result" onclick="seleccionarSkuItem(${itemId}, ${p.id}, '${p.sku}', '${(p.nombre||'').replace(/'/g,"\\'")}', ${p.stock||0})">
+                            <span class="nexo-badge me-1" style="background:var(--nexo-primary-light);color:var(--nexo-primary);">${p.sku}</span>
+                            <strong>${p.nombre || ''}</strong>
+                            <span class="text-muted ms-1">${p.talla||''} · Stock: <strong>${p.stock||0}</strong></span>
+                        </div>`).join('');
+                })
+                .catch(() => { resultsEl.innerHTML = `<div class="text-danger small p-1">Error en búsqueda</div>`; });
+        }, 350);
+    };
+
+    window.seleccionarSkuItem = function(itemId, productoTallaId, sku, nombre, stock) {
+        // Guardar selección en dataset del input
+        const searchInput = document.getElementById(`search-${itemId}`);
+        searchInput.dataset.selectedId = productoTallaId;
+        searchInput.dataset.selectedStock = stock;
+        searchInput.value = `${sku} — ${nombre}`;
+
+        // Limpiar resultados
+        document.getElementById(`results-${itemId}`).innerHTML = '';
+
+        // Mostrar info del seleccionado
+        const selectedEl = document.getElementById(`selected-${itemId}`);
+        selectedEl.style.display = 'block';
+        selectedEl.innerHTML = `
+            <span class="nexo-badge me-1" style="background:var(--nexo-primary-light);color:var(--nexo-primary);">${sku}</span>
+            <strong>${nombre}</strong>
+            <span class="text-muted small ms-2">Stock disponible: <strong>${stock}</strong></span>
+        `;
+
+        // Ajustar max de cantidad
+        const qtyInput = document.getElementById(`qty-${itemId}`);
+        if (qtyInput) qtyInput.max = stock;
+
+        // Habilitar botón
+        document.getElementById(`btn-asignar-${itemId}`).disabled = false;
+    };
+
+    window.confirmarAsignarSku = function(detalleId, cotizacionId) {
+        const searchInput = document.getElementById(`search-${detalleId}`);
+        const productoTallaId = searchInput?.dataset?.selectedId;
+        const cantidad = parseInt(document.getElementById(`qty-${detalleId}`)?.value || '1');
+
+        if (!productoTallaId) { mostrarError('Selecciona un producto primero'); return; }
+
+        const btn = document.getElementById(`btn-asignar-${detalleId}`);
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ri-loader-2-line"></i> Asignando...';
+
+        fetch(apiUrls.asignarSkuPendiente, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({ detalle_id: detalleId, producto_talla_id: productoTallaId, cantidad })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                // Marcar ítem como resuelto
+                const itemEl = document.getElementById(`sku-item-${detalleId}`);
+                if (itemEl) {
+                    itemEl.classList.add('resuelto');
+                    itemEl.innerHTML = `
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="ri-checkbox-circle-fill" style="color:var(--nexo-success);font-size:20px;"></i>
+                            <div>
+                                <strong>SKU ${data.sku}</strong> — ${data.nombre_producto}<br>
+                                <span class="text-muted small">x${cantidad} unidades despachadas · Stock decrementado</span>
+                            </div>
+                        </div>`;
+                }
+                if (data.despacho_completado) {
+                    mostrarExito('¡Todos los ítems han sido despachados! Despacho completado.');
+                } else {
+                    mostrarExito(`SKU ${data.sku} asignado correctamente. Stock decrementado.`);
+                }
+                // Recargar lista de cotizaciones para actualizar badges
+                cargarCotizaciones();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="ri-check-line me-1"></i> Asignar y Despachar';
+                mostrarError(data.error || 'Error al asignar SKU');
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ri-check-line me-1"></i> Asignar y Despachar';
+            mostrarError('Error de conexión');
+        });
+    };
+
 });
 </script>
 

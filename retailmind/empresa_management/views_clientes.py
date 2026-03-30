@@ -13,7 +13,7 @@ import json
 import csv
 from datetime import datetime, timedelta
 
-from .models import Cliente, LogCliente, Empresa
+from app.models import Cliente, LogCliente, Empresa
 
 # ========== VISTAS PARA CLIENTES ==========
 
@@ -555,7 +555,7 @@ def dashboard_clientes(request):
     
     # Top 5 empresas con más clientes
     top_empresas_clientes = Empresa.objects.annotate(
-        num_clientes=Count('clientes')
+        num_clientes=Count('clientes_crm')
     ).filter(num_clientes__gt=0).order_by('-num_clientes')[:5]
     
     # Clientes sin empresa asociada
@@ -594,7 +594,7 @@ def reporte_clientes_empresa(request, empresa_id):
     """Reporte detallado de clientes por empresa"""
     
     empresa = get_object_or_404(Empresa, id=empresa_id)
-    clientes = empresa.clientes.all()
+    clientes = empresa.clientes_crm.all()
     
     # Estadísticas
     total_clientes = clientes.count()

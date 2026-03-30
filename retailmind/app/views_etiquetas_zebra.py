@@ -742,13 +742,33 @@ def obtener_productos_documento(request, tipo_documento, documento_id):
         ).order_by('-fecha_impresion')
         
         impresiones_previas = []
-        for hist in historial_previo[:5]:  # Últimas 5 impresiones
+        for hist in historial_previo[:5]:
             impresiones_previas.append({
                 'fecha': hist.fecha_impresion.strftime('%d/%m/%Y %H:%M'),
-                'usuario': hist.usuario.username if hist.usuario else 'Sistema',
+                'usuario': hist.usuario.get_full_name() or hist.usuario.username if hist.usuario else 'Sistema',
                 'total_etiquetas': hist.total_etiquetas
             })
-        
+
+        # Historial de impresión por SKU individual
+        skus_impresos = {}
+        historial_ids = list(historial_previo.values_list('id', flat=True))
+        if historial_ids:
+            for detalle in DetalleImpresionEtiqueta.objects.filter(
+                historial_id__in=historial_ids
+            ):
+                sku = str(detalle.sku)
+                if sku not in skus_impresos:
+                    skus_impresos[sku] = {'veces': 0, 'etiquetas': 0}
+                skus_impresos[sku]['veces'] += 1
+                skus_impresos[sku]['etiquetas'] += detalle.cantidad_etiquetas
+
+        # Anotar cada producto con su historial
+        for prod in productos:
+            info = skus_impresos.get(str(prod['sku']))
+            prod['ya_impreso'] = info is not None
+            prod['veces_impreso'] = info['veces'] if info else 0
+            prod['etiquetas_impresas'] = info['etiquetas'] if info else 0
+
         # Calcular totales
         total_productos = len(productos)
         total_etiquetas = sum(p['cantidad'] for p in productos)

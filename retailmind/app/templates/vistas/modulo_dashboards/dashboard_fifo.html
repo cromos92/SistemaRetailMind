@@ -1132,6 +1132,26 @@
                 </div>
             </div>
 
+            <!-- ========== CHARTS FIFO ========== -->
+            <div class="row mb-4">
+                <div class="col-lg-5">
+                    <div class="nexo-card h-100">
+                        <div class="nexo-card-header"><h6><i class="bi bi-pie-chart-fill text-primary"></i> Distribución de Diferencias</h6></div>
+                        <div class="nexo-card-body" style="display:flex;align-items:center;justify-content:center;">
+                            <div style="position:relative;height:260px;width:100%;"><canvas id="chartDifPie"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-7">
+                    <div class="nexo-card h-100">
+                        <div class="nexo-card-header"><h6><i class="bi bi-bar-chart-fill text-primary"></i> Salud del Stock por Rango</h6></div>
+                        <div class="nexo-card-body">
+                            <div style="position:relative;height:260px;"><canvas id="chartStockBar"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ========== ALERTAS Y RECOMENDACIONES ========== -->
             <div class="row mb-4">
                 <div class="col-12">
@@ -1573,6 +1593,7 @@ function actualizarKPIsTiempo(metricas) {
 }
 
 // ========== ACTUALIZAR ANÁLISIS ==========
+let fifoCharts = {};
 function actualizarAnalisis(analisis) {
     document.getElementById('diferenciasPositivas').textContent = analisis.diferencias_positivas;
     document.getElementById('diferenciasNegativas').textContent = analisis.diferencias_negativas;
@@ -1581,6 +1602,44 @@ function actualizarAnalisis(analisis) {
     document.getElementById('stockMedio').textContent = analisis.stock_medio;
     document.getElementById('stockAlto').textContent = analisis.stock_alto;
     document.getElementById('sinStock').textContent = analisis.sin_stock;
+
+    Object.values(fifoCharts).forEach(c => c.destroy());
+
+    const pieCtx = document.getElementById('chartDifPie');
+    if (pieCtx) {
+        fifoCharts.difPie = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Positivas (FIFO > Sistema)', 'Negativas (FIFO < Sistema)', 'Sin Diferencia'],
+                datasets: [{
+                    data: [analisis.diferencias_positivas, analisis.diferencias_negativas, analisis.sin_diferencias],
+                    backgroundColor: ['#0ab39c', '#f06548', '#adb5bd'],
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+        });
+    }
+
+    const barCtx = document.getElementById('chartStockBar');
+    if (barCtx) {
+        fifoCharts.stockBar = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Sin Stock', 'Stock Bajo (<10)', 'Stock Medio (10-50)', 'Stock Alto (>50)'],
+                datasets: [{
+                    label: 'Productos',
+                    data: [analisis.sin_stock, analisis.stock_bajo, analisis.stock_medio, analisis.stock_alto],
+                    backgroundColor: ['#f06548', '#f7b84b', '#405189', '#0ab39c'],
+                    borderRadius: 8,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+            }
+        });
+    }
 }
 
 // ========== ACTUALIZAR TABLA ==========

@@ -86,6 +86,7 @@ def obtener_producto_edicion(request, producto_id):
             'precioSugerido': producto.precioSugerido or 0,
             'tipo_talla': producto.tipo_talla,
             'guia_talla_id': producto.guia_talla.id if producto.guia_talla else None,
+            'excluir_de_analitica': producto.excluir_de_analitica,
         }
         
         # Obtener variaciones/tallas
@@ -278,6 +279,10 @@ def actualizar_producto(request, producto_id):
             prod.atributo2 = atributos.get('atributo2')
             prod.atributo3 = atributos.get('atributo3')
             prod.atributo4 = atributos.get('atributo4')
+            
+            # Actualizar flag analítica (solo si viene en el payload explícitamente)
+            if 'excluir_de_analitica' in data:
+                prod.excluir_de_analitica = bool(data['excluir_de_analitica'])
             
             prod.save()
             productos_actualizados += 1
@@ -605,6 +610,75 @@ def ajustar_stock(request, variacion_id):
             'success': False,
             'error': f'Error al ajustar stock: {str(e)}'
         }, status=500)
+
+
+# ========== EXCLUIR/INCLUIR MASIVAMENTE DE ANALÍTICA POR SUCURSAL ==========
+
+@require_POST
+@login_required
+@transaction.atomic
+def excluir_analitica_masivo(request):
+    """
+    Excluir o incluir de la analítica. Acepta dos modos:
+      - Por producto_ids: { "producto_ids": [1, 2, 3], "excluir": true|false, "propagar": true|false }
+      - Por sucursal:     { "sucursal_id": <int|"todas">, "excluir": true|false }
+
+    Si propagar=True (default) y se usa producto_ids, busca el articulo de cada producto
+    y aplica el cambio a TODOS los Producto con el mismo nombre en cualquier sucursal.
+    """
+    try:
+        data = json.loads(request.body)
+        excluir = bool(data.get('excluir', True))
+        propagar = data.get('propagar', True)  # propagar a todas las sucursales por defecto
+        producto_ids = data.get('producto_ids')
+        sucursal_id = data.get('sucursal_id')
+
+        if producto_ids is not None:
+            if not isinstance(producto_ids, list) or len(producto_ids) == 0:
+                return JsonResponse({'success': False, 'error': 'producto_ids debe ser una lista no vacía'}, status=400)
+
+            if propagar:
+                # Obtener los nombres de artículo de los productos seleccionados
+                articulos = list(
+                    Producto.objects.filter(id__in=producto_ids)
+                    .values_list('articulo', flat=True)
+                    .distinct()
+                )
+                # Actualizar TODOS los productos con esos nombres en cualquier sucursal
+                qs = Producto.objects.filter(articulo__in=articulos)
+                nombre_scope = f'{len(articulos)} artículo(s) — todas las sucursales'
+            else:
+                qs = Producto.objects.filter(id__in=producto_ids)
+                nombre_scope = f'{len(producto_ids)} producto(s) seleccionado(s)'
+
+        elif sucursal_id is not None:
+            qs = Producto.objects.all()
+            if str(sucursal_id) != 'todas':
+                try:
+                    sucursal_obj = Sucursal.objects.get(id=sucursal_id)
+                except Sucursal.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Sucursal no encontrada'}, status=404)
+                qs = qs.filter(sucursal=sucursal_obj)
+                nombre_scope = sucursal_obj.alias
+            else:
+                nombre_scope = 'Todas las sucursales'
+        else:
+            return JsonResponse({'success': False, 'error': 'Se requiere producto_ids o sucursal_id'}, status=400)
+
+        cantidad = qs.update(excluir_de_analitica=excluir)
+        accion = 'excluidos de' if excluir else 'incluidos en'
+        return JsonResponse({
+            'success': True,
+            'message': f'{cantidad} registros {accion} la analítica ({nombre_scope})',
+            'cantidad': cantidad,
+            'excluir': excluir,
+            'propagado': bool(propagar),
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error: {str(e)}'}, status=500)
 
 
 # ========== HISTORIAL DE MOVIMIENTOS ==========

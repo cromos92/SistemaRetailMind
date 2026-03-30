@@ -1,0 +1,236 @@
+{% load static %}
+{% load humanize %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+:root {
+    --rm-primary: #405189;
+    --rm-success: #0ab39c;
+    --rm-warning: #f7b84b;
+    --rm-danger: #f06548;
+    --rm-info: #299cdb;
+    --rm-purple: #6559cc;
+    --rm-teal: #02a8b5;
+}
+.page-content { min-height: 100vh; padding: 70px 0 60px; background: #f3f3f9; }
+.dashboard-header {
+    background: linear-gradient(135deg, var(--rm-teal) 0%, var(--rm-primary) 100%);
+    color: #fff; border-radius: 12px; padding: 24px 30px; margin-bottom: 24px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+}
+.dashboard-header h4 { margin: 0; font-weight: 600; font-size: 1.4rem; }
+.filter-section { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.filter-section input {
+    padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3);
+    background: rgba(255,255,255,.15); color: #fff; font-size: .875rem;
+}
+.filter-section input::placeholder { color: rgba(255,255,255,.6); }
+.btn-filter {
+    padding: 8px 20px; border-radius: 8px; border: none;
+    background: rgba(255,255,255,.25); color: #fff; cursor: pointer; font-weight: 500;
+}
+.btn-filter:hover { background: rgba(255,255,255,.4); }
+.kpi-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+}
+.kpi-card {
+    background: #fff; border-radius: 12px; padding: 20px; position: relative;
+    overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); transition: transform .2s;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.kpi-card::before { content:''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+.kpi-primary::before { background: var(--rm-primary); }
+.kpi-success::before { background: var(--rm-success); }
+.kpi-warning::before { background: var(--rm-warning); }
+.kpi-danger::before { background: var(--rm-danger); }
+.kpi-info::before { background: var(--rm-info); }
+.kpi-purple::before { background: var(--rm-purple); }
+.kpi-teal::before { background: var(--rm-teal); }
+.kpi-icon { font-size: 2rem; opacity: .15; position: absolute; top: 14px; right: 14px; }
+.kpi-value { font-size: 1.6rem; font-weight: 700; color: #495057; margin-bottom: 4px; }
+.kpi-label { font-size: .8rem; color: #878a99; text-transform: uppercase; letter-spacing: .5px; }
+.chart-card {
+    background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    margin-bottom: 24px; overflow: hidden;
+}
+.chart-header { padding: 16px 20px; border-bottom: 1px solid #e9ebec; }
+.chart-header h6 { margin: 0; font-weight: 600; color: #495057; }
+.chart-body { padding: 20px; }
+.chart-container { position: relative; height: 320px; }
+.chart-container-sm { position: relative; height: 260px; }
+.star-rating { color: var(--rm-warning); font-size: 1.1rem; }
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+
+            <div class="dashboard-header">
+                <div>
+                    <h4><i class="ri-contacts-book-line me-2"></i>Dashboard CRM</h4>
+                    <small>Clientes, proveedores y relaciones comerciales</small>
+                </div>
+                <div class="filter-section">
+                    <input type="date" id="fechaInicio">
+                    <input type="date" id="fechaFin">
+                    <button class="btn-filter" onclick="cargarDatos()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
+                </div>
+            </div>
+
+            <div class="kpi-grid">
+                <div class="kpi-card kpi-primary">
+                    <i class="ri-group-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiClientes">--</div>
+                    <div class="kpi-label">Clientes Activos</div>
+                </div>
+                <div class="kpi-card kpi-success">
+                    <i class="ri-user-add-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiNuevos">--</div>
+                    <div class="kpi-label">Nuevos en Periodo</div>
+                </div>
+                <div class="kpi-card kpi-info">
+                    <i class="ri-truck-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiProveedores">--</div>
+                    <div class="kpi-label">Proveedores Activos</div>
+                </div>
+                <div class="kpi-card kpi-warning">
+                    <i class="ri-star-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiCalificacion">--</div>
+                    <div class="kpi-label">Calificación Prom.</div>
+                </div>
+                <div class="kpi-card kpi-teal">
+                    <i class="ri-building-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiEmpresas">--</div>
+                    <div class="kpi-label">Empresas Activas</div>
+                </div>
+                <div class="kpi-card kpi-purple">
+                    <i class="ri-phone-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiConContacto">--</div>
+                    <div class="kpi-label">Con Contacto</div>
+                </div>
+                <div class="kpi-card kpi-danger">
+                    <i class="ri-user-unfollow-line kpi-icon"></i>
+                    <div class="kpi-value" id="kpiSinContacto">--</div>
+                    <div class="kpi-label">Sin Contacto</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-5">
+                    <div class="chart-card">
+                        <div class="chart-header"><h6>Tipo de Cliente</h6></div>
+                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartTipoCliente"></canvas></div></div>
+                    </div>
+                </div>
+                <div class="col-lg-7">
+                    <div class="chart-card">
+                        <div class="chart-header"><h6>Nuevos Clientes por Mes</h6></div>
+                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartEvolucion"></canvas></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="chart-card">
+                        <div class="chart-header"><h6>Top 10 Empresas por Contactos</h6></div>
+                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartTopEmpresas"></canvas></div></div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="chart-card">
+                        <div class="chart-header"><h6>Calificación de Proveedores</h6></div>
+                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartCalificacion"></canvas></div></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+
+<script>
+let charts = {};
+const colores = ['#405189','#0ab39c','#f7b84b','#f06548','#299cdb','#6559cc','#02a8b5','#e83e8c'];
+
+function initDates() {
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), 0, 1);
+    document.getElementById('fechaInicio').value = inicio.toISOString().split('T')[0];
+    document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
+}
+
+function cargarDatos() {
+    const params = new URLSearchParams({
+        fecha_inicio: document.getElementById('fechaInicio').value,
+        fecha_fin: document.getElementById('fechaFin').value,
+    });
+    $.get('/app/api/dashboard-crm/datos/?' + params, function(r) {
+        if (!r.success) return;
+        const k = r.kpis;
+        $('#kpiClientes').text(k.total_clientes.toLocaleString());
+        $('#kpiNuevos').text(k.nuevos_clientes);
+        $('#kpiProveedores').text(k.total_proveedores);
+        $('#kpiCalificacion').html(k.calificacion_promedio + ' <span class="star-rating">&#9733;</span>');
+        $('#kpiEmpresas').text(k.empresas_activas);
+        $('#kpiConContacto').text(k.con_contacto);
+        $('#kpiSinContacto').text(k.sin_contacto);
+        renderCharts(r);
+    });
+}
+
+function renderCharts(data) {
+    Object.values(charts).forEach(c => c.destroy());
+
+    charts.tipoCliente = new Chart(document.getElementById('chartTipoCliente'), {
+        type: 'doughnut',
+        data: {
+            labels: data.por_tipo_cliente.map(t => t.tipo_cliente),
+            datasets: [{ data: data.por_tipo_cliente.map(t => t.cantidad), backgroundColor: colores }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+
+    charts.evolucion = new Chart(document.getElementById('chartEvolucion'), {
+        type: 'line',
+        data: {
+            labels: data.evolucion_clientes.map(e => e.mes),
+            datasets: [{
+                label: 'Nuevos Clientes',
+                data: data.evolucion_clientes.map(e => e.cantidad),
+                borderColor: '#02a8b5',
+                backgroundColor: 'rgba(2,168,181,.1)',
+                fill: true, tension: .4,
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+
+    charts.topEmpresas = new Chart(document.getElementById('chartTopEmpresas'), {
+        type: 'bar',
+        data: {
+            labels: data.top_empresas.map(e => (e.nombre || '').substring(0, 25)),
+            datasets: [{ label: 'Contactos', data: data.top_empresas.map(e => e.n_contactos), backgroundColor: 'rgba(64,81,137,.7)', borderRadius: 6 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+    });
+
+    const calLabels = data.por_calificacion.map(c => c.calificacion + ' estrellas');
+    const calData = data.por_calificacion.map(c => c.cantidad);
+    const calColors = ['#f06548','#f7b84b','#299cdb','#0ab39c','#405189'];
+    charts.calificacion = new Chart(document.getElementById('chartCalificacion'), {
+        type: 'bar',
+        data: {
+            labels: calLabels,
+            datasets: [{ label: 'Proveedores', data: calData, backgroundColor: calColors.slice(0, calData.length), borderRadius: 6 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+}
+
+$(function() { initDates(); cargarDatos(); });
+</script>

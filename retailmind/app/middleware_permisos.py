@@ -18,6 +18,12 @@ URL_PERMISO_MAP = {
     '/app/dashboard_fifo/': 'dashboard_fifo',
     '/app/verDashboardCompras/': 'dashboard_compras_estrategico',
     '/app/ventas/dashboard': 'dashboard_ventas',
+    '/app/dashboard-documentos/': 'dashboard_documentos',
+    '/app/dashboard-caja/': 'dashboard_caja',
+    '/app/dashboard-requerimientos/': 'dashboard_requerimientos',
+    '/app/dashboard-crm/': 'dashboard_crm',
+    '/app/prediccion/': 'prediccion_compras',
+    '/app/dashboard-integral/': 'dashboard_integral',
     
     # Ventas
     '/app/ticket-venta/': 'ticket_venta',
@@ -47,6 +53,7 @@ URL_PERMISO_MAP = {
     
     # Compras
     '/app/verGestionCompras/': 'gestion_compras',
+    '/app/eliminar_compra/': 'gestion_compras',
     '/app/verGestionDteCompras/': 'gestion_dte_compras',
     
     # Requerimientos

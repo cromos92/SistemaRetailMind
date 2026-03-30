@@ -216,270 +216,150 @@
         margin-left: auto;
     }
 
-    /* ========== KPI CARDS ========== */
-    .nexo-kpi-section {
-        padding: 24px 40px;
+    /* ========== METRICS BAR (KPIs + Indicadores compactos) ========== */
+    .nexo-metrics-bar {
+        padding: 12px 40px 16px;
     }
 
-    .nexo-kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 20px;
-    }
-
-    .nexo-kpi-card {
-        background: var(--nexo-white);
-        border-radius: var(--nexo-radius-lg);
-        padding: 24px;
-        box-shadow: var(--nexo-shadow-sm);
-        border: 1px solid var(--nexo-gray-300);
-        transition: var(--nexo-transition-normal);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .nexo-kpi-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--nexo-shadow-lg);
-    }
-
-    .nexo-kpi-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: var(--nexo-primary);
-    }
-
-    .nexo-kpi-card.kpi-success::before {
-        background: var(--nexo-success);
-    }
-
-    .nexo-kpi-card.kpi-warning::before {
-        background: var(--nexo-warning);
-    }
-
-    .nexo-kpi-card.kpi-danger::before {
-        background: var(--nexo-error);
-    }
-
-    .nexo-kpi-card.kpi-info::before {
-        background: var(--nexo-info);
-    }
-
-    .nexo-kpi-header {
+    /* ---- Fila 1: KPI chips ---- */
+    .nexo-kpi-strip {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 12px;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
     }
 
-    .nexo-kpi-title {
-        font-size: 0.8rem;
+    .nexo-kpi-chip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 8px 14px;
+        flex: 1;
+        min-width: 130px;
+        box-shadow: var(--nexo-shadow-sm);
+        border-top: 3px solid var(--nexo-primary);
+        transition: box-shadow var(--nexo-transition-fast);
+    }
+
+    .nexo-kpi-chip:hover { box-shadow: var(--nexo-shadow-md); }
+
+    .nexo-kpi-chip.chip-success { border-top-color: var(--nexo-success); }
+    .nexo-kpi-chip.chip-warning { border-top-color: var(--nexo-warning); }
+    .nexo-kpi-chip.chip-danger  { border-top-color: var(--nexo-error); }
+    .nexo-kpi-chip.chip-info    { border-top-color: var(--nexo-primary); }
+
+    .nexo-kpi-chip-icon {
+        font-size: 18px;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+
+    .nexo-kpi-chip-body {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .nexo-kpi-chip-value {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        line-height: 1.1;
+        white-space: nowrap;
+    }
+
+    .nexo-kpi-chip-value.cv-success { color: var(--nexo-success); }
+    .nexo-kpi-chip-value.cv-warning { color: var(--nexo-warning); }
+    .nexo-kpi-chip-value.cv-danger  { color: var(--nexo-error); }
+
+    .nexo-kpi-chip-label {
+        font-size: 0.68rem;
         font-weight: 600;
         color: var(--nexo-gray-500);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
-    .nexo-kpi-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: var(--nexo-radius-md);
+    /* ---- Fila 2: Indicadores inline ---- */
+    .nexo-ind-strip {
         display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
+        gap: 8px;
+        flex-wrap: wrap;
     }
 
-    .nexo-kpi-icon.icon-primary {
-        background: var(--nexo-primary-light);
-        color: var(--nexo-primary);
-    }
-
-    .nexo-kpi-icon.icon-success {
-        background: rgba(0, 212, 170, 0.1);
-        color: var(--nexo-success);
-    }
-
-    .nexo-kpi-icon.icon-warning {
-        background: rgba(255, 176, 32, 0.1);
-        color: var(--nexo-warning);
-    }
-
-    .nexo-kpi-icon.icon-danger {
-        background: rgba(255, 77, 77, 0.1);
-        color: var(--nexo-error);
-    }
-
-    .nexo-kpi-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--nexo-gray-900);
-        line-height: 1.2;
-    }
-
-    .nexo-kpi-value.text-success {
-        color: var(--nexo-success);
-    }
-
-    .nexo-kpi-value.text-warning {
-        color: var(--nexo-warning);
-    }
-
-    .nexo-kpi-value.text-danger {
-        color: var(--nexo-error);
-    }
-
-    .nexo-kpi-subtitle {
-        font-size: 0.85rem;
-        color: var(--nexo-gray-500);
-        margin-top: 4px;
-    }
-
-    .nexo-kpi-trend {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        padding: 4px 8px;
-        border-radius: var(--nexo-radius-sm);
-        margin-top: 12px;
-    }
-
-    .nexo-kpi-trend.trend-up {
-        background: rgba(0, 212, 170, 0.1);
-        color: var(--nexo-success);
-    }
-
-    .nexo-kpi-trend.trend-down {
-        background: rgba(255, 77, 77, 0.1);
-        color: var(--nexo-error);
-    }
-
-    .nexo-kpi-trend.trend-neutral {
-        background: var(--nexo-gray-100);
-        color: var(--nexo-gray-500);
-    }
-
-    /* ========== INDICADORES AVANZADOS ========== */
-    .nexo-indicators-section {
-        padding: 0 40px 24px;
-    }
-
-    .nexo-section-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--nexo-gray-900);
-        margin-bottom: 16px;
+    .nexo-ind-chip {
         display: flex;
         align-items: center;
         gap: 10px;
-    }
-
-    .nexo-section-badge {
-        font-size: 0.7rem;
-        background: var(--nexo-primary-light);
-        color: var(--nexo-primary);
-        padding: 4px 10px;
-        border-radius: var(--nexo-radius-full);
-        font-weight: 600;
-    }
-
-    .nexo-indicators-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 16px;
-    }
-
-    .nexo-indicator-card {
         background: var(--nexo-white);
-        border-radius: var(--nexo-radius-lg);
-        padding: 20px;
-        box-shadow: var(--nexo-shadow-sm);
         border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 7px 14px;
+        flex: 1;
+        min-width: 200px;
+        box-shadow: var(--nexo-shadow-sm);
     }
 
-    .nexo-indicator-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-    }
-
-    .nexo-indicator-title {
-        font-size: 0.9rem;
+    .nexo-ind-label {
+        font-size: 0.75rem;
         font-weight: 600;
         color: var(--nexo-gray-700);
+        white-space: nowrap;
+        flex-shrink: 0;
+        min-width: 120px;
     }
 
-    .nexo-indicator-help {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
+    .nexo-ind-bar-wrap {
+        flex: 1;
+        height: 6px;
         background: var(--nexo-gray-100);
-        color: var(--nexo-gray-500);
-        font-size: 0.7rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: help;
-    }
-
-    .nexo-progress-bar {
-        height: 8px;
-        background: var(--nexo-gray-100);
-        border-radius: var(--nexo-radius-full);
+        border-radius: 99px;
         overflow: hidden;
-        margin-bottom: 12px;
     }
 
-    .nexo-progress-fill {
+    .nexo-ind-bar-fill {
         height: 100%;
-        border-radius: var(--nexo-radius-full);
+        border-radius: 99px;
         transition: width 0.5s ease;
     }
 
-    .nexo-progress-fill.fill-success {
-        background: linear-gradient(90deg, var(--nexo-success) 0%, #00F5C4 100%);
-    }
+    .nexo-ind-bar-fill.fill-success { background: var(--nexo-success); }
+    .nexo-ind-bar-fill.fill-warning { background: var(--nexo-warning); }
+    .nexo-ind-bar-fill.fill-danger  { background: var(--nexo-error); }
+    .nexo-ind-bar-fill.fill-primary { background: var(--nexo-primary); }
 
-    .nexo-progress-fill.fill-warning {
-        background: linear-gradient(90deg, var(--nexo-warning) 0%, #FFD93D 100%);
-    }
-
-    .nexo-progress-fill.fill-danger {
-        background: linear-gradient(90deg, var(--nexo-error) 0%, #FF7878 100%);
-    }
-
-    .nexo-progress-fill.fill-primary {
-        background: linear-gradient(90deg, var(--nexo-primary) 0%, #4D9FFF 100%);
-    }
-
-    .nexo-indicator-stats {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .nexo-indicator-value {
-        font-size: 1.5rem;
+    .nexo-ind-value {
+        font-size: 0.85rem;
         font-weight: 700;
         color: var(--nexo-gray-900);
+        white-space: nowrap;
+        flex-shrink: 0;
+        min-width: 48px;
+        text-align: right;
     }
 
-    .nexo-indicator-target {
-        font-size: 0.85rem;
+    .nexo-ind-meta {
+        font-size: 0.68rem;
         color: var(--nexo-gray-500);
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
-    .nexo-indicator-target span {
-        font-weight: 600;
-        color: var(--nexo-gray-700);
-    }
+    /* compat aliases para no romper nada que quede referenciado */
+    .nexo-kpi-section { display: none; }
+    .nexo-indicators-section { display: none; }
+
+    /* progress bars (usadas en actualizarIndicadores JS) */
+    .nexo-progress-fill.fill-success { background: var(--nexo-success); }
+    .nexo-progress-fill.fill-warning { background: var(--nexo-warning); }
+    .nexo-progress-fill.fill-danger  { background: var(--nexo-error); }
+    .nexo-progress-fill.fill-primary { background: var(--nexo-primary); }
 
     /* ========== DATA TABLE ========== */
     .nexo-table-section {
@@ -791,15 +671,10 @@
     @media screen and (max-width: 1024px) {
         .nexo-hero,
         .nexo-filters-bar,
-        .nexo-kpi-section,
-        .nexo-indicators-section,
+        .nexo-metrics-bar,
         .nexo-table-section {
             padding-left: 20px;
             padding-right: 20px;
-        }
-
-        .nexo-kpi-grid {
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
         }
 
         .nexo-hero h1 {
@@ -822,12 +697,16 @@
             margin-top: 10px;
         }
 
-        .nexo-kpi-grid {
-            grid-template-columns: 1fr 1fr;
+        .nexo-kpi-strip {
+            flex-wrap: wrap;
         }
 
-        .nexo-indicators-grid {
-            grid-template-columns: 1fr;
+        .nexo-kpi-chip {
+            min-width: calc(50% - 4px);
+        }
+
+        .nexo-ind-chip {
+            min-width: 100%;
         }
 
         .nexo-table {
@@ -848,8 +727,8 @@
             -webkit-print-color-adjust: exact;
         }
 
-        .nexo-kpi-card,
-        .nexo-indicator-card,
+        .nexo-kpi-chip,
+        .nexo-ind-chip,
         .nexo-table-container {
             break-inside: avoid;
         }
@@ -918,23 +797,24 @@
             </div>
         </div>
 
-        <!-- ========== KPI CARDS PRINCIPALES ========== -->
-        <div class="nexo-kpi-section">
-            <div class="nexo-kpi-grid" id="kpi-grid">
-                <!-- KPIs se cargan dinámicamente -->
+        <!-- ========== METRICS BAR COMPACTA (KPIs + Indicadores) ========== -->
+        <div class="nexo-metrics-bar">
+
+            <!-- Fila 1: KPI chips -->
+            <div class="nexo-kpi-strip" id="kpi-grid">
+                <!-- se inyecta desde JS -->
             </div>
+
+            <!-- Fila 2: Indicadores inline -->
+            <div class="nexo-ind-strip" id="indicators-grid">
+                <!-- se inyecta desde JS -->
+            </div>
+
         </div>
 
-        <!-- ========== INDICADORES AVANZADOS DE RETAIL ========== -->
-        <div class="nexo-indicators-section">
-            <h3 class="nexo-section-title">
-                📈 Indicadores Clave de Gestión
-                <span class="nexo-section-badge">KPIs Retail</span>
-            </h3>
-            <div class="nexo-indicators-grid" id="indicators-grid">
-                <!-- Indicadores se cargan dinámicamente -->
-            </div>
-        </div>
+        <!-- compat: secciones ocultas que el JS sigue referenciando -->
+        <div class="nexo-kpi-section" style="display:none;"><div class="nexo-kpi-grid"></div></div>
+        <div class="nexo-indicators-section" style="display:none;"><div class="nexo-indicators-grid"></div></div>
 
         <!-- ========== DATA TABLE ========== -->
         <div class="nexo-table-section">
@@ -1014,6 +894,7 @@
     let datosOriginales = [];
     let datosFiltrados = [];
     let datosAgrupados = [];
+    let kpisGlobales = null;  // KPIs calculados server-side sobre el dataset completo filtrado
     
     // ========== PAGINACIÓN ==========
     let paginacion = {
@@ -1091,123 +972,89 @@
         });
     }
 
-    // ========== RENDERIZAR KPIs CON PLACEHOLDER ==========
+    // ========== RENDERIZAR KPIs COMPACTOS ==========
     function renderizarKPIsPlaceholder() {
         const html = `
-            <div class="nexo-kpi-card kpi-info">
-                <div class="nexo-kpi-header">
-                    <span class="nexo-kpi-title">Total Productos</span>
-                    <div class="nexo-kpi-icon icon-primary">📦</div>
+            <div class="nexo-kpi-chip chip-info">
+                <span class="nexo-kpi-chip-icon">📦</span>
+                <div class="nexo-kpi-chip-body">
+                    <span class="nexo-kpi-chip-value" id="kpi-total-productos">—</span>
+                    <span class="nexo-kpi-chip-label">Total Productos</span>
                 </div>
-                <div class="nexo-kpi-value" id="kpi-total-productos">—</div>
-                <div class="nexo-kpi-subtitle">SKUs únicos agrupados</div>
             </div>
-
-            <div class="nexo-kpi-card kpi-success">
-                <div class="nexo-kpi-header">
-                    <span class="nexo-kpi-title">Stock Total</span>
-                    <div class="nexo-kpi-icon icon-success">📊</div>
+            <div class="nexo-kpi-chip chip-success">
+                <span class="nexo-kpi-chip-icon">📊</span>
+                <div class="nexo-kpi-chip-body">
+                    <span class="nexo-kpi-chip-value cv-success" id="kpi-stock-total">—</span>
+                    <span class="nexo-kpi-chip-label">Stock Total</span>
                 </div>
-                <div class="nexo-kpi-value text-success" id="kpi-stock-total">—</div>
-                <div class="nexo-kpi-subtitle">Unidades en inventario</div>
             </div>
-
-            <div class="nexo-kpi-card kpi-success">
-                <div class="nexo-kpi-header">
-                    <span class="nexo-kpi-title">Valor Inventario</span>
-                    <div class="nexo-kpi-icon icon-success">💰</div>
+            <div class="nexo-kpi-chip chip-success">
+                <span class="nexo-kpi-chip-icon">💰</span>
+                <div class="nexo-kpi-chip-body">
+                    <span class="nexo-kpi-chip-value cv-success" id="kpi-valor-inventario">—</span>
+                    <span class="nexo-kpi-chip-label">Valor Inventario (FIFO)</span>
                 </div>
-                <div class="nexo-kpi-value text-success" id="kpi-valor-inventario">—</div>
-                <div class="nexo-kpi-subtitle">Valorizado FIFO (costo)</div>
             </div>
-
-            <div class="nexo-kpi-card kpi-info">
-                <div class="nexo-kpi-header">
-                    <span class="nexo-kpi-title">Potencial Venta</span>
-                    <div class="nexo-kpi-icon icon-primary">🎯</div>
+            <div class="nexo-kpi-chip chip-info">
+                <span class="nexo-kpi-chip-icon">🎯</span>
+                <div class="nexo-kpi-chip-body">
+                    <span class="nexo-kpi-chip-value" id="kpi-valor-venta">—</span>
+                    <span class="nexo-kpi-chip-label">Potencial Venta</span>
                 </div>
-                <div class="nexo-kpi-value" id="kpi-valor-venta">—</div>
-                <div class="nexo-kpi-subtitle">A precio de venta</div>
             </div>
-
-            <div class="nexo-kpi-card kpi-danger">
-                <div class="nexo-kpi-header">
-                    <span class="nexo-kpi-title">Sin Stock</span>
-                    <div class="nexo-kpi-icon icon-danger">⚠️</div>
+            <div class="nexo-kpi-chip chip-danger">
+                <span class="nexo-kpi-chip-icon">⚠️</span>
+                <div class="nexo-kpi-chip-body">
+                    <span class="nexo-kpi-chip-value cv-danger" id="kpi-sin-stock">—</span>
+                    <span class="nexo-kpi-chip-label">Sin Stock</span>
                 </div>
-                <div class="nexo-kpi-value text-danger" id="kpi-sin-stock">—</div>
-                <div class="nexo-kpi-subtitle">Requieren reposición</div>
             </div>
-
-            <div class="nexo-kpi-card kpi-warning">
-                <div class="nexo-kpi-header">
-                    <span class="nexo-kpi-title">Stock Crítico</span>
-                    <div class="nexo-kpi-icon icon-warning">🔔</div>
+            <div class="nexo-kpi-chip chip-warning">
+                <span class="nexo-kpi-chip-icon">🔔</span>
+                <div class="nexo-kpi-chip-body">
+                    <span class="nexo-kpi-chip-value cv-warning" id="kpi-bajo-stock">—</span>
+                    <span class="nexo-kpi-chip-label">Stock Crítico &lt;${RETAIL_BENCHMARKS.stock_critico_umbral}</span>
                 </div>
-                <div class="nexo-kpi-value text-warning" id="kpi-bajo-stock">—</div>
-                <div class="nexo-kpi-subtitle">Menos de ${RETAIL_BENCHMARKS.stock_critico_umbral} unidades</div>
             </div>
         `;
         document.getElementById('kpi-grid').innerHTML = html;
     }
 
-    // ========== RENDERIZAR INDICADORES AVANZADOS ==========
+    // ========== RENDERIZAR INDICADORES COMPACTOS ==========
     function renderizarIndicadoresPlaceholder() {
         const html = `
-            <div class="nexo-indicator-card">
-                <div class="nexo-indicator-header">
-                    <span class="nexo-indicator-title">📈 Margen Bruto Promedio</span>
-                    <span class="nexo-indicator-help" title="Diferencia entre precio venta y costo / precio venta">?</span>
+            <div class="nexo-ind-chip">
+                <span class="nexo-ind-label">📈 Margen Bruto</span>
+                <div class="nexo-ind-bar-wrap">
+                    <div class="nexo-ind-bar-fill fill-success" id="progress-margen" style="width:0%"></div>
                 </div>
-                <div class="nexo-progress-bar">
-                    <div class="nexo-progress-fill fill-success" id="progress-margen" style="width: 0%"></div>
-                </div>
-                <div class="nexo-indicator-stats">
-                    <span class="nexo-indicator-value" id="ind-margen">—%</span>
-                    <span class="nexo-indicator-target">Meta: <span>${RETAIL_BENCHMARKS.margen_bruto.ideal}%</span></span>
-                </div>
+                <span class="nexo-ind-value" id="ind-margen">—%</span>
+                <span class="nexo-ind-meta">meta ${RETAIL_BENCHMARKS.margen_bruto.ideal}%</span>
             </div>
-
-            <div class="nexo-indicator-card">
-                <div class="nexo-indicator-header">
-                    <span class="nexo-indicator-title">🔄 Índice de Disponibilidad</span>
-                    <span class="nexo-indicator-help" title="% de productos con stock vs total">?</span>
+            <div class="nexo-ind-chip">
+                <span class="nexo-ind-label">🔄 Disponibilidad</span>
+                <div class="nexo-ind-bar-wrap">
+                    <div class="nexo-ind-bar-fill fill-primary" id="progress-disponibilidad" style="width:0%"></div>
                 </div>
-                <div class="nexo-progress-bar">
-                    <div class="nexo-progress-fill fill-primary" id="progress-disponibilidad" style="width: 0%"></div>
-                </div>
-                <div class="nexo-indicator-stats">
-                    <span class="nexo-indicator-value" id="ind-disponibilidad">—%</span>
-                    <span class="nexo-indicator-target">Meta: <span>${RETAIL_BENCHMARKS.fill_rate_minimo}%</span></span>
-                </div>
+                <span class="nexo-ind-value" id="ind-disponibilidad">—%</span>
+                <span class="nexo-ind-meta">meta ${RETAIL_BENCHMARKS.fill_rate_minimo}%</span>
             </div>
-
-            <div class="nexo-indicator-card">
-                <div class="nexo-indicator-header">
-                    <span class="nexo-indicator-title">⚡ Cobertura de Stock</span>
-                    <span class="nexo-indicator-help" title="Días estimados que cubre el inventario actual">?</span>
+            <div class="nexo-ind-chip">
+                <span class="nexo-ind-label">⚡ Cobertura Stock</span>
+                <div class="nexo-ind-bar-wrap">
+                    <div class="nexo-ind-bar-fill fill-warning" id="progress-cobertura" style="width:0%"></div>
                 </div>
-                <div class="nexo-progress-bar">
-                    <div class="nexo-progress-fill fill-warning" id="progress-cobertura" style="width: 0%"></div>
-                </div>
-                <div class="nexo-indicator-stats">
-                    <span class="nexo-indicator-value" id="ind-cobertura">— días</span>
-                    <span class="nexo-indicator-target">Óptimo: <span>${RETAIL_BENCHMARKS.cobertura_stock.min}-${RETAIL_BENCHMARKS.cobertura_stock.max} días</span></span>
-                </div>
+                <span class="nexo-ind-value" id="ind-cobertura">— d</span>
+                <span class="nexo-ind-meta">${RETAIL_BENCHMARKS.cobertura_stock.min}-${RETAIL_BENCHMARKS.cobertura_stock.max} días</span>
             </div>
-
-            <div class="nexo-indicator-card">
-                <div class="nexo-indicator-header">
-                    <span class="nexo-indicator-title">📉 Riesgo de Quiebre</span>
-                    <span class="nexo-indicator-help" title="% de productos con stock crítico o sin stock">?</span>
+            <div class="nexo-ind-chip">
+                <span class="nexo-ind-label">📉 Riesgo Quiebre</span>
+                <div class="nexo-ind-bar-wrap">
+                    <div class="nexo-ind-bar-fill fill-danger" id="progress-riesgo" style="width:0%"></div>
                 </div>
-                <div class="nexo-progress-bar">
-                    <div class="nexo-progress-fill fill-danger" id="progress-riesgo" style="width: 0%"></div>
-                </div>
-                <div class="nexo-indicator-stats">
-                    <span class="nexo-indicator-value" id="ind-riesgo">—%</span>
-                    <span class="nexo-indicator-target">Máx. aceptable: <span>${RETAIL_BENCHMARKS.productos_sin_stock_max + RETAIL_BENCHMARKS.productos_bajo_stock_max}%</span></span>
-                </div>
+                <span class="nexo-ind-value" id="ind-riesgo">—%</span>
+                <span class="nexo-ind-meta">máx ${RETAIL_BENCHMARKS.productos_sin_stock_max + RETAIL_BENCHMARKS.productos_bajo_stock_max}%</span>
             </div>
         `;
         document.getElementById('indicators-grid').innerHTML = html;
@@ -1264,6 +1111,11 @@
             }
             
             datosOriginales = data.existencias || [];
+            
+            // Guardar KPIs globales del servidor (calculados sobre todo el dataset filtrado)
+            if (data.kpis_globales) {
+                kpisGlobales = data.kpis_globales;
+            }
             
             // Actualizar paginación
             if (data.paginacion) {
@@ -1489,12 +1341,14 @@
 
     // ========== ACTUALIZAR KPIs ==========
     function actualizarKPIs() {
-        const totalProductos = datosAgrupados.length;
-        const totalStock = datosAgrupados.reduce((sum, item) => sum + item.stock_total, 0);
-        const valorFifo = datosAgrupados.reduce((sum, item) => sum + item.valor_fifo_total, 0);
-        const valorVenta = datosAgrupados.reduce((sum, item) => sum + item.valor_venta_total, 0);
-        const sinStock = datosAgrupados.filter(item => item.stock_total === 0).length;
-        const bajoStock = datosAgrupados.filter(item => item.stock_total > 0 && item.stock_total < RETAIL_BENCHMARKS.stock_critico_umbral).length;
+        const totalProductos = paginacion.total_articulos || datosAgrupados.length;
+
+        // Usar KPIs globales del servidor (dataset completo filtrado) si están disponibles
+        const totalStock = kpisGlobales ? kpisGlobales.total_stock : datosAgrupados.reduce((sum, item) => sum + item.stock_total, 0);
+        const valorFifo = kpisGlobales ? kpisGlobales.valor_inventario_fifo : datosAgrupados.reduce((sum, item) => sum + item.valor_fifo_total, 0);
+        const valorVenta = kpisGlobales ? kpisGlobales.valor_venta_total : datosAgrupados.reduce((sum, item) => sum + item.valor_venta_total, 0);
+        const sinStock = kpisGlobales ? kpisGlobales.sin_stock : datosAgrupados.filter(item => item.stock_total === 0).length;
+        const bajoStock = kpisGlobales ? kpisGlobales.bajo_stock : datosAgrupados.filter(item => item.stock_total > 0 && item.stock_total < RETAIL_BENCHMARKS.stock_critico_umbral).length;
 
         document.getElementById('kpi-total-productos').textContent = totalProductos.toLocaleString('es-CL');
         document.getElementById('kpi-stock-total').textContent = totalStock.toLocaleString('es-CL');
@@ -1506,32 +1360,33 @@
 
     // ========== ACTUALIZAR INDICADORES AVANZADOS ==========
     function actualizarIndicadores() {
-        const totalProductos = datosAgrupados.length;
+        const totalProductos = paginacion.total_articulos || datosAgrupados.length;
         if (totalProductos === 0) return;
 
-        const valorCosto = datosAgrupados.reduce((sum, item) => sum + item.valor_fifo_total, 0);
-        const valorVenta = datosAgrupados.reduce((sum, item) => sum + item.valor_venta_total, 0);
-        const sinStock = datosAgrupados.filter(item => item.stock_total === 0).length;
-        const bajoStock = datosAgrupados.filter(item => item.stock_total > 0 && item.stock_total < RETAIL_BENCHMARKS.stock_critico_umbral).length;
-        const conStock = datosAgrupados.filter(item => item.stock_total > 0).length;
+        // Usar KPIs globales del servidor si están disponibles
+        const valorCosto = kpisGlobales ? kpisGlobales.valor_inventario_fifo : datosAgrupados.reduce((sum, item) => sum + item.valor_fifo_total, 0);
+        const valorVenta = kpisGlobales ? kpisGlobales.valor_venta_total : datosAgrupados.reduce((sum, item) => sum + item.valor_venta_total, 0);
+        const sinStock = kpisGlobales ? kpisGlobales.sin_stock : datosAgrupados.filter(item => item.stock_total === 0).length;
+        const bajoStock = kpisGlobales ? kpisGlobales.bajo_stock : datosAgrupados.filter(item => item.stock_total > 0 && item.stock_total < RETAIL_BENCHMARKS.stock_critico_umbral).length;
+        const conStock = totalProductos - sinStock;
 
         // Margen Bruto Promedio
         const margenBruto = valorVenta > 0 ? ((valorVenta - valorCosto) / valorVenta) * 100 : 0;
         const margenProgressWidth = Math.min((margenBruto / 100) * 100, 100);
         document.getElementById('ind-margen').textContent = margenBruto.toFixed(1) + '%';
         document.getElementById('progress-margen').style.width = margenProgressWidth + '%';
-        document.getElementById('progress-margen').className = `nexo-progress-fill ${margenBruto >= RETAIL_BENCHMARKS.margen_bruto.ideal ? 'fill-success' : margenBruto >= RETAIL_BENCHMARKS.margen_bruto.min ? 'fill-warning' : 'fill-danger'}`;
+        document.getElementById('progress-margen').className = `nexo-ind-bar-fill ${margenBruto >= RETAIL_BENCHMARKS.margen_bruto.ideal ? 'fill-success' : margenBruto >= RETAIL_BENCHMARKS.margen_bruto.min ? 'fill-warning' : 'fill-danger'}`;
 
         // Índice de Disponibilidad
         const disponibilidad = (conStock / totalProductos) * 100;
         document.getElementById('ind-disponibilidad').textContent = disponibilidad.toFixed(1) + '%';
         document.getElementById('progress-disponibilidad').style.width = disponibilidad + '%';
-        document.getElementById('progress-disponibilidad').className = `nexo-progress-fill ${disponibilidad >= RETAIL_BENCHMARKS.fill_rate_minimo ? 'fill-success' : disponibilidad >= 85 ? 'fill-warning' : 'fill-danger'}`;
+        document.getElementById('progress-disponibilidad').className = `nexo-ind-bar-fill ${disponibilidad >= RETAIL_BENCHMARKS.fill_rate_minimo ? 'fill-success' : disponibilidad >= 85 ? 'fill-warning' : 'fill-danger'}`;
 
         // Cobertura de Stock (estimación simplificada)
-        const coberturaDias = RETAIL_BENCHMARKS.cobertura_stock.ideal; // Placeholder - necesita datos de ventas
+        const coberturaDias = RETAIL_BENCHMARKS.cobertura_stock.ideal;
         const coberturaProgressWidth = Math.min((coberturaDias / 120) * 100, 100);
-        document.getElementById('ind-cobertura').textContent = coberturaDias + ' días';
+        document.getElementById('ind-cobertura').textContent = coberturaDias + ' d';
         document.getElementById('progress-cobertura').style.width = coberturaProgressWidth + '%';
 
         // Riesgo de Quiebre
@@ -1540,7 +1395,7 @@
         const riesgoProgressWidth = Math.min((riesgoQuiebre / maxRiesgo) * 100, 100);
         document.getElementById('ind-riesgo').textContent = riesgoQuiebre.toFixed(1) + '%';
         document.getElementById('progress-riesgo').style.width = riesgoProgressWidth + '%';
-        document.getElementById('progress-riesgo').className = `nexo-progress-fill ${riesgoQuiebre <= RETAIL_BENCHMARKS.productos_sin_stock_max ? 'fill-success' : riesgoQuiebre <= maxRiesgo ? 'fill-warning' : 'fill-danger'}`;
+        document.getElementById('progress-riesgo').className = `nexo-ind-bar-fill ${riesgoQuiebre <= RETAIL_BENCHMARKS.productos_sin_stock_max ? 'fill-success' : riesgoQuiebre <= maxRiesgo ? 'fill-warning' : 'fill-danger'}`;
     }
 
     // ========== RENDERIZAR TABLA ==========
@@ -1565,8 +1420,8 @@
         }
 
         // Mostrar total de registros (de la paginación)
-        const totalStr = paginacion.total_registros > 0 
-            ? `${paginacion.total_registros.toLocaleString('es-CL')} registros totales` 
+        const totalStr = paginacion.total_articulos > 0
+            ? `${paginacion.total_articulos.toLocaleString('es-CL')} artículos · ${paginacion.total_registros.toLocaleString('es-CL')} SKUs`
             : `${datosAgrupados.length.toLocaleString('es-CL')} productos`;
         countEl.textContent = totalStr;
 

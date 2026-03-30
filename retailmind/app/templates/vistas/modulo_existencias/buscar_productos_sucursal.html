@@ -5,1230 +5,938 @@
 {% include '../../layout/footer.html' %}
 
 <style>
-/* ========== NEXO DESIGN SYSTEM - Búsqueda de Productos ========== */
+/* ============================================================
+   NEXO POS — Búsqueda de Productos (optimizado 15")
+   Resoluciones objetivo: 1024×768 · 1280×800 · 1366×768
+   ============================================================ */
 :root {
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-info: #0066FF;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
-    --nexo-transition-fast: 150ms ease;
+    --np-primary:       #0066FF;
+    --np-primary-dk:    #0052CC;
+    --np-primary-lt:    #E6F0FF;
+    --np-success:       #00D4AA;
+    --np-success-dk:    #00895A;
+    --np-warning:       #FFB020;
+    --np-warning-dk:    #8B5E00;
+    --np-danger:        #FF4D4D;
+    --np-danger-dk:     #CC0000;
+    --np-gray-900:      #1A1A2E;
+    --np-gray-700:      #4A4A5A;
+    --np-gray-500:      #8A8A9A;
+    --np-gray-300:      #D1D1D9;
+    --np-gray-200:      #E5E5EB;
+    --np-gray-100:      #F5F5F7;
+    --np-white:         #FFFFFF;
+    --np-shadow-sm:     0 1px 3px rgba(26,26,46,.07);
+    --np-shadow-md:     0 4px 8px rgba(26,26,46,.12);
+    --np-shadow-lg:     0 12px 28px rgba(26,26,46,.14);
+    --np-radius:        10px;
+    --np-t:             140ms ease;
+    /* POS table */
+    --pos-row-h:        44px;
+    --pos-font:         0.875rem;
+    --pos-font-sm:      0.8125rem;
+    --pos-font-xs:      0.75rem;
 }
 
-/* Título de página */
-.nexo-page-header {
-    margin-bottom: 1.5rem;
+/* ===== Fullscreen loader ===== */
+#fullscreenLoader { backdrop-filter: blur(4px); }
+
+/* ===== Layout outer ===== */
+.pos-wrap {
+    padding: 0.625rem 0.75rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: calc(100vh - 80px);
 }
 
-.nexo-page-title {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--nexo-gray-900);
-    margin-bottom: 0.25rem;
+/* ===== Header compacto ===== */
+.pos-page-header {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-}
-
-.nexo-page-subtitle {
-    color: var(--nexo-gray-500);
-    font-size: 0.9375rem;
-}
-
-/* Cards */
-.nexo-card {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-lg);
-    box-shadow: var(--nexo-shadow-sm);
-    border: 1px solid var(--nexo-gray-300);
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-}
-
-.nexo-card-header {
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid var(--nexo-gray-300);
-    display: flex;
     justify-content: space-between;
-    align-items: center;
-    background: var(--nexo-white);
+    flex-shrink: 0;
 }
-
-.nexo-card-header h5 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--nexo-gray-900);
+.pos-page-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--np-gray-900);
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    margin: 0;
 }
-
-.nexo-card-body {
-    padding: 1.5rem;
-}
-
-/* Filtros */
-.nexo-filter-card {
-    background: linear-gradient(135deg, var(--nexo-primary-light) 0%, var(--nexo-white) 100%);
-    border: 1px solid var(--nexo-primary);
-    border-left: 4px solid var(--nexo-primary);
-}
-
-.nexo-form-label {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--nexo-gray-700);
-    margin-bottom: 0.5rem;
+.pos-page-title i { color: var(--np-primary); }
+.pos-shortcuts {
     display: flex;
     align-items: center;
     gap: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--np-gray-500);
+}
+kbd.sc {
+    background: var(--np-gray-200);
+    border: 1px solid var(--np-gray-300);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--np-gray-700);
+    font-family: inherit;
 }
 
-.nexo-form-label i {
+/* ===== Panel de filtros ===== */
+.pos-filter-panel {
+    background: var(--np-white);
+    border: 1px solid var(--np-primary);
+    border-left: 4px solid var(--np-primary);
+    border-radius: var(--np-radius);
+    box-shadow: var(--np-shadow-sm);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+/* Fila de búsqueda siempre visible */
+.pos-search-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 0.875rem;
+}
+.pos-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+.pos-search-wrap .ico {
+    position: absolute;
+    left: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.1rem;
+    color: var(--np-primary);
+    pointer-events: none;
+}
+.pos-search-input {
+    width: 100%;
+    border: 2px solid var(--np-primary);
+    border-radius: var(--np-radius);
+    padding: 0.625rem 1rem 0.625rem 2.75rem;
     font-size: 1rem;
-}
-
-.nexo-form-control {
-    border-radius: var(--nexo-radius-md);
-    border: 1px solid var(--nexo-gray-300);
-    padding: 0.75rem 1rem;
-    font-size: 0.9375rem;
-    transition: all var(--nexo-transition-fast);
-    background: var(--nexo-white);
-}
-
-.nexo-form-control:focus {
-    border-color: var(--nexo-primary);
-    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    font-weight: 500;
+    color: var(--np-gray-900);
+    background: var(--np-white);
+    transition: box-shadow var(--np-t), border-color var(--np-t);
+    min-height: 44px;
     outline: none;
 }
+.pos-search-input:focus {
+    box-shadow: 0 0 0 3px rgba(0,102,255,.15);
+    border-color: var(--np-primary-dk);
+}
+.pos-search-input::placeholder { color: var(--np-gray-500); font-weight: 400; }
 
-.nexo-form-control-lg {
-    padding: 1rem 1.25rem;
-    font-size: 1rem;
+/* Botones de la fila de búsqueda */
+.pos-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: none;
+    border-radius: var(--np-radius);
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all var(--np-t);
+    white-space: nowrap;
+    min-height: 44px;
+    padding: 0 1.125rem;
+}
+.pos-btn-primary { background: var(--np-primary); color: #fff; }
+.pos-btn-primary:hover { background: var(--np-primary-dk); box-shadow: 0 4px 12px rgba(0,102,255,.3); }
+.pos-btn-outline {
+    background: var(--np-white);
+    color: var(--np-gray-700);
+    border: 1px solid var(--np-gray-300);
+}
+.pos-btn-outline:hover { background: var(--np-primary-lt); border-color: var(--np-primary); color: var(--np-primary); }
+.pos-btn-outline.is-active { background: var(--np-primary); border-color: var(--np-primary); color: #fff; }
+.pos-btn-icon {
+    background: var(--np-gray-100);
+    color: var(--np-gray-700);
+    border: 1px solid var(--np-gray-300);
+    min-width: 44px;
+    justify-content: center;
+    padding: 0;
+    border-radius: var(--np-radius);
+}
+.pos-btn-icon:hover { background: var(--np-danger); border-color: var(--np-danger); color: #fff; }
+
+/* Filtros avanzados colapsables */
+.pos-filters-body {
+    padding: 0.625rem 0.875rem 0.75rem;
+    border-top: 1px solid var(--np-gray-100);
+    background: linear-gradient(180deg, var(--np-primary-lt) 0%, rgba(255,255,255,.6) 100%);
+}
+.filter-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--np-gray-700);
+    margin-bottom: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
 }
 
-/* Select2 NEXO Style - Compact */
+/* Select2 NEXO */
 .select2-container--default .select2-selection--single {
     height: 36px !important;
-    border: 1px solid var(--nexo-gray-300) !important;
-    border-radius: var(--nexo-radius-md) !important;
-    padding: 0.375rem 0.75rem !important;
-    background-color: var(--nexo-white) !important;
+    border: 1px solid var(--np-gray-300) !important;
+    border-radius: 8px !important;
+    background: var(--np-white) !important;
+    display: flex !important;
+    align-items: center !important;
 }
-
-.select2-container--default .select2-selection--single:focus,
 .select2-container--default.select2-container--focus .select2-selection--single,
 .select2-container--default.select2-container--open .select2-selection--single {
-    border-color: var(--nexo-primary) !important;
-    box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.1) !important;
+    border-color: var(--np-primary) !important;
+    box-shadow: 0 0 0 2px rgba(0,102,255,.1) !important;
 }
-
 .select2-container--default .select2-selection--single .select2-selection__rendered {
-    color: var(--nexo-gray-900) !important;
-    line-height: 20px !important;
-    padding-left: 0 !important;
+    color: var(--np-gray-900) !important;
+    line-height: 34px !important;
+    padding-left: 10px !important;
     font-size: 0.8125rem !important;
 }
-
 .select2-container--default .select2-selection--single .select2-selection__placeholder {
-    color: var(--nexo-gray-500) !important;
+    color: var(--np-gray-500) !important;
 }
-
 .select2-container--default .select2-selection--single .select2-selection__arrow {
     height: 34px !important;
     right: 6px !important;
 }
-
 .select2-container--default .select2-dropdown {
-    border: 1px solid var(--nexo-gray-300) !important;
-    border-radius: var(--nexo-radius-md) !important;
-    box-shadow: var(--nexo-shadow-lg) !important;
+    border: 1px solid var(--np-gray-300) !important;
+    border-radius: 8px !important;
+    box-shadow: var(--np-shadow-lg) !important;
     margin-top: 2px !important;
 }
-
-.select2-container--default .select2-search--dropdown .select2-search__field {
-    border: 1px solid var(--nexo-gray-300) !important;
-    border-radius: var(--nexo-radius-md) !important;
-    padding: 0.375rem 0.5rem !important;
-    font-size: 0.8125rem !important;
-}
-
-.select2-container--default .select2-search--dropdown .select2-search__field:focus {
-    border-color: var(--nexo-primary) !important;
-    outline: none !important;
-    box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.1) !important;
-}
-
 .select2-container--default .select2-results__option {
-    padding: 0.5rem 0.75rem !important;
-    font-size: 0.8125rem !important;
+    padding: .4375rem .75rem !important;
+    font-size: .8125rem !important;
 }
-
 .select2-container--default .select2-results__option--highlighted[aria-selected] {
-    background-color: var(--nexo-primary-light) !important;
-    color: var(--nexo-primary) !important;
+    background: var(--np-primary-lt) !important;
+    color: var(--np-primary) !important;
 }
-
 .select2-container--default .select2-results__option[aria-selected=true] {
-    background-color: var(--nexo-primary) !important;
-    color: var(--nexo-white) !important;
+    background: var(--np-primary) !important;
+    color: #fff !important;
+}
+.select2-container { width: 100% !important; }
+
+/* ===== Panel de resultados ===== */
+.pos-results-panel {
+    background: var(--np-white);
+    border: 1px solid var(--np-gray-300);
+    border-radius: var(--np-radius);
+    box-shadow: var(--np-shadow-sm);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
-.select2-container {
-    width: 100% !important;
-}
-
-/* Form select sm styling */
-.form-select-sm {
-    font-size: 0.8125rem !important;
-    padding: 0.375rem 2rem 0.375rem 0.75rem !important;
-    border-radius: var(--nexo-radius-md) !important;
-    border: 1px solid var(--nexo-gray-300) !important;
-}
-
-.form-select-sm:focus {
-    border-color: var(--nexo-primary) !important;
-    box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.1) !important;
-}
-
-/* Botones */
-.nexo-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border-radius: var(--nexo-radius-md);
-    font-weight: 500;
-    font-size: 0.9375rem;
-    transition: all var(--nexo-transition-fast);
-    border: none;
-    cursor: pointer;
-}
-
-.nexo-btn-primary {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-}
-
-.nexo-btn-primary:hover {
-    background: var(--nexo-primary-dark);
-    color: var(--nexo-white);
-}
-
-.nexo-btn-secondary {
-    background: var(--nexo-gray-100);
-    color: var(--nexo-gray-700);
-    border: 1px solid var(--nexo-gray-300);
-}
-
-.nexo-btn-secondary:hover {
-    background: var(--nexo-gray-300);
-    color: var(--nexo-gray-900);
-}
-
-.nexo-btn-sm {
-    padding: 0.5rem 1rem;
-    font-size: 0.8125rem;
-}
-
-/* Switch */
-.nexo-switch {
+/* Header de resultados */
+.pos-results-bar {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: var(--nexo-gray-100);
-    border-radius: var(--nexo-radius-md);
-    cursor: pointer;
+    justify-content: space-between;
+    padding: 0.5rem 0.875rem;
+    border-bottom: 1px solid var(--np-gray-200);
+    background: var(--np-white);
+    flex-shrink: 0;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
-
-.nexo-switch input[type="checkbox"] {
-    width: 44px;
-    height: 24px;
-    appearance: none;
-    background: var(--nexo-gray-300);
-    border-radius: 12px;
-    position: relative;
-    cursor: pointer;
-    transition: all var(--nexo-transition-fast);
+.pos-results-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--np-gray-900);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
 }
-
-.nexo-switch input[type="checkbox"]::before {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    background: var(--nexo-white);
-    border-radius: 50%;
-    top: 2px;
-    left: 2px;
-    transition: all var(--nexo-transition-fast);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+.badge-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    background: var(--np-primary);
+    color: #fff;
 }
-
-.nexo-switch input[type="checkbox"]:checked {
-    background: var(--nexo-primary);
+.pos-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
 }
-
-.nexo-switch input[type="checkbox"]:checked::before {
-    transform: translateX(20px);
+.pos-select-sm {
+    font-size: 0.8rem !important;
+    padding: 0.3rem 1.75rem 0.3rem 0.625rem !important;
+    border-radius: 8px !important;
+    border: 1px solid var(--np-gray-300) !important;
+    color: var(--np-gray-700) !important;
+    background-color: var(--np-white) !important;
+    min-height: 34px;
 }
+.pos-select-sm:focus { border-color: var(--np-primary) !important; box-shadow: 0 0 0 2px rgba(0,102,255,.1) !important; outline: none; }
 
-.nexo-switch-label {
-    font-size: 0.875rem;
-    color: var(--nexo-gray-700);
+/* ===== Tabla POS ===== */
+.pos-table-wrap {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    min-height: 0;
 }
+.pos-table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+.pos-table-wrap::-webkit-scrollbar-track { background: var(--np-gray-100); }
+.pos-table-wrap::-webkit-scrollbar-thumb { background: var(--np-gray-300); border-radius: 3px; }
+.pos-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--np-gray-500); }
 
-/* Tabla */
-.nexo-table {
+.pos-table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
+    min-width: 860px;
 }
-
-.nexo-table thead th {
-    background: linear-gradient(135deg, var(--nexo-gray-900) 0%, #2d2d44 100%);
-    color: var(--nexo-white);
+.pos-table thead th {
+    background: linear-gradient(135deg, var(--np-gray-900) 0%, #2d2d44 100%);
+    color: #fff;
     font-weight: 600;
-    font-size: 0.7rem;
+    font-size: 0.675rem;
     text-transform: uppercase;
-    letter-spacing: 0.75px;
-    padding: 0.875rem 0.75rem;
-    border-bottom: none;
+    letter-spacing: .7px;
+    padding: 0.6rem 0.75rem;
     white-space: nowrap;
     position: sticky;
     top: 0;
     z-index: 10;
 }
+.pos-table thead th:first-child { border-radius: 0; }
+.pos-table thead th:last-child  { border-radius: 0; }
 
-.nexo-table thead th:first-child {
-    border-radius: 8px 0 0 0;
-}
-
-.nexo-table thead th:last-child {
-    border-radius: 0 8px 0 0;
-}
-
-.nexo-table tbody td {
-    padding: 0.75rem;
-    border-bottom: 1px solid var(--nexo-gray-100);
-    color: var(--nexo-gray-700);
+.pos-table tbody td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid var(--np-gray-100);
+    color: var(--np-gray-700);
     vertical-align: middle;
-    font-size: 0.8125rem;
-    transition: all var(--nexo-transition-fast);
+    font-size: var(--pos-font);
+    min-height: var(--pos-row-h);
 }
+.pos-table tbody tr { transition: background var(--np-t); }
+.pos-table tbody tr:hover { background: var(--np-primary-lt); }
+.pos-table tbody tr:hover td { color: var(--np-gray-900); }
+.pos-table tbody tr:last-child td { border-bottom: none; }
 
-.nexo-table tbody tr {
-    transition: all var(--nexo-transition-fast);
-}
+/* Column sizing */
+.tc-art   { min-width: 130px; max-width: 170px; }
+.tc-desc  { min-width: 150px; max-width: 210px; }
+.tc-attr  { min-width: 80px;  text-align: center; }
+.tc-talla { min-width: 130px; text-align: center; }
+.tc-stock { min-width: 64px;  text-align: center; }
+.tc-price { min-width: 95px;  text-align: right; }
+.tc-suc   { min-width: 80px;  text-align: center; }
+.tc-act   { min-width: 70px;  text-align: center; }
 
-.nexo-table tbody tr:hover {
-    background: linear-gradient(90deg, var(--nexo-primary-light) 0%, rgba(0, 102, 255, 0.03) 100%);
-    transform: scale(1.001);
-}
-
-.nexo-table tbody tr:hover td {
-    color: var(--nexo-gray-900);
-}
-
-/* Columnas específicas de la tabla */
-.col-articulo {
-    min-width: 140px;
-    font-weight: 600 !important;
-}
-
-.col-articulo .articulo-codigo {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.col-articulo .articulo-icon {
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 0.75rem;
-    flex-shrink: 0;
-}
-
-.col-articulo .articulo-info {
-    display: flex;
-    flex-direction: column;
-}
-
-.col-articulo .articulo-nombre {
-    color: var(--nexo-gray-900);
+/* Artículo cell */
+.art-cell { display: flex; flex-direction: column; gap: 1px; }
+.art-name {
     font-weight: 700;
+    color: var(--np-gray-900);
     font-size: 0.875rem;
+    line-height: 1.25;
+}
+.art-id {
+    font-size: 0.6875rem;
+    color: var(--np-gray-500);
+}
+
+/* Descripción */
+.desc-cell {
+    max-width: 210px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--pos-font-sm);
+    color: var(--np-gray-700);
+}
+
+/* Atributo pill */
+.attr-pill {
+    display: inline-block;
+    padding: .2rem .55rem;
+    background: var(--np-gray-100);
+    border-radius: 10px;
+    font-size: .75rem;
+    font-weight: 500;
+    color: var(--np-gray-700);
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* Tallas chips inline */
+.tallas-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    justify-content: center;
+    max-width: 160px;
+    margin: 0 auto;
+}
+.talla-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--np-gray-100);
+    border: 1px solid var(--np-gray-200);
+    border-radius: 6px;
+    padding: 2px 5px;
+    min-width: 28px;
+    cursor: pointer;
+    transition: all var(--np-t);
     line-height: 1.2;
 }
+.talla-chip:hover {
+    background: var(--np-primary-lt);
+    border-color: var(--np-primary);
+}
+.talla-chip .tc-t {
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: var(--np-gray-900);
+}
+.talla-chip .tc-s {
+    font-size: 0.5625rem;
+    font-weight: 700;
+    color: var(--np-gray-500);
+}
+.talla-chip.tc-ok  { border-color: rgba(0,212,170,.4); }
+.talla-chip.tc-low { border-color: rgba(255,176,32,.4); background: rgba(255,176,32,.07); }
+.talla-chip.tc-low .tc-s { color: var(--np-warning-dk); }
+.talla-chip.tc-out { opacity: .45; background: rgba(255,77,77,.07); border-color: rgba(255,77,77,.25); }
+.talla-chip.tc-out .tc-s { color: var(--np-danger-dk); }
 
-.col-articulo .articulo-id {
-    color: var(--nexo-gray-500);
-    font-size: 0.6875rem;
-    font-weight: 400;
+/* Stock badge */
+.stock-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    padding: .3rem .6rem;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: .875rem;
+    transition: transform var(--np-t);
+}
+.stock-badge:hover { transform: scale(1.06); }
+.sb-alto  { background: rgba(0,212,170,.14); color: var(--np-success-dk); border: 1px solid rgba(0,212,170,.35); }
+.sb-medio { background: rgba(255,176,32,.14); color: var(--np-warning-dk); border: 1px solid rgba(255,176,32,.35); }
+.sb-bajo  { background: rgba(255,77,77,.14);  color: var(--np-danger-dk);  border: 1px solid rgba(255,77,77,.35); }
+
+/* Precio */
+.precio-monto {
+    font-weight: 700;
+    font-size: .9375rem;
+    color: var(--np-primary);
+    white-space: nowrap;
+}
+.precio-label {
+    font-size: .625rem;
+    color: var(--np-gray-500);
+    text-transform: uppercase;
+    letter-spacing: .4px;
 }
 
-.col-descripcion {
-    max-width: 220px;
+/* Sucursal badge */
+.suc-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .2rem .6rem;
+    border-radius: 9999px;
+    font-size: .75rem;
+    font-weight: 600;
+    background: var(--np-primary-lt);
+    color: var(--np-primary);
+    border: 1px solid rgba(0,102,255,.2);
     white-space: nowrap;
+    max-width: 90px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.col-stock {
-    text-align: center;
-    min-width: 80px;
-}
-
-.stock-badge {
+/* Botón detalle */
+.btn-detalle {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-width: 48px;
-    padding: 0.375rem 0.625rem;
-    border-radius: 20px;
-    font-weight: 700;
-    font-size: 0.8125rem;
-}
-
-.stock-badge.stock-alto {
-    background: linear-gradient(135deg, rgba(0, 212, 170, 0.15) 0%, rgba(0, 166, 125, 0.1) 100%);
-    color: #00A67D;
-    border: 1px solid rgba(0, 212, 170, 0.3);
-}
-
-.stock-badge.stock-medio {
-    background: linear-gradient(135deg, rgba(255, 176, 32, 0.15) 0%, rgba(255, 152, 0, 0.1) 100%);
-    color: #B87A00;
-    border: 1px solid rgba(255, 176, 32, 0.3);
-}
-
-.stock-badge.stock-bajo {
-    background: linear-gradient(135deg, rgba(255, 77, 77, 0.15) 0%, rgba(220, 53, 69, 0.1) 100%);
-    color: #DC3545;
-    border: 1px solid rgba(255, 77, 77, 0.3);
-}
-
-.col-precio {
-    text-align: right;
-    min-width: 110px;
-}
-
-.precio-valor {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-}
-
-.precio-monto {
-    font-weight: 700;
-    font-size: 0.9375rem;
-    color: var(--nexo-primary);
-    letter-spacing: -0.25px;
-}
-
-.precio-label {
-    font-size: 0.625rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.col-atributo {
-    text-align: center;
-}
-
-.atributo-pill {
-    display: inline-block;
-    padding: 0.25rem 0.625rem;
-    background: var(--nexo-gray-100);
-    border-radius: 12px;
-    font-size: 0.75rem;
-    color: var(--nexo-gray-700);
-    font-weight: 500;
-}
-
-.col-acciones {
-    text-align: center;
-    min-width: 100px;
-}
-
-/* Badges */
-.nexo-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.375rem 0.75rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
+    gap: .35rem;
+    background: var(--np-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: .375rem .75rem;
+    font-size: .75rem;
     font-weight: 600;
+    cursor: pointer;
+    transition: all var(--np-t);
+    min-height: 32px;
+    white-space: nowrap;
+}
+.btn-detalle:hover {
+    background: var(--np-primary-dk);
+    box-shadow: 0 3px 8px rgba(0,102,255,.3);
+    transform: translateY(-1px);
 }
 
-.nexo-badge.primary {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-}
-
-.nexo-badge.success {
-    background: rgba(0, 212, 170, 0.15);
-    color: #00A67D;
-}
-
-.nexo-badge.warning {
-    background: rgba(255, 176, 32, 0.15);
-    color: #996B00;
-}
-
-.nexo-badge.error {
-    background: rgba(255, 77, 77, 0.15);
-    color: var(--nexo-error);
-}
-
-.nexo-badge.info {
-    background: var(--nexo-primary-light);
-    color: var(--nexo-primary);
-}
-
-.nexo-badge.secondary {
-    background: var(--nexo-gray-100);
-    color: var(--nexo-gray-700);
-}
-
-/* Stock badges */
-.stock-ok { color: var(--nexo-success); font-weight: 700; }
-.stock-low { color: var(--nexo-warning); font-weight: 700; }
-.stock-out { color: var(--nexo-error); font-weight: 700; }
-
-/* Empty state */
-.nexo-empty-state {
-    padding: 4rem 2rem;
-    text-align: center;
-}
-
-.nexo-empty-state .icon {
-    width: 80px;
-    height: 80px;
-    background: var(--nexo-primary-light);
-    border-radius: 50%;
+/* ===== Paginación compacta ===== */
+.pos-paginator {
     display: flex;
     align-items: center;
-    justify-content: center;
-    margin: 0 auto 1.5rem;
-}
-
-.nexo-empty-state .icon i {
-    font-size: 2.5rem;
-    color: var(--nexo-primary);
-}
-
-.nexo-empty-state h5 {
-    color: var(--nexo-gray-900);
-    margin-bottom: 0.5rem;
-}
-
-.nexo-empty-state p {
-    color: var(--nexo-gray-500);
-    margin: 0;
-    max-width: 400px;
-    margin: 0 auto;
-}
-
-/* Loading */
-.nexo-loading {
-    padding: 3rem 1rem;
-    text-align: center;
-}
-
-.nexo-loading .spinner {
-    width: 48px;
-    height: 48px;
-    border: 4px solid var(--nexo-gray-100);
-    border-top-color: var(--nexo-primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Paginación */
-.nexo-pagination {
-    display: flex;
     justify-content: center;
     gap: 0.25rem;
-    margin-top: 1.5rem;
+    padding: 0.5rem;
+    background: var(--np-gray-100);
+    border-top: 1px solid var(--np-gray-200);
+    flex-shrink: 0;
+}
+.pos-pg-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 34px;
+    border: 1px solid var(--np-gray-300);
+    border-radius: 8px;
+    padding: 0 .5rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--np-gray-700);
+    background: #fff;
+    cursor: pointer;
+    transition: all var(--np-t);
+    text-decoration: none;
+}
+.pos-pg-btn:hover  { background: var(--np-primary-lt); border-color: var(--np-primary); color: var(--np-primary); }
+.pos-pg-btn.active { background: var(--np-primary);    border-color: var(--np-primary); color: #fff; }
+.pos-pg-info {
+    font-size: .8rem;
+    color: var(--np-gray-500);
+    padding: 0 .5rem;
+    white-space: nowrap;
 }
 
-.nexo-pagination .page-item .page-link {
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-md);
-    padding: 0.5rem 0.875rem;
-    color: var(--nexo-gray-700);
-    font-weight: 500;
-    transition: all var(--nexo-transition-fast);
+/* ===== Estado vacío / inicial ===== */
+.pos-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    flex: 1;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
 }
+.pos-empty-icon { font-size: 3rem; color: var(--np-gray-300); }
+.pos-empty h6 { color: var(--np-gray-700); font-size: 1rem; margin: 0; }
+.pos-empty p  { color: var(--np-gray-500); font-size: .875rem; margin: 0; }
 
-.nexo-pagination .page-item .page-link:hover {
-    background: var(--nexo-primary-light);
-    border-color: var(--nexo-primary);
-    color: var(--nexo-primary);
+/* ===== Loading spinner ===== */
+.pos-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex: 1;
+    padding: 2.5rem;
 }
-
-.nexo-pagination .page-item.active .page-link {
-    background: var(--nexo-primary);
-    border-color: var(--nexo-primary);
-    color: var(--nexo-white);
+.pos-spinner {
+    width: 42px;
+    height: 42px;
+    border: 3px solid var(--np-gray-200);
+    border-top-color: var(--np-primary);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* Modal NEXO - Diseño Premium */
+/* ===== Modal ===== */
 .nexo-modal .modal-content {
     border: none;
     border-radius: 16px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,.25);
     overflow: hidden;
 }
-
 .nexo-modal .modal-header {
-    padding: 1.5rem 2rem;
-    background: linear-gradient(135deg, var(--nexo-gray-900) 0%, #2d2d44 100%);
+    padding: 1.125rem 1.5rem;
+    background: linear-gradient(135deg, var(--np-gray-900) 0%, #2d2d44 100%);
     border-bottom: none;
 }
-
 .nexo-modal .modal-title {
     font-weight: 700;
-    font-size: 1.25rem;
-    color: var(--nexo-white);
+    font-size: 1.0625rem;
+    color: #fff;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: .625rem;
 }
-
-.nexo-modal .modal-title i {
-    background: rgba(255, 255, 255, 0.15);
-    padding: 0.5rem;
-    border-radius: 8px;
-    font-size: 1.125rem;
-}
-
-.nexo-modal .modal-header .btn-close {
-    filter: invert(1);
-    opacity: 0.7;
-    transition: all var(--nexo-transition-fast);
-}
-
-.nexo-modal .modal-header .btn-close:hover {
-    opacity: 1;
-}
-
-.nexo-modal .modal-body {
-    padding: 2rem;
-    background: var(--nexo-white);
-}
-
+.nexo-modal .modal-header .btn-close { filter: invert(1); opacity: .7; }
+.nexo-modal .modal-header .btn-close:hover { opacity: 1; }
+.nexo-modal .modal-body { padding: 1.125rem; }
 .nexo-modal .modal-footer {
-    padding: 1.25rem 2rem;
-    background: var(--nexo-gray-100);
-    border-top: 1px solid var(--nexo-gray-300);
+    padding: .875rem 1.25rem;
+    background: var(--np-gray-100);
+    border-top: 1px solid var(--np-gray-200);
 }
 
-/* Modal Info Card */
-.modal-info-card {
-    background: linear-gradient(135deg, var(--nexo-primary-light) 0%, rgba(0, 102, 255, 0.05) 100%);
-    border: 1px solid rgba(0, 102, 255, 0.15);
+.modal-prod-card {
+    background: linear-gradient(135deg, var(--np-primary-lt) 0%, rgba(0,102,255,.05) 100%);
+    border: 1px solid rgba(0,102,255,.15);
     border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.modal-producto-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
+    padding: 1rem;
     margin-bottom: 1rem;
 }
-
-.modal-producto-icon {
-    width: 56px;
-    height: 56px;
-    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    border-radius: 12px;
+.modal-prod-hdr { display: flex; align-items: center; gap: .875rem; margin-bottom: .75rem; }
+.modal-prod-ico {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, var(--np-primary) 0%, var(--np-primary-dk) 100%);
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
-    font-size: 1.5rem;
+    color: #fff;
+    font-size: 1.25rem;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
 }
+.modal-prod-name { font-size: 1.0625rem; font-weight: 700; color: var(--np-gray-900); margin: 0 0 .2rem; }
+.modal-prod-desc { font-size: .875rem; color: var(--np-gray-500); margin: 0; }
 
-.modal-producto-info h4 {
-    margin: 0 0 0.25rem 0;
-    font-size: 1.25rem;
+.modal-stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: .625rem; }
+.modal-stat-box { background: #fff; border-radius: 8px; padding: .625rem; text-align: center; border: 1px solid var(--np-gray-200); }
+.modal-stat-lbl { font-size: .65rem; color: var(--np-gray-500); text-transform: uppercase; letter-spacing: .5px; margin-bottom: .2rem; }
+.modal-stat-val { font-size: 1.0625rem; font-weight: 700; color: var(--np-gray-900); }
+.modal-stat-val.verde { color: var(--np-success-dk); }
+.modal-stat-val.rojo  { color: var(--np-danger-dk); }
+
+.modal-section-ttl {
+    font-size: .875rem;
     font-weight: 700;
-    color: var(--nexo-gray-900);
-}
-
-.modal-producto-info p {
-    margin: 0;
-    color: var(--nexo-gray-600);
-    font-size: 0.9375rem;
-}
-
-.modal-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-}
-
-.modal-stat-item {
-    background: var(--nexo-white);
-    border-radius: 10px;
-    padding: 1rem;
-    text-align: center;
-    border: 1px solid var(--nexo-gray-200);
-    transition: all var(--nexo-transition-fast);
-}
-
-.modal-stat-item:hover {
-    border-color: var(--nexo-primary);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.1);
-}
-
-.modal-stat-label {
-    font-size: 0.6875rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.75px;
-    margin-bottom: 0.375rem;
-}
-
-.modal-stat-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--nexo-gray-900);
-}
-
-.modal-stat-value.stock-alto {
-    color: #00A67D;
-}
-
-.modal-stat-value.stock-bajo {
-    color: #DC3545;
-}
-
-/* Modal Section Title */
-.modal-section-title {
+    color: var(--np-gray-900);
+    margin-bottom: .625rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9375rem;
-    font-weight: 600;
-    color: var(--nexo-gray-900);
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 2px solid var(--nexo-gray-100);
+    gap: .4rem;
 }
+.modal-section-ttl i { color: var(--np-primary); }
 
-.modal-section-title i {
-    color: var(--nexo-primary);
-}
-
-/* Modal Table */
-.modal-tallas-table {
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid var(--nexo-gray-200);
-}
-
-.modal-tallas-table thead th {
-    background: var(--nexo-gray-100) !important;
-    color: var(--nexo-gray-700) !important;
-    font-size: 0.6875rem;
-    padding: 0.75rem 1rem;
-}
-
-.modal-tallas-table tbody tr {
-    transition: all var(--nexo-transition-fast);
-}
-
-.modal-tallas-table tbody tr:hover {
-    background: var(--nexo-primary-light);
-}
-
-.modal-tallas-table tbody tr.sin-stock {
-    background: rgba(255, 77, 77, 0.05);
-}
-
-.modal-tallas-table .talla-nombre {
+.modal-tallas-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--np-gray-200); }
+.modal-tallas-wrap thead th {
+    background: var(--np-gray-100);
+    color: var(--np-gray-700);
+    font-size: .675rem;
+    text-transform: uppercase;
     font-weight: 700;
-    color: var(--nexo-gray-900);
-    font-size: 0.9375rem;
+    padding: .5rem .875rem;
+}
+.modal-tallas-wrap tbody td {
+    padding: .5rem .875rem;
+    font-size: .875rem;
+    border-bottom: 1px solid var(--np-gray-100);
+    vertical-align: middle;
+}
+.modal-tallas-wrap tbody tr:hover { background: var(--np-primary-lt); }
+.modal-tallas-wrap tbody tr.sin-stock { background: rgba(255,77,77,.04); }
+.talla-big { font-weight: 700; font-size: 1rem; color: var(--np-gray-900); }
+.sku-mono {
+    font-family: 'SF Mono','Consolas',monospace;
+    font-size: .8125rem;
+    background: var(--np-gray-100);
+    padding: .25rem .5rem;
+    border-radius: 5px;
+    color: var(--np-gray-700);
 }
 
-.modal-tallas-table .sku-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    background: var(--nexo-gray-100);
-    padding: 0.375rem 0.625rem;
-    border-radius: 6px;
-    font-family: 'SF Mono', 'Consolas', monospace;
-    font-size: 0.75rem;
-    color: var(--nexo-gray-700);
-}
-
-.modal-tallas-table .sku-badge i {
-    font-size: 0.625rem;
-    color: var(--nexo-gray-500);
-}
-
-/* Modal Summary */
 .modal-summary {
-    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    border-radius: 12px;
-    padding: 1.25rem;
-    margin-top: 1.5rem;
-    color: white;
-}
-
-.modal-summary-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
+    grid-template-columns: repeat(3,1fr);
+    gap: .75rem;
     text-align: center;
+    background: linear-gradient(135deg, var(--np-primary) 0%, var(--np-primary-dk) 100%);
+    border-radius: 10px;
+    padding: .875rem 1rem;
+    margin-top: .875rem;
+    color: #fff;
 }
+.ms-lbl { font-size: .65rem; text-transform: uppercase; letter-spacing: .5px; opacity: .8; margin-bottom: .15rem; }
+.ms-val { font-size: 1.375rem; font-weight: 700; }
+.ms-val.g { color: #7CFFCD; }
+.ms-val.r { color: #FF9999; }
 
-.modal-summary-item .label {
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.75px;
-    opacity: 0.8;
-    margin-bottom: 0.25rem;
+/* Nexo badges */
+.nexo-badge-ok  { display:inline-flex;align-items:center;gap:.3rem;background:rgba(0,212,170,.14);color:var(--np-success-dk);border:1px solid rgba(0,212,170,.3);border-radius:9999px;font-size:.6875rem;font-weight:600;padding:.2rem .55rem; }
+.nexo-badge-err { display:inline-flex;align-items:center;gap:.3rem;background:rgba(255,77,77,.12);color:var(--np-danger-dk);border:1px solid rgba(255,77,77,.3);border-radius:9999px;font-size:.6875rem;font-weight:600;padding:.2rem .55rem; }
+
+/* ===== Responsive POS ===== */
+@media screen and (max-width: 1366px) {
+    .pos-wrap { padding: 0.5rem 0.625rem; }
+    .tc-desc  { max-width: 170px; }
 }
-
-.modal-summary-item .value {
-    font-size: 1.5rem;
-    font-weight: 700;
+@media screen and (max-width: 1280px) {
+    :root { --pos-font: .8125rem; }
+    .pos-table thead th { font-size: .635rem; padding: .525rem .625rem; }
+    .pos-table tbody td { padding: .4rem .625rem; }
+    .tc-desc { max-width: 150px; }
 }
-
-.modal-summary-item .value.success {
-    color: #7CFFCD;
+@media screen and (max-width: 1024px) {
+    .pos-page-title { font-size: 1.0625rem; }
+    .pos-shortcuts  { display: none; }
+    .tc-desc { max-width: 120px; }
+    .attr-pill { max-width: 70px; font-size: .6875rem; }
+    .talla-chip { min-width: 24px; }
+    .talla-chip .tc-t { font-size: .5625rem; }
+    .talla-chip .tc-s { font-size: .5rem; }
 }
-
-.modal-summary-item .value.danger {
-    color: #FF9999;
-}
-
-/* Info grid */
-.nexo-info-item {
-    margin-bottom: 1rem;
-}
-
-.nexo-info-label {
-    font-size: 0.75rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 0.25rem;
-}
-
-.nexo-info-value {
-    font-weight: 600;
-    color: var(--nexo-gray-900);
-}
-
-/* Alert info */
-.nexo-alert-info {
-    background: var(--nexo-primary-light);
-    border: 1px solid var(--nexo-primary);
-    border-radius: var(--nexo-radius-md);
-    padding: 1rem;
-}
-
-/* Custom scrollbar */
-.table-responsive::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-.table-responsive::-webkit-scrollbar-track {
-    background: var(--nexo-gray-100);
-    border-radius: 4px;
-}
-
-.table-responsive::-webkit-scrollbar-thumb {
-    background: var(--nexo-gray-300);
-    border-radius: 4px;
-}
-
-.table-responsive::-webkit-scrollbar-thumb:hover {
-    background: var(--nexo-gray-500);
-}
-
-/* Efecto de hover para iconos de acciones */
-.nexo-btn-sm:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 102, 255, 0.25);
-}
-
-/* Badge info mejorado */
-.nexo-badge.info {
-    background: linear-gradient(135deg, var(--nexo-primary-light) 0%, rgba(0, 102, 255, 0.15) 100%);
-    color: var(--nexo-primary);
-    font-weight: 600;
-    border: 1px solid rgba(0, 102, 255, 0.2);
-}
-
-/* Animación suave para los badges de stock */
-.stock-badge {
-    transition: all var(--nexo-transition-fast);
-}
-
-.stock-badge:hover {
-    transform: scale(1.05);
-}
-
-/* Responsive improvements */
-@media (max-width: 1200px) {
-    .col-descripcion {
-        max-width: 150px;
-    }
-}
-
-@media (max-width: 992px) {
-    .col-articulo .articulo-icon {
-        display: none;
-    }
-    
-    .col-descripcion {
-        max-width: 120px;
-    }
-    
-    .atributo-pill {
-        font-size: 0.6875rem;
-        padding: 0.1875rem 0.5rem;
-    }
-}
-
-/* Loading animation */
-@keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-}
-
-.loading-row td {
-    background: linear-gradient(90deg, var(--nexo-gray-100) 25%, var(--nexo-gray-200) 50%, var(--nexo-gray-100) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-}
-
-/* Loader con estilo del proyecto */
-#fullscreenLoader {
-    backdrop-filter: blur(4px);
-}
-
-#fullscreenLoader .spinner-border {
-    color: #405189 !important;
+@media screen and (max-width: 768px) {
+    .pos-search-row { flex-wrap: wrap; }
+    .pos-search-wrap { order: -1; flex-basis: 100%; }
+    .modal-stats-row { grid-template-columns: repeat(2,1fr); }
+    .modal-summary { grid-template-columns: repeat(3,1fr); }
 }
 </style>
 
-<!-- Loader con estilo del proyecto -->
-<div id="fullscreenLoader" style="
-    display: none;
-    position: fixed;
-    z-index: 1060;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
-    backdrop-filter: blur(8px);
-    text-align: center;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
-        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
-            <i class="bi bi-search fs-3 text-white"></i>
-        </div>
-        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
-            <span class="visually-hidden">Cargando...</span>
-        </div>
-        <p class="mb-0 fw-bold" style="color: #405189;">Buscando productos...</p>
+<!-- Loader -->
+<div id="fullscreenLoader" style="display:none;position:fixed;z-index:1060;top:0;left:0;width:100%;height:100%;background:rgba(26,26,46,.35);text-align:center;">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:2rem 3rem;border-radius:20px;box-shadow:0 20px 60px rgba(64,81,137,.35);">
+        <div class="pos-spinner" style="margin:0 auto 1rem;"></div>
+        <p class="mb-0 fw-bold" style="color:var(--np-primary);">Buscando productos...</p>
         <small class="text-muted">Por favor espera un momento</small>
     </div>
 </div>
 
 <div class="main-content">
     <div class="page-content">
-        <div class="container-fluid">
-            
-            <!-- ========== HEADER ========== -->
-            <div class="nexo-page-header">
-                <h1 class="nexo-page-title">
-                    <i class="bi bi-search" style="color: var(--nexo-primary);"></i>
-                    Búsqueda General de Productos
+        <div class="container-fluid p-0">
+        <div class="pos-wrap">
+
+            <!-- ===== HEADER ===== -->
+            <div class="pos-page-header">
+                <h1 class="pos-page-title">
+                    <i class="bi bi-search"></i>
+                    Búsqueda de Productos
                 </h1>
-                <p class="nexo-page-subtitle">Busca productos en todas las sucursales con filtros avanzados</p>
-            </div>
-
-            <!-- ========== FILTROS DE BÚSQUEDA ========== -->
-            <div class="nexo-card nexo-filter-card">
-                <div class="nexo-card-header">
-                    <h5>
-                        <i class="bi bi-funnel" style="color: var(--nexo-primary);"></i>
-                        Filtros de Búsqueda
-                    </h5>
-                </div>
-                <div class="nexo-card-body">
-                    <form id="filtrosForm">
-                        <!-- Búsqueda General Grande -->
-                        <div class="row mb-4">
-                            <div class="col-12">
-                                <div class="position-relative">
-                                    <i class="bi bi-search position-absolute" style="left: 24px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; color: var(--nexo-primary); z-index: 2;"></i>
-                                    <input type="text" class="nexo-form-control nexo-form-control-lg" id="search_input" name="search" 
-                                           placeholder="🔍 Buscar por artículo, descripción, SKU, código de barras, marca, color..."
-                                           style="padding: 1.5rem 1.75rem 1.5rem 4.25rem; font-size: 1.25rem; font-weight: 500; border: 3px solid var(--nexo-primary); background: var(--nexo-white); box-shadow: 0 4px 12px rgba(0, 102, 255, 0.15);">
-                                </div>
-                                <p style="margin-top: 0.75rem; margin-bottom: 0; color: var(--nexo-gray-500); font-size: 0.875rem;">
-                                    <i class="bi bi-info-circle me-1"></i>
-                                    Escribe cualquier término y presiona <kbd style="background: var(--nexo-gray-200); padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--nexo-gray-300);">Enter</kbd> o haz clic en <strong>Buscar</strong>
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Filtros en una sola fila -->
-                        <div class="row g-2 mb-3">
-                            <div class="col-lg-2 col-md-4 col-6">
-                                <label class="nexo-form-label" style="font-size: 0.75rem;">
-                                    <i class="bi bi-building"></i> Sucursal
-                                </label>
-                                <select class="form-select form-select-sm" id="sucursal_select" name="sucursal_id">
-                                    <option value="">Todas</option>
-                                    {% for sucursal in sucursales %}
-                                    <option value="{{ sucursal.id }}">{{ sucursal.alias }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-lg-2 col-md-4 col-6">
-                                <label class="nexo-form-label" style="font-size: 0.75rem;">
-                                    <i class="bi bi-award"></i> Marca
-                                </label>
-                                <select class="form-select form-select-sm" id="marca_select" name="atributo1_id">
-                                    <option value="">Todas</option>
-                                    {% for atributo in atributos %}
-                                        {% if atributo.nombre == 'Marca' %}
-                                            {% for opcion in atributo.opciones.all %}
-                                            <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
-                                            {% endfor %}
-                                        {% endif %}
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-lg-2 col-md-4 col-6">
-                                <label class="nexo-form-label" style="font-size: 0.75rem;">
-                                    <i class="bi bi-palette"></i> Color
-                                </label>
-                                <select class="form-select form-select-sm" id="color_select" name="atributo2_id">
-                                    <option value="">Todos</option>
-                                    {% for atributo in atributos %}
-                                        {% if atributo.nombre == 'Color' %}
-                                            {% for opcion in atributo.opciones.all %}
-                                            <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
-                                            {% endfor %}
-                                        {% endif %}
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-lg-2 col-md-4 col-6">
-                                <label class="nexo-form-label" style="font-size: 0.75rem;">
-                                    <i class="bi bi-person"></i> Género
-                                </label>
-                                <select class="form-select form-select-sm" id="genero_select" name="atributo3_id">
-                                    <option value="">Todos</option>
-                                    {% for atributo in atributos %}
-                                        {% if atributo.nombre == 'Género' %}
-                                            {% for opcion in atributo.opciones.all %}
-                                            <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
-                                            {% empty %}
-                                            <option value="" disabled>No hay opciones disponibles</option>
-                                            {% endfor %}
-                                        {% endif %}
-                                    {% endfor %}
-                                </select>
-                                {% comment %}
-                                <!-- Debug info - remover en producción -->
-                                <small class="text-muted d-none">
-                                    Opciones: {% for atributo in atributos %}{% if atributo.nombre == 'Género' %}{{ atributo.opciones.count }}{% endif %}{% endfor %}
-                                </small>
-                                {% endcomment %}
-                            </div>
-
-                            <div class="col-lg-2 col-md-4 col-6">
-                                <label class="nexo-form-label" style="font-size: 0.75rem;">
-                                    <i class="bi bi-tag"></i> Categoría
-                                </label>
-                                <select class="form-select form-select-sm" id="categoria_select" name="categoria_id">
-                                    <option value="">Todas</option>
-                                    {% for categoria in categorias %}
-                                    <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-lg-2 col-md-4 col-6">
-                                <label class="nexo-form-label" style="font-size: 0.75rem;">
-                                    <i class="bi bi-box-seam"></i> Stock
-                                </label>
-                                <div class="form-check form-switch" style="padding-top: 0.5rem;">
-                                    <input class="form-check-input" type="checkbox" id="solo_con_stock" name="solo_con_stock" style="width: 2.5rem; height: 1.25rem;">
-                                    <label class="form-check-label" for="solo_con_stock" style="font-size: 0.8125rem; color: var(--nexo-gray-700);">
-                                        Con stock
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Botones -->
-                        <div class="row">
-                            <div class="col-12 d-flex gap-2">
-                                <button type="button" class="nexo-btn nexo-btn-primary" id="btnBuscar">
-                                    <i class="bi bi-search"></i>
-                                    Buscar
-                                </button>
-                                <button type="button" class="nexo-btn nexo-btn-secondary" id="btnLimpiar">
-                                    <i class="bi bi-x-circle"></i>
-                                    Limpiar
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                <div class="pos-shortcuts">
+                    <kbd class="sc">F3</kbd> Enfocar búsqueda &nbsp;·&nbsp;
+                    <kbd class="sc">Esc</kbd> Limpiar
                 </div>
             </div>
 
-            <!-- ========== MENSAJE INICIAL ========== -->
-            <div id="mensajeInicial">
-                <div class="nexo-card">
-                    <div class="nexo-card-body">
-                        <div class="nexo-empty-state">
-                            <div class="icon">
-                                <i class="bi bi-search"></i>
+            <!-- ===== FILTROS ===== -->
+            <div class="pos-filter-panel">
+                <form id="filtrosForm" onsubmit="return false;">
+
+                    <!-- Búsqueda principal (siempre visible) -->
+                    <div class="pos-search-row">
+                        <div class="pos-search-wrap">
+                            <i class="bi bi-search ico"></i>
+                            <input type="text" class="pos-search-input" id="search_input" name="search"
+                                   placeholder="Buscar por artículo, SKU, descripción, marca, color..."
+                                   autocomplete="off" autocorrect="off" spellcheck="false">
+                        </div>
+                        <button type="button" class="pos-btn pos-btn-primary" id="btnBuscar">
+                            <i class="bi bi-search"></i>
+                            Buscar
+                        </button>
+                        <button type="button" class="pos-btn pos-btn-outline" id="btnToggleFiltros">
+                            <i class="bi bi-funnel"></i>
+                            Filtros
+                            <i class="bi bi-chevron-down" id="filtrosChevron" style="font-size:.75rem;transition:transform .2s;"></i>
+                        </button>
+                        <button type="button" class="pos-btn pos-btn-icon" id="btnLimpiar" title="Limpiar búsqueda (Esc)">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+
+                    <!-- Filtros avanzados (colapsables) -->
+                    <div id="advancedFilters" style="display:none;">
+                        <div class="pos-filters-body">
+                            <div class="row g-2">
+                                <div class="col-xl-2 col-lg-3 col-md-4 col-6">
+                                    <label class="filter-label"><i class="bi bi-building"></i> Sucursal</label>
+                                    <select class="form-select form-select-sm" id="sucursal_select" name="sucursal_id">
+                                        <option value="">Todas</option>
+                                        {% for sucursal in sucursales %}
+                                        <option value="{{ sucursal.id }}">{{ sucursal.alias }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-xl-2 col-lg-3 col-md-4 col-6">
+                                    <label class="filter-label"><i class="bi bi-award"></i> Marca</label>
+                                    <select class="form-select form-select-sm" id="marca_select" name="atributo1_id">
+                                        <option value="">Todas</option>
+                                        {% for atributo in atributos %}
+                                            {% if atributo.nombre == 'Marca' %}
+                                                {% for opcion in atributo.opciones.all %}
+                                                <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
+                                                {% endfor %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-xl-2 col-lg-3 col-md-4 col-6">
+                                    <label class="filter-label"><i class="bi bi-palette"></i> Color</label>
+                                    <select class="form-select form-select-sm" id="color_select" name="atributo2_id">
+                                        <option value="">Todos</option>
+                                        {% for atributo in atributos %}
+                                            {% if atributo.nombre == 'Color' %}
+                                                {% for opcion in atributo.opciones.all %}
+                                                <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
+                                                {% endfor %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-xl-2 col-lg-3 col-md-4 col-6">
+                                    <label class="filter-label"><i class="bi bi-person"></i> Género</label>
+                                    <select class="form-select form-select-sm" id="genero_select" name="atributo3_id">
+                                        <option value="">Todos</option>
+                                        {% for atributo in atributos %}
+                                            {% if atributo.nombre == 'Género' %}
+                                                {% for opcion in atributo.opciones.all %}
+                                                <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
+                                                {% empty %}
+                                                <option value="" disabled>No configurado</option>
+                                                {% endfor %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-xl-2 col-lg-3 col-md-4 col-6">
+                                    <label class="filter-label"><i class="bi bi-tag"></i> Categoría</label>
+                                    <select class="form-select form-select-sm" id="categoria_select" name="categoria_id">
+                                        <option value="">Todas</option>
+                                        {% for categoria in categorias %}
+                                        <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-xl-2 col-lg-3 col-md-4 col-6">
+                                    <label class="filter-label"><i class="bi bi-boxes"></i> Stock</label>
+                                    <div class="form-check form-switch" style="padding-top:.375rem;">
+                                        <input class="form-check-input" type="checkbox" id="solo_con_stock" name="solo_con_stock"
+                                               style="width:2.5rem;height:1.25rem;cursor:pointer;">
+                                        <label class="form-check-label" for="solo_con_stock"
+                                               style="font-size:.8125rem;cursor:pointer;color:var(--np-gray-700);">
+                                            Con stock
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
-                            <h5>Utiliza los filtros para buscar productos</h5>
-                            <p>
-                                Puedes buscar por sucursal, texto, marca, color, género o categoría.
-                                También puedes filtrar solo productos con stock disponible.
-                            </p>
                         </div>
                     </div>
-                </div>
+                </form>
             </div>
 
-            <!-- ========== RESULTADOS ========== -->
-            <div id="resultadosContainer" style="display: none;">
-                <div class="nexo-card">
-                    <div class="nexo-card-header">
-                        <h5>
-                            <i class="bi bi-list-check" style="color: var(--nexo-success);"></i>
-                            Resultados de Búsqueda
-                            <span class="nexo-badge primary ms-2" id="totalProductos">0</span>
-                        </h5>
-                        <select class="nexo-form-control" id="pageSize" style="width: auto; padding: 0.5rem 1rem;">
-                            <option value="10">10 por página</option>
-                            <option value="25" selected>25 por página</option>
-                            <option value="50">50 por página</option>
-                            <option value="100">100 por página</option>
+            <!-- ===== RESULTADOS ===== -->
+            <div class="pos-results-panel">
+
+                <!-- Estado inicial -->
+                <div id="estadoInicial" class="pos-empty">
+                    <i class="bi bi-search pos-empty-icon"></i>
+                    <h6>Busca productos usando los filtros</h6>
+                    <p>
+                        Escribe en la barra de búsqueda y presiona
+                        <kbd class="sc">Enter</kbd> o el botón <strong>Buscar</strong>
+                    </p>
+                </div>
+
+                <!-- Header resultados -->
+                <div class="pos-results-bar" id="resultsBar" style="display:none;">
+                    <div class="pos-results-title">
+                        <i class="bi bi-list-check" style="color:var(--np-success);"></i>
+                        Resultados
+                        <span class="badge-count" id="totalProductos">0</span>
+                    </div>
+                    <div class="pos-controls">
+                        <select class="pos-select-sm form-select" id="ordenarSelect">
+                            <option value="">Ordenar por...</option>
+                            <option value="articulo_asc">Artículo A→Z</option>
+                            <option value="articulo_desc">Artículo Z→A</option>
+                            <option value="stock_desc">Mayor stock</option>
+                            <option value="stock_asc">Menor stock</option>
+                            <option value="precio_asc">Menor precio</option>
+                            <option value="precio_desc">Mayor precio</option>
+                        </select>
+                        <select class="pos-select-sm form-select" id="pageSize">
+                            <option value="10">10 / pág</option>
+                            <option value="25" selected>25 / pág</option>
+                            <option value="50">50 / pág</option>
+                            <option value="100">100 / pág</option>
                         </select>
                     </div>
-                    <div class="nexo-card-body p-0">
-                        <!-- Loading -->
-                        <div id="loadingProductos" class="nexo-loading" style="display: none;">
-                            <div class="spinner"></div>
-                            <p style="color: var(--nexo-gray-500);">Buscando productos...</p>
-                        </div>
-
-                        <!-- Tabla de Productos -->
-                        <div class="table-responsive" id="tablaProductos" style="max-height: 65vh; overflow-y: auto;">
-                            <table class="nexo-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-articulo">
-                                            <i class="bi bi-box-seam me-1"></i> Artículo
-                                        </th>
-                                        <th class="col-descripcion">
-                                            <i class="bi bi-card-text me-1"></i> Descripción
-                                        </th>
-                                        <th class="col-atributo">
-                                            <i class="bi bi-award me-1"></i> Marca
-                                        </th>
-                                        <th class="col-atributo">
-                                            <i class="bi bi-palette me-1"></i> Color
-                                        </th>
-                                        <th class="col-atributo">
-                                            <i class="bi bi-person me-1"></i> Género
-                                        </th>
-                                        <th class="col-atributo">
-                                            <i class="bi bi-tag me-1"></i> Categoría
-                                        </th>
-                                        <th class="col-stock">
-                                            <i class="bi bi-boxes me-1"></i> Stock
-                                        </th>
-                                        <th class="col-precio">
-                                            <i class="bi bi-currency-dollar me-1"></i> Precio
-                                        </th>
-                                        <th class="col-atributo">
-                                            <i class="bi bi-building me-1"></i> Sucursal
-                                        </th>
-                                        <th class="col-acciones">
-                                            <i class="bi bi-gear me-1"></i> Acciones
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody id="productosTableBody">
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Paginación -->
-                        <nav id="paginacionContainer" style="padding: 1rem;">
-                            <ul class="nexo-pagination pagination" id="paginacion">
-                            </ul>
-                        </nav>
-                    </div>
                 </div>
-            </div>
 
+                <!-- Loading -->
+                <div id="loadingProductos" class="pos-loading" style="display:none;">
+                    <div class="pos-spinner"></div>
+                    <p style="color:var(--np-gray-500);font-size:.875rem;margin:0;">Buscando productos...</p>
+                </div>
+
+                <!-- Tabla -->
+                <div class="pos-table-wrap" id="tablaWrapper" style="display:none;">
+                    <table class="pos-table">
+                        <thead>
+                            <tr>
+                                <th class="tc-art"><i class="bi bi-box-seam me-1"></i>Artículo</th>
+                                <th class="tc-desc"><i class="bi bi-card-text me-1"></i>Descripción</th>
+                                <th class="tc-attr"><i class="bi bi-award me-1"></i>Marca</th>
+                                <th class="tc-attr"><i class="bi bi-palette me-1"></i>Color</th>
+                                <th class="tc-talla"><i class="bi bi-rulers me-1"></i>Tallas · Stock</th>
+                                <th class="tc-stock"><i class="bi bi-boxes me-1"></i>Total</th>
+                                <th class="tc-price"><i class="bi bi-currency-dollar me-1"></i>Precio</th>
+                                <th class="tc-suc"><i class="bi bi-building me-1"></i>Sucursal</th>
+                                <th class="tc-act">Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productosTableBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Sin resultados -->
+                <div id="sinResultados" class="pos-empty" style="display:none;">
+                    <i class="bi bi-inbox pos-empty-icon"></i>
+                    <h6>No se encontraron productos</h6>
+                    <p>Intenta ajustar los filtros de búsqueda</p>
+                </div>
+
+                <!-- Paginación -->
+                <div id="paginacionContainer" style="display:none;">
+                    <ul class="pos-paginator" id="paginacion"></ul>
+                </div>
+
+            </div><!-- /pos-results-panel -->
+
+        </div><!-- /pos-wrap -->
         </div>
     </div>
 </div>
 
-<!-- ========== MODAL DETALLE DE TALLAS ========== -->
+<!-- ===== MODAL DETALLE DE TALLAS ===== -->
 <div class="modal fade nexo-modal" id="modalDetalleTallas" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -1240,75 +948,69 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <!-- Card de información del producto -->
-                <div class="modal-info-card">
-                    <div class="modal-producto-header">
-                        <div class="modal-producto-icon">
-                            <i class="bi bi-box-seam"></i>
-                        </div>
-                        <div class="modal-producto-info">
-                            <h4 id="modalArticulo">-</h4>
-                            <p id="modalDescripcion">-</p>
+                <!-- Info del producto -->
+                <div class="modal-prod-card">
+                    <div class="modal-prod-hdr">
+                        <div class="modal-prod-ico"><i class="bi bi-box-seam"></i></div>
+                        <div>
+                            <h4 class="modal-prod-name" id="modalArticulo">-</h4>
+                            <p class="modal-prod-desc" id="modalDescripcion">-</p>
                         </div>
                     </div>
-                    
-                    <div class="modal-stats-grid">
-                        <div class="modal-stat-item">
-                            <div class="modal-stat-label">Sucursal</div>
-                            <div class="modal-stat-value" id="modalSucursal" style="font-size: 0.9375rem;">-</div>
+                    <div class="modal-stats-row">
+                        <div class="modal-stat-box">
+                            <div class="modal-stat-lbl">Sucursal</div>
+                            <div class="modal-stat-val" id="modalSucursal" style="font-size:.9375rem;">-</div>
                         </div>
-                        <div class="modal-stat-item">
-                            <div class="modal-stat-label">Stock Total</div>
-                            <div class="modal-stat-value" id="modalStockTotal">-</div>
+                        <div class="modal-stat-box">
+                            <div class="modal-stat-lbl">Stock Total</div>
+                            <div class="modal-stat-val" id="modalStockTotal">-</div>
                         </div>
-                        <div class="modal-stat-item">
-                            <div class="modal-stat-label">Tipo de Talla</div>
-                            <div class="modal-stat-value" id="modalTipoTalla" style="font-size: 0.9375rem;">-</div>
+                        <div class="modal-stat-box">
+                            <div class="modal-stat-lbl">Tipo Talla</div>
+                            <div class="modal-stat-val" id="modalTipoTalla" style="font-size:.9375rem;">-</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Tabla de Tallas -->
-                <div class="modal-section-title">
+                <!-- Tabla tallas -->
+                <div class="modal-section-ttl">
                     <i class="bi bi-list-check"></i>
                     Detalle por Talla
                 </div>
-                
-                <div class="table-responsive modal-tallas-table">
-                    <table class="nexo-table" style="margin-bottom: 0;">
+                <div class="table-responsive modal-tallas-wrap">
+                    <table style="width:100%;border-collapse:collapse;margin:0;">
                         <thead>
                             <tr>
-                                <th style="width: 20%;">Talla</th>
-                                <th style="width: 35%;">SKU</th>
-                                <th style="width: 20%; text-align: center;">Stock</th>
-                                <th style="width: 25%; text-align: center;">Estado</th>
+                                <th style="width:18%;">Talla</th>
+                                <th style="width:44%;">SKU</th>
+                                <th style="width:16%;text-align:center;">Stock</th>
+                                <th style="width:22%;text-align:center;">Estado</th>
                             </tr>
                         </thead>
-                        <tbody id="tablaTallasModal">
-                        </tbody>
+                        <tbody id="tablaTallasModal"></tbody>
                     </table>
                 </div>
 
                 <!-- Resumen -->
                 <div class="modal-summary">
-                    <div class="modal-summary-grid">
-                        <div class="modal-summary-item">
-                            <div class="label">Total Tallas</div>
-                            <div class="value" id="totalTallas">0</div>
-                        </div>
-                        <div class="modal-summary-item">
-                            <div class="label">Con Stock</div>
-                            <div class="value success" id="tallasConStock">0</div>
-                        </div>
-                        <div class="modal-summary-item">
-                            <div class="label">Sin Stock</div>
-                            <div class="value danger" id="tallasSinStock">0</div>
-                        </div>
+                    <div>
+                        <div class="ms-lbl">Total Tallas</div>
+                        <div class="ms-val" id="totalTallas">0</div>
+                    </div>
+                    <div>
+                        <div class="ms-lbl">Con Stock</div>
+                        <div class="ms-val g" id="tallasConStock">0</div>
+                    </div>
+                    <div>
+                        <div class="ms-lbl">Sin Stock</div>
+                        <div class="ms-val r" id="tallasSinStock">0</div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="nexo-btn nexo-btn-secondary" data-bs-dismiss="modal">
+                <button type="button" class="pos-btn pos-btn-outline" data-bs-dismiss="modal"
+                        style="min-height:38px;padding:0 1rem;">
                     <i class="bi bi-x-lg"></i>
                     Cerrar
                 </button>
@@ -1318,220 +1020,261 @@
 </div>
 
 <script>
-// Funciones globales de loading
-function showGlobalLoader() {
-    $('#fullscreenLoader').fadeIn(100);
-}
+/* ============================================================
+   Búsqueda de Productos — POS optimizado
+   ============================================================ */
+$(document).ready(function () {
 
-function hideGlobalLoader() {
-    $('#fullscreenLoader').fadeOut(100);
-}
-
-$(document).ready(function() {
-    let paginaActual = 1;
+    let paginaActual  = 1;
     let ultimosFiltros = {};
+    let filtrosAbiertos = false;
 
-    // Inicializar Select2 en todos los filtros
-    inicializarSelect2();
+    /* ---------- Select2 ---------- */
+    function initSelect2() {
+        if ($('#sucursal_select').data('select2')) {
+            $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select').select2('destroy');
+        }
+        const cfg = {
+            allowClear: true,
+            width: '100%',
+            language: {
+                noResults: () => 'Sin resultados',
+                searching: () => 'Buscando...'
+            }
+        };
+        $('#sucursal_select').select2({ ...cfg, placeholder: 'Todas las sucursales' });
+        $('#marca_select').select2({ ...cfg, placeholder: 'Todas las marcas' });
+        $('#color_select').select2({ ...cfg, placeholder: 'Todos los colores' });
+        $('#genero_select').select2({ ...cfg, placeholder: 'Todos los géneros' });
+        $('#categoria_select').select2({ ...cfg, placeholder: 'Todas las categorías' });
+    }
+    initSelect2();
 
-    // Verificar si el selector de género tiene opciones
-    verificarOpcionesGenero();
+    /* ---------- Toggle filtros avanzados ---------- */
+    $('#btnToggleFiltros').on('click', function () {
+        filtrosAbiertos = !filtrosAbiertos;
+        $('#advancedFilters').slideToggle(200);
+        $(this).toggleClass('is-active', filtrosAbiertos);
+        $('#filtrosChevron').css('transform', filtrosAbiertos ? 'rotate(180deg)' : 'rotate(0deg)');
+        if (filtrosAbiertos) {
+            // re-init Select2 after showing (DOM must be visible)
+            setTimeout(initSelect2, 250);
+        }
+    });
 
-    // Prevenir submit del formulario
-    $('#filtrosForm').on('submit', function(e) {
+    /* ---------- Buscar ---------- */
+    $('#btnBuscar').on('click', function () { paginaActual = 1; buscarProductos(); });
+
+    $('#filtrosForm').on('submit', function (e) {
         e.preventDefault();
         paginaActual = 1;
         buscarProductos();
         return false;
     });
 
-    // Buscar productos
-    $('#btnBuscar').on('click', function() {
-        paginaActual = 1;
-        buscarProductos();
+    $('#search_input').on('keydown', function (e) {
+        if (e.which === 13) { e.preventDefault(); paginaActual = 1; buscarProductos(); }
     });
 
-    // Limpiar filtros
-    $('#btnLimpiar').on('click', function() {
+    /* ---------- Auto-buscar al cambiar filtros (solo si ya buscamos) ---------- */
+    $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select')
+        .on('select2:select select2:clear change', function () {
+            if (Object.keys(ultimosFiltros).length > 0) { paginaActual = 1; buscarProductos(); }
+        });
+
+    $('#solo_con_stock').on('change', function () {
+        if (Object.keys(ultimosFiltros).length > 0) { paginaActual = 1; buscarProductos(); }
+    });
+
+    $('#ordenarSelect').on('change', function () {
+        if (Object.keys(ultimosFiltros).length > 0) { paginaActual = 1; buscarProductos(); }
+    });
+
+    $('#pageSize').on('change', function () {
+        if (Object.keys(ultimosFiltros).length > 0) { paginaActual = 1; buscarProductos(); }
+    });
+
+    /* ---------- Limpiar (botón + Esc) ---------- */
+    function limpiar() {
         $('#filtrosForm')[0].reset();
         $('#solo_con_stock').prop('checked', false);
-        $('#sucursal_select, #marca_select, #color_select, #genero_select, #categoria_select').val(null).trigger('change');
-        $('#resultadosContainer').hide();
-        $('#mensajeInicial').show();
+        $('#sucursal_select,#marca_select,#color_select,#genero_select,#categoria_select').val(null).trigger('change');
+        $('#ordenarSelect').val('');
+        $('#search_input').val('').focus();
+        setEstadoInicial();
         paginaActual = 1;
         ultimosFiltros = {};
+    }
+    $('#btnLimpiar').on('click', limpiar);
+
+    $(document).on('keydown', function (e) {
+        // F3 → enfocar búsqueda
+        if (e.which === 114) { e.preventDefault(); $('#search_input').focus().select(); }
+        // Esc → limpiar si no hay modal abierto
+        if (e.which === 27 && !$('.modal.show').length) { limpiar(); }
     });
 
-    // Cambio en tamaño de página
-    $('#pageSize').on('change', function() {
-        if (Object.keys(ultimosFiltros).length > 0) {
-            paginaActual = 1;
-            buscarProductos();
-        }
-    });
+    /* ---------- Estado UI helpers ---------- */
+    function setEstadoInicial() {
+        $('#estadoInicial').show();
+        $('#loadingProductos').hide();
+        $('#tablaWrapper').hide();
+        $('#sinResultados').hide();
+        $('#resultsBar').hide();
+        $('#paginacionContainer').hide();
+    }
 
-    // Búsqueda automática al cambiar filtros
-    $('#sucursal_select, #marca_select, #color_select, #genero_select, #categoria_select').on('select2:select select2:clear change', function() {
-        if (Object.keys(ultimosFiltros).length > 0 || $(this).val() !== '') {
-            paginaActual = 1;
-            buscarProductos();
-        }
-    });
+    function setLoading() {
+        $('#estadoInicial').hide();
+        $('#loadingProductos').show();
+        $('#tablaWrapper').hide();
+        $('#sinResultados').hide();
+    }
 
-    // Búsqueda automática al cambiar checkbox
-    $('#solo_con_stock').on('change', function() {
-        if (Object.keys(ultimosFiltros).length > 0) {
-            paginaActual = 1;
-            buscarProductos();
-        }
-    });
+    function setResultados() {
+        $('#estadoInicial').hide();
+        $('#loadingProductos').hide();
+        $('#tablaWrapper').show();
+        $('#sinResultados').hide();
+        $('#resultsBar').show();
+    }
 
-    // Búsqueda con Enter
-    $('#search_input').on('keypress', function(e) {
-        if (e.which === 13) {
-            e.preventDefault();
-            paginaActual = 1;
-            buscarProductos();
-        }
-    });
+    function setSinResultados() {
+        $('#estadoInicial').hide();
+        $('#loadingProductos').hide();
+        $('#tablaWrapper').hide();
+        $('#sinResultados').show();
+        $('#resultsBar').show();
+    }
 
-    // Función para buscar productos
+    /* ---------- Función principal de búsqueda ---------- */
     function buscarProductos() {
         const formData = new FormData($('#filtrosForm')[0]);
-        const params = new URLSearchParams();
-        
-        for (let [key, value] of formData.entries()) {
-            if (value.trim() !== '') {
-                params.append(key, value);
-            }
+        const params   = new URLSearchParams();
+
+        for (const [k, v] of formData.entries()) {
+            if (v.trim && v.trim() !== '') params.append(k, v);
         }
-        
-        if ($('#solo_con_stock').is(':checked')) {
-            params.append('solo_con_stock', 'on');
-        }
-        
-        params.append('page', paginaActual);
-        params.append('page_size', $('#pageSize').val());
-        
+        if ($('#solo_con_stock').is(':checked')) params.append('solo_con_stock', 'on');
+
+        const ordenar = $('#ordenarSelect').val();
+        if (ordenar) params.append('ordenar', ordenar);
+
+        params.set('page',      paginaActual);
+        params.set('page_size', $('#pageSize').val());
+
         ultimosFiltros = Object.fromEntries(params);
-        
-        $('#mensajeInicial').hide();
-        $('#loadingProductos').show();
-        $('#tablaProductos').hide();
-        $('#resultadosContainer').show();
-        
+        setLoading();
+
         $.ajax({
             url: '{% url "obtener_productos_sucursal" %}',
             type: 'GET',
             data: params.toString(),
-            success: function(response) {
-                $('#loadingProductos').hide();
-                
-                if (response.success) {
-                    mostrarProductos(response);
-                    generarPaginacion(response);
-                    $('#tablaProductos').show();
+            success: function (resp) {
+                if (resp.success) {
+                    renderProductos(resp);
+                    renderPaginacion(resp);
+                    if (resp.productos.length === 0) {
+                        setSinResultados();
+                        $('#totalProductos').text('0');
+                        $('#resultsBar').show();
+                    } else {
+                        setResultados();
+                    }
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: response.error || 'Error al buscar productos',
-                        confirmButtonColor: '#0066FF'
-                    });
+                    setEstadoInicial();
+                    Swal.fire({ icon: 'error', title: 'Error', text: resp.error || 'Error al buscar productos', confirmButtonColor: '#0066FF' });
                 }
             },
-            error: function(xhr, status, error) {
-                $('#loadingProductos').hide();
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error de conexión',
-                    text: 'No se pudo conectar con el servidor',
-                    confirmButtonColor: '#0066FF'
-                });
+            error: function () {
+                setEstadoInicial();
+                Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo conectar con el servidor', confirmButtonColor: '#0066FF' });
             }
         });
     }
 
-    // Función para mostrar productos
-    function mostrarProductos(response) {
+    /* ---------- Render tabla ---------- */
+    function stockClass(n) {
+        if (n === 0)  return 'sb-bajo';
+        if (n < 10)   return 'sb-medio';
+        return 'sb-alto';
+    }
+    function tallaChipClass(n) {
+        if (n === 0)  return 'tc-out';
+        if (n < 5)    return 'tc-low';
+        return 'tc-ok';
+    }
+
+    function renderProductos(resp) {
         const tbody = $('#productosTableBody');
         tbody.empty();
-        
-        $('#totalProductos').text(response.pagination.total_items);
-        
-        if (response.productos.length === 0) {
+        $('#totalProductos').text(resp.pagination.total_items);
+
+        resp.productos.forEach(function (p) {
+            const precioFmt = new Intl.NumberFormat('es-CL', {
+                style: 'currency', currency: 'CLP',
+                minimumFractionDigits: 0, maximumFractionDigits: 0
+            }).format(p.precio_venta || 0);
+
+            /* Talla chips */
+            let tallasHtml = '';
+            if (p.tallas_stock && p.tallas_stock.length > 0) {
+                // Mostrar máximo 8 chips; el resto con botón "+"
+                const MAX_CHIPS = 8;
+                const visible = p.tallas_stock.slice(0, MAX_CHIPS);
+                const extra   = p.tallas_stock.length - MAX_CHIPS;
+                visible.forEach(function (t) {
+                    tallasHtml += `<span class="talla-chip ${tallaChipClass(t.stock)}"
+                                         title="SKU: ${escHtml(t.sku)} · Stock: ${t.stock}">
+                                      <span class="tc-t">${escHtml(t.talla)}</span>
+                                      <span class="tc-s">${t.stock}</span>
+                                  </span>`;
+                });
+                if (extra > 0) {
+                    tallasHtml += `<span class="talla-chip" style="background:var(--np-primary-lt);border-color:var(--np-primary);color:var(--np-primary);">
+                                      <span class="tc-t">+${extra}</span>
+                                  </span>`;
+                }
+            } else {
+                tallasHtml = '<span style="color:var(--np-gray-400);font-size:.75rem;">—</span>';
+            }
+
+            const marcaHtml    = p.marca    ? `<span class="attr-pill" title="${escHtml(p.marca)}">${escHtml(p.marca)}</span>`    : '<span style="color:var(--np-gray-300);">—</span>';
+            const colorHtml    = p.color    ? `<span class="attr-pill" title="${escHtml(p.color)}">${escHtml(p.color)}</span>`    : '<span style="color:var(--np-gray-300);">—</span>';
+
+            const dataAttr = escAttr(JSON.stringify(p));
+
             tbody.append(`
                 <tr>
-                    <td colspan="10">
-                        <div class="nexo-empty-state" style="padding: 2rem;">
-                            <i class="bi bi-inbox" style="font-size: 3rem; color: var(--nexo-gray-300);"></i>
-                            <h6 style="color: var(--nexo-gray-700); margin-top: 1rem;">No se encontraron productos</h6>
-                            <p style="color: var(--nexo-gray-500);">Intenta ajustar los filtros de búsqueda</p>
+                    <td class="tc-art">
+                        <div class="art-cell">
+                            <span class="art-name" title="${escHtml(p.articulo)}">${escHtml(p.articulo)}</span>
+                            <span class="art-id">ID: ${p.id}</span>
                         </div>
                     </td>
-                </tr>
-            `);
-            return;
-        }
-        
-        response.productos.forEach(function(producto) {
-            // Determinar clase de stock
-            let stockBadgeClass = 'stock-alto';
-            if (producto.stock_total === 0) stockBadgeClass = 'stock-bajo';
-            else if (producto.stock_total < 10) stockBadgeClass = 'stock-medio';
-            
-            // Formatear precio
-            const precioFormateado = new Intl.NumberFormat('es-CL', {
-                style: 'currency',
-                currency: 'CLP',
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0
-            }).format(producto.precio_venta || 0);
-            
-            // Obtener iniciales del artículo para el ícono
-            const iniciales = producto.articulo.substring(0, 2).toUpperCase();
-            
-            tbody.append(`
-                <tr>
-                    <td class="col-articulo">
-                        <div class="articulo-codigo">
-                            <div class="articulo-icon">${iniciales}</div>
-                            <div class="articulo-info">
-                                <span class="articulo-nombre">${producto.articulo}</span>
-                                <span class="articulo-id">ID: ${producto.id}</span>
-                            </div>
+                    <td class="tc-desc">
+                        <span class="desc-cell" title="${escHtml(p.descripcion)}">${escHtml(p.descripcion)}</span>
+                    </td>
+                    <td class="tc-attr">${marcaHtml}</td>
+                    <td class="tc-attr">${colorHtml}</td>
+                    <td class="tc-talla">
+                        <div class="tallas-grid">${tallasHtml}</div>
+                    </td>
+                    <td class="tc-stock">
+                        <span class="stock-badge ${stockClass(p.stock_total)}">${p.stock_total}</span>
+                    </td>
+                    <td class="tc-price">
+                        <div style="display:flex;flex-direction:column;align-items:flex-end;">
+                            <span class="precio-monto">${precioFmt}</span>
+                            <span class="precio-label">venta</span>
                         </div>
                     </td>
-                    <td class="col-descripcion" title="${producto.descripcion}">${producto.descripcion}</td>
-                    <td class="col-atributo">
-                        ${producto.marca ? `<span class="atributo-pill">${producto.marca}</span>` : '<span style="color: var(--nexo-gray-400);">—</span>'}
+                    <td class="tc-suc">
+                        <span class="suc-badge" title="${escHtml(p.sucursal)}">${escHtml(p.sucursal)}</span>
                     </td>
-                    <td class="col-atributo">
-                        ${producto.color ? `<span class="atributo-pill">${producto.color}</span>` : '<span style="color: var(--nexo-gray-400);">—</span>'}
-                    </td>
-                    <td class="col-atributo">
-                        ${producto.genero ? `<span class="atributo-pill">${producto.genero}</span>` : '<span style="color: var(--nexo-gray-400);">—</span>'}
-                    </td>
-                    <td class="col-atributo">
-                        ${producto.categoria ? `<span class="atributo-pill">${producto.categoria}</span>` : '<span style="color: var(--nexo-gray-400);">—</span>'}
-                    </td>
-                    <td class="col-stock">
-                        <span class="stock-badge ${stockBadgeClass}">${producto.stock_total}</span>
-                    </td>
-                    <td class="col-precio">
-                        <div class="precio-valor">
-                            <span class="precio-monto">${precioFormateado}</span>
-                            <span class="precio-label">Venta</span>
-                        </div>
-                    </td>
-                    <td class="col-atributo">
-                        <span class="nexo-badge info">${producto.sucursal}</span>
-                    </td>
-                    <td class="col-acciones">
-                        <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-primary btn-ver-tallas" 
-                                data-producto='${JSON.stringify(producto)}' 
-                                title="Ver detalle de tallas"
-                                style="padding: 0.5rem 0.75rem; font-size: 0.75rem;">
+                    <td class="tc-act">
+                        <button type="button" class="btn-detalle btn-ver-tallas"
+                                data-producto="${dataAttr}" title="Ver tallas y stock">
                             <i class="bi bi-rulers"></i>
                             Tallas
                         </button>
@@ -1541,212 +1284,113 @@ $(document).ready(function() {
         });
     }
 
-    // Función para generar paginación
-    function generarPaginacion(response) {
-        const paginacion = $('#paginacion');
-        paginacion.empty();
-        
-        const pagination = response.pagination;
-        
-        if (pagination.total_pages <= 1) {
-            $('#paginacionContainer').hide();
-            return;
-        }
-        
+    /* ---------- Render paginación ---------- */
+    function renderPaginacion(resp) {
+        const pg  = resp.pagination;
+        const $ul = $('#paginacion');
+        $ul.empty();
+
+        if (pg.total_pages <= 1) { $('#paginacionContainer').hide(); return; }
         $('#paginacionContainer').show();
-        
-        if (pagination.current_page > 1) {
-            paginacion.append(`
-                <li class="page-item">
-                    <a class="page-link" href="#" data-page="${pagination.current_page - 1}">
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
-                </li>
-            `);
-        }
-        
-        const inicio = Math.max(1, pagination.current_page - 2);
-        const fin = Math.min(pagination.total_pages, pagination.current_page + 2);
-        
-        for (let i = inicio; i <= fin; i++) {
-            paginacion.append(`
-                <li class="page-item ${i === pagination.current_page ? 'active' : ''}">
-                    <a class="page-link" href="#" data-page="${i}">${i}</a>
-                </li>
-            `);
-        }
-        
-        if (pagination.current_page < pagination.total_pages) {
-            paginacion.append(`
-                <li class="page-item">
-                    <a class="page-link" href="#" data-page="${pagination.current_page + 1}">
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-                </li>
-            `);
-        }
+
+        const append = (label, page, active) => {
+            $ul.append(`<li><a class="pos-pg-btn ${active ? 'active' : ''}" href="#" data-page="${page}">${label}</a></li>`);
+        };
+
+        if (pg.current_page > 1)
+            append('<i class="bi bi-chevron-left"></i>', pg.current_page - 1, false);
+
+        const start = Math.max(1, pg.current_page - 2);
+        const end   = Math.min(pg.total_pages, pg.current_page + 2);
+
+        if (start > 1) { append('1', 1, false); if (start > 2) $ul.append('<li><span class="pos-pg-info">…</span></li>'); }
+        for (let i = start; i <= end; i++) append(i, i, i === pg.current_page);
+        if (end < pg.total_pages) { if (end < pg.total_pages - 1) $ul.append('<li><span class="pos-pg-info">…</span></li>'); append(pg.total_pages, pg.total_pages, false); }
+
+        if (pg.current_page < pg.total_pages)
+            append('<i class="bi bi-chevron-right"></i>', pg.current_page + 1, false);
+
+        $ul.append(`<li><span class="pos-pg-info">Pág. ${pg.current_page} / ${pg.total_pages}</span></li>`);
     }
 
-    // Click en paginación
-    $(document).on('click', '.page-link', function(e) {
+    /* ---------- Click paginación ---------- */
+    $(document).on('click', '#paginacion .pos-pg-btn', function (e) {
         e.preventDefault();
-        const nuevaPagina = $(this).data('page');
-        if (nuevaPagina && nuevaPagina !== paginaActual) {
-            paginaActual = nuevaPagina;
-            buscarProductos();
-        }
+        const p = parseInt($(this).data('page'));
+        if (p && p !== paginaActual) { paginaActual = p; buscarProductos(); }
     });
 
-    // Click en Ver Tallas
-    $(document).on('click', '.btn-ver-tallas', function() {
-        const producto = JSON.parse($(this).attr('data-producto'));
-        mostrarModalTallas(producto);
+    /* ---------- Modal tallas ---------- */
+    $(document).on('click', '.btn-ver-tallas', function () {
+        abrirModalTallas(JSON.parse($(this).attr('data-producto').replace(/&quot;/g, '"')));
     });
 
-    // Modal de tallas
-    function mostrarModalTallas(producto) {
-        $('#modalArticulo').text(producto.articulo);
-        $('#modalDescripcion').text(producto.descripcion);
-        $('#modalSucursal').text(producto.sucursal);
-        $('#modalStockTotal').text(producto.stock_total);
-        $('#modalTipoTalla').text(producto.tipo_talla || 'Estándar');
-        
-        // Clase de stock para el total
-        let stockClass = 'stock-alto';
-        if (producto.stock_total === 0) stockClass = 'stock-bajo';
-        else if (producto.stock_total < 10) stockClass = 'stock-medio';
-        $('#modalStockTotal').removeClass('stock-alto stock-medio stock-bajo').addClass(stockClass);
-        
-        const tablaTallas = $('#tablaTallasModal');
-        tablaTallas.empty();
-        
-        let tallasConStock = 0;
-        let tallasSinStock = 0;
-        
-        if (producto.tallas_stock && producto.tallas_stock.length > 0) {
-            producto.tallas_stock.forEach(function(talla) {
-                const tieneStock = talla.stock > 0;
-                if (tieneStock) tallasConStock++;
-                else tallasSinStock++;
-                
-                // Badge de estado mejorado
-                const estadoBadge = tieneStock ? 
-                    `<span class="nexo-badge success" style="font-size: 0.6875rem; padding: 0.25rem 0.625rem;">
-                        <i class="bi bi-check-circle-fill me-1"></i>Disponible
-                    </span>` : 
-                    `<span class="nexo-badge error" style="font-size: 0.6875rem; padding: 0.25rem 0.625rem;">
-                        <i class="bi bi-x-circle-fill me-1"></i>Agotado
-                    </span>`;
-                
-                // Badge de stock mejorado
-                const stockBadgeClass = tieneStock ? (talla.stock >= 10 ? 'stock-alto' : 'stock-medio') : 'stock-bajo';
-                
-                tablaTallas.append(`
-                    <tr class="${tieneStock ? '' : 'sin-stock'}">
-                        <td>
-                            <span class="talla-nombre">${talla.talla}</span>
-                        </td>
-                        <td>
-                            <span class="sku-badge">
-                                <i class="bi bi-upc"></i>
-                                ${talla.sku}
-                            </span>
-                        </td>
-                        <td style="text-align: center;">
-                            <span class="stock-badge ${stockBadgeClass}" style="min-width: 40px; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                ${talla.stock}
-                            </span>
-                        </td>
-                        <td style="text-align: center;">${estadoBadge}</td>
+    function abrirModalTallas(p) {
+        $('#modalArticulo').text(p.articulo);
+        $('#modalDescripcion').text(p.descripcion);
+        $('#modalSucursal').text(p.sucursal);
+        $('#modalTipoTalla').text(p.tipo_talla || 'Estándar');
+
+        const stClass = p.stock_total === 0 ? 'rojo' : (p.stock_total < 10 ? '' : 'verde');
+        $('#modalStockTotal').text(p.stock_total).attr('class', 'modal-stat-val ' + stClass);
+
+        const tbody = $('#tablaTallasModal');
+        tbody.empty();
+
+        let conStock = 0, sinStock = 0;
+        if (p.tallas_stock && p.tallas_stock.length > 0) {
+            p.tallas_stock.forEach(function (t) {
+                const tiene = t.stock > 0;
+                if (tiene) conStock++; else sinStock++;
+                const sc  = tiene ? (t.stock >= 10 ? 'sb-alto' : 'sb-medio') : 'sb-bajo';
+                const est = tiene
+                    ? `<span class="nexo-badge-ok"><i class="bi bi-check-circle-fill"></i>Disponible</span>`
+                    : `<span class="nexo-badge-err"><i class="bi bi-x-circle-fill"></i>Agotado</span>`;
+                tbody.append(`
+                    <tr class="${tiene ? '' : 'sin-stock'}">
+                        <td><span class="talla-big">${escHtml(t.talla)}</span></td>
+                        <td><span class="sku-mono">${escHtml(t.sku)}</span></td>
+                        <td style="text-align:center;"><span class="stock-badge ${sc}" style="min-width:38px;font-size:.8125rem;">${t.stock}</span></td>
+                        <td style="text-align:center;">${est}</td>
                     </tr>
                 `);
             });
         } else {
-            tablaTallas.append(`
+            tbody.append(`
                 <tr>
-                    <td colspan="4" class="text-center" style="padding: 3rem; color: var(--nexo-gray-500);">
-                        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
-                            <div style="width: 64px; height: 64px; background: var(--nexo-gray-100); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                                <i class="bi bi-inbox" style="font-size: 1.75rem; color: var(--nexo-gray-400);"></i>
-                            </div>
-                            <div>
-                                <p style="margin: 0; font-weight: 600; color: var(--nexo-gray-700);">Sin tallas registradas</p>
-                                <p style="margin: 0; font-size: 0.8125rem;">Este producto no tiene tallas configuradas</p>
-                            </div>
-                        </div>
+                    <td colspan="4" style="text-align:center;padding:2.5rem;color:var(--np-gray-500);">
+                        <i class="bi bi-inbox" style="font-size:2rem;color:var(--np-gray-300);display:block;margin-bottom:.5rem;"></i>
+                        Sin tallas registradas
                     </td>
                 </tr>
             `);
         }
-        
-        $('#totalTallas').text(producto.tallas_stock ? producto.tallas_stock.length : 0);
-        $('#tallasConStock').text(tallasConStock);
-        $('#tallasSinStock').text(tallasSinStock);
-        
-        $('#modalDetalleTallas').modal('show');
+
+        $('#totalTallas').text(p.tallas_stock ? p.tallas_stock.length : 0);
+        $('#tallasConStock').text(conStock);
+        $('#tallasSinStock').text(sinStock);
+
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetalleTallas'));
+        modal.show();
     }
 
-    // Inicializar Select2
-    function inicializarSelect2() {
-        if ($('#sucursal_select').data('select2')) {
-            $('#sucursal_select, #marca_select, #color_select, #genero_select, #categoria_select').select2('destroy');
-        }
-
-        const select2Config = {
-            allowClear: true,
-            width: '100%',
-            theme: 'default',
-            language: {
-                noResults: function() { return "No se encontraron resultados"; },
-                searching: function() { return "Buscando..."; }
-            }
-        };
-
-        $('#sucursal_select').select2({ ...select2Config, placeholder: 'Todas las sucursales' });
-        $('#marca_select').select2({ ...select2Config, placeholder: 'Todas las marcas' });
-        $('#color_select').select2({ ...select2Config, placeholder: 'Todos los colores' });
-        $('#genero_select').select2({ ...select2Config, placeholder: 'Todos los géneros' });
-        $('#categoria_select').select2({ ...select2Config, placeholder: 'Todas las categorías' });
-
-        console.log('✅ Select2 inicializado con diseño NEXO');
+    /* ---------- Utilidades de escape ---------- */
+    function escHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
-    // Verificar si el selector de género tiene opciones
-    function verificarOpcionesGenero() {
-        const generoSelect = $('#genero_select');
-        const opcionesCount = generoSelect.find('option').length - 1; // -1 para excluir "Todos"
-        
-        console.log(`[INFO] Selector de Género tiene ${opcionesCount} opciones`);
-        
-        if (opcionesCount === 0) {
-            console.warn('⚠️ El selector de Género no tiene opciones cargadas');
-            
-            // Agregar mensaje visual temporal
-            const label = generoSelect.closest('.col-lg-2').find('label');
-            label.append(' <i class="bi bi-exclamation-triangle-fill text-warning ms-1" title="No hay opciones de género configuradas"></i>');
-            
-            // Opcionalmente mostrar una notificación
-            // Swal.fire({
-            //     icon: 'info',
-            //     title: 'Información',
-            //     text: 'El filtro de Género no tiene opciones configuradas. Contacta al administrador para agregar opciones.',
-            //     confirmButtonColor: '#0066FF',
-            //     toast: true,
-            //     position: 'top-end',
-            //     timer: 5000,
-            //     showConfirmButton: false
-            // });
-        } else {
-            console.log('✅ Género configurado correctamente con opciones disponibles');
-        }
-        
-        // Hacer lo mismo para otros selectores
-        ['marca_select', 'color_select'].forEach(function(selectId) {
-            const select = $('#' + selectId);
-            const count = select.find('option').length - 1;
-            const nombre = select.closest('.col-lg-2').find('label').text().trim();
-            console.log(`[INFO] Selector de ${nombre} tiene ${count} opciones`);
-        });
+    function escAttr(str) {
+        if (!str) return '';
+        return String(str).replace(/"/g, '&quot;');
     }
+
+    /* ---------- Auto-focus al cargar ---------- */
+    setTimeout(() => $('#search_input').focus(), 300);
 });
 </script>

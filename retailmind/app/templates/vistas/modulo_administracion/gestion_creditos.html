@@ -652,16 +652,16 @@
         <div class="row mb-4">
             <div class="col">
                 <h1 class="h3 mb-0" style="color: var(--nexo-text-primary);">
-                    <i class="ri-bank-card-line" style="color: var(--nexo-primary);"></i> Gestión de Créditos a Trabajadores
+                    <i class="ri-bank-card-line" style="color: var(--nexo-primary);"></i> Gestión de Créditos
                 </h1>
-                <p class="mb-0" style="color: var(--nexo-text-secondary);">Administra préstamos, anticipos y créditos del personal</p>
+                <p class="mb-0" style="color: var(--nexo-text-secondary);">Administra préstamos, anticipos y créditos de beneficiarios</p>
                 <small style="color: var(--nexo-info);">
                     <i class="ri-information-line"></i> Control completo de créditos, pagos y vencimientos
                 </small>
                 </div>
             <div class="col-auto d-flex gap-2">
-                <button class="btn btn-lg nexo-btn-secondary" id="btn-nuevo-trabajador" title="Crear nuevo trabajador">
-                    <i class="ri-user-add-line me-1"></i> Nuevo Trabajador
+                <button class="btn btn-lg nexo-btn-secondary" id="btn-nuevo-trabajador" title="Crear nuevo beneficiario">
+                    <i class="ri-user-add-line me-1"></i> Nuevo Beneficiario
                 </button>
                 <button class="btn btn-lg nexo-btn-primary" id="btn-nuevo-credito">
                     <i class="ri-add-line me-1"></i> Nuevo Crédito
@@ -780,7 +780,7 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
-                            <label class="nexo-form-label">Trabajador</label>
+                            <label class="nexo-form-label">Beneficiario</label>
                             <select class="form-select nexo-input" id="filtro-trabajador">
                                     <option value="">Todos</option>
                                 </select>
@@ -807,7 +807,7 @@
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <input type="text" class="form-control nexo-input" id="filtro-trabajador-texto" placeholder="Nombre/RUT/Código">
+                                <input type="text" class="form-control nexo-input" id="filtro-trabajador-texto" placeholder="Nombre/RUT beneficiario">
                             </div>
                             <div class="col-md-3">
                                 <input type="text" class="form-control nexo-input" id="filtro-sucursal-texto" placeholder="Sucursal...">
@@ -900,9 +900,9 @@
                 <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="nexo-form-label">Trabajador/Vendedor <span style="color: var(--nexo-error);">*</span></label>
+                            <label class="nexo-form-label">Beneficiario <span style="color: var(--nexo-error);">*</span></label>
                             <select class="form-select nexo-input" id="trabajador-id" required>
-                                <option value="">Seleccionar trabajador...</option>
+                                <option value="">Seleccionar beneficiario...</option>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -1237,7 +1237,7 @@
         <div class="modal-content nexo-modal">
             <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-info), var(--nexo-accent)); border: none;">
                 <h5 class="modal-title" id="modal-trabajador-label" style="color: white;">
-                    <i class="ri-user-add-line me-1"></i> Crear Nuevo Trabajador / Persona
+                    <i class="ri-user-add-line me-1"></i> Crear Nuevo Beneficiario
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -1245,11 +1245,10 @@
                 <div class="modal-body">
                     <div class="alert" style="background-color: rgba(0, 108, 255, 0.1); border-left: 4px solid var(--nexo-info); border-radius: var(--nexo-radius-md);">
                         <i class="ri-information-line" style="color: var(--nexo-info);"></i>
-                        <strong>Tipos de personas que puedes agregar:</strong>
+                        <strong>Tipos de beneficiarios que puedes agregar:</strong>
                         <ul class="mb-0 mt-1" style="font-size: 12px;">
-                            <li><strong>Vendedores:</strong> Personal de tienda que vende y puede tener comisión</li>
-                            <li><strong>Administrativos:</strong> Personal de oficina (no asociar a sucursal)</li>
-                            <li><strong>Externos:</strong> Personas de otras empresas o freelancers (no asociar a sucursal)</li>
+                            <li><strong>Empleados:</strong> Personal interno de la empresa</li>
+                            <li><strong>Externos:</strong> Personas externas con crédito autorizado</li>
                         </ul>
                     </div>
 
@@ -1263,16 +1262,6 @@
                         <div class="col-md-6">
                             <label class="nexo-form-label">Nombre Completo <span style="color: var(--nexo-error);">*</span></label>
                             <input type="text" class="form-control nexo-input" id="trabajador-nombre" required placeholder="Ej: Juan Pérez González">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="nexo-form-label">Código Identificador <span style="color: var(--nexo-error);">*</span></label>
-                            <div class="input-group">
-                                <input type="text" class="form-control nexo-input" id="trabajador-codigo" required placeholder="Ej: VND001, ADM001, EXT001">
-                                <span class="input-group-text" id="codigo-status" style="background: var(--nexo-bg-secondary); border-color: var(--nexo-gray-300);">
-                                    <i class="ri-check-line" style="color: var(--nexo-gray-400);"></i>
-                                </span>
-                            </div>
-                            <small id="codigo-feedback" style="color: var(--nexo-text-muted);">Debe ser único en el sistema</small>
                         </div>
                         <div class="col-md-6">
                             <label class="nexo-form-label">RUT</label>
@@ -1330,7 +1319,7 @@
                         <i class="ri-close-line me-1"></i> Cancelar
                     </button>
                     <button type="submit" class="nexo-btn-info" id="btn-crear-trabajador">
-                        <i class="ri-user-add-line me-1"></i> Crear Trabajador
+                        <i class="ri-user-add-line me-1"></i> Crear Beneficiario
                     </button>
                 </div>
             </form>
@@ -1535,11 +1524,12 @@ $(document).ready(function() {
             .done(function(response) {
                 if (response.success) {
                     const trabajadores = response.trabajadores;
-                    let options = '<option value="">Seleccionar trabajador...</option>';
+                    let options = '<option value="">Seleccionar beneficiario...</option>';
                     let filterOptions = '<option value="">Todos</option>';
 
                     trabajadores.forEach(function(trabajador) {
-                        options += `<option value="${trabajador.id}">${trabajador.nombre} (${trabajador.codigo_vendedor})</option>`;
+                        const ident = trabajador.rut ? ' (' + trabajador.rut + ')' : '';
+                        options += `<option value="${trabajador.id}">${trabajador.nombre}${ident}</option>`;
                         filterOptions += `<option value="${trabajador.id}">${trabajador.nombre}</option>`;
                     });
 
@@ -1551,7 +1541,7 @@ $(document).ready(function() {
                         $('#trabajador-id').select2('destroy');
                     }
                     $('#trabajador-id').select2({
-                        placeholder: 'Seleccionar trabajador...',
+                        placeholder: 'Seleccionar beneficiario...',
                         allowClear: true,
                         width: '100%',
                         dropdownParent: $('#modal-credito')
@@ -1559,36 +1549,25 @@ $(document).ready(function() {
                 }
             })
             .fail(function() {
-                showError('Error al cargar trabajadores');
+                showError('Error al cargar beneficiarios');
             });
     }
 
-    // ============ GESTIÓN DE TRABAJADORES ============
+    // ============ GESTIÓN DE BENEFICIARIOS ============
     let sucursalesDisponibles = [];
-    let codigoValidoTimeout = null;
-    let codigoEsValido = true;
 
     function openNuevoTrabajadorModal() {
-        // Limpiar formulario
         $('#form-nuevo-trabajador')[0].reset();
-        $('#codigo-status').html('<i class="ri-check-line" style="color: var(--nexo-gray-400);"></i>');
-        $('#codigo-feedback').text('Debe ser único en el sistema').css('color', 'var(--nexo-text-muted)');
-        codigoEsValido = true;
         
-        // Inicializar flatpickr para fecha de nacimiento
         flatpickr('#trabajador-fecha-nacimiento', {
             dateFormat: 'd-m-Y',
             locale: 'es',
             allowInput: true
         });
         
-        // Cargar empresas
         cargarEmpresasParaTrabajador();
-        
-        // Cargar sucursales
         cargarSucursalesParaTrabajador();
         
-        // Mostrar modal
         $('#modal-nuevo-trabajador').modal('show');
     }
     
@@ -1674,7 +1653,7 @@ $(document).ready(function() {
             <div class="col-12 mt-2">
                 <small style="color: var(--nexo-text-muted);">
                     <i class="ri-checkbox-blank-circle-line me-1"></i>
-                    Si no seleccionas ninguna sucursal, el trabajador no estará asociado a ninguna tienda (ideal para administrativos o externos)
+                    Si no seleccionas ninguna sucursal, el beneficiario no estará asociado a ninguna tienda (ideal para administrativos o externos)
                 </small>
             </div>
         `;
@@ -1710,49 +1689,8 @@ $(document).ready(function() {
         }
     }
 
-    // Validación de código único en tiempo real
-    $('#trabajador-codigo').on('input', function() {
-        const codigo = $(this).val().trim();
-        
-        // Cancelar timeout anterior
-        if (codigoValidoTimeout) {
-            clearTimeout(codigoValidoTimeout);
-        }
-        
-        if (!codigo) {
-            $('#codigo-status').html('<i class="ri-check-line" style="color: var(--nexo-gray-400);"></i>');
-            $('#codigo-feedback').text('Debe ser único en el sistema').css('color', 'var(--nexo-text-muted)');
-            codigoEsValido = true;
-            return;
-        }
-        
-        // Mostrar loading
-        $('#codigo-status').html('<div class="spinner-border spinner-border-sm" style="width: 14px; height: 14px;"></div>');
-        
-        // Esperar 500ms antes de validar
-        codigoValidoTimeout = setTimeout(function() {
-            $.get('/app/api/creditos/trabajadores/validar-codigo/', { codigo: codigo })
-                .done(function(response) {
-                    if (response.exists) {
-                        $('#codigo-status').html('<i class="ri-close-line" style="color: var(--nexo-error);"></i>');
-                        $('#codigo-feedback').html(`<span style="color: var(--nexo-error);">Ya existe: ${response.existente.nombre}</span>`);
-                        codigoEsValido = false;
-                    } else {
-                        $('#codigo-status').html('<i class="ri-check-line" style="color: var(--nexo-success);"></i>');
-                        $('#codigo-feedback').html('<span style="color: var(--nexo-success);">✓ Código disponible</span>');
-                        codigoEsValido = true;
-                    }
-                })
-                .fail(function() {
-                    $('#codigo-status').html('<i class="ri-question-line" style="color: var(--nexo-warning);"></i>');
-                    codigoEsValido = true; // Permitir enviar si falla la validación
-                });
-        }, 500);
-    });
-
     function crearNuevoTrabajador() {
         const nombre = $('#trabajador-nombre').val().trim();
-        const codigo = $('#trabajador-codigo').val().trim();
         const rut = $('#trabajador-rut').val().trim();
         const correo = $('#trabajador-correo').val().trim();
         const fechaNacimiento = $('#trabajador-fecha-nacimiento').val();
@@ -1766,16 +1704,6 @@ $(document).ready(function() {
 
         if (!nombre) {
             showError('El nombre es requerido');
-            return;
-        }
-
-        if (!codigo) {
-            showError('El código identificador es requerido');
-            return;
-        }
-
-        if (!codigoEsValido) {
-            showError('El código ingresado ya existe. Por favor, usa otro código.');
             return;
         }
 
@@ -1793,7 +1721,7 @@ $(document).ready(function() {
 
         // Mostrar loading
         Swal.fire({
-            title: 'Creando trabajador...',
+            title: 'Creando beneficiario...',
             allowOutsideClick: false,
             didOpen: () => {
                 Swal.showLoading();
@@ -1806,7 +1734,6 @@ $(document).ready(function() {
             contentType: 'application/json',
             data: JSON.stringify({
                 nombre: nombre,
-                codigo_vendedor: codigo,
                 rut: rut,
                 correo: correo,
                 fecha_nacimiento: fechaNacimiento,
@@ -1817,34 +1744,28 @@ $(document).ready(function() {
                 if (response.success) {
                     $('#modal-nuevo-trabajador').modal('hide');
                     
-                    let sucursalesMsg = response.trabajador.sucursales.length > 0 
-                        ? `<br><small style="color: var(--nexo-text-muted);">Sucursales: ${response.trabajador.sucursales.join(', ')}</small>`
-                        : `<br><small style="color: var(--nexo-warning);">Sin sucursal asignada (administrativo/externo)</small>`;
-                    
                     let empresaMsg = response.trabajador.empresa 
                         ? `<br><small style="color: var(--nexo-info);"><i class="ri-building-line me-1"></i>Empresa: ${response.trabajador.empresa}</small>`
                         : '';
                     
                     Swal.fire({
                         icon: 'success',
-                        title: '¡Trabajador Creado!',
+                        title: '¡Beneficiario Creado!',
                         html: `
-                            <p>Se ha creado el trabajador:</p>
+                            <p>Se ha creado el beneficiario:</p>
                             <strong>${response.trabajador.nombre}</strong><br>
-                            <small style="color: var(--nexo-text-muted);">Código: ${response.trabajador.codigo_vendedor}</small>
+                            <small style="color: var(--nexo-text-muted);">RUT: ${response.trabajador.rut || 'N/A'}</small>
                             ${empresaMsg}
-                            ${sucursalesMsg}
                         `,
                         confirmButtonColor: 'var(--nexo-primary)'
                     });
-                    // Recargar lista de trabajadores
                     loadTrabajadores();
                 } else {
                     showError(response.error);
                 }
             },
             error: function(xhr) {
-                const error = xhr.responseJSON?.error || 'Error al crear el trabajador';
+                const error = xhr.responseJSON?.error || 'Error al crear beneficiario';
                 showError(error);
             }
         });
@@ -1943,7 +1864,7 @@ $(document).ready(function() {
                         <thead>
                             <tr>
                                 <th>Crédito</th>
-                                <th>Trabajador</th>
+                                <th>Beneficiario</th>
                                 <th>Sucursal</th>
                                 <th>Fecha</th>
                                 <th>Monto</th>
@@ -1977,7 +1898,7 @@ $(document).ready(function() {
                 </td>
                 <td>
                     <div class="fw-semibold">${credito.trabajador.nombre}</div>
-                    <div class="text-muted small">${credito.trabajador.codigo_vendedor || ''}</div>
+                    <div class="text-muted small">${credito.trabajador.rut || ''}</div>
                 </td>
                 <td title="${credito.sucursal_direccion || ''}">
                     <div>${sucursalLabel}</div>
@@ -2098,7 +2019,7 @@ $(document).ready(function() {
         }
         
         if (!trabajadorId) {
-            showError('Debe seleccionar un trabajador');
+            showError('Debe seleccionar un beneficiario');
             return;
         }
         
@@ -2163,7 +2084,7 @@ $(document).ready(function() {
                         html: `
                             <div class="text-center">
                                 <h4 style="color: var(--nexo-success);" class="mb-3">${response.numero_credito}</h4>
-                                <p class="mb-2"><strong>Trabajador:</strong> ${response.trabajador}</p>
+                                <p class="mb-2"><strong>Beneficiario:</strong> ${response.trabajador}</p>
                                 <p class="mb-4"><strong>Monto:</strong> ${formatCurrency(response.monto_aprobado)}</p>
                                 <div style="background-color: rgba(0, 102, 255, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid var(--nexo-info);">
                                     <i class="ri-information-line" style="color: var(--nexo-info);"></i> 
@@ -2380,7 +2301,7 @@ $(document).ready(function() {
     window.activarCredito = function(creditoId) {
         Swal.fire({
             title: '¿Activar Crédito?',
-            text: 'Esto indica que el dinero ha sido entregado al trabajador',
+            text: 'Esto indica que el dinero ha sido entregado al beneficiario',
             icon: 'question',
             iconColor: '#0066FF',
             showCancelButton: true,
@@ -2420,7 +2341,7 @@ $(document).ready(function() {
                     </h6>
                     <table class="table table-borderless table-sm">
                         <tr><td style="color: var(--nexo-text-muted); width: 40%;">Número:</td><td style="font-weight: 600; color: var(--nexo-primary);">${credito.numero_credito}</td></tr>
-                        <tr><td style="color: var(--nexo-text-muted);">Trabajador:</td><td style="font-weight: 500;">${credito.trabajador.nombre}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Beneficiario:</td><td style="font-weight: 500;">${credito.trabajador.nombre}</td></tr>
                         <tr><td style="color: var(--nexo-text-muted);">RUT:</td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
                         <tr><td style="color: var(--nexo-text-muted);">Tipo:</td><td>${credito.tipo_credito_display}</td></tr>
                         <tr><td style="color: var(--nexo-text-muted);">Estado:</td><td><span class="nexo-badge nexo-badge-${credito.estado.toLowerCase()}">${credito.estado_display}</span></td></tr>
@@ -2541,8 +2462,44 @@ $(document).ready(function() {
         });
     }
     
-    // Función global para imprimir voucher
-    window.imprimirVoucher = function(creditoId) {
+    // Función global para imprimir voucher (QZ Tray si está habilitado, sino popup)
+    async function _imprimirVoucherConQZ(creditoId) {
+        try {
+            await _cargarQzTray();
+            if (typeof qz === 'undefined') return false;
+            _configurarFirma();
+            if (!qz.websocket.isActive()) await _conectarQz();
+            if (!_qzConectado) return false;
+
+            // Obtener HTML del voucher con las cookies de sesión del navegador
+            // (flavor:'file' no envía cookies → obtendría la página de login)
+            const url = `/app/api/creditos/imprimir-voucher/${creditoId}/`;
+            const resp = await fetch(url, { credentials: 'same-origin' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status + ' al obtener voucher');
+            const htmlVoucher = await resp.text();
+
+            const cfg = qz.configs.create(QZ_CONFIG.impresora, {
+                scaleContent: false,
+                margins: { top: 0, right: 0, bottom: 0, left: 0 }
+            });
+            // flavor:'plain' → QZ recibe el HTML directamente (ya autenticado)
+            const data = [{ type: 'pixel', format: 'html', flavor: 'plain', data: htmlVoucher }];
+            await qz.print(cfg, data);
+            console.log('[QZ] Voucher crédito enviado a "' + QZ_CONFIG.impresora + '"');
+            return true;
+        } catch (e) {
+            console.error('[QZ] Error al imprimir voucher:', e);
+            return false;
+        }
+    }
+
+    window.imprimirVoucher = async function(creditoId) {
+        if (typeof QZ_CONFIG !== 'undefined' && QZ_CONFIG.habilitado) {
+            const ok = await _imprimirVoucherConQZ(creditoId);
+            if (ok) return;
+            console.warn('[QZ] No disponible, usando impresión del navegador');
+        }
+        // Fallback: popup con window.print() nativo
         const url = `/app/api/creditos/imprimir-voucher/${creditoId}/`;
         window.open(url, '_blank', 'width=350,height=650');
     };
@@ -2606,10 +2563,9 @@ $(document).ready(function() {
         // Headers con nombres amigables - Incluyendo información de pagos
         const headers = [
             'N° Crédito',
-            'Trabajador',
-            'RUT Trabajador',
-            'Código Vendedor',
-            'Empresa Trabajador',
+            'Beneficiario',
+            'RUT Beneficiario',
+            'Empresa Beneficiario',
             'Empresa Crédito',
             'Sucursal Otorgamiento',
             'Dirección Sucursal',
@@ -2637,7 +2593,7 @@ $(document).ready(function() {
             'Fecha Pago',
             'Monto Último Pago',
             'Método Pago',
-            'Vendedor Cobro'
+            'Registrado Por'
         ];
 
         // Crear contenido CSV con BOM para UTF-8
@@ -2652,7 +2608,6 @@ $(document).ready(function() {
                 c.numero_credito || '',
                 c.trabajador?.nombre || '',
                 c.trabajador?.rut || '',
-                c.trabajador?.codigo_vendedor || '',
                 c.trabajador?.empresa || '',
                 c.empresa?.nombre || '',
                 c.sucursal || '',
@@ -2699,7 +2654,7 @@ $(document).ready(function() {
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        link.setAttribute("download", `Creditos_Trabajadores_${new Date().toISOString().slice(0,10)}.csv`);
+        link.setAttribute("download", `Creditos_${new Date().toISOString().slice(0,10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -2900,7 +2855,7 @@ $(document).ready(function() {
                             <thead style="background: rgba(255, 77, 77, 0.1); position: sticky; top: 0;">
                                 <tr>
                                     <th style="font-size: 11px; color: var(--nexo-error);">Número</th>
-                                    <th style="font-size: 11px; color: var(--nexo-error);">Trabajador</th>
+                                    <th style="font-size: 11px; color: var(--nexo-error);">Beneficiario</th>
                                     <th style="font-size: 11px; color: var(--nexo-error);">Saldo</th>
                                     <th style="font-size: 11px; color: var(--nexo-error);">Vencimiento</th>
                                     <th style="font-size: 11px; color: var(--nexo-error);">Días</th>
@@ -2957,7 +2912,7 @@ $(document).ready(function() {
                 </style>
             </head>
             <body>
-                <h1>Reporte de Créditos a Trabajadores</h1>
+                <h1>Reporte de Créditos</h1>
                 <p>Fecha de generación: ${new Date().toLocaleString('es-CL')}</p>
                 ${contenido}
             </body>
@@ -3071,11 +3026,10 @@ $(document).ready(function() {
                 <div class="col-md-4">
                     <div class="nexo-card p-3 h-100">
                         <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
-                            <i class="ri-user-line me-1"></i> Trabajador
+                            <i class="ri-user-line me-1"></i> Beneficiario
                         </h6>
                         <table class="table table-borderless table-sm mb-0">
                             <tr><td style="color: var(--nexo-text-muted); width: 40%;">Nombre:</td><td style="font-weight: 500;">${credito.trabajador.nombre}</td></tr>
-                            <tr><td style="color: var(--nexo-text-muted);">Código:</td><td>${credito.trabajador.codigo_vendedor}</td></tr>
                             <tr><td style="color: var(--nexo-text-muted);">RUT:</td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
                         </table>
                     </div>
@@ -3216,6 +3170,8 @@ $(document).ready(function() {
     }
 });
 </script>
+
+{% include 'vistas/modulo_ventas/_qz_tray_module.html' %}
 
 <!-- Scripts adicionales -->
 <script src="{% static 'libs/datatables.net/js/jquery.dataTables.min.js' %}"></script>

@@ -38,6 +38,7 @@ todos:
   - id: cuadratura
     content: Implementar modulo de cuadratura/cierre de caja
     status: pending
+isProject: false
 ---
 
 # Plan: Aplicacion de Escritorio para Modulo de Ventas
@@ -96,6 +97,8 @@ flowchart TB
     Rust -->|ESC/POS| Printer
 ```
 
+
+
 ---
 
 ## Modo Offline - Como Funcionara
@@ -137,6 +140,8 @@ sequenceDiagram
     Server-->>App: Confirmacion + IDs oficiales
     App->>Local: Marcar como sincronizado
 ```
+
+
 
 ---
 
@@ -266,8 +271,8 @@ Nuevos endpoints necesarios en el backend Django:
 
 ### Archivos Django a modificar:
 
-- [`retailmind/app/urls.py`](retailmind/app/urls.py) - Agregar rutas API
-- [`retailmind/app/models.py`](retailmind/app/models.py) - Campo `synced_at` en Ticket
+- `[retailmind/app/urls.py](retailmind/app/urls.py)` - Agregar rutas API
+- `[retailmind/app/models.py](retailmind/app/models.py)` - Campo `synced_at` en Ticket
 - Crear nuevo archivo `retailmind/app/api_desktop.py` para los endpoints
 
 ---
@@ -283,3 +288,4 @@ Una aplicacion de escritorio que:
 - Procesa pagos con tarjeta via Transbank
 - Imprime tickets directamente
 - Usa el mismo look and feel NEXO del sistema web
+

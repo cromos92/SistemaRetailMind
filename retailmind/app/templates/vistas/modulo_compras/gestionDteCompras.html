@@ -144,29 +144,55 @@
         cursor: not-allowed;
     }
 
-    /* KPI Cards estilizadas */
+    /* KPI Cards compactas - diseño horizontal */
     .kpi-card {
-        border-radius: 12px;
+        border-radius: 10px;
         border: none;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
         overflow: hidden;
+        cursor: pointer;
     }
     
     .kpi-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 14px rgba(0,0,0,0.12);
     }
     
     .kpi-card .card-body {
-        padding: 12px 16px;
+        padding: 10px 14px;
     }
     
-    .kpi-card i.fs-1 {
-        transition: transform 0.3s ease;
+    .kpi-card .kpi-icon {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
     }
     
-    .kpi-card:hover i.fs-1 {
-        transform: scale(1.1);
+    .kpi-card .kpi-value {
+        font-size: 1.15rem;
+        font-weight: 700;
+        line-height: 1.1;
+        margin: 0;
+    }
+    
+    .kpi-card .kpi-label {
+        font-size: 0.68rem;
+        color: #6c757d;
+        font-weight: 500;
+        line-height: 1.2;
+        margin: 0;
+    }
+    
+    .kpi-card .kpi-amount {
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1.2;
+        margin: 0;
     }
 
     /* Shortcuts de formulario */
@@ -210,6 +236,25 @@
             width: 40px;
             height: 40px;
             font-size: 20px;
+        }
+        
+        .kpi-card .kpi-value {
+            font-size: 1rem;
+        }
+        
+        .kpi-card .kpi-label {
+            font-size: 0.62rem;
+        }
+        
+        .kpi-card .card-body {
+            padding: 8px 10px;
+        }
+        
+        .kpi-card .kpi-icon {
+            width: 28px;
+            height: 28px;
+            min-width: 28px;
+            font-size: 0.8rem;
         }
     }
 
@@ -499,25 +544,33 @@
         border-color: transparent;
     }
     
-    /* Quick filters estilo chat */
+    /* Quick filters compactos */
     .quick-filter-btn {
-        padding: 8px 16px;
-        font-size: 13px;
+        padding: 5px 12px;
+        font-size: 0.75rem;
         white-space: nowrap;
-        border-radius: 20px;
-        border: 2px solid #e5e7eb;
+        border-radius: 16px;
+        border: 1.5px solid #e5e7eb;
         background: white;
         cursor: pointer;
         transition: all 0.2s;
         font-weight: 500;
+        color: #495057;
     }
     
     .quick-filter-btn:hover {
         background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
         border-color: transparent;
         color: white;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(64, 81, 137, 0.3);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(64, 81, 137, 0.25);
+    }
+    
+    .quick-filter-btn.active {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        border-color: transparent;
+        color: white;
+        box-shadow: 0 2px 8px rgba(64, 81, 137, 0.3);
     }
     
     /* Loader mejorado */
@@ -622,18 +675,6 @@
 <div class="page-content">
     <div class="container-fluid">
 
-        <style>
-            th.sorting::after,
-            th.sorting_asc::after,
-            th.sorting_desc::after {
-                display: none !important;
-            }
-
-            .dataTables_filter input {
-                margin-left: auto;
-                display: inline-block;
-            }
-        </style>
         <div class="card shadow">
             <!-- Header estilo Chat del Proyecto -->
             <div class="dte-header">
@@ -691,10 +732,10 @@
             </div>
 
             <div class="card-body">
-                <!-- Filtros - Estilo Chat -->
-                <div class="card mb-4" style="border: none; border-radius: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                    <div class="card-body p-3">
-                        <form id="formBuscarDTE" class="row g-3 align-items-end">
+                <!-- Filtros por fecha -->
+                <div class="card mb-3" style="border: none; border-radius: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
+                    <div class="card-body p-2 px-3">
+                        <form id="formBuscarDTE" class="row g-2 align-items-end">
                             <div class="col-md-3 col-lg-2">
                                 <label for="tipoFecha" class="form-label small">
                                     <i class="bi bi-calendar-range me-1"></i>Buscar por
@@ -725,82 +766,89 @@
                     </div>
                 </div>
 
-                <!-- Panel de KPIs de Pendientes y Vencimiento - Estilo Chat -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card border-0" style="border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);">
-                            <div class="card-body p-3">
-                                <!-- Fila 1: Resumen General -->
-                                <div class="row g-2 mb-3">
-                                    <div class="col-md-3 col-6">
-                                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b;">
-                                            <div class="card-body text-center py-2">
-                                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                                    <i class="bi bi-file-earmark-text fs-5 text-white"></i>
-                                                </div>
-                                                <h4 class="mb-0 fw-bold" id="cantidadPendientes" style="color: #405189;">0</h4>
-                                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Documentos Pendientes</p>
-                                                <h6 class="mb-0 mt-1 fw-bold" id="montoPendiente" style="color: #f06548; font-size: 0.85rem;">$0</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="col-md-3 col-6">
-                                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid #f06548;">
-                                            <div class="card-body text-center py-2">
-                                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                                    <i class="bi bi-exclamation-circle-fill fs-5 text-white"></i>
-                                                </div>
-                                                <h4 class="mb-0 fw-bold" id="cantidadVencidos" style="color: #f06548;">0</h4>
-                                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Documentos Vencidos</p>
-                                                <h6 class="mb-0 mt-1 fw-bold" id="montoVencidos" style="color: #f06548; font-size: 0.85rem;">$0</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="col-md-3 col-6">
-                                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 4px solid #fb8c00;">
-                                            <div class="card-body text-center py-2">
-                                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #fb8c00 0%, #f57c00 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                                    <i class="bi bi-clock-history fs-5 text-white"></i>
-                                                </div>
-                                                <h4 class="mb-0 fw-bold" id="cantidadPorVencer" style="color: #fb8c00;">0</h4>
-                                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Por Vencer (7 días)</p>
-                                                <h6 class="mb-0 mt-1 fw-bold" id="montoPorVencer" style="color: #fb8c00; font-size: 0.85rem;">$0</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="col-md-3 col-6">
-                                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c;">
-                                            <div class="card-body text-center py-2">
-                                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
-                                                    <i class="bi bi-check-circle-fill fs-5 text-white"></i>
-                                                </div>
-                                                <h4 class="mb-0 fw-bold" id="cantidadAlDia" style="color: #0ab39c;">0</h4>
-                                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Al Día (+7 días)</p>
-                                                <h6 class="mb-0 mt-1 fw-bold" id="montoAlDia" style="color: #0ab39c; font-size: 0.85rem;">$0</h6>
-                                            </div>
-                                        </div>
-                                    </div>
+                <!-- Panel de KPIs compacto -->
+                <div class="row g-2 mb-3">
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #ffbe0b;" onclick="filtrarPendientes()" title="Ver todos pendientes">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #ffbe0b, #f0a500);">
+                                    <i class="bi bi-file-earmark-text"></i>
                                 </div>
-                                
-                                <!-- Fila 2: Acciones Rápidas Estilo Chat -->
-                                <div class="d-flex flex-wrap justify-content-center gap-2">
-                                    <span class="badge me-2" id="periodoActualBadge" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); font-size: 0.9rem; padding: 8px 16px; border-radius: 20px;">Año 2025</span>
-                                    <button class="quick-filter-btn" onclick="filtrarVencidos()">
-                                        <i class="bi bi-exclamation-triangle me-1"></i>Ver Vencidos
-                                    </button>
-                                    <button class="quick-filter-btn" onclick="filtrarPorVencer()">
-                                        <i class="bi bi-clock me-1"></i>Ver Por Vencer
-                                    </button>
-                                    <button class="quick-filter-btn" onclick="filtrarPendientes()">
-                                        <i class="bi bi-filter me-1"></i>Ver Todos Pendientes
-                                    </button>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="kpi-value" id="cantidadPendientes" style="color: #405189;">0</span>
+                                        <span class="kpi-label">Pendientes</span>
+                                    </div>
+                                    <p class="kpi-amount" id="montoPendiente" style="color: #f06548;">$0</p>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 3px solid #f06548;" onclick="filtrarVencidos()" title="Ver vencidos">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #f06548, #d9534f);">
+                                    <i class="bi bi-exclamation-circle-fill"></i>
+                                </div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="kpi-value" id="cantidadVencidos" style="color: #f06548;">0</span>
+                                        <span class="kpi-label">Vencidos</span>
+                                    </div>
+                                    <p class="kpi-amount" id="montoVencidos" style="color: #f06548;">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 3px solid #fb8c00;" onclick="filtrarPorVencer()" title="Ver por vencer (7 días)">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #fb8c00, #f57c00);">
+                                    <i class="bi bi-clock-history"></i>
+                                </div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="kpi-value" id="cantidadPorVencer" style="color: #fb8c00;">0</span>
+                                        <span class="kpi-label">Por Vencer</span>
+                                    </div>
+                                    <p class="kpi-amount" id="montoPorVencer" style="color: #fb8c00;">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 3px solid #0ab39c;" onclick="cargarDTEsSinFiltro()" title="Ver al día (+7 días)">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #0ab39c, #099885);">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                </div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div class="d-flex align-items-baseline gap-2">
+                                        <span class="kpi-value" id="cantidadAlDia" style="color: #0ab39c;">0</span>
+                                        <span class="kpi-label">Al Día</span>
+                                    </div>
+                                    <p class="kpi-amount" id="montoAlDia" style="color: #0ab39c;">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtros rápidos + badge período -->
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <span class="badge" id="periodoActualBadge" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); font-size: 0.78rem; padding: 5px 12px; border-radius: 16px;">Cargando...</span>
+                    <button class="quick-filter-btn" id="qfVencidos" onclick="filtrarVencidos()">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Vencidos
+                    </button>
+                    <button class="quick-filter-btn" id="qfPorVencer" onclick="filtrarPorVencer()">
+                        <i class="bi bi-clock me-1"></i>Por Vencer
+                    </button>
+                    <button class="quick-filter-btn" id="qfPendientes" onclick="filtrarPendientes()">
+                        <i class="bi bi-filter me-1"></i>Todos Pendientes
+                    </button>
+                    <button class="quick-filter-btn" id="qfTodos" onclick="limpiarFiltrosRapidos()" style="display:none;">
+                        <i class="bi bi-x-circle me-1"></i>Quitar Filtro
+                    </button>
                 </div>
 
                 <!-- Controles de búsqueda y paginación -->
@@ -1822,7 +1870,16 @@
         });
     }
     
-    // Función para filtrar todos los pendientes del año
+    function setActiveQuickFilter(btnId) {
+        $('.quick-filter-btn').removeClass('active');
+        if (btnId) {
+            $('#' + btnId).addClass('active');
+            $('#qfTodos').show();
+        } else {
+            $('#qfTodos').hide();
+        }
+    }
+
     function filtrarPendientes() {
         const hoy = new Date();
         const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
@@ -1832,20 +1889,12 @@
         $('#fechaInicio').val(formato(primerDiaAnio));
         $('#fechaFin').val(formato(ultimoDiaAnio));
         
-        Swal.fire({
-            title: 'Todos los Pendientes',
-            html: `Mostrando todos los DTEs pendientes del año <strong>${hoy.getFullYear()}</strong>`,
-            icon: 'info',
-            timer: 2000,
-            showConfirmButton: false
-        });
-        
+        setActiveQuickFilter('qfPendientes');
         currentPageDTE = 1;
         currentSearchDTE = '';
-        cargarDTEs(1, '', 'pendientes');  // ⭐ Pasar filtro
+        cargarDTEs(1, '', 'pendientes');
     }
     
-    // Función para filtrar solo vencidos
     function filtrarVencidos() {
         const hoy = new Date();
         const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
@@ -1855,20 +1904,12 @@
         $('#fechaInicio').val(formato(primerDiaAnio));
         $('#fechaFin').val(formato(ultimoDiaAnio));
         
-        Swal.fire({
-            title: 'Documentos Vencidos',
-            html: `Mostrando DTEs con fecha de vencimiento <strong class="text-danger">VENCIDA</strong><br><small>Requieren atención urgente</small>`,
-            icon: 'error',
-            timer: 2500,
-            showConfirmButton: false
-        });
-        
+        setActiveQuickFilter('qfVencidos');
         currentPageDTE = 1;
         currentSearchDTE = '';
-        cargarDTEs(1, '', 'vencidos');  // ⭐ Pasar filtro
+        cargarDTEs(1, '', 'vencidos');
     }
     
-    // Función para filtrar por vencer próximamente
     function filtrarPorVencer() {
         const hoy = new Date();
         const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
@@ -1878,17 +1919,33 @@
         $('#fechaInicio').val(formato(primerDiaAnio));
         $('#fechaFin').val(formato(ultimoDiaAnio));
         
-        Swal.fire({
-            title: 'Por Vencer Pronto',
-            html: `Mostrando DTEs que vencen en los <strong>próximos 7 días</strong><br><small class="text-muted">Planifica tus pagos</small>`,
-            icon: 'warning',
-            timer: 2500,
-            showConfirmButton: false
-        });
-        
+        setActiveQuickFilter('qfPorVencer');
         currentPageDTE = 1;
         currentSearchDTE = '';
-        cargarDTEs(1, '', 'por_vencer');  // ⭐ Pasar filtro
+        cargarDTEs(1, '', 'por_vencer');
+    }
+
+    function cargarDTEsSinFiltro() {
+        currentPageDTE = 1;
+        currentSearchDTE = '';
+        filtroVencimientoActual = '';
+        setActiveQuickFilter(null);
+        cargarDTEs(1, '', '');
+    }
+
+    function limpiarFiltrosRapidos() {
+        const hoy = new Date();
+        const dosMesesAtras = new Date(hoy.getFullYear(), hoy.getMonth() - 2, hoy.getDate());
+        const formato = date => date.toISOString().split('T')[0];
+        
+        $('#fechaInicio').val(formato(dosMesesAtras));
+        $('#fechaFin').val(formato(hoy));
+        
+        setActiveQuickFilter(null);
+        currentPageDTE = 1;
+        currentSearchDTE = '';
+        filtroVencimientoActual = '';
+        cargarDTEs(1, '', '');
     }
 
     // Al cargar la página
@@ -1923,7 +1980,8 @@
         e.preventDefault();
         currentPageDTE = 1;
         currentSearchDTE = '';
-        filtroVencimientoActual = '';  // Limpiar filtro de vencimiento
+        filtroVencimientoActual = '';
+        setActiveQuickFilter(null);
         $('#searchDTE').val('');
         cargarDTEs(1, '', '');
     });
@@ -1947,6 +2005,7 @@
         currentSearchDTE = search;
         currentPageDTE = 1;
         filtroVencimientoActual = '';
+        setActiveQuickFilter(null);
         cargarDTEs(1, search, '');
     });
 
@@ -1962,6 +2021,7 @@
         const search = $('#searchDTE').val().trim();
         currentSearchDTE = search;
         currentPageDTE = 1;
+        setActiveQuickFilter(null);
         cargarDTEs(1, search);
     });
 
@@ -2323,14 +2383,9 @@
         </div>
     </td>
    <td>
-        <div class="d-flex flex-column gap-1">
-            <span class="badge bg-${dte.estado_pago === 'Pagado' ? 'success' : 'warning'}">
-                ${dte.estado_pago || 'Pendiente'}
-            </span>
-            <span class="badge bg-${dte.estado_pago === 'Pagado' ? 'info' : creditoColor(dte.dias_credito_restantes || 0)}">
-                ${dte.estado_pago === 'Pagado' ? '0 días' : (dte.dias_credito_restantes || 0) + ' días'}
-            </span>
-        </div>
+        <span class="badge bg-${dte.estado_pago === 'Pagado' ? 'success' : 'warning'}">
+            ${dte.estado_pago || 'Pendiente'}
+        </span>
     </td>
 
 

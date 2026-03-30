@@ -16,6 +16,7 @@ urlpatterns = [
     
     # Acciones específicas
     path('resetear-password/<int:usuario_id>/', views.resetear_password, name='resetear_password'),
+    path('reenviar-credenciales/<int:usuario_id>/', views.reenviar_credenciales, name='reenviar_credenciales'),
     path('toggle-estado/<int:usuario_id>/', views.toggle_estado_usuario, name='toggle_estado_usuario'),
     path('asignar-sucursal/<int:usuario_id>/', views.asignar_sucursal_sesion, name='asignar_sucursal_sesion'),
     

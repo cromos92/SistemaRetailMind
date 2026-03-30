@@ -884,6 +884,49 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- ===== QZ TRAY — IMPRESIÓN TÉRMICA SILENCIOSA ===== -->
+                    <hr style="border-color: var(--nexo-gray-300); margin: 1.25rem 0 1rem 0;">
+                    <div class="nexo-form-group mb-2">
+                        <label class="nexo-label" style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--nexo-gray-500);">
+                            <i class="ri-printer-fill me-1"></i> Impresión Térmica Directa (QZ Tray)
+                        </label>
+                    </div>
+
+                    <div class="nexo-form-group">
+                        <div class="d-flex align-items-center gap-3 p-3"
+                             style="background:var(--nexo-gray-100); border-radius:var(--nexo-radius-md); border:1px solid var(--nexo-gray-300);">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox"
+                                       id="inputUsarQzTray" name="usar_qz_tray"
+                                       style="width:2.5em; height:1.3em; cursor:pointer;">
+                            </div>
+                            <div>
+                                <div style="font-weight:700; color:var(--nexo-gray-900); font-size:0.9rem;">
+                                    Usar QZ Tray
+                                </div>
+                                <div style="font-size:0.78rem; color:var(--nexo-gray-500); margin-top:2px;">
+                                    Impresión silenciosa sin diálogo del navegador. Requiere QZ Tray instalado en el PC de caja.
+                                    <a href="https://qz.io/download/" target="_blank" rel="noopener"
+                                       style="color:var(--nexo-primary);">Descargar QZ Tray</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="nexo-form-group" id="grupoImpresoraTermica">
+                        <label class="nexo-label" for="inputImpresoraTermica">
+                            <i class="ri-printer-fill"></i>
+                            Nombre de la Impresora Térmica
+                        </label>
+                        <input type="text" class="nexo-input" id="inputImpresoraTermica"
+                               name="nombre_impresora_termica"
+                               placeholder="Ej: EPSON TM-T20II" value="EPSON TM-T20II">
+                        <div class="nexo-input-hint">
+                            Debe coincidir exactamente con el nombre en
+                            <strong>Windows → Dispositivos e Impresoras</strong>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
@@ -988,6 +1031,8 @@ $(document).ready(function() {
         $('#sucursalId').val('');
         $('#inputImpresoraBoleta').val('boleta');  // Valor por defecto
         $('#inputImpresoraFactura').val('factura');  // Valor por defecto
+        $('#inputUsarQzTray').prop('checked', false);
+        $('#inputImpresoraTermica').val('EPSON TM-T20II');
         // Mostrar modal primero (Select2 se inicializará en el evento shown.bs.modal)
         $('#modalSucursal').modal('show');
         // Seleccionar empresa actual del usuario por defecto después de que Select2 esté listo
@@ -1183,6 +1228,8 @@ $(document).ready(function() {
             empresa_id: $('#inputEmpresa').val(),
             nombre_impresora_boleta: $('#inputImpresoraBoleta').val() || 'boleta',
             nombre_impresora_factura: $('#inputImpresoraFactura').val() || 'factura',
+            usar_qz_tray: $('#inputUsarQzTray').is(':checked') ? 'on' : '',
+            nombre_impresora_termica: $('#inputImpresoraTermica').val() || 'EPSON TM-T20II',
         };
 
         $.ajax({
@@ -1261,6 +1308,8 @@ $(document).ready(function() {
                     $('#inputDireccion').val(sucursal.direccion);
                     $('#inputImpresoraBoleta').val(sucursal.nombre_impresora_boleta || 'boleta');
                     $('#inputImpresoraFactura').val(sucursal.nombre_impresora_factura || 'factura');
+                    $('#inputUsarQzTray').prop('checked', sucursal.usar_qz_tray === true);
+                    $('#inputImpresoraTermica').val(sucursal.nombre_impresora_termica || 'EPSON TM-T20II');
                     
                     // Mostrar modal primero
                     $('#modalSucursal').modal('show');
@@ -1353,5 +1402,27 @@ $(document).ready(function() {
             }
         });
     }
+});
+</script>
+
+<script>
+/* ── QZ Tray: mostrar/ocultar campo de impresora según el switch ── */
+$(document).ready(function () {
+    function toggleImpresoraTermica() {
+        if ($('#inputUsarQzTray').is(':checked')) {
+            $('#grupoImpresoraTermica').slideDown(200);
+        } else {
+            $('#grupoImpresoraTermica').slideUp(200);
+        }
+    }
+    // Ejecutar al cargar (estado inicial oculto)
+    toggleImpresoraTermica();
+    // Ejecutar al cambiar el switch
+    $('#inputUsarQzTray').on('change', toggleImpresoraTermica);
+
+    // Cuando se abre el modal de crear (reset), asegurar que el campo esté oculto
+    $('#modalSucursal').on('show.bs.modal', function () {
+        toggleImpresoraTermica();
+    });
 });
 </script>

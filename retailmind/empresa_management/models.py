@@ -455,4 +455,4 @@ class LogCliente(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.cliente.nombre_completo} - {self.accion} - {self.fecha}" 
+        return f"{self.cliente.nombre_completo} - {self.accion} - {self.fecha}"

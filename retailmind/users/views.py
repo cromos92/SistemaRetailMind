@@ -774,6 +774,68 @@ def resetear_password(request, usuario_id):
             'error': str(e)
         }, status=500)
 
+@require_POST
+@login_required
+@csrf_exempt
+def reenviar_credenciales(request, usuario_id):
+    """
+    Reenviar correo con credenciales (genera nueva password temporal y envía email de bienvenida)
+    RESTRINGIDO: Solo administradores
+    """
+    try:
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({
+                'success': False,
+                'error': 'Acceso restringido. Solo los administradores pueden reenviar credenciales.'
+            }, status=403)
+
+        usuario = get_object_or_404(Usuario, id=usuario_id)
+
+        if not usuario.email:
+            return JsonResponse({
+                'success': False,
+                'error': 'El usuario no tiene correo electrónico configurado'
+            }, status=400)
+
+        nueva_password = get_random_string(12)
+        usuario.set_password(nueva_password)
+        usuario.requiere_cambio_password = True
+        usuario.save()
+
+        login_url = getattr(settings, 'SITE_URL', 'http://localhost:8000').rstrip('/') + '/'
+        try:
+            enviar_credenciales_usuario(usuario, nueva_password, login_url=login_url)
+            return JsonResponse({
+                'success': True,
+                'message': f'Credenciales reenviadas exitosamente a {usuario.email}',
+                'email': usuario.email
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': True,
+                'message': f'Contraseña reseteada pero no se pudo enviar el correo: {str(e)}',
+                'nueva_password': nueva_password,
+                'email_enviado': False,
+                'usuario': {
+                    'nombre': usuario.get_full_name(),
+                    'email': usuario.email,
+                    'username': usuario.username
+                }
+            })
+
+    except Usuario.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Usuario no encontrado'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 @require_GET
 @login_required
 def exportar_usuarios(request):

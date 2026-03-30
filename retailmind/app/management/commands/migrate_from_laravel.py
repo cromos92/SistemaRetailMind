@@ -34,7 +34,8 @@ from django.utils import timezone
 from app.models import (
     Empresa, Sucursal, Categoria, Productos_Atributos, AtributoOpcion,
     Producto, Producto_Talla, Movimientos_Producto, Dte, Dte_Productos,
-    Dte_Detalle_Pago, Vendedor
+    Dte_Detalle_Pago, Vendedor, Correlativo, ParametroGlobal,
+    StockInicialTemporada,
 )
 from app.management.commands.importar_creditos_personal import Command as ImportCreditosCommand
 
@@ -58,6 +59,7 @@ MYSQL_DATABASE = os.getenv('MYSQL_DATABASE')
 MYSQL_USER = os.getenv('MYSQL_USER')
 MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
 
+RUTS_EMPRESAS_PROPIAS = {'78503140-7', '76104936-4', '76337843-8', '7397811-4'}
 
 # ============================================================================
 # MAPEOS HARDCODED
@@ -114,13 +116,51 @@ TIPO_MOVIMIENTO_MAP = {
 }
 
 CONCEPTO_MAP = {
+    # === INGRESOS ===
     'Creacion': 'INGRESO_INICIAL',
-    'VentaXInterna': 'TRASPASO_SUCURSAL',
-    'Venta': 'VENTA_PUBLICO',
+    'Creacion Productos': 'INGRESO_INICIAL',
     'Compra': 'RECEPCION_COMPRA',
-    'Ajuste': 'AJUSTE_INVENTARIO',
     'Devolucion': 'DEVOLUCION_CLIENTE',
+
+    # === EGRESOS / VENTAS ===
+    'Venta': 'VENTA_PUBLICO',
+    'VentaXPublico': 'VENTA_PUBLICO',
+    'VentaxBoleta': 'VENTA_PUBLICO',
+    'VentaxFactura': 'VENTA_MAYORISTA',
+
+    # === TRASPASOS ===
+    'VentaXInterna': 'TRASPASO_SUCURSAL',
+    'Concepto': 'TRASPASO_SUCURSAL',
+
+    # === CAMBIOS / DEVOLUCIONES ===
+    # En Laravel genera 2 movimientos: Ingreso (devuelto) + Egreso (nuevo)
+    # Se determina CAMBIO_PRODUCTO_ENTRADA o CAMBIO_PRODUCTO_SALIDA según tipo_movimiento
+    'MovimientoxCambioProducto': '_CAMBIO_PRODUCTO',  # Prefijo especial, se resuelve abajo
+    'MovimientoxNotaDeCredito': 'DEVOLUCION_CLIENTE',
+
+    # === CORRECCIONES / AJUSTES ===
+    # 'Ajuste' se resuelve a AJUSTE_POSITIVO o AJUSTE_NEGATIVO según tipo_movimiento
+    'Ajuste': '_AJUSTE',  # Prefijo especial, se resuelve abajo
+    'MovimientoxParametrosxMaestros': 'CORRECCION_STOCK',
+    'EdicionxConcepto': 'CORRECCION_STOCK',
 }
+
+def resolver_concepto(concepto_mysql, tipo_movimiento_mysql):
+    """
+    Resuelve el concepto Django final considerando el tipo_movimiento.
+    Necesario porque 'Ajuste' y 'MovimientoxCambioProducto' dependen
+    de si es Ingreso o Egreso para mapear al choice correcto.
+    """
+    concepto_base = CONCEPTO_MAP.get(concepto_mysql, 'CORRECCION_STOCK')
+    tipo = TIPO_MOVIMIENTO_MAP.get(tipo_movimiento_mysql, 'INGRESO')
+
+    if concepto_base == '_AJUSTE':
+        return 'AJUSTE_POSITIVO' if tipo == 'INGRESO' else 'AJUSTE_NEGATIVO'
+
+    if concepto_base == '_CAMBIO_PRODUCTO':
+        return 'CAMBIO_PRODUCTO_ENTRADA' if tipo == 'INGRESO' else 'CAMBIO_PRODUCTO_SALIDA'
+
+    return concepto_base
 
 TIPO_DOCUMENTO_MAP = {
     '33': 'FACTURA ELECTRONICA',
@@ -132,9 +172,13 @@ TIPO_DOCUMENTO_MAP = {
 }
 
 ESTADO_DTE_MAP = {
-    'Vigente': 'EMITIDO',
+    'Vigente': 'ACEPTADO',   # Ya procesado en sistema antiguo → no requiere recepción en el nuevo
+    'vigente': 'ACEPTADO',
     'Anulado': 'ANULADO',
+    'anulado': 'ANULADO',
+    'AnuladoxParcial': 'ANULADO',
     'Recepcionado': 'RECEPCIONADO_COMPLETO',
+    'recepcionado': 'RECEPCIONADO_COMPLETO',
 }
 
 
@@ -195,7 +239,12 @@ class Command(BaseCommand):
         parser.add_argument(
             '--fast-mode',
             action='store_true',
-            help='⚡ Modo ultra-rápido: deshabilita triggers y constraints temporalmente'
+            help='Modo ultra-rapido: deshabilita triggers y constraints temporalmente'
+        )
+        parser.add_argument(
+            '--no-input',
+            action='store_true',
+            help='Saltar confirmacion interactiva'
         )
 
     def handle(self, *args, **options):
@@ -246,13 +295,16 @@ class Command(BaseCommand):
         
         self.stdout.write('\n' + '-'*70)
         
-        # Pedir confirmación o cambiar DB
-        self.stdout.write(self.style.HTTP_INFO('\n  Opciones:'))
-        self.stdout.write(f'    [ENTER] = Continuar con "{pg_name}"')
-        self.stdout.write(f'    [nombre] = Usar otra base de datos')
-        self.stdout.write(f'    [N] = Cancelar')
-        
-        respuesta = input(f'\n  Tu elección: ').strip()
+        no_input = options.get('no_input', False)
+
+        if no_input:
+            respuesta = ''
+        else:
+            self.stdout.write(self.style.HTTP_INFO('\n  Opciones:'))
+            self.stdout.write(f'    [ENTER] = Continuar con "{pg_name}"')
+            self.stdout.write(f'    [nombre] = Usar otra base de datos')
+            self.stdout.write(f'    [N] = Cancelar')
+            respuesta = input(f'\n  Tu elección: ').strip()
         
         if respuesta.upper() in ['N', 'NO', 'CANCELAR']:
             self.stdout.write(self.style.ERROR('\n  ❌ Migración cancelada por el usuario.'))
@@ -319,24 +371,36 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('[ERROR] Faltan variables MySQL'))
             return
 
+        # Operaciones que solo necesitan PostgreSQL (sin MySQL)
+        POSTGRES_ONLY_TABLES = {'fix_dtes_duplicados', 'corregir_tipo_transaccion'}
+        skip_mysql = specific_tables and all(t in POSTGRES_ONLY_TABLES for t in specific_tables)
+
         # Conectar a MySQL
-        try:
-            self.mysql_conn = self.connect_mysql()
-            self.stdout.write(self.style.SUCCESS('✓ Conexión MySQL establecida'))
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f'✗ Error MySQL: {e}'))
-            return
+        if skip_mysql:
+            self.mysql_conn = None
+            self.stdout.write(self.style.WARNING('  (Operación solo-PostgreSQL, se omite conexión MySQL)'))
+        else:
+            try:
+                self.mysql_conn = self.connect_mysql()
+                self.stdout.write(self.style.SUCCESS('✓ Conexión MySQL establecida'))
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f'✗ Error MySQL: {e}'))
+                return
         
         # Pre-cargar cachés
         self.stdout.write('\n📦 Cargando cachés...')
-        self.preload_caches()
+        if not skip_mysql:
+            self.preload_caches()
+        else:
+            self.cache_sucursales = {}
+            self.cache_empresas_rut = {}
 
         # Orden de migración
         migration_order = [
             ('empresas', self.migrate_empresas_principales),
             ('clientes', self.migrate_clientes),
             ('sucursales', self.migrate_sucursales),
-            ('vendedores', self.migrate_vendedores),  # ✅ Vendedores (después de sucursales)
+            ('vendedores', self.migrate_vendedores),
             ('atributos', self.migrate_atributos),
             ('categorias', self.migrate_categorias),
             ('productos', self.migrate_productos),
@@ -344,12 +408,19 @@ class Command(BaseCommand):
             ('movimientos', self.migrate_movimientos),
             ('dtes', self.migrate_dtes),
             ('dte_productos', self.migrate_dte_productos),
-            ('crear_dtes_faltantes', self.crear_dtes_faltantes),  # ✅ DTEs genéricos desde ventas
-            ('corregir_fechas_dte', self.corregir_fechas_dte),  # ✅ Corregir fechas
-            ('corregir_sucursales_dte', self.corregir_sucursales_dte),  # ✅ Corregir sucursales
-            ('ventas_pagos', self.migrate_ventas_pagos),  # ✅ Pagos de DTEs para cuadratura
-            ('asignar_vendedores_dte', self.asignar_vendedores_a_dtes),  # ✅ Vendedores a DTEs
+            ('crear_dtes_faltantes', self.crear_dtes_faltantes),
+            ('fix_dtes_duplicados', self.fix_dtes_duplicados),
+            ('corregir_descuentos_dte', self.corregir_descuentos_dte),
+            ('corregir_fechas_dte', self.corregir_fechas_dte),
+            ('corregir_sucursales_dte', self.corregir_sucursales_dte),
+            ('corregir_tipo_transaccion', self.corregir_tipo_transaccion_dte),
+            ('ventas_pagos', self.migrate_ventas_pagos),
+            ('asignar_vendedores_dte', self.asignar_vendedores_a_dtes),
             ('creditos_personal', self.migrate_creditos_personal),
+            ('parametros_maestros', self.migrate_parametros_maestros),
+            ('correlativos', self.migrate_correlativos),
+            ('nc_vinculacion', self.migrate_nc_vinculacion),
+            ('enriquecer_prediccion', self.enriquecer_datos_prediccion),
         ]
 
         if specific_tables:
@@ -409,7 +480,8 @@ class Command(BaseCommand):
         )
 
     def migrate_creditos_personal(self):
-        """Migrar créditos desde creditos_personal usando el comando dedicado"""
+        """Migrar créditos desde creditos_personal usando el comando dedicado.
+        Los créditos se asocian a Cliente (no a Vendedor)."""
         self.stdout.write(self.style.SUCCESS('🔹 Importando créditos desde creditos_personal'))
         cmd = ImportCreditosCommand()
         cmd.stdout = self.stdout
@@ -418,14 +490,14 @@ class Command(BaseCommand):
         cmd.handle(
             table='creditos_personal',
             dry_run=self.dry_run,
-            externo_en_creditos=True,
             user_id=None,
             empresa_id=None,
-            crear_vendedor=False,
             actualizar=False,
             solo_internos=False,
             solo_externos=False,
-            limit=None
+            limit=None,
+            crear_vendedor=False,
+            externo_en_creditos=False,
         )
 
     def preload_caches(self):
@@ -583,12 +655,19 @@ class Command(BaseCommand):
     def safe_date(self, value):
         if value is None:
             return timezone.now()
+        if isinstance(value, date) and not isinstance(value, datetime):
+            return timezone.make_aware(datetime.combine(value, datetime.min.time()))
         if isinstance(value, datetime):
-            return value
-        try:
             return timezone.make_aware(value) if timezone.is_naive(value) else value
-        except:
-            return timezone.now()
+        if isinstance(value, str):
+            from django.utils.dateparse import parse_datetime, parse_date
+            parsed = parse_datetime(value)
+            if parsed:
+                return timezone.make_aware(parsed) if timezone.is_naive(parsed) else parsed
+            parsed_d = parse_date(value)
+            if parsed_d:
+                return timezone.make_aware(datetime.combine(parsed_d, datetime.min.time()))
+        return timezone.now()
 
     def safe_date_only(self, value):
         """Extrae solo la fecha (date) de un datetime"""
@@ -732,6 +811,21 @@ class Command(BaseCommand):
                 'acteco': '469000',
             },
             {
+                'rut': '76337843-8',
+                'nombre': 'Edelmira Tebes y Cia Ltda',
+                'razon_social': 'Edelmira Tebes y Cia Ltda',
+                'nombre_fantasia': 'EDEL',
+                'giro': 'Comercio',
+                'direccion': 'Maipu 676',
+                'comuna': '',
+                'ciudad': '',
+                'correoVendedor': '',
+                'correoIntercambio': '',
+                'correoAdministrador': '',
+                'esProveedor': False,
+                'acteco': '469000',
+            },
+            {
                 'rut': '7397811-4',
                 'nombre': 'Edelmira Gilda Tebes',
                 'razon_social': 'Edelmira Gilda Tebes',
@@ -745,7 +839,7 @@ class Command(BaseCommand):
                 'correoAdministrador': '',
                 'esProveedor': False,
                 'acteco': '469000',
-            }
+            },
         ]
 
         count = 0
@@ -1229,10 +1323,12 @@ class Command(BaseCommand):
         # =====================================================================
         self.stdout.write('  ⏳ Cargando SKUs existentes de PostgreSQL...')
         
-        # Set de (sku, producto_id) que ya existen
-        skus_existentes = set(
-            Producto_Talla.objects.values_list('sku', 'producto_id')
-        )
+        # Dict (sku, producto_id) -> pt_id para poder actualizar stock de registros existentes
+        skus_existentes_map = {
+            (sku, pid): pt_id
+            for pt_id, sku, pid in Producto_Talla.objects.values_list('id', 'sku', 'producto_id')
+        }
+        skus_existentes = set(skus_existentes_map.keys())
         self.stdout.write(f'  ✓ {len(skus_existentes):,} SKUs existentes')
 
         # =====================================================================
@@ -1268,7 +1364,10 @@ class Command(BaseCommand):
         sin_producto = 0
         sin_sucursal = 0
         ya_existe = 0
+        stock_actualizado = 0
         batch = []
+        # Dict (sku, producto_id) -> nuevo_stock para actualizar registros existentes
+        stock_updates = {}
 
         for idx, row in enumerate(cursor, 1):
             sku = self.safe_int(row['codigo_asociado'])
@@ -1294,20 +1393,25 @@ class Command(BaseCommand):
                 sin_producto += 1
                 continue
 
+            nuevo_stock = self.safe_int(row['stock'])
+
             # Verificar si ya existe (sin query!)
             if (sku, producto_id) in skus_existentes:
+                # Acumular para sincronizar stock (puede haber cambiado desde el último import)
+                stock_updates[(sku, producto_id)] = nuevo_stock
                 ya_existe += 1
                 continue
 
             if not self.dry_run:
                 talla_obj = Producto_Talla(
                     sku=sku,
-                    producto_id=producto_id,  # Usar ID directo
+                    producto_id=producto_id,
                     talla=row['size'] or 'U',
-                    stock=self.safe_int(row['stock']),
+                    stock=nuevo_stock,
                 )
                 batch.append(talla_obj)
-                skus_existentes.add((sku, producto_id))  # Agregar al set para evitar duplicados en esta sesión
+                skus_existentes.add((sku, producto_id))
+                skus_existentes_map[(sku, producto_id)] = None  # ID se asigna tras bulk_create
                 
                 if len(batch) >= self.batch_size:
                     Producto_Talla.objects.bulk_create(batch, ignore_conflicts=True)
@@ -1323,6 +1427,22 @@ class Command(BaseCommand):
             Producto_Talla.objects.bulk_create(batch, ignore_conflicts=True)
             count += len(batch)
 
+        # =====================================================================
+        # PASO 6: Sincronizar stock de registros existentes (bulk_update)
+        # =====================================================================
+        if stock_updates and not self.dry_run:
+            self.stdout.write(f'\n  ⏳ Sincronizando stock de {len(stock_updates):,} SKUs existentes...')
+            update_objs = []
+            for (sku, producto_id), nuevo_stock in stock_updates.items():
+                pt_id = skus_existentes_map.get((sku, producto_id))
+                if pt_id:
+                    update_objs.append(Producto_Talla(id=pt_id, stock=nuevo_stock))
+
+            for i in range(0, len(update_objs), self.batch_size):
+                chunk = update_objs[i:i + self.batch_size]
+                Producto_Talla.objects.bulk_update(chunk, ['stock'])
+                stock_actualizado += len(chunk)
+
         cursor.close()
         self.stats['producto_talla'] = count
         self.stats['producto_talla_ya_existe'] = ya_existe
@@ -1330,7 +1450,8 @@ class Command(BaseCommand):
         self.stats['producto_talla_sin_sucursal'] = sin_sucursal
         self.stdout.write('\n' + self.style.SUCCESS(
             f'  ✓ {count:,} SKUs nuevos migrados\n'
-            f'    - Ya existían: {ya_existe:,}\n'
+            f'    - Stock actualizado: {stock_actualizado:,}\n'
+            f'    - Ya existían (sin cambio): {ya_existe - stock_actualizado:,}\n'
             f'    - Sin producto: {sin_producto:,}\n'
             f'    - Sin sucursal: {sin_sucursal:,}'
         ))
@@ -1406,7 +1527,7 @@ class Command(BaseCommand):
                 continue
 
             tipo_movimiento = TIPO_MOVIMIENTO_MAP.get(row['tipo_movimiento'], 'INGRESO')
-            concepto = CONCEPTO_MAP.get(row['concepto'], 'AJUSTE_INVENTARIO')
+            concepto = resolver_concepto(row['concepto'], row['tipo_movimiento'])
 
             if not self.dry_run:
                 # ✅ Buscar sucursal por alias
@@ -1498,10 +1619,9 @@ class Command(BaseCommand):
         for idx, row in enumerate(cursor, 1):
             # ✅ Determinar sucursal - bodega_inicio es la sucursal principal del DTE
             alias_origen = row['bodega_inicio']
-            alias_destino = row['bodega_destino']
+            alias_destino = row['bodega_destino'] or ''
             sucursal = self.cache_sucursales.get(alias_origen) if alias_origen else None
-            # Si no hay bodega_inicio, intentar con bodega_destino
-            if not sucursal and alias_destino:
+            if not sucursal and alias_destino and alias_destino != '0':
                 sucursal = self.cache_sucursales.get(alias_destino)
             
             # Buscar empresas emisor y receptor
@@ -1545,10 +1665,24 @@ class Command(BaseCommand):
                 dias_credito = 0
             
             # Determinar tipo de transacción
-            if row['bodega_inicio'] and row['bodega_destino']:
+            rut_emisor = row['rut_emisor'] or ''
+            es_emisor_propio = rut_emisor in RUTS_EMPRESAS_PROPIAS
+
+            bodega_dest = row['bodega_destino'] or ''
+            es_traspaso_real = (
+                row['bodega_inicio'] and bodega_dest
+                and bodega_dest != '0' and bodega_dest != row['bodega_inicio']
+                and tipo_documento in ('DESPACHO ELECTRONICO', 'GUIA')
+            )
+
+            if es_traspaso_real:
                 tipo_transaccion = 'TRASPASO'
-            elif 'BOLETA' in tipo_doc_mysql.upper() or tipo_documento == 'BOLETA ELECTRONICA':
+            elif 'BOLETA' in tipo_doc_mysql.upper() or tipo_documento in ('BOLETA ELECTRONICA', 'BOLETA PAPEL'):
                 tipo_transaccion = 'VENTA_PUBLICO'
+            elif 'NOTA DE CREDITO' in tipo_doc_mysql.upper() or tipo_documento == 'NOTA DE CREDITO':
+                tipo_transaccion = 'NOTA_CREDITO'
+            elif es_emisor_propio:
+                tipo_transaccion = 'VENTA'
             else:
                 tipo_transaccion = 'COMPRA'
 
@@ -1856,40 +1990,118 @@ class Command(BaseCommand):
         self.disable_fast_mode(['app_dte_productos'])
 
     def migrate_ventas_pagos(self):
-        """⚡ VERSIÓN ULTRA-OPTIMIZADA - Migra pagos de ventas para cuadratura desde MySQL"""
-        self.stdout.write('💳 Migrando pagos de ventas (OPTIMIZADO)...')
+        """Migra pagos de ventas para cuadratura desde MySQL.
+        Busca DTEs por (numero_documento + sucursal) para evitar cruce entre empresas."""
+        self.stdout.write('💳 Migrando pagos de ventas...')
 
         # =====================================================================
-        # PASO 1: CARGAR TODO EN MEMORIA DE POSTGRESQL
+        # PASO 1: CARGAR DTEs DE POSTGRESQL CON MÚLTIPLES ÍNDICES
         # =====================================================================
         self.stdout.write('  ⏳ Cargando cachés de PostgreSQL...')
-        
-        # Cache de DTEs por múltiples claves
-        cache_dtes_by_num = {}  # {numero_documento: dte_id}
-        cache_dtes_by_num_monto = {}  # {(numero, monto): dte_id}
-        
-        for dte_id, numero, monto in Dte.objects.values_list('id', 'numero_documento', 'monto_con_iva'):
-            monto_int = int(monto or 0)
-            if numero not in cache_dtes_by_num:
-                cache_dtes_by_num[numero] = dte_id
-            cache_dtes_by_num_monto[(numero, monto_int)] = dte_id
-        
-        self.stdout.write(f'  ✓ {len(cache_dtes_by_num):,} DTEs en caché')
 
-        # Pagos existentes - solo claves para verificación rápida
+        # Mapeo direccion MySQL → sucursal_id (ventas.sucursal es dirección)
+        cache_suc_por_dir = {}
+        cache_suc_por_alias = {}
+        cache_suc_empresa = {}  # sucursal_id → empresa_id
+        cache_suc_obj = {}      # sucursal_id → Sucursal object (para crear DTE on-the-fly)
+        for suc in Sucursal.objects.select_related('empresa').all():
+            if suc.direccion:
+                cache_suc_por_dir[suc.direccion] = suc.id
+            cache_suc_por_alias[suc.alias] = suc.id
+            cache_suc_empresa[suc.id] = suc.empresa_id
+            cache_suc_obj[suc.id] = suc
+
+        # Emisor por defecto para crear DTEs on-the-fly cuando no hay sucursal
+        emisor_pagos_default = None
+        for rut in ['78503140-7', '76104936-4', '76337843-8', '7397811-4']:
+            emisor_pagos_default = self.cache_empresas_rut.get(rut)
+            if emisor_pagos_default:
+                break
+        if not emisor_pagos_default:
+            emisor_pagos_default = Empresa.objects.first()
+
+        # Mapa tipo documento MySQL → Django
+        TIPO_DOC_MAP_PAGOS = {
+            'Factura Electronica': 'FACTURA ELECTRONICA',
+            'Boleta Electronica': 'BOLETA ELECTRONICA',
+            'Boleta': 'BOLETA PAPEL',
+            'Nota de Credito': 'NOTA DE CREDITO',
+        }
+        TIPO_TRANSACCION_MAP_PAGOS = {
+            'BOLETA ELECTRONICA': 'VENTA_PUBLICO',
+            'BOLETA PAPEL': 'VENTA_PUBLICO',
+            'FACTURA ELECTRONICA': 'VENTA',
+            'NOTA DE CREDITO': 'NOTA_CREDITO',
+        }
+
+        dtes_creados_otf = 0  # on-the-fly
+
+        # Cache de fechas por dte_id para validar compatibilidad en todos los pasos
+        cache_dte_fechas = {}
+        for dte in Dte.objects.only('id', 'fecha_emision'):
+            cache_dte_fechas[dte.id] = dte.fecha_emision
+
+        def fechas_compatibles(dte_id_check, venta_fecha, max_days=730):
+            """True si las fechas son compatibles o si alguna no está disponible."""
+            if not venta_fecha:
+                return True  # Sin fecha de venta, no podemos rechazar
+            dte_fecha = cache_dte_fechas.get(dte_id_check)
+            if not dte_fecha:
+                return True  # Sin fecha de DTE, no podemos rechazar
+            try:
+                vf = venta_fecha.date() if hasattr(venta_fecha, 'date') else venta_fecha
+                df = dte_fecha.date() if hasattr(dte_fecha, 'date') else dte_fecha
+                return abs((df - vf).days) <= max_days
+            except Exception:
+                return True  # Error comparando, no rechazar
+
+        # Índices de DTEs: de más preciso a menos preciso
+        cache_dtes_num_suc = {}       # (numero_documento, sucursal_id) → dte_id  [MÁS PRECISO]
+        cache_dtes_num_tipo_suc = {}  # (numero_documento, tipo_documento, sucursal_id) → dte_id
+        cache_dtes_num_empresa = {}   # (numero_documento, empresa_id) → dte_id  [FALLBACK: mismo holding]
+        cache_dtes_num = {}           # numero_documento → (dte_id, fecha_emision)  [FALLBACK FINAL]
+
+        for dte in Dte.objects.select_related('sucursal__empresa').only(
+            'id', 'numero_documento', 'tipo_documento', 'sucursal_id', 'emisor_id', 'fecha_emision'
+        ):
+            suc_id = dte.sucursal_id
+            num = dte.numero_documento
+
+            if suc_id:
+                cache_dtes_num_suc[(num, suc_id)] = dte.id
+                cache_dtes_num_tipo_suc[(num, dte.tipo_documento, suc_id)] = dte.id
+                empresa_id = cache_suc_empresa.get(suc_id)
+                if empresa_id and (num, empresa_id) not in cache_dtes_num_empresa:
+                    cache_dtes_num_empresa[(num, empresa_id)] = dte.id
+
+            # Guardar con fecha para evitar asignar pagos antiguos a DTEs nuevos con el mismo folio
+            if num not in cache_dtes_num:
+                cache_dtes_num[num] = (dte.id, dte.fecha_emision)
+
+        # Cargar DTEs MySQL por ID para resolver ID_dte → n_documento
+        cache_mysql_dte_id = {}
+        cursor_dte = self.mysql_conn.cursor(dictionary=True, buffered=True)
+        cursor_dte.execute('SELECT ID, n_documento, bodega_inicio FROM dte')
+        for row in cursor_dte:
+            cache_mysql_dte_id[row['ID']] = row
+        cursor_dte.close()
+
+        self.stdout.write(f'  ✓ {len(cache_dtes_num_suc):,} DTEs indexados por (num+sucursal)')
+
+        # Pagos existentes para dedup
         pagos_existentes = set(
             Dte_Detalle_Pago.objects.values_list('dte_id', 'voucher', 'monto')
         )
         self.stdout.write(f'  ✓ {len(pagos_existentes):,} pagos existentes')
 
         # =====================================================================
-        # PASO 2: CARGAR TODOS LOS DATOS DE MySQL EN MEMORIA DE UNA VEZ
+        # PASO 2: CARGAR VENTAS DE MySQL
         # =====================================================================
-        self.stdout.write('  ⏳ Descargando datos de MySQL (puede tardar)...')
-        
+        self.stdout.write('  ⏳ Descargando datos de MySQL...')
+
         cursor = self.mysql_conn.cursor(dictionary=True)
         cursor.execute(f'''
-            SELECT 
+            SELECT
                 ID, tipo_documento, metodo_pago, n_documento, tarjeta,
                 sub_total, descuento, monto_pagado, sucursal, fecha,
                 voucher, n_convenio, correlativo_ticket, responsable,
@@ -1898,11 +2110,10 @@ class Command(BaseCommand):
             ORDER BY ID
             {f"LIMIT {self.limit}" if self.limit else ""}
         ''')
-        
-        # ⚡ CARGAR TODO EN MEMORIA DE UNA VEZ
+
         ventas_mysql = cursor.fetchall()
         cursor.close()
-        
+
         total = len(ventas_mysql)
         self.stdout.write(f'  ✓ {total:,} ventas descargadas de MySQL')
 
@@ -1921,8 +2132,9 @@ class Command(BaseCommand):
             'Orden Compra': 'ORDEN_COMPRA',
             'Transferencia': 'TRANSFERENCIA',
             'Venta Internet': 'VENTA_INTERNET',
+            'Nota de Credito': 'EFECTIVO',
         }
-        
+
         tarjeta_metodo_map = {
             'REDCOMPRA DEBITO': 'TBK_DEBITO_POS',
             'VISA-MC-AMEX-DINER': 'TBK_CREDITO_POS',
@@ -1939,48 +2151,130 @@ class Command(BaseCommand):
             'Falabella': 'VENTA_INTERNET',
             'Shopify': 'VENTA_INTERNET',
             'Credito': 'CREDITO_EXTERNO',
+            'Web Pay': 'TBK_CREDITO_POS',
+            'Transferencia': 'TRANSFERENCIA',
         }
 
         # =====================================================================
-        # PASO 4: PROCESAR EN MEMORIA (SIN CONEXIÓN A MySQL)
+        # PASO 4: PROCESAR CON BÚSQUEDA POR SUCURSAL
         # =====================================================================
-        self.stdout.write('  ⏳ Procesando en memoria...')
-        
+        self.stdout.write('  ⏳ Procesando...')
+
         count = 0
         duplicados = 0
         dte_no_encontrado = 0
         batch = []
-        batch_size = 5000  # ⚡ Batch grande para inserción masiva
+        batch_size = 5000
 
         for idx, row in enumerate(ventas_mysql, 1):
-            # Buscar DTE - primero por número + monto, luego solo por número
-            dte_id = None
             n_doc = row['n_documento']
-            
-            if n_doc:
-                sub_total = int(row['sub_total'] or 0)
-                descuento = int(row['descuento'] or 0)
-                total_doc = max(0, sub_total - descuento)
-                
-                # Buscar por número + monto (más preciso)
-                dte_id = cache_dtes_by_num_monto.get((n_doc, total_doc))
-                
-                # Fallback: solo por número
-                if not dte_id:
-                    dte_id = cache_dtes_by_num.get(n_doc)
-            
-            # Intentar por ID_dte
-            if not dte_id and row['ID_dte']:
-                dte_id = cache_dtes_by_num.get(row['ID_dte'])
-
-            if not dte_id:
+            if not n_doc:
                 dte_no_encontrado += 1
                 continue
+
+            # Resolver sucursal_id desde ventas.sucursal (dirección)
+            sucursal_mysql = row['sucursal']
+            suc_id = None
+            if sucursal_mysql:
+                suc_id = cache_suc_por_dir.get(sucursal_mysql) or cache_suc_por_alias.get(sucursal_mysql)
+
+            # Búsqueda escalonada: más preciso → menos preciso
+            dte_id = None
+            venta_fecha = row.get('fecha')
+
+            # 1) numero + sucursal (más preciso, evita cruce entre empresas)
+            if suc_id:
+                candidato = cache_dtes_num_suc.get((n_doc, suc_id))
+                if candidato and fechas_compatibles(candidato, venta_fecha):
+                    dte_id = candidato
+
+            # 2) Resolver via ID_dte de MySQL → n_documento + alias del padre
+            if not dte_id and row['ID_dte']:
+                padre = cache_mysql_dte_id.get(row['ID_dte'])
+                if padre:
+                    alias_padre = padre['bodega_inicio']
+                    suc_id_padre = cache_suc_por_alias.get(alias_padre) if alias_padre else None
+                    if suc_id_padre:
+                        candidato = cache_dtes_num_suc.get((padre['n_documento'], suc_id_padre))
+                        if candidato and fechas_compatibles(candidato, venta_fecha):
+                            dte_id = candidato
+                    if not dte_id:
+                        fallback_padre = cache_dtes_num.get(padre['n_documento'])
+                        if fallback_padre:
+                            fp_id, fp_fecha = fallback_padre
+                            if fechas_compatibles(fp_id, venta_fecha):
+                                dte_id = fp_id
+
+            # 3) Fallback por empresa: DTE del mismo holding aunque bodega_inicio != ventas.sucursal
+            # Cubre el caso PAO2/3/4 donde el DTE fue asignado a PA00 pero la venta fue en sucursal específica
+            if not dte_id and suc_id:
+                empresa_id = cache_suc_empresa.get(suc_id)
+                if empresa_id:
+                    candidato = cache_dtes_num_empresa.get((n_doc, empresa_id))
+                    if candidato and fechas_compatibles(candidato, venta_fecha):
+                        dte_id = candidato
+
+            # 4) Fallback: solo por número, validando fecha (evita asignar pagos de 2019 a DTEs 2026)
+            if not dte_id:
+                fallback = cache_dtes_num.get(n_doc)
+                if fallback:
+                    fb_dte_id, fb_fecha = fallback
+                    # Solo asignar si AMBAS fechas están disponibles y son compatibles
+                    if venta_fecha and fb_fecha:
+                        try:
+                            venta_date = venta_fecha.date() if hasattr(venta_fecha, 'date') else venta_fecha
+                            dte_date = fb_fecha.date() if hasattr(fb_fecha, 'date') else fb_fecha
+                            diff_days = abs((dte_date - venta_date).days)
+                            if diff_days <= 730:  # máximo 2 años de diferencia
+                                dte_id = fb_dte_id
+                        except Exception:
+                            pass  # si hay error comparando fechas, no asignar
+
+            if not dte_id:
+                # 5) Crear DTE on-the-fly para esta venta huerfana
+                if not self.dry_run and n_doc and row.get('tipo_documento'):
+                    try:
+                        tipo_mysql = row['tipo_documento'] or 'Boleta Electronica'
+                        tipo_pg = TIPO_DOC_MAP_PAGOS.get(tipo_mysql, 'BOLETA ELECTRONICA')
+                        tipo_transaccion = TIPO_TRANSACCION_MAP_PAGOS.get(tipo_pg, 'VENTA_PUBLICO')
+
+                        suc_obj = cache_suc_obj.get(suc_id) if suc_id else None
+                        emisor_otf = suc_obj.empresa if suc_obj else emisor_pagos_default
+                        if not emisor_otf:
+                            dte_no_encontrado += 1
+                            continue
+
+                        nuevo_dte = Dte.objects.create(
+                            numero_documento=n_doc,
+                            tipo_documento=tipo_pg,
+                            tipo_transaccion=tipo_transaccion,
+                            monto_total=self.safe_int(row.get('sub_total')) or 0,
+                            sucursal=suc_obj,
+                            emisor=emisor_otf,
+                            fecha_emision=row.get('fecha'),
+                            estado_dte='EMITIDO',
+                        )
+                        dte_id = nuevo_dte.id
+                        # Actualizar caches para filas futuras de esta misma venta
+                        cache_dtes_num[n_doc] = (dte_id, nuevo_dte.fecha_emision)
+                        if suc_id:
+                            cache_dtes_num_suc[(n_doc, suc_id)] = dte_id
+                            empresa_id_suc = cache_suc_empresa.get(suc_id)
+                            if empresa_id_suc:
+                                cache_dtes_num_empresa[(n_doc, empresa_id_suc)] = dte_id
+                        dtes_creados_otf += 1
+                    except Exception as e:
+                        self.log_error(f'Error creando DTE OTF n_doc={n_doc}: {e}')
+                        dte_no_encontrado += 1
+                        continue
+                else:
+                    dte_no_encontrado += 1
+                    continue
 
             # Mapear método de pago
             metodo_mysql = row['metodo_pago'] or 'Efectivo'
             metodo_pago = metodo_pago_map.get(metodo_mysql, 'EFECTIVO')
-            
+
             tarjeta = (row['tarjeta'] or '').strip()
             if tarjeta in tarjeta_metodo_map:
                 metodo_pago = tarjeta_metodo_map[tarjeta]
@@ -1991,12 +2285,12 @@ class Command(BaseCommand):
             voucher = str(row['voucher']) if row['voucher'] else f"MIG-{row['ID']}"
             monto = self.safe_int(row['monto_pagado']) or 0
             dup_key = (dte_id, voucher, monto)
-            
+
             if dup_key in pagos_existentes:
                 duplicados += 1
                 continue
 
-            # Crear notas
+            # Notas con contexto
             notas_partes = []
             if row['n_convenio']:
                 notas_partes.append(f"Convenio: {row['n_convenio']}")
@@ -2004,11 +2298,13 @@ class Command(BaseCommand):
                 notas_partes.append(f"RUT Conv: {row['rut_convenio']}")
             if row['nombre_vendedor']:
                 notas_partes.append(f"Vendedor: {row['nombre_vendedor']}")
+            if row['correlativo_ticket']:
+                notas_partes.append(f"Ticket: {row['correlativo_ticket']}")
             notas = ' | '.join(notas_partes) if notas_partes else None
 
             if not self.dry_run:
                 batch.append(Dte_Detalle_Pago(
-                    dte_id=dte_id,  # ⚡ Usar ID directo, no objeto
+                    dte_id=dte_id,
                     metodo_pago=metodo_pago,
                     tipo_tarjeta=row['tarjeta'] or None,
                     voucher=voucher,
@@ -2017,7 +2313,6 @@ class Command(BaseCommand):
                 ))
                 pagos_existentes.add(dup_key)
 
-                # ⚡ Insertar en batches grandes
                 if len(batch) >= batch_size:
                     Dte_Detalle_Pago.objects.bulk_create(batch, ignore_conflicts=True)
                     count += len(batch)
@@ -2026,62 +2321,83 @@ class Command(BaseCommand):
             else:
                 count += 1
 
-            # Mostrar progreso cada 10000 registros
             if idx % 10000 == 0:
                 self.show_progress(idx, total, f'│ {count:,} OK, {duplicados:,} dup')
 
-        # Insertar batch final
         if batch and not self.dry_run:
             Dte_Detalle_Pago.objects.bulk_create(batch, ignore_conflicts=True)
             count += len(batch)
 
-        # Liberar memoria
         del ventas_mysql
 
         self.stats['ventas_pagos'] = count
         self.stats['ventas_pagos_duplicados'] = duplicados
         self.stats['ventas_pagos_dte_no_encontrado'] = dte_no_encontrado
-        self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count:,} pagos migrados ({dte_no_encontrado:,} DTE no encontrado, {duplicados:,} duplicados)'))
+        self.stats['ventas_pagos_dtes_creados_otf'] = dtes_creados_otf
+        self.stdout.write('\n' + self.style.SUCCESS(
+            f'  [OK] {count:,} pagos migrados ({dtes_creados_otf:,} DTEs creados on-the-fly, '
+            f'{dte_no_encontrado:,} sin DTE, {duplicados:,} duplicados)'
+        ))
 
     def asignar_vendedores_a_dtes(self):
-        """Asigna vendedores a DTEs usando codigo_vendedor de ventas MySQL"""
+        """Asigna vendedores a DTEs usando (n_documento + sucursal) para evitar
+        confundir folios iguales de diferentes tiendas.
+        Los vendedores pueden trabajar en sucursales de cualquier empresa del holding."""
         self.stdout.write('👤 Asignando vendedores a DTEs...')
 
-        # Cache de vendedores por codigo_vendedor
+        from django.db import connection
+
+        # Cache de vendedores por codigo_vendedor (sin restricción de empresa)
         cache_vendedores = {}
         for v in Vendedor.objects.all():
             if v.codigo_vendedor:
                 cache_vendedores[str(v.codigo_vendedor)] = v.id
         self.stdout.write(f'  ✓ {len(cache_vendedores)} vendedores en cache')
 
-        # Cargar codigo_vendedor de ventas MySQL
+        # Mapeo dirección/alias → sucursal_id
+        cache_suc_por_dir = {}
+        cache_suc_por_alias = {}
+        for suc in Sucursal.objects.all():
+            if suc.direccion:
+                cache_suc_por_dir[suc.direccion] = suc.id
+            cache_suc_por_alias[suc.alias] = suc.id
+
+        # Cargar mapeo ventas MySQL → codigo_vendedor CON sucursal
         cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
         cursor.execute('''
-            SELECT n_documento, codigo_vendedor, fecha, sucursal
+            SELECT n_documento, codigo_vendedor, sucursal
             FROM ventas
-            WHERE n_documento > 0 
-            AND codigo_vendedor IS NOT NULL 
+            WHERE n_documento > 0
+            AND codigo_vendedor IS NOT NULL
             AND codigo_vendedor != ''
             AND codigo_vendedor != '0'
             ORDER BY n_documento, ID
         ''')
 
-        # Indexar por n_documento (simple)
-        mysql_vendedores = {}  # {n_documento: codigo_vendedor}
+        mysql_vend_by_num_suc = {}   # (n_documento, sucursal_id) → codigo_vendedor
+        mysql_vend_by_num = {}       # n_documento → codigo_vendedor (fallback)
         for row in cursor:
             n_doc = row['n_documento']
             codigo = str(row['codigo_vendedor'])
-            if n_doc not in mysql_vendedores:
-                mysql_vendedores[n_doc] = codigo
+            suc_mysql = row['sucursal']
+
+            suc_id = None
+            if suc_mysql:
+                suc_id = cache_suc_por_dir.get(suc_mysql) or cache_suc_por_alias.get(suc_mysql)
+
+            if suc_id and (n_doc, suc_id) not in mysql_vend_by_num_suc:
+                mysql_vend_by_num_suc[(n_doc, suc_id)] = codigo
+
+            if n_doc not in mysql_vend_by_num:
+                mysql_vend_by_num[n_doc] = codigo
 
         cursor.close()
-        self.stdout.write(f'  ✓ {len(mysql_vendedores):,} documentos con vendedor en MySQL')
+        self.stdout.write(f'  ✓ {len(mysql_vend_by_num_suc):,} docs con vendedor+sucursal en MySQL')
 
         # Cargar DTEs sin vendedor
-        from django.db import connection
         with connection.cursor() as c:
             c.execute('''
-                SELECT id, numero_documento
+                SELECT id, numero_documento, sucursal_id
                 FROM app_dte
                 WHERE vendedor_id IS NULL
             ''')
@@ -2092,15 +2408,21 @@ class Command(BaseCommand):
 
         if total == 0:
             self.stdout.write(self.style.SUCCESS('  ✓ Todos los DTEs ya tienen vendedor'))
+            self.stats['vendedores_asignados'] = 0
             return
 
-        # Crear updates
         updates = []
         sin_codigo = 0
         codigo_no_existe = 0
 
-        for dte_id, numero_doc in dtes_sin_vendedor:
-            codigo = mysql_vendedores.get(numero_doc)
+        for dte_id, numero_doc, suc_id in dtes_sin_vendedor:
+            # Buscar codigo_vendedor: por (num + sucursal) primero, luego por num solo
+            codigo = None
+            if suc_id:
+                codigo = mysql_vend_by_num_suc.get((numero_doc, suc_id))
+            if not codigo:
+                codigo = mysql_vend_by_num.get(numero_doc)
+
             if not codigo:
                 sin_codigo += 1
                 continue
@@ -2120,7 +2442,6 @@ class Command(BaseCommand):
             self.stats['vendedores_asignados'] = 0
             return
 
-        # Ejecutar updates en batches
         batch_size = 5000
         actualizados = 0
 
@@ -2128,7 +2449,7 @@ class Command(BaseCommand):
             for i in range(0, len(updates), batch_size):
                 batch = updates[i:i + batch_size]
                 values_list = ', '.join([f'({dte_id}, {vend_id})' for dte_id, vend_id in batch])
-                
+
                 c.execute(f'''
                     UPDATE app_dte AS d
                     SET vendedor_id = v.vendedor_id
@@ -2148,11 +2469,13 @@ class Command(BaseCommand):
         """Crea DTEs genéricos desde ventas MySQL que no tienen DTE en PostgreSQL"""
         self.stdout.write('[DTEs FALTANTES] Creando DTEs desde ventas sin DTE...')
 
-        # Cargar sucursales
+        # Cargar sucursales por dirección (ventas.sucursal es dirección en MySQL)
         cache_sucursales = {}
-        for sucursal in Sucursal.objects.all():
+        for sucursal in Sucursal.objects.select_related('empresa').all():
             if sucursal.direccion:
                 cache_sucursales[sucursal.direccion] = sucursal
+            # También por alias como fallback
+            cache_sucursales[sucursal.alias] = sucursal
         
         # Cargar vendedores
         cache_vendedores = {}
@@ -2160,16 +2483,33 @@ class Command(BaseCommand):
             if vendedor.codigo_vendedor:
                 cache_vendedores[vendedor.codigo_vendedor] = vendedor
         
-        # Obtener emisor
-        emisor = Empresa.objects.first()
-        if not emisor:
+        # Emisor se determina por sucursal (cada sucursal pertenece a una empresa)
+        # Fallback: primera empresa propia (no cliente)
+        emisor_default = None
+        for rut in ['78503140-7', '76104936-4', '76337843-8', '7397811-4']:
+            emisor_default = self.cache_empresas_rut.get(rut)
+            if emisor_default:
+                break
+        if not emisor_default:
+            emisor_default = Empresa.objects.first()
+        if not emisor_default:
             self.stdout.write(self.style.WARNING('  [!] No hay empresas, saltando'))
             return
         
-        # DTEs existentes
-        dtes_existentes = set()
-        for dte in Dte.objects.values_list('numero_documento', 'monto_con_iva'):
-            dtes_existentes.add((dte[0], int(dte[1] or 0)))
+        # DTEs existentes — clave (numero, tipo, sucursal_id) SIN monto
+        # IMPORTANTE: NO usar monto como parte de la clave.
+        dtes_existentes_full = set()      # (numero, tipo_documento, sucursal_id)
+        dtes_existentes_num_tipo = set()  # (numero, tipo_documento) — cualquier sucursal
+        max_folio_suc_tipo = {}           # (sucursal_id, tipo_documento) → folio máximo conocido
+        for num, tipo, suc_id in Dte.objects.values_list(
+            'numero_documento', 'tipo_documento', 'sucursal_id'
+        ):
+            if suc_id:
+                dtes_existentes_full.add((num, tipo, suc_id))
+                key = (suc_id, tipo)
+                if max_folio_suc_tipo.get(key, 0) < num:
+                    max_folio_suc_tipo[key] = num
+            dtes_existentes_num_tipo.add((num, tipo))
         
         # Mapeo tipo documento
         TIPO_DOC_MAP = {
@@ -2188,10 +2528,10 @@ class Command(BaseCommand):
         # Obtener ventas únicas de MySQL
         cursor = self.mysql_conn.cursor(dictionary=True)
         cursor.execute('''
-            SELECT n_documento, tipo_documento, sub_total, sucursal,
+            SELECT n_documento, tipo_documento, MAX(sub_total) as sub_total, sucursal,
                    MIN(fecha) as fecha, MIN(codigo_vendedor) as codigo_vendedor
             FROM ventas
-            GROUP BY n_documento, sub_total, tipo_documento, sucursal
+            GROUP BY n_documento, tipo_documento, sucursal
         ''')
         
         ventas = cursor.fetchall()
@@ -2203,24 +2543,43 @@ class Command(BaseCommand):
         for venta in ventas:
             n_doc = venta['n_documento']
             sub_total = int(venta['sub_total'] or 0)
-            
-            if (n_doc, sub_total) in dtes_existentes:
-                continue
-            
+
             sucursal = cache_sucursales.get(venta['sucursal'])
             if not sucursal and cache_sucursales:
                 sucursal = list(cache_sucursales.values())[0]
-            
+
+            suc_id = sucursal.id if sucursal else None
+
             tipo_mysql = venta['tipo_documento'] or 'Boleta'
             tipo_pg = TIPO_DOC_MAP.get(tipo_mysql, 'BOLETA PAPEL')
+
+            venta_fecha = venta['fecha']
+
+            # Guard 1: ya existe DTE exacto (mismo folio + tipo + sucursal) → skip
+            if suc_id and (n_doc, tipo_pg, suc_id) in dtes_existentes_full:
+                continue
+            # Guard 2: ya existe DTE con mismo folio + tipo en CUALQUIER sucursal → skip
+            # (evita crear DTEs fantasma por registros ventas con fechas incorrectas)
+            if (n_doc, tipo_pg) in dtes_existentes_num_tipo:
+                continue
+            # Guard 3: el folio ya fue superado en esta misma sucursal+tipo → el registro es un
+            # artefacto histórico con fecha incorrecta en MySQL (ej: folio 4731 para PAO1 en 2026
+            # cuando PAO1 ya está en folio 410349) → skip
+            if suc_id:
+                max_conocido = max_folio_suc_tipo.get((suc_id, tipo_pg), 0)
+                if max_conocido > 0 and n_doc < max_conocido:
+                    continue
+
+            emisor_dte = sucursal.empresa if sucursal else emisor_default
+
             tipo_transaccion = TIPO_TRANSACCION_MAP.get(tipo_pg, 'VENTA_PUBLICO')
-            
+
             vendedor = None
             if venta['codigo_vendedor']:
                 vendedor = cache_vendedores.get(venta['codigo_vendedor'])
-            
-            fecha = venta['fecha']
-            
+
+            fecha = venta_fecha
+
             if not self.dry_run:
                 batch.append(Dte(
                     numero_documento=n_doc,
@@ -2232,14 +2591,16 @@ class Command(BaseCommand):
                     fecha_vencimiento=fecha,
                     sucursal=sucursal,
                     vendedor=vendedor,
-                    emisor=emisor,
+                    emisor=emisor_dte,
                     estado_dte='EMITIDO',
                     estado_pago='PAGADO',
                     bultos=0,
                     unidades_productos=0,
                     diasCredito=0
                 ))
-                dtes_existentes.add((n_doc, sub_total))
+                if suc_id:
+                    dtes_existentes_full.add((n_doc, tipo_pg, suc_id))
+                dtes_existentes_num_tipo.add((n_doc, tipo_pg))
                 
                 if len(batch) >= self.batch_size:
                     Dte.objects.bulk_create(batch, ignore_conflicts=True)
@@ -2256,74 +2617,232 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'  ✓ {count:,} DTEs creados desde ventas'))
 
     # ========================================================================
+    # LIMPIAR DTEs DUPLICADOS
+    # ========================================================================
+
+    def fix_dtes_duplicados(self):
+        """Elimina DTEs duplicados generados por crear_dtes_faltantes cuando el
+        monto_pagado (ventas.sub_total) difería del monto_total del DTE original.
+
+        Estrategia por cada grupo (numero_documento, tipo_documento, sucursal_id):
+        - Mantiene el DTE con mayor monto_con_iva (el de la tabla dte, que incluye
+          el total bruto antes de descuento).
+        - Reasigna todos los Dte_Detalle_Pago del duplicado al DTE correcto.
+        - Elimina los DTEs duplicados.
+        """
+        from django.db import connection
+
+        self.stdout.write('[FIX DUPLICADOS] Buscando DTEs duplicados...')
+
+        with connection.cursor() as cur:
+            cur.execute('''
+                SELECT numero_documento, tipo_documento, sucursal_id,
+                       COUNT(*) as cnt,
+                       array_agg(id ORDER BY monto_con_iva DESC, id ASC) as ids
+                FROM app_dte
+                WHERE sucursal_id IS NOT NULL
+                GROUP BY numero_documento, tipo_documento, sucursal_id
+                HAVING COUNT(*) > 1
+            ''')
+            grupos = cur.fetchall()
+
+        if not grupos:
+            self.stdout.write(self.style.SUCCESS('  ✓ No se encontraron duplicados'))
+            self.stats['dtes_duplicados_eliminados'] = 0
+            return
+
+        self.stdout.write(f'  📊 {len(grupos):,} grupos con duplicados')
+
+        eliminados = 0
+        pagos_reasignados = 0
+
+        for numero_doc, tipo_doc, suc_id, cnt, ids in grupos:
+            correcto_id = ids[0]         # mayor monto_con_iva
+            duplicados_ids = ids[1:]     # los demás
+
+            if self.dry_run:
+                self.stdout.write(
+                    f'  [DRY] Folio {numero_doc} {tipo_doc}: '
+                    f'mantener id={correcto_id}, eliminar {duplicados_ids}'
+                )
+                eliminados += len(duplicados_ids)
+                continue
+
+            # Reasignar pagos de duplicados → DTE correcto
+            from app.models import Dte_Detalle_Pago
+            n_pagos = Dte_Detalle_Pago.objects.filter(
+                dte_id__in=duplicados_ids
+            ).update(dte_id=correcto_id)
+            pagos_reasignados += n_pagos
+
+            # Eliminar duplicados
+            Dte.objects.filter(id__in=duplicados_ids).delete()
+            eliminados += len(duplicados_ids)
+
+        self.stats['dtes_duplicados_eliminados'] = eliminados
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'  ✓ {eliminados:,} DTEs duplicados eliminados, '
+                f'{pagos_reasignados:,} pagos reasignados'
+            )
+        )
+
+    # ========================================================================
+    # CORREGIR DESCUENTOS EN DTEs
+    # ========================================================================
+
+    def corregir_descuentos_dte(self):
+        """Actualiza app_dte.descuento a partir de ventas.descuento de MySQL.
+
+        Muchos DTEs migrados tienen descuento=0 porque la tabla `dte` de MySQL no
+        almacenaba el descuento; éste solo estaba en la tabla `ventas`. Este paso
+        lee los descuentos de `ventas` y los aplica a los DTEs existentes.
+        """
+        from django.db import connection
+
+        self.stdout.write('[DESCUENTOS] Corrigiendo descuentos de DTEs desde ventas...')
+
+        if not self.mysql_conn:
+            self.stdout.write(self.style.WARNING('  Sin conexión MySQL, omitiendo'))
+            self.stats['descuentos_corregidos'] = 0
+            return
+
+        # Leer descuentos desde MySQL ventas
+        # Agrupar por (n_documento, sucursal) tomando el MAX(descuento)
+        cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
+        cursor.execute('''
+            SELECT n_documento, sucursal, MAX(descuento) as descuento
+            FROM ventas
+            WHERE descuento > 0 AND n_documento > 0
+            GROUP BY n_documento, sucursal
+        ''')
+        mysql_rows = cursor.fetchall()
+        cursor.close()
+        self.stdout.write(f'  📊 {len(mysql_rows):,} folios con descuento en MySQL')
+
+        if not mysql_rows:
+            self.stats['descuentos_corregidos'] = 0
+            return
+
+        # Mapeo dirección/alias → sucursal_id
+        cache_suc_por_dir = {}
+        cache_suc_por_alias = {}
+        for suc in Sucursal.objects.all():
+            if suc.direccion:
+                cache_suc_por_dir[suc.direccion] = suc.id
+            cache_suc_por_alias[suc.alias] = suc.id
+
+        # Índice: (numero_documento, sucursal_id) → dte_id
+        cache_dtes = {}
+        for dte_id, num_doc, suc_id in Dte.objects.values_list('id', 'numero_documento', 'sucursal_id'):
+            if suc_id:
+                cache_dtes[(num_doc, suc_id)] = dte_id
+
+        updates = []
+        sin_dte = 0
+
+        for row in mysql_rows:
+            n_doc = row['n_documento']
+            descuento = int(row['descuento'] or 0)
+            if not descuento:
+                continue
+
+            suc_mysql = row['sucursal']
+            suc_id = None
+            if suc_mysql:
+                suc_id = cache_suc_por_dir.get(suc_mysql) or cache_suc_por_alias.get(suc_mysql)
+
+            dte_id = cache_dtes.get((n_doc, suc_id)) if suc_id else None
+
+            if not dte_id:
+                sin_dte += 1
+                continue
+
+            updates.append((descuento, dte_id))
+
+        self.stdout.write(f'  📊 {len(updates):,} DTEs a actualizar ({sin_dte:,} sin DTE)')
+
+        if self.dry_run or not updates:
+            self.stats['descuentos_corregidos'] = len(updates)
+            return
+
+        # Bulk update via raw SQL
+        batch_size = 5000
+        corregidos = 0
+        for i in range(0, len(updates), batch_size):
+            batch = updates[i:i + batch_size]
+            with connection.cursor() as cur:
+                # Only update DTEs where descuento IS NULL or 0
+                cases = ' '.join([f'WHEN {dte_id} THEN {desc}' for desc, dte_id in batch])
+                ids = ', '.join([str(dte_id) for _, dte_id in batch])
+                cur.execute(f'''
+                    UPDATE app_dte
+                    SET descuento = CASE id {cases} END
+                    WHERE id IN ({ids})
+                    AND (descuento IS NULL OR descuento = 0)
+                ''')
+            corregidos += len(batch)
+            self.show_progress(corregidos, len(updates), f'│ {corregidos:,} actualizados')
+
+        self.stats['descuentos_corregidos'] = corregidos
+        self.stdout.write(self.style.SUCCESS(f'  ✓ {corregidos:,} DTEs con descuento corregido'))
+
+    # ========================================================================
     # CORREGIR FECHAS DE DTEs
     # ========================================================================
 
     def corregir_fechas_dte(self):
-        """Corrige fechas de DTEs desde tabla dte y ventas de MySQL"""
+        """Corrige fechas de DTEs comparando con MySQL via (n_documento, rut_emisor).
+        Solo revisa DTEs de empresas propias para rendimiento."""
         self.stdout.write('[FECHAS] Corrigiendo fechas de DTEs...')
-        
+
         from django.db import connection
-        
-        # 1. Cargar fechas desde tabla dte de MySQL
+
         cursor = self.mysql_conn.cursor(dictionary=True)
-        cursor.execute('SELECT n_documento, monto_total, fecha_emision FROM dte')
-        
-        fechas_dte = {}
+        cursor.execute(
+            'SELECT n_documento, rut_emisor, fecha_emision FROM dte '
+            'WHERE fecha_emision IS NOT NULL AND rut_emisor IN (%s, %s, %s)',
+            tuple(RUTS_EMPRESAS_PROPIAS)
+        )
+        fechas_mysql = {}
         for row in cursor:
-            key = (row['n_documento'], int(row['monto_total'] or 0))
-            fechas_dte[key] = row['fecha_emision']
+            fechas_mysql[(row['n_documento'], row['rut_emisor'])] = row['fecha_emision']
         cursor.close()
-        
-        # 2. Cargar fechas desde tabla ventas de MySQL
-        cursor = self.mysql_conn.cursor(dictionary=True)
-        cursor.execute('''
-            SELECT n_documento, sub_total, MIN(fecha) as fecha
-            FROM ventas GROUP BY n_documento, sub_total
-        ''')
-        
-        fechas_ventas = {}
-        for row in cursor:
-            key = (row['n_documento'], int(row['sub_total'] or 0))
-            fechas_ventas[key] = row['fecha']
-        cursor.close()
-        
-        # 3. Buscar DTEs con fecha incorrecta (2026-01-07 = fecha de migración)
-        fecha_migracion = '2026-01-07'
+        self.stdout.write(f'  {len(fechas_mysql):,} fechas cargadas de MySQL')
+
+        empresa_rut = {e.id: e.rut for e in Empresa.objects.all()}
+        ids_propias = [eid for eid, rut in empresa_rut.items() if rut in RUTS_EMPRESAS_PROPIAS]
+
         actualizaciones = []
-        
-        for dte in Dte.objects.filter(fecha_emision=fecha_migracion).iterator():
-            key = (dte.numero_documento, int(dte.monto_con_iva or 0))
-            
-            # Buscar primero en dte, luego en ventas
-            fecha_correcta = fechas_dte.get(key) or fechas_ventas.get(key)
-            
-            if fecha_correcta and str(fecha_correcta) != fecha_migracion:
-                actualizaciones.append((dte.id, fecha_correcta))
-        
+        for dte_id, ndoc, emisor_id, fecha_dj in Dte.objects.filter(
+            emisor_id__in=ids_propias
+        ).values_list('id', 'numero_documento', 'emisor_id', 'fecha_emision'):
+            rut = empresa_rut.get(emisor_id, '')
+            fecha_mysql = fechas_mysql.get((ndoc, rut))
+            if fecha_mysql and str(fecha_mysql) != str(fecha_dj):
+                actualizaciones.append((dte_id, str(fecha_mysql)))
+
         if not actualizaciones:
             self.stdout.write('  [OK] No hay fechas que corregir')
             return
-        
+
         if self.dry_run:
             self.stdout.write(f'  [DRY-RUN] Se corregirían {len(actualizaciones):,} fechas')
             return
-        
-        # 4. Actualizar en batch
+
         with connection.cursor() as pg_cursor:
             for i in range(0, len(actualizaciones), self.batch_size):
                 batch = actualizaciones[i:i + self.batch_size]
                 cases = [f"WHEN {dte_id} THEN '{fecha}'::date" for dte_id, fecha in batch]
                 ids = [str(dte_id) for dte_id, _ in batch]
-                
                 sql = f'''
-                    UPDATE app_dte 
+                    UPDATE app_dte
                     SET fecha_emision = CASE id {' '.join(cases)} END,
                         fecha_vencimiento = CASE id {' '.join(cases)} END
                     WHERE id IN ({','.join(ids)})
                 '''
                 pg_cursor.execute(sql)
-        
+
         self.stats['fechas_corregidas'] = len(actualizaciones)
         self.stdout.write(self.style.SUCCESS(f'  ✓ {len(actualizaciones):,} fechas corregidas'))
 
@@ -2332,47 +2851,60 @@ class Command(BaseCommand):
     # ========================================================================
 
     def corregir_sucursales_dte(self):
-        """Corrige sucursales de DTEs desde tabla ventas de MySQL"""
+        """Corrige sucursales de DTEs cruzando con tabla dte y ventas de MySQL."""
         self.stdout.write('[SUCURSALES] Corrigiendo sucursales de DTEs...')
-        
+
         from django.db import connection
-        
+
         # Cargar sucursales de PostgreSQL
-        sucursales_pg = {}
+        sucursales_pg_por_dir = {}
+        sucursales_pg_por_alias = {}
         for suc in Sucursal.objects.all():
             if suc.direccion:
-                sucursales_pg[suc.direccion] = suc.id
-        
-        # Cargar sucursales desde ventas MySQL
-        cursor = self.mysql_conn.cursor(dictionary=True)
-        cursor.execute('''
-            SELECT n_documento, sub_total, sucursal
-            FROM ventas GROUP BY n_documento, sub_total, sucursal
-        ''')
-        
-        sucursales_ventas = {}
+                sucursales_pg_por_dir[suc.direccion] = suc.id
+            sucursales_pg_por_alias[suc.alias] = suc.id
+
+        # Fuente 1: tabla dte de MySQL (usa bodega_inicio = alias, más confiable)
+        suc_from_dte = {}  # (n_documento, tipo_documento) → sucursal_id
+        cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
+        cursor.execute('SELECT n_documento, tipo_documento, bodega_inicio FROM dte WHERE bodega_inicio IS NOT NULL')
         for row in cursor:
-            key = (row['n_documento'], int(row['sub_total'] or 0))
-            sucursales_ventas[key] = row['sucursal']
+            alias = row['bodega_inicio']
+            suc_id = sucursales_pg_por_alias.get(alias)
+            if suc_id:
+                tipo_pg = self._mapear_tipo_documento(row['tipo_documento'] or '')
+                suc_from_dte[(row['n_documento'], tipo_pg)] = suc_id
         cursor.close()
-        
-        # Comparar y preparar actualizaciones
+
+        # Fuente 2: tabla ventas de MySQL (ventas.sucursal = dirección)
+        suc_from_ventas = {}  # n_documento → sucursal_id
+        cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
+        cursor.execute('''
+            SELECT n_documento, sucursal
+            FROM ventas
+            WHERE sucursal IS NOT NULL AND sucursal != ''
+            GROUP BY n_documento, sucursal
+        ''')
+        for row in cursor:
+            suc_id = sucursales_pg_por_dir.get(row['sucursal']) or sucursales_pg_por_alias.get(row['sucursal'])
+            if suc_id and row['n_documento'] not in suc_from_ventas:
+                suc_from_ventas[row['n_documento']] = suc_id
+        cursor.close()
+
+        self.stdout.write(f'  ✓ {len(suc_from_dte):,} DTEs con alias, {len(suc_from_ventas):,} ventas con sucursal')
+
         actualizaciones = []
-        
-        for dte in Dte.objects.select_related('sucursal').iterator():
-            key = (dte.numero_documento, int(dte.monto_con_iva or 0))
-            sucursal_mysql = sucursales_ventas.get(key)
-            
-            if not sucursal_mysql:
+
+        for dte in Dte.objects.select_related('sucursal').only('id', 'numero_documento', 'tipo_documento', 'sucursal').iterator():
+            if dte.sucursal_id:
                 continue
-            
-            sucursal_id_pg = sucursales_pg.get(sucursal_mysql)
-            if not sucursal_id_pg:
-                continue
-            
-            sucursal_actual = dte.sucursal.direccion if dte.sucursal else None
-            if sucursal_actual != sucursal_mysql:
-                actualizaciones.append((dte.id, sucursal_id_pg))
+
+            suc_id = suc_from_dte.get((dte.numero_documento, dte.tipo_documento))
+            if not suc_id:
+                suc_id = suc_from_ventas.get(dte.numero_documento)
+
+            if suc_id:
+                actualizaciones.append((dte.id, suc_id))
         
         if not actualizaciones:
             self.stdout.write('  [OK] No hay sucursales que corregir')
@@ -2399,6 +2931,499 @@ class Command(BaseCommand):
         self.stats['sucursales_corregidas'] = len(actualizaciones)
         self.stdout.write(self.style.SUCCESS(f'  ✓ {len(actualizaciones):,} sucursales corregidas'))
 
+    def corregir_tipo_transaccion_dte(self):
+        """Corrige tipo_transaccion de DTEs mal clasificados:
+        1. COMPRA cuando emisor es empresa propia → VENTA/VENTA_PUBLICO/NOTA_CREDITO
+        2. TRASPASO cuando bodega_destino='0' en MySQL → VENTA/VENTA_PUBLICO
+        """
+        self.stdout.write('[TIPO_TRANSACCION] Corrigiendo DTEs mal clasificados...')
+
+        from django.db import connection
+
+        ids_propias = set(
+            Empresa.objects.filter(rut__in=RUTS_EMPRESAS_PROPIAS).values_list('id', flat=True)
+        )
+        if not ids_propias:
+            self.stdout.write(self.style.WARNING('  [!] No se encontraron empresas propias'))
+            return
+
+        total = 0
+
+        # 1) Boletas propias como COMPRA o TRASPASO → VENTA_PUBLICO
+        boletas_mal = Dte.objects.filter(
+            emisor_id__in=ids_propias,
+            tipo_transaccion__in=['COMPRA', 'TRASPASO'],
+            tipo_documento__in=['BOLETA ELECTRONICA', 'BOLETA PAPEL', 'BOLETA']
+        ).update(tipo_transaccion='VENTA_PUBLICO')
+        self.stdout.write(f'  Boletas -> VENTA_PUBLICO: {boletas_mal:,}')
+        total += boletas_mal
+
+        # 2) Facturas propias como COMPRA o TRASPASO → VENTA
+        facturas_mal = Dte.objects.filter(
+            emisor_id__in=ids_propias,
+            tipo_transaccion__in=['COMPRA', 'TRASPASO'],
+            tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'FACTURA']
+        ).update(tipo_transaccion='VENTA')
+        self.stdout.write(f'  Facturas -> VENTA: {facturas_mal:,}')
+        total += facturas_mal
+
+        # 3) NC propias como COMPRA o TRASPASO → NOTA_CREDITO
+        nc_mal = Dte.objects.filter(
+            emisor_id__in=ids_propias,
+            tipo_transaccion__in=['COMPRA', 'TRASPASO'],
+            tipo_documento__in=['NOTA DE CREDITO', 'NOTA DE DEBITO']
+        ).update(tipo_transaccion='NOTA_CREDITO')
+        self.stdout.write(f'  NC -> NOTA_CREDITO: {nc_mal:,}')
+        total += nc_mal
+
+        self.stats['tipo_transaccion_corregidos'] = total
+        self.stdout.write(self.style.SUCCESS(f'  ✓ {total:,} DTEs corregidos'))
+
+    # ========================================================================
+    # PARÁMETROS MAESTROS (SKU actual, descuentos, límite de cambios)
+    # ========================================================================
+
+    def migrate_parametros_maestros(self):
+        """Migra parámetros globales desde parametrosmaestros de MySQL"""
+        self.stdout.write('⚙️  Migrando parámetros maestros...')
+
+        from app.models import ParametroGlobal
+
+        cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
+        cursor.execute('SELECT * FROM parametrosmaestros LIMIT 1')
+        row = cursor.fetchone()
+        cursor.close()
+
+        if not row:
+            self.stdout.write(self.style.WARNING('  ⚠️ Tabla parametrosmaestros vacía'))
+            return
+
+        params = {
+            'codigo_asociado_actual': self.safe_int(row.get('codigo_asociado_actual', 0)),
+            'N_listado_precios': self.safe_int(row.get('N_listado_precios', 0)),
+            'correlativo_job': self.safe_int(row.get('correlativo_job', 0)),
+            'descuento_admin': self.safe_int(row.get('descuentoAdmin', 0)),
+            'descuento_jefe': self.safe_int(row.get('descuentoJefe', 0)),
+            'descuento_cajera': self.safe_int(row.get('descuentoCajera', 0)),
+            'cantidad_cambios': self.safe_int(row.get('Cantidad_cambios', row.get('cantidad_cambios', 3))),
+        }
+
+        count = 0
+        if not self.dry_run:
+            for nombre, valor in params.items():
+                _, created = ParametroGlobal.objects.update_or_create(
+                    nombre=nombre,
+                    defaults={'valor_entero': valor}
+                )
+                if created:
+                    count += 1
+                self.stdout.write(f'  {"✓" if created else "🔄"} {nombre} = {valor}')
+
+        self.stats['parametros_maestros'] = count
+        self.stdout.write(self.style.SUCCESS(f'  ✓ {len(params)} parámetros migrados'))
+
+    # ========================================================================
+    # CORRELATIVOS (Folios SII)
+    # ========================================================================
+
+    def migrate_correlativos(self):
+        """Migra control de folios SII desde correlativo_documentos de MySQL"""
+        self.stdout.write('📋 Migrando correlativos (folios SII)...')
+
+        from app.models import Correlativo
+
+        cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
+        cursor.execute('''
+            SELECT Rut, tipo_documento, correlativo_inicio, correlativo_termino,
+                   empresa, cantidad_folios, fecha_folio
+            FROM correlativo_documentos
+            ORDER BY Rut, tipo_documento
+        ''')
+
+        # Mapeo de tipo_documento MySQL → tipo_dte Django (Correlativo)
+        tipo_dte_map = {
+            'Boleta': 'BOLETA',
+            'Boleta Electronica': 'BOLETA_ELECTRONICA',
+            'Factura Electronica': 'FACTURA_ELECTRONICA',
+            'Nota de Credito': 'NOTA_CREDITO',
+            'Despacho Electronico': 'GUIA_DESPACHO',
+            'ticket': 'TICKET',
+            'ticket_cambio': 'TICKET_CAMBIO',
+            'cotizacion': 'COTIZACION',
+            'orden_compra': 'ORDEN_COMPRA',
+        }
+
+        count = 0
+        skipped = 0
+
+        for row in cursor:
+            rut = row['Rut']
+            tipo_mysql = row['tipo_documento']
+            tipo_dte = tipo_dte_map.get(tipo_mysql, tipo_mysql)
+
+            # Buscar la empresa y sucursal por RUT
+            empresa = self.cache_empresas_rut.get(rut)
+            if not empresa:
+                skipped += 1
+                continue
+
+            # Buscar la primera sucursal de esta empresa
+            sucursal = None
+            for alias, suc in self.cache_sucursales.items():
+                if suc.empresa_id == empresa.id:
+                    sucursal = suc
+                    break
+
+            if not sucursal:
+                skipped += 1
+                continue
+
+            if not self.dry_run:
+                correlativo, created = Correlativo.objects.update_or_create(
+                    sucursal=sucursal,
+                    tipo_dte=tipo_dte,
+                    defaults={
+                        'inicio': self.safe_int(row['correlativo_inicio']),
+                        'termino': self.safe_int(row['correlativo_termino']),
+                        'fecha_actualizacion': row['fecha_folio'],
+                        'alias': sucursal.alias,
+                        'responsable': 'Migración',
+                    }
+                )
+                if created:
+                    count += 1
+
+        cursor.close()
+        self.stats['correlativos'] = count
+        self.stdout.write(self.style.SUCCESS(f'  ✓ {count} correlativos migrados ({skipped} sin empresa/sucursal)'))
+
+    # ========================================================================
+    # VINCULAR NOTAS DE CRÉDITO CON FACTURAS ORIGINALES
+    # ========================================================================
+
+    def migrate_nc_vinculacion(self):
+        """Vincula Notas de Crédito con sus DTEs originales usando factura_asociada_nc de MySQL"""
+        self.stdout.write('🔗 Vinculando Notas de Crédito con DTEs originales...')
+
+        from django.db import connection
+
+        # Cargar factura_asociada_nc desde MySQL
+        cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
+        cursor.execute('''
+            SELECT ID, n_documento, tipo_documento, factura_asociada_nc,
+                   rut_emisor, monto_nc, estado
+            FROM dte
+            WHERE factura_asociada_nc IS NOT NULL
+              AND factura_asociada_nc > 0
+        ''')
+
+        # Cargar DTEs MySQL por ID para resolver factura_asociada_nc → n_documento del padre
+        mysql_dtes_by_id = {}
+        cursor_ids = self.mysql_conn.cursor(dictionary=True, buffered=True)
+        cursor_ids.execute('SELECT ID, n_documento, tipo_documento, rut_emisor FROM dte')
+        for row in cursor_ids:
+            mysql_dtes_by_id[row['ID']] = row
+        cursor_ids.close()
+
+        # Cargar DTEs de PostgreSQL para buscar el padre
+        cache_pg_dtes = {}
+        for dte in Dte.objects.select_related('emisor').all():
+            key = (dte.numero_documento, dte.tipo_documento, dte.emisor_id)
+            cache_pg_dtes[key] = dte.id
+            # También indexar solo por número
+            if dte.numero_documento not in cache_pg_dtes:
+                cache_pg_dtes[dte.numero_documento] = dte.id
+
+        actualizaciones = []
+        sin_padre = 0
+
+        for row in cursor:
+            nc_mysql_ndoc = row['n_documento']
+            padre_mysql_id = row['factura_asociada_nc']
+
+            # Buscar el DTE padre en MySQL
+            padre_mysql = mysql_dtes_by_id.get(padre_mysql_id)
+            if not padre_mysql:
+                sin_padre += 1
+                continue
+
+            padre_ndoc = padre_mysql['n_documento']
+
+            # Buscar NC en PostgreSQL
+            tipo_nc = self._mapear_tipo_documento(row['tipo_documento'] or '')
+            rut_emisor = row['rut_emisor']
+            emisor = self.cache_empresas_rut.get(rut_emisor)
+            emisor_id = emisor.id if emisor else None
+
+            nc_pg_id = None
+            if emisor_id:
+                nc_pg_id = cache_pg_dtes.get((nc_mysql_ndoc, tipo_nc, emisor_id))
+            if not nc_pg_id:
+                nc_pg_id = cache_pg_dtes.get(nc_mysql_ndoc)
+
+            # Buscar DTE padre en PostgreSQL
+            tipo_padre = self._mapear_tipo_documento(padre_mysql['tipo_documento'] or '')
+            padre_emisor = self.cache_empresas_rut.get(padre_mysql['rut_emisor'])
+            padre_emisor_id = padre_emisor.id if padre_emisor else None
+
+            padre_pg_id = None
+            if padre_emisor_id:
+                padre_pg_id = cache_pg_dtes.get((padre_ndoc, tipo_padre, padre_emisor_id))
+            if not padre_pg_id:
+                padre_pg_id = cache_pg_dtes.get(padre_ndoc)
+
+            if nc_pg_id and padre_pg_id:
+                actualizaciones.append((nc_pg_id, padre_pg_id))
+
+        cursor.close()
+
+        if not actualizaciones:
+            self.stdout.write(f'  [OK] No hay NC por vincular ({sin_padre} sin padre en MySQL)')
+            return
+
+        if self.dry_run:
+            self.stdout.write(f'  [DRY-RUN] Se vincularían {len(actualizaciones):,} NC')
+            return
+
+        # Actualizar en batch
+        updated = 0
+        with connection.cursor() as pg_cursor:
+            for i in range(0, len(actualizaciones), self.batch_size):
+                batch = actualizaciones[i:i + self.batch_size]
+                cases = [f"WHEN {nc_id} THEN {padre_id}" for nc_id, padre_id in batch]
+                ids = [str(nc_id) for nc_id, _ in batch]
+
+                sql = f'''
+                    UPDATE app_dte
+                    SET documento_afectado_id = CASE id {' '.join(cases)} END,
+                        es_nota_credito = TRUE
+                    WHERE id IN ({','.join(ids)})
+                '''
+                pg_cursor.execute(sql)
+                updated += pg_cursor.rowcount
+
+        self.stats['nc_vinculadas'] = updated
+        self.stdout.write(self.style.SUCCESS(
+            f'  ✓ {updated:,} NC vinculadas con DTEs originales ({sin_padre} sin padre)'
+        ))
+
+    # ========================================================================
+    # ENRIQUECIMIENTO DATOS PREDICCIÓN
+    # ========================================================================
+
+    def enriquecer_datos_prediccion(self):
+        """
+        Post-migración: enriquece campos de predicción en Producto y genera
+        registros StockInicialTemporada a partir de movimientos existentes.
+        Subpasos:
+          A) temporada + anio_temporada  (desde primer movimiento INGRESO_INICIAL)
+          B) rango_precio                (desde precioventa del Producto)
+          C) StockInicialTemporada       (agrupando INGRESO_INICIAL por producto)
+        """
+        self.stdout.write(f'\n{"="*70}')
+        self.stdout.write('🔮 Enriqueciendo datos para motor de predicción...')
+
+        updated_temporada = self._enriquecer_temporada()
+        updated_rango = self._enriquecer_rango_precio()
+        created_stock = self._enriquecer_stock_inicial_temporada()
+
+        self.stats['pred_temporadas'] = updated_temporada
+        self.stats['pred_rango_precio'] = updated_rango
+        self.stats['pred_stock_inicial'] = created_stock
+
+        self.stdout.write(self.style.SUCCESS(
+            f'  ✓ Predicción: {updated_temporada} temporadas, '
+            f'{updated_rango} rangos precio, {created_stock} stocks iniciales'
+        ))
+
+    # --- A) Temporada y año desde primer movimiento INGRESO_INICIAL ----------
+
+    def _enriquecer_temporada(self):
+        """
+        Para cada Producto sin temporada, busca su primer movimiento
+        INGRESO_INICIAL y asigna temporada según el mes:
+          Oct-Mar → verano   |   Abr-Sep → invierno
+        El año-temporada es el año del movimiento (si Oct-Dic, año+1 porque
+        la temporada verano pertenece al siguiente ciclo comercial).
+        """
+        from django.db import connection
+        from django.db.models import Min
+
+        productos_sin_temporada = Producto.objects.filter(
+            temporada__isnull=True
+        ).values_list('id', flat=True)
+
+        if not productos_sin_temporada:
+            self.stdout.write('  [OK] Todos los productos ya tienen temporada')
+            return 0
+
+        primer_ingreso = (
+            Movimientos_Producto.objects
+            .filter(
+                concepto='INGRESO_INICIAL',
+                fecha__isnull=False,
+                ProductoTalla__producto_id__in=productos_sin_temporada,
+            )
+            .values('ProductoTalla__producto_id')
+            .annotate(primera_fecha=Min('fecha'))
+        )
+
+        fecha_por_producto = {
+            row['ProductoTalla__producto_id']: row['primera_fecha']
+            for row in primer_ingreso
+        }
+
+        if not fecha_por_producto:
+            self.stdout.write('  [OK] No hay movimientos INGRESO_INICIAL para inferir temporada')
+            return 0
+
+        if self.dry_run:
+            self.stdout.write(f'  [DRY-RUN] Se asignaría temporada a {len(fecha_por_producto)} productos')
+            return len(fecha_por_producto)
+
+        updated = 0
+        batch = []
+        for prod_id, fecha in fecha_por_producto.items():
+            mes = fecha.month
+            if mes >= 10 or mes <= 3:
+                temporada = 'verano'
+                anio = fecha.year + 1 if mes >= 10 else fecha.year
+            else:
+                temporada = 'invierno'
+                anio = fecha.year
+
+            batch.append((prod_id, temporada, anio))
+
+        for i in range(0, len(batch), self.batch_size):
+            chunk = batch[i:i + self.batch_size]
+            with connection.cursor() as cur:
+                for prod_id, temporada, anio in chunk:
+                    cur.execute(
+                        '''UPDATE app_producto
+                           SET temporada = %s, anio_temporada = %s
+                           WHERE id = %s AND temporada IS NULL''',
+                        [temporada, anio, prod_id]
+                    )
+                    updated += cur.rowcount
+
+        self.stdout.write(f'  → {updated} productos: temporada asignada')
+        return updated
+
+    # --- B) Rango de precio desde precioventa --------------------------------
+
+    def _enriquecer_rango_precio(self):
+        """
+        Asigna rango_precio a productos que aún no lo tienen, usando umbrales:
+          < 20000  → economico
+          < 50000  → medio
+          < 100000 → alto
+          >= 100000 → premium
+        """
+        from django.db import connection
+
+        productos = Producto.objects.filter(rango_precio__isnull=True).only('id', 'precioventa')
+
+        if not productos.exists():
+            self.stdout.write('  [OK] Todos los productos ya tienen rango_precio')
+            return 0
+
+        if self.dry_run:
+            count = productos.count()
+            self.stdout.write(f'  [DRY-RUN] Se asignaría rango_precio a {count} productos')
+            return count
+
+        updated = 0
+        with connection.cursor() as cur:
+            cur.execute('''
+                UPDATE app_producto
+                SET rango_precio = CASE
+                    WHEN precioventa < 20000  THEN 'economico'
+                    WHEN precioventa < 50000  THEN 'medio'
+                    WHEN precioventa < 100000 THEN 'alto'
+                    ELSE 'premium'
+                END
+                WHERE rango_precio IS NULL
+            ''')
+            updated = cur.rowcount
+
+        self.stdout.write(f'  → {updated} productos: rango_precio asignado')
+        return updated
+
+    # --- C) StockInicialTemporada desde movimientos INGRESO_INICIAL ----------
+
+    def _enriquecer_stock_inicial_temporada(self):
+        """
+        Agrupa movimientos INGRESO_INICIAL por producto, infiriendo temporada
+        desde la fecha del movimiento, y crea registros StockInicialTemporada
+        con: stock_inicial = cantidad del primer ingreso de esa temporada/año,
+             stock_total_ingresado = suma de todos los ingresos de esa temporada/año,
+             fecha_primer_ingreso = min(fecha) del grupo.
+        """
+        from django.db.models import Min, Sum, F
+
+        ingresos = (
+            Movimientos_Producto.objects
+            .filter(concepto='INGRESO_INICIAL', fecha__isnull=False)
+            .values(
+                producto_id=F('ProductoTalla__producto_id'),
+            )
+            .annotate(
+                primera_fecha=Min('fecha'),
+                total_ingresado=Sum('cantidad'),
+            )
+        )
+
+        if not ingresos:
+            self.stdout.write('  [OK] No hay movimientos INGRESO_INICIAL para stock inicial')
+            return 0
+
+        agrupados = {}
+        for row in ingresos:
+            prod_id = row['producto_id']
+            fecha = row['primera_fecha']
+            total = row['total_ingresado'] or 0
+
+            mes = fecha.month
+            if mes >= 10 or mes <= 3:
+                temporada = 'verano'
+                anio = fecha.year + 1 if mes >= 10 else fecha.year
+            else:
+                temporada = 'invierno'
+                anio = fecha.year
+
+            key = (prod_id, temporada, anio)
+            if key not in agrupados:
+                agrupados[key] = {
+                    'fecha_primer_ingreso': fecha,
+                    'stock_total': 0,
+                }
+            entry = agrupados[key]
+            if fecha < entry['fecha_primer_ingreso']:
+                entry['fecha_primer_ingreso'] = fecha
+            entry['stock_total'] += total
+
+        if self.dry_run:
+            self.stdout.write(f'  [DRY-RUN] Se crearían {len(agrupados)} registros StockInicialTemporada')
+            return len(agrupados)
+
+        created = 0
+        for (prod_id, temporada, anio), data in agrupados.items():
+            _, was_created = StockInicialTemporada.objects.update_or_create(
+                producto_id=prod_id,
+                temporada=temporada,
+                anio=anio,
+                defaults={
+                    'fecha_primer_ingreso': data['fecha_primer_ingreso'],
+                    'stock_inicial': data['stock_total'],
+                    'stock_total_ingresado': data['stock_total'],
+                },
+            )
+            if was_created:
+                created += 1
+
+        self.stdout.write(f'  → {created} registros StockInicialTemporada creados')
+        return created
+
     # ========================================================================
     # ESTADÍSTICAS FINALES
     # ========================================================================
@@ -2423,10 +3448,19 @@ class Command(BaseCommand):
             ('DTEs', self.stats.get('dtes', 0)),
             ('DTE Productos', self.stats.get('dte_productos', 0)),
             ('DTEs faltantes creados', self.stats.get('dtes_faltantes', 0)),
+            ('DTEs duplicados eliminados', self.stats.get('dtes_duplicados_eliminados', 0)),
+            ('Descuentos DTEs corregidos', self.stats.get('descuentos_corregidos', 0)),
             ('Fechas DTEs corregidas', self.stats.get('fechas_corregidas', 0)),
             ('Sucursales DTEs corregidas', self.stats.get('sucursales_corregidas', 0)),
+            ('Tipo transacción corregidos', self.stats.get('tipo_transaccion_corregidos', 0)),
             ('Pagos DTEs (cuadratura)', self.stats.get('ventas_pagos', 0)),
             ('Vendedores asignados DTEs', self.stats.get('vendedores_asignados', 0)),
+            ('Parámetros maestros', self.stats.get('parametros_maestros', 0)),
+            ('Correlativos (folios)', self.stats.get('correlativos', 0)),
+            ('NC vinculadas', self.stats.get('nc_vinculadas', 0)),
+            ('Predicción: temporadas', self.stats.get('pred_temporadas', 0)),
+            ('Predicción: rango_precio', self.stats.get('pred_rango_precio', 0)),
+            ('Predicción: stock_inicial', self.stats.get('pred_stock_inicial', 0)),
         ]
         
         total_migrado = sum(count for _, count in tabla_stats)

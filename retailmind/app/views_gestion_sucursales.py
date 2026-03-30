@@ -257,6 +257,8 @@ def obtener_sucursal(request, sucursal_id):
                 'empresa_nombre': sucursal.empresa.nombre if sucursal.empresa else 'N/A',
                 'nombre_impresora_boleta': getattr(sucursal, 'nombre_impresora_boleta', 'boleta') or 'boleta',
                 'nombre_impresora_factura': getattr(sucursal, 'nombre_impresora_factura', 'factura') or 'factura',
+                'usar_qz_tray': getattr(sucursal, 'usar_qz_tray', False),
+                'nombre_impresora_termica': getattr(sucursal, 'nombre_impresora_termica', 'EPSON TM-T20II') or 'EPSON TM-T20II',
             }
         })
         
@@ -323,6 +325,8 @@ def editar_sucursal(request, sucursal_id):
             sucursal.empresa = nueva_empresa
             sucursal.nombre_impresora_boleta = data.get('nombre_impresora_boleta', 'boleta') or 'boleta'
             sucursal.nombre_impresora_factura = data.get('nombre_impresora_factura', 'factura') or 'factura'
+            sucursal.usar_qz_tray = data.get('usar_qz_tray') == 'on'
+            sucursal.nombre_impresora_termica = data.get('nombre_impresora_termica', 'EPSON TM-T20II') or 'EPSON TM-T20II'
             sucursal.save()
             
             logger.info(f"Sucursal actualizada: {sucursal.alias} (ID: {sucursal.id}) por usuario {request.user.username}")

@@ -1,0 +1,358 @@
+{% comment %}
+  _qz_tray_module.html
+  Módulo reutilizable de QZ Tray para impresión térmica ESC/POS.
+  Requiere que la vista pase {{ qz_config }} con:
+    - habilitado: bool
+    - nombre_impresora: str
+  Expone globalmente: imprimirConQZ(ticketData) → Promise<bool>
+{% endcomment %}
+<script>
+/* ================================================================
+   QZ TRAY — MÓDULO ESC/POS COMPARTIDO
+   Epson TM-T20II | 80mm | CP1252 | 48 columnas Font A
+   ================================================================ */
+
+const QZ_CONFIG = {
+    habilitado:     {{ qz_config.habilitado|yesno:"true,false" }},
+    impresora:      "{{ qz_config.nombre_impresora|escapejs }}",
+    urlCertificado: "{% url 'qz_certificado' %}",
+    urlFirmar:      "{% url 'qz_firmar' %}",
+    csrfToken: (function() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    })(),
+};
+
+let _qzConectado = false;
+let _qzConectando = false;
+let _qzFirmaOK    = false;
+
+/* ── Cargar qz-tray.js desde CDN si aún no está disponible ──── */
+function _cargarQzTray() {
+    return new Promise(function(resolve) {
+        if (typeof qz !== 'undefined') { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js';
+        s.onload = resolve;
+        s.onerror = function() { console.warn('[QZ] No se pudo cargar qz-tray.js'); resolve(); };
+        document.head.appendChild(s);
+    });
+}
+
+/* ── Configurar firma RSA-SHA512 (solo una vez) ─────────────── */
+function _configurarFirma() {
+    if (_qzFirmaOK) return;
+    _qzFirmaOK = true;
+
+    qz.security.setCertificatePromise(function(resolve, reject) {
+        fetch(QZ_CONFIG.urlCertificado)
+            .then(function(r) { return r.text(); }).then(resolve).catch(reject);
+    });
+
+    qz.security.setSignatureAlgorithm('SHA512');
+
+    qz.security.setSignaturePromise(function(toSign) {
+        return function(resolve, reject) {
+            fetch(QZ_CONFIG.urlFirmar, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': QZ_CONFIG.csrfToken },
+                body: JSON.stringify({ request: toSign })
+            }).then(function(r) { return r.json(); })
+              .then(function(d) { resolve(d.firma); })
+              .catch(reject);
+        };
+    });
+}
+
+/* ── Conectar con reconexión automática ─────────────────────── */
+async function _conectarQz() {
+    if (_qzConectado || _qzConectando) return;
+    _qzConectando = true;
+    try {
+        if (qz.websocket.isActive()) { _qzConectado = true; _qzConectando = false; return; }
+        await qz.websocket.connect({ retries: 3, delay: 1 });
+        _qzConectado = true;
+        console.log('[QZ] Conectado a "' + QZ_CONFIG.impresora + '"');
+        qz.websocket.setClosedCallbacks(function() {
+            _qzConectado = false;
+            console.warn('[QZ] Conexión perdida. Reintentando en 5s...');
+            setTimeout(_conectarQz, 5000);
+        });
+    } catch (e) {
+        console.warn('[QZ] No se pudo conectar:', e.message || e);
+        _qzConectado = false;
+    } finally {
+        _qzConectando = false;
+    }
+}
+
+/* ── Constantes ESC/POS ────────────────────────────────────── */
+const _E = '\x1B', _G = '\x1D', _N = '\x0A';
+const _EP = {
+    INIT:           _E + '@',
+    CP1252:         _E + 't\x10',
+    LEFT:           _E + 'a\x00',
+    CENTER:         _E + 'a\x01',
+    BOLD_ON:        _E + 'E\x01',
+    BOLD_OFF:       _E + 'E\x00',
+    DBL_ON:         _G + '!\x11',
+    DBL_OFF:        _G + '!\x00',
+    CUT:            _G + 'V\x41\x03',
+    FEED3:          _E + 'd\x03',
+    BAR_H:          _G + 'h\x50',
+    BAR_W:          _G + 'w\x02',
+    BAR_HRI:        _G + 'H\x02',
+    BAR_FONT:       _G + 'f\x00',
+};
+const _COLS = 48;
+
+function _pL(t, n) { return String(t||'').substring(0,n).padEnd(n,' '); }
+function _pR(t, n) { return String(t||'').substring(0,n).padStart(n,' '); }
+function _sep(c, n){ return (c||'-').repeat(n||_COLS) + _N; }
+function _clp(v)   { return '$'+(parseInt(v,10)||0).toLocaleString('es-CL'); }
+function _row(lbl, val) {
+    const l = String(lbl||'')+' ';
+    return l + String(val||'').substring(0, _COLS - l.length) + _N;
+}
+function _col2(iz, de, nd) {
+    nd = nd || 14;
+    return _pL(iz, _COLS-nd) + _pR(de, nd) + _N;
+}
+
+/* ── Helper: emitir barcode CODE128 nativo ──────────────────── */
+function _escBarcode128(contenido) {
+    const bd = '{B' + contenido;
+    return [
+        _EP.CENTER, _N,
+        _EP.BAR_H, _EP.BAR_W, _EP.BAR_HRI, _EP.BAR_FONT,
+        _G + 'k\x49' + String.fromCharCode(bd.length) + bd,
+        _N,
+    ];
+}
+
+/* ── Generar comandos ESC/POS — modo TICKET DE CAMBIO ───────── */
+function _generarEscPosCambio(td) {
+    const suc  = td.sucursal  || {};
+    const vend = td.vendedor  || {};
+    const tot  = td.totales   || {};
+    const cli  = td.cliente   || {};
+    const prod = td.productos || [];
+
+    const empNombre   = String(suc.empresa     || 'MI EMPRESA');
+    const empRut      = String(suc.rut_empresa || '');
+    const aliasLimpio = (suc.alias || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const ticketId    = String(td.ticket_id || td.correlativo || 0);
+    const codigoTC    = 'TC' + (aliasLimpio ? '-' + aliasLimpio : '') + '-' + ticketId;
+
+    let fechaStr = '';
+    if (td.fecha && td.hora)  fechaStr = td.fecha + ' ' + String(td.hora).substring(0,5);
+    else if (td.fecha)        fechaStr = td.fecha;
+    else                      fechaStr = new Date().toLocaleString('es-CL');
+
+    // Extraer ticket original desde observaciones (si existe)
+    let ticketOrig = '-';
+    if (td.observaciones) {
+        const m = String(td.observaciones).match(/\d+/);
+        if (m) ticketOrig = '#' + m[0];
+    }
+
+    const c = [];
+
+    // Inicialización
+    c.push(_EP.INIT, _EP.CP1252);
+
+    // Cabecera empresa
+    c.push(_EP.CENTER, _EP.BOLD_ON);
+    c.push(empNombre.toUpperCase().substring(0, _COLS) + _N);
+    c.push(_EP.BOLD_OFF);
+    if (suc.alias)     c.push(suc.alias.toUpperCase().substring(0, _COLS) + _N);
+    if (suc.direccion) c.push(suc.direccion.substring(0, _COLS) + _N);
+    if (empRut)        c.push('RUT: ' + empRut + _N);
+    c.push(_sep('='));
+
+    // Banner TICKET DE CAMBIO (doble tamaño, centrado)
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push('TICKET DE CAMBIO' + _N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    // Código de barras CODE128 con formato TC
+    c.push(..._escBarcode128(codigoTC));
+    c.push(_EP.CENTER, _EP.BOLD_ON);
+    c.push(codigoTC + _N);
+    c.push(_EP.BOLD_OFF);
+    c.push(_sep('='));
+
+    // Info del cambio
+    c.push(_EP.LEFT);
+    c.push(_row('N\xB0 Cambio:', '#' + ticketId));
+    c.push(_row('Fecha:',       fechaStr));
+    c.push(_row('Vendedor:',    String(vend.nombre || '')));
+    c.push(_row('Doc. Original:', ticketOrig));
+    if (String(cli.nombre||'').trim()) c.push(_row('Cliente:', String(cli.nombre)));
+    if (String(cli.rut||'').trim())    c.push(_row('RUT:',     String(cli.rut)));
+    c.push(_sep('='));
+
+    // Cabecera columnas (sin precio)
+    c.push(_EP.BOLD_ON);
+    c.push(_pL('CANT',5) + _pL('DESCRIPCION / SKU',43) + _N);
+    c.push(_EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    // Productos sin precios
+    prod.forEach(function(p) {
+        const cant = String(p.cantidad || p.stock || 1);
+        const nom  = String(p.articulo||p.nombre||'').toUpperCase().substring(0,43);
+        const sku  = p.sku  ? 'SKU: ' + p.sku  : '';
+        const tal  = p.talla ? ' | T: ' + p.talla : '';
+        c.push(_pR(cant,4) + ' ' + _pL(nom,43) + _N);
+        if (sku || tal) c.push('     ' + _pL(sku + tal, 43) + _N);
+    });
+    c.push(_sep('='));
+
+    // Resumen items
+    const nItems = tot.items || prod.length || 0;
+    c.push(_EP.CENTER);
+    c.push('Total items: ' + nItems + _N);
+    c.push(_sep('-'));
+
+    // Pie de página
+    c.push(_EP.CENTER);
+    c.push('*** GRACIAS POR SU COMPRA ***' + _N);
+    c.push('Cambios: 15 d\xEDas | Con ticket' + _N);
+    c.push(_EP.FEED3, _EP.CUT);
+
+    return c;
+}
+
+/* ── Generar comandos ESC/POS — modo TICKET DE VENTA (normal) ── */
+function _generarEscPosVenta(td) {
+    const suc  = td.sucursal  || {};
+    const vend = td.vendedor  || {};
+    const tot  = td.totales   || {};
+    const cli  = td.cliente   || {};
+    const prod = td.productos || [];
+
+    const empNombre = String(suc.empresa    || 'MI EMPRESA');
+    const empRut    = String(suc.rut_empresa|| '');
+    const numT      = String(td.ticket_id || td.correlativo || 0).padStart(8,'0');
+
+    let fechaStr = '';
+    if (td.fecha && td.hora)  fechaStr = td.fecha + ' ' + String(td.hora).substring(0,5);
+    else if (td.fecha)        fechaStr = td.fecha;
+    else                      fechaStr = new Date().toLocaleString('es-CL');
+
+    const c = [];
+
+    // Inicialización
+    c.push(_EP.INIT, _EP.CP1252);
+
+    // Cabecera empresa
+    c.push(_EP.CENTER, _EP.BOLD_ON);
+    c.push(empNombre.toUpperCase().substring(0, _COLS) + _N);
+    c.push(_EP.BOLD_OFF);
+    if (suc.alias)     c.push(suc.alias.toUpperCase().substring(0, _COLS) + _N);
+    if (suc.direccion) c.push(suc.direccion.substring(0, _COLS) + _N);
+    if (empRut)        c.push('RUT: ' + empRut + _N);
+    if (suc.telefono)  c.push('Tel: ' + suc.telefono + _N);
+    c.push(_sep('='));
+
+    // Número de ticket (doble tamaño)
+    c.push(_EP.DBL_ON, _EP.BOLD_ON);
+    c.push('TICKET N\xB0 ' + numT + _N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    // Info ticket
+    c.push(_EP.LEFT);
+    c.push(_row('Fecha:',    fechaStr));
+    c.push(_row('Vendedor:', String(vend.nombre || '')));
+    if (String(cli.nombre||'').trim()) c.push(_row('Cliente:', String(cli.nombre)));
+    if (String(cli.rut||'').trim())    c.push(_row('RUT:', String(cli.rut)));
+    if (td.metodo_pago_principal)      c.push(_row('Pago:', td.metodo_pago_principal));
+    c.push(_sep('='));
+
+    // Cabecera columnas
+    c.push(_EP.BOLD_ON);
+    c.push(_pL('CANT',5) + _pL('DESCRIPCION',29) + _pR('TOTAL',10) + _N);
+    c.push(_EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    // Productos
+    prod.forEach(function(p) {
+        const cant  = String(p.cantidad || p.stock || 1);
+        const nom   = String(p.articulo||p.nombre||'').toUpperCase().substring(0,29);
+        const st    = p.subtotal || ((p.cantidad||p.stock||1)*(p.precio_unitario||p.precio||0));
+        const sku   = p.sku ? 'SKU:'+p.sku : '';
+        c.push(_pR(cant,4)+' '+_pL(nom,29)+_pR(_clp(st),10)+_N);
+        c.push('     '+_pL(sku,15)+_pL('P/U: '+_clp(p.precio_unitario||p.precio||0),19)+_N);
+    });
+    c.push(_sep('='));
+
+    // Totales
+    const subtotal  = tot.subtotal  || td.subtotal  || 0;
+    const descuento = tot.descuento || td.descuento || 0;
+    const total     = tot.total     || td.total     || 0;
+    const iva       = Math.round(total - total/1.19);
+
+    if (descuento > 0) {
+        c.push(_col2('Subtotal s/desc:', _clp(subtotal)));
+        c.push(_col2('Descuento:', '-'+_clp(descuento)));
+        c.push(_sep('-'));
+    }
+    c.push(_col2('IVA incluido (19%):', _clp(iva), 14));
+    c.push(_sep('-'));
+
+    // Total doble tamaño
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push('TOTAL: '+_clp(total)+_N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('='));
+
+    // Código de barras CODE128 nativo
+    c.push(..._escBarcode128(numT));
+    c.push(_sep('-'));
+
+    // Pie de página
+    c.push(_EP.CENTER);
+    c.push('*** GRACIAS POR SU COMPRA ***' + _N);
+    c.push(_EP.FEED3, _EP.CUT);
+
+    return c;
+}
+
+/* ── Generar comandos ESC/POS a partir de ticketData ────────── */
+function _generarEscPos(td) {
+    if (td.modulo_origen === 'CAMBIO_DEVOLUCION') {
+        return _generarEscPosCambio(td);
+    }
+    return _generarEscPosVenta(td);
+}
+
+/* ── Función pública: imprimirConQZ(ticketData) → Promise<bool> */
+async function imprimirConQZ(ticketData) {
+    try {
+        await _cargarQzTray();
+        if (typeof qz === 'undefined') { console.warn('[QZ] qz-tray.js no disponible'); return false; }
+        _configurarFirma();
+        if (!qz.websocket.isActive()) await _conectarQz();
+        if (!_qzConectado) return false;
+
+        const cfg  = qz.configs.create(QZ_CONFIG.impresora, { encoding: 'CP1252', copies: 1 });
+        const data = _generarEscPos(ticketData);
+        await qz.print(cfg, data);
+        console.log('[QZ] Ticket enviado a "' + QZ_CONFIG.impresora + '"');
+        return true;
+    } catch (err) {
+        console.error('[QZ] Error al imprimir:', err);
+        return false;
+    }
+}
+
+/* ── Preconectar en segundo plano si QZ está habilitado ─────── */
+if (QZ_CONFIG.habilitado) {
+    _cargarQzTray().then(function() {
+        if (typeof qz !== 'undefined') { _configurarFirma(); _conectarQz(); }
+    });
+}
+</script>

@@ -4,9 +4,8 @@
 {% include 'layout/menu.html' %}
 
 <div class="page-content">
-<div class="container-fluid">
+<div class="container-fluid px-2">
 
-<!-- Estilos -->
 <style>
     :root {
         --tbk-primary: #0066FF;
@@ -14,220 +13,261 @@
         --tbk-error: #FF4D4D;
         --tbk-warning: #FFB020;
     }
-    
+
+    /* ── Compacto para POS 15" ── */
     .tbk-hero {
         background: linear-gradient(135deg, #1A1A2E 0%, #2D2D4A 50%, #0052CC 100%);
-        border-radius: 16px;
-        padding: 32px;
+        border-radius: 10px;
+        padding: 10px 16px;
         color: white;
-        margin-bottom: 24px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
     }
-    
+    .tbk-hero-title {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+        white-space: nowrap;
+    }
+    .tbk-hero-sub {
+        font-size: 0.7rem;
+        opacity: .75;
+        margin: 0;
+    }
+    .tbk-badges {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
     .tbk-badge {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 10px 20px;
+        gap: 4px;
+        padding: 3px 10px;
         border-radius: 50px;
         font-weight: 600;
-        font-size: 14px;
+        font-size: 0.72rem;
     }
-    
-    .tbk-badge-success {
-        background: var(--tbk-success);
-        color: white;
-    }
-    
-    .tbk-badge-error {
-        background: var(--tbk-error);
-        color: white;
-    }
-    
-    .tbk-btn {
-        padding: 12px 24px;
+    .tbk-badge-success { background: var(--tbk-success); color: white; }
+    .tbk-badge-error   { background: var(--tbk-error);   color: white; }
+
+    .tbk-card {
+        background: white;
         border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        box-shadow: 0 1px 5px rgba(0,0,0,0.08);
+    }
+    .tbk-card h6 {
+        font-size: 0.78rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+        color: #333;
+    }
+    .tbk-card hr { margin: 4px 0 8px; }
+
+    /* Botones compactos */
+    .tbk-btn {
+        padding: 5px 10px;
+        border-radius: 6px;
         font-weight: 600;
         border: none;
         cursor: pointer;
-        transition: all 0.3s;
+        font-size: 0.75rem;
+        transition: all 0.2s;
+        width: 100%;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 5px;
     }
-    
-    .tbk-btn-primary {
-        background: var(--tbk-primary);
-        color: white;
+    .tbk-btn + .tbk-btn { margin-top: 4px; }
+    .tbk-btn-primary { background: var(--tbk-primary); color: white; }
+    .tbk-btn-primary:hover { background: #0052CC; }
+    .tbk-btn-success { background: var(--tbk-success); color: white; }
+    .tbk-btn-success:hover { background: #00b898; }
+    .tbk-btn.btn-secondary { background: #6c757d; color: white; }
+    .tbk-btn.btn-info      { background: #0dcaf0; color: #000; }
+    .tbk-btn.btn-warning   { background: var(--tbk-warning); color: #000; }
+    .tbk-btn.btn-danger    { background: var(--tbk-error); color: white; }
+
+    /* Inputs compactos */
+    .form-control-sm-pos {
+        height: 28px;
+        font-size: 0.78rem;
+        padding: 3px 8px;
+        border-radius: 5px;
+        border: 1px solid #ced4da;
+        width: 100%;
     }
-    
-    .tbk-btn-primary:hover {
-        background: #0052CC;
-        transform: translateY(-2px);
+    .form-label-sm {
+        font-size: 0.72rem;
+        font-weight: 600;
+        margin-bottom: 2px;
+        display: block;
+        color: #555;
     }
-    
-    .tbk-btn-success {
-        background: var(--tbk-success);
-        color: white;
+
+    /* Log compacto */
+    #log_transacciones {
+        max-height: 180px;
+        overflow-y: auto;
+        font-size: 0.72rem;
     }
-    
-    .tbk-card {
-        background: white;
-        border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    #log_transacciones .alert {
+        padding: 4px 8px;
+        margin-bottom: 4px;
+        font-size: 0.72rem;
     }
+
+    /* Info técnica colapsable */
+    .tbk-tech-toggle {
+        font-size: 0.72rem;
+        color: #888;
+        cursor: pointer;
+        text-decoration: underline;
+        user-select: none;
+    }
+    .tbk-tech-body {
+        font-size: 0.72rem;
+        color: #555;
+    }
+    .tbk-tech-body ul { margin: 2px 0; padding-left: 16px; }
+    .tbk-tech-body li { margin-bottom: 1px; }
 </style>
 
-<!-- Header Hero -->
-<div class="tbk-hero text-center">
-    <h2><i class="bi bi-credit-card-2-front"></i> Transbank POS Integrado</h2>
-    <p>Gestión de Terminal POS con Web Serial API</p>
-    <p class="small mb-0">Soporte Verifone & Ingenico</p>
-    <div class="mt-3">
-        <span class="tbk-badge tbk-badge-error" id="estado_pos">Desconectado</span>
-        <span class="tbk-badge tbk-badge-success ms-2">
-            <i class="bi bi-usb-symbol"></i> 
-            Puerto: <span id="puerto">-</span>
+<!-- Header compacto -->
+<div class="tbk-hero">
+    <div>
+        <p class="tbk-hero-title"><i class="bi bi-credit-card-2-front"></i> Transbank POS Integrado</p>
+        <p class="tbk-hero-sub">Web Serial API · Verifone &amp; Ingenico · Chrome/Edge 89+</p>
+    </div>
+    <div class="tbk-badges">
+        <span class="tbk-badge tbk-badge-error" id="estado_pos"><i class="bi bi-circle-fill"></i> Desconectado</span>
+        <span class="tbk-badge tbk-badge-success">
+            <i class="bi bi-usb-symbol"></i> Puerto: <span id="puerto">-</span>
         </span>
     </div>
 </div>
 
-<!-- Row Principal -->
-<div class="row">
-    <!-- Columna Izquierda: Conexión -->
-    <div class="col-md-6">
+<!-- Layout 3 columnas -->
+<div class="row g-2">
+
+    <!-- Col 1: Conexión -->
+    <div class="col-md-3">
         <div class="tbk-card">
-            <h4><i class="bi bi-link-45deg"></i> Conexión</h4>
+            <h6><i class="bi bi-link-45deg"></i> Conexión</h6>
             <hr>
-            
-            <div class="d-grid gap-2">
-                <button class="tbk-btn tbk-btn-primary" onclick="conectarPOS()">
-                    <i class="bi bi-power"></i> Conectar POS
-                </button>
-                
-                <button class="tbk-btn btn-secondary" onclick="liberarPuertoPOS()">
-                    <i class="bi bi-x-circle"></i> Desconectar
-                </button>
-                
-                <button class="tbk-btn btn-info" onclick="verificarPOS()">
-                    <i class="bi bi-check-circle"></i> Verificar (POLL)
-                </button>
-            </div>
-            
-            <div class="mt-3 p-3 bg-light rounded">
-                <small class="text-muted">
-                    <i class="bi bi-info-circle"></i> 
-                    <strong>Requisitos:</strong> Chrome/Edge 89+, HTTPS en producción
-                </small>
-            </div>
+            <button class="tbk-btn tbk-btn-primary" onclick="conectarPOS()">
+                <i class="bi bi-power"></i> Conectar POS
+            </button>
+            <button class="tbk-btn btn-secondary" onclick="liberarPuertoPOS()">
+                <i class="bi bi-x-circle"></i> Desconectar
+            </button>
+            <button class="tbk-btn btn-info" onclick="verificarPOS()">
+                <i class="bi bi-check-circle"></i> Verificar (POLL)
+            </button>
         </div>
-        
-        <!-- Operaciones -->
+
         <div class="tbk-card">
-            <h4><i class="bi bi-gear"></i> Operaciones</h4>
+            <h6><i class="bi bi-gear"></i> Operaciones</h6>
             <hr>
-            
-            <div class="d-grid gap-2">
-                <button class="tbk-btn btn-warning" onclick="cargarLlavesPOS()">
-                    <i class="bi bi-key"></i> Cargar Llaves (30-60s)
-                </button>
-                
-                <button class="tbk-btn btn-info" onclick="consultarUltimaVenta()">
-                    <i class="bi bi-receipt"></i> Última Venta
-                </button>
-                
-                <button class="tbk-btn btn-info" onclick="consultarTotales()">
-                    <i class="bi bi-calculator"></i> Totales del Día
-                </button>
-                
-                <button class="tbk-btn btn-info" onclick="consultarDetalleVentas()">
-                    <i class="bi bi-list-check"></i> Detalle de Ventas
-                </button>
-                
-                <button class="tbk-btn btn-danger" onclick="cerrarDia()">
-                    <i class="bi bi-lock"></i> Cierre de Día
-                </button>
-                
-                <button class="tbk-btn btn-warning" onclick="anularVenta()">
-                    <i class="bi bi-x-circle-fill"></i> Anular Venta
-                </button>
-            </div>
+            <button class="tbk-btn btn-warning" onclick="cargarLlavesPOS()">
+                <i class="bi bi-key"></i> Cargar Llaves
+            </button>
+            <button class="tbk-btn btn-info" onclick="consultarUltimaVenta()">
+                <i class="bi bi-receipt"></i> Última Venta
+            </button>
+            <button class="tbk-btn btn-info" onclick="consultarTotales()">
+                <i class="bi bi-calculator"></i> Totales del Día
+            </button>
+            <button class="tbk-btn btn-info" onclick="consultarDetalleVentas()">
+                <i class="bi bi-list-check"></i> Detalle Ventas
+            </button>
+            <button class="tbk-btn btn-danger" onclick="cerrarDia()">
+                <i class="bi bi-lock"></i> Cierre de Día
+            </button>
+            <button class="tbk-btn btn-warning" onclick="anularVenta()">
+                <i class="bi bi-x-circle-fill"></i> Anular Venta
+            </button>
         </div>
     </div>
-    
-    <!-- Columna Derecha: Prueba de Venta -->
-    <div class="col-md-6">
+
+    <!-- Col 2: Prueba de Venta -->
+    <div class="col-md-4">
         <div class="tbk-card">
-            <h4><i class="bi bi-cash-coin"></i> Prueba de Venta</h4>
+            <h6><i class="bi bi-cash-coin"></i> Prueba de Venta</h6>
             <hr>
-            
-            <div class="mb-3">
-                <label class="form-label">Monto</label>
-                <input type="number" class="form-control" id="monto_prueba" 
-                       value="1000" min="50" step="100">
+            <div class="mb-2">
+                <label class="form-label-sm">Monto</label>
+                <input type="number" class="form-control-sm-pos" id="monto_prueba" value="1000" min="50" step="100">
             </div>
-            
-            <div class="mb-3">
-                <label class="form-label">Número de Ticket</label>
-                <input type="text" class="form-control" id="ticket_prueba" 
-                       value="TEST001">
+            <div class="mb-2">
+                <label class="form-label-sm">Número de Ticket</label>
+                <input type="text" class="form-control-sm-pos" id="ticket_prueba" value="TEST001">
             </div>
-            
-            <button class="tbk-btn tbk-btn-success w-100" onclick="procesarVentaPrueba()">
+            <button class="tbk-btn tbk-btn-success mt-1" onclick="procesarVentaPrueba()">
                 <i class="bi bi-credit-card"></i> Procesar Venta de Prueba
             </button>
         </div>
-        
+
         <!-- Log de Transacciones -->
         <div class="tbk-card">
-            <h4><i class="bi bi-list-ul"></i> Log de Transacciones</h4>
+            <h6><i class="bi bi-list-ul"></i> Log de Transacciones</h6>
             <hr>
-            <div id="log_transacciones" style="max-height: 400px; overflow-y: auto;">
-                <p class="text-muted text-center">No hay transacciones recientes</p>
+            <div id="log_transacciones">
+                <p class="text-muted text-center small mb-0">Sin transacciones</p>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Información Técnica -->
-<div class="row mt-4">
-    <div class="col-12">
+    <!-- Col 3: Info Técnica colapsable -->
+    <div class="col-md-5">
         <div class="tbk-card">
-            <h5><i class="bi bi-info-circle"></i> Información Técnica</h5>
+            <h6>
+                <i class="bi bi-info-circle"></i> Información Técnica
+                <span class="tbk-tech-toggle ms-2" onclick="toggleTechInfo(this)">[ocultar]</span>
+            </h6>
             <hr>
-            <div class="row">
-                <div class="col-md-4">
-                    <strong>Dispositivos Soportados:</strong>
-                    <ul class="mt-2">
-                        <li>Verifone: VX520, VX675, VX680, VX810, VX820</li>
-                        <li>Ingenico: iCT220, iWL220, iWL250, DESK/3500</li>
-                    </ul>
-                </div>
-                <div class="col-md-4">
-                    <strong>Comandos Disponibles:</strong>
-                    <ul class="mt-2">
-                        <li>0100 - POLL (Verificar)</li>
-                        <li>0200 - VENTA</li>
-                        <li>0250 - ÚLTIMA VENTA</li>
-                        <li>0260 - DETALLE VENTAS</li>
-                        <li>0500 - CIERRE DÍA</li>
-                        <li>0700 - TOTALES</li>
-                        <li>0800 - CARGAR LLAVES</li>
-                        <li>1200 - ANULACIÓN</li>
-                    </ul>
-                </div>
-                <div class="col-md-4">
-                    <strong>Configuración:</strong>
-                    <ul class="mt-2">
-                        <li>Baudrate: 115200 bps</li>
-                        <li>Timeout: 180 segundos (ventas)</li>
-                        <li>Protocolo: Serial binario</li>
-                    </ul>
+            <div id="tbk-tech-body" class="tbk-tech-body">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <strong>Dispositivos:</strong>
+                        <ul>
+                            <li>Verifone: VX520, VX675, VX680, VX810, VX820</li>
+                            <li>Ingenico: iCT220, iWL220, iWL250, DESK/3500</li>
+                        </ul>
+                        <strong>Configuración:</strong>
+                        <ul>
+                            <li>Baudrate: 115200 bps</li>
+                            <li>Timeout: 180s (ventas)</li>
+                            <li>Protocolo: Serial binario</li>
+                        </ul>
+                    </div>
+                    <div class="col-6">
+                        <strong>Comandos:</strong>
+                        <ul>
+                            <li>0100 – POLL (Verificar)</li>
+                            <li>0200 – VENTA</li>
+                            <li>0250 – ÚLTIMA VENTA</li>
+                            <li>0260 – DETALLE VENTAS</li>
+                            <li>0500 – CIERRE DÍA</li>
+                            <li>0700 – TOTALES</li>
+                            <li>0800 – CARGAR LLAVES</li>
+                            <li>1200 – ANULACIÓN</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
+</div><!-- /row -->
 </div>
 </div>
 
@@ -237,7 +277,19 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-// ==================== FUNCIONES DE LA PÁGINA ====================
+// ==================== INFO TÉCNICA TOGGLE ====================
+function toggleTechInfo(el) {
+    const body = document.getElementById('tbk-tech-body');
+    if (body.style.display === 'none') {
+        body.style.display = '';
+        el.textContent = '[ocultar]';
+    } else {
+        body.style.display = 'none';
+        el.textContent = '[mostrar]';
+    }
+}
+
+// ==================== FUNCIONES POS ====================
 
 async function conectarPOS() {
     try {
@@ -284,22 +336,19 @@ async function consultarUltimaVenta() {
         showLoading('Consultando última venta...');
         const resultado = await Transbank.POS.lastSale();
         hideLoading();
-        
-        const info = `
-            <div class="text-start">
-                <strong>Estado:</strong> ${resultado.responseMessage}<br>
-                <strong>Monto:</strong> $${resultado.amount.toLocaleString()}<br>
-                <strong>Autorización:</strong> ${resultado.authorizationCode}<br>
-                <strong>Tarjeta:</strong> ${resultado.cardBrand} - ${resultado.cardType}<br>
-                <strong>Últimos 4:</strong> ${resultado.last4Digits}
-            </div>
-        `;
-        
         Swal.fire({
             icon: 'info',
             title: 'Última Venta',
-            html: info,
-            width: 500
+            html: `
+                <div class="text-start">
+                    <strong>Estado:</strong> ${resultado.responseMessage}<br>
+                    <strong>Monto:</strong> $${resultado.amount.toLocaleString()}<br>
+                    <strong>Autorización:</strong> ${resultado.authorizationCode}<br>
+                    <strong>Tarjeta:</strong> ${resultado.cardBrand} - ${resultado.cardType}<br>
+                    <strong>Últimos 4:</strong> ${resultado.last4Digits}
+                </div>
+            `,
+            width: 460
         });
     } catch (error) {
         hideLoading();
@@ -312,7 +361,6 @@ async function consultarTotales() {
         showLoading('Consultando totales...');
         const resultado = await Transbank.POS.getTotals();
         hideLoading();
-        
         Swal.fire({
             icon: 'info',
             title: 'Totales del Día',
@@ -339,12 +387,10 @@ async function cerrarDia() {
             confirmButtonText: 'Sí, cerrar',
             cancelButtonText: 'Cancelar'
         });
-        
         if (confirm.isConfirmed) {
             showLoading('Ejecutando cierre de día...');
             const resultado = await Transbank.POS.closeDay();
             hideLoading();
-            
             if (resultado.successful) {
                 showSuccess('Cierre de día completado');
             } else {
@@ -359,7 +405,7 @@ async function cerrarDia() {
 
 async function consultarDetalleVentas() {
     try {
-        const { value: imprimir } = await Swal.fire({
+        const { value } = await Swal.fire({
             title: 'Detalle de Ventas',
             text: '¿Desea imprimir el detalle en el POS?',
             icon: 'question',
@@ -369,15 +415,11 @@ async function consultarDetalleVentas() {
             denyButtonText: 'Imprimir en POS',
             cancelButtonText: 'Cancelar'
         });
-        
-        if (value === undefined) return; // Canceló
-        
-        const printOnPOS = value === false; // Si presionó "Imprimir" (deny button)
-        
+        if (value === undefined) return;
+        const printOnPOS = value === false;
         showLoading('Obteniendo detalle de ventas...');
         const resultado = await Transbank.POS.getSalesDetail(printOnPOS);
         hideLoading();
-        
         if (resultado.successful) {
             Swal.fire({
                 icon: 'success',
@@ -389,7 +431,7 @@ async function consultarDetalleVentas() {
                         ${printOnPOS ? '<p class="text-success"><i class="bi bi-printer"></i> Imprimiendo en el POS...</p>' : ''}
                     </div>
                 `,
-                width: 500
+                width: 460
             });
         } else {
             showError('Error obteniendo detalle: ' + resultado.responseMessage);
@@ -405,14 +447,11 @@ async function anularVenta() {
         const { value: operationId } = await Swal.fire({
             title: 'Anular Venta',
             html: `
-                <p class="text-start mb-3">Ingrese el número de operación a anular:</p>
-                <input type="text" id="operation-id-input" class="swal2-input" 
-                       placeholder="Ej: 123456" 
-                       pattern="[0-9]{1,6}"
-                       maxlength="6">
-                <p class="small text-muted text-start mt-2">
-                    <i class="bi bi-info-circle"></i> 
-                    Puede encontrar el número de operación en el voucher
+                <p class="text-start mb-2">Número de operación a anular:</p>
+                <input type="text" id="operation-id-input" class="swal2-input"
+                       placeholder="Ej: 123456" pattern="[0-9]{1,6}" maxlength="6">
+                <p class="small text-muted text-start mt-1">
+                    <i class="bi bi-info-circle"></i> Ver voucher del cliente
                 </p>
             `,
             showCancelButton: true,
@@ -421,21 +460,19 @@ async function anularVenta() {
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
                 const value = document.getElementById('operation-id-input').value;
-                if (!value || value.length === 0) {
-                    Swal.showValidationMessage('Debe ingresar un número de operación');
+                if (!value) {
+                    Swal.showValidationMessage('Ingrese un número de operación');
                     return false;
                 }
                 return value;
             }
         });
-        
         if (!operationId) return;
-        
         const confirmAnular = await Swal.fire({
             icon: 'warning',
             title: '⚠️ Confirmar Anulación',
             html: `
-                <p><strong>¿Está seguro de anular la operación ${operationId}?</strong></p>
+                <p><strong>¿Anular operación ${operationId}?</strong></p>
                 <p class="text-danger small">Esta acción NO se puede deshacer</p>
             `,
             showCancelButton: true,
@@ -443,13 +480,10 @@ async function anularVenta() {
             confirmButtonColor: '#dc3545',
             cancelButtonText: 'Cancelar'
         });
-        
         if (!confirmAnular.isConfirmed) return;
-        
         showLoading('Anulando operación...');
         const resultado = await Transbank.POS.refund(operationId);
         hideLoading();
-        
         if (resultado.successful) {
             Swal.fire({
                 icon: 'success',
@@ -458,10 +492,6 @@ async function anularVenta() {
                     <div class="text-start">
                         <p><strong>Operación anulada:</strong> ${operationId}</p>
                         <p><strong>Código autorización:</strong> ${resultado.authorizationCode}</p>
-                        <p class="text-success mt-3">
-                            <i class="bi bi-check-circle"></i> 
-                            La transacción ha sido anulada correctamente
-                        </p>
                     </div>
                 `
             });
@@ -478,26 +508,13 @@ async function procesarVentaPrueba() {
     try {
         const monto = parseInt(document.getElementById('monto_prueba').value);
         const ticket = document.getElementById('ticket_prueba').value;
-        
-        if (!monto || monto < 50) {
-            showError('Ingrese un monto válido (mínimo $50)');
-            return;
-        }
-        
-        if (!ticket) {
-            showError('Ingrese un número de ticket');
-            return;
-        }
-        
-        // Ejecutar venta
+        if (!monto || monto < 50) { showError('Ingrese un monto válido (mínimo $50)'); return; }
+        if (!ticket) { showError('Ingrese un número de ticket'); return; }
         const resultado = await ejecutarVentaPOS(monto, ticket);
-        
-        // Guardar en BD si fue exitosa
         if (resultado.successful) {
             await guardarTransaccionPOS(resultado, null);
             agregarLogTransaccion(resultado);
         }
-        
     } catch (error) {
         console.error('Error en venta:', error);
     }
@@ -505,33 +522,24 @@ async function procesarVentaPrueba() {
 
 function agregarLogTransaccion(resultado) {
     const log = document.getElementById('log_transacciones');
-    const fecha = new Date().toLocaleString();
-    
+    const fecha = new Date().toLocaleTimeString();
     const clase = resultado.successful ? 'success' : 'danger';
     const icono = resultado.successful ? 'check-circle' : 'x-circle';
-    
     const item = `
-        <div class="alert alert-${clase} mb-2">
-            <i class="bi bi-${icono}"></i>
-            <strong>${resultado.responseMessage}</strong><br>
-            <small>
-                Monto: $${resultado.amount.toLocaleString()} | 
-                Auth: ${resultado.authorizationCode} | 
-                ${fecha}
-            </small>
+        <div class="alert alert-${clase} mb-1 py-1 px-2">
+            <i class="bi bi-${icono}"></i> <strong>${resultado.responseMessage}</strong><br>
+            <small>$${resultado.amount.toLocaleString()} · Auth: ${resultado.authorizationCode} · ${fecha}</small>
         </div>
     `;
-    
     log.innerHTML = item + log.innerHTML;
 }
 
-// Verificar soporte Web Serial al cargar
-window.addEventListener('load', function() {
+window.addEventListener('load', function () {
     if (!('serial' in navigator)) {
         Swal.fire({
             icon: 'error',
             title: 'Navegador no compatible',
-            html: 'Tu navegador no soporta Web Serial API.<br>Por favor usa <strong>Chrome</strong> o <strong>Edge</strong> versión 89 o superior.',
+            html: 'Web Serial API no disponible.<br>Usa <strong>Chrome</strong> o <strong>Edge</strong> 89+.',
             allowOutsideClick: false
         });
     }

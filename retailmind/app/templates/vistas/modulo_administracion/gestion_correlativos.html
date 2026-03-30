@@ -69,16 +69,18 @@
 
     /* ========== STATS CARDS ========== */
     .stats-card {
-        border-radius: var(--nexo-radius-lg);
-        padding: 1.5rem;
-        text-align: center;
+        border-radius: var(--nexo-radius-md);
+        padding: 0.625rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
         transition: var(--nexo-transition-normal);
         border: none;
     }
 
     .stats-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--nexo-shadow-lg);
+        transform: translateY(-2px);
+        box-shadow: var(--nexo-shadow-md);
     }
 
     .stats-card-primary {
@@ -102,21 +104,29 @@
     }
 
     .stats-card i {
-        font-size: 2.5rem;
-        margin-bottom: 0.75rem;
+        font-size: 1.5rem;
         opacity: 0.9;
+        flex-shrink: 0;
+    }
+
+    .stats-card-body {
+        min-width: 0;
     }
 
     .stats-card h3 {
-        font-size: 2rem;
+        font-size: 1.375rem;
         font-weight: 700;
-        margin-bottom: 0.25rem;
+        margin: 0;
+        line-height: 1.2;
     }
 
     .stats-card p {
-        font-size: 0.875rem;
-        opacity: 0.9;
+        font-size: 0.75rem;
+        opacity: 0.85;
         margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     /* ========== BUTTONS ========== */
@@ -580,33 +590,41 @@
             </div>
 
             <!-- Estadísticas -->
-            <div class="row mb-4 g-3">
+            <div class="row mb-3 g-2">
                 <div class="col-md-3 col-sm-6">
                     <div class="stats-card stats-card-primary">
                         <i class="ri-file-text-line"></i>
-                        <h3 id="totalCorrelativos">{{ total_correlativos }}</h3>
-                        <p>Total Correlativos</p>
+                        <div class="stats-card-body">
+                            <h3 id="totalCorrelativos">{{ total_correlativos }}</h3>
+                            <p>Total Correlativos</p>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6">
                     <div class="stats-card stats-card-success">
                         <i class="ri-play-circle-line"></i>
-                        <h3 id="correlativosActivos">{{ correlativos_activos }}</h3>
-                        <p>Activos</p>
+                        <div class="stats-card-body">
+                            <h3 id="correlativosActivos">{{ correlativos_activos }}</h3>
+                            <p>Activos</p>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6">
                     <div class="stats-card stats-card-warning">
                         <i class="ri-error-warning-line"></i>
-                        <h3 id="correlativosProximosAgotar">{{ correlativos_proximos_agotar }}</h3>
-                        <p>Próximos a Agotar</p>
+                        <div class="stats-card-body">
+                            <h3 id="correlativosProximosAgotar">{{ correlativos_proximos_agotar }}</h3>
+                            <p>Próximos a Agotar</p>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6">
                     <div class="stats-card stats-card-error">
                         <i class="ri-close-circle-line"></i>
-                        <h3 id="correlativosAgotados">{{ correlativos_agotados }}</h3>
-                        <p>Agotados</p>
+                        <div class="stats-card-body">
+                            <h3 id="correlativosAgotados">{{ correlativos_agotados }}</h3>
+                            <p>Agotados</p>
+                        </div>
                     </div>
                 </div>
             </div>

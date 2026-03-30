@@ -1,0 +1,1442 @@
+{% load static %}
+{% load humanize %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+{% include 'layout/footer.html' %}
+
+<style>
+/* ========== NEXO DESIGN SYSTEM - Predicción de Compras ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26,26,46,0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26,26,46,0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26,26,46,0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+}
+
+.pred-container {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #E8EDF5 100%);
+    min-height: 100vh;
+    padding-bottom: 2rem;
+}
+
+/* Header */
+.pred-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #252547 100%);
+    color: var(--nexo-white);
+    padding: 2rem;
+    border-radius: 0 0 var(--nexo-radius-xl) var(--nexo-radius-xl);
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+.pred-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0,102,255,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.pred-header h4 {
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin-bottom: .4rem;
+    position: relative;
+    z-index: 1;
+}
+.pred-header p {
+    opacity: .8;
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    font-size: .9rem;
+}
+.pred-header .header-actions {
+    position: relative;
+    z-index: 1;
+}
+
+/* Buttons */
+.nexo-btn {
+    padding: 8px 20px;
+    border-radius: var(--nexo-radius-md);
+    border: 1px solid transparent;
+    font-weight: 600;
+    font-size: .85rem;
+    cursor: pointer;
+    transition: all .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.nexo-btn-accent {
+    background: var(--nexo-accent);
+    color: var(--nexo-gray-900);
+}
+.nexo-btn-accent:hover {
+    background: #00B892;
+    transform: translateY(-1px);
+}
+.nexo-btn-outline-light {
+    background: rgba(255,255,255,.1);
+    border-color: rgba(255,255,255,.3);
+    color: #fff;
+}
+.nexo-btn-outline-light:hover {
+    background: rgba(255,255,255,.2);
+}
+.nexo-btn.loading {
+    opacity: .6;
+    pointer-events: none;
+}
+
+/* KPI Grid */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 1.5rem;
+}
+.kpi-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 20px;
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid rgba(0,0,0,.04);
+    transition: all .25s;
+    position: relative;
+    overflow: hidden;
+}
+.kpi-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+    transform: translateY(-2px);
+}
+.kpi-card .kpi-icon-bg {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 4rem;
+    opacity: .06;
+    color: var(--nexo-gray-900);
+}
+.kpi-card .kpi-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--nexo-gray-900);
+    line-height: 1;
+    margin-bottom: 6px;
+}
+.kpi-card .kpi-label {
+    font-size: .75rem;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 600;
+}
+.kpi-card .kpi-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+}
+.kpi-danger .kpi-accent { background: var(--nexo-error); }
+.kpi-warning .kpi-accent { background: var(--nexo-warning); }
+.kpi-primary .kpi-accent { background: var(--nexo-primary); }
+.kpi-success .kpi-accent { background: var(--nexo-accent); }
+.kpi-info .kpi-accent { background: #8B5CF6; }
+.kpi-orange .kpi-accent { background: #F97316; }
+
+/* Panel / Card */
+.nexo-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid rgba(0,0,0,.04);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+/* Tabs */
+.pred-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--nexo-gray-100);
+    padding: 0 20px;
+    background: var(--nexo-white);
+    overflow-x: auto;
+}
+.pred-tab {
+    padding: 14px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: .85rem;
+    color: var(--nexo-gray-500);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pred-tab:hover { color: var(--nexo-gray-700); }
+.pred-tab.active {
+    color: var(--nexo-primary);
+    border-bottom-color: var(--nexo-primary);
+}
+.pred-tab .tab-count {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: .7rem;
+    font-weight: 700;
+}
+.pred-tab.active .tab-count {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.panel-body { padding: 20px; }
+
+/* Tables */
+.nexo-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: .83rem;
+}
+.nexo-table th {
+    background: var(--nexo-gray-100);
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 700;
+    color: var(--nexo-gray-700);
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-bottom: 1px solid var(--nexo-gray-300);
+}
+.nexo-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+}
+.nexo-table tbody tr { cursor: pointer; transition: background .15s; }
+.nexo-table tbody tr:hover { background: var(--nexo-primary-light); }
+.table-scroll { max-height: 480px; overflow-y: auto; }
+
+/* Badges */
+.badge-urg {
+    display: inline-flex;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
+.badge-CRITICA { background: #FEE2E2; color: #DC2626; }
+.badge-ALTA { background: #FEF3C7; color: #D97706; }
+.badge-MEDIA { background: #DBEAFE; color: #2563EB; }
+.badge-BAJA { background: #D1FAE5; color: #059669; }
+.badge-abc-pill {
+    display: inline-flex;
+    width: 30px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: 800;
+    font-size: .75rem;
+}
+.abc-A { background: #FEE2E2; color: #DC2626; }
+.abc-B { background: #FEF3C7; color: #D97706; }
+.abc-C { background: #DBEAFE; color: #2563EB; }
+.xyz-X { background: #D1FAE5; color: #059669; }
+.xyz-Y { background: #FED7AA; color: #EA580C; }
+.xyz-Z { background: #E9D5FF; color: #7C3AED; }
+
+/* Chart grid */
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+@media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
+.chart-box { position: relative; height: 280px; }
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--nexo-gray-500);
+}
+.empty-state i {
+    font-size: 3rem;
+    opacity: .3;
+    display: block;
+    margin-bottom: 12px;
+}
+
+/* Modals */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(26,26,46,.6);
+    z-index: 1050;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-xl);
+    max-width: 920px;
+    width: 95%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 28px;
+    box-shadow: 0 25px 50px rgba(26,26,46,.25);
+}
+
+/* Filter bar */
+.filter-bar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.filter-bar select, .filter-bar input {
+    padding: 7px 14px;
+    border-radius: var(--nexo-radius-md);
+    border: 1px solid var(--nexo-gray-300);
+    font-size: .83rem;
+    color: var(--nexo-gray-700);
+    background: var(--nexo-white);
+}
+
+/* Section title */
+.section-title {
+    font-weight: 700;
+    font-size: .95rem;
+    color: var(--nexo-gray-900);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.section-title i { color: var(--nexo-primary); }
+
+/* Loading shimmer */
+.shimmer {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+    display: inline-block;
+    height: 1em;
+    width: 60px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Sell-through progress bar */
+.st-bar { display:flex;align-items:center;gap:6px; }
+.st-bar .st-track { width:60px;height:6px;border-radius:3px;background:#eee;flex-shrink:0; }
+.st-bar .st-fill { height:100%;border-radius:3px; }
+
+/* Toast */
+#toastContainer { position:fixed;bottom:24px;right:24px;z-index:9999; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* Row indicator */
+.rank-badge { display:inline-flex;width:26px;height:26px;align-items:center;justify-content:center;border-radius:50%;font-size:.75rem;font-weight:800; }
+.rank-1 { background:#FFF3CD;color:#856404; }
+.rank-2 { background:#E2E8F0;color:#475569; }
+.rank-3 { background:#FFE8D6;color:#9A3412; }
+</style>
+
+<div class="main-content pred-container">
+    <div class="page-content">
+        <div class="container-fluid px-4">
+
+            <!-- ========== HEADER ========== -->
+            <div class="pred-header">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                    <div>
+                        <h4><i class="ri-bar-chart-box-line me-2"></i>Prediccion de Compras</h4>
+                        <p>Clasificacion ABC-XYZ &bull; Alertas de velocidad &bull; Quiebres de talle &bull; Sugerencias de reposicion</p>
+                        <div class="d-flex align-items-center gap-3 mt-2">
+                            <span class="text-white-50 small" id="lastUpdate">
+                                <i class="ri-time-line me-1"></i>Cargando datos...
+                            </span>
+                        </div>
+                    </div>
+                    <div class="header-actions d-flex gap-2 flex-wrap">
+                        <button class="nexo-btn nexo-btn-accent" id="btnRecalcular" onclick="recalcular()">
+                            <i class="ri-refresh-line"></i> Recalcular
+                        </button>
+                        <button class="nexo-btn nexo-btn-outline-light" onclick="abrirConfiguracion()">
+                            <i class="ri-settings-3-line"></i> Configuracion
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== KPIs ========== -->
+            <div class="kpi-grid" id="kpiGrid">
+                <div class="kpi-card kpi-danger">
+                    <div class="kpi-accent"></div>
+                    <div class="kpi-icon-bg"><i class="ri-alarm-warning-line"></i></div>
+                    <div class="kpi-value" id="kpiCriticas"><span class="shimmer"></span></div>
+                    <div class="kpi-label">Alertas Criticas</div>
+                </div>
+                <div class="kpi-card kpi-warning">
+                    <div class="kpi-accent"></div>
+                    <div class="kpi-icon-bg"><i class="ri-speed-line"></i></div>
+                    <div class="kpi-value" id="kpiVelocidad"><span class="shimmer"></span></div>
+                    <div class="kpi-label">Alertas Velocidad</div>
+                </div>
+                <div class="kpi-card kpi-orange">
+                    <div class="kpi-accent"></div>
+                    <div class="kpi-icon-bg"><i class="ri-scissors-cut-line"></i></div>
+                    <div class="kpi-value" id="kpiQuiebre"><span class="shimmer"></span></div>
+                    <div class="kpi-label">Quiebres de Talle</div>
+                </div>
+                <div class="kpi-card kpi-primary">
+                    <div class="kpi-accent"></div>
+                    <div class="kpi-icon-bg"><i class="ri-shopping-cart-2-line"></i></div>
+                    <div class="kpi-value" id="kpiSugerencias"><span class="shimmer"></span></div>
+                    <div class="kpi-label">Sugerencias Pendientes</div>
+                </div>
+                <div class="kpi-card kpi-success">
+                    <div class="kpi-accent"></div>
+                    <div class="kpi-icon-bg"><i class="ri-stack-line"></i></div>
+                    <div class="kpi-value" id="kpiUnidades"><span class="shimmer"></span></div>
+                    <div class="kpi-label">Unidades a Pedir</div>
+                </div>
+                <div class="kpi-card kpi-info">
+                    <div class="kpi-accent"></div>
+                    <div class="kpi-icon-bg"><i class="ri-pie-chart-line"></i></div>
+                    <div class="kpi-value" id="kpiClaseA"><span class="shimmer"></span></div>
+                    <div class="kpi-label">Productos Clase A</div>
+                </div>
+            </div>
+
+            <!-- ========== TABS ========== -->
+            <div class="nexo-card">
+                <div class="pred-tabs">
+                    <button class="pred-tab active" data-tab="tabUrgente">
+                        <i class="ri-alarm-warning-line"></i> Urgente
+                        <span class="tab-count" id="countUrgente">-</span>
+                    </button>
+                    <button class="pred-tab" data-tab="tabMarca">
+                        <i class="ri-price-tag-3-line"></i> Por Marca
+                    </button>
+                    <button class="pred-tab" data-tab="tabProveedor">
+                        <i class="ri-building-line"></i> Por Proveedor
+                    </button>
+                    <button class="pred-tab" data-tab="tabSugerencias">
+                        <i class="ri-shopping-cart-line"></i> Sugerencias
+                        <span class="tab-count" id="countSugerencias">-</span>
+                    </button>
+                    <button class="pred-tab" data-tab="tabClasificacion">
+                        <i class="ri-pie-chart-2-line"></i> ABC-XYZ
+                        <span class="tab-count" id="countABC">-</span>
+                    </button>
+                    <button class="pred-tab" data-tab="tabGraficos">
+                        <i class="ri-bar-chart-grouped-line"></i> Graficos
+                    </button>
+                </div>
+
+                <!-- Tab: Urgente (alertas velocidad + quiebres fusionados y ordenados) -->
+                <div class="tab-panel active" id="tabUrgente">
+                    <div class="panel-body">
+                        <div class="section-title">
+                            <i class="ri-alarm-warning-line"></i> Acciones inmediatas &mdash; ordenadas por urgencia
+                        </div>
+
+                        <!-- Leyenda: qué es cada urgencia -->
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:16px;">
+                            <div style="border-radius:8px;padding:12px 14px;border-left:4px solid #DC2626;background:#FEF2F2;">
+                                <div style="font-weight:700;color:#DC2626;font-size:.82rem;margin-bottom:3px;">CRITICA &mdash; Actua hoy</div>
+                                <div style="font-size:.78rem;color:#7F1D1D;">El stock se agota en menos de <strong>2 semanas</strong> al ritmo actual, o talles clave ya agotados con &gt;50% de demanda sin cubrir. Hay menos tiempo que el lead time del proveedor.</div>
+                            </div>
+                            <div style="border-radius:8px;padding:12px 14px;border-left:4px solid #D97706;background:#FFFBEB;">
+                                <div style="font-weight:700;color:#D97706;font-size:.82rem;margin-bottom:3px;">ALTA &mdash; Pedir esta semana</div>
+                                <div style="font-size:.78rem;color:#78350F;">El stock se agota antes de que llegue un pedido si esperas mas. Tienes dias de margen, no semanas. O talles populares agotados con 25-50% de demanda perdida.</div>
+                            </div>
+                            <div style="border-radius:8px;padding:12px 14px;border-left:4px solid #2563EB;background:#EFF6FF;">
+                                <div style="font-weight:700;color:#2563EB;font-size:.82rem;margin-bottom:3px;">MEDIA &mdash; Planificar reposicion</div>
+                                <div style="font-size:.78rem;color:#1E3A8A;">Rotacion acelerada pero aun hay margen comodo. Incluir en la proxima OC. Talles con quiebre parcial pero el impacto es menor.</div>
+                            </div>
+                            <div style="border-radius:8px;padding:12px 14px;border-left:4px solid #059669;background:#F0FDF4;">
+                                <div style="font-weight:700;color:#059669;font-size:.82rem;margin-bottom:3px;">BAJA &mdash; Monitorear</div>
+                                <div style="font-size:.78rem;color:#14532D;">Rotacion ligeramente por encima de lo normal. Revisar en la siguiente planificacion.</div>
+                            </div>
+                        </div>
+
+                        <p class="text-muted small mb-3" style="max-width:720px;">
+                            Haz clic en cualquier fila para ver el <strong>detalle completo</strong>: velocidad real vs historica, trazabilidad de compras, historial de ventas y cuanto tardaron en llegar los pedidos anteriores.
+                        </p>
+                        <div class="filter-bar">
+                            <select id="filtroUrg" onchange="cargarUrgente()">
+                                <option value="">Todas las urgencias</option>
+                                <option value="CRITICA">Solo CRITICA</option>
+                                <option value="ALTA">Solo ALTA</option>
+                                <option value="MEDIA">MEDIA o superior</option>
+                            </select>
+                            <select id="filtroTipoUrgente" onchange="cargarUrgente()">
+                                <option value="">Todos los tipos</option>
+                                <option value="velocidad">Solo velocidad</option>
+                                <option value="quiebre">Solo quiebre de talle</option>
+                            </select>
+                        </div>
+                        <div class="table-scroll" id="tablaUrgente">
+                            <div class="empty-state"><i class="ri-loader-4-line"></i>Cargando alertas...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Por Marca -->
+                <div class="tab-panel" id="tabMarca">
+                    <div class="panel-body">
+                        <div class="section-title">
+                            <i class="ri-price-tag-3-line"></i> Ranking de Marcas &mdash; &iquest;en que marcas conviene comprar?
+                        </div>
+                        <p class="text-muted small mb-3" style="max-width:720px;">
+                            Las marcas se ordenan por <strong>score de rotacion</strong>
+                            (sell-through &divide; semanas mediana &times; factor ABC).
+                            Filtra por categoria para acotar el analisis.
+                            <span style="background:#D1FAE5;color:#059669;padding:1px 7px;border-radius:20px;font-size:.72rem;font-weight:700;">&#128293; Alta prioridad</span>
+                            = sell-through &gt;85% y rota en menos de 15 sem.
+                        </p>
+                        <div class="filter-bar">
+                            <select id="selCatMarca" style="min-width:200px;">
+                                <option value="">Todas las categorias</option>
+                            </select>
+                            <input type="text" id="inpTempMarca" placeholder="Temporada" style="width:120px;" />
+                            <input type="number" id="inpAnioMarca" placeholder="Ano" style="width:90px;" />
+                            <button type="button" class="nexo-btn nexo-btn-accent" onclick="cargarRankingMarca()">
+                                <i class="ri-refresh-line"></i> Actualizar
+                            </button>
+                        </div>
+                        <div class="d-flex gap-3 mb-3 flex-wrap" id="kpisMarca"></div>
+                        <div class="table-scroll mb-3" id="tablaMarca" style="max-height:400px;">
+                            <div class="empty-state"><i class="ri-arrow-up-line"></i>Presiona Actualizar para cargar el ranking de marcas</div>
+                        </div>
+                        <div class="nexo-card" style="padding:16px;margin:0;">
+                            <div class="section-title"><i class="ri-bubble-chart-line"></i> Mapa de decision: velocidad vs volumen a pedir</div>
+                            <p class="small text-muted mb-2">
+                                <span style="color:#059669">&#9632;</span> <strong>Verde</strong> = alta prioridad (rota rapido + sell-through alto) &mdash;
+                                <span style="color:#DC2626">&#9632;</span> <strong>Rojo</strong> = revisar (rota lento + sell-through bajo) &mdash;
+                                <span style="color:#0066FF">&#9632;</span> Normal.
+                                Tamano de burbuja = sell-through %.
+                            </p>
+                            <div class="chart-box" style="height:340px;"><canvas id="chartMarcaScatter"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Por Proveedor -->
+                <div class="tab-panel" id="tabProveedor">
+                    <div class="panel-body">
+                        <div class="section-title">
+                            <i class="ri-building-line"></i> Ranking de Proveedores &mdash; &iquest;a quien comprar mas?
+                        </div>
+                        <p class="text-muted small mb-3" style="max-width:720px;">
+                            Agrupa las sugerencias de compra pendientes por proveedor (empresa asignada al producto).
+                            La barra muestra el % del total que corresponde a ese proveedor.
+                            Filtra por categoria para ver solo un segmento.
+                        </p>
+                        <div class="filter-bar">
+                            <select id="selCatProv" style="min-width:200px;">
+                                <option value="">Todas las categorias</option>
+                            </select>
+                            <input type="text" id="inpTempProv" placeholder="Temporada" style="width:120px;" />
+                            <input type="number" id="inpAnioProv" placeholder="Ano" style="width:90px;" />
+                            <button type="button" class="nexo-btn nexo-btn-accent" onclick="cargarRankingProveedor()">
+                                <i class="ri-refresh-line"></i> Actualizar
+                            </button>
+                        </div>
+                        <div class="table-scroll" id="tablaProveedor" style="max-height:460px;">
+                            <div class="empty-state"><i class="ri-arrow-up-line"></i>Presiona Actualizar para cargar proveedores</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Sugerencias -->
+                <div class="tab-panel" id="tabSugerencias">
+                    <div class="panel-body">
+                        <div class="filter-bar">
+                            <input type="text" id="busquedaSug" placeholder="Buscar articulo, SKU o marca..." style="min-width:240px;" oninput="filtrarSugerencias()">
+                            <select id="filtroOrigen" onchange="cargarSugerencias()">
+                                <option value="">Todos los origenes</option>
+                                <option value="prediccion">Prediccion</option>
+                                <option value="alerta_velocidad">Alerta velocidad</option>
+                                <option value="alerta_quiebre">Alerta quiebre</option>
+                            </select>
+                            <button class="nexo-btn nexo-btn-accent" onclick="aprobarSeleccionadas()" style="padding:6px 16px;">
+                                <i class="ri-check-double-line"></i> Aprobar seleccionadas
+                            </button>
+                        </div>
+                        <div class="table-scroll" id="tablaSugerencias">
+                            <div class="empty-state"><i class="ri-loader-4-line"></i>Cargando sugerencias...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: ABC-XYZ -->
+                <div class="tab-panel" id="tabClasificacion">
+                    <div class="panel-body">
+                        <div class="section-title">
+                            <i class="ri-pie-chart-2-line"></i> Clasificacion ABC (ingreso) y XYZ (estabilidad de demanda)
+                        </div>
+                        <p class="text-muted small mb-3">
+                            <strong>ABC:</strong> A = 80% del ingreso, B = 15%, C = 5%. &nbsp;
+                            <strong>XYZ:</strong> X = demanda estable (CV &lt;0.5), Y = variable, Z = irregular.
+                            Haz clic en un articulo para ver detalle completo.
+                        </p>
+                        <div class="table-scroll" id="tablaClasificacion">
+                            <div class="empty-state"><i class="ri-loader-4-line"></i>Cargando clasificacion...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Graficos -->
+                <div class="tab-panel" id="tabGraficos">
+                    <div class="panel-body">
+                        <div class="chart-grid">
+                            <div class="nexo-card" style="padding:20px;margin:0;">
+                                <div class="section-title"><i class="ri-donut-chart-line"></i> Distribucion ABC</div>
+                                <div class="chart-box"><canvas id="chartABC"></canvas></div>
+                            </div>
+                            <div class="nexo-card" style="padding:20px;margin:0;">
+                                <div class="section-title"><i class="ri-donut-chart-line"></i> Distribucion XYZ</div>
+                                <div class="chart-box"><canvas id="chartXYZ"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer"></div>
+
+<!-- Modal Detalle Producto -->
+<div class="modal-overlay" id="modalProducto">
+    <div class="modal-box" id="modalProductoBody">
+        <div class="empty-state"><i class="ri-loader-4-line"></i>Cargando...</div>
+    </div>
+</div>
+
+<!-- Modal desglose artículos por marca -->
+<div class="modal-overlay" id="modalMarca">
+    <div class="modal-box" id="modalMarcaBody" style="max-width:1150px;">
+        <div class="empty-state"><i class="ri-loader-4-line"></i>Cargando...</div>
+    </div>
+</div>
+
+<!-- Modal Configuracion -->
+<div class="modal-overlay" id="modalConfig">
+    <div class="modal-box" id="modalConfigBody">
+        <div class="empty-state"><i class="ri-loader-4-line"></i>Cargando...</div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const CSRF = '{{ csrf_token }}';
+let chartABC = null, chartXYZ = null, chartMarcaScatter = null;
+
+function esc(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function toast(msg, type = 'success') {
+    const c = document.getElementById('toastContainer');
+    const colors = { success:'#00D4AA', error:'#FF4D4D', info:'#0066FF', warning:'#FFB020' };
+    const icons  = { success:'ri-check-circle-line', error:'ri-error-warning-line', info:'ri-information-line', warning:'ri-alert-line' };
+    const t = document.createElement('div');
+    t.style.cssText = `background:#fff;border-left:4px solid ${colors[type]||colors.info};border-radius:8px;padding:14px 18px;margin-top:10px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-width:360px;font-size:.88rem;display:flex;align-items:center;gap:10px;animation:fadeIn .3s ease;`;
+    t.innerHTML = `<i class="${icons[type]||icons.info}" style="color:${colors[type]||colors.info};font-size:1.2rem;flex-shrink:0;"></i><span>${esc(msg)}</span>`;
+    c.appendChild(t);
+    setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(() => t.remove(), 400); }, 4500);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    cargarTodo();
+    cargarCategoriasSelectores();
+    document.querySelectorAll('.pred-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.pred-tab').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.dataset.tab).classList.add('active');
+        });
+    });
+    document.querySelectorAll('.modal-overlay').forEach(m => {
+        m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+    });
+});
+
+async function fetchJSON(url, opts) {
+    const headers = { 'X-CSRFToken': CSRF };
+    if (opts && opts.body) headers['Content-Type'] = 'application/json';
+    const res = await fetch(url, { ...opts, headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { throw new Error(data.error || data.detail || `Error ${res.status}`); }
+    return data;
+}
+
+// ── SELECTORES CATEGORIA ──────────────────────────────────────
+async function cargarCategoriasSelectores() {
+    try {
+        const d = await fetchJSON('/app/api/prediccion/categorias-disponibles/');
+        const cats = d.categorias || [];
+        ['selCatMarca', 'selCatProv'].forEach(selId => {
+            const sel = document.getElementById(selId);
+            if (!sel) return;
+            sel.innerHTML = '<option value="">Todas las categorias</option>';
+            cats.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.categoria;
+                opt.textContent = `${c.categoria} (${c.marcas_activas} marcas · ${(c.unidades_a_pedir||0).toLocaleString()} u.)`;
+                sel.appendChild(opt);
+            });
+        });
+        if (d.temporada_default) {
+            ['inpTempMarca','inpTempProv'].forEach(id => { const el=document.getElementById(id); if(el) el.value=d.temporada_default; });
+        }
+        if (d.anio_default) {
+            ['inpAnioMarca','inpAnioProv'].forEach(id => { const el=document.getElementById(id); if(el) el.value=d.anio_default; });
+        }
+    } catch (e) { console.error('Error cargando categorias:', e); }
+}
+
+// ── URGENTE ───────────────────────────────────────────────────
+async function cargarUrgente() {
+    const el = document.getElementById('tablaUrgente');
+    const filtroUrg   = document.getElementById('filtroUrg')?.value || '';
+    const filtroTipo  = document.getElementById('filtroTipoUrgente')?.value || '';
+    el.innerHTML = '<div class="empty-state"><i class="ri-loader-4-line"></i>Cargando alertas...</div>';
+    try {
+        const [dv, dq] = await Promise.all([
+            fetchJSON('/app/api/prediccion/alertas-velocidad/'),
+            fetchJSON('/app/api/prediccion/alertas-quiebre/'),
+        ]);
+        const ord = { CRITICA:0, ALTA:1, MEDIA:2, BAJA:3 };
+        let rows = [];
+        if (filtroTipo !== 'quiebre') {
+            (dv.alertas_velocidad||[]).forEach(a => rows.push({
+                tipo:'velocidad', urgencia:a.urgencia, id:a.producto_id, articulo:a.articulo, marca:a.marca,
+                detalle:`${a.semanas_stock.toFixed(1)} sem stock · vel. real ${a.velocidad_real.toFixed(1)}/sem`,
+                accion:`Recomprar ${a.recompra_sugerida} u.`, _ord: ord[a.urgencia]??9,
+            }));
+        }
+        if (filtroTipo !== 'velocidad') {
+            (dq.alertas_quiebre||[]).forEach(a => {
+                const tc = (a.talles_criticos||[]).join(', ');
+                rows.push({
+                    tipo:'quiebre', urgencia:a.urgencia, id:a.producto_id, articulo:a.articulo, marca:a.marca,
+                    detalle:`Talles criticos: ${tc||'–'} · ${a.pct_sin_cubrir.toFixed(0)}% sin cubrir`,
+                    accion:`Stock rest.: ${a.stock_restante}u`, _ord: ord[a.urgencia]??9,
+                });
+            });
+        }
+        if (filtroUrg==='CRITICA') rows = rows.filter(r=>r.urgencia==='CRITICA');
+        else if (filtroUrg==='ALTA') rows = rows.filter(r=>r.urgencia==='ALTA');
+        else if (filtroUrg==='MEDIA') rows = rows.filter(r=>['CRITICA','ALTA','MEDIA'].includes(r.urgencia));
+        rows.sort((a,b)=>a._ord-b._ord);
+        document.getElementById('countUrgente').textContent = rows.length;
+        if (!rows.length) {
+            el.innerHTML = '<div class="empty-state"><i class="ri-check-double-line"></i>Sin alertas activas — todo en orden</div>';
+            return;
+        }
+        const tipoIcon  = { velocidad:'ri-speed-line', quiebre:'ri-scissors-cut-line' };
+        const tipoLabel = { velocidad:'Velocidad', quiebre:'Quiebre talle' };
+        let html = `<table class="nexo-table"><thead><tr>
+            <th>Urgencia</th><th>Tipo</th><th>Articulo</th><th>Marca</th>
+            <th>Detalle</th><th>Accion sugerida</th>
+        </tr></thead><tbody>`;
+        rows.forEach(r => {
+            html += `<tr onclick="verProducto(${r.id})">
+                <td><span class="badge-urg badge-${esc(r.urgencia)}">${esc(r.urgencia)}</span></td>
+                <td><i class="${tipoIcon[r.tipo]}"></i> ${esc(tipoLabel[r.tipo])}</td>
+                <td><strong>${esc(r.articulo)}</strong></td>
+                <td>${esc(r.marca)}</td>
+                <td class="small">${esc(r.detalle)}</td>
+                <td><strong style="color:var(--nexo-primary)">${esc(r.accion)}</strong></td>
+            </tr>`;
+        });
+        el.innerHTML = html + '</tbody></table>';
+    } catch (e) {
+        el.innerHTML = `<div class="empty-state"><i class="ri-error-warning-line"></i>${esc(e.message)}</div>`;
+    }
+}
+
+// ── POR MARCA ─────────────────────────────────────────────────
+async function cargarRankingMarca() {
+    const el = document.getElementById('tablaMarca');
+    el.innerHTML = '<div class="empty-state"><i class="ri-loader-4-line"></i>Calculando ranking...</div>';
+    const p = new URLSearchParams();
+    const cat  = document.getElementById('selCatMarca').value;
+    const temp = document.getElementById('inpTempMarca').value.trim();
+    const anio = document.getElementById('inpAnioMarca').value.trim();
+    if (cat)  p.set('categoria', cat);
+    if (temp) p.set('temporada', temp);
+    if (anio) p.set('anio', anio);
+    try {
+        const d = await fetchJSON('/app/api/prediccion/analisis-marca/?' + p);
+        renderRankingMarca(d);
+    } catch (e) {
+        el.innerHTML = `<div class="empty-state"><i class="ri-error-warning-line"></i>${esc(e.message)}</div>`;
+    }
+}
+
+function renderRankingMarca(d) {
+    const rows = d.marcas || [];
+    const res  = d.resumen || {};
+    const kEl = document.getElementById('kpisMarca');
+    kEl.innerHTML = `
+        <div class="kpi-card kpi-primary" style="padding:14px;min-width:150px;">
+            <div class="kpi-accent"></div>
+            <div class="kpi-value" style="font-size:1.4rem;">${res.total_marcas||0}</div>
+            <div class="kpi-label">Marcas analizadas</div>
+        </div>
+        <div class="kpi-card kpi-success" style="padding:14px;min-width:160px;">
+            <div class="kpi-accent"></div>
+            <div class="kpi-value" style="font-size:1.4rem;">${(res.total_unidades_a_pedir||0).toLocaleString()}</div>
+            <div class="kpi-label">Unidades a pedir</div>
+        </div>
+        <div class="kpi-card kpi-warning" style="padding:14px;min-width:180px;">
+            <div class="kpi-accent"></div>
+            <div class="kpi-value" style="font-size:.95rem;">${esc(res.mejor_rotacion_marca||'—')}</div>
+            <div class="kpi-label">Mejor rotacion</div>
+        </div>
+        <div class="kpi-card kpi-info" style="padding:14px;min-width:180px;">
+            <div class="kpi-accent"></div>
+            <div class="kpi-value" style="font-size:.95rem;">${esc(res.mayor_volumen_marca||'—')}</div>
+            <div class="kpi-label">Mayor volumen</div>
+        </div>`;
+    const el = document.getElementById('tablaMarca');
+    if (!rows.length) {
+        el.innerHTML = '<div class="empty-state"><i class="ri-inbox-line"></i>Sin datos para estos filtros. Intenta con otra temporada o categoria.</div>';
+        if (chartMarcaScatter) { chartMarcaScatter.destroy(); chartMarcaScatter = null; }
+        return;
+    }
+    const badgeHtml = { alta_prioridad:'<span style="background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700;">&#128293; Prioridad</span>', revisar:'<span style="background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700;">&#9888;&#65039; Revisar</span>', normal:'' };
+    let html = `<table class="nexo-table"><thead><tr>
+        <th>#</th><th>Marca</th><th>Categorias</th>
+        <th>Rot. (sem mediana)</th><th>Sell-through</th>
+        <th>A / B / C</th><th>A pedir</th><th>vs Ano ant.</th><th>Alertas</th><th></th>
+    </tr></thead><tbody>`;
+    rows.forEach(m => {
+        const vp = m.variacion_vs_anterior_pct;
+        const varTxt   = vp!=null ? ((vp>=0?'+':'')+Number(vp).toFixed(1)+'%') : '—';
+        const varStyle = vp>0 ? 'color:#059669' : (vp<0 ? 'color:#DC2626' : '');
+        const venAnt   = m.ventas_temporada_anterior;
+        const varTooltip = venAnt ? `title="vs ${(venAnt).toLocaleString()} u. vendidas temp. ant."` : '';
+        const varSubtxt = venAnt ? `<div class="small" style="color:var(--nexo-gray-400);">${(venAnt).toLocaleString()} u. ant.</div>` : '';
+        const cats  = (m.categorias||[]).map(esc).join(', ') || '—';
+        const stColor = m.sell_through_promedio_pct>85?'#059669':(m.sell_through_promedio_pct>60?'#F59E0B':'#DC2626');
+        const rankBadge = m.ranking<=3 ? `<span class="rank-badge rank-${m.ranking}">${m.ranking}</span>` : `<span class="rank-badge" style="background:var(--nexo-gray-100);color:var(--nexo-gray-500);">${m.ranking}</span>`;
+        html += `<tr onclick="verDetallesMarca(${m.marca_id},'${esc(m.marca).replace(/'/g,"\\'")}',this)" style="cursor:pointer;" title="Clic para ver articulos de ${esc(m.marca)}">
+            <td>${rankBadge}</td>
+            <td><strong>${esc(m.marca)}</strong> ${badgeHtml[m.badge]||''}</td>
+            <td class="small" style="color:var(--nexo-gray-500);">${cats}</td>
+            <td>
+                ${Number(m.mediana_semanas_agotar).toFixed(1)} sem
+                <div class="small" style="color:var(--nexo-gray-500);">P25:${m.percentil_25_semanas} — P75:${m.percentil_75_semanas}</div>
+            </td>
+            <td>
+                <div class="st-bar">
+                    <div class="st-track"><div class="st-fill" style="width:${Math.min(100,m.sell_through_promedio_pct)}%;background:${stColor};"></div></div>
+                    <span style="color:${stColor};font-weight:700;">${m.sell_through_promedio_pct}%</span>
+                </div>
+            </td>
+            <td>
+                <span class="badge-abc-pill abc-A" style="width:24px;height:24px;font-size:.7rem;">${m.skus_clase_A}</span>
+                <span class="badge-abc-pill abc-B" style="width:24px;height:24px;font-size:.7rem;">${m.skus_clase_B}</span>
+                <span class="badge-abc-pill abc-C" style="width:24px;height:24px;font-size:.7rem;">${m.skus_clase_C}</span>
+            </td>
+            <td><strong style="color:var(--nexo-primary);font-size:1rem;">${(m.unidades_a_pedir||0).toLocaleString()}</strong></td>
+            <td ${varTooltip} style="${varStyle}">${varTxt}${varSubtxt}</td>
+            <td>${m.alertas_criticas ? `<span style="background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700;">${m.alertas_criticas} crit.</span>` : '<span style="color:var(--nexo-gray-300)">—</span>'}</td>
+            <td><button class="btn-nexo-sm btn-outline" onclick="event.stopPropagation();verDetallesMarca(${m.marca_id},'${esc(m.marca).replace(/'/g,"\\'")}',null)" style="font-size:.72rem;padding:3px 8px;"><i class="ri-bar-chart-grouped-line"></i> Desglose</button></td>
+        </tr>`;
+    });
+    el.innerHTML = html + '</tbody></table>';
+
+    const pts = rows.map(m => ({
+        x: Number(m.mediana_semanas_agotar),
+        y: m.unidades_a_pedir||0,
+        r: Math.max(6, Math.min(30, (m.sell_through_promedio_pct||0)/3.5)),
+        marca: m.marca, sell: m.sell_through_promedio_pct||0,
+    }));
+    if (chartMarcaScatter) chartMarcaScatter.destroy();
+    chartMarcaScatter = new Chart(document.getElementById('chartMarcaScatter').getContext('2d'), {
+        type: 'bubble',
+        data: { datasets: [{ label:'Marcas', data:pts,
+            backgroundColor: rows.map(m => m.badge==='alta_prioridad'?'rgba(5,150,105,.60)': m.badge==='revisar'?'rgba(220,38,38,.45)':'rgba(0,102,255,.50)'),
+            borderColor:     rows.map(m => m.badge==='alta_prioridad'?'#059669': m.badge==='revisar'?'#DC2626':'#0066FF'),
+            borderWidth: 1.5,
+        }]},
+        options: {
+            responsive:true, maintainAspectRatio:false,
+            plugins: { legend:{display:false}, tooltip:{ callbacks:{
+                label(ctx) {
+                    const p=ctx.raw;
+                    return [`Marca: ${p.marca}`, `Semanas mediana: ${p.x.toFixed(1)}`, `A pedir: ${p.y.toLocaleString()} u.`, `Sell-through: ${p.sell}%`];
+                }
+            }}},
+            scales:{
+                x:{ title:{display:true,text:'Semanas mediana ← menor = rota mas rapido'}, min:0 },
+                y:{ title:{display:true,text:'Unidades a pedir'}, beginAtZero:true },
+            },
+        },
+    });
+}
+
+// ── POR PROVEEDOR ─────────────────────────────────────────────
+async function cargarRankingProveedor() {
+    const el = document.getElementById('tablaProveedor');
+    el.innerHTML = '<div class="empty-state"><i class="ri-loader-4-line"></i>Cargando proveedores...</div>';
+    const p = new URLSearchParams();
+    const cat  = document.getElementById('selCatProv').value;
+    const temp = document.getElementById('inpTempProv').value.trim();
+    const anio = document.getElementById('inpAnioProv').value.trim();
+    if (cat)  p.set('categoria', cat);
+    if (temp) p.set('temporada', temp);
+    if (anio) p.set('anio', anio);
+    try {
+        const d = await fetchJSON('/app/api/prediccion/analisis-proveedor/?' + p);
+        renderRankingProveedor(d);
+    } catch (e) {
+        el.innerHTML = `<div class="empty-state"><i class="ri-error-warning-line"></i>${esc(e.message)}</div>`;
+    }
+}
+
+function renderRankingProveedor(d) {
+    const rows = d.proveedores || [];
+    const el   = document.getElementById('tablaProveedor');
+    if (!rows.length) {
+        el.innerHTML = '<div class="empty-state"><i class="ri-inbox-line"></i>Sin proveedores con ordenes de compra para esta temporada.<br><small style="opacity:.7">Los proveedores se cargan desde las OC activas/completadas de la temporada.</small></div>';
+        return;
+    }
+    const total = d.resumen?.total_unidades_ordenadas || 1;
+    let html = `<table class="nexo-table"><thead><tr>
+        <th>#</th><th>Proveedor</th><th>OCs</th><th>Productos</th>
+        <th>Unidades ordenadas</th><th>Recibidas</th><th>En transito</th><th>vs Ano ant.</th>
+    </tr></thead><tbody>`;
+    rows.forEach((r, i) => {
+        const vp = r.variacion_vs_anterior_pct;
+        const varTxt   = vp!=null ? ((vp>=0?'+':'')+Number(vp).toFixed(1)+'%') : '—';
+        const varStyle = vp>0?'color:#059669':(vp<0?'color:#DC2626':'');
+        const pct = Math.min(100, (r.unidades_ordenadas/total)*100);
+        html += `<tr>
+            <td>${i+1}</td>
+            <td><strong>${esc(r.empresa)}</strong></td>
+            <td>${r.num_ocs}</td>
+            <td>${r.num_productos}</td>
+            <td>
+                <div class="st-bar">
+                    <div class="st-track" style="width:80px;"><div class="st-fill" style="width:${pct.toFixed(0)}%;background:var(--nexo-primary);"></div></div>
+                    <strong style="color:var(--nexo-primary)">${(r.unidades_ordenadas||0).toLocaleString()}</strong>
+                    <small style="color:var(--nexo-gray-500)">${pct.toFixed(0)}%</small>
+                </div>
+            </td>
+            <td>${(r.unidades_recibidas||0).toLocaleString()}</td>
+            <td><strong style="color:var(--nexo-warning)">${(r.unidades_en_transito||0).toLocaleString()}</strong></td>
+            <td style="${varStyle}">${varTxt}</td>
+        </tr>`;
+    });
+    el.innerHTML = html + '</tbody></table>';
+}
+
+// ── SUGERENCIAS ───────────────────────────────────────────────
+async function cargarSugerencias() {
+    const origen = document.getElementById('filtroOrigen')?.value || '';
+    const url = '/app/api/prediccion/sugerencias/' + (origen ? `?origen=${origen}` : '');
+    const d = await fetchJSON(url);
+    const el = document.getElementById('tablaSugerencias');
+    if (!d.sugerencias.length) {
+        el.innerHTML = '<div class="empty-state"><i class="ri-inbox-line"></i>Sin sugerencias pendientes.<br><small style="opacity:.7">Se generan cuando la demanda predicha supera stock actual + en transito.</small></div>';
+        return;
+    }
+    let html = `<table class="nexo-table"><thead><tr>
+        <th style="width:30px"><input type="checkbox" id="chkAll" onchange="toggleAll(this)"></th>
+        <th>SKU</th><th>Articulo</th><th>Talle</th><th>Marca</th>
+        <th>Stock</th><th>Transito</th><th>A Pedir</th><th>Origen</th>
+        <th>Confianza</th></tr></thead><tbody>`;
+    d.sugerencias.forEach(s => {
+        html += `<tr class="sug-row" data-search="${esc((s.sku||'')+' '+(s.articulo||'')+' '+(s.marca||''))}">
+            <td><input type="checkbox" class="chk-sug" value="${s.id}" onclick="event.stopPropagation()"></td>
+            <td><code>${esc(s.sku)}</code></td><td><strong>${esc(s.articulo)}</strong></td><td>${esc(s.talle)}</td><td>${esc(s.marca)}</td>
+            <td>${s.stock_actual}</td><td>${s.en_transito}</td>
+            <td><strong style="color:var(--nexo-primary)">${s.a_pedir}</strong></td>
+            <td><span class="badge-urg badge-MEDIA">${esc(s.origen)}</span></td>
+            <td>${(s.confianza*100).toFixed(0)}%</td></tr>`;
+    });
+    el.innerHTML = html + '</tbody></table>';
+    filtrarSugerencias();
+}
+
+function filtrarSugerencias() {
+    const q = (document.getElementById('busquedaSug')?.value || '').toLowerCase();
+    document.querySelectorAll('.sug-row').forEach(row => {
+        row.style.display = (row.dataset.search||'').toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+
+function toggleAll(el) {
+    document.querySelectorAll('.chk-sug').forEach(c => c.checked = el.checked);
+}
+
+async function aprobarSeleccionadas() {
+    const ids = [...document.querySelectorAll('.chk-sug:checked')].map(c => parseInt(c.value));
+    if (!ids.length) { toast('Selecciona al menos una sugerencia', 'warning'); return; }
+    if (!confirm(`Aprobar ${ids.length} sugerencia(s)?`)) return;
+    try {
+        const d = await fetchJSON('/app/api/prediccion/aprobar-sugerencia/', { method:'POST', body:JSON.stringify({ids}) });
+        toast(`${d.aprobadas} sugerencias aprobadas`, 'success');
+        cargarSugerencias();
+        cargarResumen();
+    } catch (e) { toast('Error al aprobar: ' + e.message, 'error'); }
+}
+
+// ── CLASIFICACION ─────────────────────────────────────────────
+async function cargarClasificacion() {
+    const d = await fetchJSON('/app/api/prediccion/clasificacion/');
+    const el = document.getElementById('tablaClasificacion');
+    if (!d.clasificaciones.length) { el.innerHTML = '<div class="empty-state"><i class="ri-pie-chart-line"></i>Sin clasificaciones. Ejecuta Recalcular primero.</div>'; return; }
+    let html = `<table class="nexo-table"><thead><tr>
+        <th>Articulo</th><th>Marca</th><th>Categoria</th><th>ABC</th>
+        <th>XYZ</th><th>Clase</th><th>Ventas</th><th>Corregidas</th><th>CV</th>
+        <th>% Acum.</th><th>Censurada</th></tr></thead><tbody>`;
+    d.clasificaciones.forEach(c => {
+        html += `<tr onclick="verProducto(${c.producto_id})">
+            <td><strong>${esc(c.articulo)}</strong></td><td>${esc(c.marca)}</td><td>${esc(c.categoria)}</td>
+            <td><span class="badge-abc-pill abc-${esc(c.abc)}">${esc(c.abc)}</span></td>
+            <td><span class="badge-abc-pill xyz-${esc(c.xyz)}">${esc(c.xyz)}</span></td>
+            <td><strong>${esc(c.clase)}</strong></td>
+            <td>${c.ventas.toLocaleString()}</td><td>${c.ventas_corregidas.toLocaleString()}</td>
+            <td>${c.cv.toFixed(2)}</td><td>${(c.pct_acumulado*100).toFixed(1)}%</td>
+            <td>${c.censurada ? '<i class="ri-alert-fill" style="color:var(--nexo-warning)"></i> Si' : '—'}</td></tr>`;
+    });
+    el.innerHTML = html + '</tbody></table>';
+}
+
+// ── CARGA INICIAL ─────────────────────────────────────────────
+async function cargarTodo() {
+    try { await Promise.all([cargarResumen(), cargarUrgente(), cargarSugerencias(), cargarClasificacion()]); }
+    catch(e) { console.error('Error cargando datos:', e); }
+    document.getElementById('lastUpdate').innerHTML = '<i class="ri-check-line me-1"></i>Datos cargados ' + new Date().toLocaleTimeString();
+}
+
+async function cargarResumen() {
+    const d = await fetchJSON('/app/api/prediccion/resumen/');
+    document.getElementById('kpiCriticas').textContent   = (d.alertas.total_criticas||0).toLocaleString();
+    document.getElementById('kpiVelocidad').textContent  = (d.alertas.velocidad_total||0).toLocaleString();
+    document.getElementById('kpiQuiebre').textContent    = (d.alertas.quiebre_total||0).toLocaleString();
+    document.getElementById('kpiSugerencias').textContent= (d.sugerencias.total||0).toLocaleString();
+    document.getElementById('kpiUnidades').textContent   = (d.sugerencias.unidades_a_pedir||0).toLocaleString();
+    document.getElementById('kpiClaseA').textContent     = (d.clasificacion_abc.A||0).toLocaleString();
+    document.getElementById('countUrgente').textContent    = (d.alertas.velocidad_total||0)+(d.alertas.quiebre_total||0);
+    document.getElementById('countSugerencias').textContent= d.sugerencias.total||0;
+    document.getElementById('countABC').textContent        = (d.clasificacion_abc.A||0)+(d.clasificacion_abc.B||0)+(d.clasificacion_abc.C||0);
+    renderCharts(d.clasificacion_abc, d.clasificacion_xyz);
+}
+
+function renderCharts(abc, xyz) {
+    if (chartABC) chartABC.destroy();
+    if (chartXYZ) chartXYZ.destroy();
+    chartABC = new Chart(document.getElementById('chartABC').getContext('2d'), {
+        type:'doughnut',
+        data:{ labels:[`A — ${abc.A||0} productos (80% ingreso)`,`B — ${abc.B||0} productos (15% ingreso)`,`C — ${abc.C||0} productos (5% ingreso)`], datasets:[{data:[abc.A||0,abc.B||0,abc.C||0],backgroundColor:['#DC2626','#F59E0B','#3B82F6'],borderWidth:0}] },
+        options:{ responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{padding:16,font:{size:12}}}} }
+    });
+    chartXYZ = new Chart(document.getElementById('chartXYZ').getContext('2d'), {
+        type:'doughnut',
+        data:{ labels:[`X — ${xyz.X||0} (estable CV<0.5)`,`Y — ${xyz.Y||0} (variable CV 0.5-1.0)`,`Z — ${xyz.Z||0} (irregular CV>1.0)`], datasets:[{data:[xyz.X||0,xyz.Y||0,xyz.Z||0],backgroundColor:['#059669','#EA580C','#7C3AED'],borderWidth:0}] },
+        options:{ responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{padding:16,font:{size:12}}}} }
+    });
+}
+
+// ── DESGLOSE ARTÍCULOS POR MARCA ─────────────────────────────
+async function verDetallesMarca(marcaId, marcaNombre, trEl) {
+    const modal = document.getElementById('modalMarca');
+    const body  = document.getElementById('modalMarcaBody');
+    body.innerHTML = `<div class="empty-state"><i class="ri-loader-4-line"></i>Cargando artículos de <strong>${esc(marcaNombre)}</strong>...</div>`;
+    modal.classList.add('show');
+
+    const temporada = document.getElementById('inpTempMarca')?.value?.trim() || '';
+    const anio      = document.getElementById('inpAnioMarca')?.value?.trim() || '';
+    const cat       = document.getElementById('selCatMarca')?.value || '';
+
+    let url = `/app/api/prediccion/marca-articulos/?marca_id=${encodeURIComponent(marcaId)}`;
+    if (temporada) url += `&temporada=${encodeURIComponent(temporada)}`;
+    if (anio)      url += `&anio=${encodeURIComponent(anio)}`;
+    if (cat)       url += `&categoria=${encodeURIComponent(cat)}`;
+
+    let d;
+    try { d = await fetchJSON(url); }
+    catch(e) { body.innerHTML = `<div class="empty-state"><i class="ri-error-warning-line"></i>${esc(e.message)}</div>`; return; }
+
+    const arts = d.articulos || [];
+    const res  = d.resumen   || {};
+    const varPct = (res.total_ventas_anterior > 0)
+        ? ((res.total_a_pedir - res.total_ventas_anterior) / res.total_ventas_anterior * 100).toFixed(1)
+        : null;
+    const varTxt = varPct != null ? ((varPct>=0?'+':'')+varPct+'%') : '—';
+    const varColor = varPct > 0 ? '#059669' : (varPct < 0 ? '#DC2626' : '#6B7280');
+    const abcColors = { A:'#059669', B:'#F59E0B', C:'#DC2626', '—':'#9CA3AF' };
+
+    let html = `
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:20px;">
+        <div>
+            <h5 style="margin:0;font-weight:800;font-size:1.1rem;">${esc(d.marca)} — Desglose de articulos</h5>
+            <span style="color:var(--nexo-gray-500);font-size:.83rem;">${esc(d.temporada||'—')} ${d.anio||''} ${cat ? '· Cat: '+esc(cat) : ''}</span>
+        </div>
+        <button onclick="document.getElementById('modalMarca').classList.remove('show')" style="border:none;background:var(--nexo-gray-100);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">&times;</button>
+    </div>
+    <!-- KPIs resumen -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px;">
+        <div class="kpi-card" style="padding:12px;"><div class="kpi-accent"></div>
+            <div class="kpi-value" style="font-size:1.3rem;">${res.total_articulos||0}</div>
+            <div class="kpi-label">Articulos</div></div>
+        <div class="kpi-card" style="padding:12px;"><div class="kpi-accent" style="background:var(--nexo-primary)"></div>
+            <div class="kpi-value" style="font-size:1.3rem;">${(res.total_ventas||0).toLocaleString()}</div>
+            <div class="kpi-label">Ventas temporada</div></div>
+        <div class="kpi-card" style="padding:12px;"><div class="kpi-accent" style="background:#8B5CF6"></div>
+            <div class="kpi-value" style="font-size:1.3rem;">${(res.total_stock||0).toLocaleString()}</div>
+            <div class="kpi-label">Stock actual</div></div>
+        <div class="kpi-card" style="padding:12px;"><div class="kpi-accent" style="background:var(--nexo-success)"></div>
+            <div class="kpi-value" style="font-size:1.3rem;">${(res.total_a_pedir||0).toLocaleString()}</div>
+            <div class="kpi-label">A pedir</div></div>
+        <div class="kpi-card" style="padding:12px;"><div class="kpi-accent" style="background:${varColor}"></div>
+            <div class="kpi-value" style="font-size:1.3rem;color:${varColor};">${varTxt}</div>
+            <div class="kpi-label" title="vs ${(res.total_ventas_anterior||0).toLocaleString()} u. vendidas temp. ant.">vs Ano ant. <i class="ri-information-line" style="font-size:.7rem;vertical-align:middle;cursor:help;"></i></div></div>
+    </div>`;
+
+    if (!arts.length) {
+        html += '<div class="empty-state"><i class="ri-inbox-line"></i>No se encontraron articulos con datos para esta marca/temporada.</div>';
+    } else {
+        html += `<div style="overflow-x:auto;">
+        <table class="nexo-table" style="font-size:.82rem;">
+        <thead><tr>
+            <th>#</th><th>Articulo</th><th>Cat.</th><th>Gen.</th>
+            <th>ABC / XYZ</th><th>Ventas temp.</th><th>Stock</th>
+            <th>Sell-through est.</th><th>A pedir</th>
+        </tr></thead><tbody>`;
+        arts.forEach((a, idx) => {
+            const stColor = a.sell_through_estimado_pct != null
+                ? (a.sell_through_estimado_pct > 85 ? '#059669' : a.sell_through_estimado_pct > 60 ? '#F59E0B' : '#DC2626')
+                : '#9CA3AF';
+            const stTxt = a.sell_through_estimado_pct != null ? a.sell_through_estimado_pct+'%' : '—';
+            const abcColor = abcColors[a.abc] || '#9CA3AF';
+            html += `<tr>
+                <td style="color:var(--nexo-gray-400);font-size:.75rem;">${idx+1}</td>
+                <td>
+                    <a href="#" onclick="event.preventDefault();document.getElementById('modalMarca').classList.remove('show');verProducto(${a.id})" style="font-weight:600;color:var(--nexo-primary);text-decoration:none;">${esc(a.articulo)}</a>
+                </td>
+                <td class="small" style="color:var(--nexo-gray-500);">${esc(a.categoria)||'—'}</td>
+                <td class="small" style="color:var(--nexo-gray-500);">${esc(a.genero)||'—'}</td>
+                <td>
+                    <span style="background:${abcColor}22;color:${abcColor};border:1px solid ${abcColor};padding:1px 6px;border-radius:4px;font-weight:700;font-size:.7rem;">${esc(a.abc)}</span>
+                    <span style="background:#6B7280;color:#fff;padding:1px 5px;border-radius:4px;font-size:.7rem;">${esc(a.xyz)}</span>
+                </td>
+                <td><strong>${(a.ventas_temporada||0).toLocaleString()}</strong></td>
+                <td>${(a.stock_actual||0).toLocaleString()}</td>
+                <td>
+                    ${a.sell_through_estimado_pct != null ? `
+                    <div class="st-bar">
+                        <div class="st-track"><div class="st-fill" style="width:${Math.min(100,a.sell_through_estimado_pct)}%;background:${stColor};"></div></div>
+                        <span style="color:${stColor};font-weight:700;font-size:.78rem;">${stTxt}</span>
+                    </div>` : '<span style="color:var(--nexo-gray-300)">—</span>'}
+                </td>
+                <td><strong style="color:var(--nexo-primary);">${(a.unidades_a_pedir||0).toLocaleString()}</strong></td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+
+        // Mini nota sobre sell-through
+        html += `<p style="margin-top:10px;font-size:.75rem;color:var(--nexo-gray-500);"><i class="ri-information-line"></i> Sell-through estimado = ventas / (ventas + stock actual). Clic en el nombre del articulo para ver su detalle completo.</p>`;
+    }
+
+    body.innerHTML = html;
+}
+
+// ── DETALLE PRODUCTO ──────────────────────────────────────────
+async function verProducto(id) {
+    if (!id) return;
+    const modal = document.getElementById('modalProducto');
+    const body  = document.getElementById('modalProductoBody');
+    body.innerHTML = '<div class="empty-state"><i class="ri-loader-4-line"></i>Cargando detalle...</div>';
+    modal.classList.add('show');
+    const d = await fetchJSON(`/app/api/prediccion/producto/${id}/`);
+    if (d.error) { body.innerHTML = `<div class="empty-state"><i class="ri-error-warning-line"></i>${esc(d.error)}</div>`; return; }
+    const p = d.producto;
+
+    // ── Cabecera ──────────────────────────────────────────────────
+    let html = `<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:20px;">
+        <div>
+            <h5 style="margin:0;font-weight:800;color:var(--nexo-gray-900);">${esc(p.articulo)}</h5>
+            <span style="color:var(--nexo-gray-500);font-size:.85rem;">${esc(p.marca)} &bull; ${esc(p.categoria)} &bull; ${esc(p.genero)} &bull; Temporada: <strong>${esc(p.temporada||'—')}</strong> &bull; ${p.semanas_temporada} sem.</span>
+        </div>
+        <button onclick="document.getElementById('modalProducto').classList.remove('show')" style="border:none;background:var(--nexo-gray-100);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;">&times;</button>
+    </div>`;
+
+    // ── KPIs clasificacion + prediccion ───────────────────────────
+    if (d.clasificacion) {
+        const conf = d.prediccion ? (d.prediccion.confianza*100).toFixed(0)+'%' : '—';
+        const stk  = d.stock_temporada;
+        html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
+            <div class="kpi-card" style="padding:12px;"><div class="kpi-accent" style="background:#DC2626"></div>
+                <div style="display:flex;gap:5px;margin-bottom:3px;"><span class="badge-abc-pill abc-${esc(d.clasificacion.abc)}">${esc(d.clasificacion.abc)}</span><span class="badge-abc-pill xyz-${esc(d.clasificacion.xyz)}">${esc(d.clasificacion.xyz)}</span></div>
+                <div class="kpi-label">Clasificacion</div></div>
+            <div class="kpi-card" style="padding:12px;"><div class="kpi-accent" style="background:var(--nexo-primary)"></div>
+                <div class="kpi-value" style="font-size:1.2rem;">${d.prediccion?d.prediccion.unidades.toLocaleString():'—'}</div>
+                <div class="kpi-label">Demanda predicha</div></div>
+            <div class="kpi-card" style="padding:12px;"><div class="kpi-accent" style="background:var(--nexo-accent)"></div>
+                <div class="kpi-value" style="font-size:1.2rem;">${conf}</div>
+                <div class="kpi-label">Confianza</div></div>
+            ${stk ? `<div class="kpi-card" style="padding:12px;"><div class="kpi-accent" style="background:#8B5CF6"></div>
+                <div class="kpi-value" style="font-size:1.2rem;">${(stk.total_ingresado||0).toLocaleString()}</div>
+                <div class="kpi-label">Ingresado temporada</div></div>` : ''}
+        </div>`;
+    }
+
+    // ── Alerta velocidad expandida ────────────────────────────────
+    if (d.alerta_velocidad) {
+        const av = d.alerta_velocidad;
+        const pct_vendido = av.stock_inicial > 0 ? (av.ventas_acumuladas/av.stock_inicial*100).toFixed(0) : 0;
+        const ratio_txt = av.ratio >= 1
+            ? `vende <strong>${av.ratio.toFixed(2)}x mas rapido</strong> que lo historico`
+            : `vende <strong>${(1/av.ratio).toFixed(2)}x mas lento</strong> que lo historico`;
+        const urgColor = {'CRITICA':'#DC2626','ALTA':'#D97706','MEDIA':'#2563EB','BAJA':'#059669'}[av.urgencia]||'#666';
+        html += `<div style="background:#FFFBEB;border-radius:8px;padding:14px 18px;margin-bottom:12px;border-left:4px solid ${urgColor};">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <strong style="color:${urgColor}"><i class="ri-speed-line me-1"></i>Alerta Velocidad: <span class="badge-urg badge-${esc(av.urgencia)}">${esc(av.urgencia)}</span></strong>
+                <small style="color:var(--nexo-gray-500)">Detectada: ${esc(av.fecha_deteccion?.substring(0,10)||'—')}</small>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;font-size:.82rem;">
+                <div><span style="color:var(--nexo-gray-500)">Vel. real (u/sem)</span><br><strong style="color:${urgColor}">${av.velocidad_real.toFixed(1)}</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Vel. historica (u/sem)</span><br><strong>${av.velocidad_normal.toFixed(1)}</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Diferencia</span><br><strong>${ratio_txt}</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Stock restante</span><br><strong>${av.stock_restante} u. (${av.semanas_stock.toFixed(1)} sem)</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Stock inicial / Vendido</span><br><strong>${av.stock_inicial} u. → ${pct_vendido}% vendido</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Lead time proveedor</span><br><strong>${av.lead_time_dias} dias (${av.semanas_para_pedir.toFixed(1)} sem para pedir)</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Sem. temporada rest.</span><br><strong>${av.semanas_temporada_restante.toFixed(1)} sem</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">En transito</span><br><strong>${av.en_transito} u.</strong></div>
+            </div>
+            <div style="margin-top:10px;padding:8px 12px;background:rgba(0,0,0,.04);border-radius:6px;font-size:.82rem;">
+                <i class="ri-shopping-cart-2-line me-1" style="color:var(--nexo-primary)"></i>
+                <strong>Recompra sugerida: <span style="color:var(--nexo-primary)">${av.recompra} u.</span></strong>
+                &mdash; Pedido urgente: el stock se agota en ${av.semanas_stock.toFixed(1)} semanas al ritmo actual.
+                Con lead time de ${av.lead_time_dias} dias, hay que pedir ${av.semanas_stock.toFixed(1) > av.semanas_para_pedir.toFixed(1) ? 'esta semana' : '<strong style=color:#DC2626>HOY</strong>'}.
+            </div>
+        </div>`;
+    }
+
+    // ── Alerta quiebre expandida ──────────────────────────────────
+    if (d.alerta_quiebre) {
+        const aq = d.alerta_quiebre;
+        const urgColor = {'CRITICA':'#DC2626','ALTA':'#D97706','MEDIA':'#2563EB','BAJA':'#059669'}[aq.urgencia]||'#666';
+        html += `<div style="background:#FEF2F2;border-radius:8px;padding:14px 18px;margin-bottom:12px;border-left:4px solid ${urgColor};">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <strong style="color:${urgColor}"><i class="ri-scissors-cut-line me-1"></i>Quiebre de Talle: <span class="badge-urg badge-${esc(aq.urgencia)}">${esc(aq.urgencia)}</span></strong>
+                <small style="color:var(--nexo-gray-500)">Detectada: ${esc(aq.fecha_deteccion?.substring(0,10)||'—')}</small>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;font-size:.82rem;">
+                <div><span style="color:var(--nexo-gray-500)">Talles agotados criticos</span><br><strong style="color:#DC2626">${(aq.talles_criticos||[]).map(esc).join(', ')||'—'}</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Todos los agotados</span><br><strong>${(aq.talles_agotados||[]).map(esc).join(', ')||'—'}</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Talles con stock</span><br><strong style="color:#059669">${(aq.talles_con_stock||[]).map(esc).join(', ')||'—'}</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Demanda sin cubrir</span><br><strong style="color:#DC2626">${aq.pct_sin_cubrir.toFixed(1)}%</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Ventas perdidas/sem</span><br><strong>~${aq.perdidas_semana} u.</strong></div>
+                <div><span style="color:var(--nexo-gray-500)">Stock total restante</span><br><strong>${aq.stock_total_restante} u.</strong></div>
+            </div>
+        </div>`;
+    }
+
+    // ── Stock por talle ───────────────────────────────────────────
+    if (d.talles_stock.length) {
+        html += `<div class="section-title" style="margin-top:16px;"><i class="ri-list-check-2"></i> Stock por Talle</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">`;
+        d.talles_stock.forEach(t => {
+            const col = t.stock<=0?'background:#FEE2E2;color:#DC2626;border:1px solid #FECACA;':t.stock<=3?'background:#FEF3C7;color:#D97706;border:1px solid #FDE68A;':'background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0;';
+            html += `<div style="${col}padding:8px 14px;border-radius:8px;text-align:center;min-width:60px;">
+                <div style="font-weight:800;font-size:1rem;">${esc(t.talle)}</div>
+                <div style="font-size:.72rem;">${t.stock<=0?'AGOTADO':t.stock+' u.'}</div>
+            </div>`;
+        });
+        html += '</div>';
+    }
+
+    // ── Trazabilidad: historial de compras ────────────────────────
+    if (d.historial_compras && d.historial_compras.length) {
+        html += `<div class="section-title" style="margin-top:16px;"><i class="ri-truck-line"></i> Trazabilidad de Compras</div>
+        <p class="small text-muted mb-2">Ordenes de compra que incluyeron este producto, con fechas reales de entrega y lead time.</p>
+        <div style="overflow-x:auto;margin-bottom:16px;">
+        <table class="nexo-table"><thead><tr>
+            <th>OC</th><th>Proveedor</th><th>Temporada</th><th>Talle</th>
+            <th>Ordenado</th><th>Recibido</th><th>Estado</th>
+            <th>Fecha OC</th><th>Envio prov.</th><th>Entrega est.</th><th>Entrega real</th>
+            <th>Lead time real</th>
+        </tr></thead><tbody>`;
+        d.historial_compras.forEach(c => {
+            const ltReal = c.lead_time_real_dias != null
+                ? `<strong style="color:${c.lead_time_real_dias>30?'#DC2626':c.lead_time_real_dias>21?'#D97706':'#059669'}">${c.lead_time_real_dias}d</strong>`
+                : (c.estado==='ACTIVA'?'<span style="color:#2563EB">En camino</span>':'—');
+            const estadoCol = {'ACTIVA':'color:#2563EB','COMPLETADA':'color:#059669','ELIMINADA':'color:#9CA3AF','CANCELADA':'color:#DC2626'}[c.estado]||'';
+            html += `<tr style="cursor:default;">
+                <td><small>#${c.oc_id}</small> ${esc(c.oc_nombre)}</td>
+                <td>${esc(c.empresa)}</td>
+                <td>${esc(c.temporada)}</td>
+                <td>${esc(c.talla)}</td>
+                <td>${c.unidades_ordenadas}</td>
+                <td>${c.unidades_recibidas}</td>
+                <td><span style="${estadoCol};font-weight:600;font-size:.78rem;">${esc(c.estado)}</span></td>
+                <td class="small">${c.fecha_oc?.substring(0,10)||'—'}</td>
+                <td class="small">${c.fecha_envio_proveedor||'—'}</td>
+                <td class="small">${c.fecha_entrega_estimada||'—'}</td>
+                <td class="small">${c.fecha_entrega_real||'—'}</td>
+                <td>${ltReal}</td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+    } else {
+        html += `<div style="background:var(--nexo-gray-100);border-radius:8px;padding:12px 16px;margin:16px 0;font-size:.83rem;color:var(--nexo-gray-500);">
+            <i class="ri-truck-line me-1"></i> Sin historial de compras registrado para este producto. Las OC se vinculan al recepcionar la mercaderia.
+        </div>`;
+    }
+
+    // ── Ultimas ventas ────────────────────────────────────────────
+    if (d.ultimas_ventas && d.ultimas_ventas.length) {
+        html += `<div class="section-title" style="margin-top:16px;"><i class="ri-receipt-line"></i> Ultimas ${d.ultimas_ventas.length} ventas</div>
+        <div style="overflow-x:auto;margin-bottom:16px;">
+        <table class="nexo-table"><thead><tr><th>Fecha</th><th>Talle</th><th>Und.</th><th>Tipo</th></tr></thead><tbody>`;
+        d.ultimas_ventas.forEach(v => {
+            html += `<tr style="cursor:default;"><td>${esc(v.fecha?.substring(0,10)||'—')}</td><td>${esc(v['ProductoTalla__talla']||'—')}</td><td>${Math.abs(v.cantidad)}</td><td class="small">${esc(v.concepto)}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    // ── Grafico ventas semanales ──────────────────────────────────
+    if (d.serie_temporal && d.serie_temporal.length > 3) {
+        html += `<div class="section-title" style="margin-top:16px;"><i class="ri-line-chart-line"></i> Ventas Semanales Historicas</div><div style="height:200px;"><canvas id="chartDetalle"></canvas></div>`;
+    }
+
+    body.innerHTML = html;
+
+    if (d.serie_temporal && d.serie_temporal.length > 3) {
+        new Chart(document.getElementById('chartDetalle').getContext('2d'), {
+            type:'line',
+            data:{ labels:d.serie_temporal.map(s=>`S${s.semana}/${s.anio}`), datasets:[{label:'Unidades',data:d.serie_temporal.map(s=>s.unidades),borderColor:'#0066FF',backgroundColor:'rgba(0,102,255,.08)',fill:true,tension:.35,pointRadius:2}] },
+            options:{ responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0f0f0'}},x:{grid:{display:false}}} }
+        });
+    }
+}
+
+// ── RECALCULAR ────────────────────────────────────────────────
+async function recalcular() {
+    const btn = document.getElementById('btnRecalcular');
+    btn.classList.add('loading');
+    btn.innerHTML = '<i class="ri-loader-4-line"></i> Calculando...';
+    try {
+        await fetchJSON('/app/api/prediccion/recalcular/', { method:'POST' });
+        toast('Pipeline completado. Recarga para ver nuevos datos.', 'success');
+        cargarTodo();
+    } catch (e) {
+        toast('Error al recalcular: ' + e.message, 'error');
+    } finally {
+        btn.classList.remove('loading');
+        btn.innerHTML = '<i class="ri-refresh-line"></i> Recalcular';
+    }
+}
+
+// ── CONFIGURACION ─────────────────────────────────────────────
+async function abrirConfiguracion() {
+    const modal = document.getElementById('modalConfig');
+    const body  = document.getElementById('modalConfigBody');
+    modal.classList.add('show');
+    body.innerHTML = '<div class="empty-state"><i class="ri-loader-4-line"></i>Cargando configuracion...</div>';
+    const d = await fetchJSON('/app/api/prediccion/configuracion/');
+    const campos = [
+        { key:'dias_historico_analisis',        label:'Dias de historico a analizar',  tipo:'int', desc:'Cuantos dias atras se miran las ventas' },
+        { key:'factor_seguridad_clase_a',        label:'Factor seguridad Clase A',      tipo:'dec', desc:'Multiplicador de demanda para productos A' },
+        { key:'factor_seguridad_clase_b',        label:'Factor seguridad Clase B',      tipo:'dec', desc:'Multiplicador para productos B' },
+        { key:'factor_seguridad_clase_c',        label:'Factor seguridad Clase C',      tipo:'dec', desc:'Multiplicador para productos C' },
+        { key:'semanas_minimas_para_alerta',     label:'Semanas min. para alertar',     tipo:'int', desc:'Un producto debe llevar X semanas activo' },
+        { key:'umbral_cv_x',                     label:'Umbral CV para X (estable)',    tipo:'dec', desc:'CV menor a esto = demanda estable' },
+        { key:'umbral_cv_y',                     label:'Umbral CV para Y (variable)',   tipo:'dec', desc:'CV menor a esto = variable, mayor = irregular' },
+        { key:'umbral_ratio_velocidad_alta',     label:'Ratio velocidad alta',          tipo:'dec', desc:'Umbral para urgencia ALTA' },
+        { key:'umbral_ratio_velocidad_critica',  label:'Ratio velocidad critica',       tipo:'dec', desc:'Umbral para urgencia CRITICA' },
+        { key:'umbral_quiebre_talle_critico',    label:'Umbral quiebre critico',        tipo:'dec', desc:'% de demanda sin cubrir = CRITICA' },
+        { key:'semanas_buffer_seguridad',        label:'Semanas buffer seguridad',      tipo:'int', desc:'Semanas extra sobre el lead time' },
+        { key:'sellthrough_default',             label:'Sell-through default',          tipo:'dec', desc:'% de stock que se vende normalmente' },
+        { key:'velocidad_default_semanas',       label:'Velocidad default (sem.)',      tipo:'int', desc:'Rotacion por defecto sin historico' },
+    ];
+    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <div><h5 style="margin:0;font-weight:800;color:var(--nexo-gray-900);">Configuracion del Motor Predictivo</h5>
+        <small style="color:var(--nexo-gray-500)">Estos parametros controlan como se calculan las predicciones y alertas</small></div>
+        <button onclick="document.getElementById('modalConfig').classList.remove('show')" style="border:none;background:var(--nexo-gray-100);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center;">&times;</button>
+    </div><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;">`;
+    campos.forEach(c => {
+        const step = c.tipo==='dec'?'step="0.01"':'';
+        html += `<div>
+            <label style="font-size:.82rem;font-weight:600;color:var(--nexo-gray-700);display:block;margin-bottom:3px;">${c.label}</label>
+            <input type="number" id="cfg_${c.key}" value="${d[c.key]}" ${step} style="width:100%;padding:8px 12px;border:1px solid var(--nexo-gray-300);border-radius:var(--nexo-radius-md);font-size:.85rem;">
+            <small style="color:var(--nexo-gray-500);font-size:.72rem;">${c.desc}</small>
+        </div>`;
+    });
+    html += `</div><div style="margin-top:24px;text-align:right;">
+        <button onclick="guardarConfiguracion()" class="nexo-btn nexo-btn-accent" style="padding:10px 32px;">
+            <i class="ri-save-line"></i> Guardar Configuracion</button></div>`;
+    body.innerHTML = html;
+}
+
+async function guardarConfiguracion() {
+    const body = {};
+    document.querySelectorAll('[id^="cfg_"]').forEach(el => { body[el.id.replace('cfg_','')] = parseFloat(el.value); });
+    try {
+        await fetchJSON('/app/api/prediccion/configuracion/', { method:'POST', body:JSON.stringify(body) });
+        toast('Configuracion guardada correctamente', 'success');
+        document.getElementById('modalConfig').classList.remove('show');
+    } catch (e) { toast('Error al guardar: ' + e.message, 'error'); }
+}
+</script>

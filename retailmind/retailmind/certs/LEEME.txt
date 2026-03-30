@@ -1,0 +1,20 @@
+CARPETA DE CERTIFICADOS QZ TRAY
+================================
+
+Esta carpeta debe contener los archivos de certificado para QZ Tray.
+Los archivos .pem NO se suben al repositorio (están en .gitignore).
+
+GENERAR CERTIFICADOS (ejecutar UNA SOLA VEZ):
+---------------------------------------------
+Abrir PowerShell o Git Bash y ejecutar:
+
+    openssl req -newkey rsa:2048 -nodes -keyout private-key.pem -x509 -days 3650 -out digital-certificate.txt -subj "/C=CL/ST=Region/L=Ciudad/O=RetailMind/CN=retailmind.local"
+
+Archivos que se generan:
+- private-key.pem          → SECRETO. Solo en el servidor. NO al repositorio.
+- digital-certificate.txt  → Público. Lo sirve Django al browser via /app/qz/certificado/
+
+NOTAS:
+- El mismo par de certificados sirve para TODOS los PCs de caja
+- El certificado dura 3650 días (10 años)
+- La clave privada NUNCA debe salir del servidor

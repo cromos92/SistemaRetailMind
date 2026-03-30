@@ -56,7 +56,7 @@
 
 .nexo-card-header {
     background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    color: var(--nexo-white);
+    color: #FFFFFF !important;
     border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
     padding: 1rem 1.5rem;
 }
@@ -67,58 +67,81 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    color: #FFFFFF !important;
+}
+
+.nexo-card-header h5 i, .nexo-card-header h6 i {
+    color: #FFFFFF !important;
 }
 
 /* ========== STATS CARDS ========== */
 .stats-card {
     border-radius: var(--nexo-radius-lg);
-    padding: 1.5rem;
-    text-align: center;
+    padding: 0.875rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
     transition: var(--nexo-transition-normal);
     border: none;
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
 }
 
 .stats-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--nexo-shadow-lg);
+    transform: translateY(-2px);
+    box-shadow: var(--nexo-shadow-md);
 }
 
-.stats-card-primary {
+.stats-card .stats-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.stats-card .stats-icon i {
+    font-size: 1.25rem;
+    color: var(--nexo-white);
+}
+
+.stats-card-primary .stats-icon {
     background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    color: var(--nexo-white);
 }
 
-.stats-card-success {
+.stats-card-success .stats-icon {
     background: linear-gradient(135deg, var(--nexo-success) 0%, #00B894 100%);
-    color: var(--nexo-white);
 }
 
-.stats-card-warning {
+.stats-card-warning .stats-icon {
     background: linear-gradient(135deg, var(--nexo-warning) 0%, #F39C12 100%);
-    color: var(--nexo-white);
 }
 
-.stats-card-info {
+.stats-card-info .stats-icon {
     background: linear-gradient(135deg, var(--nexo-info) 0%, #0052CC 100%);
-    color: var(--nexo-white);
 }
 
-.stats-card i {
-    font-size: 2.5rem;
-    margin-bottom: 0.75rem;
-    opacity: 0.9;
+.stats-card .stats-content {
+    min-width: 0;
 }
 
-.stats-card h3 {
-    font-size: 2rem;
+.stats-card .stats-content h3 {
+    font-size: 1.25rem;
     font-weight: 700;
-    margin-bottom: 0.25rem;
+    margin: 0;
+    color: var(--nexo-gray-900);
+    line-height: 1.2;
 }
 
-.stats-card p {
-    font-size: 0.875rem;
-    opacity: 0.9;
+.stats-card .stats-content p {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
     margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    font-weight: 500;
 }
 
 /* ========== BUTTONS ========== */
@@ -348,7 +371,7 @@
 /* ========== MODAL STYLES ========== */
 .modal-header-nexo {
     background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    color: var(--nexo-white);
+    color: #FFFFFF !important;
     border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
     padding: 1.25rem 1.5rem;
 }
@@ -358,6 +381,11 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    color: #FFFFFF !important;
+}
+
+.modal-header-nexo .modal-title i {
+    color: #FFFFFF !important;
 }
 
 .modal-header-nexo .btn-close {
@@ -512,33 +540,41 @@
             </div>
 
             <!-- ========== MÉTRICAS RÁPIDAS ========== -->
-            <div class="row mb-4 g-3">
+            <div class="row mb-3 g-3">
                 <div class="col-xl-3 col-md-6">
                     <div class="stats-card stats-card-primary">
-                        <i class="ri-group-line d-block"></i>
-                        <h3 id="totalClientes">0</h3>
-                        <p>Total Clientes</p>
+                        <div class="stats-icon"><i class="ri-group-line"></i></div>
+                        <div class="stats-content">
+                            <h3 id="totalClientes">0</h3>
+                            <p>Total Clientes</p>
+                        </div>
                     </div>
                 </div>
                 <div class="col-xl-3 col-md-6">
                     <div class="stats-card stats-card-success">
-                        <i class="ri-user-follow-line d-block"></i>
-                        <h3 id="clientesActivos">0</h3>
-                        <p>Clientes Activos</p>
+                        <div class="stats-icon"><i class="ri-user-follow-line"></i></div>
+                        <div class="stats-content">
+                            <h3 id="clientesActivos">0</h3>
+                            <p>Clientes Activos</p>
+                        </div>
                     </div>
                 </div>
                 <div class="col-xl-3 col-md-6">
                     <div class="stats-card stats-card-info">
-                        <i class="ri-user-add-line d-block"></i>
-                        <h3 id="clientesNuevos">0</h3>
-                        <p>Nuevos (Mes)</p>
+                        <div class="stats-icon"><i class="ri-user-add-line"></i></div>
+                        <div class="stats-content">
+                            <h3 id="clientesNuevos">0</h3>
+                            <p>Nuevos (Mes)</p>
+                        </div>
                     </div>
                 </div>
                 <div class="col-xl-3 col-md-6">
                     <div class="stats-card stats-card-warning">
-                        <i class="ri-shopping-cart-line d-block"></i>
-                        <h3 id="ventasPromedio">$0</h3>
-                        <p>Ventas Promedio</p>
+                        <div class="stats-icon"><i class="ri-shopping-cart-line"></i></div>
+                        <div class="stats-content">
+                            <h3 id="ventasPromedio">$0</h3>
+                            <p>Ventas Promedio</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -593,7 +629,7 @@
                         <i class="ri-table-line"></i>
                         Lista de Clientes
                     </h6>
-                    <span class="badge-nexo badge-nexo-primary" id="contadorClientes">0 clientes</span>
+                    <span class="badge-nexo" style="background-color: rgba(255,255,255,0.2); color: #FFFFFF;" id="contadorClientes">0 clientes</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">

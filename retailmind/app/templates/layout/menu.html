@@ -1855,8 +1855,15 @@
                                     {% endif %}
                                     {% if user|puede_ver_opcion:'dashboard_ventas' %}
                                     <li class="nav-item">
-                                        <a href="{% url 'dashboard_ventas' %}" class="nav-link" data-key="t-dashboard-ventas">
-                                            <i class="ri-dashboard-line"></i> Dashboard Ventas
+                                        <a href="{% url 'dashboard_ventas_mejorado' %}" class="nav-link" data-key="t-dashboard-ventas">
+                                            <i class="ri-line-chart-line"></i> Dashboard Ventas
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_compras_estrategico' %}
+                                    <li class="nav-item">
+                                        <a href="/app/verDashboardComprasMejorado/" class="nav-link" data-key="t-dashboard-compras">
+                                            <i class="ri-shopping-bag-line"></i> Dashboard Compras
                                         </a>
                                     </li>
                                     {% endif %}
@@ -1864,21 +1871,21 @@
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#dashboardExistencias" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="dashboardExistencias">
-                                            <i class="ri-store-3-line"></i> Dashboard de Existencias
+                                            <i class="ri-store-3-line"></i> Dashboard Existencias
                                         </a>
                                         <div class="menu-dropdown collapse" id="dashboardExistencias">
                                             <ul class="nav nav-sm flex-column">
                                                 {% if user|puede_ver_opcion:'dashboard_productos' %}
                                                 <li class="nav-item">
-                                                    <a href="/app/dashboard_productos/" class="nav-link" data-key="t-chartjs">
-                                                        <i class="bi bi-box-seam"></i> Dashboard Productos
+                                                    <a href="/app/dashboard_productos_mejorado/" class="nav-link">
+                                                        <i class="bi bi-box-seam"></i> Productos
                                                     </a>
                                                 </li>
                                                 {% endif %}
                                                 {% if user|puede_ver_opcion:'dashboard_fifo' %}
                                                 <li class="nav-item">
-                                                    <a href="/app/dashboard_fifo/" class="nav-link" data-key="t-echarts">
-                                                        <i class="bi bi-arrow-repeat"></i> Dashboard FIFO
+                                                    <a href="/app/dashboard_fifo/" class="nav-link">
+                                                        <i class="bi bi-arrow-repeat"></i> FIFO / Lotes
                                                     </a>
                                                 </li>
                                                 {% endif %}
@@ -1886,10 +1893,38 @@
                                         </div>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_compras_estrategico' %}
+                                    {% if user|puede_ver_opcion:'dashboard_documentos' %}
                                     <li class="nav-item">
-                                        <a href="/app/verDashboardCompras/" class="nav-link" data-key="t-dashboard-compras">
-                                            <i class="ri-shopping-bag-line"></i> Dashboard de Compras
+                                        <a href="/app/dashboard-documentos/" class="nav-link" data-key="t-dashboard-documentos">
+                                            <i class="ri-file-list-line"></i> Dashboard Documentos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_caja' %}
+                                    <li class="nav-item">
+                                        <a href="/app/dashboard-caja/" class="nav-link" data-key="t-dashboard-caja">
+                                            <i class="ri-calculator-line"></i> Dashboard Caja
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_requerimientos' %}
+                                    <li class="nav-item">
+                                        <a href="/app/dashboard-requerimientos/" class="nav-link" data-key="t-dashboard-requerimientos">
+                                            <i class="ri-customer-service-2-line"></i> Dashboard Requerimientos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_crm' %}
+                                    <li class="nav-item">
+                                        <a href="/app/dashboard-crm/" class="nav-link" data-key="t-dashboard-crm">
+                                            <i class="ri-contacts-book-line"></i> Dashboard CRM
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_integral' %}
+                                    <li class="nav-item">
+                                        <a href="/app/dashboard-integral/" class="nav-link" data-key="t-dashboard-integral">
+                                            <i class="ri-pie-chart-line"></i> Dashboard Integral
                                         </a>
                                     </li>
                                     {% endif %}
@@ -2094,6 +2129,13 @@
                                     <li class="nav-item">
                                         <a href="/app/verGestionDteCompras/" class="nav-link" data-key="t-echarts">
                                             <i class="ri-file-list-2-line"></i> Gestión Documentos Compras
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'prediccion_compras' %}
+                                    <li class="nav-item">
+                                        <a href="/app/prediccion/" class="nav-link" data-key="t-prediccion-compras">
+                                            <i class="ri-line-chart-line"></i> Predicción de Compras
                                         </a>
                                     </li>
                                     {% endif %}

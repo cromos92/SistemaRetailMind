@@ -699,6 +699,11 @@
                                     <i class="ri-money-dollar-box-line me-1"></i> Pagos
                                 </a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabRendimiento" role="tab" id="tabRendimientoLink">
+                                    <i class="ri-line-chart-line me-1"></i> Rendimiento
+                                </a>
+                            </li>
                         </ul>
                     </div>
                     <div class="nexo-card-body">
@@ -909,6 +914,13 @@
 
                             <!-- Tab Pagos -->
                             <div class="tab-pane fade" id="tabPagos" role="tabpanel">
+                                <!-- Aviso datos históricos -->
+                                <div class="alert alert-warning d-flex align-items-start gap-2 mb-3 py-2" style="border-left:4px solid #f59e0b; background:#fffbeb;">
+                                    <i class="ri-information-line fs-5 mt-1 flex-shrink-0" style="color:#d97706;"></i>
+                                    <div>
+                                        <strong>Datos históricos migrados:</strong> El sistema anterior no registraba pagos de facturas de proveedor. Todos los DTEs importados aparecen como <strong>PENDIENTE</strong>, por lo que el monto "Vencidos" refleja la deuda histórica acumulada sin confirmación de pago. Los nuevos documentos de compra registrados desde el inicio de RetailMind sí podrán marcar su estado de pago correctamente.
+                                    </div>
+                                </div>
                                 <div class="row mb-4">
                                     <div class="col-lg-4">
                                         <div class="nexo-card h-100">
@@ -1013,6 +1025,232 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Tab Rendimiento (Compra→Despacho→Venta) -->
+                            <div class="tab-pane fade" id="tabRendimiento" role="tabpanel">
+                                <!-- BARRA DE FILTROS RENDIMIENTO -->
+                                <div class="d-flex flex-wrap align-items-end gap-3 mb-3 p-3 rounded border" style="background:var(--nexo-gray-100)">
+                                    <div>
+                                        <label class="form-label small mb-1 fw-semibold">Año</label>
+                                        <select class="form-select form-select-sm" id="rendimientoAnio" style="width:110px">
+                                            <!-- llenado dinámico desde API -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small mb-1 fw-semibold">Sucursal</label>
+                                        <select class="form-select form-select-sm" id="rendimientoSucursal" style="width:160px">
+                                            <option value="">Todas</option>
+                                        </select>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 mt-1">
+                                        <div class="form-check form-switch mb-0">
+                                            <input class="form-check-input" type="checkbox" id="rendimientoComparar">
+                                            <label class="form-check-label small" for="rendimientoComparar">Comparar vs año anterior</label>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-sm btn-primary ms-auto" id="btnCargarRendimiento">
+                                        <i class="ri-refresh-line"></i> Cargar
+                                    </button>
+                                    <span id="rendimientoFuenteBadge" class="badge bg-secondary" style="display:none; font-size:0.75rem; align-self:center;"></span>
+                                </div>
+                                <div id="rendimientoLoader" class="text-center py-5">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                    <p class="mt-2 text-muted">Selecciona año y haz clic en "Cargar"...</p>
+                                </div>
+                                <div id="rendimientoContent" style="display:none;">
+                                    <!-- KPIs de cadena -->
+                                    <div class="row mb-4" id="kpisRendimiento">
+                                        <div class="col-lg-2 col-md-4 col-6 mb-3">
+                                            <div class="kpi-card" style="--kpi-accent: var(--nexo-primary)">
+                                                <div class="kpi-label">Entrada stock</div>
+                                                <div class="kpi-value" id="rend_comprado">0</div>
+                                                <div class="kpi-sublabel">uds ingreso año</div>
+                                                <div class="kpi-delta" id="rend_comprado_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-2 col-md-4 col-6 mb-3">
+                                            <div class="kpi-card" style="--kpi-accent: #8B5CF6">
+                                                <div class="kpi-label">Inversión (costo)</div>
+                                                <div class="kpi-value" id="rend_inversion">$0</div>
+                                                <div class="kpi-sublabel">entrada año</div>
+                                                <div class="kpi-delta" id="rend_inversion_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-2 col-md-4 col-6 mb-3">
+                                            <div class="kpi-card" style="--kpi-accent: var(--nexo-warning)">
+                                                <div class="kpi-label">Despachado</div>
+                                                <div class="kpi-value" id="rend_despachado">0</div>
+                                                <div class="kpi-sublabel">a sucursales</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-2 col-md-4 col-6 mb-3">
+                                            <div class="kpi-card" style="--kpi-accent: var(--nexo-success)">
+                                                <div class="kpi-label">Vendido</div>
+                                                <div class="kpi-value" id="rend_vendido">0</div>
+                                                <div class="kpi-sublabel">unidades</div>
+                                                <div class="kpi-delta" id="rend_vendido_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-2 col-md-4 col-6 mb-3">
+                                            <div class="kpi-card" style="--kpi-accent: var(--nexo-info)">
+                                                <div class="kpi-label">Rotación</div>
+                                                <div class="kpi-value" id="rend_rotacion">0%</div>
+                                                <div class="kpi-sublabel">vendido / entrada año</div>
+                                                <div class="kpi-delta" id="rend_rotacion_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-2 col-md-4 col-6 mb-3">
+                                            <div class="kpi-card" style="--kpi-accent: var(--nexo-error)">
+                                                <div class="kpi-label">ROI Real</div>
+                                                <div class="kpi-value" id="rend_roi">0%</div>
+                                                <div class="kpi-sublabel">sobre costo vendido</div>
+                                                <div class="kpi-delta" id="rend_roi_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="rendimientoNotaMetodologia" class="alert alert-light border small mb-3" style="display:none;"></div>
+
+                                    <!-- Gráfico evolución + Funnel -->
+                                    <div class="row mb-4">
+                                        <div class="col-lg-8">
+                                            <div class="nexo-card">
+                                                <div class="nexo-card-header">
+                                                    <h5><i class="ri-line-chart-line"></i> Compras vs Ventas - Evolución Mensual</h5>
+                                                </div>
+                                                <div class="nexo-card-body">
+                                                    <div id="chartRendimientoMensual" style="min-height:320px"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-4">
+                                            <div class="nexo-card">
+                                                <div class="nexo-card-header">
+                                                    <h5><i class="ri-filter-3-line"></i> Embudo de Conversión</h5>
+                                                </div>
+                                                <div class="nexo-card-body">
+                                                    <div id="funnelRendimiento" style="min-height:320px"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Rendimiento por Sucursal -->
+                                    <div class="row mb-4">
+                                        <div class="col-12">
+                                            <div class="nexo-card">
+                                                <div class="nexo-card-header">
+                                                    <h5><i class="ri-building-2-line"></i> Por sucursal (origen en movimiento)</h5>
+                                                    <p class="small text-muted mb-0">Entrada = ingreso/recepción en esa sucursal. Despacho = salida hacia otras tiendas. La mercadería que llega desde central suele figurar con origen en la bodega central (ej. EDEL), no en la tienda.</p>
+                                                </div>
+                                                <div class="nexo-card-body">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-nexo table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Sucursal</th>
+                                                                    <th class="text-end" title="Ingreso inicial / recepción en el año">Entrada</th>
+                                                                    <th class="text-end" title="Traspaso saliente desde esta sucursal">Despacho</th>
+                                                                    <th class="text-end">Vendido</th>
+                                                                    <th class="text-end">Rotación</th>
+                                                                    <th class="text-end">Ingreso $</th>
+                                                                    <th class="text-end">ROI</th>
+                                                                    <th class="text-end">Stock Rest.</th>
+                                                                    <th style="width:160px">Progreso</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="tbodySucursales"></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Top Productos por Rotación -->
+                                    <div class="row mb-4">
+                                        <div class="col-lg-6">
+                                            <div class="nexo-card">
+                                                <div class="nexo-card-header">
+                                                    <h5><i class="ri-rocket-2-line"></i> Top Rotación (Mejor)</h5>
+                                                </div>
+                                                <div class="nexo-card-body">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-nexo table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Artículo</th>
+                                                                    <th>Talla</th>
+                                                                    <th class="text-end">Comprado</th>
+                                                                    <th class="text-end">Vendido</th>
+                                                                    <th class="text-end">Rotación</th>
+                                                                    <th class="text-end">ROI</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="tbodyTopRotacion"></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <div class="nexo-card">
+                                                <div class="nexo-card-header">
+                                                    <h5><i class="ri-error-warning-line"></i> Baja Rotación (Stock Parado)</h5>
+                                                </div>
+                                                <div class="nexo-card-body">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-nexo table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Artículo</th>
+                                                                    <th>Talla</th>
+                                                                    <th class="text-end">Comprado</th>
+                                                                    <th class="text-end">Vendido</th>
+                                                                    <th class="text-end">Rotación</th>
+                                                                    <th class="text-end">Restante</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="tbodyBajaRotacion"></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Rendimiento por Compra -->
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <div class="nexo-card">
+                                                <div class="nexo-card-header">
+                                                    <h5><i class="ri-shopping-bag-3-line"></i> Rendimiento por Sucursal de Entrada</h5>
+                                                </div>
+                                                <div class="nexo-card-body">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-nexo table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Origen (Sucursal / Tipo)</th>
+                                                                    <th class="text-center">Fuente</th>
+                                                                    <th class="text-end">Prod.</th>
+                                                                    <th class="text-end">Entrada</th>
+                                                                    <th class="text-end">Despachado</th>
+                                                                    <th class="text-end">Vendido</th>
+                                                                    <th class="text-end">Rotación</th>
+                                                                    <th class="text-end">Inversión</th>
+                                                                    <th class="text-end">Ingreso</th>
+                                                                    <th class="text-end">ROI</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="tbodyPorCompra"></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1054,6 +1292,15 @@
 <script>
 // ========== Variables Globales ==========
 let datosReporte = {};
+let chartEvolucion = null;
+let chartTemporadas = null;
+let chartComparativa = null;
+let chartPareto = null;
+let chartCumplimiento = null;
+let chartEstadoRecepciones = null;
+let chartEstadoPagos = null;
+let chartVencimientos = null;
+
 const coloresNexo = {
     primary: '#0066FF',
     primaryDark: '#0052CC',
@@ -1073,7 +1320,14 @@ document.addEventListener('DOMContentLoaded', function() {
     cargarDatosReporte();
     
     // Event listeners
-    document.getElementById('btnFiltrar').addEventListener('click', cargarDatosReporte);
+    document.getElementById('btnFiltrar').addEventListener('click', function() {
+        cargarDatosReporte();
+        rendimientoCargado = false;
+        const tabRend = document.getElementById('tabRendimiento');
+        if (tabRend && tabRend.classList.contains('active')) {
+            cargarRendimiento();
+        }
+    });
     document.getElementById('btnExportar').addEventListener('click', exportarExcel);
 });
 
@@ -1081,13 +1335,25 @@ document.addEventListener('DOMContentLoaded', function() {
 function inicializarFiltros() {
     const selectAnio = document.getElementById('filtroAnio');
     const anioActual = new Date().getFullYear();
+    // El año por defecto es el anterior: el sistema anterior no tenía módulo de compras
+    // por lo que 2026 tiene muy pocos DTEs registrados; 2025 y 2024 tienen datos reales.
+    const anioDefault = anioActual - 1;
     
-    for (let i = anioActual; i >= anioActual - 5; i--) {
+    for (let i = anioActual; i >= anioActual - 7; i--) {
         const option = document.createElement('option');
         option.value = i;
         option.textContent = i;
-        if (i === anioActual) option.selected = true;
+        if (i === anioDefault) option.selected = true;
         selectAnio.appendChild(option);
+    }
+
+    // Inicializar selector de año del Rendimiento con año actual (se actualizará con datos reales al cargar)
+    const selRendAnio = document.getElementById('rendimientoAnio');
+    if (selRendAnio && selRendAnio.options.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = anioActual;
+        opt.textContent = anioActual;
+        selRendAnio.appendChild(opt);
     }
 }
 
@@ -1204,7 +1470,7 @@ function renderizarGraficoEvolucion(datos) {
     const chartElement = document.getElementById('chartEvolucionMensual');
     if (!chartElement) return;
     
-    // Limpiar gráfico anterior
+    if (chartEvolucion) { chartEvolucion.destroy(); chartEvolucion = null; }
     chartElement.innerHTML = '';
     
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1280,14 +1546,15 @@ function renderizarGraficoEvolucion(datos) {
         }
     };
 
-    const chart = new ApexCharts(chartElement, options);
-    chart.render();
+    chartEvolucion = new ApexCharts(chartElement, options);
+    chartEvolucion.render();
 }
 
 function renderizarGraficoTemporadas(datos) {
     const chartElement = document.getElementById('chartTemporadas');
     if (!chartElement) return;
     
+    if (chartTemporadas) { chartTemporadas.destroy(); chartTemporadas = null; }
     chartElement.innerHTML = '';
     
     const options = {
@@ -1326,14 +1593,15 @@ function renderizarGraficoTemporadas(datos) {
         }
     };
 
-    const chart = new ApexCharts(chartElement, options);
-    chart.render();
+    chartTemporadas = new ApexCharts(chartElement, options);
+    chartTemporadas.render();
 }
 
 function renderizarGraficoComparativa(datos) {
     const chartElement = document.getElementById('chartComparativaAnual');
     if (!chartElement) return;
     
+    if (chartComparativa) { chartComparativa.destroy(); chartComparativa = null; }
     chartElement.innerHTML = '';
     
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1388,14 +1656,15 @@ function renderizarGraficoComparativa(datos) {
         }
     };
 
-    const chart = new ApexCharts(chartElement, options);
-    chart.render();
+    chartComparativa = new ApexCharts(chartElement, options);
+    chartComparativa.render();
 }
 
 function renderizarGraficoParetoProveedores(datos) {
     const chartElement = document.getElementById('chartParetoProveedores');
     if (!chartElement) return;
     
+    if (chartPareto) { chartPareto.destroy(); chartPareto = null; }
     chartElement.innerHTML = '';
     
     const top10 = datos.slice(0, 10);
@@ -1441,14 +1710,15 @@ function renderizarGraficoParetoProveedores(datos) {
         }
     };
 
-    const chart = new ApexCharts(chartElement, options);
-    chart.render();
+    chartPareto = new ApexCharts(chartElement, options);
+    chartPareto.render();
 }
 
 function renderizarGraficoCumplimientoProveedores(datos) {
     const chartElement = document.getElementById('chartCumplimientoProveedores');
     if (!chartElement) return;
     
+    if (chartCumplimiento) { chartCumplimiento.destroy(); chartCumplimiento = null; }
     chartElement.innerHTML = '';
     
     const top10 = datos.slice(0, 10);
@@ -1499,14 +1769,15 @@ function renderizarGraficoCumplimientoProveedores(datos) {
         }
     };
 
-    const chart = new ApexCharts(chartElement, options);
-    chart.render();
+    chartCumplimiento = new ApexCharts(chartElement, options);
+    chartCumplimiento.render();
 }
 
 function renderizarGraficoEstadoRecepciones(datos) {
     const chartElement = document.getElementById('chartEstadoRecepciones');
     if (!chartElement) return;
     
+    if (chartEstadoRecepciones) { chartEstadoRecepciones.destroy(); chartEstadoRecepciones = null; }
     chartElement.innerHTML = '';
     
     const labels = ['Recibido OK', 'Parcial', 'Pendiente', 'Con Problemas'];
@@ -1548,14 +1819,15 @@ function renderizarGraficoEstadoRecepciones(datos) {
         }
     };
 
-    const chart = new ApexCharts(chartElement, options);
-    chart.render();
+    chartEstadoRecepciones = new ApexCharts(chartElement, options);
+    chartEstadoRecepciones.render();
 }
 
 function renderizarGraficoEstadoPagos(datos) {
     const chartElement = document.getElementById('chartEstadoPagos');
     if (!chartElement) return;
     
+    if (chartEstadoPagos) { chartEstadoPagos.destroy(); chartEstadoPagos = null; }
     chartElement.innerHTML = '';
     
     const options = {
@@ -1591,8 +1863,8 @@ function renderizarGraficoEstadoPagos(datos) {
         }
     };
 
-    const chart = new ApexCharts(chartElement, options);
-    chart.render();
+    chartEstadoPagos = new ApexCharts(chartElement, options);
+    chartEstadoPagos.render();
     
     // Actualizar totales
     document.getElementById('montoPagados').textContent = formatearMoneda(datos.pagados || 0);
@@ -1605,6 +1877,7 @@ function renderizarGraficoVencimientos(datos) {
     const chartElement = document.getElementById('chartVencimientos');
     if (!chartElement) return;
     
+    if (chartVencimientos) { chartVencimientos.destroy(); chartVencimientos = null; }
     chartElement.innerHTML = '';
     
     const options = {
@@ -1645,8 +1918,8 @@ function renderizarGraficoVencimientos(datos) {
         }
     };
 
-    const chart = new ApexCharts(chartElement, options);
-    chart.render();
+    chartVencimientos = new ApexCharts(chartElement, options);
+    chartVencimientos.render();
 }
 
 function actualizarMetricasRecepcion(metricas) {
@@ -1879,5 +2152,298 @@ function exportarExcel() {
     });
     
     window.location.href = `/app/api/exportar-reporte-compras-excel/?${params}`;
+}
+
+// ========== RENDIMIENTO DE COMPRAS (Trazabilidad Completa) ==========
+let rendimientoCargado = false;
+let chartRendMensual = null;
+let chartFunnel = null;
+
+// Poblar selector de sucursales
+(function poblarSucursalesRendimiento() {
+    fetch('/app/api/sucursales/listar/')
+        .then(r => r.json())
+        .then(data => {
+            const sel = document.getElementById('rendimientoSucursal');
+            if (!sel) return;
+            (data.sucursales || data || []).forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.alias || s.nombre;
+                sel.appendChild(opt);
+            });
+        }).catch(() => {});
+})();
+
+document.getElementById('tabRendimientoLink').addEventListener('shown.bs.tab', function() {
+    if (!rendimientoCargado) {
+        cargarRendimiento();
+    }
+});
+
+document.getElementById('btnCargarRendimiento').addEventListener('click', function() {
+    rendimientoCargado = false;
+    cargarRendimiento();
+});
+
+async function cargarRendimiento() {
+    const loader = document.getElementById('rendimientoLoader');
+    const content = document.getElementById('rendimientoContent');
+    loader.innerHTML = '<div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Analizando cadena Compra → Despacho → Venta...</p>';
+    loader.style.display = 'block';
+    content.style.display = 'none';
+
+    const anioEl = document.getElementById('rendimientoAnio');
+    const sucursalEl = document.getElementById('rendimientoSucursal');
+    const compararEl = document.getElementById('rendimientoComparar');
+
+    const anio = (anioEl && anioEl.value) ? anioEl.value : document.getElementById('filtroAnio').value;
+    const sucursal = sucursalEl ? sucursalEl.value : '';
+    const comparar = compararEl && compararEl.checked ? '1' : '0';
+
+    try {
+        const resp = await fetch(`/app/api/rendimiento-compras/?anio=${anio}&sucursal=${sucursal}&comparar=${comparar}`);
+        const data = await resp.json();
+        if (!data.success) {
+            loader.innerHTML = `<div class="alert alert-warning"><i class="ri-information-line"></i> ${data.mensaje || data.error || 'Sin datos'}</div>`;
+            return;
+        }
+
+        // Poblar selector de años con datos reales
+        if (data.anios_disponibles && anioEl) {
+            const anioActual = parseInt(anio);
+            anioEl.innerHTML = '';
+            data.anios_disponibles.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a;
+                opt.textContent = a;
+                if (a === anioActual) opt.selected = true;
+                anioEl.appendChild(opt);
+            });
+        }
+
+        // Badge de fuente
+        const badge = document.getElementById('rendimientoFuenteBadge');
+        if (badge && data.fuente_datos) {
+            const fuentes = { movimientos: 'Movimientos 2025+', dte: 'DTEs Laravel histórico', mixto: 'Mixto' };
+            const colores = { movimientos: 'bg-primary', dte: 'bg-info text-dark', mixto: 'bg-secondary' };
+            badge.textContent = fuentes[data.fuente_datos] || data.fuente_datos;
+            badge.className = 'badge ' + (colores[data.fuente_datos] || 'bg-secondary');
+            badge.style.display = 'inline-block';
+        }
+
+        rendimientoCargado = true;
+        loader.style.display = 'none';
+        content.style.display = 'block';
+
+        renderKPIsRendimiento(data.resumen, data.comparacion);
+        const notaEl = document.getElementById('rendimientoNotaMetodologia');
+        if (notaEl && data.nota_metodologia) {
+            notaEl.style.display = 'block';
+            const fuenteInfo = data.fuente_datos === 'dte'
+                ? '<span class="badge bg-info text-dark me-2">DTEs Laravel</span>'
+                : '<span class="badge bg-primary me-2">Movimientos</span>';
+            notaEl.innerHTML = fuenteInfo + '<i class="ri-information-line me-1"></i>' + data.nota_metodologia;
+        } else if (notaEl) {
+            notaEl.style.display = 'none';
+        }
+        renderChartMensualRendimiento(data.evolucion_mensual);
+        renderFunnel(data.resumen);
+        renderTablaSucursales(data.por_sucursal);
+        renderTopRotacion(data.por_producto);
+        renderBajaRotacion(data.por_producto);
+        renderPorCompra(data.por_compra);
+
+    } catch(e) {
+        loader.innerHTML = `<div class="alert alert-danger"><i class="ri-error-warning-line"></i> Error al cargar: ${e.message}</div>`;
+    }
+}
+
+function _deltaHtml(delta) {
+    if (delta === null || delta === undefined) return '';
+    const arrow = delta >= 0 ? '▲' : '▼';
+    const cls = delta >= 0 ? 'color:var(--nexo-success)' : 'color:var(--nexo-error)';
+    return `<span style="${cls}">${arrow}${Math.abs(delta)}% vs año ant.</span>`;
+}
+
+function renderKPIsRendimiento(r, comparacion) {
+    document.getElementById('rend_comprado').textContent = formatearNumero(r.total_comprado);
+    const invEl = document.getElementById('rend_inversion');
+    if (invEl) invEl.textContent = formatearMoneda(r.total_inversion);
+    document.getElementById('rend_despachado').textContent = formatearNumero(r.total_despachado);
+    document.getElementById('rend_vendido').textContent = formatearNumero(r.total_vendido);
+    const rotPct = r.rotacion_raw_pct != null ? r.rotacion_raw_pct : r.rotacion_global;
+    document.getElementById('rend_rotacion').textContent = (r.ventas_superan_entrada ? '~' : '') + rotPct + '%';
+    document.getElementById('rend_roi').textContent = r.roi_real + '%';
+
+    const rotEl = document.getElementById('rend_rotacion');
+    const rotVal = parseFloat(String(rotPct).replace(',', '.')) || 0;
+    rotEl.style.color = rotVal >= 60 ? 'var(--nexo-success)' : rotVal >= 30 ? 'var(--nexo-warning)' : 'var(--nexo-error)';
+    const roiEl = document.getElementById('rend_roi');
+    roiEl.style.color = r.roi_real >= 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
+
+    // Deltas interanuales
+    const deltaMap = {
+        rend_comprado_delta: comparacion?.delta_entrada,
+        rend_inversion_delta: comparacion?.delta_inversion,
+        rend_vendido_delta: comparacion?.delta_vendido,
+        rend_rotacion_delta: comparacion?.delta_rotacion,
+        rend_roi_delta: comparacion?.delta_roi,
+    };
+    Object.entries(deltaMap).forEach(([id, delta]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (comparacion && delta !== null && delta !== undefined) {
+            el.innerHTML = _deltaHtml(delta);
+            el.style.display = 'block';
+        } else {
+            el.style.display = 'none';
+        }
+    });
+}
+
+function renderChartMensualRendimiento(evolucion) {
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    if (chartRendMensual) chartRendMensual.destroy();
+    chartRendMensual = new ApexCharts(document.getElementById('chartRendimientoMensual'), {
+        chart: { type: 'area', height: 320, toolbar: { show: true }, fontFamily: 'inherit' },
+        series: [
+            { name: 'Entrada stock (uds)', data: evolucion.map(e => e.uds_compradas) },
+            { name: 'Ventas (uds)', data: evolucion.map(e => e.uds_vendidas) },
+        ],
+        xaxis: { categories: meses },
+        colors: [coloresNexo.primary, coloresNexo.success],
+        stroke: { curve: 'smooth', width: 2.5 },
+        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 100] }},
+        tooltip: {
+            y: { formatter: v => formatearNumero(v) + ' uds' }
+        },
+        dataLabels: { enabled: false },
+        legend: { position: 'top' },
+    });
+    chartRendMensual.render();
+}
+
+function renderFunnel(r) {
+    if (chartFunnel) chartFunnel.destroy();
+    chartFunnel = new ApexCharts(document.getElementById('funnelRendimiento'), {
+        chart: { type: 'bar', height: 320, toolbar: { show: false }, fontFamily: 'inherit' },
+        series: [{ name: 'Unidades', data: [r.total_comprado, r.total_despachado, r.total_vendido] }],
+        xaxis: { categories: ['Entrada año', 'Despacho salida', 'Ventas'] },
+        colors: [coloresNexo.primary],
+        plotOptions: {
+            bar: {
+                borderRadius: 4,
+                horizontal: true,
+                distributed: true,
+                barHeight: '60%',
+            }
+        },
+        fill: {
+            type: 'gradient',
+            gradient: { shade: 'light', type: 'horizontal', gradientToColors: [coloresNexo.success], stops: [0, 100] }
+        },
+        dataLabels: {
+            enabled: true,
+            formatter: v => formatearNumero(v),
+            style: { fontSize: '12px' }
+        },
+        tooltip: { y: { formatter: v => formatearNumero(v) + ' unidades' } },
+        legend: { show: false },
+    });
+    chartFunnel.render();
+}
+
+function renderTablaSucursales(sucursales) {
+    const tbody = document.getElementById('tbodySucursales');
+    if (!sucursales || !sucursales.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">Sin datos de movimientos en el período</td></tr>';
+        return;
+    }
+    tbody.innerHTML = sucursales.map(s => {
+        const barColor = s.rotacion_pct >= 60 ? 'var(--nexo-success)' : s.rotacion_pct >= 30 ? 'var(--nexo-warning)' : 'var(--nexo-error)';
+        const roiClass = s.roi >= 0 ? 'text-success' : 'text-danger';
+        const uEnt = s.uds_entrada != null ? s.uds_entrada : 0;
+        const hint = s.explicacion ? `<span class="text-muted" title="${String(s.explicacion).replace(/"/g, '&quot;')}"><i class="ri-question-line"></i></span>` : '';
+        return `<tr>
+            <td><strong>${s.sucursal}</strong> ${hint}</td>
+            <td class="text-end">${formatearNumero(uEnt)}</td>
+            <td class="text-end">${formatearNumero(s.uds_despachadas)}</td>
+            <td class="text-end">${formatearNumero(s.uds_vendidas)}</td>
+            <td class="text-end"><strong>${s.rotacion_pct}%</strong></td>
+            <td class="text-end">${formatearMoneda(s.ingreso)}</td>
+            <td class="text-end ${roiClass}"><strong>${s.roi}%</strong></td>
+            <td class="text-end">${formatearNumero(s.stock_restante)}</td>
+            <td>
+                <div class="progress" style="height:8px;">
+                    <div class="progress-bar" style="width:${Math.min(s.rotacion_pct, 100)}%;background:${barColor}"></div>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderTopRotacion(productos) {
+    const tbody = document.getElementById('tbodyTopRotacion');
+    const top = productos.filter(p => p.rotacion_pct > 0).slice(0, 15);
+    if (!top.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin datos</td></tr>';
+        return;
+    }
+    tbody.innerHTML = top.map(p => `<tr>
+        <td>${p.articulo}</td>
+        <td>${p.talla}</td>
+        <td class="text-end">${formatearNumero(p.uds_compradas)}</td>
+        <td class="text-end">${formatearNumero(p.uds_vendidas)}</td>
+        <td class="text-end"><span class="badge bg-success">${p.rotacion_pct}%</span></td>
+        <td class="text-end"><span class="${p.roi_real >= 0 ? 'text-success' : 'text-danger'}">${p.roi_real}%</span></td>
+    </tr>`).join('');
+}
+
+function renderBajaRotacion(productos) {
+    const tbody = document.getElementById('tbodyBajaRotacion');
+    const baja = [...productos].sort((a,b) => a.rotacion_pct - b.rotacion_pct).filter(p => p.stock_restante > 0).slice(0, 15);
+    if (!baja.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin datos</td></tr>';
+        return;
+    }
+    tbody.innerHTML = baja.map(p => {
+        const rotClass = p.rotacion_pct === 0 ? 'bg-danger' : p.rotacion_pct < 30 ? 'bg-warning' : 'bg-secondary';
+        return `<tr>
+            <td>${p.articulo}</td>
+            <td>${p.talla}</td>
+            <td class="text-end">${formatearNumero(p.uds_compradas)}</td>
+            <td class="text-end">${formatearNumero(p.uds_vendidas)}</td>
+            <td class="text-end"><span class="badge ${rotClass}">${p.rotacion_pct}%</span></td>
+            <td class="text-end"><strong class="text-danger">${formatearNumero(p.stock_restante)}</strong></td>
+        </tr>`;
+    }).join('');
+}
+
+function renderPorCompra(compras) {
+    const tbody = document.getElementById('tbodyPorCompra');
+    if (!compras || !compras.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Sin datos</td></tr>';
+        return;
+    }
+    tbody.innerHTML = compras.map(c => {
+        const rotClass = c.rotacion_pct >= 60 ? 'bg-success' : c.rotacion_pct >= 30 ? 'bg-warning' : 'bg-danger';
+        const roiClass = c.roi_real >= 0 ? 'text-success' : 'text-danger';
+        const fuenteBadge = c.fuente === 'Compra'
+            ? '<span class="badge bg-primary">Compra</span>'
+            : '<span class="badge bg-secondary">Mov</span>';
+        return `<tr>
+            <td><strong>${c.compra}</strong></td>
+            <td class="text-center">${fuenteBadge}</td>
+            <td class="text-end">${c.productos}</td>
+            <td class="text-end">${formatearNumero(c.uds_compradas)}</td>
+            <td class="text-end">${formatearNumero(c.uds_despachadas)}</td>
+            <td class="text-end">${formatearNumero(c.uds_vendidas)}</td>
+            <td class="text-end"><span class="badge ${rotClass}">${c.rotacion_pct}%</span></td>
+            <td class="text-end">${formatearMoneda(c.inversion)}</td>
+            <td class="text-end">${formatearMoneda(c.ingreso_venta)}</td>
+            <td class="text-end ${roiClass}"><strong>${c.roi_real}%</strong></td>
+        </tr>`;
+    }).join('');
 }
 </script>

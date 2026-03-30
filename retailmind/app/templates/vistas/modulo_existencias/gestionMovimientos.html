@@ -959,7 +959,7 @@ function cargarMovimientos(page = 1) {
                             <td><code>${mov.sku}</code></td>
                             <td class="${cantidadClass}">${cantidadSign}${mov.cantidad}</td>
                             <td><span class="nexo-badge ${tipoBadgeClass}">${mov.tipo_movimiento}</span></td>
-                            <td>${formatearConcepto(mov.concepto)}</td>
+                            <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
                             <td>${mov.responsable}</td>
                             <td class="referencia-cell ${referenciaClass}" title="${mov.referencia_externa || '-'}">${mov.referencia_externa || '-'}</td>
                         </tr>`;
@@ -995,10 +995,14 @@ function getReferenciaClass(concepto, referencia) {
     return '';
 }
 
-function formatearConcepto(concepto) {
+function formatearConcepto(concepto, sucursalDestino) {
     // Formatear concepto para mejor legibilidad
     if (!concepto) return '-';
-    return concepto.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+    let texto = concepto.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+    if (sucursalDestino) {
+        texto += ` <span class="text-muted">(${sucursalDestino})</span>`;
+    }
+    return texto;
 }
 
 function updatePaginationMovimientos(pagination) {
@@ -1110,7 +1114,7 @@ function cargarKardex(page = 1) {
                         <tr>
                             <td>${formatearFecha(mov.fecha)}</td>
                             <td>${mov.hora}</td>
-                            <td>${formatearConcepto(mov.concepto)}</td>
+                            <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
                             <td class="cantidad-positiva">${mov.entrada || '-'}</td>
                             <td class="cantidad-negativa">${mov.salida || '-'}</td>
                             <td><strong>${mov.saldo}</strong></td>
@@ -1256,7 +1260,7 @@ function cargarKardexAgrupado(page = 1) {
                         <tr>
                             <td>${formatearFecha(mov.fecha)}</td>
                             <td>${mov.hora}</td>
-                            <td>${formatearConcepto(mov.concepto)}</td>
+                            <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
                             <td class="cantidad-positiva">${mov.entrada || '-'}</td>
                             <td class="cantidad-negativa">${mov.salida || '-'}</td>
                             <td><strong>${mov.saldo}</strong></td>

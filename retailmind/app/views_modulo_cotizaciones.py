@@ -25,7 +25,8 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 
 from .models import (
     Cotizacion_Empresa, Cotizacion_Empresa_Detalle, Cotizacion_Empresa_Detalle_SKU,
-    Historial_Cotizacion, Empresa, Sucursal, Producto_Talla, Vendedor
+    Historial_Cotizacion, Empresa, Sucursal, Producto_Talla, Vendedor,
+    Movimientos_Producto,
 )
 
 
@@ -105,6 +106,7 @@ def listar_cotizaciones(request):
             'vigentes': cotizaciones.filter(estado=Cotizacion_Empresa.ESTADO_VIGENTE).count(),
             'monto_total': cotizaciones.aggregate(Sum('total'))['total__sum'] or 0,
             'facturadas': cotizaciones.filter(estado=Cotizacion_Empresa.ESTADO_FACTURADA).count(),
+            'anuladas': cotizaciones.filter(estado=Cotizacion_Empresa.ESTADO_ANULADA).count(),
         }
         
         # Paginación
@@ -161,13 +163,13 @@ def listar_cotizaciones(request):
                     items_sin_sku += 1
             
             # Solo puede facturar si:
-            # - TODOS los items tienen SKU
-            # - TODOS tienen stock suficiente
+            # - Tiene items
             # - NO está ya facturada
             # - Está vigente
+            # - (items_sin_sku se tolera: el usuario confirmará despacho diferido)
             esta_facturada = cot.facturada or cot.estado == Cotizacion_Empresa.ESTADO_FACTURADA
             esta_vigente = cot.estado == Cotizacion_Empresa.ESTADO_VIGENTE
-            puede_facturar = total_items > 0 and items_sin_sku == 0 and items_sin_stock == 0 and not esta_facturada and esta_vigente
+            puede_facturar = total_items > 0 and items_sin_stock == 0 and not esta_facturada and esta_vigente
             
             # Motivo por el que no puede facturar
             motivo_no_facturar = None
@@ -175,10 +177,10 @@ def listar_cotizaciones(request):
                 motivo_no_facturar = f'Ya facturada: {cot.numero_factura or "Sin número"}'
             elif not esta_vigente:
                 motivo_no_facturar = f'Estado: {cot.get_estado_display()}'
-            elif items_sin_sku > 0:
-                motivo_no_facturar = f'{items_sin_sku} producto(s) sin SKU asociado'
             elif items_sin_stock > 0:
                 motivo_no_facturar = f'{items_sin_stock} producto(s) sin stock suficiente'
+            elif items_sin_sku > 0:
+                motivo_no_facturar = f'{items_sin_sku} ítem(s) sin SKU (se facturará con despacho diferido)'
             
             cotizaciones_data.append({
                 'id': cot.id,
@@ -202,6 +204,23 @@ def listar_cotizaciones(request):
                 'motivo_no_facturar': motivo_no_facturar,
                 'descripcion': cot.descripcion or '',
                 'dias_restantes': cot.dias_restantes,
+                # Despacho diferido
+                'estado_despacho': cot.estado_despacho,
+                'tiene_despacho_pendiente': (
+                    esta_facturada and
+                    cot.estado_despacho in (
+                        Cotizacion_Empresa.DESPACHO_PENDIENTE,
+                        Cotizacion_Empresa.DESPACHO_PARCIAL,
+                    )
+                ),
+                'items_pendientes_despacho': (
+                    cot.items.filter(
+                        es_producto_pendiente=False,
+                        sku_asignado_post_factura=False,
+                        producto_existente__isnull=True,
+                    ).count()
+                    if esta_facturada else 0
+                ),
             })
         
         return JsonResponse({
@@ -309,6 +328,10 @@ def detalle_cotizacion(request, cotizacion_id):
                 'producto_data': producto_data,  # Primer SKU para compatibilidad
                 'skus_asociados': skus_asociados,  # TODOS los SKUs
                 'es_producto_pendiente': item.es_producto_pendiente,
+                'sku_asignado_post_factura': item.sku_asignado_post_factura,
+                'nombre_producto_pendiente': item.nombre_producto_pendiente or '',
+                'sku_producto_pendiente': item.sku_producto_pendiente or '',
+                'tiene_sku': bool(skus_asociados),
                 'tiene_stock': item.tiene_stock_suficiente,
                 'stock_disponible': item.stock_disponible,
                 'observaciones': item.observaciones or '',
@@ -655,14 +678,19 @@ def anular_cotizacion(request):
 @require_http_methods(["POST"])
 def convertir_cotizacion_factura(request):
     """
-    API para convertir una cotización en factura
+    API para convertir una cotización en factura.
+
+    Acepta `forzar_con_pendientes=True` para facturar aunque haya ítems sin SKU.
+    En ese caso la cotización queda con estado_despacho=PENDIENTE y los ítems
+    sin SKU se resolverán después desde la sección "Despacho diferido".
     """
     try:
         data = json.loads(request.body)
-        cotizacion_id = data.get('cotizacion_id')
-        
+        cotizacion_id       = data.get('cotizacion_id')
+        forzar_con_pendientes = data.get('forzar_con_pendientes', False)
+
         cotizacion = get_object_or_404(Cotizacion_Empresa, pk=cotizacion_id)
-        
+
         # Verificar que pertenece a la sucursal del usuario
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
@@ -670,35 +698,60 @@ def convertir_cotizacion_factura(request):
                 'success': False,
                 'error': 'No tiene permisos para convertir esta cotización'
             }, status=403)
-        
+
         # Verificar que está vigente
         if not cotizacion.esta_vigente:
             return JsonResponse({
                 'success': False,
                 'error': 'Solo se pueden facturar cotizaciones vigentes'
             })
-        
-        # Aquí deberías implementar la lógica para crear la factura
-        # Por ahora solo marcaremos como facturada
+
+        # Contar ítems sin SKU
+        items_sin_sku = 0
+        for item in cotizacion.items.all():
+            tiene_sku = item.skus_asociados.exists() or item.producto_existente is not None
+            if not tiene_sku:
+                items_sin_sku += 1
+
+        # Si hay pendientes y el usuario no confirmó, pedir confirmación al frontend
+        if items_sin_sku > 0 and not forzar_con_pendientes:
+            return JsonResponse({
+                'success': False,
+                'requiere_confirmacion': True,
+                'items_sin_sku': items_sin_sku,
+                'message': (
+                    f'{items_sin_sku} ítem(s) no tienen SKU asociado. '
+                    'Puede facturar ahora y asignar el stock cuando los productos lleguen '
+                    '(despacho diferido). ¿Desea continuar?'
+                ),
+            })
+
+        # Facturar
+        tiene_pendientes = items_sin_sku > 0
         numero_factura = f"F-{cotizacion.numero_cotizacion}"
-        
-        cotizacion.marcar_como_facturada(numero_factura)
-        
+        cotizacion.marcar_como_facturada(numero_factura, tiene_pendientes=tiene_pendientes)
+
         # Registrar en historial
+        descripcion_hist = f'Cotización convertida a factura {numero_factura}'
+        if tiene_pendientes:
+            descripcion_hist += f'. {items_sin_sku} ítem(s) con despacho diferido pendiente.'
         Historial_Cotizacion.objects.create(
             cotizacion=cotizacion,
             usuario=request.user,
             accion='FACTURADA',
-            descripcion=f'Cotización convertida a factura {numero_factura}',
+            descripcion=descripcion_hist,
+            datos_nuevos={'numero_factura': numero_factura, 'items_pendientes': items_sin_sku},
             ip_address=get_client_ip(request)
         )
-        
+
         return JsonResponse({
             'success': True,
             'message': 'Cotización convertida a factura exitosamente',
-            'numero_factura': numero_factura
+            'numero_factura': numero_factura,
+            'tiene_despacho_pendiente': tiene_pendientes,
+            'estado_despacho': cotizacion.estado_despacho,
         })
-        
+
     except Exception as e:
         print(f"Error en convertir_cotizacion_factura: {str(e)}")
         return JsonResponse({
@@ -754,7 +807,8 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
         
         # Construir lista de productos en formato POS
         productos = []
-        items_sin_stock = []
+        items_pendientes = []   # ítems sin SKU — despacho diferido
+        items_sin_stock = []    # ítems CON SKU pero sin stock suficiente
         
         for item in cotizacion.items.all().order_by('numero_linea'):
             # Intentar obtener el producto desde los SKUs asociados
@@ -824,16 +878,44 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
                     'cotizacion_item_id': item.id,
                 })
             else:
-                # Producto pendiente o manual - no se puede facturar directamente
-                items_sin_stock.append({
+                # Producto pendiente — se incluye en AMBAS listas:
+                # 1) En 'productos' como línea manual para que aparezca en el DTE
+                # 2) En 'items_pendientes' para mostrar info al usuario
+                item_pendiente = {
+                    'detalle_id': item.id,
                     'descripcion': item.descripcion,
-                    'sku': 'N/A',
-                    'stock_actual': 0,
-                    'cantidad_requerida': item.cantidad,
-                    'es_producto_pendiente': True
+                    'nombre_pendiente': item.nombre_producto_pendiente or item.descripcion,
+                    'sku_esperado': item.sku_producto_pendiente or 'N/A',
+                    'cantidad': item.cantidad,
+                    'precio_unitario': float(item.precio_unitario),
+                    'subtotal': float(item.subtotal),
+                    'fecha_llegada_estimada': (
+                        item.fecha_llegada_estimada.strftime('%Y-%m-%d')
+                        if item.fecha_llegada_estimada else None
+                    ),
+                }
+                items_pendientes.append(item_pendiente)
+
+                # Agregar a productos como línea manual (sin SKU/stock, solo descripción)
+                productos.append({
+                    'sku': None,
+                    'producto_talla_id': None,
+                    'articulo': item.descripcion,
+                    'descripcion': item.nombre_producto_pendiente or item.descripcion,
+                    'marca': '',
+                    'talla': '',
+                    'cantidad': item.cantidad,
+                    'precio': float(item.precio_unitario),
+                    'precio_unitario': float(item.precio_unitario),
+                    'subtotal': float(item.subtotal),
+                    'stock': 0,
+                    'descuento_unitario': 0,
+                    'costo': 0,
+                    'cotizacion_item_id': item.id,
+                    'es_pendiente_despacho': True,
                 })
         
-        # Calcular totales
+        # Calcular totales (solo ítems con SKU)
         total_items = sum(p['cantidad'] for p in productos)
         subtotal = sum(p['subtotal'] for p in productos)
         
@@ -853,6 +935,7 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
             'es_cotizacion': True,
             'cliente': cliente_data,
             'productos': productos,
+            'items_pendientes': items_pendientes,
             'totales': totales,
             'observaciones': cotizacion.observaciones or '',
             'observaciones_adicionales': cotizacion.descripcion or '',
@@ -862,27 +945,32 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
             'dias_restantes': cotizacion.dias_restantes,
         }
         
-        # Advertencias si hay productos sin stock
+        # Advertencias de stock insuficiente (ya no incluye pendientes como error)
         advertencias = []
         if items_sin_stock:
             for item in items_sin_stock:
-                if item.get('es_producto_pendiente'):
-                    advertencias.append(f"Producto pendiente '{item['descripcion']}' no tiene SKU asignado")
-                else:
-                    advertencias.append(
-                        f"'{item['descripcion']}' (SKU: {item['sku']}): "
-                        f"Stock actual {item['stock_actual']}, requerido {item['cantidad_requerida']}"
-                    )
+                advertencias.append(
+                    f"'{item['descripcion']}' (SKU: {item['sku']}): "
+                    f"Stock actual {item['stock_actual']}, requerido {item['cantidad_requerida']}"
+                )
         
-        print(f"✅ Cotización cargada: {len(productos)} productos, total ${totales['total']:,.0f}")
-        if advertencias:
-            print(f"⚠️ Advertencias: {len(advertencias)}")
+        # Información sobre ítems pendientes de despacho
+        avisos_pendientes = []
+        for item in items_pendientes:
+            avisos_pendientes.append(
+                f"'{item['descripcion']}' (x{item['cantidad']}) — pendiente de SKU/despacho diferido"
+            )
+
+        print(f"✅ Cotización cargada: {len(productos)} productos con SKU, {len(items_pendientes)} pendientes, total ${totales['total']:,.0f}")
         
         return JsonResponse({
             'success': True,
             'ticket': ticket_data,
             'advertencias': advertencias,
-            'tiene_advertencias': len(advertencias) > 0
+            'tiene_advertencias': len(advertencias) > 0,
+            'avisos_pendientes': avisos_pendientes,
+            'tiene_pendientes': len(items_pendientes) > 0,
+            'total_pendientes': len(items_pendientes),
         })
         
     except Exception as e:
@@ -893,6 +981,168 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# ==================== DESPACHO DIFERIDO ====================
+
+@login_required
+@require_http_methods(["POST"])
+def asignar_sku_pendiente(request):
+    """
+    Asigna un SKU (Producto_Talla) a un ítem pendiente de una cotización ya FACTURADA.
+
+    Body JSON:
+        detalle_id        – ID de Cotizacion_Empresa_Detalle
+        producto_talla_id – ID de Producto_Talla a vincular
+        cantidad          – cantidad a despachar (debe ser <= item.cantidad)
+
+    Al asignar:
+    1. Vincula el Producto_Talla al detalle.
+    2. Crea Cotizacion_Empresa_Detalle_SKU.
+    3. Decrementa Producto_Talla.stock.
+    4. Crea Movimientos_Producto (EGRESO / DESPACHO_COTIZACION).
+    5. Registra Historial_Cotizacion (SKU_ASIGNADO).
+    6. Actualiza estado_despacho de la cotización.
+    """
+    try:
+        data = json.loads(request.body)
+        detalle_id        = data.get('detalle_id')
+        producto_talla_id = data.get('producto_talla_id')
+        cantidad          = int(data.get('cantidad', 1))
+
+        if not detalle_id or not producto_talla_id:
+            return JsonResponse({'success': False, 'error': 'Faltan parámetros requeridos'}, status=400)
+
+        detalle = get_object_or_404(Cotizacion_Empresa_Detalle, pk=detalle_id)
+        cotizacion = detalle.cotizacion
+
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+
+        # Validar pertenencia a sucursal
+        if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
+            return JsonResponse({'success': False, 'error': 'No tiene permisos sobre esta cotización'}, status=403)
+
+        # Validar que la cotización esté FACTURADA
+        if cotizacion.estado != Cotizacion_Empresa.ESTADO_FACTURADA:
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo se puede asignar SKU a cotizaciones ya facturadas'
+            }, status=400)
+
+        # Validar que el ítem realmente está pendiente
+        tiene_sku = detalle.skus_asociados.exists() or (
+            detalle.producto_existente is not None and not detalle.sku_asignado_post_factura
+        )
+        if tiene_sku and not detalle.es_producto_pendiente:
+            return JsonResponse({
+                'success': False,
+                'error': 'Este ítem ya tiene un SKU asignado'
+            }, status=400)
+
+        if cantidad <= 0 or cantidad > detalle.cantidad:
+            return JsonResponse({
+                'success': False,
+                'error': f'La cantidad debe estar entre 1 y {detalle.cantidad}'
+            }, status=400)
+
+        producto_talla = get_object_or_404(Producto_Talla, pk=producto_talla_id)
+
+        # Verificar stock disponible
+        stock_actual = producto_talla.stock_sucursal(sucursal_id) if sucursal_id else producto_talla.stock
+        if stock_actual < cantidad:
+            return JsonResponse({
+                'success': False,
+                'error': f'Stock insuficiente. Disponible: {stock_actual}, requerido: {cantidad}'
+            }, status=400)
+
+        from django.db import transaction
+        with transaction.atomic():
+            # 1. Crear/actualizar Cotizacion_Empresa_Detalle_SKU
+            Cotizacion_Empresa_Detalle_SKU.objects.create(
+                detalle=detalle,
+                producto_talla=producto_talla,
+                cantidad=cantidad,
+                costo_unitario=producto_talla.producto.costo if producto_talla.producto else 0,
+                precio_unitario=detalle.precio_unitario,
+            )
+
+            # 2. Vincular producto_existente en el detalle y marcar como resuelto
+            detalle.producto_existente = producto_talla
+            detalle.es_producto_pendiente = False
+            detalle.sku_asignado_post_factura = True
+            detalle.fecha_asignacion_sku = timezone.now()
+            detalle.usuario_asignacion_sku = request.user
+            detalle.save(update_fields=[
+                'producto_existente', 'es_producto_pendiente',
+                'sku_asignado_post_factura', 'fecha_asignacion_sku', 'usuario_asignacion_sku'
+            ])
+
+            # 3. Decrementar stock
+            producto_talla.stock -= cantidad
+            producto_talla.save(update_fields=['stock'])
+
+            # 4. Crear movimiento de inventario
+            sucursal_obj = cotizacion.sucursal
+            Movimientos_Producto.objects.create(
+                ProductoTalla=producto_talla,
+                sucursal_origen=sucursal_obj,
+                cantidad=-cantidad,
+                costo=producto_talla.producto.costo if producto_talla.producto else 0,
+                precio=int(detalle.precio_unitario),
+                concepto='DESPACHO_COTIZACION',
+                tipo_movimiento='EGRESO',
+                estado='COMPLETADO',
+                responsable=request.user.get_full_name() or request.user.username,
+                referencia_externa=cotizacion.numero_cotizacion,
+                observaciones=f'Despacho diferido cotización {cotizacion.numero_cotizacion} - {detalle.descripcion[:80]}',
+                fecha=timezone.now().date(),
+                hora=timezone.now().time(),
+            )
+
+            # 5. Registrar historial
+            Historial_Cotizacion.objects.create(
+                cotizacion=cotizacion,
+                usuario=request.user,
+                accion='SKU_ASIGNADO',
+                descripcion=(
+                    f'SKU {producto_talla.sku} asignado al ítem "{detalle.descripcion[:60]}" '
+                    f'(x{cantidad}). Stock descontado.'
+                ),
+                datos_nuevos={
+                    'detalle_id': detalle.id,
+                    'producto_talla_id': producto_talla.id,
+                    'sku': str(producto_talla.sku),
+                    'cantidad': cantidad,
+                },
+                ip_address=get_client_ip(request),
+            )
+
+            # 6. Recalcular estado_despacho de la cotización
+            cotizacion.actualizar_estado_despacho()
+
+            # Si todos los ítems están despachados, registrar historial de completado
+            if cotizacion.estado_despacho == Cotizacion_Empresa.DESPACHO_COMPLETADO:
+                Historial_Cotizacion.objects.create(
+                    cotizacion=cotizacion,
+                    usuario=request.user,
+                    accion='DESPACHO_COMPLETADO',
+                    descripcion='Todos los ítems pendientes han sido despachados. Despacho completado.',
+                    ip_address=get_client_ip(request),
+                )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'SKU {producto_talla.sku} asignado correctamente',
+            'estado_despacho': cotizacion.estado_despacho,
+            'despacho_completado': cotizacion.estado_despacho == Cotizacion_Empresa.DESPACHO_COMPLETADO,
+            'sku': str(producto_talla.sku),
+            'nombre_producto': producto_talla.producto.articulo if producto_talla.producto else '',
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 # ==================== APIs DE BÚSQUEDA ====================

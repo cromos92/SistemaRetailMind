@@ -1,515 +1,914 @@
 {% load static %}
-
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 
 <div class="page-content">
-    <div class="container-fluid">
+<div class="container-fluid">
 
 <style>
-    .reporte-sucursal-container {
-        max-width: 100%;
-        margin: 0 auto;
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        overflow: hidden;
-    }
+  /* ========== NEXO DESIGN SYSTEM ========== */
+  :root {
+    --nexo-primary:       #0066FF;
+    --nexo-primary-dark:  #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary:     #1A1A2E;
+    --nexo-accent:        #00D4AA;
+    --nexo-success:       #00D4AA;
+    --nexo-warning:       #FFB020;
+    --nexo-error:         #FF4D4D;
+    --nexo-gray-900:      #1A1A2E;
+    --nexo-gray-700:      #4A4A5A;
+    --nexo-gray-600:      #6A6A7A;
+    --nexo-gray-500:      #8A8A9A;
+    --nexo-gray-400:      #AAAABC;
+    --nexo-gray-300:      #D1D1D9;
+    --nexo-gray-200:      #E8E8F0;
+    --nexo-gray-100:      #F5F5F7;
+    --nexo-white:         #FFFFFF;
+    --nexo-shadow-sm:     0 1px 2px rgba(26,26,46,.05);
+    --nexo-shadow-md:     0 4px 6px rgba(26,26,46,.1);
+    --nexo-shadow-lg:     0 10px 15px rgba(26,26,46,.1);
+    --nexo-radius-sm:     4px;
+    --nexo-radius-md:     8px;
+    --nexo-radius-lg:     12px;
+    --nexo-radius-xl:     16px;
+    --nexo-transition:    150ms ease;
+  }
 
-    .header {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
-        padding: 30px;
-        text-align: center;
-    }
+  .nexo-container {
+    background: var(--nexo-gray-100);
+    min-height: calc(100vh - 70px);
+    padding-bottom: 40px;
+  }
 
-    .header h1 {
-        font-size: 2.5em;
-        margin-bottom: 10px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-    }
+  /* ── Header ─────────────────────────────────────────── */
+  .nexo-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
+    color: var(--nexo-white);
+    padding: 24px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .nexo-header::before {
+    content: '';
+    position: absolute;
+    top: -50%; right: -10%;
+    width: 400px; height: 300%;
+    background: linear-gradient(135deg, var(--nexo-accent) 0%, transparent 60%);
+    opacity: .08;
+    transform: rotate(-15deg);
+  }
+  .nexo-header-content {
+    position: relative; z-index: 1;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .nexo-header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    margin: 0 0 4px;
+    color: var(--nexo-white);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nexo-header p {
+    font-size: .8rem; color: var(--nexo-gray-300); margin: 0;
+  }
+  .nexo-header-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(0,212,170,.15);
+    border: 1px solid rgba(0,212,170,.3);
+    color: var(--nexo-accent);
+    padding: 8px 16px; border-radius: 9999px;
+    font-size: .8rem; font-weight: 600;
+  }
 
-    .controls {
-        padding: 25px 30px;
-        background: #f8f9fa;
-        border-bottom: 2px solid #e9ecef;
-        display: flex;
-        gap: 15px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
+  /* ── KPI row ─────────────────────────────────────────── */
+  .nexo-kpi-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 40px;
+    background: var(--nexo-white);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    align-items: center;
+  }
+  .nexo-kpi-card {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 7px 14px 7px 10px;
+    position: relative; overflow: hidden;
+    transition: var(--nexo-transition);
+    flex: 1; min-width: 170px; max-width: 240px;
+  }
+  .nexo-kpi-card:hover { box-shadow: var(--nexo-shadow-md); transform: translateY(-1px); }
+  .nexo-kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0;
+    width: 3px; height: 100%;
+  }
+  .nexo-kpi-card.kpi-primary::before { background: var(--nexo-primary); }
+  .nexo-kpi-card.kpi-success::before { background: var(--nexo-success); }
+  .nexo-kpi-card.kpi-warning::before { background: var(--nexo-warning); }
+  .nexo-kpi-card.kpi-error::before   { background: var(--nexo-error); }
+  .nexo-kpi-icon {
+    width: 28px; height: 28px;
+    border-radius: var(--nexo-radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .85rem; flex-shrink: 0;
+  }
+  .icon-primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+  .icon-success { background: rgba(0,212,170,.1);        color: var(--nexo-success); }
+  .icon-warning { background: rgba(255,176,32,.1);       color: var(--nexo-warning); }
+  .icon-error   { background: rgba(255,77,77,.1);        color: var(--nexo-error); }
+  .nexo-kpi-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .nexo-kpi-label {
+    font-size: .6rem; font-weight: 600;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase; letter-spacing: .4px;
+    white-space: nowrap;
+  }
+  .nexo-kpi-value {
+    font-size: 1.05rem; font-weight: 700;
+    color: var(--nexo-gray-900); line-height: 1.2;
+    white-space: nowrap;
+  }
 
-    .control-group {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-    }
+  /* ── KPI Skeleton ───────────────────────────────────── */
+  .nexo-kpi-skeleton {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 7px 14px 7px 10px;
+    flex: 1; min-width: 170px; max-width: 240px;
+  }
+  .sk-icon {
+    width: 28px; height: 28px;
+    border-radius: var(--nexo-radius-sm);
+    background: var(--nexo-gray-300);
+    flex-shrink: 0;
+  }
+  .sk-body { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .sk-label {
+    height: 9px; width: 70%;
+    border-radius: 4px; background: var(--nexo-gray-300);
+  }
+  .sk-value {
+    height: 16px; width: 55%;
+    border-radius: 4px; background: var(--nexo-gray-300);
+  }
+  @keyframes shimmer {
+    0%   { opacity: 1; }
+    50%  { opacity: .45; }
+    100% { opacity: 1; }
+  }
+  .nexo-kpi-skeleton .sk-icon,
+  .nexo-kpi-skeleton .sk-label,
+  .nexo-kpi-skeleton .sk-value {
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
 
-    .control-group label {
-        font-weight: 600;
-        color: #495057;
-        font-size: 0.9em;
-    }
+  /* ── Controles ───────────────────────────────────────── */
+  .nexo-controls {
+    padding: 16px 40px;
+    background: var(--nexo-white);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .nexo-control-group {
+    display: flex; flex-direction: column; gap: 4px;
+    flex: 1; min-width: 160px; max-width: 220px;
+  }
+  .nexo-control-group.wide { min-width: 240px; max-width: 320px; }
+  .nexo-control-label {
+    font-size: .65rem; font-weight: 600;
+    color: var(--nexo-gray-700);
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .nexo-input, .nexo-select {
+    padding: 8px 12px;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: .8rem; color: var(--nexo-gray-900);
+    background: var(--nexo-white);
+    transition: var(--nexo-transition); width: 100%;
+  }
+  .nexo-input:focus, .nexo-select:focus {
+    outline: none;
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0,102,255,.1);
+  }
+  .nexo-toggle-row {
+    display: flex; align-items: center; gap: 7px;
+    font-size: .72rem; font-weight: 600;
+    color: var(--nexo-gray-700); text-transform: uppercase; letter-spacing: .4px;
+    cursor: pointer; padding-bottom: 2px; white-space: nowrap;
+  }
+  .nexo-toggle-row input[type="checkbox"] {
+    width: 15px; height: 15px;
+    accent-color: var(--nexo-primary); cursor: pointer;
+  }
 
-    .control-group select,
-    .control-group input {
-        padding: 10px 15px;
-        border: 2px solid #dee2e6;
-        border-radius: 8px;
-        font-size: 1em;
-        transition: all 0.3s ease;
-        min-width: 200px;
-    }
+  /* ── Botones ─────────────────────────────────────────── */
+  .nexo-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 8px 16px;
+    border: none; border-radius: var(--nexo-radius-md);
+    font-size: .8rem; font-weight: 600;
+    cursor: pointer; transition: var(--nexo-transition); white-space: nowrap;
+  }
+  .nexo-btn-primary { background: var(--nexo-primary); color: var(--nexo-white); }
+  .nexo-btn-primary:hover { background: var(--nexo-primary-dark); transform: translateY(-1px); box-shadow: var(--nexo-shadow-md); }
+  .nexo-btn-success { background: var(--nexo-success); color: var(--nexo-white); }
+  .nexo-btn-success:hover { background: #00b894; transform: translateY(-1px); }
+  .nexo-btn-excel { background: #217346; color: var(--nexo-white); }
+  .nexo-btn-excel:hover { background: #185a36; transform: translateY(-1px); }
+  .nexo-btn-pdf   { background: #c62828; color: var(--nexo-white); }
+  .nexo-btn-pdf:hover { background: #a81e1e; transform: translateY(-1px); }
+  .nexo-btn:disabled { background: var(--nexo-gray-300); color: var(--nexo-gray-500); cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .nexo-btn-group { display: flex; gap: 8px; margin-left: auto; }
 
-    .control-group select:focus,
-    .control-group input:focus {
-        outline: none;
-        border-color: #28a745;
-        box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
-    }
+  /* ── Contenido ───────────────────────────────────────── */
+  .nexo-content { padding: 20px 40px; }
 
-    .btn {
-        padding: 12px 25px;
-        border: none;
-        border-radius: 8px;
-        font-size: 1em;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        align-self: flex-end;
-    }
+  /* ── Tabla ───────────────────────────────────────────── */
+  .nexo-table-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    overflow: hidden;
+    border: 1px solid var(--nexo-gray-300);
+  }
+  .nexo-table-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px;
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+  }
+  .nexo-table-title {
+    font-size: .95rem; font-weight: 700;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .nexo-table-info {
+    font-size: .75rem; color: var(--nexo-gray-300);
+    display: flex; align-items: center; gap: 16px;
+  }
+  .nexo-search-wrap {
+    padding: 12px 20px;
+    background: var(--nexo-gray-100);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nexo-search-inner { position: relative; flex: 1; max-width: 360px; }
+  .nexo-search-inner svg {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--nexo-gray-400); pointer-events: none;
+  }
+  .nexo-search-inner input {
+    width: 100%; padding: 7px 12px 7px 34px;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: .8rem; background: var(--nexo-white);
+  }
+  .nexo-search-inner input:focus {
+    outline: none; border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0,102,255,.1);
+  }
+  .nexo-table-wrapper {
+    overflow-x: auto;
+    max-height: calc(100vh - 380px);
+    overflow-y: auto;
+  }
+  .nexo-table {
+    width: 100%; border-collapse: collapse; font-size: .75rem;
+  }
+  .nexo-table thead {
+    background: var(--nexo-gray-100);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .nexo-table th {
+    padding: 10px 8px; text-align: center;
+    font-weight: 700; color: var(--nexo-gray-700);
+    border-bottom: 2px solid var(--nexo-gray-300);
+    font-size: .65rem; text-transform: uppercase; letter-spacing: .5px;
+    white-space: nowrap; cursor: pointer; user-select: none;
+  }
+  .nexo-table th:hover { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+  .th-sort-arrow { opacity: .5; margin-left: 3px; font-size: .6rem; }
+  .nexo-table td {
+    padding: 8px 6px; text-align: center;
+    border-bottom: 1px solid var(--nexo-gray-200);
+    vertical-align: middle;
+  }
+  .nexo-table tbody tr:hover { background: var(--nexo-primary-light); }
+  .nexo-table tbody tr:nth-child(even) { background: rgba(245,245,247,.5); }
+  .nexo-table tbody tr:nth-child(even):hover { background: var(--nexo-primary-light); }
+  .td-left { text-align: left !important; }
+  .td-right { text-align: right !important; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono','Courier New',monospace; }
+  .td-art { font-weight: 600; color: var(--nexo-gray-900); max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .td-desc { color: var(--nexo-gray-700); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    .btn-primary {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
-    }
+  /* Badges */
+  .stock-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 38px; padding: 2px 7px;
+    border-radius: var(--nexo-radius-sm);
+    font-weight: 700; font-size: .7rem;
+    font-family: 'JetBrains Mono','Courier New',monospace;
+  }
+  .stock-ok      { background: rgba(0,212,170,.1); color: #007a62; }
+  .stock-warning { background: rgba(255,176,32,.12); color: #8a5c00; }
+  .stock-error   { background: rgba(255,77,77,.1); color: var(--nexo-error); font-weight: 700; }
+  .badge-marca {
+    display: inline-flex; padding: 2px 8px;
+    background: var(--nexo-primary-light); color: var(--nexo-primary);
+    border-radius: 9999px; font-size: .68rem; font-weight: 700; white-space: nowrap;
+  }
+  .badge-talla {
+    display: inline-flex; padding: 2px 8px;
+    background: var(--nexo-gray-200); color: var(--nexo-gray-700);
+    border-radius: var(--nexo-radius-sm); font-size: .72rem; font-weight: 700;
+  }
+  .row-sin-stock { background: rgba(255,77,77,.04) !important; }
+  .row-sin-stock:hover { background: rgba(255,77,77,.1) !important; }
 
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
-    }
+  /* ── Paginación ──────────────────────────────────────── */
+  .nexo-pagination {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px;
+    background: var(--nexo-gray-100);
+    border-top: 1px solid var(--nexo-gray-300);
+    flex-wrap: wrap; gap: 10px;
+  }
+  .nexo-pagination-info { font-size: .75rem; color: var(--nexo-gray-600); }
+  .nexo-pagination-controls { display: flex; align-items: center; gap: 6px; }
+  .nexo-pagination-btn {
+    padding: 5px 11px;
+    border: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-sm);
+    font-size: .75rem; cursor: pointer;
+    transition: var(--nexo-transition);
+  }
+  .nexo-pagination-btn:hover:not(:disabled) {
+    background: var(--nexo-primary-light); border-color: var(--nexo-primary);
+  }
+  .nexo-pagination-btn.active {
+    background: var(--nexo-primary); color: var(--nexo-white); border-color: var(--nexo-primary);
+  }
+  .nexo-pagination-btn:disabled { opacity: .45; cursor: not-allowed; }
 
-    .btn-success {
-        background: #28a745;
-        color: white;
-    }
+  /* ── Empty / Loading ─────────────────────────────────── */
+  .nexo-empty-state { text-align: center; padding: 50px 20px; color: var(--nexo-gray-500); }
+  .nexo-empty-icon  { font-size: 3rem; margin-bottom: 12px; opacity: .5; display: block; }
+  .nexo-empty-title { font-size: 1.05rem; font-weight: 700; color: var(--nexo-gray-700); margin-bottom: 6px; }
+  .nexo-empty-text  { font-size: .8rem; max-width: 380px; margin: 0 auto; }
 
-    .btn-success:hover {
-        background: #218838;
-    }
+  .nexo-loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(26,26,46,.85);
+    backdrop-filter: blur(4px);
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 9999;
+  }
+  .nexo-loading-overlay.active { display: flex; }
+  .nexo-loading-content {
+    background: var(--nexo-white);
+    padding: 36px 50px; border-radius: var(--nexo-radius-xl);
+    text-align: center; box-shadow: var(--nexo-shadow-lg);
+  }
+  .nexo-spinner {
+    width: 40px; height: 40px;
+    border: 4px solid var(--nexo-gray-300);
+    border-top-color: var(--nexo-primary);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    margin: 0 auto 14px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-    .loading {
-        text-align: center;
-        padding: 40px;
-        font-size: 1.2em;
-        color: #28a745;
-    }
+  /* Toast */
+  .nexo-toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--nexo-error); color: #fff;
+    padding: 12px 28px; border-radius: var(--nexo-radius-md);
+    font-size: .88rem; font-weight: 600;
+    z-index: 10000; box-shadow: var(--nexo-shadow-lg);
+    animation: fadeSlide .25s ease;
+  }
+  @keyframes fadeSlide { from { opacity:0; top:5px; } to { opacity:1; top:20px; } }
 
-    .tabla-existencias {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.85em;
-        margin: 20px 0;
-    }
-
-    .tabla-existencias thead {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    .tabla-existencias th {
-        padding: 12px 8px;
-        text-align: left;
-        font-weight: 700;
-        border: 1px solid rgba(255,255,255,0.3);
-        font-size: 0.9em;
-    }
-
-    .tabla-existencias td {
-        padding: 10px 8px;
-        border: 1px solid #dee2e6;
-    }
-
-    .tabla-existencias tbody tr:hover {
-        background: #e8f5e9;
-    }
-
-    .tabla-existencias tbody tr:nth-child(even) {
-        background: #f8f9fa;
-    }
-
-    .td-articulo {
-        font-weight: 600;
-        color: #212529;
-    }
-
-    .td-numero {
-        text-align: right;
-        font-family: 'Courier New', monospace;
-    }
-
-    .td-centro {
-        text-align: center;
-    }
-
-    .stock-bajo {
-        color: #dc3545;
-        font-weight: 700;
-    }
-
-    .stock-ok {
-        color: #28a745;
-        font-weight: 600;
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: #6c757d;
-    }
-
-    .empty-state i {
-        font-size: 4em;
-        color: #dee2e6;
-        margin-bottom: 20px;
-    }
-
-    .resumen-cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-        padding: 20px 30px;
-        background: #f8f9fa;
-    }
-
-    .card-resumen {
-        background: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-
-    .card-resumen h3 {
-        font-size: 0.9em;
-        color: #6c757d;
-        margin-bottom: 10px;
-    }
-
-    .card-resumen .valor {
-        font-size: 1.8em;
-        font-weight: 700;
-        color: #28a745;
-    }
-
-    @media print {
-        .controls, .btn {
-            display: none;
-        }
-    }
+  @media (max-width: 768px) {
+    .nexo-header { padding: 16px 20px; }
+    .nexo-header h1 { font-size: 1.1rem; }
+    .nexo-header-badge { display: none; }
+    .nexo-controls, .nexo-kpi-row, .nexo-content { padding-left: 16px; padding-right: 16px; }
+    .nexo-btn-group { margin-left: 0; width: 100%; }
+    .nexo-btn { flex: 1; }
+    .nexo-kpi-card, .nexo-kpi-skeleton { min-width: 140px; }
+  }
+  @media print {
+    .nexo-controls, .nexo-btn-group, .nexo-search-wrap,
+    .nexo-pagination, .nexo-header-badge { display: none !important; }
+  }
 </style>
 
-<div class="reporte-sucursal-container">
-    <div class="header">
-        <h1>🏪 Reporte de Existencias por Sucursal</h1>
-        <p>Detalle completo de productos y stock por sucursal</p>
-    </div>
-
-    <div class="controls">
-        <div class="control-group">
-            <label for="filtro-sucursal">Sucursal: *</label>
-            <select id="filtro-sucursal" required>
-                <option value="">Selecciona una sucursal</option>
-            </select>
-        </div>
-
-        <div class="control-group">
-            <label for="search-marca">Buscar Marca:</label>
-            <input type="text" id="search-marca" placeholder="🔍 Buscar marca..." 
-                   oninput="filtrarMarcas()">
-        </div>
-
-        <div class="control-group">
-            <label for="filtro-marca">Marca:</label>
-            <select id="filtro-marca">
-                <option value="">Todas las marcas</option>
-            </select>
-        </div>
-
-        <button class="btn btn-primary" onclick="cargarReporte()">
-            🔄 Generar Reporte
-        </button>
-
-        <button class="btn btn-success" onclick="exportarExcel()">
-            📥 Exportar a Excel
-        </button>
-    </div>
-
-    <div id="resumen-container"></div>
-
-    <div id="contenido-reporte" class="p-4">
-        <div class="empty-state">
-            <i>🔍</i>
-            <p><strong>Selecciona una sucursal y haz clic en "Generar Reporte"</strong></p>
-            <p style="color: #6c757d; font-size: 0.9em;">Opcionalmente puedes filtrar por marca</p>
-        </div>
-    </div>
+<!-- Loading overlay -->
+<div class="nexo-loading-overlay" id="loadingOverlay">
+  <div class="nexo-loading-content">
+    <div class="nexo-spinner"></div>
+    <div style="font-size:.95rem;font-weight:600;color:var(--nexo-gray-900)">Cargando existencias…</div>
+    <div style="font-size:.8rem;color:var(--nexo-gray-500);margin-top:4px">Por favor espera</div>
+  </div>
 </div>
 
-<script>
-let todasLasMarcas = [];
+<div class="nexo-container mt-0">
 
-// Cargar filtros al iniciar
-document.addEventListener('DOMContentLoaded', function() {
-    cargarSucursales();
-    cargarMarcas();
+  <!-- ── Cabecera ─────────────────────────────────────── -->
+  <div class="nexo-header">
+    <div class="nexo-header-content">
+      <div>
+        <h1>
+          <i class="ri-store-2-line"></i>
+          Existencias por Sucursal
+        </h1>
+        <p>Stock actual por producto y talla — stock inicial desde movimientos registrados</p>
+      </div>
+      <div class="nexo-header-badge">
+        <i class="ri-database-2-line"></i>
+        <span id="badge-sucursal">Selecciona sucursal</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KPI cards ────────────────────────────────────── -->
+  <div class="nexo-kpi-row" id="kpi-row">
+    <!-- Skeletons (visibles mientras no hay datos) -->
+    <div class="nexo-kpi-skeleton" id="kpi-sk-1">
+      <div class="sk-icon"></div>
+      <div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div>
+    </div>
+    <div class="nexo-kpi-skeleton" id="kpi-sk-2">
+      <div class="sk-icon"></div>
+      <div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div>
+    </div>
+    <div class="nexo-kpi-skeleton" id="kpi-sk-3">
+      <div class="sk-icon"></div>
+      <div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div>
+    </div>
+    <div class="nexo-kpi-skeleton" id="kpi-sk-4">
+      <div class="sk-icon"></div>
+      <div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div>
+    </div>
+
+    <!-- Cards reales (ocultos hasta cargar) -->
+    <div class="nexo-kpi-card kpi-primary" id="kpi-card-1" style="display:none">
+      <div class="nexo-kpi-icon icon-primary"><i class="ri-box-3-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">SKUs con Stock</div>
+        <div class="nexo-kpi-value" id="kpi-skus">0</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-success" id="kpi-card-2" style="display:none">
+      <div class="nexo-kpi-icon icon-success"><i class="ri-stack-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">Unidades Totales</div>
+        <div class="nexo-kpi-value" id="kpi-unidades">0</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-warning" id="kpi-card-3" style="display:none">
+      <div class="nexo-kpi-icon icon-warning"><i class="ri-money-dollar-circle-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">Valor Inventario</div>
+        <div class="nexo-kpi-value" id="kpi-valor">$0</div>
+      </div>
+    </div>
+    <div class="nexo-kpi-card kpi-error" id="kpi-card-4" style="display:none">
+      <div class="nexo-kpi-icon icon-error"><i class="ri-error-warning-line"></i></div>
+      <div class="nexo-kpi-body">
+        <div class="nexo-kpi-label">SKUs Sin Stock</div>
+        <div class="nexo-kpi-value" id="kpi-sin-stock">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Controles ────────────────────────────────────── -->
+  <div class="nexo-controls">
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Sucursal <span style="color:var(--nexo-error)">*</span></label>
+      <select class="nexo-select" id="filtro-sucursal">
+        <option value="">— Seleccionar —</option>
+      </select>
+    </div>
+
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Buscar Marca</label>
+      <input class="nexo-input" type="text" id="search-marca"
+             placeholder="Escribe para filtrar..." oninput="filtrarMarcas()">
+    </div>
+
+    <div class="nexo-control-group">
+      <label class="nexo-control-label">Marca</label>
+      <select class="nexo-select" id="filtro-marca">
+        <option value="">Todas las marcas</option>
+      </select>
+    </div>
+
+    <label class="nexo-toggle-row" title="Incluye filas en rojo con stock 0">
+      <input type="checkbox" id="check-sin-stock">
+      Mostrar sin stock
+    </label>
+
+    <div class="nexo-btn-group">
+      <button class="nexo-btn nexo-btn-primary" id="btn-generar" onclick="cargarReporte()">
+        <i class="ri-refresh-line"></i> Generar
+      </button>
+      <button class="nexo-btn nexo-btn-excel" id="btn-excel" onclick="exportar('excel')" disabled>
+        <i class="ri-file-excel-2-line"></i> Excel
+      </button>
+      <button class="nexo-btn nexo-btn-pdf" id="btn-pdf" onclick="exportar('pdf')" disabled>
+        <i class="ri-file-pdf-line"></i> PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Contenido ────────────────────────────────────── -->
+  <div class="nexo-content">
+    <div class="nexo-table-card" id="tabla-card">
+
+      <!-- Estado inicial -->
+      <div id="estado-inicial">
+        <div class="nexo-empty-state">
+          <span class="nexo-empty-icon">📊</span>
+          <div class="nexo-empty-title">Selecciona una sucursal</div>
+          <p class="nexo-empty-text">
+            Elige una sucursal y presiona <strong>Generar</strong> para ver el inventario detallado
+          </p>
+        </div>
+      </div>
+
+      <!-- Tabla (oculta hasta cargar) -->
+      <div id="tabla-wrapper" style="display:none">
+        <div class="nexo-table-header">
+          <div class="nexo-table-title">
+            <i class="ri-table-line"></i>
+            Detalle de Existencias
+          </div>
+          <div class="nexo-table-info">
+            <span id="tabla-info-header"></span>
+          </div>
+        </div>
+
+        <div class="nexo-search-wrap">
+          <div class="nexo-search-inner">
+            <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+            </svg>
+            <input type="text" id="buscar-tabla" placeholder="Buscar en la tabla..." oninput="filtrarTabla()">
+          </div>
+          <span style="font-size:.72rem;color:var(--nexo-gray-500)">
+            Haz clic en los encabezados para ordenar
+          </span>
+        </div>
+
+        <div class="nexo-table-wrapper">
+          <table class="nexo-table">
+            <thead id="tabla-head"></thead>
+            <tbody id="tabla-body"></tbody>
+          </table>
+        </div>
+
+        <div class="nexo-pagination" id="paginacion">
+          <span class="nexo-pagination-info" id="pag-info"></span>
+          <div class="nexo-pagination-controls" id="pag-btns"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /nexo-container -->
+
+<script>
+/* ================================================================
+   Estado
+   ================================================================ */
+let todasLasMarcas = [];
+let todosLosDatos  = [];
+let datosFiltrados = [];
+let paginaActual   = 1;
+let sortCol        = null;
+let sortDir        = 1;
+const POR_PAGINA   = 100;
+
+/* ================================================================
+   Init
+   ================================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  cargarSucursales();
+  cargarMarcas();
 });
 
-// Cargar sucursales
+/* ================================================================
+   Combos
+   ================================================================ */
 async function cargarSucursales() {
-    try {
-        const response = await fetch('/app/api/reportes/sucursales/');
-        const data = await response.json();
-        
-        const select = document.getElementById('filtro-sucursal');
-        
-        if (data.success && data.sucursales) {
-            data.sucursales.forEach(sucursal => {
-                const option = document.createElement('option');
-                option.value = sucursal.id;
-                option.textContent = sucursal.nombre || sucursal.alias || `Sucursal ${sucursal.id}`;
-                select.appendChild(option);
-            });
-            
-            console.log('✅ Sucursales cargadas:', data.sucursales.length);
-        } else {
-            console.error('Error al cargar sucursales:', data.error);
-        }
-    } catch (error) {
-        console.error('Error al cargar sucursales:', error);
+  try {
+    const data = await fetch('/app/api/reportes/sucursales/').then(r => r.json());
+    const sel = document.getElementById('filtro-sucursal');
+    if (data.success && data.sucursales) {
+      data.sucursales.forEach(s => {
+        sel.appendChild(new Option(s.nombre || s.alias || `Sucursal ${s.id}`, s.id));
+      });
     }
+  } catch(e) { console.error(e); }
 }
 
-// Cargar marcas
 async function cargarMarcas() {
-    try {
-        const response = await fetch('/app/obtener_marcas/');
-        const data = await response.json();
-        
-        todasLasMarcas = data;
-        
-        const select = document.getElementById('filtro-marca');
-        const optionInfo = document.createElement('option');
-        optionInfo.value = '';
-        optionInfo.textContent = `💡 Usa el buscador arriba (${data.length} marcas)`;
-        optionInfo.disabled = true;
-        select.appendChild(optionInfo);
-    } catch (error) {
-        console.error('Error al cargar marcas:', error);
-    }
+  try {
+    const data = await fetch('/app/obtener_marcas/').then(r => r.json());
+    todasLasMarcas = data;
+    const o = new Option(`Escribe para filtrar (${data.length} marcas)`, '', false, false);
+    o.disabled = true;
+    document.getElementById('filtro-marca').appendChild(o);
+  } catch(e) { console.error(e); }
 }
 
-// Filtrar marcas
 function filtrarMarcas() {
-    const searchInput = document.getElementById('search-marca');
-    const select = document.getElementById('filtro-marca');
-    const searchText = searchInput.value.toLowerCase().trim();
-    
-    select.innerHTML = '<option value="">Todas las marcas</option>';
-    
-    if (!searchText) {
-        const optionInfo = document.createElement('option');
-        optionInfo.value = '';
-        optionInfo.textContent = `💡 Usa el buscador arriba (${todasLasMarcas.length} marcas)`;
-        optionInfo.disabled = true;
-        select.appendChild(optionInfo);
-        return;
-    }
-    
-    if (searchText.length < 2) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = '⌨️ Escribe al menos 2 caracteres...';
-        option.disabled = true;
-        select.appendChild(option);
-        return;
-    }
-    
-    const marcasFiltradas = todasLasMarcas.filter(marca => 
-        marca.valor.toLowerCase().includes(searchText)
-    );
-    
-    marcasFiltradas.forEach(marca => {
-        const option = document.createElement('option');
-        option.value = marca.id;
-        option.textContent = marca.valor;
-        select.appendChild(option);
-    });
-    
-    if (marcasFiltradas.length === 0) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = `❌ No se encontraron marcas con "${searchInput.value}"`;
-        option.disabled = true;
-        select.appendChild(option);
-    }
+  const txt = document.getElementById('search-marca').value.toLowerCase().trim();
+  const sel = document.getElementById('filtro-marca');
+  sel.innerHTML = '<option value="">Todas las marcas</option>';
+  if (!txt || txt.length < 2) {
+    const o = new Option(`Escribe al menos 2 caracteres`, '', false, false);
+    o.disabled = true; sel.appendChild(o);
+    return;
+  }
+  const matches = todasLasMarcas.filter(m => m.valor.toLowerCase().includes(txt));
+  if (!matches.length) {
+    const o = new Option(`Sin resultados para "${document.getElementById('search-marca').value}"`, '', false, false);
+    o.disabled = true; sel.appendChild(o);
+    return;
+  }
+  matches.forEach(m => sel.appendChild(new Option(m.valor, m.id)));
 }
 
-// Cargar reporte
+/* ================================================================
+   Cargar reporte
+   ================================================================ */
 async function cargarReporte() {
-    const sucursalId = document.getElementById('filtro-sucursal').value;
-    const marcaId = document.getElementById('filtro-marca').value;
-    
-    if (!sucursalId) {
-        alert('Por favor selecciona una sucursal');
-        return;
+  const sucursalId = document.getElementById('filtro-sucursal').value;
+  if (!sucursalId) { toast('Selecciona una sucursal primero'); return; }
+
+  const marcaId  = document.getElementById('filtro-marca').value;
+  const sinStock = document.getElementById('check-sin-stock').checked;
+
+  mostrarLoading(true);
+  setExportButtons(false);
+  mostrarKpis(false);
+
+  try {
+    let url = `/app/api/reporte-existencias-sucursal/?sucursal_id=${sucursalId}`;
+    if (marcaId)  url += `&marca_id=${marcaId}`;
+    if (sinStock) url += `&incluir_sin_stock=true`;
+
+    const data = await fetch(url).then(r => r.json());
+
+    if (!data.success) {
+      mostrarLoading(false);
+      mostrarError(data.error || 'Error al cargar datos');
+      return;
     }
-    
-    const contenido = document.getElementById('contenido-reporte');
-    contenido.innerHTML = '<div class="loading">⏳ Generando reporte...</div>';
-    
-    try {
-        let url = `/app/api/reporte-existencias-sucursal/?sucursal_id=${sucursalId}`;
-        if (marcaId) url += `&marca_id=${marcaId}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.success) {
-            renderizarResumen(data.resumen);
-            renderizarReporte(data.datos);
-        } else {
-            contenido.innerHTML = `<div class="empty-state"><i>⚠️</i><p>${data.error || 'Error al cargar datos'}</p></div>`;
-        }
-    } catch (error) {
-        console.error('Error al cargar reporte:', error);
-        contenido.innerHTML = '<div class="empty-state"><i>⚠️</i><p>Error al cargar el reporte</p></div>';
-    }
+
+    todosLosDatos  = data.datos || [];
+    datosFiltrados = [...todosLosDatos];
+    paginaActual   = 1;
+    sortCol        = null;
+
+    // KPIs
+    const r = data.resumen;
+    document.getElementById('kpi-skus').textContent      = num(r.total_productos);
+    document.getElementById('kpi-unidades').textContent  = num(r.stock_total);
+    document.getElementById('kpi-valor').textContent     = '$' + numCL(r.valor_inventario);
+    document.getElementById('kpi-sin-stock').textContent = num(r.sin_stock);
+    mostrarKpis(true);
+    document.getElementById('badge-sucursal').textContent = r.sucursal;
+
+    document.getElementById('buscar-tabla').value = '';
+    renderEncabezado();
+    renderTabla();
+
+    document.getElementById('estado-inicial').style.display = 'none';
+    document.getElementById('tabla-wrapper').style.display  = '';
+
+    setExportButtons(true);
+  } catch(e) {
+    console.error(e);
+    mostrarError('Error inesperado al cargar el reporte');
+  } finally {
+    mostrarLoading(false);
+  }
 }
 
-// Renderizar resumen
-function renderizarResumen(resumen) {
-    const container = document.getElementById('resumen-container');
-    
-    const html = `
-        <div class="resumen-cards">
-            <div class="card-resumen">
-                <h3>Total Productos</h3>
-                <div class="valor">${resumen.total_productos}</div>
-            </div>
-            <div class="card-resumen">
-                <h3>Stock Total</h3>
-                <div class="valor">${resumen.stock_total.toLocaleString()}</div>
-            </div>
-            <div class="card-resumen">
-                <h3>Valor Inventario</h3>
-                <div class="valor">$${formatearNumero(resumen.valor_inventario)}</div>
-            </div>
-            <div class="card-resumen">
-                <h3>Productos Sin Stock</h3>
-                <div class="valor" style="color: #dc3545;">${resumen.sin_stock}</div>
-            </div>
-        </div>
-    `;
-    
-    container.innerHTML = html;
+/* ================================================================
+   Encabezado de tabla
+   ================================================================ */
+const COLS = [
+  { key: 'articulo',      label: 'Artículo',      cls: 'td-left td-art' },
+  { key: 'descripcion',   label: 'Descripción',    cls: 'td-left td-desc' },
+  { key: 'categoria',     label: 'Categoría',      cls: '' },
+  { key: 'marca',         label: 'Marca',          cls: '' },
+  { key: 'color',         label: 'Color',          cls: '' },
+  { key: 'genero',        label: 'Género',         cls: '' },
+  { key: 'talla',         label: 'Talla',          cls: '' },
+  { key: 'stock_inicial', label: 'Stock Ini.',     cls: 'td-right' },
+  { key: 'stock',         label: 'Stock Act.',     cls: 'td-right' },
+  { key: 'costo',         label: 'Costo',          cls: 'td-right' },
+  { key: 'sobreprecio',   label: 'Sobreprecio',    cls: 'td-right' },
+  { key: 'precio_venta',  label: 'Precio Venta',   cls: 'td-right' },
+];
+
+function renderEncabezado() {
+  let html = '<tr>';
+  COLS.forEach(c => {
+    const arrow = c.key === sortCol ? (sortDir === 1 ? '▲' : '▼') : '⇅';
+    html += `<th onclick="sortBy('${c.key}')">${c.label}<span class="th-sort-arrow">${arrow}</span></th>`;
+  });
+  html += '</tr>';
+  document.getElementById('tabla-head').innerHTML = html;
 }
 
-// Renderizar reporte
-function renderizarReporte(datos) {
-    const contenido = document.getElementById('contenido-reporte');
-    
-    if (!datos || datos.length === 0) {
-        contenido.innerHTML = `
-            <div class="empty-state">
-                <i>📦</i>
-                <p>No se encontraron productos con stock en esta sucursal</p>
-            </div>
-        `;
-        return;
-    }
-    
-    let html = `
-        <table class="tabla-existencias">
-            <thead>
-                <tr>
-                    <th>Artículo</th>
-                    <th>Descripción</th>
-                    <th>Categoría</th>
-                    <th>Marca</th>
-                    <th>Color</th>
-                    <th>Género</th>
-                    <th class="td-centro">Talla</th>
-                    <th class="td-numero">Stock Inicial</th>
-                    <th class="td-numero">Stock</th>
-                    <th class="td-numero">Costo</th>
-                    <th class="td-numero">Sobreprecio</th>
-                    <th class="td-numero">Precio Venta</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-    
-    datos.forEach(item => {
-        const claseStock = item.stock < 5 ? 'stock-bajo' : 'stock-ok';
-        
-        html += `
-            <tr>
-                <td class="td-articulo">${item.articulo}</td>
-                <td>${item.descripcion}</td>
-                <td>${item.categoria}</td>
-                <td>${item.marca}</td>
-                <td>${item.color}</td>
-                <td>${item.genero}</td>
-                <td class="td-centro">${item.talla}</td>
-                <td class="td-numero">${item.stock_inicial}</td>
-                <td class="td-numero ${claseStock}">${item.stock}</td>
-                <td class="td-numero">$${formatearNumero(item.costo)}</td>
-                <td class="td-numero">$${formatearNumero(item.sobreprecio)}</td>
-                <td class="td-numero">$${formatearNumero(item.precio_venta)}</td>
-            </tr>
-        `;
-    });
-    
-    html += `
-            </tbody>
-        </table>
-    `;
-    
-    contenido.innerHTML = html;
+/* ================================================================
+   Filtro en tabla
+   ================================================================ */
+function filtrarTabla() {
+  const q = document.getElementById('buscar-tabla').value.toLowerCase().trim();
+  datosFiltrados = !q
+    ? [...todosLosDatos]
+    : todosLosDatos.filter(item =>
+        ['articulo','descripcion','marca','color','genero','talla','categoria','sku']
+          .some(k => item[k] && String(item[k]).toLowerCase().includes(q))
+      );
+  paginaActual = 1;
+  renderTabla();
 }
 
-// Formatear números
-function formatearNumero(num) {
-    if (!num) return '0';
-    return parseFloat(num).toLocaleString('es-CL', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    });
+/* ================================================================
+   Render tabla
+   ================================================================ */
+function renderTabla() {
+  const total  = datosFiltrados.length;
+  const inicio = (paginaActual - 1) * POR_PAGINA;
+  const fin    = Math.min(inicio + POR_PAGINA, total);
+  const pagData = datosFiltrados.slice(inicio, fin);
+
+  document.getElementById('tabla-info-header').textContent =
+    `${num(total)} registros`;
+
+  if (!pagData.length) {
+    document.getElementById('tabla-body').innerHTML = `
+      <tr><td colspan="${COLS.length}" style="padding:40px;text-align:center;color:var(--nexo-gray-500)">
+        Sin resultados para los filtros aplicados
+      </td></tr>`;
+    renderPaginacion(total);
+    return;
+  }
+
+  let rows = '';
+  pagData.forEach(item => {
+    const rowCls = item.sin_stock ? 'row-sin-stock' : '';
+    const stCls  = item.sin_stock ? 'stock-error'
+                 : item.stock < 5  ? 'stock-warning'
+                 : 'stock-ok';
+    rows += `<tr class="${rowCls}">
+      <td class="td-left td-art" title="${esc(item.articulo)}">${esc(item.articulo)}</td>
+      <td class="td-left td-desc" title="${esc(item.descripcion)}">${esc(item.descripcion)}</td>
+      <td>${esc(item.categoria)}</td>
+      <td><span class="badge-marca">${esc(item.marca)}</span></td>
+      <td>${esc(item.color)}</td>
+      <td>${esc(item.genero)}</td>
+      <td><span class="badge-talla">${esc(item.talla)}</span></td>
+      <td class="td-right">${num(item.stock_inicial)}</td>
+      <td class="td-right"><span class="stock-badge ${stCls}">${num(item.stock)}</span></td>
+      <td class="td-right">$${numCL(item.costo)}</td>
+      <td class="td-right">$${numCL(item.sobreprecio)}</td>
+      <td class="td-right">$${numCL(item.precio_venta)}</td>
+    </tr>`;
+  });
+
+  document.getElementById('tabla-body').innerHTML = rows;
+  renderPaginacion(total);
 }
 
-// Exportar a Excel
-function exportarExcel() {
-    const sucursalId = document.getElementById('filtro-sucursal').value;
-    const marcaId = document.getElementById('filtro-marca').value;
-    
-    if (!sucursalId) {
-        alert('Por favor selecciona una sucursal');
-        return;
-    }
-    
-    let url = `/app/api/exportar-existencias-sucursal-excel/?sucursal_id=${sucursalId}`;
-    if (marcaId) url += `&marca_id=${marcaId}`;
-    
-    window.location.href = url;
+/* ================================================================
+   Ordenamiento
+   ================================================================ */
+function sortBy(col) {
+  sortDir = (sortCol === col) ? sortDir * -1 : 1;
+  sortCol = col;
+  datosFiltrados.sort((a, b) => {
+    let va = a[col], vb = b[col];
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    return va < vb ? -sortDir : va > vb ? sortDir : 0;
+  });
+  paginaActual = 1;
+  renderEncabezado();
+  renderTabla();
+}
+
+/* ================================================================
+   Paginación
+   ================================================================ */
+function renderPaginacion(total) {
+  const totalPags = Math.ceil(total / POR_PAGINA) || 1;
+  const inicio = (paginaActual - 1) * POR_PAGINA + 1;
+  const fin    = Math.min(paginaActual * POR_PAGINA, total);
+  document.getElementById('pag-info').textContent =
+    `Mostrando ${num(inicio)}–${num(fin)} de ${num(total)} registros`;
+
+  let html = `<button class="nexo-pagination-btn" onclick="irPagina(${paginaActual-1})" ${paginaActual<=1?'disabled':''}>‹</button>`;
+  paginRange(paginaActual, totalPags).forEach(p => {
+    html += p === '…'
+      ? `<span class="nexo-pagination-btn" style="pointer-events:none">…</span>`
+      : `<button class="nexo-pagination-btn ${p===paginaActual?'active':''}" onclick="irPagina(${p})">${p}</button>`;
+  });
+  html += `<button class="nexo-pagination-btn" onclick="irPagina(${paginaActual+1})" ${paginaActual>=totalPags?'disabled':''}>›</button>`;
+  document.getElementById('pag-btns').innerHTML = html;
+}
+
+function paginRange(actual, total) {
+  if (total <= 7) return Array.from({length: total}, (_, i) => i + 1);
+  const r = [1];
+  if (actual > 3) r.push('…');
+  for (let p = Math.max(2, actual-1); p <= Math.min(total-1, actual+1); p++) r.push(p);
+  if (actual < total - 2) r.push('…');
+  r.push(total);
+  return r;
+}
+
+function irPagina(p) {
+  const total = Math.ceil(datosFiltrados.length / POR_PAGINA) || 1;
+  if (p < 1 || p > total) return;
+  paginaActual = p;
+  renderTabla();
+  document.querySelector('.nexo-table-wrapper')?.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+/* ================================================================
+   Exportar
+   ================================================================ */
+function exportar(tipo) {
+  const sid = document.getElementById('filtro-sucursal').value;
+  if (!sid) { toast('Selecciona una sucursal primero'); return; }
+  const mid = document.getElementById('filtro-marca').value;
+  const ss  = document.getElementById('check-sin-stock').checked;
+  const base = tipo === 'pdf'
+    ? '/app/api/exportar-existencias-sucursal-pdf/'
+    : '/app/api/exportar-existencias-sucursal-excel/';
+  let url = `${base}?sucursal_id=${sid}`;
+  if (mid) url += `&marca_id=${mid}`;
+  if (ss)  url += `&incluir_sin_stock=true`;
+  window.location.href = url;
+}
+
+/* ================================================================
+   UI helpers
+   ================================================================ */
+function mostrarLoading(show) {
+  document.getElementById('loadingOverlay').classList.toggle('active', show);
+}
+function mostrarKpis(loaded) {
+  [1,2,3,4].forEach(i => {
+    document.getElementById(`kpi-sk-${i}`).style.display  = loaded ? 'none' : '';
+    document.getElementById(`kpi-card-${i}`).style.display = loaded ? '' : 'none';
+  });
+}
+function setExportButtons(enabled) {
+  document.getElementById('btn-excel').disabled = !enabled;
+  document.getElementById('btn-pdf').disabled   = !enabled;
+}
+function mostrarError(msg) {
+  document.getElementById('estado-inicial').innerHTML = `
+    <div class="nexo-empty-state">
+      <span class="nexo-empty-icon">⚠️</span>
+      <div class="nexo-empty-title">Error al cargar datos</div>
+      <p class="nexo-empty-text">${esc(msg)}</p>
+    </div>`;
+  document.getElementById('estado-inicial').style.display = '';
+  document.getElementById('tabla-wrapper').style.display  = 'none';
+}
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'nexo-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+function num(v)   { return (v ?? 0).toLocaleString('es-CL'); }
+function numCL(v) { return parseFloat(v || 0).toLocaleString('es-CL', {minimumFractionDigits:0, maximumFractionDigits:0}); }
+function esc(s)   {
+  if (!s) return '-';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 </script>
 
-    </div>
-</div>
-
 {% include 'layout/footer.html' %}
-
