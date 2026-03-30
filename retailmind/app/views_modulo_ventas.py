@@ -3105,6 +3105,8 @@ def registrar_pagos_ticket(request, correlativo):
             
             # Verificar stock ANTES de generar DTE
             for tp in ticket.ticket_productos.all():
+                if tp.ProductoTalla is None:
+                    continue
                 print(f"🔍 DEBUG PRE-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
             
             # ✅ Pasar cotizacion_obj para usar sus descripciones en el TXT

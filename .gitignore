@@ -50,3 +50,4 @@ build/
 # QZ Tray - clave privada NUNCA al repositorio
 retailmind/retailmind/certs/private-key.pem
 
+retailmind/.env
