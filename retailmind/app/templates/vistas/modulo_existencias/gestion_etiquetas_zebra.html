@@ -1076,7 +1076,15 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
             </div>
             <div class="modal-footer">
                 <div id="modalAlertaImpresora" class="nexo-alert nexo-alert-warning small py-1 px-2 mb-0 me-auto" style="display:none;">
-                    <i class="ri-alert-line"></i> Sin impresora — conecta Zebra Browser Print
+                    <i class="ri-alert-line"></i>
+                    <span>Sin impresora — inicia Zebra Browser Print</span>
+                    <button class="nexo-btn nexo-btn-outline ms-2" style="padding:2px 10px;font-size:0.78rem;" onclick="reconectarDesdeModal()">
+                        <i class="ri-refresh-line"></i> Reconectar
+                    </button>
+                </div>
+                <div id="modalAlertaConectada" class="nexo-alert nexo-alert-success small py-1 px-2 mb-0 me-auto" style="display:none;">
+                    <span class="status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--nexo-success);display:inline-block;margin-right:6px;animation:pulse 2s infinite;"></span>
+                    <span id="modalNombreImpresora">Zebra conectada</span>
                 </div>
                 <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
                     <i class="ri-close-line"></i> Cancelar
@@ -1422,16 +1430,37 @@ function abrirModalImprimir(productos, contexto = null) {
 
     renderizarModalProductos();
     actualizarModalResumen();
-
-    // Alerta impresora
-    const alertaEl = document.getElementById('modalAlertaImpresora');
-    alertaEl.style.display = printerDevice ? 'none' : 'flex';
+    actualizarEstadoImpresoraEnModal();
 
     // Preview del primer producto
     if (modalProductos.length > 0) actualizarModalPreview(modalProductos[0]);
 
     const modal = new bootstrap.Modal(document.getElementById('modalImprimir'));
     modal.show();
+}
+
+function actualizarEstadoImpresoraEnModal() {
+    const alerta = document.getElementById('modalAlertaImpresora');
+    const ok = document.getElementById('modalAlertaConectada');
+    const btn = document.getElementById('btnConfirmarImprimir');
+    if (printerDevice) {
+        alerta.style.display = 'none';
+        ok.style.display = 'flex';
+        document.getElementById('modalNombreImpresora').textContent = printerDevice.name || 'Zebra conectada';
+    } else {
+        alerta.style.display = 'flex';
+        ok.style.display = 'none';
+    }
+    // El botón sigue habilitado según cantidad — solo actualizamos el resumen
+    actualizarModalResumen();
+}
+
+async function reconectarDesdeModal() {
+    const btnRecon = document.querySelector('#modalAlertaImpresora button');
+    if (btnRecon) { btnRecon.disabled = true; btnRecon.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Buscando...'; }
+    await buscarImpresora();
+    actualizarEstadoImpresoraEnModal();
+    if (btnRecon) { btnRecon.disabled = false; btnRecon.innerHTML = '<i class="ri-refresh-line"></i> Reconectar'; }
 }
 
 function renderizarModalProductos() {
@@ -1496,7 +1525,8 @@ function actualizarModalResumen() {
     document.getElementById('modalStatEtiquetas').textContent = total;
     document.getElementById('modalStatFilas').textContent = filas;
     document.getElementById('btnConfirmarTotal').textContent = total > 0 ? `(${total})` : '';
-    document.getElementById('btnConfirmarImprimir').disabled = !printerDevice || total === 0;
+    // Solo deshabilitar si no hay etiquetas — la alerta de impresora es informativa
+    document.getElementById('btnConfirmarImprimir').disabled = total === 0;
 }
 
 function actualizarModalPreview(producto) {
@@ -1878,17 +1908,17 @@ function actualizarEstadisticas() {
 
 function actualizarBotonImprimir() {
     const btn = document.getElementById('btnImprimir');
+    if (!btn) return;
     const seleccionados = productosDocumento.filter(p => p.seleccionado);
     const totalEtiquetas = seleccionados.reduce((sum, p) => sum + (p.cantidad_etiquetas || p.cantidad), 0);
     
-    btn.disabled = !printerDevice || totalEtiquetas === 0;
+    // El botón siempre activo si hay selección — la impresora se valida al confirmar
+    btn.disabled = totalEtiquetas === 0;
     
-    if (!printerDevice) {
-        btn.innerHTML = '<i class="ri-printer-line"></i> Sin impresora';
-    } else if (totalEtiquetas === 0) {
+    if (totalEtiquetas === 0) {
         btn.innerHTML = '<i class="ri-printer-line"></i> Seleccione productos';
     } else {
-        btn.innerHTML = `<i class="ri-printer-line"></i> Imprimir ${totalEtiquetas} Etiquetas`;
+        btn.innerHTML = `<i class="ri-printer-line"></i> Revisar e Imprimir (${totalEtiquetas})`;
     }
 }
 
