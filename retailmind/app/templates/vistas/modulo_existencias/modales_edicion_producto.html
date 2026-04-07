@@ -3,45 +3,43 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="modalEdicionProductoLabel">
-                    <i class="bi bi-pencil-square"></i> Editar Producto
-                </h5>
+                <div>
+                    <h5 class="modal-title mb-0" id="modalEdicionProductoLabel">
+                        <i class="bi bi-pencil-square me-1"></i> Editar Producto
+                    </h5>
+                    <div class="small mt-1 opacity-75">
+                        Bodega: <span class="badge bg-white text-primary ms-1" id="editSucursalBadge">—</span>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="edit_producto_id">
                 
-                <!-- OPCION DE SINCRONIZACION GLOBAL -->
-                <div class="alert alert-warning py-2 mb-3" role="alert">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-building me-2 fs-5"></i>
+                <!-- PANEL DE SINCRONIZACIÓN GLOBAL -->
+                <div class="rounded mb-3 border overflow-hidden" id="panelSincronizacion">
+                    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="background:#e8f0fe;">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-arrow-repeat text-primary fs-5"></i>
                             <div>
-                                <strong>Sincronizacion Global</strong>
-                                <div class="small text-muted">Al guardar, los cambios se aplicaran a TODAS las sucursales donde exista este articulo</div>
+                                <div class="fw-semibold text-primary" style="font-size:.9rem;">Sincronización global de atributos</div>
+                                <div class="small text-muted">
+                                    Cuando está <strong>activado</strong>: nombre, descripción, categoría, marca, color, género y precios se aplicarán en <strong>todas las bodegas</strong> que tengan el mismo artículo.
+                                </div>
                             </div>
                         </div>
-                        <div class="form-check form-switch ms-3">
-                            <input class="form-check-input" type="checkbox" id="edit_propagar_sucursales" checked style="width: 3em; height: 1.5em;">
-                            <label class="form-check-label fw-bold" for="edit_propagar_sucursales">Activado</label>
+                        <div class="form-check form-switch ms-3 flex-shrink-0 d-flex align-items-center gap-2">
+                            <input class="form-check-input" type="checkbox" id="edit_propagar_sucursales" checked style="width: 3em; height: 1.5em; cursor:pointer;">
+                            <label class="form-check-label fw-bold" for="edit_propagar_sucursales" id="lblPropagar" style="min-width:90px; cursor:pointer;">
+                                <span class="text-success"><i class="bi bi-check-circle me-1"></i>Global</span>
+                            </label>
                         </div>
                     </div>
-                </div>
-                
-                <!-- ALERTA INFORMATIVA -->
-                <div class="alert alert-info alert-dismissible fade show py-2 mb-3" role="alert">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-info-circle-fill me-2 fs-5"></i>
-                        <div>
-                            <strong>Que se actualiza:</strong>
-                            <ul class="mb-0 ps-3 small">
-                                <li><strong>Producto base:</strong> nombre, descripcion, categoria, atributos y precios.</li>
-                                <li><strong>Lotes FIFO activos:</strong> se actualizan con los nuevos precios.</li>
-                                <li><strong>Movimientos historicos:</strong> NO se modifican (metricas y reportes intactos).</li>
-                            </ul>
-                        </div>
+                    <div class="px-3 py-1 d-flex gap-4 flex-wrap" style="background:#f0f4ff; border-top:1px solid #cfe2ff; font-size:.75rem; color:#5a6a8a;">
+                        <span><i class="bi bi-check2 text-success me-1"></i>Lotes FIFO activos se actualizan con nuevos precios</span>
+                        <span><i class="bi bi-x text-muted me-1"></i>Movimientos históricos no se modifican</span>
+                        <span><i class="bi bi-x text-muted me-1"></i>Stock de tallas no se altera</span>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
                 
                 <!-- TABS DE NAVEGACIÓN -->
@@ -68,7 +66,7 @@
                             <!-- INFORMACIÓN BÁSICA -->
                             <div class="row">
                                 <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3">Información Básica</h6>
+                                    <h6 class="border-bottom pb-2 mb-3 text-secondary"><i class="bi bi-card-text me-1"></i>Información Básica</h6>
                                 </div>
                             </div>
                             
@@ -101,14 +99,14 @@
                             <!-- ATRIBUTOS -->
                             <div class="row">
                                 <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3 mt-2">Atributos</h6>
+                                    <h6 class="border-bottom pb-2 mb-3 mt-2 text-secondary"><i class="bi bi-tags me-1"></i>Atributos del Producto</h6>
                                 </div>
                             </div>
                             
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group mb-3">
-                                        <label for="edit_atributo1_id" class="form-label">Marca</label>
+                                        <label for="edit_atributo1_id" class="form-label"><i class="bi bi-bookmark me-1 text-primary"></i>Marca</label>
                                         <select class="form-select select2-edicion" id="edit_atributo1_id" data-atributo="marca" style="width: 100%;">
                                             <option value="">Seleccionar marca...</option>
                                         </select>
@@ -116,7 +114,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group mb-3">
-                                        <label for="edit_atributo2_id" class="form-label">Color</label>
+                                        <label for="edit_atributo2_id" class="form-label"><i class="bi bi-palette me-1 text-info"></i>Color</label>
                                         <select class="form-select select2-edicion" id="edit_atributo2_id" data-atributo="color" style="width: 100%;">
                                             <option value="">Seleccionar color...</option>
                                         </select>
@@ -127,7 +125,7 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group mb-3">
-                                        <label for="edit_atributo3_id" class="form-label">Género</label>
+                                        <label for="edit_atributo3_id" class="form-label"><i class="bi bi-person me-1 text-secondary"></i>Género</label>
                                         <select class="form-select select2-edicion" id="edit_atributo3_id" data-atributo="genero" style="width: 100%;">
                                             <option value="">Seleccionar género...</option>
                                         </select>
@@ -146,7 +144,7 @@
                             <!-- PRECIOS -->
                             <div class="row">
                                 <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3 mt-3">Precios Base</h6>
+                                    <h6 class="border-bottom pb-2 mb-3 mt-3 text-secondary"><i class="bi bi-currency-dollar me-1"></i>Precios Base</h6>
                                 </div>
                             </div>
                             
@@ -200,7 +198,7 @@
                             <!-- ESTADO ANALÍTICA -->
                             <div class="row mt-3">
                                 <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3">Estado Analítica</h6>
+                                    <h6 class="border-bottom pb-2 mb-3 text-secondary"><i class="bi bi-bar-chart me-1"></i>Estado Analítica</h6>
                                 </div>
                             </div>
                             <div class="row">
@@ -550,18 +548,37 @@
 document.addEventListener('DOMContentLoaded', function() {
     const switchSincronizar = document.getElementById('edit_propagar_sucursales');
     if (switchSincronizar) {
+        const actualizarEstado = (checked) => {
+            const label = document.getElementById('lblPropagar');
+            const panel = document.getElementById('panelSincronizacion');
+            if (checked) {
+                label.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Global</span>';
+                if (panel) panel.style.borderColor = '#86b7fe';
+            } else {
+                label.innerHTML = '<span class="text-muted"><i class="bi bi-x-circle me-1"></i>Solo esta bodega</span>';
+                if (panel) panel.style.borderColor = '#dee2e6';
+            }
+        };
         switchSincronizar.addEventListener('change', function() {
-            const label = this.nextElementSibling;
-            const alertDiv = this.closest('.alert');
-            
+            actualizarEstado(this.checked);
+        });
+        // Estado inicial
+        actualizarEstado(switchSincronizar.checked);
+    }
+    
+    const switchExcluir = document.getElementById('edit_excluir_de_analitica');
+    if (switchExcluir) {
+        switchExcluir.addEventListener('change', function() {
+            const label = document.getElementById('labelExcluirAnalitica');
+            const alertDiv = document.getElementById('alertExcluirAnalitica');
             if (this.checked) {
-                label.textContent = 'Activado';
-                alertDiv.classList.remove('alert-secondary');
+                label.textContent = 'Excluido';
+                alertDiv.classList.remove('alert-light');
                 alertDiv.classList.add('alert-warning');
             } else {
-                label.textContent = 'Desactivado';
+                label.textContent = 'Incluido';
                 alertDiv.classList.remove('alert-warning');
-                alertDiv.classList.add('alert-secondary');
+                alertDiv.classList.add('alert-light');
             }
         });
     }

@@ -1193,7 +1193,7 @@ def obtener_ventas_por_vendedor_reporte(request):
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fecha_inicio,
             fecha_emision__lte=fecha_fin,
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION'],
             estado_dte__in=['EMITIDO', 'PAGADO']
         ).select_related('vendedor', 'sucursal')
 
@@ -1208,8 +1208,8 @@ def obtener_ventas_por_vendedor_reporte(request):
         if vendedor_id:
             queryset_dtes = queryset_dtes.filter(vendedor_id=vendedor_id)
         
-        # Agrupar DTEs por vendedor
-        dtes_por_vendedor = queryset_dtes.values(
+        # Agrupar DTEs de VENTA (excluir NCs)
+        dtes_por_vendedor = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO').values(
             'vendedor__id',
             'vendedor__nombre',
             'vendedor__codigo_vendedor'
@@ -1217,6 +1217,21 @@ def obtener_ventas_por_vendedor_reporte(request):
             total_ventas=Sum('monto_con_iva'),
             total_documentos=Count('id')
         )
+
+        # Agrupar NCs (devoluciones) por vendedor
+        nc_por_vendedor = queryset_dtes.filter(tipo_documento='NOTA DE CREDITO').values(
+            'vendedor__id'
+        ).annotate(
+            total_devoluciones=Sum('monto_con_iva'),
+            cantidad_devoluciones=Count('id')
+        )
+        devoluciones_vend = {
+            item['vendedor__id']: {
+                'total': int(item['total_devoluciones'] or 0),
+                'cantidad': item['cantidad_devoluciones'] or 0
+            }
+            for item in nc_por_vendedor if item['vendedor__id']
+        }
         
         for item in dtes_por_vendedor:
             vid = item['vendedor__id']
@@ -1226,23 +1241,38 @@ def obtener_ventas_por_vendedor_reporte(request):
                         'nombre': item['vendedor__nombre'],
                         'codigo': item['vendedor__codigo_vendedor'],
                         'ventas': 0,
-                        'documentos': 0
+                        'documentos': 0,
+                        'devoluciones': 0,
+                        'cantidad_devoluciones': 0
                     }
                 ventas_acumuladas[vid]['ventas'] += int(item['total_ventas'] or 0)
                 ventas_acumuladas[vid]['documentos'] += item['total_documentos'] or 0
+
+        # Agregar devoluciones NC a los vendedores
+        for vid, nc_data in devoluciones_vend.items():
+            if vid in ventas_acumuladas:
+                ventas_acumuladas[vid]['devoluciones'] = nc_data['total']
+                ventas_acumuladas[vid]['cantidad_devoluciones'] = nc_data['cantidad']
         
-        # Calcular total general
-        total_general = sum(v['ventas'] for v in ventas_acumuladas.values())
+        # Calcular total general (ventas netas)
+        total_general = sum(
+            v['ventas'] - v.get('devoluciones', 0)
+            for v in ventas_acumuladas.values()
+        )
         
-        # Procesar datos ordenados por ventas
+        # Procesar datos ordenados por ventas netas
         vendedores_data = []
         for vid, data in sorted(ventas_acumuladas.items(), key=lambda x: x[1]['ventas'], reverse=True):
-            participacion = (data['ventas'] / total_general * 100) if total_general > 0 else 0
+            ventas_netas = data['ventas'] - data.get('devoluciones', 0)
+            participacion = (ventas_netas / total_general * 100) if total_general > 0 else 0
             vendedores_data.append({
                 'id': vid,
                 'nombre': data['nombre'],
                 'codigo': data['codigo'],
-                'ventas': data['ventas'],
+                'ventas': ventas_netas,
+                'ventas_brutas': data['ventas'],
+                'devoluciones': data.get('devoluciones', 0),
+                'cantidad_devoluciones': data.get('cantidad_devoluciones', 0),
                 'documentos': data['documentos'],
                 'participacion': round(participacion, 1)
             })
@@ -1251,12 +1281,15 @@ def obtener_ventas_por_vendedor_reporte(request):
         total_documentos = sum(v['documentos'] for v in ventas_acumuladas.values())
         ticket_promedio = total_general / total_documentos if total_documentos > 0 else 0
         top_vendedor = vendedores_data[0]['nombre'] if vendedores_data else '-'
+        total_devoluciones_general = sum(v.get('devoluciones', 0) for v in ventas_acumuladas.values())
         
         return JsonResponse({
             'success': True,
             'vendedores': vendedores_data,
             'kpis': {
                 'total_ventas': int(total_general),
+                'total_ventas_brutas': int(total_general + total_devoluciones_general),
+                'total_devoluciones': int(total_devoluciones_general),
                 'total_documentos': total_documentos,
                 'ticket_promedio': int(ticket_promedio),
                 'top_vendedor': top_vendedor
@@ -1369,7 +1402,7 @@ def obtener_ventas_por_sucursal_reporte(request):
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fecha_inicio,
             fecha_emision__lte=fecha_fin,
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION'],
             estado_dte__in=['EMITIDO', 'PAGADO']
         ).select_related('sucursal', 'vendedor')
 
@@ -1381,8 +1414,9 @@ def obtener_ventas_por_sucursal_reporte(request):
             if sucursal_sesion:
                 queryset_dtes = queryset_dtes.filter(sucursal_id=sucursal_sesion)
         
-        # Agrupar DTEs por sucursal
-        dtes_por_sucursal = queryset_dtes.values(
+        # Agrupar DTEs de VENTA (excluir NCs)
+        queryset_ventas = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO')
+        dtes_por_sucursal = queryset_ventas.values(
             'sucursal__id',
             'sucursal__alias',
             'sucursal__direccion'
@@ -1391,6 +1425,20 @@ def obtener_ventas_por_sucursal_reporte(request):
             subtotal_ventas=Sum('monto_neto'),
             total_documentos=Count('id')
         )
+        
+        # Agrupar NCs (devoluciones) por sucursal
+        queryset_nc = queryset_dtes.filter(tipo_documento='NOTA DE CREDITO')
+        nc_por_sucursal = queryset_nc.values('sucursal__id').annotate(
+            total_devoluciones=Sum('monto_con_iva'),
+            cantidad_devoluciones=Count('id')
+        )
+        devoluciones_map = {
+            item['sucursal__id']: {
+                'total': int(item['total_devoluciones'] or 0),
+                'cantidad': item['cantidad_devoluciones'] or 0
+            }
+            for item in nc_por_sucursal
+        }
         
         for item in dtes_por_sucursal:
             sid = item['sucursal__id']
@@ -1401,12 +1449,33 @@ def obtener_ventas_por_sucursal_reporte(request):
                         'direccion': item['sucursal__direccion'],
                         'ventas': 0,
                         'subtotal': 0,
-                        'documentos': 0
+                        'documentos': 0,
+                        'devoluciones': 0,
+                        'cantidad_devoluciones': 0
                     }
                     vendedores_por_sucursal[sid] = set()
                 ventas_acumuladas[sid]['ventas'] += int(item['total_ventas'] or 0)
                 ventas_acumuladas[sid]['subtotal'] += int(item['subtotal_ventas'] or 0)
                 ventas_acumuladas[sid]['documentos'] += item['total_documentos'] or 0
+
+        # Agregar devoluciones NC a las sucursales
+        for sid, nc_data in devoluciones_map.items():
+            if sid:
+                if sid not in ventas_acumuladas:
+                    # Sucursal solo con NC (sin ventas en el período)
+                    try:
+                        from .models import Sucursal as _Sucursal
+                        suc = _Sucursal.objects.get(id=sid)
+                        ventas_acumuladas[sid] = {
+                            'alias': suc.alias, 'direccion': suc.direccion,
+                            'ventas': 0, 'subtotal': 0, 'documentos': 0,
+                            'devoluciones': 0, 'cantidad_devoluciones': 0
+                        }
+                    except Exception:
+                        pass
+                if sid in ventas_acumuladas:
+                    ventas_acumuladas[sid]['devoluciones'] = nc_data['total']
+                    ventas_acumuladas[sid]['cantidad_devoluciones'] = nc_data['cantidad']
         
         # Contar vendedores de DTEs
         for dte in queryset_dtes.values('sucursal_id', 'vendedor_id').distinct():
@@ -1417,30 +1486,37 @@ def obtener_ventas_por_sucursal_reporte(request):
                     vendedores_por_sucursal[sid] = set()
                 vendedores_por_sucursal[sid].add(vid)
         
-        # Calcular total general
-        total_general = sum(v['ventas'] for v in ventas_acumuladas.values())
+        # Calcular total general (ventas netas = bruto - devoluciones)
+        total_general = sum(
+            v['ventas'] - v.get('devoluciones', 0)
+            for v in ventas_acumuladas.values()
+        )
         
         # Convertir a formato de salida ordenado
         ventas_por_sucursal = []
         for sid, data in sorted(ventas_acumuladas.items(), key=lambda x: x[1]['ventas'], reverse=True):
             total_docs = data['documentos']
+            ventas_netas = data['ventas'] - data.get('devoluciones', 0)
             ventas_por_sucursal.append({
                 'sucursal__id': sid,
                 'sucursal__alias': data['alias'],
                 'sucursal__direccion': data['direccion'],
-                'total_ventas': data['ventas'],
+                'total_ventas': ventas_netas,
+                'total_ventas_brutas': data['ventas'],
+                'total_devoluciones': data.get('devoluciones', 0),
+                'cantidad_devoluciones': data.get('cantidad_devoluciones', 0),
                 'subtotal_ventas': data['subtotal'],
                 'total_documentos': total_docs,
-                'ticket_promedio': data['ventas'] / total_docs if total_docs > 0 else 0,
+                'ticket_promedio': ventas_netas / total_docs if total_docs > 0 else 0,
                 'vendedores_count': len(vendedores_por_sucursal.get(sid, set()))
             })
 
         # Procesar datos
         sucursales_data = []
         for item in ventas_por_sucursal:
-            total_ventas = item['total_ventas'] or 0
+            total_ventas = item['total_ventas'] or 0       # ventas netas
             subtotal = item['subtotal_ventas'] or 0
-            # Calcular IVA (total - subtotal)
+            # Calcular IVA (total neto - subtotal neto)
             iva = total_ventas - subtotal
             total_docs = item['total_documentos'] or 0
             participacion = (total_ventas / total_general * 100) if total_general > 0 else 0
@@ -1452,6 +1528,9 @@ def obtener_ventas_por_sucursal_reporte(request):
                 'neto': int(subtotal),
                 'iva': int(iva),
                 'ventas': int(total_ventas),
+                'ventas_brutas': int(item.get('total_ventas_brutas', total_ventas)),
+                'devoluciones': int(item.get('total_devoluciones', 0)),
+                'cantidad_devoluciones': int(item.get('cantidad_devoluciones', 0)),
                 'documentos': total_docs,
                 'vendedores': item['vendedores_count'],
                 'participacion': round(participacion, 1)
@@ -1750,12 +1829,18 @@ def obtener_comparativa_mensual(request):
 @login_required
 def ver_documentos_emitidos(request):
     """Vista principal del reporte de documentos emitidos"""
+    sucursal_activa_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+    sucursal_activa_nombre = request.session.get('nombreSucursalActual', '')
     sucursal_actual = None
-    sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-    if sucursal_id:
-        sucursal_actual = Sucursal.objects.filter(id=sucursal_id).first()
+    if sucursal_activa_id:
+        sucursal_actual = Sucursal.objects.filter(id=sucursal_activa_id).first()
+        if sucursal_actual and not sucursal_activa_nombre:
+            sucursal_activa_nombre = sucursal_actual.alias or sucursal_actual.nombre or ''
     return render(request, 'vistas/modulo_reportes/documentos_emitidos.html', {
         'sucursal_actual': sucursal_actual,
+        'sucursal_activa_id': sucursal_activa_id,
+        'sucursal_activa_nombre': sucursal_activa_nombre,
+        'es_superuser': request.user.is_superuser,
     })
 
 
@@ -1960,13 +2045,21 @@ def obtener_documentos_emitidos(request):
             'transferencia': 0,
             'credito_trabajador': 0,
             'otros': 0,
-            'total_global': 0
+            'notas_credito': 0,   # total de NC (se resta del global)
+            'ventas_brutas': 0,   # suma bruta sin NC ni descuentos
+            'total_global': 0     # ventas_brutas - notas_credito - descuentos
         }
         
         # Calcular totales por método de pago desde Dte_Detalle_Pago
         for dte in queryset:
             total = int(dte.monto_con_iva)
             descuento_db = int(dte.descuento) if dte.descuento else 0
+            tipo_doc_upper = dte.tipo_documento.upper() if dte.tipo_documento else ''
+
+            # Las Notas de Crédito se acumulan aparte y se restan del total
+            if 'NOTA' in tipo_doc_upper and 'CREDITO' in tipo_doc_upper:
+                resumen['notas_credito'] += total
+                continue
 
             # Obtener métodos de pago del DTE usando la relación inversa
             detalles_pago = dte.dte_asociado.all()
@@ -2007,7 +2100,7 @@ def obtener_documentos_emitidos(request):
                 descuento = descuento_db
 
             resumen['descuentos'] += descuento
-            resumen['total_global'] += total
+            resumen['ventas_brutas'] += total
             
             # Si no se procesó método de pago, buscar en ticket relacionado
             if not metodo_procesado:
@@ -2052,6 +2145,9 @@ def obtener_documentos_emitidos(request):
                     # Si no hay ticket ni detalle de pago, asumir efectivo
                     resumen['efectivo'] += total
         
+        # Total neto = ventas brutas - notas de crédito - descuentos
+        resumen['total_global'] = resumen['ventas_brutas'] - resumen['notas_credito'] - resumen['descuentos']
+
         return JsonResponse({
             'success': True,
             'documentos': documentos_data,

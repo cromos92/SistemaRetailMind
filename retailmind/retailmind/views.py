@@ -4,10 +4,23 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 from app.models import EmpresaUser
+
+
+def csrf_failure(request, reason=""):
+    """Vista personalizada para errores CSRF: redirige al login con mensaje claro."""
+    messages.warning(
+        request,
+        'Tu sesión ha expirado o el formulario quedó desactualizado. Por favor, intenta nuevamente.'
+    )
+    next_url = request.GET.get('next') or request.POST.get('next', '')
+    if next_url:
+        return redirect(f'/?next={next_url}')
+    return redirect('/')
 
 
 @require_GET
@@ -37,7 +50,7 @@ def _obtener_codigo_2fa(usuario):
 
 
 def _enviar_pin_2fa(usuario, codigo):
-    subject = '🔐 NEXO - Tu código de acceso'
+    subject = f'🔐 NEXO - Tu código de acceso: {codigo}'
     nombre = usuario.get_full_name() or usuario.username
     
     # Mensaje de texto plano (fallback)
@@ -171,9 +184,12 @@ def _finalizar_login(request, user):
 
 
 def _requiere_2fa(user):
+    if getattr(settings, 'REQUIRE_2FA_FOR_ALL', False):
+        return True
     return getattr(user, 'requiere_2fa', False)
 
 
+@ensure_csrf_cookie
 def login_view(request):
     # Si el usuario ya está autenticado, mostrar opción de continuar o cambiar cuenta
     if request.user.is_authenticated:
@@ -222,6 +238,7 @@ def login_view(request):
     return render(request, 'registration/login.html')
 
 
+@ensure_csrf_cookie
 def login_2fa_view(request):
     user_id = request.session.get('pending_2fa_user_id')
     if not user_id:

@@ -1078,18 +1078,18 @@
                 </div>
                 <div class="col-md-2">
                     <label for="formaPago" class="form-label fw-bold mb-1 small">Forma de Pago</label>
-                    <select id="formaPago" class="form-select form-select-sm">
+                    <select id="formaPago" class="form-select form-select-sm" onchange="toggleDiasCredito()">
+                        <option value="Contado" selected>Contado</option>
                         <option value="Credito">Crédito</option>
-                        <option value="Contado">Contado</option>
                     </select>
                 </div>
                 <div class="col-md-1">
                     <label for="vendedor" class="form-label fw-bold mb-1 small">Vendedor</label>
                     <input type="text" id="vendedor" class="form-control form-control-sm" value="9999" readonly>
                 </div>
-                <div class="col-md-1">
+                <div class="col-md-1" id="diasCreditoContainer" style="display:none;">
                     <label for="diasCredito" class="form-label fw-bold mb-1 small">Días Créd.</label>
-                    <input type="number" id="diasCredito" class="form-control form-control-sm" value="30" min="0" max="365">
+                    <input type="number" id="diasCredito" class="form-control form-control-sm" value="30" min="1" max="365">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label fw-bold mb-1 small">Folio</label>
@@ -3244,6 +3244,19 @@ function selectProduct(productId) {
 }
 
 // Función helper para obtener el precio correcto según el tipo de despacho
+function toggleDiasCredito() {
+    const esCredito = $('#formaPago').val() === 'Credito';
+    const container = document.getElementById('diasCreditoContainer');
+    if (container) {
+        container.style.display = esCredito ? '' : 'none';
+        if (!esCredito) {
+            document.getElementById('diasCredito').value = 0;
+        } else if (document.getElementById('diasCredito').value == 0) {
+            document.getElementById('diasCredito').value = 30;
+        }
+    }
+}
+
 function getPrecioSegunMetodo(product) {
     console.log('💰 getPrecioSegunMetodo - selectedMethod:', selectedMethod);
     console.log('💰 Product prices:', {
@@ -4957,7 +4970,9 @@ function procesarEmision() {
         tipo_documento: tipoDocumentoMap[selectedConcept] || selectedConcept,
         fecha_emision: $('#fechaEmision').val(),
         observaciones: observaciones,
-        detalle_productos: detalleProductos
+        detalle_productos: detalleProductos,
+        forma_pago: $('#formaPago').val(),          // 'Contado' o 'Credito'
+        dias_credito: parseInt($('#diasCredito').val()) || 0
     };
     
     if (selectedMethod === 'interno') {

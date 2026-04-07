@@ -74,6 +74,7 @@ from .inventario import (  # noqa: F401
     TomaInventario,
     TomaInventarioDetalle,
     TomaInventarioLog,
+    TareaAplicacionAjustes,
 )
 
 from .compras import (  # noqa: F401
@@ -100,6 +101,7 @@ from .caja import (  # noqa: F401
     TIPO_CREDITO_CHOICES,
     TIPO_BENEFICIARIO_CHOICES,
     ArqueoCaja,
+    GrupoDeposito,
     DepositoBancario,
     CreditoTrabajador,
     PagoCreditoTrabajador,
@@ -168,4 +170,10 @@ from .predicciones import (  # noqa: F401
     PendienteReevaluacion,
     StockInicialTemporada,
     URGENCIA_CHOICES,
+)
+
+from .ecommerce import (  # noqa: F401
+    CANAL_ECOMMERCE_CHOICES,
+    ESTADO_PEDIDO_ECOMMERCE_CHOICES,
+    PedidoEcommerce,
 )

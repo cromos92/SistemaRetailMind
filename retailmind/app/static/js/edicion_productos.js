@@ -89,6 +89,12 @@ window.cargarDatosProductoEnModal = function(producto, variaciones) {
     $('#edit_precioventa').val(producto.precioventa);
     $('#edit_precioSugerido').val(producto.precioSugerido);
     
+    // Mostrar sucursal en el modal
+    const $sucBadge = $('#editSucursalBadge');
+    if ($sucBadge.length) {
+        $sucBadge.text(producto.sucursal_nombre || 'Sin bodega');
+    }
+    
     // Cargar todas las opciones con Select2
     cargarOpcionesConSelect2(producto);
     
@@ -353,6 +359,8 @@ function guardarProductoBase() {
         return;
     }
     
+    const propagar = $('#edit_propagar_sucursales').is(':checked');
+    
     // Construir datos
     const datos = {
         articulo: articulo,
@@ -365,44 +373,87 @@ function guardarProductoBase() {
         costo: costo,
         sobreprecio: sobreprecio,
         precioventa: precioventa,
-        precioSugerido: parseInt($('#edit_precioSugerido').val()) || 0
+        precioSugerido: parseInt($('#edit_precioSugerido').val()) || 0,
+        propagar_sucursales: propagar,
+        excluir_de_analitica: $('#edit_excluir_de_analitica').is(':checked'),
     };
     
-    // Mostrar loading
-    mostrarLoading('Guardando cambios...');
-    
-    // Enviar al servidor
-    fetch(`/app/productos/actualizar/${productoId}/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify(datos)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            mostrarExito(data.message || 'Producto actualizado exitosamente');
-            // Cerrar modal con Bootstrap 5
-            const modalElement = document.getElementById('modalEdicionProducto');
-            const modal = bootstrap.Modal.getInstance(modalElement);
-            if (modal) modal.hide();
-            // Recargar lista de productos si existe
-            if (typeof cargarProductos === 'function') {
-                cargarProductos();
+    // Confirmación si va a propagar
+    const guardar = () => {
+        mostrarLoading('Guardando cambios...');
+        
+        fetch(`/app/productos/actualizar/${productoId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(datos)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                let htmlMsg = `<div>${data.message}</div>`;
+                const sync = data.sincronizacion;
+                if (sync && sync.productos_actualizados > 1) {
+                    htmlMsg += `
+                        <div class="mt-2 small text-muted">
+                            <i class="bi bi-arrow-repeat me-1"></i>
+                            Sincronizado en <strong>${sync.productos_actualizados}</strong> bodega(s):
+                            ${sync.sucursales_afectadas.map(s => `<span class="badge bg-secondary ms-1">${s}</span>`).join('')}
+                        </div>`;
+                    if (sync.lotes_actualizados > 0) {
+                        htmlMsg += `<div class="small text-muted"><i class="bi bi-layers me-1"></i>${sync.lotes_actualizados} lote(s) FIFO actualizados</div>`;
+                    }
+                }
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Guardado!',
+                        html: htmlMsg,
+                        timer: 3500,
+                        showConfirmButton: false,
+                        timerProgressBar: true
+                    });
+                }
+                // Cerrar modal con Bootstrap 5
+                const modalElement = document.getElementById('modalEdicionProducto');
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) modal.hide();
+                // Recargar lista de productos si existe
+                if (typeof cargarProductos === 'function') {
+                    cargarProductos();
+                }
+            } else {
+                mostrarError(data.error || 'Error al actualizar el producto');
             }
-        } else {
-            mostrarError(data.error || 'Error al actualizar el producto');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        mostrarError('Error al actualizar el producto');
-    })
-    .finally(() => {
-        ocultarLoading();
-    });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error al actualizar el producto');
+        })
+        .finally(() => {
+            ocultarLoading();
+        });
+    };
+
+    if (propagar && typeof Swal !== 'undefined') {
+        const sucursal = $('#editSucursalBadge').text() || 'todas las bodegas';
+        Swal.fire({
+            icon: 'question',
+            title: 'Confirmar cambios globales',
+            html: `Los cambios se aplicarán en <strong>todas las bodegas</strong> donde exista el artículo <em>"${articulo}"</em>.<br><small class="text-muted">Precio, descripción, categoría y atributos se sincronizarán.</small>`,
+            showCancelButton: true,
+            confirmButtonColor: '#0d6efd',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="bi bi-save me-1"></i>Guardar en todas',
+            cancelButtonText: 'Cancelar'
+        }).then(result => {
+            if (result.isConfirmed) guardar();
+        });
+    } else {
+        guardar();
+    }
 }
 
 // ========== FUNCIONES DE AJUSTE DE STOCK ==========

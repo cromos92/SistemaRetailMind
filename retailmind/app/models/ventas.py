@@ -75,6 +75,10 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
     ('CORRECCION_STOCK', 'Corrección de Stock'),  # ✅ AGREGADO: Para corregir errores
     ('ANULACION_REGULARIZACION', 'Anulación de Regularización'),  # ✅ AGREGADO
     
+    # === AJUSTES DE INVENTARIO FÍSICO ===
+    ('AJUSTE_INVENTARIO_ENTRADA', 'Ajuste Inventario - Entrada (Sobrante)'),
+    ('AJUSTE_INVENTARIO_SALIDA', 'Ajuste Inventario - Salida (Faltante)'),
+    
     # === DESPACHO DIFERIDO ===
     ('DESPACHO_COTIZACION', 'Despacho de Cotización'),
 ]
@@ -138,6 +142,7 @@ class Ticket(models.Model):
         ('VENTA_MAYORISTA', 'Venta Mayorista'),
         ('POS', 'Punto de Venta'),
         ('CAMBIO_DEVOLUCION', 'Cambio/Devolución'),
+        ('ECOMMERCE', 'Venta Ecommerce'),
     ])
     
     # ✅ CAMPOS PARA FACTURACIÓN ELECTRÓNICA (Acepta)
@@ -322,6 +327,7 @@ ESTADO_CAMBIO_CHOICES = [
     ('COMPLETADO', 'Completado'),
     ('RECHAZADO', 'Rechazado'),
     ('CANCELADO', 'Cancelado'),
+    ('REVERTIDO', 'Revertido'),
 ]
 
 MOTIVO_CAMBIO_CHOICES = [
@@ -806,6 +812,8 @@ class HistorialCambioDevolucion(models.Model):
             ('MODIFICADO', 'Modificado'),
             ('PAGO_PROCESADO', 'Pago Procesado'),
             ('PRODUCTO_EVALUADO', 'Producto Evaluado'),
+            ('REVERTIDO', 'Revertido'),
+            ('COBRO_DIFERENCIA', 'Cobro de Diferencia'),
         ]
     )
     estado_anterior = models.CharField(max_length=20, blank=True, null=True)

@@ -92,6 +92,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'app.context_processors.ecommerce_context',
             ],
         },
     },
@@ -176,13 +177,12 @@ STATIC_URL = '/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-SESSION_COOKIE_DOMAIN = None  # o simplemente no lo pongas
+SESSION_COOKIE_DOMAIN = None
+SESSION_COOKIE_NAME = 'retailmind'
 
- 
- 
+
 
 STATICFILES_DIRS = [
-    BASE_DIR / 'retailmind' / 'static',
     BASE_DIR / 'app' / 'static',  # Archivos estáticos de la app
 ]
 
@@ -196,6 +196,9 @@ if 'RAILWAY_ENVIRONMENT' in os.environ:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 else:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# CSRF Failure View - redirige al login con mensaje en lugar de mostrar 403
+CSRF_FAILURE_VIEW = 'retailmind.views.csrf_failure'
 
 # CSRF Trusted Origins - SIEMPRE configurar en producción
 if 'RAILWAY_ENVIRONMENT' in os.environ:
@@ -223,6 +226,14 @@ if not DEBUG:
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'verHome'
 LOGOUT_REDIRECT_URL = 'login'
+
+# ========== CONFIGURACIÓN 2FA / PIN ==========
+# True  → todos los usuarios deben ingresar un PIN al hacer login (recomendado)
+# False → solo los usuarios con requiere_2fa=True en su perfil
+REQUIRE_2FA_FOR_ALL = True
+# 'session' → el PIN expira a los 10 minutos
+# 'daily'   → el mismo PIN sirve durante todo el día
+PIN_2FA_MODE = 'session'
 
 # ========== CONFIGURACIÓN DE EMAIL ==========
 # Ahora usa variables de entorno para mayor seguridad
@@ -334,8 +345,8 @@ if not _logs_dir.exists():
 
 # Configuración de seguridad
 PASSWORD_RESET_TIMEOUT = 86400  # 24 horas
-SESSION_COOKIE_AGE = 3600  # 1 hora
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 604800     # 7 días (dev-friendly; ajustar en producción)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = True
 
 # Configuración de archivos de medios
@@ -419,6 +430,9 @@ LANGFUSE_SECRET_KEY = os.environ.get('LANGFUSE_SECRET_KEY', '')
 LANGFUSE_PUBLIC_KEY = os.environ.get('LANGFUSE_PUBLIC_KEY', '')
 LANGFUSE_HOST = os.environ.get('LANGFUSE_HOST', 'https://cloud.langfuse.com')
 
+# ========== API EXTERNA (VicentAllEcommercesConected) ==========
+RETAILMIND_API_KEY = os.environ.get('RETAILMIND_API_KEY', '')
+
 # Configuración del Asistente
 ASSISTANT_MAX_MESSAGES_PER_SESSION = 50  # Máximo de mensajes por sesión
 ASSISTANT_SESSION_TIMEOUT_HOURS = 24  # Tiempo de vida de una sesión
@@ -462,4 +476,5 @@ CORS_ALLOW_HEADERS = [
     "x-app-version",
     "x-sucursal-id",
     "x-request-timestamp",
+    "x-api-key",
 ]

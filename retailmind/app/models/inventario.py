@@ -779,3 +779,47 @@ class TomaInventarioLog(models.Model):
     
     def __str__(self):
         return f"{self.toma_inventario.numero_inventario} - {self.get_tipo_accion_display()}"
+
+
+class TareaAplicacionAjustes(models.Model):
+    """
+    Modelo para rastrear el progreso de la aplicación de ajustes de inventario
+    en background. Permite al frontend hacer polling para mostrar progreso real.
+    """
+    ESTADO_CHOICES = [
+        ('PENDIENTE', 'Pendiente'),
+        ('EN_PROCESO', 'En proceso'),
+        ('COMPLETADO', 'Completado'),
+        ('ERROR', 'Error'),
+    ]
+
+    inventario = models.OneToOneField(
+        TomaInventario,
+        on_delete=models.CASCADE,
+        related_name='tarea_ajustes'
+    )
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
+    total = models.IntegerField(default=0)
+    procesados = models.IntegerField(default=0)
+    errores = models.JSONField(default=list)
+    iniciada_en = models.DateTimeField(null=True, blank=True)
+    finalizada_en = models.DateTimeField(null=True, blank=True)
+    creada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        verbose_name = 'Tarea de Aplicación de Ajustes'
+        verbose_name_plural = 'Tareas de Aplicación de Ajustes'
+
+    def __str__(self):
+        return f"Tarea ajustes {self.inventario.numero_inventario} - {self.get_estado_display()}"
+
+    @property
+    def porcentaje(self):
+        if self.total and self.total > 0:
+            return int(self.procesados / self.total * 100)
+        return 0

@@ -1535,12 +1535,17 @@ class Command(BaseCommand):
                 
                 # ✅ Extraer fecha y hora por separado del datetime de MySQL
                 fecha_mysql = row['fecha']
-                
+
+                # En Laravel las cantidades se almacenan siempre como positivas.
+                # En Django la convención es: positiva para ingresos, negativa para egresos.
+                raw_cantidad = self.safe_int(row['cantidad'])
+                cantidad = -abs(raw_cantidad) if tipo_movimiento == 'EGRESO' else abs(raw_cantidad)
+
                 movimiento = Movimientos_Producto(
                     ProductoTalla=producto_talla,
                     tipo_movimiento=tipo_movimiento,
                     concepto=concepto,
-                    cantidad=self.safe_int(row['cantidad']),
+                    cantidad=cantidad,
                     costo=self.safe_int(row['costo']),
                     precio=self.safe_int(row['precio_salida']),
                     fecha=self.safe_date_only(fecha_mysql),

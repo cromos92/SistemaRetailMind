@@ -8,6 +8,7 @@ from . import views_resumen_existencias
 from . import views_dashboard_home
 from . import views_gestion_inventarios
 from . import views_etiquetas_zebra
+from . import views_ecommerce
 from .views_modulo_ventas import (
     # Funciones POS Dashboard
     pos_dashboard,
@@ -44,6 +45,10 @@ from .views_modulo_ventas import (
     declarar_deposito,
     confirmar_deposito,
     obtener_depositos_pendientes,
+    listar_arqueos_para_deposito,
+    crear_deposito_multidia,
+    detalle_grupo_deposito,
+    revision_arqueos,
     listar_arqueos,
     crear_arqueo,
     guardar_conteo_fisico,
@@ -80,6 +85,7 @@ from .views_modulo_ventas import (
     aprobar_cambio_generar_ticket,
     validar_codigo_vendedor,
     cancelar_cambio_devolucion,
+    revertir_cambio_devolucion,
     ejecutar_cambio_devolucion,
     registrar_pago_diferencia,
     completar_cambio_devolucion,
@@ -167,6 +173,7 @@ from .views_modulo_gestion_precios import (
     rechazar_cambio_precio,
     obtener_notificaciones_precio,
     marcar_notificacion_leida,
+    marcar_notificacion_leida_por_cambio,
     eliminar_notificaciones_precio,
     # Regularización de precios entre sucursales
     detectar_discrepancias_precios,
@@ -606,6 +613,7 @@ urlpatterns = [
     
     # === CUADRATURA Y ARQUEO DE CAJA ===
     path('ventas/cuadratura-caja/', cuadratura_caja, name='cuadratura_caja'),
+    path('ventas/revision-arqueos/', revision_arqueos, name='revision_arqueos'),
     path('api/cuadratura/generar/', generar_cuadratura_caja, name='generar_cuadratura_caja'),
     path('api/cuadratura/guardar/', guardar_cuadratura_completa, name='guardar_cuadratura_completa'),
     path('api/cuadratura/verificar-existente/', verificar_cuadratura_existente, name='verificar_cuadratura_existente'),
@@ -621,6 +629,10 @@ urlpatterns = [
     path('api/cuadratura/deposito/declarar/', declarar_deposito, name='declarar_deposito'),
     path('api/cuadratura/deposito/<int:deposito_id>/confirmar/', confirmar_deposito, name='confirmar_deposito'),
     path('api/cuadratura/deposito/pendientes/', obtener_depositos_pendientes, name='obtener_depositos_pendientes'),
+    # Depósito multi-día
+    path('api/cuadratura/deposito-multidia/arqueos-disponibles/', listar_arqueos_para_deposito, name='listar_arqueos_para_deposito'),
+    path('api/cuadratura/deposito-multidia/crear/', crear_deposito_multidia, name='crear_deposito_multidia'),
+    path('api/cuadratura/deposito-multidia/<int:grupo_id>/', detalle_grupo_deposito, name='detalle_grupo_deposito'),
     
     # URLs para arqueo mejorado
     path('api/arqueos/', listar_arqueos, name='listar_arqueos'),
@@ -642,6 +654,7 @@ urlpatterns = [
     # ========== MÓDULO DOCUMENTOS ==========
     # === Gestión de DTEs ===
     path('documentos/gestion-dte/', views.gestion_dte, name='gestion_dte'),
+    path('documentos/anular-factura/', views.anular_factura_dte, name='anular_factura_dte'),
     path('documentos/api/cargar-dte-ventas/', views.cargar_dte_ventas, name='cargar_dte_ventas'),
     path('documentos/api/dte/<int:dte_id>/', views.detalle_dte, name='detalle_dte'),
     path('detalle_dte/<int:dte_id>/', views.vista_detalle_dte, name='vista_detalle_dte'),  # Vista HTML
@@ -741,6 +754,7 @@ urlpatterns = [
     path('ventas/api/aprobar-cambio-generar-ticket/', aprobar_cambio_generar_ticket, name='aprobar_cambio_generar_ticket'),
     path('ventas/api/validar-codigo-vendedor/', validar_codigo_vendedor, name='validar_codigo_vendedor'),
     path('ventas/api/cancelar-cambio-devolucion/', cancelar_cambio_devolucion, name='cancelar_cambio_devolucion'),
+    path('ventas/api/revertir-cambio-devolucion/', revertir_cambio_devolucion, name='revertir_cambio_devolucion'),
     
     # === APIs para Códigos de Autorización Dinámicos ===
     path('ventas/api/codigo-autorizacion/actual/', obtener_codigo_autorizacion_actual, name='obtener_codigo_autorizacion_actual'),
@@ -841,6 +855,7 @@ urlpatterns = [
     path('gestion-precios/rechazar-cambio/', rechazar_cambio_precio, name='rechazar_cambio_precio'),
     path('gestion-precios/notificaciones/', obtener_notificaciones_precio, name='obtener_notificaciones_precio'),
     path('gestion-precios/marcar-notificacion/', marcar_notificacion_leida, name='marcar_notificacion_leida'),
+    path('gestion-precios/marcar-leida-por-cambio/<int:cambio_id>/', marcar_notificacion_leida_por_cambio, name='marcar_notificacion_leida_por_cambio'),
     path('gestion-precios/eliminar-notificaciones/', eliminar_notificaciones_precio, name='eliminar_notificaciones_precio'),
     
     # ========== NOTIFICACIONES DE DTEs RECIBIDOS ==========
@@ -1013,6 +1028,7 @@ urlpatterns = [
     
     # APIs de aplicación de ajustes
     path('gestion-inventarios/api/aplicar-ajustes/<int:inventario_id>/', views_gestion_inventarios.aplicar_ajustes_inventario, name='api_aplicar_ajustes'),
+    path('gestion-inventarios/api/estado-ajustes/<int:inventario_id>/', views_gestion_inventarios.estado_tarea_ajustes, name='api_estado_tarea_ajustes'),
     
     # APIs de cancelación
     path('gestion-inventarios/api/cancelar/<int:inventario_id>/', views_gestion_inventarios.cancelar_inventario, name='api_cancelar_inventario'),
@@ -1061,5 +1077,18 @@ urlpatterns = [
     path('api/prediccion/analisis-marca/', api_prediccion_analisis_marca, name='api_prediccion_analisis_marca'),
     path('api/prediccion/analisis-proveedor/', api_prediccion_analisis_proveedor, name='api_prediccion_analisis_proveedor'),
     path('api/prediccion/marca-articulos/', api_prediccion_marca_articulos, name='api_prediccion_marca_articulos'),
+
+    # =====================================================
+    # MÓDULO ECOMMERCE — Pedidos online externos
+    # =====================================================
+    path('api/ecommerce/pedidos/', views_ecommerce.api_recibir_pedido_ecommerce, name='api_ecommerce_recibir_pedido'),
+    path('api/ecommerce/pedidos/consultar/', views_ecommerce.api_asignar_ticket_rm, name='api_ecommerce_consultar_pedido'),
+    path('api/ecommerce/facturar-masivo/', views_ecommerce.facturar_ecommerce_masivo, name='facturar_ecommerce_masivo'),
+    path('ecommerce/pedidos/', views_ecommerce.PedidosEcommerceListView.as_view(), name='pedidos_ecommerce_list'),
+    path('ecommerce/pedidos/<int:pedido_id>/', views_ecommerce.pedido_ecommerce_detalle, name='pedido_ecommerce_detalle'),
+    path('ecommerce/pedidos/<int:pedido_id>/buscar-producto/', views_ecommerce.api_buscar_producto_match, name='api_buscar_producto_match'),
+    path('ecommerce/pedidos/<int:pedido_id>/guardar-match/', views_ecommerce.api_guardar_match_sku, name='api_guardar_match_sku'),
+    path('ecommerce/pedidos/<int:pedido_id>/facturar/', views_ecommerce.api_facturar_pedido_individual, name='api_facturar_pedido_individual'),
+    path('ecommerce/dte/<int:dte_id>/txt/', views_ecommerce.descargar_txt_dte_ecommerce, name='descargar_txt_dte_ecommerce'),
 
 ]

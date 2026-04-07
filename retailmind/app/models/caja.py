@@ -224,6 +224,66 @@ BANCO_CHOICES = [
     ('OTRO', 'Otro'),
 ]
 
+
+class GrupoDeposito(models.Model):
+    """
+    Comprobante bancario real que puede cubrir efectivo de múltiples días.
+    Cada día incluido genera su propio DepositoBancario vinculado a este grupo,
+    y la suma de esos depósitos debe coincidir con monto_total.
+    """
+    sucursal = models.ForeignKey(
+        Sucursal, on_delete=models.CASCADE, related_name='grupos_deposito'
+    )
+    fecha_deposito = models.DateField(help_text="Fecha en que se realizó el depósito bancario")
+    monto_total = models.IntegerField(help_text="Monto total del comprobante bancario")
+    banco = models.CharField(max_length=20, choices=BANCO_CHOICES, default='ESTADO')
+    numero_comprobante = models.CharField(max_length=50, blank=True)
+    imagen_comprobante = models.ImageField(
+        upload_to='comprobantes_bancarios/', blank=True, null=True
+    )
+    observaciones = models.TextField(blank=True)
+
+    verificado = models.BooleanField(default=False)
+    verificado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='grupos_deposito_verificados'
+    )
+    fecha_verificacion = models.DateTimeField(null=True, blank=True)
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='grupos_deposito_registrados'
+    )
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'grupo_deposito'
+        ordering = ['-fecha_deposito']
+        verbose_name = 'Grupo de Depósito'
+        verbose_name_plural = 'Grupos de Depósito'
+
+    def __str__(self):
+        return f"Grupo Depósito {self.fecha_deposito} - {self.get_banco_display()} - ${self.monto_total:,}"
+
+    @property
+    def suma_desglose(self):
+        """Suma de los depósitos individuales vinculados a este grupo."""
+        return sum(d.monto for d in self.depositos.all())
+
+    @property
+    def esta_cuadrado(self):
+        """True si la suma del desglose por día coincide con el monto del comprobante."""
+        return self.suma_desglose == self.monto_total
+
+    @property
+    def diferencia(self):
+        return self.monto_total - self.suma_desglose
+
+    @property
+    def cantidad_dias(self):
+        return self.depositos.values('arqueo__fecha_arqueo').distinct().count()
+
+
 class DepositoBancario(models.Model):
     """
     Modelo simple para registrar depósitos bancarios realizados
@@ -235,6 +295,15 @@ class DepositoBancario(models.Model):
         on_delete=models.CASCADE, 
         related_name='depositos',
         help_text="Arqueo de caja al que pertenece este depósito"
+    )
+    
+    # === RELACIÓN OPCIONAL CON GRUPO (depósito multi-día) ===
+    grupo = models.ForeignKey(
+        GrupoDeposito,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='depositos',
+        help_text="Grupo de depósito cuando un solo comprobante cubre varios días"
     )
     
     # === DATOS DEL DEPÓSITO ===

@@ -1530,6 +1530,101 @@ function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 }
+
+// =====================================================================
+// PROGRESO DE APLICACIÓN DE AJUSTES (background task polling)
+// =====================================================================
+
+function aplicarAjustesDesdeDetalle() {
+    Swal.fire({
+        title: '¿Aplicar Ajustes de Inventario?',
+        html: `<p class="text-danger"><strong>¡ATENCIÓN!</strong></p>
+               <p>Esta acción modificará el stock real del sistema según las diferencias encontradas.</p>
+               <p><strong>Esta acción no se puede deshacer.</strong></p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, Aplicar Ajustes',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FFB020'
+    }).then(result => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/app/gestion-inventarios/api/aplicar-ajustes/${inventarioId}/`,
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.success) {
+                        _iniciarPollingAjustes();
+                    } else {
+                        Swal.fire('Error', response.error, 'error');
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error', 'No se pudo iniciar el proceso', 'error');
+                }
+            });
+        }
+    });
+}
+
+function _iniciarPollingAjustes() {
+    let pollingInterval = null;
+    Swal.fire({
+        title: 'Aplicando Ajustes de Inventario',
+        html: `
+            <div class="mb-3">
+                <div class="progress" style="height: 22px; border-radius: 11px;">
+                    <div id="swal-det-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                         role="progressbar" style="width: 0%; font-size: 0.8rem; font-weight: 700;">0%</div>
+                </div>
+            </div>
+            <p id="swal-det-texto" class="mb-1" style="font-size: 0.9rem;">Iniciando proceso...</p>
+            <small id="swal-det-detalle" class="text-muted">Preparando ajustes...</small>
+        `,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            pollingInterval = setInterval(() => {
+                $.get(`/app/gestion-inventarios/api/estado-ajustes/${inventarioId}/`, function(data) {
+                    if (!data.success) return;
+                    const pct = data.porcentaje || 0;
+                    const bar = document.getElementById('swal-det-bar');
+                    const texto = document.getElementById('swal-det-texto');
+                    const detalle = document.getElementById('swal-det-detalle');
+                    if (bar) { bar.style.width = pct + '%'; bar.textContent = pct + '%'; }
+                    if (data.estado === 'EN_PROCESO') {
+                        if (texto) texto.textContent = 'Procesando ajustes de stock...';
+                        if (detalle) detalle.textContent = `${data.procesados} / ${data.total} SKUs`;
+                    } else if (data.estado === 'COMPLETADO') {
+                        clearInterval(pollingInterval);
+                        if (bar) { bar.style.width = '100%'; bar.textContent = '100%'; bar.classList.remove('progress-bar-animated', 'bg-warning'); bar.classList.add('bg-success'); }
+                        const errCount = data.errores ? data.errores.length : 0;
+                        setTimeout(() => {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Ajustes Aplicados',
+                                html: `<p>${data.procesados} ajuste(s) aplicados.</p>${errCount > 0 ? `<p class="text-warning">${errCount} SKU(s) con errores</p>` : ''}`,
+                            }).then(() => window.location.reload());
+                        }, 400);
+                    } else if (data.estado === 'ERROR') {
+                        clearInterval(pollingInterval);
+                        Swal.fire('Error al Aplicar', data.errores && data.errores[0] ? data.errores[0].error : 'Error desconocido', 'error')
+                            .then(() => window.location.reload());
+                    }
+                });
+            }, 1500);
+        }
+    });
+}
+
+// Si la página carga con estado APLICANDO, reanudar polling automáticamente
+document.addEventListener('DOMContentLoaded', function() {
+    const estadoActual = '{{ inventario.estado }}';
+    if (estadoActual === 'APLICANDO') {
+        setTimeout(_iniciarPollingAjustes, 500);
+    }
+});
 </script>
 
 {% include '../../layout/footer.html' %}

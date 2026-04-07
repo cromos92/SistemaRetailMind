@@ -7518,24 +7518,80 @@ def obtener_productos_para_crear(request):
     
     # Aplicar paginación (después del distinct)
     offset = (page - 1) * page_size
-    productos = productos[offset:offset + page_size]
+    productos_list = list(productos[offset:offset + page_size])
+
+    # --- Bulk lookups para origen_tipo y precio_alerta ---
+    talla_ids = [p['primer_producto_talla'] for p in productos_list if p['primer_producto_talla']]
+    compra_ids_bulk = [p['primer_compra_id'] for p in productos_list if p['primer_compra_id']]
+
+    # origen_tipo: primer movimiento de ingreso por producto_talla
+    movimientos_origen = {}
+    if talla_ids:
+        mov_qs = (
+            Movimientos_Producto.objects
+            .filter(
+                ProductoTalla_id__in=talla_ids,
+                concepto__in=['INGRESO_INICIAL', 'INGRESO_MANUAL'],
+            )
+            .order_by('ProductoTalla_id', 'fecha', 'id')
+            .values('ProductoTalla_id', 'concepto')
+        )
+        seen_tallas = set()
+        for m in mov_qs:
+            tid = m['ProductoTalla_id']
+            if tid not in seen_tallas:
+                movimientos_origen[tid] = m['concepto']
+                seen_tallas.add(tid)
+
+    # precio_alerta: notificaciones no leídas del usuario actual ligadas a estas tallas
+    precio_alertas = set()
+    if talla_ids and request.user.is_authenticated:
+        from .models import NotificacionCambioPrecio
+        precio_alertas = set(
+            NotificacionCambioPrecio.objects
+            .filter(
+                usuario=request.user,
+                leida=False,
+                cambio_precio__producto_talla_id__in=talla_ids,
+                cambio_precio__descartado=False,
+            )
+            .values_list('cambio_precio__producto_talla_id', flat=True)
+        )
+
+    # Bulk datos de compra/proveedor
+    compras_map = {}
+    if compra_ids_bulk:
+        for compra in Compras.objects.select_related('empresa').filter(id__in=compra_ids_bulk):
+            compras_map[compra.id] = {
+                'nombre': compra.nombre,
+                'tipo': compra.tipo if hasattr(compra, 'tipo') else None,
+                'proveedor': compra.empresa.nombre if compra.empresa else None,
+                'proveedor_id': compra.empresa.id if compra.empresa else None,
+            }
 
     respuesta = []
-    for p in productos:
-        # Obtener nombres de compra y proveedor si existen
-        compra_nombre = None
-        proveedor_nombre = None
-        if p['primer_compra_id']:
-            try:
-                from .models import Compras
-                compra = Compras.objects.select_related('empresa').filter(id=p['primer_compra_id']).first()
-                if compra:
-                    compra_nombre = compra.nombre
-                    if compra.empresa:
-                        proveedor_nombre = compra.empresa.nombre
-            except:
-                pass
-        
+    for p in productos_list:
+        talla_id = p['primer_producto_talla']
+        compra_id_p = p['primer_compra_id']
+
+        # origen_tipo
+        concepto_mov = movimientos_origen.get(talla_id) if talla_id else None
+        if concepto_mov == 'INGRESO_MANUAL':
+            origen_tipo = 'MANUAL'
+        elif concepto_mov == 'INGRESO_INICIAL':
+            origen_tipo = 'RECEPCION'
+        elif p['count_creados'] > 0:
+            origen_tipo = 'RECEPCION'  # fallback para registros legados
+        else:
+            origen_tipo = None  # aún no creado
+
+        # datos de compra
+        compra_data = compras_map.get(compra_id_p, {})
+        compra_nombre = compra_data.get('nombre')
+        compra_tipo = compra_data.get('tipo')
+        proveedor_nombre = compra_data.get('proveedor')
+        proveedor_id_val = compra_data.get('proveedor_id') or p['primer_proveedor_id']
+
         respuesta.append({
             'producto_id': p['compra_producto_talla__compra_producto_id'],
             'nombre': p['compra_producto_talla__compra_producto__nombre'],
@@ -7548,11 +7604,15 @@ def obtener_productos_para_crear(request):
             'stock_total': p['stock_total'],
             'stock_creado': p['stock_creado'],
             'creado': p['count_creados'] > 0,
-            'producto_talla_id': p['primer_producto_talla'],  # ID del primer producto_talla asociado
-            'compra_id': p['primer_compra_id'],
+            'producto_talla_id': talla_id,
+            'compra_id': compra_id_p,
             'compra_nombre': compra_nombre,
-            'proveedor_id': p['primer_proveedor_id'],
+            'compra_tipo': compra_tipo,
+            'proveedor_id': proveedor_id_val,
             'proveedor_nombre': proveedor_nombre,
+            # Nuevos campos de trazabilidad
+            'origen_tipo': origen_tipo,
+            'precio_alerta': talla_id in precio_alertas,
         })
 
     # Devolver respuesta con información de paginación
@@ -7646,7 +7706,12 @@ def detalle_producto_para_crear(request, producto_id):
         'tipo_talla': compra_producto.tipo_talla if hasattr(compra_producto, 'tipo_talla') else 'CL',
 
         'tallas': tallas,
-        'dte_id': dte_id  # Agregar el DTE ID
+        'dte_id': dte_id,  # Agregar el DTE ID
+        # Trazabilidad: datos de la compra origen
+        'compra_id': compra_producto.compras.id if compra_producto.compras else None,
+        'compra_nombre': compra_producto.compras.nombre if compra_producto.compras else None,
+        'compra_tipo': compra_producto.compras.tipo if compra_producto.compras and hasattr(compra_producto.compras, 'tipo') else None,
+        'proveedor_nombre': compra_producto.compras.empresa.nombre if compra_producto.compras and compra_producto.compras.empresa else None,
     }
 
     return JsonResponse(data)
@@ -14809,6 +14874,8 @@ def emitir_dte(request):
         fecha_emision = data.get('fecha_emision')
         detalle_productos = data.get('detalle_productos', [])
         observaciones = data.get('observaciones', '')
+        forma_pago_str = data.get('forma_pago', 'Contado')   # 'Contado' o 'Credito'
+        dias_credito = int(data.get('dias_credito', 0) or 0)
         
         # DEBUG: Mostrar cada campo individualmente
         print(f"📝 metodo_despacho: '{metodo_despacho}' (len: {len(str(metodo_despacho)) if metodo_despacho else 0})")
@@ -15017,6 +15084,17 @@ def emitir_dte(request):
             print(f"  estado_pago: {estado_pago}, estado_dte: {estado_dte}")
             print(f"  tipo_transaccion: {tipo_transaccion}")
             
+            # Calcular fecha de vencimiento según forma de pago y días crédito
+            from datetime import timedelta
+            fecha_emision_date = parse_date(fecha_emision)
+            es_credito = (forma_pago_str == 'Credito' and dias_credito > 0)
+            fecha_vencimiento_date = (
+                fecha_emision_date + timedelta(days=dias_credito)
+                if es_credito else fecha_emision_date
+            )
+            dias_credito_final = dias_credito if es_credito else 0
+            print(f"  forma_pago: '{forma_pago_str}', dias_credito: {dias_credito_final}, fecha_vencimiento: {fecha_vencimiento_date}")
+            
             # Crear DTE con todos los campos requeridos
             try:
                 dte = Dte.objects.create(
@@ -15029,9 +15107,9 @@ def emitir_dte(request):
                     estado_pago=estado_pago,
                     estado_dte=estado_dte,
                     responsable=request.user.username,
-                    fecha_emision=parse_date(fecha_emision),
-                    fecha_vencimiento=parse_date(fecha_emision),  # Mismo día por defecto
-                    diasCredito=0,
+                    fecha_emision=fecha_emision_date,
+                    fecha_vencimiento=fecha_vencimiento_date,
+                    diasCredito=dias_credito_final,
                     bultos=1,  # Por defecto
                     unidades_productos=total_unidades,
                     tipo_transaccion=tipo_transaccion,
@@ -16767,6 +16845,198 @@ def gestion_dte(request):
     return render(request, 'vistas/modulo_administracion/gestion_dte.html', {
         'es_admin': es_admin
     })
+
+
+@login_required
+def anular_factura_dte(request):
+    """
+    Anula una Factura Electrónica creando una Nota de Crédito y marcando la
+    factura original como ANULADO.  Devuelve el TXT Acepta de la NC.
+
+    Recibe JSON:
+        { "dte_id": int, "tipo_anulacion": "ANULACION" | "DEVOLUCION" }
+
+    - ANULACION  → NC con tipo_transaccion='ANULACION'  (misma jornada,
+                   no entra en cuadratura)
+    - DEVOLUCION → NC con tipo_transaccion='DEVOLUCION' (día distinto,
+                   sí aparece en cuadratura como resta en venta_total)
+    """
+    import json as _json
+    from decimal import Decimal
+    from datetime import date
+    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    try:
+        body = _json.loads(request.body)
+    except ValueError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    dte_id = body.get('dte_id')
+    tipo_anulacion = body.get('tipo_anulacion', 'ANULACION')
+    if tipo_anulacion not in ('ANULACION', 'DEVOLUCION'):
+        tipo_anulacion = 'ANULACION'
+
+    # --- Obtener factura original ---
+    try:
+        dte = Dte.objects.select_related('emisor', 'receptor', 'sucursal').get(
+            id=dte_id,
+            tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA']
+        )
+    except Dte.DoesNotExist:
+        return JsonResponse({'error': 'Factura no encontrada'}, status=404)
+
+    if dte.estado_dte == 'ANULADO':
+        return JsonResponse({'error': 'La factura ya está anulada'}, status=400)
+
+    empresa_actual_id = request.session.get('idEmpresaActual')
+    if dte.emisor_id != empresa_actual_id:
+        return JsonResponse({'error': 'Sin permiso sobre este DTE'}, status=403)
+
+    with transaction.atomic():
+        # 1. Correlativo NC
+        numero_nc = obtener_siguiente_correlativo(dte.sucursal, 'NOTA DE CREDITO')
+
+        # 2. Crear registro NC
+        nc = Dte.objects.create(
+            emisor=dte.emisor,
+            receptor=dte.receptor,
+            tipo_documento='NOTA DE CREDITO',
+            numero_documento=numero_nc,
+            monto_neto=dte.monto_neto,
+            monto_con_iva=dte.monto_con_iva,
+            descuento=dte.descuento or 0,
+            fecha_emision=date.today(),
+            fecha_vencimiento=date.today(),
+            estado_dte='EMITIDO',
+            estado_pago='PAGADO',
+            tipo_transaccion=tipo_anulacion,
+            responsable=request.user.username,
+            sucursal=dte.sucursal,
+            referencias=_json.dumps([{
+                'tipo_documento': 33,
+                'folio': dte.numero_documento,
+                'fecha': dte.fecha_emision.strftime('%Y-%m-%d'),
+                'razon': '1'   # 1 = anula documento
+            }])
+        )
+
+        # 3. Copiar productos de la factura a la NC
+        for dp in dte.dte_productos.select_related('productoTalla__producto'):
+            Dte_Productos.objects.create(
+                dte=nc,
+                productoTalla=dp.productoTalla,
+                descripcion=dp.descripcion,
+                costo=dp.costo,
+                sobreprecio=dp.sobreprecio,
+                precio=dp.precio,
+                stock=dp.stock,
+                activo=True
+            )
+
+        # 4. Marcar factura original como ANULADO
+        dte.estado_dte = 'ANULADO'
+        dte.save(update_fields=['estado_dte'])
+
+    # 5. Construir datos para TXT NC
+    from collections import defaultdict
+    iva_calculado = int(nc.monto_con_iva - nc.monto_neto)
+
+    productos_agrupados = defaultdict(lambda: {
+        'tallas': [], 'cantidad_total': 0, 'precio': 0,
+        'monto_total': 0, 'articulo': '', 'marca': '', 'color': ''
+    })
+    for dp in nc.dte_productos.select_related('productoTalla__producto'):
+        producto = dp.productoTalla.producto
+        key = producto.articulo
+        g = productos_agrupados[key]
+        talla_nombre = str(dp.productoTalla.talla) if hasattr(dp.productoTalla, 'talla') and dp.productoTalla.talla else 'U'
+        g['tallas'].append(f"{dp.stock}:{talla_nombre}")
+        g['cantidad_total'] += dp.stock
+        g['precio'] = dp.precio
+        g['monto_total'] += dp.stock * dp.precio
+        g['articulo'] = producto.articulo
+        if not g['marca'] and producto.atributo1:
+            g['marca'] = producto.atributo1.valor
+        if not g['color'] and producto.atributo2:
+            g['color'] = producto.atributo2.valor
+
+    detalle = []
+    for articulo, g in productos_agrupados.items():
+        tallas_str = ' '.join(g['tallas'])
+        marca_limpia = limpiar_texto(g['marca'] or '')
+        color_limpio = limpiar_texto(g['color'] or '')
+        marca_color = f"{marca_limpia} {color_limpio}".strip()
+        nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
+        detalle.append({
+            'nombre': limpiar_texto(nombre_final),
+            'descripcion': '',
+            'cantidad': g['cantidad_total'],
+            'unidad': 'UN',
+            'precio_unitario': g['precio'],
+            'descuento_pct': 0,
+            'monto_descuento': 0,
+            'monto_item': g['monto_total'],
+            'codigo': limpiar_texto(g['articulo'])
+        })
+
+    referencias_nc = []
+    try:
+        refs_raw = _json.loads(nc.referencias) if isinstance(nc.referencias, str) else []
+        if isinstance(refs_raw, list):
+            referencias_nc = refs_raw
+    except Exception:
+        pass
+
+    datos = {
+        'documento': {
+            'tipo_documento': 61,
+            'folio': nc.numero_documento,
+            'fecha_emision': nc.fecha_emision.strftime('%Y-%m-%d'),
+            'fecha_vencimiento': nc.fecha_vencimiento.strftime('%Y-%m-%d'),
+            'forma_pago': 1,
+            'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
+        },
+        'emisor': {
+            'rut': nc.emisor.rut,
+            'razon_social': limpiar_texto(nc.emisor.razon_social or ''),
+            'giro': limpiar_texto(nc.emisor.giro or ''),
+            'acteco': nc.emisor.acteco or '',
+            'direccion': limpiar_texto(nc.sucursal.direccion if nc.sucursal else nc.emisor.direccion or ''),
+            'comuna': limpiar_texto(nc.emisor.comuna or ''),
+            'ciudad': limpiar_texto(nc.emisor.ciudad or ''),
+            'codigo_vendedor': limpiar_texto(nc.responsable or 'USUARIO'),
+            'sucursal': limpiar_texto(nc.sucursal.alias if nc.sucursal else ''),
+            'telefono': nc.emisor.contacto1 or '',
+        },
+        'receptor': {
+            'rut': nc.receptor.rut if nc.receptor else '66666666-6',
+            'razon_social': limpiar_texto(nc.receptor.razon_social if nc.receptor else 'CONSUMIDOR FINAL'),
+            'giro': limpiar_texto(nc.receptor.giro if nc.receptor else ''),
+            'direccion': limpiar_texto(nc.receptor.direccion if nc.receptor else ''),
+            'comuna': limpiar_texto(nc.receptor.comuna if nc.receptor else ''),
+            'ciudad': limpiar_texto(nc.receptor.ciudad if nc.receptor else ''),
+        },
+        'totales': {
+            'monto_neto': int(nc.monto_neto),
+            'monto_exento': 0,
+            'tasa_iva': 19,
+            'iva': iva_calculado,
+            'monto_total': int(nc.monto_con_iva),
+            'descuento_global': int(nc.descuento) if nc.descuento else 0
+        },
+        'detalle': detalle,
+        'referencias': referencias_nc
+    }
+
+    # 6. Generar TXT y retornar
+    contenido_txt = generar_txt_nota_credito_acepta(datos)
+    nombre_archivo = f"NC_61_{nc.numero_documento}_{nc.fecha_emision.strftime('%Y%m%d')}.txt"
+    response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
+    return response
 
 @login_required
 @require_GET

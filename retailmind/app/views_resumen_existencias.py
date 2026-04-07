@@ -25,14 +25,19 @@ def ver_resumen_existencias(request):
 def calcular_stock_historico(talla, sucursal_id, fecha_corte):
     """
     Calcula el stock de una talla en una sucursal a una fecha específica.
-    
-    Fórmula: Stock a fecha X = Stock actual - (movimientos después de X)
-    
+
+    Fórmula: stock_en_fecha = stock_actual - ingresos_después + abs(egresos_después)
+
+    Los movimientos posteriores a fecha_corte se revierten:
+    - Ingresos ocurridos después → se restan (esos pares aún no habían llegado)
+    - Egresos ocurridos después → se suman (esos pares todavía estaban en esa fecha)
+      Las cantidades de egresos se almacenan como negativas, de ahí el abs().
+
     Args:
         talla: Instancia de Producto_Talla
         sucursal_id: ID de la sucursal
         fecha_corte: Fecha hasta la cual calcular (date object)
-    
+
     Returns:
         int: Stock calculado a esa fecha
     """
@@ -64,9 +69,11 @@ def calcular_stock_historico(talla, sucursal_id, fecha_corte):
         (Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA'))
     ).aggregate(total=Sum('cantidad'))['total'] or 0
     
-    # Stock histórico = Stock actual - ingresos posteriores - egresos posteriores
-    # (egresos son negativos, así que al restar un negativo, sumamos)
-    stock_historico = stock_actual - ingresos_posteriores - abs(egresos_posteriores)
+    # Stock histórico = Stock actual - ingresos posteriores + egresos posteriores
+    # Los ingresos después de la fecha aumentaron el stock actual → los restamos
+    # Los egresos después de la fecha disminuyeron el stock actual → los sumamos de vuelta
+    # cantidad de egresos se almacena como negativa, por eso usamos abs()
+    stock_historico = stock_actual - ingresos_posteriores + abs(egresos_posteriores)
     
     return max(0, stock_historico)
 
@@ -101,9 +108,10 @@ def obtener_resumen_existencias(request):
         resumen_sucursales = []
         
         for sucursal in sucursales:
-            # Filtrar productos de esta sucursal
+            # Filtrar productos de esta sucursal (excluye productos marcados como "excluir de analítica")
             queryset_productos = Producto.objects.filter(
-                sucursal_id=sucursal.id
+                sucursal_id=sucursal.id,
+                excluir_de_analitica=False,
             ).select_related('atributo1', 'categoria').prefetch_related('producto_talla')
             
             # Aplicar filtros opcionales
@@ -201,9 +209,10 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico):
                 for subsub in sub.subcategorias.all():
                     categoria_ids.append(subsub.id)
             
-            # Filtrar productos de estas categorías
+            # Filtrar productos de estas categorías (excluye productos marcados como "excluir de analítica")
             queryset_productos = Producto.objects.filter(
-                categoria_id__in=categoria_ids
+                categoria_id__in=categoria_ids,
+                excluir_de_analitica=False,
             ).select_related('atributo1', 'categoria', 'sucursal').prefetch_related('producto_talla')
             
             # Aplicar filtro de marca si existe

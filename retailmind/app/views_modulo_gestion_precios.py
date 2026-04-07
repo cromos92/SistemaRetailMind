@@ -18,7 +18,8 @@ from datetime import datetime, timedelta
 from .models import (
     Producto, Producto_Talla, LoteProducto, Categoria, AtributoOpcion,
     Sucursal, Movimientos_Producto, Ticket_Productos, Ticket,
-    CambioPrecioPendiente, NotificacionCambioPrecio, HistorialCambioPrecio
+    CambioPrecioPendiente, NotificacionCambioPrecio, HistorialCambioPrecio,
+    ParametroGlobal, EmpresaUser
 )
 
 
@@ -241,6 +242,8 @@ def buscar_productos(request):
             'categoria',
             'atributo1',
             'atributo2',
+            'atributo3',
+            'atributo4',
             'sucursal'
         ).prefetch_related('producto_talla').all()
         
@@ -404,9 +407,16 @@ def buscar_productos(request):
                 'id': producto.id,  # ID del producto (no de la talla)
                 'sku': ', '.join([str(t.sku) for t in tallas[:3]]),  # Primeros 3 SKUs
                 'nombre': producto.articulo,
+                'descripcion': producto.descripcion or '',
                 'talla': f"{len(tallas_list)} tallas: {', '.join(str(t) for t in tallas_list[:5])}",  # Mostrar tallas
                 'categoria': producto.categoria.nombre if producto.categoria else None,
                 'marca': producto.atributo1.valor if producto.atributo1 else None,
+                'color': producto.atributo2.valor if producto.atributo2 else None,
+                'genero': producto.atributo3.valor if producto.atributo3 else None,
+                'otro': producto.atributo4.valor if producto.atributo4 else None,
+                'temporada': producto.temporada or None,
+                'anio_temporada': producto.anio_temporada or None,
+                'rango_precio': producto.rango_precio or None,
                 'sucursal': producto.sucursal.alias,
                 'costo': float(costo_promedio),
                 'precio_venta': float(precio_venta),
@@ -420,7 +430,7 @@ def buscar_productos(request):
                     'hace_cuanto': ultimo_cambio.hace_cuanto if ultimo_cambio else None
                 } if ultimo_cambio else None,
                 'sucursales_similares': sucursales_count,
-                'sucursales_lista': sucursales_lista,  # ✅ NUEVO: Lista de sucursales
+                'sucursales_lista': sucursales_lista,
             })
         
         # Paginación manual
@@ -774,7 +784,6 @@ def actualizar_precio(request):
         
         if sincronizar_sucursales:
             from django.db.models import Sum
-            from .models import EmpresaUser
             
             # Buscar productos similares en OTRAS sucursales QUE TENGAN STOCK
             productos_otras_sucursales = Producto.objects.filter(
@@ -847,6 +856,40 @@ def actualizar_precio(request):
                 if abs(porcentaje_sync) > 50:
                     prioridad = 'URGENTE'
                 
+                # === UMBRAL DE DIVERGENCIA: Si supera el umbral, crear PENDIENTE (requiere revisión) ===
+                # en lugar de APLICADO (informativo). El parámetro UMBRAL_DIVERGENCIA_PRECIO_PCT
+                # en ParametroGlobal define el % a partir del cual se requiere aprobación manual.
+                # Valor 0 = umbral desactivado (siempre APLICADO automático).
+                try:
+                    umbral_param = ParametroGlobal.objects.filter(
+                        nombre='UMBRAL_DIVERGENCIA_PRECIO_PCT'
+                    ).first()
+                    umbral_divergencia = umbral_param.valor_entero if umbral_param else 0
+                except Exception:
+                    umbral_divergencia = 0
+                
+                # Si el umbral está activo (> 0) y el cambio supera el umbral → PENDIENTE sin auto-aplicar
+                supera_umbral = umbral_divergencia > 0 and abs(porcentaje_sync) >= umbral_divergencia
+                
+                if supera_umbral:
+                    # No aplicar precio automáticamente — revertir el cambio hecho en prod_similar
+                    prod_similar.precioventa = precio_anterior_sync
+                    prod_similar.save()
+                    LoteProducto.objects.filter(
+                        producto_talla__producto=prod_similar,
+                        cantidad_disponible__gt=0,
+                        activo=True
+                    ).update(precio_venta_unitario=precio_anterior_sync)
+                    estado_cambio = 'PENDIENTE'
+                    motivo_cambio = (
+                        f'Cambio de precio desde {sucursal_origen.alias} supera el umbral de divergencia '
+                        f'({umbral_divergencia}%). Requiere aprobación.'
+                    )
+                    productos_sincronizados -= 1  # No se sincronizó, solo queda pendiente
+                else:
+                    estado_cambio = 'APLICADO'
+                    motivo_cambio = f'Precio sincronizado automáticamente desde {sucursal_origen.alias}'
+                
                 cambio = CambioPrecioPendiente.objects.create(
                     producto_talla=primera_talla,
                     sucursal=prod_similar.sucursal,
@@ -855,8 +898,8 @@ def actualizar_precio(request):
                     diferencia=diferencia_sync,
                     porcentaje_cambio=porcentaje_sync,
                     tipo_cambio='SINCRONIZACION',
-                    estado='APLICADO',  # APLICADO porque ya se sincronizó
-                    motivo=f'Precio sincronizado automáticamente desde {sucursal_origen.alias}',
+                    estado=estado_cambio,
+                    motivo=motivo_cambio,
                     creado_por=request.user,
                     prioridad=prioridad,
                     fecha_vencimiento=timezone.now() + timedelta(days=7),
@@ -869,11 +912,19 @@ def actualizar_precio(request):
                     status=True
                 ).select_related('user')
                 
-                mensaje_notif = (
-                    f"💰 Precio actualizado en {producto.articulo}: "
-                    f"${precio_anterior_sync:,} → ${nuevo_precio:,} "
-                    f"(desde {sucursal_origen.alias})"
-                )
+                if supera_umbral:
+                    mensaje_notif = (
+                        f"⚠️ Cambio de precio pendiente de aprobación en {producto.articulo}: "
+                        f"${precio_anterior_sync:,} → ${nuevo_precio:,} "
+                        f"({abs(porcentaje_sync):.1f}% — supera umbral {umbral_divergencia}%). "
+                        f"Enviado desde {sucursal_origen.alias}. Requiere revisión."
+                    )
+                else:
+                    mensaje_notif = (
+                        f"💰 Precio actualizado en {producto.articulo}: "
+                        f"${precio_anterior_sync:,} → ${nuevo_precio:,} "
+                        f"(desde {sucursal_origen.alias})"
+                    )
                 
                 for empresa_user in usuarios_sucursal:
                     NotificacionCambioPrecio.objects.create(
@@ -884,9 +935,10 @@ def actualizar_precio(request):
                     )
                     notificaciones_creadas += 1
                 
-                productos_sincronizados += 1
+                if not supera_umbral:
+                    productos_sincronizados += 1
                 sucursales_notificadas += 1
-                print(f"✅ Precio sincronizado en {prod_similar.sucursal.alias}: ${precio_anterior_sync:,} → ${nuevo_precio:,}. {usuarios_sucursal.count()} notificaciones")
+                print(f"✅ {'Pendiente revisión' if supera_umbral else 'Precio sincronizado'} en {prod_similar.sucursal.alias}: ${precio_anterior_sync:,} → ${nuevo_precio:,}. {usuarios_sucursal.count()} notificaciones")
             
             if productos_sincronizados > 0:
                 print(f"🔄 {productos_sincronizados} productos sincronizados. {notificaciones_creadas} notificaciones enviadas")
@@ -1273,16 +1325,78 @@ def listar_sucursales(request):
 @require_GET
 @login_required
 def obtener_historial_precio(request, producto_id):
-    """Obtener historial de cambios de precio de un producto"""
+    """Obtener historial de cambios de precio de un producto, enriquecido con
+    sucursales afectadas y referencia a la compra/recepción de origen."""
     try:
-        producto = Producto.objects.get(id=producto_id)
+        producto = Producto.objects.select_related('sucursal').get(id=producto_id)
         
         historial = HistorialCambioPrecio.objects.filter(
             producto=producto
         ).select_related('usuario').order_by('-fecha_cambio')[:10]
-        
+
+        # Prefetch sucursales afectadas por SINCRONIZACION del mismo artículo
+        from datetime import timedelta as _td
+        articulo = producto.articulo
+        atrib1 = producto.atributo1_id if hasattr(producto, 'atributo1_id') else None
+
         historial_data = []
         for cambio in historial:
+            # --- Sucursales afectadas ---
+            ventana_inicio = cambio.fecha_cambio - _td(seconds=10)
+            ventana_fin = cambio.fecha_cambio + _td(seconds=10)
+            sync_items = HistorialCambioPrecio.objects.filter(
+                tipo_cambio='SINCRONIZACION',
+                precio_nuevo=cambio.precio_nuevo,
+                fecha_cambio__range=(ventana_inicio, ventana_fin),
+                producto__articulo=articulo,
+            ).exclude(producto=producto).select_related('producto__sucursal').values(
+                'producto__sucursal__alias', 'producto__sucursal__id', 'precio_anterior'
+            )
+            sucursales_afectadas = [
+                {
+                    'alias': s['producto__sucursal__alias'],
+                    'precio_anterior': s['precio_anterior'],
+                }
+                for s in sync_items
+            ]
+
+            # --- Origen compra (link a compras/DTE) ---
+            origen_compra = None
+            tipo_raw = cambio.tipo_cambio
+            if tipo_raw in ('ACTUALIZACION_RECEPCION', 'ACTUALIZACION_MANUAL'):
+                from .models import Productos_Recepcionados, Movimientos_Producto as _Mov
+                # Buscar primer movimiento de ingreso para este producto alrededor de la fecha
+                mov = _Mov.objects.filter(
+                    ProductoTalla__producto=producto,
+                    concepto__in=['INGRESO_INICIAL', 'INGRESO_MANUAL'],
+                ).order_by('fecha', 'id').first()
+                if mov and mov.dte_id:
+                    origen_compra = {
+                        'tipo': 'DTE',
+                        'id': mov.dte_id,
+                        'url': f'/app/verGestionCompras/',
+                        'label': f'Ver Compra (DTE #{mov.dte_id})',
+                    }
+                elif mov:
+                    # Buscar a través de Productos_Recepcionados
+                    recep = Productos_Recepcionados.objects.filter(
+                        movimiento_ingreso=mov
+                    ).select_related(
+                        'compra_producto_talla__compra_producto__compras'
+                    ).first()
+                    if recep and recep.compra_producto_talla and recep.compra_producto_talla.compra_producto.compras:
+                        compra = recep.compra_producto_talla.compra_producto.compras
+                        origen_compra = {
+                            'tipo': 'COMPRA',
+                            'id': compra.id,
+                            'url': f'/app/verGestionCompras/',
+                            'label': f'Compra: {compra.nombre}',
+                        }
+
+            # --- Margen en el momento del cambio ---
+            costo_producto = producto.costo or 0
+            margen = round((cambio.precio_nuevo - costo_producto) / cambio.precio_nuevo * 100, 1) if cambio.precio_nuevo > 0 else None
+
             historial_data.append({
                 'id': cambio.id,
                 'precio_anterior': cambio.precio_anterior,
@@ -1290,11 +1404,16 @@ def obtener_historial_precio(request, producto_id):
                 'diferencia': cambio.diferencia,
                 'porcentaje_cambio': float(cambio.porcentaje_cambio),
                 'motivo': cambio.motivo or 'Sin motivo',
-                'tipo_cambio': cambio.get_tipo_cambio_display(),
+                'tipo_cambio': cambio.tipo_cambio,
+                'tipo_cambio_label': cambio.get_tipo_cambio_display(),
                 'usuario': cambio.usuario.username if cambio.usuario else 'Sistema',
                 'fecha_cambio': cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M'),
                 'hace_cuanto': cambio.hace_cuanto,
-                'tallas_afectadas': cambio.tallas_afectadas
+                'tallas_afectadas': cambio.tallas_afectadas,
+                'costo_ref': costo_producto,
+                'margen_estimado': margen,
+                'sucursales_afectadas': sucursales_afectadas,
+                'origen_compra': origen_compra,
             })
         
         # Último cambio
@@ -1303,6 +1422,8 @@ def obtener_historial_precio(request, producto_id):
         return JsonResponse({
             'success': True,
             'historial': historial_data,
+            'producto_articulo': producto.articulo,
+            'producto_sucursal': producto.sucursal.alias if producto.sucursal else None,
             'ultimo_cambio': {
                 'usuario': ultimo_cambio.usuario.username if ultimo_cambio and ultimo_cambio.usuario else None,
                 'fecha': ultimo_cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M') if ultimo_cambio else None,
@@ -2175,6 +2296,37 @@ def marcar_notificacion_leida(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al marcar notificación: {str(e)}'
+        })
+
+
+@require_POST
+@login_required
+def marcar_notificacion_leida_por_cambio(request, cambio_id):
+    """
+    Marca como leída la NotificacionCambioPrecio asociada a un CambioPrecioPendiente.
+    Se usa al llegar a revisar-pendientes desde una notificación (?cambio=ID).
+    """
+    try:
+        actualizadas = NotificacionCambioPrecio.objects.filter(
+            cambio_precio_id=cambio_id,
+            usuario=request.user,
+            leida=False
+        ).update(leida=True, fecha_lectura=timezone.now())
+
+        restantes = NotificacionCambioPrecio.objects.filter(
+            usuario=request.user,
+            leida=False
+        ).count()
+
+        return JsonResponse({
+            'success': True,
+            'actualizadas': actualizadas,
+            'restantes': restantes
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
         })
 
 

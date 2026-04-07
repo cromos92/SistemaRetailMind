@@ -653,23 +653,17 @@
                         <thead>
                             <tr>
                                 <th style="display: none;">ID</th>
-                                <th class="text-start" style="width: 15%;">Cliente</th>
-                                <th style="width: 10%;">RUT</th>
-                                <th style="width: 8%;">N° Doc</th>
-                                <th style="width: 10%;">Tipo</th>
-                                <th style="width: 8%;">Emisión</th>
-                                <th style="width: 8%;">Vencimiento</th>
-                                <th class="text-end" style="width: 10%;">Monto</th>
-                                <th class="text-end" style="width: 8%;">Descuento</th>
-                                <th style="width: 8%;">Estado</th>
-                                <th style="width: 8%;">Pago</th>
-                                <th style="width: 7%;">Vendedor</th>
-                                <th style="width: 10%;">Acciones</th>
+                                <th class="text-start" style="width: 20%;">Cliente</th>
+                                <th style="width: 14%;">Documento</th>
+                                <th style="width: 10%;">Fechas</th>
+                                <th class="text-end" style="width: 12%;">Monto</th>
+                                <th style="width: 12%;">Estado</th>
+                                <th style="width: 12%;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tablaDTEBody">
                             <tr>
-                                <td colspan="13" class="text-center py-4">
+                                <td colspan="7" class="text-center py-4">
                                     <div class="nexo-spinner mx-auto mb-3"></div>
                                     <p class="text-muted mb-0">Cargando documentos...</p>
                                 </td>
@@ -1068,7 +1062,7 @@
                     $('#sucursalActual').text(data.sucursal || 'Sin sucursal');
 
                     if (!data.items || data.items.length === 0) {
-                        tbody.append(`<tr><td colspan="13" class="text-center text-muted py-4">
+                        tbody.append(`<tr><td colspan="7" class="text-center text-muted py-4">
                             <i class="bi bi-inbox display-6 d-block mb-2"></i>
                             No se encontraron DTEs${search ? ' con la búsqueda "' + search + '"' : ''}
                         </td></tr>`);
@@ -1096,31 +1090,34 @@
                             const fila = `
 <tr class="${dte.es_nota_credito ? 'fila-nc' : ''}">
     <td style="display: none;">${dte.id || ''}</td>
-    <td class="text-start fw-medium">${resaltarBusqueda(dte.receptor_nombre || '', search)}</td>
-    <td><code>${resaltarBusqueda(dte.receptor_rut || '', search)}</code></td>
+    <td class="text-start">
+        <span class="fw-medium">${resaltarBusqueda(dte.receptor_nombre || '', search)}</span>
+        <br><code class="small text-muted">${resaltarBusqueda(dte.receptor_rut || '', search)}</code>
+        ${dte.vendedor ? `<br><small class="text-muted"><i class="bi bi-person me-1"></i>${dte.vendedor}</small>` : ''}
+    </td>
     <td>
         <strong>${resaltarBusqueda(dte.numero_documento || '', search)}</strong>
         ${asociacionNC}
+        <br><span class="nexo-badge nexo-badge-info" style="font-size:0.7rem;">${resaltarBusqueda(dte.tipo_documento || '', search)}</span>
     </td>
-    <td><span class="nexo-badge nexo-badge-info">${resaltarBusqueda(dte.tipo_documento || '', search)}</span></td>
-    <td>${dte.fecha_emision || ''}</td>
-    <td>${dte.fecha_vencimiento || '-'}</td>
+    <td class="small">
+        ${dte.fecha_emision || ''}
+        ${dte.fecha_vencimiento && dte.fecha_vencimiento !== dte.fecha_emision
+            ? `<br><span class="text-muted">Vto: ${dte.fecha_vencimiento}</span>`
+            : ''}
+    </td>
     <td class="text-end">
         <strong>$${parseFloat(dte.monto_con_iva || 0).toLocaleString()}</strong>
+        ${dte.descuento > 0 ? `<br><small class="text-danger">-$${parseFloat(dte.descuento).toLocaleString()} dto</small>` : ''}
         ${dte.notas_credito > 0 ? `<br><small style="color: var(--nexo-error);">(-$${parseFloat(dte.notas_credito).toLocaleString()} NC)</small>` : ''}
     </td>
-    <td class="text-end">
-        $${parseFloat(dte.descuento || 0).toLocaleString()}
-        ${dte.descuento > 0 ? `<br><small class="text-muted">(${calcularPorcentajeDescuento(dte.descuento, dte.monto_con_iva)}%)</small>` : ''}
-    </td>
-    <td><span class="nexo-badge ${estadoDTEClass}">${dte.estado_dte || ''}</span></td>
     <td>
-        <span class="nexo-badge ${estadoPagoClass}">${dte.estado_pago || 'PENDIENTE'}</span>
+        <span class="nexo-badge ${estadoDTEClass}">${dte.estado_dte || ''}</span>
+        <br><span class="nexo-badge ${estadoPagoClass}" style="font-size:0.65rem;">${dte.estado_pago || 'PENDIENTE'}</span>
         ${dte.saldo_pendiente > 0 ? `<br><small class="text-muted">Saldo: $${parseFloat(dte.saldo_pendiente).toLocaleString()}</small>` : ''}
     </td>
-    <td class="text-start">${dte.vendedor || '-'}</td>
     <td>
-        <div class="d-flex justify-content-center gap-1">
+        <div class="d-flex justify-content-center gap-1 flex-wrap">
             <button class="nexo-action-btn info" title="Ver detalles" onclick="verDetalleDTE(${dte.id || 0})">
                 <i class="bi bi-eye"></i>
             </button>
@@ -1135,6 +1132,10 @@
             ${['FACTURA_ELECTRONICA', 'FACTURA_EXENTA', 'BOLETA_ELECTRONICA', 'GUIA_DESPACHO', 'NOTA_CREDITO', 'NOTA DE CREDITO'].includes(dte.tipo_documento) ? `
             <button class="nexo-action-btn warning" title="Descargar TXT Acepta" onclick="descargarTXTAcepta(${dte.id || 0}, '${dte.tipo_documento}', '${dte.numero_documento}')">
                 <i class="bi bi-file-earmark-text"></i>
+            </button>` : ''}
+            ${(dte.tipo_documento === 'FACTURA ELECTRONICA' || dte.tipo_documento === 'FACTURA_ELECTRONICA') && dte.estado_dte !== 'ANULADO' ? `
+            <button class="nexo-action-btn danger" title="Anular Factura Electrónica" onclick="anularFactura(${dte.id || 0}, '${dte.numero_documento}')">
+                <i class="bi bi-x-circle"></i>
             </button>` : ''}
             {% endif %}
         </div>
@@ -1390,5 +1391,83 @@
             }
         }
         return cookieValue;
+    }
+
+    async function anularFactura(dteId, numeroDoc) {
+        // Paso 1: preguntar tipo de anulación
+        const { value: tipoAnulacion, isConfirmed } = await Swal.fire({
+            title: `Anular Factura #${numeroDoc}`,
+            html: `
+                <p class="text-start mb-3">Selecciona el tipo de anulación:</p>
+                <div class="d-flex flex-column gap-2 text-start">
+                    <label class="p-2 border rounded" style="cursor:pointer;">
+                        <input type="radio" name="tipoAnulacion" value="ANULACION" checked class="me-2">
+                        <strong>Anulación misma jornada</strong><br>
+                        <small class="text-muted ms-4">La venta nunca se efectuó o el cliente no pagó. Desaparece de la cuadratura de hoy.</small>
+                    </label>
+                    <label class="p-2 border rounded" style="cursor:pointer;">
+                        <input type="radio" name="tipoAnulacion" value="DEVOLUCION" class="me-2">
+                        <strong>Devolución / anulación posterior</strong><br>
+                        <small class="text-muted ms-4">El cliente ya pagó y se le devuelve el dinero. Aparece como NC negativa en la cuadratura de hoy.</small>
+                    </label>
+                </div>
+                <hr class="my-3">
+                <p class="small text-danger text-start mb-0">Esta acción creará una Nota de Crédito, marcará la factura como <strong>ANULADO</strong> y descargará el TXT Acepta.</p>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-x-circle me-1"></i>Confirmar Anulación',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const sel = document.querySelector('input[name="tipoAnulacion"]:checked');
+                return sel ? sel.value : 'ANULACION';
+            }
+        });
+
+        if (!isConfirmed) return;
+
+        Swal.fire({
+            title: 'Procesando...',
+            html: 'Generando Nota de Crédito y TXT Acepta...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            const resp = await fetch('/app/documentos/anular-factura/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ dte_id: dteId, tipo_anulacion: tipoAnulacion })
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.error || `Error ${resp.status}`);
+            }
+
+            // Descargar TXT
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `NC_anula_${numeroDoc}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            await Swal.fire({
+                icon: 'success',
+                title: 'Factura Anulada',
+                html: `Nota de Crédito creada.<br>TXT Acepta descargado.<br><small class="text-muted">Factura #${numeroDoc} marcada como ANULADO.</small>`,
+                confirmButtonText: 'Aceptar'
+            });
+            cargarDTEs();
+        } catch (e) {
+            Swal.fire('Error', e.message, 'error');
+        }
     }
 </script>

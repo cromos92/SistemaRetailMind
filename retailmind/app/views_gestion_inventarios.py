@@ -26,6 +26,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from django.db import transaction, connection
 from django.core.exceptions import ValidationError
+import threading
 from decimal import Decimal
 import csv
 import io
@@ -35,7 +36,7 @@ import logging
 from .models import (
     Producto, Producto_Talla, Productos_Atributos, AtributoOpcion, Categoria,
     LoteProducto, Movimientos_Producto, Sucursal, Empresa, EmpresaUser,
-    TomaInventario, TomaInventarioDetalle, TomaInventarioLog
+    TomaInventario, TomaInventarioDetalle, TomaInventarioLog, TareaAplicacionAjustes
 )
 
 logger = logging.getLogger(__name__)
@@ -1645,98 +1646,200 @@ def rechazar_inventario(request, inventario_id):
 
 
 # ==============================================================================
-# API: APLICACIÓN DE AJUSTES (PROCESO EN LOTES)
+# API: APLICACIÓN DE AJUSTES (BACKGROUND THREAD + PROGRESS TRACKING)
 # ==============================================================================
+
+def _ejecutar_ajustes_background(inventario_id, usuario_id):
+    """
+    Worker que corre en un thread separado para aplicar ajustes de inventario.
+    Actualiza TareaAplicacionAjustes cada PROGRESS_UPDATE_INTERVAL SKUs para
+    que el frontend pueda hacer polling del progreso.
+    La conexión de BD se cierra al finalizar para evitar leaks.
+    """
+    PROGRESS_UPDATE_INTERVAL = 25
+
+    try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        usuario = User.objects.get(pk=usuario_id)
+        inventario = TomaInventario.objects.get(pk=inventario_id)
+        tarea = TareaAplicacionAjustes.objects.get(inventario=inventario)
+
+        detalles_pendientes = list(
+            inventario.detalles.filter(
+                contado=True,
+                ajuste_aplicado=False
+            ).exclude(diferencia=0)
+        )
+
+        tarea.total = len(detalles_pendientes)
+        tarea.procesados = 0
+        tarea.save(update_fields=['total', 'procesados'])
+
+        if not detalles_pendientes:
+            inventario.estado = 'COMPLETADO'
+            inventario.save()
+            tarea.estado = 'COMPLETADO'
+            tarea.finalizada_en = timezone.now()
+            tarea.save(update_fields=['estado', 'finalizada_en'])
+            return
+
+        ajustes_aplicados = 0
+        errores = []
+
+        for i, detalle in enumerate(detalles_pendientes):
+            try:
+                _aplicar_ajuste_individual(detalle, inventario, usuario)
+                ajustes_aplicados += 1
+            except Exception as e:
+                errores.append({'sku': detalle.sku, 'error': str(e)})
+                logger.error(f"Error al aplicar ajuste para {detalle.sku}: {str(e)}")
+
+            # Actualizar progreso periódicamente
+            if (i + 1) % PROGRESS_UPDATE_INTERVAL == 0:
+                tarea.procesados = i + 1
+                tarea.save(update_fields=['procesados'])
+
+        # Finalizar inventario
+        inventario.estado = 'COMPLETADO'
+        inventario.save()
+
+        # Registrar log
+        _registrar_log(
+            inventario=inventario,
+            tipo_accion='APLICACION_AJUSTES',
+            descripcion=f'{ajustes_aplicados} ajustes aplicados',
+            usuario=usuario,
+            datos={'ajustes_aplicados': ajustes_aplicados, 'errores': errores}
+        )
+
+        tarea.procesados = len(detalles_pendientes)
+        tarea.errores = errores
+        tarea.estado = 'COMPLETADO'
+        tarea.finalizada_en = timezone.now()
+        tarea.save(update_fields=['procesados', 'errores', 'estado', 'finalizada_en'])
+
+    except Exception as e:
+        logger.error(f"Error crítico en background task de ajustes: {str(e)}")
+        try:
+            tarea = TareaAplicacionAjustes.objects.get(inventario_id=inventario_id)
+            tarea.estado = 'ERROR'
+            tarea.errores = [{'error': str(e)}]
+            tarea.finalizada_en = timezone.now()
+            tarea.save(update_fields=['estado', 'errores', 'finalizada_en'])
+            inventario = TomaInventario.objects.get(pk=inventario_id)
+            if inventario.estado == 'APLICANDO':
+                inventario.estado = 'APROBADO'
+                inventario.save()
+        except Exception:
+            pass
+    finally:
+        connection.close()
+
 
 @require_POST
 @login_required
-@transaction.atomic
 def aplicar_ajustes_inventario(request, inventario_id):
     """
-    Aplicar ajustes de inventario.
-    Procesa en lotes para optimizar grandes volúmenes.
-    
+    Inicia la aplicación de ajustes de inventario en un thread background.
+    Retorna inmediatamente con el task_id para que el frontend haga polling
+    al endpoint estado_tarea_ajustes.
+
     IMPORTANTE: Esta función modifica el stock real del sistema.
     Solo debe ejecutarse después de la aprobación.
     """
     try:
         inventario = get_object_or_404(TomaInventario, id=inventario_id)
-        
-        if inventario.estado != 'APROBADO':
+
+        if inventario.estado not in ('APROBADO', 'APLICANDO'):
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'error': 'El inventario debe estar aprobado para aplicar ajustes'
             })
-        
-        # Cambiar estado a "Aplicando"
-        inventario.estado = 'APLICANDO'
-        inventario.save()
-        
-        # Obtener detalles con diferencias no aplicados
-        detalles_pendientes = inventario.detalles.filter(
-            contado=True,
-            ajuste_aplicado=False
-        ).exclude(diferencia=0)
-        
-        total_pendientes = detalles_pendientes.count()
-        
-        if total_pendientes == 0:
-            inventario.estado = 'COMPLETADO'
-            inventario.save()
+
+        # Verificar si ya hay un proceso en curso
+        tarea, created = TareaAplicacionAjustes.objects.get_or_create(
+            inventario=inventario,
+            defaults={'creada_por': request.user}
+        )
+
+        if tarea.estado == 'EN_PROCESO':
             return JsonResponse({
                 'success': True,
-                'message': 'No hay ajustes pendientes de aplicar',
-                'ajustes_aplicados': 0
+                'task_id': tarea.id,
+                'already_running': True,
+                'message': 'El proceso ya está en ejecución'
             })
-        
-        # Procesar en lotes
-        ajustes_aplicados = 0
-        errores = []
-        
-        # Usar select_for_update para evitar condiciones de carrera
-        for detalle in detalles_pendientes.select_for_update().iterator(chunk_size=BATCH_SIZE):
-            try:
-                _aplicar_ajuste_individual(detalle, inventario, request.user)
-                ajustes_aplicados += 1
-            except Exception as e:
-                errores.append({
-                    'sku': detalle.sku,
-                    'error': str(e)
-                })
-                logger.error(f"Error al aplicar ajuste para {detalle.sku}: {str(e)}")
-        
-        # Finalizar
-        inventario.estado = 'COMPLETADO'
+
+        # Reiniciar tarea si es reintento
+        tarea.estado = 'EN_PROCESO'
+        tarea.procesados = 0
+        tarea.total = 0
+        tarea.errores = []
+        tarea.iniciada_en = timezone.now()
+        tarea.finalizada_en = None
+        tarea.creada_por = request.user
+        tarea.save()
+
+        inventario.estado = 'APLICANDO'
         inventario.save()
-        
-        _registrar_log(
-            inventario=inventario,
-            tipo_accion='APLICACION_AJUSTES',
-            descripcion=f'{ajustes_aplicados} ajustes aplicados',
-            usuario=request.user,
-            datos={'ajustes_aplicados': ajustes_aplicados, 'errores': errores}
+
+        thread = threading.Thread(
+            target=_ejecutar_ajustes_background,
+            args=(inventario_id, request.user.id),
+            daemon=True
         )
-        
+        thread.start()
+
         return JsonResponse({
             'success': True,
-            'message': f'{ajustes_aplicados} ajustes aplicados exitosamente',
-            'ajustes_aplicados': ajustes_aplicados,
-            'errores': errores if errores else None
+            'task_id': tarea.id,
+            'message': 'Proceso de ajustes iniciado. Usa el endpoint de estado para monitorear el progreso.'
         })
-        
+
     except Exception as e:
-        # Revertir estado en caso de error
-        if inventario.estado == 'APLICANDO':
-            inventario.estado = 'APROBADO'
-            inventario.save()
-        logger.error(f"Error al aplicar ajustes: {str(e)}")
+        logger.error(f"Error al iniciar aplicación de ajustes: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
+
+@require_GET
+@login_required
+def estado_tarea_ajustes(request, inventario_id):
+    """
+    Endpoint de polling para monitorear el progreso de aplicación de ajustes.
+    El frontend consulta este endpoint cada ~2s para actualizar la barra de progreso.
+    """
+    try:
+        tarea = TareaAplicacionAjustes.objects.filter(inventario_id=inventario_id).first()
+        if not tarea:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontró tarea para este inventario'
+            })
+
+        return JsonResponse({
+            'success': True,
+            'estado': tarea.estado,
+            'total': tarea.total,
+            'procesados': tarea.procesados,
+            'porcentaje': tarea.porcentaje,
+            'errores': tarea.errores,
+            'iniciada_en': tarea.iniciada_en.isoformat() if tarea.iniciada_en else None,
+            'finalizada_en': tarea.finalizada_en.isoformat() if tarea.finalizada_en else None,
+        })
+    except Exception as e:
+        logger.error(f"Error al obtener estado de tarea: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
 
 def _aplicar_ajuste_individual(detalle, inventario, usuario):
     """
     Aplica el ajuste de un producto individual.
     Crea movimientos y actualiza lotes según corresponda.
+
+    Para SOBRANTES (diferencia > 0): crea lote FIFO + registra movimiento AJUSTE_INVENTARIO_ENTRADA.
+    Para FALTANTES (diferencia < 0): consumir_stock_fifo ya registra el movimiento y
+    descuenta el stock internamente, por lo que NO se llama a registrar_movimiento_producto
+    nuevamente (evita doble descuento).
     """
     from .views import registrar_movimiento_producto
     
@@ -1746,13 +1849,8 @@ def _aplicar_ajuste_individual(detalle, inventario, usuario):
     if diferencia == 0:
         return
     
-    # Determinar tipo de ajuste
     if diferencia > 0:
-        # SOBRANTE: Crear entrada de inventario
-        concepto = 'AJUSTE_INVENTARIO_ENTRADA'
-        cantidad = diferencia
-        
-        # Crear lote para los sobrantes
+        # SOBRANTE: Crear lote para los sobrantes, luego registrar movimiento de entrada
         from .views_modulo_productos import crear_lote_producto
         try:
             crear_lote_producto(
@@ -1765,12 +1863,23 @@ def _aplicar_ajuste_individual(detalle, inventario, usuario):
             )
         except Exception as e:
             logger.warning(f"No se pudo crear lote para {detalle.sku}: {str(e)}")
-    else:
-        # FALTANTE: Registrar salida de inventario
-        concepto = 'AJUSTE_INVENTARIO_SALIDA'
-        cantidad = diferencia  # Ya es negativo
         
-        # Consumir stock FIFO
+        # Registrar movimiento de entrada
+        try:
+            registrar_movimiento_producto(
+                producto_talla=producto_talla,
+                concepto='AJUSTE_INVENTARIO_ENTRADA',
+                cantidad=diferencia,
+                responsable=usuario,
+                sucursal_destino=inventario.sucursal,
+                observaciones=f'Ajuste inventario {inventario.numero_inventario}',
+                referencia_externa=inventario.numero_inventario
+            )
+        except Exception as e:
+            logger.warning(f"No se pudo registrar movimiento entrada para {detalle.sku}: {str(e)}")
+    else:
+        # FALTANTE: consumir_stock_fifo ya registra movimiento y descuenta stock internamente.
+        # No llamar a registrar_movimiento_producto después para evitar doble descuento.
         from .views_modulo_productos import consumir_stock_fifo
         try:
             consumir_stock_fifo(
@@ -1781,21 +1890,6 @@ def _aplicar_ajuste_individual(detalle, inventario, usuario):
             )
         except Exception as e:
             logger.warning(f"No se pudo consumir stock FIFO para {detalle.sku}: {str(e)}")
-    
-    # Registrar movimiento
-    try:
-        registrar_movimiento_producto(
-            producto_talla=producto_talla,
-            concepto=concepto,
-            cantidad=cantidad,
-            responsable=usuario,
-            sucursal_origen=inventario.sucursal if diferencia < 0 else None,
-            sucursal_destino=inventario.sucursal if diferencia > 0 else None,
-            observaciones=f'Ajuste inventario {inventario.numero_inventario}',
-            referencia_externa=inventario.numero_inventario
-        )
-    except Exception as e:
-        logger.warning(f"No se pudo registrar movimiento para {detalle.sku}: {str(e)}")
     
     # Marcar como aplicado
     detalle.ajuste_aplicado = True

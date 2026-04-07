@@ -1,0 +1,932 @@
+{% load static %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+/* ─── Variables ─────────────────────────────────────────────── */
+:root {
+  --rm-blue:    #1e40af;
+  --rm-green:   #15803d;
+  --rm-red:     #b91c1c;
+  --rm-yellow:  #92400e;
+  --rm-slate:   #334155;
+  --rm-light:   #f8fafc;
+  --rm-border:  #e2e8f0;
+}
+
+/* ─── Header breadcrumb ─────────────────────────────────────── */
+.pedido-header { margin-bottom: 20px; }
+.pedido-header .back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .8rem; font-weight: 600; color: #64748b;
+  text-decoration: none; padding: 5px 10px;
+  border: 1px solid var(--rm-border); border-radius: 8px;
+  background: #fff; transition: background .15s, color .15s;
+}
+.pedido-header .back-btn:hover { background: #f1f5f9; color: #1e293b; }
+.pedido-title { font-size: 1.4rem; font-weight: 800; color: #0f172a; line-height: 1.2; }
+.pedido-subtitle { font-size: .85rem; color: #64748b; margin-top: 2px; }
+
+/* ─── Estado badges (grandes) ───────────────────────────────── */
+.estado-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: .82rem; font-weight: 700; padding: 6px 14px;
+  border-radius: 30px; letter-spacing: .2px;
+}
+.estado-badge i { font-size: .95rem; }
+.estado-pendiente  { background: #fef9c3; color: #78350f; border: 1.5px solid #fcd34d; }
+.estado-facturado  { background: #dcfce7; color: #14532d; border: 1.5px solid #86efac; }
+.estado-cancelado  { background: #fee2e2; color: #7f1d1d; border: 1.5px solid #fca5a5; }
+
+/* ─── Canal badge ───────────────────────────────────────────── */
+.canal-badge {
+  font-size: .72rem; font-weight: 700; padding: 4px 11px;
+  border-radius: 5px; letter-spacing: .3px; text-transform: uppercase;
+}
+.canal-shopify  { background: #96bf48; color: #fff; }
+.canal-paris    { background: #0033a0; color: #fff; }
+.canal-ripley   { background: #6f42c1; color: #fff; }
+.canal-walmart  { background: #0071ce; color: #fff; }
+.canal-otro     { background: #6b7280; color: #fff; }
+
+/* ─── Ticket RM Hero ────────────────────────────────────────── */
+.ticket-hero-card {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
+  border-radius: 14px; padding: 20px 24px;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 16px; margin-bottom: 14px;
+}
+.ticket-hero-label { font-size: .72rem; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: #93c5fd; margin-bottom: 4px; }
+.ticket-hero-number {
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-size: 2.4rem; font-weight: 900; color: #fff; letter-spacing: 3px; line-height: 1;
+}
+.ticket-hero-hint { font-size: .75rem; color: #93c5fd; margin-top: 6px; }
+
+/* ─── Cards ─────────────────────────────────────────────────── */
+.rm-card {
+  background: #fff; border: 1px solid var(--rm-border);
+  border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.05);
+  margin-bottom: 14px; overflow: hidden;
+}
+.rm-card-header {
+  padding: 13px 20px 11px;
+  border-bottom: 1px solid var(--rm-border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--rm-light);
+}
+.rm-card-header-title {
+  font-size: .72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--rm-slate);
+  display: flex; align-items: center; gap: 7px;
+}
+.rm-card-header-title i { font-size: 1rem; color: #94a3b8; }
+.rm-card-body { padding: 18px 20px; }
+
+/* ─── Info grid ─────────────────────────────────────────────── */
+.info-cell { margin-bottom: 4px; }
+.info-label {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: #94a3b8; margin-bottom: 3px;
+}
+.info-val { font-size: .88rem; font-weight: 500; color: #1e293b; line-height: 1.4; }
+.info-val.large { font-size: 1rem; font-weight: 700; }
+
+/* ─── Tabla de items ────────────────────────────────────────── */
+.items-table { margin: 0; }
+.items-table thead th {
+  background: #f1f5f9; color: #475569;
+  font-weight: 700; font-size: .68rem; text-transform: uppercase;
+  letter-spacing: .4px; padding: 9px 12px; border-bottom: 2px solid var(--rm-border);
+}
+.items-table tbody tr { transition: background .1s; }
+.items-table tbody tr:hover { background: #f8fafc; }
+.items-table tbody td { padding: 10px 12px; font-size: .83rem; vertical-align: middle; border-color: #f1f5f9; }
+
+/* ─── Comparación de precios ────────────────────────────────── */
+.precio-canal { font-size: .85rem; font-weight: 700; color: #1e293b; }
+
+/* Caso: vendió sobre precio RM → positivo, margen alto */
+.margen-card {
+  display: inline-flex; flex-direction: column; align-items: flex-end;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+  padding: 5px 10px; margin-top: 3px; min-width: 90px;
+}
+.margen-card .margen-num {
+  font-size: .95rem; font-weight: 900; color: #15803d; line-height: 1.1;
+}
+.margen-card .margen-label {
+  font-size: .62rem; font-weight: 600; color: #16a34a;
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.margen-card .precio-rm-ref {
+  font-size: .68rem; color: #86efac; margin-top: 2px;
+}
+
+/* Caso: bajo margen → alerta naranja */
+.bajo-margen-card {
+  display: inline-flex; flex-direction: column; align-items: flex-end;
+  background: #fff7ed; border: 1.5px solid #fed7aa; border-radius: 8px;
+  padding: 5px 10px; margin-top: 3px; min-width: 90px;
+}
+.bajo-margen-card .margen-num {
+  font-size: .95rem; font-weight: 900; color: #c2410c; line-height: 1.1;
+}
+.bajo-margen-card .margen-label {
+  font-size: .62rem; font-weight: 700; color: #ea580c;
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.bajo-margen-card .precio-rm-ref {
+  font-size: .68rem; color: #fdba74; margin-top: 2px;
+}
+
+/* Caso: descuento ok (bajo RM pero margen bien) */
+.descuento-ok-pill {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: #f1f5f9; color: #475569;
+  font-size: .7rem; font-weight: 600; padding: 3px 8px;
+  border-radius: 20px; margin-top: 3px;
+}
+.precio-igual-pill {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: #f0fdf4; color: #15803d;
+  font-size: .7rem; font-weight: 600; padding: 3px 8px;
+  border-radius: 20px; margin-top: 3px;
+}
+
+/* Resumen pie de tabla */
+.resumen-precios {
+  background: linear-gradient(135deg, #fff7ed, #fffbeb);
+  border: 1.5px solid #fed7aa; border-radius: 10px;
+  padding: 12px 16px; margin: 12px 16px 4px;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.resumen-precios i { font-size: 1.1rem; color: #f97316; flex-shrink: 0; margin-top: 2px; }
+.resumen-precios .title { font-size: .78rem; font-weight: 700; color: #9a3412; margin-bottom: 4px; }
+.resumen-precios .detalle { font-size: .76rem; color: #7c3200; line-height: 1.6; }
+
+.resumen-bajo-margen {
+  background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+  border: 1.5px solid #fecdd3; border-radius: 10px;
+  padding: 12px 16px; margin: 8px 16px 4px;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.resumen-bajo-margen i { font-size: 1.1rem; color: #e11d48; flex-shrink: 0; margin-top: 2px; }
+.resumen-bajo-margen .title { font-size: .78rem; font-weight: 700; color: #9f1239; margin-bottom: 4px; }
+.resumen-bajo-margen .detalle { font-size: .76rem; color: #881337; line-height: 1.6; }
+
+/* ─── Match status ──────────────────────────────────────────── */
+.match-ok   { display:flex; align-items:flex-start; gap:5px; color:#15803d; font-size:.8rem; font-weight:600; }
+.match-fail { display:flex; align-items:flex-start; gap:5px; color:#dc2626; font-size:.8rem; font-weight:600; }
+.match-ok i, .match-fail i { margin-top: 1px; flex-shrink: 0; }
+.match-stock { font-size: .72rem; color: #64748b; margin-top: 3px; padding-left: 18px; }
+
+/* ─── Buscador inline ───────────────────────────────────────── */
+.search-panel {
+  background: #fffbeb; border: 1.5px solid #fcd34d;
+  border-radius: 8px; padding: 10px 12px; margin-top: 8px;
+}
+.search-results {
+  max-height: 170px; overflow-y: auto;
+  border: 1px solid var(--rm-border); border-radius: 7px; background: #fff;
+}
+.search-result-item {
+  padding: 8px 12px; cursor: pointer;
+  font-size: .8rem; border-bottom: 1px solid #f1f5f9;
+  transition: background .1s;
+}
+.search-result-item:hover  { background: #eff6ff; }
+.search-result-item:last-child { border-bottom: none; }
+
+/* ─── Totales ───────────────────────────────────────────────── */
+.totals-row { border-top: 2px solid var(--rm-border); padding-top: 12px; margin-top: 8px; }
+.total-amount { font-size: 1.5rem; font-weight: 900; color: #0f172a; }
+
+/* ─── Facturar card ─────────────────────────────────────────── */
+.facturar-card { border: 2px solid #bbf7d0; border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+.facturar-card .rm-card-header { background: #f0fdf4; border-bottom: 1px solid #bbf7d0; }
+.btn-facturar {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  border: none; color: #fff; font-weight: 800; font-size: .95rem;
+  padding: 12px; border-radius: 10px; width: 100%;
+  box-shadow: 0 4px 12px rgba(21,128,61,.3); transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-facturar:hover:not(:disabled) {
+  background: linear-gradient(135deg, #15803d, #166534);
+  box-shadow: 0 6px 18px rgba(21,128,61,.4); transform: translateY(-1px);
+  color: #fff;
+}
+.btn-facturar:disabled {
+  background: #d1d5db; box-shadow: none; cursor: not-allowed; transform: none;
+}
+
+/* ─── Panel factura electrónica ─────────────────────────────── */
+.panel-factura-e {
+  background: #f8fafc; border: 1px solid var(--rm-border);
+  border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;
+}
+.panel-factura-e .panel-title {
+  font-size: .72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--rm-slate); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* ─── Zona de riesgo ────────────────────────────────────────── */
+.danger-zone { border: 1.5px solid #fecaca; border-radius: 12px; overflow: hidden; }
+.danger-zone .rm-card-header { background: #fff5f5; border-bottom: 1px solid #fecaca; }
+.danger-zone .rm-card-header-title { color: #b91c1c; }
+.danger-zone .rm-card-header-title i { color: #f87171; }
+
+/* ─── Aviso bloqueante ──────────────────────────────────────── */
+.sku-warning {
+  background: #fff7ed; border: 1.5px solid #fed7aa;
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;
+  font-size: .82rem; color: #9a3412; display: flex; align-items: flex-start; gap: 9px;
+}
+.sku-warning i { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+
+/* ─── Facturado banner ──────────────────────────────────────── */
+.facturado-banner {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border: 2px solid #86efac; border-radius: 12px; padding: 18px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.facturado-banner i { font-size: 2rem; color: #16a34a; flex-shrink: 0; }
+.facturado-banner .title { font-weight: 800; font-size: .95rem; color: #14532d; }
+.facturado-banner .detail { font-size: .8rem; color: #166534; margin-top: 4px; line-height: 1.6; }
+
+/* ─── Meta vendedor/método ──────────────────────────────────── */
+.meta-row {
+  background: #f1f5f9; border-radius: 8px; padding: 9px 12px;
+  font-size: .78rem; color: #475569; display: flex; flex-wrap: wrap; gap: 14px;
+  margin-bottom: 14px;
+}
+.meta-row span { display: flex; align-items: center; gap: 5px; }
+.meta-row strong { color: #1e293b; }
+</style>
+
+<div class="page-content">
+<div class="container-fluid" style="max-width:1200px;">
+
+  <!-- ── ENCABEZADO ──────────────────────────────────────────── -->
+  <div class="pedido-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div class="d-flex align-items-start gap-3">
+      <a href="{% url 'pedidos_ecommerce_list' %}" class="back-btn mt-1">
+        <i class="bi bi-arrow-left"></i>Pedidos
+      </a>
+      <div>
+        <div class="pedido-title">
+          Pedido
+          <span style="color:#1e40af;">{{ pedido.numero_pedido_canal }}</span>
+        </div>
+        <div class="pedido-subtitle">
+          <span class="canal-badge canal-{{ pedido.canal_origen|lower }}">{{ pedido.canal_origen }}</span>
+          <span class="ms-2 text-muted" style="font-size:.78rem;">Recibido {{ pedido.fecha_recepcion|date:"d/m/Y H:i" }}</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      {% if pedido.estado == 'PENDIENTE' %}
+        <span class="estado-badge estado-pendiente"><i class="bi bi-clock-fill"></i>Pendiente</span>
+      {% elif pedido.estado == 'FACTURADO' %}
+        <span class="estado-badge estado-facturado"><i class="bi bi-check-circle-fill"></i>Facturado</span>
+      {% elif pedido.estado == 'CANCELADO' %}
+        <span class="estado-badge estado-cancelado"><i class="bi bi-x-circle-fill"></i>Cancelado</span>
+      {% else %}
+        <span class="estado-badge" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;">{{ pedido.estado }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{% if msg.tags == 'error' %}danger{% elif msg.tags == 'warning' %}warning{% else %}success{% endif %} alert-dismissible fade show py-2 mb-3" style="border-radius:10px;">
+        {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row g-3">
+
+    <!-- ── COLUMNA IZQUIERDA ──────────────────────────────────── -->
+    <div class="col-lg-7">
+
+      <!-- Ticket RM Hero -->
+      <div class="ticket-hero-card">
+        <div>
+          <div class="ticket-hero-label"><i class="bi bi-ticket-perforated me-1"></i>Ticket RetailMind</div>
+          <div class="ticket-hero-number">{{ pedido.numero_ticket_rm }}</div>
+          <div class="ticket-hero-hint"><i class="bi bi-info-circle me-1"></i>Muestra este número en caja para facturar directamente</div>
+        </div>
+        <div class="text-end" style="flex-shrink:0;">
+          <div style="font-size:.7rem;font-weight:700;letter-spacing:.5px;color:#93c5fd;text-transform:uppercase;margin-bottom:6px;">Canal</div>
+          <span class="canal-badge canal-{{ pedido.canal_origen|lower }}">{{ pedido.canal_origen }}</span>
+        </div>
+      </div>
+
+      <!-- Cliente -->
+      <div class="rm-card">
+        <div class="rm-card-header">
+          <div class="rm-card-header-title"><i class="bi bi-person-circle"></i>Cliente</div>
+        </div>
+        <div class="rm-card-body">
+          <div class="row g-3">
+            <div class="col-sm-6 info-cell">
+              <div class="info-label">Nombre</div>
+              <div class="info-val large">{{ pedido.cliente_nombre }}</div>
+            </div>
+            {% if pedido.cliente_documento %}
+            <div class="col-sm-6 info-cell">
+              <div class="info-label">RUT / Documento</div>
+              <div class="info-val large">{{ pedido.cliente_documento }}</div>
+            </div>
+            {% endif %}
+            {% if pedido.cliente_email %}
+            <div class="col-sm-6 info-cell">
+              <div class="info-label">Email</div>
+              <div class="info-val"><a href="mailto:{{ pedido.cliente_email }}" style="color:#1e40af;text-decoration:none;">{{ pedido.cliente_email }}</a></div>
+            </div>
+            {% endif %}
+            {% if pedido.direccion_envio %}
+            <div class="col-12 info-cell">
+              <div class="info-label"><i class="bi bi-geo-alt me-1"></i>Dirección envío</div>
+              <div class="info-val">{{ pedido.direccion_envio }}</div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Productos -->
+      <div class="rm-card">
+        <div class="rm-card-header">
+          <div class="rm-card-header-title"><i class="bi bi-box-seam"></i>Productos del pedido</div>
+          {% if pedido.estado == 'PENDIENTE' %}
+            {% if puede_facturar %}
+              <span style="font-size:.72rem;color:#15803d;font-weight:700;display:flex;align-items:center;gap:5px;">
+                <i class="bi bi-check-circle-fill"></i>Todos los SKUs encontrados
+              </span>
+            {% else %}
+              <span style="font-size:.72rem;color:#dc2626;font-weight:700;display:flex;align-items:center;gap:5px;">
+                <i class="bi bi-exclamation-triangle-fill"></i>Hay SKUs sin match
+              </span>
+            {% endif %}
+          {% endif %}
+        </div>
+        <div class="rm-card-body" style="padding:0;">
+          {% if items_validados %}
+          <div class="table-responsive">
+            <table class="table items-table mb-0" id="items-table">
+              <thead>
+                <tr>
+                  <th>SKU Canal</th>
+                  <th>Producto</th>
+                  <th class="text-center">Cant.</th>
+                  <th class="text-end">Precio canal</th>
+                  <th class="text-end">Precio RM</th>
+                  <th>Match en sucursal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for iv in items_validados %}
+                <tr data-idx="{{ forloop.counter0 }}" id="row-item-{{ forloop.counter0 }}">
+                  <td><code style="font-size:.74rem;background:#f1f5f9;padding:2px 6px;border-radius:4px;color:#334155;">{{ iv.sku|default:"-" }}</code></td>
+                  <td style="max-width:160px;">
+                    <div style="font-size:.83rem;color:#1e293b;font-weight:500;">{{ iv.nombre|default:"-" }}</div>
+                  </td>
+                  <td class="text-center">
+                    <span style="background:#e0f2fe;color:#0369a1;font-weight:700;font-size:.8rem;padding:2px 9px;border-radius:20px;">{{ iv.cantidad|default:1 }}</span>
+                  </td>
+                  <!-- Precio canal -->
+                  <td class="text-end">
+                    <div class="precio-canal">${{ iv.precio_canal|default:iv.precio_unitario|default:0|floatformat:0 }}</div>
+                  </td>
+                  <!-- Precio RM + margen (precio público maestro) -->
+                  <td class="text-end">
+                    {% if iv.precio_rm %}
+                      <div style="font-size:.82rem;font-weight:600;color:#64748b;">${{ iv.precio_rm|floatformat:0 }} <span style="font-size:.65rem;color:#94a3b8;">RM</span></div>
+
+                      {% if iv.precio_clase == 'sobre_precio' %}
+                        {# Canal vendió MÁS caro que RM → tarjeta verde con margen #}
+                        <div class="margen-card">
+                          {% if iv.margen_canal_pct is not None %}
+                            <div class="margen-num">{{ iv.margen_canal_pct }}%</div>
+                            <div class="margen-label">margen real</div>
+                          {% endif %}
+                          <div class="precio-rm-ref">+${{ iv.descuento_canal|floatformat:0|slice:"1:" }} sobre RM</div>
+                        </div>
+
+                      {% elif iv.precio_clase == 'bajo_margen' %}
+                        {# Bajo RM Y margen bajo → tarjeta naranja alerta #}
+                        <div class="bajo-margen-card">
+                          {% if iv.margen_canal_pct is not None %}
+                            <div class="margen-num">{{ iv.margen_canal_pct }}%</div>
+                            <div class="margen-label"><i class="bi bi-exclamation-triangle-fill me-1"></i>margen bajo</div>
+                          {% endif %}
+                          <div class="precio-rm-ref">-{{ iv.pct_descuento }}% vs RM</div>
+                        </div>
+
+                      {% elif iv.precio_clase == 'descuento_ok' %}
+                        {# Bajo RM pero margen OK → pill gris informativo #}
+                        <div class="descuento-ok-pill">
+                          <i class="bi bi-tag me-1"></i>-{{ iv.pct_descuento }}% vs RM
+                          {% if iv.margen_canal_pct is not None %}&nbsp;·&nbsp;{{ iv.margen_canal_pct }}% mg{% endif %}
+                        </div>
+
+                      {% elif iv.precio_clase == 'precio_igual' %}
+                        <div class="precio-igual-pill"><i class="bi bi-check2 me-1"></i>Precio RM exacto</div>
+
+                      {% endif %}
+                    {% else %}
+                      <span class="text-muted" style="font-size:.75rem;">Sin match</span>
+                    {% endif %}
+                  </td>
+                  <td id="match-cell-{{ forloop.counter0 }}">
+                    {% if iv.encontrado %}
+                      <div class="match-ok"><i class="bi bi-check-circle-fill"></i><span>{{ iv.producto_nombre_rm|default:iv.sku }}</span></div>
+                      <div class="match-stock">Stock disponible: <strong>{{ iv.stock_disponible }}</strong></div>
+                      {% if pedido.estado == 'PENDIENTE' %}
+                      <button class="btn btn-outline-secondary btn-sm py-0 px-2 mt-2" style="font-size:.7rem;"
+                        onclick="abrirBuscador({{ forloop.counter0 }})">
+                        <i class="bi bi-search me-1"></i>Cambiar
+                      </button>
+                      {% endif %}
+                    {% elif iv.sin_stock %}
+                      <div class="match-fail"><i class="bi bi-exclamation-circle-fill"></i><span>Sin stock — {{ iv.producto_nombre_rm|default:iv.sku }}</span></div>
+                      <div class="match-stock" style="color:#dc2626;">Stock disponible: <strong>0</strong></div>
+                      {% if pedido.estado == 'PENDIENTE' %}
+                      <button class="btn btn-warning btn-sm py-0 px-2 mt-2" style="font-size:.72rem;"
+                        onclick="abrirBuscador({{ forloop.counter0 }})">
+                        <i class="bi bi-search me-1"></i>Buscar con stock
+                      </button>
+                      {% endif %}
+                    {% else %}
+                      <div class="match-fail"><i class="bi bi-x-circle-fill"></i><span>No encontrado en {{ sucursal_validacion.alias }}</span></div>
+                      {% if pedido.estado == 'PENDIENTE' %}
+                      <button class="btn btn-warning btn-sm py-0 px-2 mt-2" style="font-size:.72rem;"
+                        onclick="abrirBuscador({{ forloop.counter0 }})">
+                        <i class="bi bi-search me-1"></i>Buscar producto
+                      </button>
+                      {% endif %}
+                    {% endif %}
+
+                    {% if pedido.estado == 'PENDIENTE' %}
+                    <div id="search-panel-{{ forloop.counter0 }}" class="search-panel" style="display:none;">
+                      <div class="d-flex gap-2 align-items-center mb-2">
+                        <input type="text" class="form-control form-control-sm"
+                          id="search-input-{{ forloop.counter0 }}"
+                          placeholder="Busca por nombre o SKU..."
+                          oninput="buscarProducto({{ forloop.counter0 }}, this.value)">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="cerrarBuscador({{ forloop.counter0 }})">
+                          <i class="bi bi-x"></i>
+                        </button>
+                      </div>
+                      <div id="search-results-{{ forloop.counter0 }}" class="search-results"></div>
+                    </div>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Resumen diferencia precios -->
+          {% if hay_diferencia_precios %}
+          <div class="resumen-precios">
+            <i class="bi bi-info-circle-fill"></i>
+            <div>
+              <div class="title">Diferencia de precio canal vs precio público RM</div>
+              <div class="detalle">
+                Cobrado al cliente: <strong>${{ total_precios_canal|floatformat:0 }}</strong>
+                &nbsp;·&nbsp;
+                Precio público RM: <strong>${{ total_precios_rm|floatformat:0 }}</strong>
+                &nbsp;·&nbsp;
+                {% if diferencia_total_precios > 0 %}
+                  Canal aplicó <strong>${{ diferencia_total_precios|floatformat:0 }}</strong> de descuento respecto al precio RM.
+                {% else %}
+                  Canal cobró <strong>${{ diferencia_total_precios|floatformat:0|slice:"1:" }}</strong> adicional sobre el precio RM.
+                {% endif %}
+                <br><span style="opacity:.8;font-size:.71rem;">El DTE se emitirá al precio efectivamente cobrado por el canal.</span>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if hay_bajo_margen %}
+          <div class="resumen-bajo-margen">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <div>
+              <div class="title">Alerta: uno o más productos tienen margen bajo</div>
+              <div class="detalle">
+                El canal vendió por debajo del precio RM <strong>y</strong> el margen sobre costo es inferior al {{ items_validados.0.margen_bajo_umbral|default:"20" }}%.
+                Revisa los ítems marcados en naranja antes de facturar.
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Totales -->
+          <div class="totals-row d-flex justify-content-end gap-4 px-4 pb-4 flex-wrap">
+            {% if pedido.descuento %}
+            <div class="text-end">
+              <div class="info-label">Descuento</div>
+              <div class="info-val" style="color:#dc2626;font-weight:700;">-${{ pedido.descuento|floatformat:0 }}</div>
+            </div>
+            {% endif %}
+            {% if pedido.costo_envio %}
+            <div class="text-end">
+              <div class="info-label">Costo envío</div>
+              <div class="info-val" style="font-weight:700;">${{ pedido.costo_envio|floatformat:0 }}</div>
+            </div>
+            {% endif %}
+            <div class="text-end">
+              <div class="info-label">Total pedido</div>
+              <div class="total-amount">${{ pedido.total|floatformat:0 }}</div>
+            </div>
+          </div>
+
+          {% else %}
+            <div class="p-4 text-muted" style="font-size:.85rem;"><i class="bi bi-info-circle me-1"></i>Sin detalle de ítems.</div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div><!-- /col izquierda -->
+
+    <!-- ── COLUMNA DERECHA ────────────────────────────────────── -->
+    <div class="col-lg-5">
+
+      <!-- Información general -->
+      <div class="rm-card">
+        <div class="rm-card-header">
+          <div class="rm-card-header-title"><i class="bi bi-info-circle"></i>Información del pedido</div>
+        </div>
+        <div class="rm-card-body">
+          <div class="row g-3">
+            <div class="col-6 info-cell">
+              <div class="info-label">Sucursal pedido</div>
+              <div class="info-val">{{ pedido.sucursal.nombre|default:pedido.sucursal.alias }}</div>
+            </div>
+            <div class="col-6 info-cell">
+              <div class="info-label">
+                Sucursal sesión
+                {% if sucursal_sesion %}<span class="badge bg-primary ms-1" style="font-size:.6rem;">Facturará aquí</span>{% endif %}
+              </div>
+              {% if sucursal_sesion %}
+                <div class="info-val" style="color:#15803d;font-weight:700;">{{ sucursal_sesion.nombre|default:sucursal_sesion.alias }}</div>
+              {% else %}
+                <div class="info-val" style="color:#dc2626;font-size:.8rem;"><i class="bi bi-exclamation-triangle me-1"></i>Sin sucursal activa</div>
+              {% endif %}
+            </div>
+            <div class="col-6 info-cell">
+              <div class="info-label">Recibido</div>
+              <div class="info-val">{{ pedido.fecha_recepcion|date:"d/m/Y" }}<br><span style="font-size:.78rem;color:#64748b;">{{ pedido.fecha_recepcion|date:"H:i" }}</span></div>
+            </div>
+            {% if pedido.fecha_facturacion %}
+            <div class="col-6 info-cell">
+              <div class="info-label">Facturado</div>
+              <div class="info-val">{{ pedido.fecha_facturacion|date:"d/m/Y" }}<br><span style="font-size:.78rem;color:#64748b;">{{ pedido.fecha_facturacion|date:"H:i" }}</span></div>
+            </div>
+            {% endif %}
+            {% if pedido.ticket %}
+            <div class="col-6 info-cell">
+              <div class="info-label">Ticket vinculado</div>
+              <div class="info-val">#{{ pedido.ticket.correlativo }}</div>
+            </div>
+            {% endif %}
+            {% if pedido.facturado_por %}
+            <div class="col-6 info-cell">
+              <div class="info-label">Facturado por</div>
+              <div class="info-val">{{ pedido.facturado_por.username }}</div>
+            </div>
+            {% endif %}
+            {% if pedido.dte %}
+            <div class="col-12 info-cell">
+              <div class="info-label">DTE emitido</div>
+              <div class="info-val d-flex align-items-center gap-2 flex-wrap">
+                <span style="font-weight:600;">#{{ pedido.dte.numero_documento }} — {{ pedido.dte.tipo_documento }}</span>
+                <div class="d-flex gap-1 flex-wrap">
+                  <a href="/app/ventas/documentos/?buscar={{ pedido.dte.numero_documento }}"
+                     class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.7rem;" target="_blank">
+                    <i class="bi bi-eye me-1"></i>Ver DTE
+                  </a>
+                  <a href="{% url 'descargar_txt_dte_ecommerce' dte_id=pedido.dte_id %}"
+                     class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.7rem;">
+                    <i class="bi bi-file-earmark-arrow-down me-1"></i>TXT Acepta
+                  </a>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+          {% if pedido.notas %}
+          <div class="mt-3 pt-3" style="border-top:1px solid var(--rm-border);">
+            <div class="info-label"><i class="bi bi-sticky me-1"></i>Notas</div>
+            <div class="info-val" style="background:#fafafa;padding:10px;border-radius:8px;border:1px solid var(--rm-border);font-size:.83rem;">{{ pedido.notas }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- ── FACTURAR ─────────────────────────────────────────── -->
+      {% if pedido.estado == 'PENDIENTE' %}
+
+      <div class="rm-card facturar-card" id="card-facturar">
+        <div class="rm-card-header">
+          <div class="rm-card-header-title" style="color:#15803d;"><i class="bi bi-receipt" style="color:#16a34a;"></i>Facturar este pedido</div>
+        </div>
+        <div class="rm-card-body">
+
+          {% if not puede_facturar %}
+          <div class="sku-warning">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <div>
+              <strong>Hay productos sin match o sin stock.</strong><br>
+              Usa el buscador en cada ítem rojo para asignarlo a un producto con stock en <strong>{{ sucursal_validacion.alias }}</strong>.
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="info-label d-block mb-1">Tipo de Documento</label>
+            <select id="sel-tipo-doc" class="form-select form-select-sm" onchange="onTipoDocChange()">
+              <option value="BOLETA_ELECTRONICA">Boleta Electrónica</option>
+              <option value="FACTURA_ELECTRONICA">Factura Electrónica</option>
+            </select>
+          </div>
+
+          <div id="panel-factura" class="panel-factura-e" style="display:none;">
+            <div class="panel-title"><i class="bi bi-building"></i>Datos Receptor (obligatorios para Factura)</div>
+            <div class="row g-2">
+              <div class="col-12">
+                <label style="font-size:.72rem;color:#64748b;font-weight:600;">RUT Empresa <span class="text-danger">*</span></label>
+                <input type="text" id="fac-rut" class="form-control form-control-sm"
+                  placeholder="76123456-7" value="{{ pedido.cliente_documento }}">
+              </div>
+              <div class="col-12">
+                <label style="font-size:.72rem;color:#64748b;font-weight:600;">Razón Social <span class="text-danger">*</span></label>
+                <input type="text" id="fac-razon" class="form-control form-control-sm"
+                  placeholder="Empresa S.A." value="{{ pedido.cliente_nombre }}">
+              </div>
+              <div class="col-12">
+                <label style="font-size:.72rem;color:#64748b;font-weight:600;">Giro <span class="text-danger">*</span></label>
+                <input type="text" id="fac-giro" class="form-control form-control-sm" placeholder="Comercio al por menor">
+              </div>
+              <div class="col-12">
+                <label style="font-size:.72rem;color:#64748b;font-weight:600;">Dirección <span class="text-danger">*</span></label>
+                <input type="text" id="fac-direccion" class="form-control form-control-sm"
+                  placeholder="Av. Ejemplo 123" value="{{ pedido.direccion_envio|truncatechars:100 }}">
+              </div>
+              <div class="col-6">
+                <label style="font-size:.72rem;color:#64748b;font-weight:600;">Comuna <span class="text-danger">*</span></label>
+                <input type="text" id="fac-comuna" class="form-control form-control-sm" placeholder="Santiago">
+              </div>
+              <div class="col-6">
+                <label style="font-size:.72rem;color:#64748b;font-weight:600;">Ciudad <span class="text-danger">*</span></label>
+                <input type="text" id="fac-ciudad" class="form-control form-control-sm" placeholder="Santiago">
+              </div>
+            </div>
+            <div id="fac-errores" style="display:none;" class="alert alert-danger py-2 mt-2 mb-0" style="font-size:.78rem;"></div>
+          </div>
+
+          <div class="meta-row">
+            <span><i class="bi bi-person-badge"></i>Vendedor: <strong>Venta Internet (1000)</strong></span>
+            <span><i class="bi bi-credit-card"></i>Método: <strong>{% if pedido.canal_origen == "SHOPIFY" %}Venta por Internet{% else %}Transferencia{% endif %}</strong></span>
+          </div>
+
+          <button id="btn-facturar-aqui" class="btn-facturar"
+            onclick="facturarDesdeDetalle()"
+            {% if not puede_facturar %}disabled title="Asigna todos los SKUs primero"{% endif %}>
+            <i class="bi bi-receipt fs-5"></i>Facturar ahora
+          </button>
+
+          <div id="facturar-loading" style="display:none;text-align:center;padding:16px;">
+            <div class="spinner-border spinner-border-sm text-success me-2"></div>
+            <span style="color:#15803d;font-weight:600;">Generando Ticket + DTE...</span>
+          </div>
+          <div id="facturar-resultado" style="display:none;" class="mt-3"></div>
+        </div>
+      </div>
+
+      <!-- Zona de riesgo -->
+      <div class="danger-zone rm-card">
+        <div class="rm-card-header">
+          <div class="rm-card-header-title" style="color:#b91c1c;"><i class="bi bi-exclamation-octagon-fill" style="color:#f87171;"></i>Zona de riesgo</div>
+        </div>
+        <div class="rm-card-body">
+          <form method="post" onsubmit="return confirm('¿Cancelar este pedido? Esta acción no se puede deshacer.')">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="cancelar">
+            <button type="submit" class="btn btn-outline-danger btn-sm w-100" style="border-radius:8px;font-weight:600;">
+              <i class="bi bi-x-circle me-2"></i>Cancelar pedido
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {% endif %}
+
+      <!-- Banner facturado -->
+      {% if pedido.estado == 'FACTURADO' %}
+      <div class="facturado-banner">
+        <i class="bi bi-check-circle-fill"></i>
+        <div>
+          <div class="title">Pedido facturado correctamente</div>
+          <div class="detail">
+            {% if pedido.ticket %}Ticket #{{ pedido.ticket.correlativo }}<br>{% endif %}
+            {% if pedido.dte %}DTE #{{ pedido.dte.numero_documento }} — {{ pedido.dte.tipo_documento }}{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div><!-- /col derecha -->
+  </div><!-- /row -->
+
+</div>
+</div>
+
+<script>
+const PEDIDO_ID = {{ pedido.id }};
+const CSRF_TOKEN = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+let searchTimers = {};
+
+/* ── Buscador por item ───────────────────────────────── */
+function abrirBuscador(idx) {
+  document.querySelectorAll('[id^="search-panel-"]').forEach(p => {
+    if (p.id !== `search-panel-${idx}`) p.style.display = 'none';
+  });
+  const panel = document.getElementById(`search-panel-${idx}`);
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display === 'block') {
+    setTimeout(() => document.getElementById(`search-input-${idx}`).focus(), 50);
+  }
+}
+
+function cerrarBuscador(idx) {
+  document.getElementById(`search-panel-${idx}`).style.display = 'none';
+}
+
+function buscarProducto(idx, q) {
+  clearTimeout(searchTimers[idx]);
+  const container = document.getElementById(`search-results-${idx}`);
+  if (q.length < 2) { container.innerHTML = ''; return; }
+  searchTimers[idx] = setTimeout(() => {
+    fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/buscar-producto/?q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.resultados.length) {
+          container.innerHTML = '<div class="p-3 text-muted" style="font-size:.8rem;"><i class="bi bi-search me-1"></i>Sin resultados</div>';
+          return;
+        }
+        container.innerHTML = data.resultados.map(r =>
+          `<div class="search-result-item" onclick="seleccionarProducto(${idx}, ${r.id}, '${r.sku}', '${r.nombre.replace(/'/g,"\\'")}', ${r.stock})">
+            <strong style="color:#1e40af;">${r.sku}</strong> — ${r.nombre}
+            <span class="ms-2" style="font-size:.72rem;background:#e0f2fe;color:#0369a1;padding:1px 7px;border-radius:10px;font-weight:600;">Stock: ${r.stock}</span>
+          </div>`
+        ).join('');
+      });
+  }, 300);
+}
+
+function seleccionarProducto(idx, ptId, sku, nombre, stock) {
+  fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/guardar-match/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+    body: JSON.stringify({ item_idx: idx, producto_talla_id: ptId })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.ok) { alert('Error: ' + data.error); return; }
+    const cell = document.getElementById(`match-cell-${idx}`);
+    cell.innerHTML = `
+      <div class="match-ok"><i class="bi bi-check-circle-fill"></i><span>${data.nombre_rm}</span></div>
+      <div class="match-stock">Stock disponible: <strong>${data.stock}</strong></div>
+      <button class="btn btn-outline-secondary btn-sm py-0 px-2 mt-2" style="font-size:.7rem;" onclick="abrirBuscador(${idx})">
+        <i class="bi bi-search me-1"></i>Cambiar
+      </button>
+      <div id="search-panel-${idx}" class="search-panel" style="display:none;">
+        <div class="d-flex gap-2 align-items-center mb-2">
+          <input type="text" class="form-control form-control-sm" id="search-input-${idx}"
+            placeholder="Busca por nombre o SKU..." oninput="buscarProducto(${idx}, this.value)">
+          <button class="btn btn-sm btn-outline-secondary" onclick="cerrarBuscador(${idx})"><i class="bi bi-x"></i></button>
+        </div>
+        <div id="search-results-${idx}" class="search-results"></div>
+      </div>`;
+    verificarTodosMatcheados();
+  });
+}
+
+function verificarTodosMatcheados() {
+  const faltantes = document.querySelectorAll('.match-fail');
+  const btn = document.getElementById('btn-facturar-aqui');
+  const alerta = document.querySelector('#card-facturar .sku-warning');
+  if (!faltantes.length) {
+    if (btn) { btn.disabled = false; btn.title = ''; }
+    if (alerta) alerta.style.display = 'none';
+  }
+}
+
+/* ── Toggle panel factura electrónica ───────────────── */
+function onTipoDocChange() {
+  const val = document.getElementById('sel-tipo-doc').value;
+  const panel = document.getElementById('panel-factura');
+  panel.style.display = val === 'FACTURA_ELECTRONICA' ? 'block' : 'none';
+  document.getElementById('fac-errores').style.display = 'none';
+}
+
+/* ── Facturar desde detalle ───────────────────────────── */
+function facturarDesdeDetalle() {
+  const tipoDoc = document.getElementById('sel-tipo-doc').value;
+  const btn     = document.getElementById('btn-facturar-aqui');
+  const loading = document.getElementById('facturar-loading');
+  const resultado = document.getElementById('facturar-resultado');
+
+  let datos_receptor = null;
+  if (tipoDoc === 'FACTURA_ELECTRONICA') {
+    const rut    = document.getElementById('fac-rut').value.trim();
+    const razon  = document.getElementById('fac-razon').value.trim();
+    const giro   = document.getElementById('fac-giro').value.trim();
+    const dir    = document.getElementById('fac-direccion').value.trim();
+    const comuna = document.getElementById('fac-comuna').value.trim();
+    const ciudad = document.getElementById('fac-ciudad').value.trim();
+    const errDiv = document.getElementById('fac-errores');
+    const faltantes = [];
+    if (!rut)    faltantes.push('RUT Empresa');
+    if (!razon)  faltantes.push('Razón Social');
+    if (!giro)   faltantes.push('Giro');
+    if (!dir)    faltantes.push('Dirección');
+    if (!comuna) faltantes.push('Comuna');
+    if (!ciudad) faltantes.push('Ciudad');
+    if (rut && !/^\d{7,8}-[\dkK]$/.test(rut)) faltantes.push('RUT con formato inválido (ej: 76123456-7)');
+    if (faltantes.length) {
+      errDiv.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Completa: <strong>' + faltantes.join(', ') + '</strong>';
+      errDiv.style.display = 'block';
+      return;
+    }
+    errDiv.style.display = 'none';
+    datos_receptor = { rut, razon_social: razon, giro, direccion: dir, comuna, ciudad };
+  }
+
+  btn.style.display = 'none';
+  loading.style.display = 'block';
+  resultado.style.display = 'none';
+
+  const body = { tipo_documento: tipoDoc };
+  if (datos_receptor) body.datos_receptor = datos_receptor;
+
+  fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/facturar/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+    body: JSON.stringify(body)
+  })
+  .then(r => r.json())
+  .then(data => {
+    loading.style.display = 'none';
+    resultado.style.display = 'block';
+    if (data.ok) {
+      resultado.innerHTML = `
+        <div class="alert alert-success py-2 mb-2" style="border-radius:10px;">
+          <i class="bi bi-check-circle-fill me-1"></i>
+          <strong>¡Facturado exitosamente!</strong><br>
+          <small>Ticket #${data.ticket_correlativo} · ${data.dte_tipo} #${data.dte_numero}</small>
+        </div>`;
+      if (data.archivo_txt && data.archivo_txt.contenido) {
+        try {
+          const blob = new Blob([data.archivo_txt.contenido], { type: 'text/plain;charset=utf-8' });
+          const link = document.createElement('a');
+          link.href = window.URL.createObjectURL(blob);
+          link.download = data.archivo_txt.nombre_archivo;
+          document.body.appendChild(link); link.click(); document.body.removeChild(link);
+          window.URL.revokeObjectURL(link.href);
+        } catch(e) { console.error('Error descargando TXT:', e); }
+      }
+      resultado.innerHTML += `
+        <a href="/app/ecommerce/dte/${data.dte_id}/txt/" class="btn btn-outline-secondary btn-sm w-100 mb-2" style="border-radius:8px;">
+          <i class="bi bi-file-earmark-arrow-down me-1"></i>Re-descargar TXT Acepta
+        </a>
+        <button class="btn btn-primary btn-sm w-100" style="border-radius:8px;" onclick="location.reload()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Recargar página
+        </button>`;
+      document.querySelector('#card-facturar').style.borderColor = '#86efac';
+    } else {
+      resultado.innerHTML = `
+        <div class="alert alert-danger py-2" style="border-radius:10px;">
+          <i class="bi bi-x-circle me-1"></i>${data.error}
+        </div>`;
+      btn.style.display = 'block';
+    }
+  })
+  .catch(err => {
+    loading.style.display = 'none';
+    btn.style.display = 'block';
+    resultado.style.display = 'block';
+    resultado.innerHTML = `<div class="alert alert-danger py-2" style="border-radius:10px;">Error de conexión: ${err}</div>`;
+  });
+}
+</script>
+
+{% include 'layout/footer.html' %}

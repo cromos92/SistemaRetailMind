@@ -91,27 +91,18 @@
     $(document).ready(function() {
         // Evento para manejar la selección de archivo
         function checkSession() {
-    var url = "{% url 'check_session' %}";
     $.ajax({
-        method: 'POST',
-        url: url,
-        headers: {
-            'X-CSRFToken': getCookie("csrftoken"),
-        },
+        method: 'GET',
+        url: '/api/check-session/',
         success: function (response) {
-            console.log(response);
-              if (response.status !== "ok") {
-   
-    window.location.href = '/';
-}
-
+            if (!response.authenticated) {
+                window.location.href = '/';
+            }
         },
         error: function (xhr) {
-           if (xhr.status !== 200) {
-    console.error("Error:", xhr.status, xhr.responseText);
-    window.location.href = '/login/';
-}
-
+            if (xhr.status === 403 || xhr.status === 302) {
+                window.location.href = '/';
+            }
         },
     });
 }

@@ -1119,6 +1119,48 @@
     color: var(--nexo-gray-500);
 }
 
+/* ===== PILLS DE ATRIBUTOS DEL PRODUCTO ===== */
+.product-attr-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.attr-marca {
+    background: rgba(0, 102, 255, 0.08);
+    color: var(--nexo-primary-dark);
+    border: 1px solid rgba(0, 102, 255, 0.18);
+}
+
+.attr-color {
+    background: rgba(0, 212, 170, 0.1);
+    color: #00776B;
+    border: 1px solid rgba(0, 212, 170, 0.25);
+}
+
+.attr-genero {
+    background: rgba(138, 43, 226, 0.08);
+    color: #6b1fa8;
+    border: 1px solid rgba(138, 43, 226, 0.2);
+}
+
+.attr-otro {
+    background: rgba(26, 26, 46, 0.06);
+    color: var(--nexo-gray-700);
+    border: 1px solid rgba(26, 26, 46, 0.12);
+}
+
+.attr-temporada {
+    background: rgba(255, 176, 32, 0.1);
+    color: #8a5a00;
+    border: 1px solid rgba(255, 176, 32, 0.25);
+}
+
 .product-price {
     font-weight: 700;
     color: var(--nexo-accent);
@@ -2402,9 +2444,21 @@ function renderizarResultadosBusqueda(productos) {
                 <span class="product-name">${producto.nombre}</span>
                 <span class="product-price">${formatearMoneda(producto.precio_venta)}</span>
             </div>
-            <div class="product-info-line">
+            ${producto.descripcion ? `<div style="font-size:12px;color:var(--nexo-gray-500);margin-bottom:4px;line-height:1.3;">${producto.descripcion}</div>` : ''}
+            <div class="product-info-line" style="flex-wrap:wrap;gap:6px;">
                 <span class="product-meta">
-                    ${producto.talla} | ${producto.marca || ''} | Costo: ${formatearMoneda(producto.costo)}
+                    ${producto.talla}
+                </span>
+                ${producto.marca ? `<span class="product-attr-pill attr-marca"><i class="ri-medal-line"></i> ${producto.marca}</span>` : ''}
+                ${producto.color ? `<span class="product-attr-pill attr-color"><i class="ri-palette-line"></i> ${producto.color}</span>` : ''}
+                ${producto.genero ? `<span class="product-attr-pill attr-genero"><i class="ri-user-line"></i> ${producto.genero}</span>` : ''}
+                ${producto.otro ? `<span class="product-attr-pill attr-otro"><i class="ri-price-tag-line"></i> ${producto.otro}</span>` : ''}
+                ${producto.temporada ? `<span class="product-attr-pill attr-temporada"><i class="ri-sun-line"></i> ${producto.temporada}${producto.anio_temporada ? ' ' + producto.anio_temporada : ''}</span>` : ''}
+            </div>
+            <div class="product-info-line" style="margin-top:4px;">
+                <span class="product-meta">
+                    ${producto.categoria ? `<i class="ri-folder-line"></i> ${producto.categoria} &nbsp;|&nbsp;` : ''} Costo: ${formatearMoneda(producto.costo)}
+                    ${producto.rango_precio ? `&nbsp;|&nbsp;<span style="text-transform:capitalize;">${producto.rango_precio}</span>` : ''}
                 </span>
                 <span class="product-meta" style="color: ${margen > 25 ? 'var(--nexo-accent)' : 'var(--nexo-error)'};">
                     Margen: ${margen.toFixed(1)}%
@@ -3286,6 +3340,15 @@ async function verHistorial(productoId, nombre, talla, costo, precioActual) {
         
         if (data.success && data.historial && data.historial.length > 0) {
             renderizarHistorial(data.historial, contentEl);
+            // Actualizar el subtítulo con la sucursal del producto si está disponible
+            if (data.producto_sucursal) {
+                const subtituloExtra = document.getElementById('modalHistorialSubtitulo');
+                if (subtituloExtra) {
+                    subtituloExtra.textContent = `Sucursal: ${data.producto_sucursal}`;
+                } else {
+                    detalleEl.innerHTML += ` &nbsp; <span style="color:var(--nexo-teal);font-size:0.8rem;"><i class="ri-store-2-line me-1"></i>${data.producto_sucursal}</span>`;
+                }
+            }
         } else {
             contentEl.innerHTML = `
                 <div class="historial-empty">
@@ -3414,7 +3477,7 @@ function renderizarTimeline(historial) {
         
         const fechaFormateada = cambio.fecha_cambio || cambio.fecha || 'N/A';
         const haceCuanto = cambio.hace_cuanto || '';
-        const tipoCambio = cambio.tipo_cambio || 'Manual';
+        const tipoCambio = cambio.tipo_cambio_label || cambio.tipo_cambio || 'Manual';
         const motivo = cambio.motivo || '';
         
         // Clase para tipo de cambio
@@ -3459,7 +3522,23 @@ function renderizarTimeline(historial) {
                         ${cambio.usuario || 'Sistema'}
                     </span>
                     ${cambio.tallas_afectadas ? `<span style="font-size: 11px; color: var(--nexo-gray-500);"><i class="ri-t-shirt-line"></i> ${cambio.tallas_afectadas} tallas</span>` : ''}
+                    ${cambio.margen_estimado !== undefined && cambio.margen_estimado !== null ? `<span style="font-size:11px;color:var(--nexo-gray-500);"><i class="ri-percent-line"></i> Margen ~${cambio.margen_estimado}%</span>` : ''}
                 </div>
+                
+                ${cambio.origen_compra ? `
+                <div style="margin-top:6px;">
+                    <a href="${cambio.origen_compra.url}" target="_blank" class="btn btn-outline-info btn-sm py-0 px-2" style="font-size:0.72rem;">
+                        <i class="ri-store-2-line me-1"></i>${cambio.origen_compra.label}
+                    </a>
+                </div>` : ''}
+                
+                ${cambio.sucursales_afectadas && cambio.sucursales_afectadas.length > 0 ? `
+                <div style="margin-top:6px;padding:6px 8px;background:rgba(0,150,136,0.07);border-radius:6px;">
+                    <small style="color:#009688;font-weight:600;"><i class="ri-global-line me-1"></i>Sucursales sincronizadas:</small>
+                    <div class="d-flex flex-wrap gap-1 mt-1">
+                        ${cambio.sucursales_afectadas.map(s => `<span style="font-size:0.65rem;background:#e0f2f1;color:#00695c;border-radius:4px;padding:2px 6px;">${s.alias}</span>`).join('')}
+                    </div>
+                </div>` : ''}
             </div>
         `;
     });

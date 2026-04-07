@@ -1873,11 +1873,28 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
     siguiente_folio = correlativo_obj.numero_actual + 1
     
     # Preparar datos del documento
+    # Determinar forma de pago para el DTE
+    # 1=Contado (pago inmediato), 2=Crédito (pago diferido), 3=Sin costo
+    # Primero se intenta leer el valor que el usuario eligió en el POS (guardado en observaciones_adicionales).
+    # Si no está almacenado, se auto-detecta desde los métodos de pago del ticket.
+    METODOS_CREDITO_DTE = {'CREDITO_TRABAJADOR', 'CREDITO_EXTERNO', 'CONVENIO', 'ORDEN_COMPRA'}
+    forma_pago_dte = None
+    try:
+        import json as _json
+        notas = _json.loads(ticket.observaciones_adicionales or '{}')
+        if isinstance(notas, dict) and notas.get('condicion_pago_dte') in (1, 2):
+            forma_pago_dte = notas['condicion_pago_dte']
+    except (ValueError, TypeError):
+        pass
+    if forma_pago_dte is None:
+        metodos_ticket = set(ticket.pagos.values_list('metodo_pago', flat=True))
+        forma_pago_dte = 2 if metodos_ticket & METODOS_CREDITO_DTE else 1
+
     documento = {
         'tipo_documento': 39 if 'BOLETA' in tipo_dte else 33,
         'folio': siguiente_folio,
         'fecha_emision': ticket.fecha.strftime('%Y-%m-%d'),
-        'forma_pago': 1,  # Contado
+        'forma_pago': forma_pago_dte,
         'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
     }
     
@@ -1931,6 +1948,21 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         talla_limpia = limpiar_texto(str(producto_talla.talla) if producto_talla.talla else '')
         nombre_limpio = f"{articulo_limpio} {marca_limpia} {talla_limpia}".strip()
         
+        # Precios almacenados en BD son IVA-inclusive (precio de venta al público).
+        # - Facturas: requieren valores NETO (sin IVA) por línea; el IVA se muestra en los totales.
+        # - Boletas: usan precio IVA-inclusive. El formato Acepta para boletas no tiene campo
+        #   de descuento por línea (INT1|cod||nom||qty|UN|precio|monto|}), por lo que se debe
+        #   usar el precio unitario YA descontado para mantener precio × qty == monto.
+        if 'FACTURA' in tipo_dte:
+            precio_unitario_txt   = int(round(Decimal(item.precio) / Decimal('1.19')))
+            monto_descuento_txt   = int(round(Decimal(item.descuento_unitario * item.stock) / Decimal('1.19'))) if item.descuento_unitario else 0
+            monto_item_txt        = int(round(Decimal(item.subtotal) / Decimal('1.19')))
+        else:
+            # Para boletas: precio unitario con descuento aplicado para que precio×qty = monto
+            precio_unitario_txt   = item.precio - item.descuento_unitario  # precio neto de descuento
+            monto_descuento_txt   = 0  # no aplica en formato boleta (no hay campo dedicado)
+            monto_item_txt        = item.subtotal  # (precio - descuento) × qty, IVA-inclusive
+        
         detalle.append({
             'codigo': limpiar_texto(producto.articulo or f'PROD{producto.id}'),
             'sku': limpiar_texto(str(producto_talla.sku) if producto_talla.sku else ''),
@@ -1938,18 +1970,33 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
             'descripcion': limpiar_texto(producto.descripcion or ''),
             'cantidad': item.stock,
             'unidad': 'UN',
-            'precio_unitario': item.precio,
+            'precio_unitario': precio_unitario_txt,
             'descuento_pct': float(item.porcentaje_descuento) if item.porcentaje_descuento else 0,
-            'monto_descuento': item.descuento_unitario * item.stock if item.descuento_unitario else 0,
-            'monto_item': item.subtotal
+            'monto_descuento': monto_descuento_txt,
+            'monto_item': monto_item_txt
         })
     
     # Calcular totales
-    subtotal = sum(item['monto_item'] for item in detalle)
-    descuento_global = ticket.descuento or 0
-    neto = subtotal - descuento_global
-    iva = int(neto * Decimal('0.19'))
-    total = neto + iva
+    # Los precios en BD son IVA-inclusive; para facturas el neto se extrae dividiendo por 1.19.
+    # Para boletas se usa el precio IVA-inclusive directamente (el total ya incluye IVA).
+    subtotal_iva = sum(item.subtotal for item in ticket.ticket_productos.all())
+    descuento_global_iva = ticket.descuento or 0   # descuento global IVA-inclusive (normalmente 0 en POS)
+    total_con_iva = subtotal_iva - descuento_global_iva
+
+    if 'FACTURA' in tipo_dte:
+        # Extraer neto correcto desde el total IVA-inclusive
+        neto = int(round(Decimal(total_con_iva) / Decimal('1.19')))
+        iva = total_con_iva - neto
+        total = total_con_iva
+        # Descuento global en neto (para la línea D del TXT)
+        descuento_global = int(round(Decimal(descuento_global_iva) / Decimal('1.19'))) if descuento_global_iva else 0
+    else:
+        # Boletas: monto_total = total IVA-inclusive (lo que paga el cliente)
+        # El TXT de boleta solo usa monto_total; neto/iva son de uso interno.
+        total = total_con_iva
+        neto  = int(round(Decimal(total_con_iva) / Decimal('1.19')))
+        iva   = total_con_iva - neto
+        descuento_global = descuento_global_iva
     
     totales = {
         'monto_neto': neto,

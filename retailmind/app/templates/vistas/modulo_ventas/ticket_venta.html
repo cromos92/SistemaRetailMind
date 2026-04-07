@@ -258,6 +258,163 @@ html {
     font-size: 0.875rem;
 }
 
+/* ========== MEJORAS LISTADO VENDEDORES ========== */
+
+/* Header mejorado con flex */
+.vendedores-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.vendedores-count-badge {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    border-radius: 20px;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Barra de búsqueda/filtro en tiempo real */
+.vendedores-filter-bar {
+    padding: 0.75rem 1rem 0.5rem;
+    background: #fff;
+    border-bottom: 1px solid #e9ecef;
+    border-radius: 0;
+}
+
+.vendedores-filter-wrap {
+    position: relative;
+}
+
+.vendedores-filter-wrap .filter-icon {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    font-size: 0.9rem;
+    pointer-events: none;
+}
+
+.vendedores-filter-wrap #filtroVendedor {
+    padding-left: 2.1rem;
+    border-radius: 8px;
+    border: 1.5px solid #e5e7eb;
+    font-size: 0.85rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    height: 36px;
+    background: #f9fafb;
+}
+
+.vendedores-filter-wrap #filtroVendedor:focus {
+    border-color: #6366f1;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    outline: none;
+}
+
+/* Contador de resultados del filtro */
+.vendedores-filter-count {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 0.3rem;
+    min-height: 1rem;
+    padding-left: 0.1rem;
+}
+
+.vendedores-filter-count.has-filter {
+    color: #6366f1;
+    font-weight: 600;
+}
+
+/* Estado sin resultados al filtrar */
+.vendedores-no-filter-results {
+    display: none;
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.vendedores-no-filter-results i {
+    font-size: 2.5rem;
+    color: #d1d5db;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.vendedores-no-filter-results p {
+    color: #6b7280;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+/* Resaltar texto que coincide con el filtro */
+.vendedor-highlight {
+    background: #fef08a;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+/* Controles inferiores mejorados */
+.vendedores-bottom-controls {
+    background: #f8fafc;
+    border-top: 1px solid #e9ecef;
+    border-radius: 0 0 12px 12px;
+    padding: 0.85rem 1rem;
+    margin: 0 -1px -1px;
+}
+
+.vendedores-bottom-controls .input-group-text {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: #fff;
+    font-size: 0.85rem;
+}
+
+.vendedores-bottom-controls #codigoVendedor {
+    border: 1.5px solid #e5e7eb;
+    border-left: none;
+    font-size: 0.9rem;
+    font-family: 'Monaco', 'Consolas', monospace;
+}
+
+.vendedores-bottom-controls #codigoVendedor:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.vendedores-bottom-controls #btnBuscarVendedor {
+    border-radius: 0 8px 8px 0 !important;
+    font-weight: 600;
+    padding: 0.4rem 1rem;
+    font-size: 0.875rem;
+}
+
+.vendedores-kbd-hint {
+    font-size: 0.72rem;
+    color: #9ca3af;
+    margin-top: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.vendedores-kbd-hint kbd {
+    background: #e5e7eb;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 0.68rem;
+    color: #374151;
+    font-family: monospace;
+}
+
 .title {
     font-size: 2rem;
     font-weight: bold;
@@ -609,42 +766,204 @@ div[style*="border: 1px solid #000"] {
     padding-bottom: 90px;
 }
 
-/* --- Barra de info compacta (top) --- */
-.pos-info-bar {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4e 100%) !important;
+/* --- Barra unificada info + accesos rápidos --- */
+.pos-topbar-unified {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4e 100%);
     border: none !important;
     border-radius: var(--nexo-radius-md) !important;
     box-shadow: var(--nexo-shadow-md) !important;
 }
-.pos-info-bar .card-body {
-    padding: 9px 16px !important;
+.pos-topbar-body {
+    display: flex;
+    align-items: center;
+    padding: 5px 12px;
+    gap: 8px;
+    min-height: 38px;
+    overflow: hidden;
+}
+.pos-topbar-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
 }
 .pos-info-item {
     display: flex;
     flex-direction: column;
-    line-height: 1.2;
+    line-height: 1.15;
 }
 .pos-info-label {
-    font-size: 0.66rem;
+    font-size: 0.58rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.4px;
+    color: rgba(255,255,255,0.45);
     font-weight: 600;
 }
 .pos-info-value {
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     color: #ffffff;
     font-weight: 700;
-    max-width: 200px;
+    max-width: 130px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .pos-info-sep {
-    color: rgba(255,255,255,0.2);
-    font-size: 1.3rem;
+    color: rgba(255,255,255,0.18);
+    font-size: 1.1rem;
     align-self: center;
+    line-height: 1;
 }
+.pos-topbar-vdivider {
+    width: 1px;
+    height: 26px;
+    background: rgba(255,255,255,0.15);
+    flex-shrink: 0;
+    margin: 0 2px;
+}
+/* Accesos sección */
+.pos-topbar-accesos {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+.pos-topbar-accesos-label {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+.pos-topbar-config-alert {
+    font-size: 0.65rem;
+    color: #fbbf24;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: rgba(251,191,36,0.12);
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+.pos-accesos-strip-wrap {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+.accesos-strip {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 2px 0;
+}
+.accesos-strip::-webkit-scrollbar { display: none; }
+
+/* Acceso card en modo strip (compact) */
+.acceso-card {
+    position: relative;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 2px 6px;
+    text-align: center;
+    cursor: pointer;
+    background: rgba(255,255,255,0.07);
+    transition: all 0.15s ease;
+    min-width: 64px;
+    max-width: 80px;
+    height: 34px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+    flex-shrink: 0;
+}
+.acceso-card:hover {
+    background: rgba(255,255,255,0.18);
+    border-color: rgba(255,255,255,0.5);
+    transform: translateY(-1px);
+}
+.acceso-card.con-producto {
+    border-color: rgba(0,150,255,0.4);
+    background: rgba(0,102,255,0.12);
+}
+.acceso-card.con-producto:hover {
+    border-color: #0099ff;
+    background: rgba(0,102,255,0.22);
+}
+.acceso-card.sin-producto {
+    border: 1.5px dashed rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.03);
+    color: rgba(255,255,255,0.3);
+}
+.acceso-card.sin-producto:hover {
+    border-color: rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.08);
+}
+.acceso-card.en-config {
+    border-color: #f59e0b !important;
+    background: rgba(245,158,11,0.15) !important;
+}
+.acceso-card.en-config:hover {
+    border-color: #d97706 !important;
+}
+.acceso-nombre {
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: rgba(255,255,255,0.9);
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    width: 100%;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.acceso-talla {
+    font-size: 0.52rem;
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.6);
+    border-radius: 2px;
+    padding: 0 3px;
+    display: inline-block;
+    line-height: 1.3;
+}
+.acceso-precio {
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: #60c0ff;
+    line-height: 1;
+}
+.acceso-num {
+    position: absolute;
+    top: 1px;
+    left: 2px;
+    font-size: 0.48rem;
+    color: rgba(255,255,255,0.25);
+    font-weight: 700;
+}
+.acceso-sin-icon {
+    font-size: 1rem;
+    color: rgba(255,255,255,0.2);
+    line-height: 1;
+}
+.acceso-config-icon {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 0.65rem;
+    color: #f59e0b;
+    display: none;
+}
+.modo-config-activo .acceso-config-icon { display: block; }
+.modo-config-activo .acceso-card { cursor: cell; }
 
 /* --- Layout 2 columnas: entrada + lista --- */
 .pos-main-layout {
@@ -786,14 +1105,16 @@ div[style*="border: 1px solid #000"] {
 }
 
 /* ===== ACCESOS RÁPIDOS ===== */
+/* accesos-grid kept for backward compat; active layout is .accesos-strip */
 .accesos-grid {
-    display: grid;
-    grid-template-columns: repeat(12, 1fr);
-    gap: 5px;
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    flex-wrap: nowrap;
 }
-@media screen and (max-width: 1400px) { .accesos-grid { grid-template-columns: repeat(8, 1fr); } }
-@media screen and (max-width: 900px)  { .accesos-grid { grid-template-columns: repeat(6, 1fr); } }
-@media screen and (max-width: 600px)  { .accesos-grid { grid-template-columns: repeat(4, 1fr); } }
+@media screen and (max-width: 1400px) { .accesos-grid { } }
+@media screen and (max-width: 900px)  { .accesos-grid { } }
+@media screen and (max-width: 600px)  { .accesos-grid { } }
 
 .acceso-card {
     position: relative;
@@ -955,79 +1276,124 @@ div[style*="border: 1px solid #000"] {
             {% endif %}
 
             <!-- Vendedores -->
-            <div  id="seccionVendedores">
-                <div >
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0 text-center">
-                                <i class="ri-user-star-line text-primary me-2"></i>
-                                Listado de Vendedores en Sistema
+            <div id="seccionVendedores">
+                <div class="card" style="border-radius: 14px; overflow: hidden;">
+
+                    <!-- Encabezado mejorado -->
+                    <div class="card-header py-3 px-4">
+                        <div class="vendedores-card-header">
+                            <h5 class="card-title mb-0 d-flex align-items-center gap-2">
+                                <i class="ri-user-star-line text-primary"></i>
+                                Vendedores Disponibles
                             </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="vendedores-container">
+                            <div class="d-flex align-items-center gap-2">
                                 {% if vendedores %}
-                                    <div class="vendedores-grid">
-                                        {% for vendedor in vendedores %}
-                                        <div class="vendedor-card" 
-                                             data-vendedor-id="{{ vendedor.id }}"
-                                             data-vendedor-codigo="{{ vendedor.codigo_vendedor }}"
-                                             data-vendedor-nombre="{{ vendedor.nombre }}">
-                                            <span class="vendedor-badge" title="Activo"></span>
-                                            <div class="vendedor-card-body">
-                                                <div class="vendedor-avatar">
-                                                    {{ vendedor.nombre|default:"V"|slice:":1" }}{{ vendedor.nombre|default:"X"|slice:"1:2"|default:"" }}
-                                                </div>
-                                                <div class="vendedor-nombre">
-                                                    {{ vendedor.nombre|default:"Sin nombre" }}
-                                                </div>
-                                                <span class="vendedor-codigo">
-                                                    #{{ vendedor.codigo_vendedor }}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    <div class="vendedores-empty">
-                                        <i class="ri-user-unfollow-line"></i>
-                                        <h6>No hay vendedores asignados</h6>
-                                        <p>No se encontraron vendedores activos para esta sucursal.<br>
-                                        Contacta al administrador para asignar vendedores.</p>
-                                    </div>
+                                <span class="vendedores-count-badge" id="vendedoresCountBadge">
+                                    <i class="ri-team-line me-1"></i>{{ vendedores|length }} vendedor{% if vendedores|length != 1 %}es{% endif %}
+                                </span>
                                 {% endif %}
-                            </div>
-                            
-                            <!-- Controles inferiores -->
-                            <div class="row mt-4">
-                                <div class="col-12">
-                                    <div class="d-flex justify-content-end align-items-center gap-2">
-                                        <button type="button" class="btn btn-info" 
-                                                onclick="window.open('/app/productos-sucursal/', '_blank')">
-                                            <i class="ri-external-link-line me-1"></i>
-                                            Buscar En Otra Sucursal
-                                        </button>
-                                        <input type="text" placeholder="Ingresar Codigo Vendedor" 
-                                               class="form-control" style="max-width: 250px;" 
-                                               id="codigoVendedor" autofocus>
-                                        <button type="button" class="btn btn-success" id="btnBuscarVendedor">
-                                            OK
-                                        </button>
-                                    </div>
-                                </div>
+                                <button type="button" class="btn btn-outline-info btn-sm"
+                                        onclick="window.open('/app/productos-sucursal/', '_blank')"
+                                        title="Ver stock en otra sucursal">
+                                    <i class="ri-store-2-line me-1"></i>Otra Sucursal
+                                </button>
                             </div>
                         </div>
                     </div>
+
+                    {% if vendedores %}
+                    <!-- Barra de filtro en tiempo real -->
+                    <div class="vendedores-filter-bar">
+                        <div class="vendedores-filter-wrap">
+                            <i class="ri-search-line filter-icon"></i>
+                            <input type="text"
+                                   id="filtroVendedor"
+                                   class="form-control"
+                                   placeholder="Buscar por nombre o código..."
+                                   autocomplete="off">
+                        </div>
+                        <div class="vendedores-filter-count" id="vendedoresFilterCount"></div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Grid de vendedores -->
+                    <div class="card-body p-0">
+                        <div class="vendedores-container" style="border-radius: 0;">
+                            {% if vendedores %}
+                                <div class="vendedores-grid" id="vendedoresGrid">
+                                    {% for vendedor in vendedores %}
+                                    <div class="vendedor-card"
+                                         data-vendedor-id="{{ vendedor.id }}"
+                                         data-vendedor-codigo="{{ vendedor.codigo_vendedor }}"
+                                         data-vendedor-nombre="{{ vendedor.nombre|lower }}">
+                                        <span class="vendedor-badge" title="Activo"></span>
+                                        <div class="vendedor-card-body">
+                                            <div class="vendedor-avatar">
+                                                {{ vendedor.nombre|default:"V"|slice:":1" }}{{ vendedor.nombre|default:"X"|slice:"1:2" }}
+                                            </div>
+                                            <div class="vendedor-nombre">
+                                                {{ vendedor.nombre|default:"Sin nombre" }}
+                                            </div>
+                                            <span class="vendedor-codigo">
+                                                #{{ vendedor.codigo_vendedor }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <!-- Sin resultados al filtrar -->
+                                <div class="vendedores-no-filter-results" id="vendedoresNoResults">
+                                    <i class="ri-search-eye-line"></i>
+                                    <p>Sin resultados para <strong id="vendedoresNoResultsQuery"></strong></p>
+                                </div>
+                            {% else %}
+                                <div class="vendedores-empty">
+                                    <i class="ri-user-unfollow-line"></i>
+                                    <h6>No hay vendedores asignados</h6>
+                                    <p>No se encontraron vendedores activos para esta sucursal.<br>
+                                    Contacta al administrador para asignar vendedores.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Controles inferiores mejorados -->
+                    <div class="vendedores-bottom-controls">
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Input de código con ícono integrado -->
+                            <div class="input-group flex-grow-1" style="max-width: 340px;">
+                                <span class="input-group-text" style="border-radius: 8px 0 0 8px;">
+                                    <i class="ri-barcode-line"></i>
+                                </span>
+                                <input type="text"
+                                       placeholder="Código de vendedor"
+                                       class="form-control"
+                                       id="codigoVendedor"
+                                       autofocus
+                                       autocomplete="off">
+                                <button type="button" class="btn btn-success" id="btnBuscarVendedor">
+                                    <i class="ri-check-line me-1"></i>Confirmar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="vendedores-kbd-hint">
+                            <kbd>Enter</kbd> para confirmar código &nbsp;·&nbsp;
+                            <kbd>↑</kbd><kbd>↓</kbd> para navegar tarjetas &nbsp;·&nbsp;
+                            Clic en la tarjeta para seleccionar directamente
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
             <!-- Sección Crear Ticket (oculta inicialmente) — layout POS 2 columnas -->
             <div id="seccionCrearTicket" style="display: none;" class="pos-container mt-3">
 
-                <!-- Barra de info compacta -->
-                <div class="pos-info-bar card">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                <!-- ===== BARRA UNIFICADA: info + accesos rápidos ===== -->
+                <div id="posTopBar" class="pos-topbar-unified mb-2">
+                    <div class="pos-topbar-body">
+                        <!-- Info section -->
+                        <div class="pos-topbar-info">
                             <div class="pos-info-item">
                                 <span class="pos-info-label">Vendedor</span>
                                 <span class="pos-info-value" id="ticketVendedor">-</span>
@@ -1041,7 +1407,7 @@ div[style*="border: 1px solid #000"] {
                             <div class="pos-info-item">
                                 <span class="pos-info-label">Sucursal</span>
                                 <span class="pos-info-value" id="ticketSucursal">
-                                    {% if sucursal_actual %}{{ sucursal_actual.alias }}{% else %}Sin sucursal — Selecciona una{% endif %}
+                                    {% if sucursal_actual %}{{ sucursal_actual.alias }}{% else %}Sin sucursal{% endif %}
                                 </span>
                             </div>
                             <div class="pos-info-sep">|</div>
@@ -1049,46 +1415,41 @@ div[style*="border: 1px solid #000"] {
                                 <span class="pos-info-label">Fecha</span>
                                 <span class="pos-info-value" id="ticketFecha">{% now "d/m/Y H:i" %}</span>
                             </div>
-                            <div class="ms-auto d-flex align-items-center gap-2">
-                                <span class="badge bg-light text-dark border" id="badgeItemCount">
-                                    <i class="ri-shopping-cart-line me-1"></i>0 items
-                                </span>
-                                <button type="button" class="btn btn-warning btn-sm" id="btnCambiarVendedor">
-                                    <i class="ri-arrow-left-line me-1"></i>Cambiar Vendedor
+                            <span class="badge bg-dark bg-opacity-50 border border-light border-opacity-25 ms-1" id="badgeItemCount" style="font-size:0.68rem;white-space:nowrap;">
+                                <i class="ri-shopping-cart-line me-1"></i>0 items
+                            </span>
+                            <button type="button" class="btn btn-warning btn-sm py-0 px-2 ms-1" id="btnCambiarVendedor" style="font-size:0.7rem;white-space:nowrap;">
+                                <i class="ri-arrow-left-line"></i>
+                            </button>
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="pos-topbar-vdivider"></div>
+
+                        <!-- Accesos Rápidos section -->
+                        <div class="pos-topbar-accesos" id="panelAccesosRapidos">
+                            <span class="pos-topbar-accesos-label">
+                                <i class="ri-apps-2-line text-warning"></i>
+                                <span class="d-none d-md-inline" style="font-size:0.65rem;font-weight:600;color:rgba(255,255,255,0.7);white-space:nowrap;">Accesos</span>
+                            </span>
+                            <div id="alertaConfigAccesos" class="d-none pos-topbar-config-alert">
+                                <i class="ri-edit-2-line me-1"></i>Click en tarjeta para asignar · luego <strong>Guardar</strong>
+                            </div>
+                            <div id="cuerpoAccesosRapidos" class="pos-accesos-strip-wrap">
+                                <div id="gridAccesosRapidos" class="accesos-strip">
+                                    <!-- Generado por JS -->
+                                </div>
+                            </div>
+                            <div class="d-flex gap-1 flex-shrink-0 ms-1">
+                                <button id="btnConfigAccesos" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                        style="font-size:0.68rem;" title="Configurar accesos rápidos">
+                                    <i class="ri-settings-3-line me-1"></i><span class="d-none d-lg-inline">Config</span>
+                                </button>
+                                <button id="btnToggleAccesos" class="btn btn-sm btn-outline-light border py-0 px-1"
+                                        style="font-size:0.68rem;" title="Ocultar/Mostrar accesos">
+                                    <i class="ri-arrow-up-s-line" id="iconoToggleAccesos"></i>
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ===== ACCESOS RÁPIDOS ===== -->
-                <div id="panelAccesosRapidos" class="card mb-2">
-                    <div class="card-header py-2 d-flex align-items-center justify-content-between gap-2" style="background:linear-gradient(90deg,#fffbeb,#fff);">
-                        <span style="font-size:0.82rem;font-weight:600;">
-                            <i class="ri-apps-2-line text-warning me-1"></i>Accesos Rápidos
-                            <small class="text-muted ms-1" style="font-weight:400;font-size:0.72rem;">— click = agrega 1 al ticket</small>
-                        </span>
-                        <div class="d-flex gap-1 align-items-center">
-                            <button id="btnConfigAccesos" class="btn btn-sm btn-outline-secondary"
-                                    style="font-size:0.72rem;" title="Configurar accesos rápidos">
-                                <i class="ri-settings-3-line me-1"></i>Configurar
-                            </button>
-                            <button id="btnToggleAccesos" class="btn btn-sm btn-outline-light border"
-                                    style="font-size:0.72rem;" title="Ocultar/Mostrar">
-                                <i class="ri-arrow-up-s-line" id="iconoToggleAccesos"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="cuerpoAccesosRapidos" class="card-body py-2 px-2">
-                        <div id="alertaConfigAccesos" class="d-none mb-2">
-                            <div class="alert alert-warning py-1 px-2 mb-0" style="font-size:0.78rem;">
-                                <i class="ri-edit-2-line me-1"></i><strong>Modo Configurar:</strong>
-                                Haz click en cualquier tarjeta para asignarle un producto. Click en
-                                <strong>Guardar</strong> cuando termines.
-                            </div>
-                        </div>
-                        <div id="gridAccesosRapidos" class="accesos-grid">
-                            <!-- Generado por JS -->
                         </div>
                     </div>
                 </div>
@@ -1455,13 +1816,6 @@ $(document).ready(function() {
     // Enfocar automáticamente el input de código al cargar la página
     $('#codigoVendedor').focus();
 
-    // Manejar Enter en el input de código
-    $('#codigoVendedor').on('keypress', function(e) {
-        if (e.which === 13) { // Enter key
-            buscarVendedorPorCodigo();
-        }
-    });
-
     // Manejar click en botón Enter
     $('#btnBuscarVendedor').on('click', function() {
         buscarVendedorPorCodigo();
@@ -1592,6 +1946,96 @@ $(document).ready(function() {
             }
         });
     }
+
+    // ==================== FILTRO EN TIEMPO REAL VENDEDORES ====================
+
+    const $filtro = $('#filtroVendedor');
+    const $grid = $('#vendedoresGrid');
+    const $noResults = $('#vendedoresNoResults');
+    const $noResultsQuery = $('#vendedoresNoResultsQuery');
+    const $filterCount = $('#vendedoresFilterCount');
+    const $countBadge = $('#vendedoresCountBadge');
+    const totalVendedores = $('.vendedor-card').length;
+
+    $filtro.on('input', function() {
+        const query = $(this).val().trim().toLowerCase();
+        let visible = 0;
+
+        $('.vendedor-card').each(function() {
+            const nombre = $(this).data('vendedor-nombre') || '';
+            const codigo = String($(this).data('vendedor-codigo') || '').toLowerCase();
+            const match = !query || nombre.includes(query) || codigo.includes(query);
+            $(this).toggle(match);
+            if (match) visible++;
+        });
+
+        if (query) {
+            $noResultsQuery.text('"' + $filtro.val().trim() + '"');
+            if (visible === 0) {
+                $grid.hide();
+                $noResults.show();
+                $filterCount.text('').removeClass('has-filter');
+            } else {
+                $grid.show();
+                $noResults.hide();
+                $filterCount
+                    .text(visible + ' de ' + totalVendedores + ' vendedores')
+                    .addClass('has-filter');
+            }
+        } else {
+            $grid.show();
+            $noResults.hide();
+            $filterCount.text('').removeClass('has-filter');
+        }
+    });
+
+    // Limpiar filtro con Escape
+    $filtro.on('keydown', function(e) {
+        if (e.key === 'Escape') {
+            $(this).val('').trigger('input');
+            $('#codigoVendedor').focus();
+        }
+        // Enter en el filtro mueve foco al primer vendedor visible o al input de código
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const $firstVisible = $('.vendedor-card:visible').first();
+            if ($firstVisible.length) {
+                $firstVisible.trigger('click');
+            } else {
+                $('#codigoVendedor').focus();
+            }
+        }
+    });
+
+    // Navegación con teclado (↑ ↓) entre tarjetas visibles desde el campo de código
+    $('#codigoVendedor').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            buscarVendedorPorCodigo();
+        }
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const $cards = $('.vendedor-card:visible');
+            const $sel = $cards.filter('.selected');
+            const idx = $cards.index($sel);
+            const next = idx < $cards.length - 1 ? idx + 1 : 0;
+            $cards.removeClass('selected');
+            $cards.eq(next).addClass('selected').get(0).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            const cod = $cards.eq(next).data('vendedor-codigo');
+            if (cod) $(this).val(cod);
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const $cards = $('.vendedor-card:visible');
+            const $sel = $cards.filter('.selected');
+            const idx = $cards.index($sel);
+            const prev = idx > 0 ? idx - 1 : $cards.length - 1;
+            $cards.removeClass('selected');
+            $cards.eq(prev).addClass('selected').get(0).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            const cod = $cards.eq(prev).data('vendedor-codigo');
+            if (cod) $(this).val(cod);
+        }
+    });
 
     // ==================== FUNCIONES DEL TICKET ====================
 
@@ -2338,10 +2782,10 @@ $(document).ready(function() {
     $('#btnToggleAccesos').on('click', function() {
         panelAccesosVisible = !panelAccesosVisible;
         if (panelAccesosVisible) {
-            $('#cuerpoAccesosRapidos').slideDown(200);
+            $('#cuerpoAccesosRapidos').slideDown(150);
             $('#iconoToggleAccesos').removeClass('ri-arrow-down-s-line').addClass('ri-arrow-up-s-line');
         } else {
-            $('#cuerpoAccesosRapidos').slideUp(200);
+            $('#cuerpoAccesosRapidos').slideUp(150);
             $('#iconoToggleAccesos').removeClass('ri-arrow-up-s-line').addClass('ri-arrow-down-s-line');
         }
     });

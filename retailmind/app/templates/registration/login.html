@@ -754,6 +754,22 @@
         if (window.history.replaceState) {
             window.history.replaceState(null, null, window.location.href);
         }
+
+        // Si el formulario lleva más de 30 minutos cargado, recargar la página para
+        // obtener un CSRF token fresco antes de que el usuario intente enviar.
+        (function() {
+            var PAGE_LOADED_AT = Date.now();
+            var MAX_FORM_AGE_MS = 30 * 60 * 1000; // 30 minutos
+            var form = document.getElementById('loginForm');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    if (Date.now() - PAGE_LOADED_AT > MAX_FORM_AGE_MS) {
+                        e.preventDefault();
+                        window.location.reload();
+                    }
+                });
+            }
+        })();
     </script>
 </body>
 

@@ -841,8 +841,19 @@ document.addEventListener('DOMContentLoaded', function() {
         detalleDocumento: (id) => `{% url "detalle_documento_venta" documento_id=0 %}`.replace('/0/', `/${id}/`),
     };
 
+    // Leer parámetros de URL (ej: ?buscar=14 desde link "Ver DTE" en ecommerce)
+    function leerParamsURL() {
+        const params = new URLSearchParams(window.location.search);
+        const buscar = params.get('buscar');
+        if (buscar) {
+            const input = document.getElementById('buscarTexto');
+            if (input) input.value = buscar;
+        }
+    }
+
     // Inicialización
     try {
+        leerParamsURL();
         inicializarFechas();
         inicializarOrdenamiento();
         cargarDocumentos();

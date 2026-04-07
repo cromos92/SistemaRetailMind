@@ -510,11 +510,40 @@
                                             </div>
                                         </div>
 
-                                        <!-- Paso 3: Referencias (colapsable) -->
+                                        <!-- Paso 3: Condición de pago -->
+                                        <div class="card border-info shadow-sm mb-2" id="seccionCondicionPago" style="display:none;">
+                                            <div class="card-header bg-info bg-opacity-10 border-info py-2 d-flex align-items-center gap-2">
+                                                <span class="badge bg-info text-dark fw-bold px-2">3</span>
+                                                <i class="ri-bank-card-line text-info"></i>
+                                                <span class="fw-semibold small">Condición de pago DTE</span>
+                                                <span id="badge-condicion-pago" class="badge ms-auto bg-success" style="font-size:0.68rem;">Contado</span>
+                                            </div>
+                                            <div class="card-body py-2">
+                                                <div class="d-flex gap-3 flex-wrap">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="condicionPagoDTE" id="condicionContado" value="1" checked onchange="actualizarBadgeCondicionPago()">
+                                                        <label class="form-check-label small fw-medium" for="condicionContado">
+                                                            <i class="ri-money-dollar-circle-line me-1 text-success"></i>Contado
+                                                            <span class="text-muted">(pago inmediato)</span>
+                                                        </label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="condicionPagoDTE" id="condicionCredito" value="2" onchange="actualizarBadgeCondicionPago()">
+                                                        <label class="form-check-label small fw-medium" for="condicionCredito">
+                                                            <i class="ri-calendar-line me-1 text-warning"></i>Crédito
+                                                            <span class="text-muted">(pago diferido)</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted mt-1 d-block"><i class="ri-information-line me-1"></i>Se detecta automáticamente según los métodos de pago registrados.</small>
+                                            </div>
+                                        </div>
+
+                                        <!-- Paso 4: Referencias (colapsable) -->
                                         <div class="card shadow-sm" id="seccionReferencia" style="display:none;">
                                             <div class="card-header py-2 d-flex align-items-center gap-2"
                                                  style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#collapseRefs">
-                                                <span class="badge bg-secondary fw-bold px-2">3</span>
+                                                <span class="badge bg-secondary fw-bold px-2">4</span>
                                                 <i class="ri-link text-secondary"></i>
                                                 <span class="fw-semibold small">Referencias comerciales</span>
                                                 <small class="text-muted ms-1">(Opcional)</small>
@@ -613,9 +642,14 @@
                                             <h6 class="mb-0 fw-bold text-white">
                                                 <i class="ri-shopping-cart-line me-1"></i> Productos del Ticket
                                             </h6>
-                                            <button class="btn btn-sm btn-outline-light" onclick="mostrarModalAgregarProducto()" title="Búsqueda avanzada con filtros (F3)">
-                                                <i class="ri-search-2-line me-1"></i> Avanzado
-                                            </button>
+                                            <div class="d-flex gap-1">
+                                                <button class="btn btn-sm btn-outline-warning" onclick="mostrarModalDescuentoGlobal()" title="Aplicar descuento distribuido a toda la venta (F12)">
+                                                    <i class="ri-price-tag-3-line me-1"></i> Dcto. Global <kbd style="font-size:0.55rem;opacity:0.7">F12</kbd>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-light" onclick="mostrarModalAgregarProducto()" title="Búsqueda avanzada con filtros (F3)">
+                                                    <i class="ri-search-2-line me-1"></i> Avanzado
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -700,39 +734,54 @@
                                         </h6>
                                     </div>
                                     <div class="card-body p-2">
+                                        <!-- Atajos rápidos -->
+                                        <div class="d-flex align-items-center gap-1 mb-1 px-1" style="font-size:0.6rem;">
+                                            <i class="ri-keyboard-box-line text-muted"></i>
+                                            <span class="text-muted">Atajos:</span>
+                                            <kbd style="font-size:0.55rem">F4</kbd><span class="text-muted">Efectivo total</span>
+                                            <span class="text-muted mx-1">·</span>
+                                            <kbd style="font-size:0.55rem">F5-F9</kbd><span class="text-muted">Métodos</span>
+                                            <span class="text-muted mx-1">·</span>
+                                            <kbd style="font-size:0.55rem">F10</kbd><span class="text-muted">Siguiente</span>
+                                        </div>
                                         <div class="row g-1 mb-2">
                                             <div class="col-6">
-                                                <button class="btn btn-outline-success w-100 py-2" style="min-height:58px;" onclick="agregarPago('EFECTIVO')">
+                                                <button class="btn btn-outline-success w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="agregarPago('EFECTIVO')" id="btnPagoEfectivo">
+                                                    <kbd class="pos-kbd-badge">F5</kbd>
                                                     <i class="ri-money-dollar-circle-line d-block mb-1"></i>
                                                     <span class="fw-bold" style="font-size:0.75rem">Efectivo</span>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-primary w-100 py-2" style="min-height:58px;" onclick="agregarPago('TBK_DEBITO_POS')">
+                                                <button class="btn btn-outline-primary w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="agregarPago('TBK_DEBITO_POS')" id="btnPagoDebito">
+                                                    <kbd class="pos-kbd-badge">F6</kbd>
                                                     <i class="ri-bank-card-line d-block mb-1"></i>
                                                     <span class="fw-bold" style="font-size:0.75rem">Débito</span>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-info w-100 py-2" style="min-height:58px;" onclick="agregarPago('TBK_CREDITO_POS')">
+                                                <button class="btn btn-outline-info w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="agregarPago('TBK_CREDITO_POS')" id="btnPagoCredito">
+                                                    <kbd class="pos-kbd-badge">F7</kbd>
                                                     <i class="ri-bank-card-2-line d-block mb-1"></i>
                                                     <span class="fw-bold" style="font-size:0.75rem">Crédito</span>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-warning w-100 py-2" style="min-height:58px;" onclick="agregarPago('TRANSFERENCIA')">
+                                                <button class="btn btn-outline-warning w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="agregarPago('TRANSFERENCIA')" id="btnPagoTransferencia">
+                                                    <kbd class="pos-kbd-badge">F8</kbd>
                                                     <i class="ri-exchange-line d-block mb-1"></i>
                                                     <span class="fw-bold" style="font-size:0.75rem">Transfer.</span>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-secondary w-100 py-2" style="min-height:58px;" onclick="pagarConVentaInternet()">
+                                                <button class="btn btn-outline-secondary w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="pagarConVentaInternet()" id="btnPagoInternet">
+                                                    <kbd class="pos-kbd-badge">F9</kbd>
                                                     <i class="ri-shopping-cart-line d-block mb-1"></i>
                                                     <span class="fw-bold" style="font-size:0.75rem">Internet</span>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-danger w-100 py-2" style="min-height:58px;" onclick="pagarConPOSTransbank()" id="btn-pos-transbank">
+                                                <button class="btn btn-outline-danger w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="pagarConPOSTransbank()" id="btn-pos-transbank">
                                                     <i class="ri-bank-card-line d-block mb-1"></i>
                                                     <span class="fw-bold" style="font-size:0.75rem">POS TBK</span>
                                                 </button>
@@ -755,6 +804,14 @@
                                                     <span class="fw-bold" style="font-size:0.78rem">ORDEN DE COMPRA</span>
                                                 </button>
                                             </div>
+                                        </div>
+                                
+                                        <!-- Pago rápido F4 -->
+                                        <div class="mb-1">
+                                            <button class="btn btn-success w-100 py-2 fw-bold pos-pago-btn" onclick="pagoRapidoEfectivoTotal()" style="font-size:0.8rem; position:relative;">
+                                                <kbd class="pos-kbd-badge" style="background:rgba(255,255,255,0.2); color:white; border-color:rgba(255,255,255,0.3);">F4</kbd>
+                                                <i class="ri-flashlight-line me-1"></i> PAGO RÁPIDO — Efectivo Total
+                                            </button>
                                         </div>
                                 
                                         <!-- Indicador crédito activo -->
@@ -795,7 +852,7 @@
                                             <span class="text-muted" style="font-size:0.82rem">Subtotal:</span>
                                             <strong id="subtotal" style="font-size:0.85rem">$0</strong>
                                         </div>
-                                        <div class="d-flex justify-content-between mb-1" id="lineaDescuento" style="display: none;">
+                                        <div class="d-flex justify-content-between align-items-center mb-1" id="lineaDescuento" style="display: none;">
                                             <span class="text-warning" style="font-size:0.82rem"><i class="ri-price-tag-3-line"></i> Descuento:</span>
                                             <strong class="text-warning" id="descuento" style="font-size:0.85rem">-$0</strong>
                                         </div>
@@ -808,7 +865,7 @@
                                             <span class="text-muted" style="font-size:0.82rem">Pagado:</span>
                                             <strong class="text-success" id="pagado" style="font-size:0.85rem">$0</strong>
                                         </div>
-                                        <div class="d-flex justify-content-between">
+                                        <div class="d-flex justify-content-between align-items-center">
                                             <span class="fw-medium">Saldo:</span>
                                             <strong class="text-danger fw-bold fs-6" id="saldo">$0</strong>
                                         </div>
@@ -887,11 +944,11 @@
                 <div class="wizard-footer mt-2">
                     <div class="d-flex justify-content-between align-items-center gap-2" style="padding-right: 90px;">
                         <button class="btn btn-lg btn-outline-secondary px-5 py-3" id="btnAnterior" onclick="pasoAnterior()" disabled>
-                            <i class="ri-arrow-left-line me-1"></i> Volver
+                            <i class="ri-arrow-left-line me-1"></i> Volver <span class="pos-enter-hint d-none d-md-inline"><kbd>F11</kbd></span>
                         </button>
                         <div class="text-center small text-muted d-none d-sm-block" id="txtContextoBotones" style="flex:1;"></div>
                         <button class="btn btn-lg btn-primary px-5 py-3 fw-semibold" id="btnSiguiente" onclick="pasoSiguiente()">
-                            Siguiente <i class="ri-arrow-right-line ms-1"></i>
+                            Siguiente <span class="pos-enter-hint d-none d-md-inline"><kbd>F10</kbd></span> <i class="ri-arrow-right-line ms-1"></i>
                         </button>
                     </div>
                 </div>
@@ -926,12 +983,58 @@
                         </div>
                         <small class="text-muted" id="montoSugerido"></small>
                     </div>
-                    <div class="mb-3" id="campoVuelto" style="display: none;">
-                        <label class="form-label fw-bold text-success">Vuelto</label>
-                        <div class="input-group input-group-lg">
-                            <span class="input-group-text bg-success text-white">$</span>
-                            <input type="text" class="form-control fw-bold fs-4 text-success" id="pagoVuelto" readonly>
+                    <!-- Billetes rápidos para efectivo -->
+                    <div class="mb-2" id="campoDenominaciones" style="display: none;">
+                        <label class="form-label fw-bold text-muted small mb-1">Pago rápido con billete:</label>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-success denominacion-btn" onclick="setMontoDenominacion(1000)">$1.000</button>
+                            <button type="button" class="btn btn-sm btn-outline-success denominacion-btn" onclick="setMontoDenominacion(2000)">$2.000</button>
+                            <button type="button" class="btn btn-sm btn-outline-success denominacion-btn" onclick="setMontoDenominacion(5000)">$5.000</button>
+                            <button type="button" class="btn btn-sm btn-outline-success denominacion-btn" onclick="setMontoDenominacion(10000)">$10.000</button>
+                            <button type="button" class="btn btn-sm btn-outline-success denominacion-btn" onclick="setMontoDenominacion(20000)">$20.000</button>
+                            <button type="button" class="btn btn-sm btn-outline-warning denominacion-btn" onclick="setMontoDenominacion(50000)">$50.000</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary denominacion-btn" onclick="setMontoExacto()" title="Pagar el monto exacto pendiente"><i class="ri-checkbox-circle-line"></i> Exacto</button>
                         </div>
+                    </div>
+                    <!-- Vuelto para efectivo -->
+                    <div class="mb-3" id="campoVuelto" style="display: none;">
+                        <div class="card border-success" id="cardVueltoPositivo" style="display:none;">
+                            <div class="card-body py-2 px-3 bg-success bg-opacity-10">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <small class="text-success fw-bold d-block">VUELTO A ENTREGAR</small>
+                                        <span class="text-success fs-3 fw-bold" id="pagoVueltoMonto">$0</span>
+                                    </div>
+                                    <i class="ri-hand-coin-line text-success" style="font-size:2.5rem; opacity:0.5;"></i>
+                                </div>
+                                <div id="vueltoDesglose" class="mt-1 pt-1 border-top border-success border-opacity-25" style="display:none;">
+                                    <small class="text-muted" id="vueltoDesgloseTexto"></small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card border-danger" id="cardVueltoNegativo" style="display:none;">
+                            <div class="card-body py-2 px-3 bg-danger bg-opacity-10">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <small class="text-danger fw-bold d-block">FALTA POR PAGAR</small>
+                                        <span class="text-danger fs-3 fw-bold" id="pagoFaltaMonto">$0</span>
+                                    </div>
+                                    <i class="ri-error-warning-line text-danger" style="font-size:2.5rem; opacity:0.5;"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card border-success" id="cardVueltoCero" style="display:none;">
+                            <div class="card-body py-2 px-3 bg-success bg-opacity-10">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <small class="text-success fw-bold d-block">MONTO EXACTO</small>
+                                        <span class="text-success fs-4 fw-bold">Sin vuelto</span>
+                                    </div>
+                                    <i class="ri-checkbox-circle-fill text-success" style="font-size:2.5rem; opacity:0.5;"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="pagoVuelto" value="">
                     </div>
                     <div class="mb-3" id="campoTarjeta" style="display: none;">
                         <label class="form-label">Tipo de Tarjeta</label>
@@ -960,10 +1063,10 @@
             </div>
             <div class="modal-footer d-flex justify-content-between">
                 <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">
-                    <i class="ri-close-line"></i> Cancelar
+                    <i class="ri-close-line"></i> Cancelar <span class="pos-enter-hint"><kbd>Esc</kbd></span>
                 </button>
-                <button type="button" class="btn btn-success btn-lg px-5 py-3" onclick="confirmarPago()" style="font-size: 1.1rem;">
-                    <i class="ri-check-double-line"></i> <strong>CONFIRMAR PAGO</strong>
+                <button type="button" class="btn btn-success btn-lg px-5 py-3" id="btnConfirmarPago" onclick="confirmarPago()" style="font-size: 1.1rem;">
+                    <i class="ri-check-double-line"></i> <strong>CONFIRMAR PAGO</strong> <span class="pos-enter-hint"><kbd>Enter</kbd></span>
                 </button>
             </div>
         </div>
@@ -1249,19 +1352,34 @@
 
                 <!-- Preview del descuento -->
                 <div class="card bg-light">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Precio Original:</span>
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="small">Precio Original:</span>
                             <strong id="descuentoPreviewOriginal">$0</strong>
                         </div>
-                        <div class="d-flex justify-content-between mb-2 text-warning">
-                            <span>Descuento:</span>
+                        <div class="d-flex justify-content-between mb-1 text-warning">
+                            <span class="small">Descuento <span id="descuentoPreviewPorcentaje" class="badge bg-warning text-dark" style="font-size:0.7rem"></span>:</span>
                             <strong id="descuentoPreviewMonto">-$0</strong>
                         </div>
-                        <hr>
-                        <div class="d-flex justify-content-between">
-                            <span class="fw-bold">Precio Final:</span>
+                        <hr class="my-1">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="fw-bold">Precio Final Unit.:</span>
                             <strong class="text-success fs-5" id="descuentoPreviewFinal">$0</strong>
+                        </div>
+                        <!-- Impacto total por cantidad -->
+                        <div id="descuentoPreviewCantidadSection" class="border-top pt-2 mt-1" style="display:none;">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="small text-muted">Cantidad:</span>
+                                <span class="fw-bold" id="descuentoPreviewCantidad">1</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1 text-warning">
+                                <span class="small">Descuento Total Línea:</span>
+                                <strong id="descuentoPreviewMontoTotal">-$0</strong>
+                            </div>
+                            <div class="d-flex justify-content-between bg-success bg-opacity-10 rounded p-2">
+                                <span class="fw-bold">Subtotal Línea:</span>
+                                <strong class="text-success fs-5" id="descuentoPreviewSubtotalFinal">$0</strong>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1289,6 +1407,148 @@
                 </button>
                 <button type="button" class="btn btn-warning btn-lg" onclick="confirmarDescuentoProducto()">
                     <i class="ri-check-line"></i> Aplicar Descuento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Descuento Global -->
+<div class="modal fade" id="modalDescuentoGlobal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="ri-price-tag-3-line"></i> Descuento Global — Distribuido entre Productos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% if limite_descuento_rol and limite_descuento_rol > 0 %}
+                <div class="alert alert-info border-0 mb-3 py-2">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <i class="ri-information-line me-1"></i>
+                            El descuento se distribuirá <strong>proporcionalmente</strong> al precio de cada producto.
+                        </div>
+                        <span class="badge bg-warning text-dark">Límite: {{ limite_descuento_rol|floatformat:0 }}%</span>
+                    </div>
+                </div>
+
+                <!-- Resumen actual de la venta -->
+                <div class="card bg-light mb-3">
+                    <div class="card-body py-2">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <small class="text-muted d-block">Subtotal Venta</small>
+                                <strong class="fs-5" id="descGlobalSubtotal">$0</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Dcto. Actual</small>
+                                <strong class="fs-5 text-warning" id="descGlobalDctoActual">$0</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Total Actual</small>
+                                <strong class="fs-5 text-primary" id="descGlobalTotalActual">$0</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tipo de descuento global -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Descuento Global</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="tipoDescuentoGlobal" id="descGlobalPorcentaje" value="PORCENTAJE" checked>
+                        <label class="btn btn-outline-warning" for="descGlobalPorcentaje">
+                            <i class="ri-percent-line"></i> Porcentaje
+                        </label>
+                        <input type="radio" class="btn-check" name="tipoDescuentoGlobal" id="descGlobalMonto" value="MONTO">
+                        <label class="btn btn-outline-warning" for="descGlobalMonto">
+                            <i class="ri-money-dollar-circle-line"></i> Monto Total
+                        </label>
+                        <input type="radio" class="btn-check" name="tipoDescuentoGlobal" id="descGlobalPrecioFinal" value="PRECIO_FINAL">
+                        <label class="btn btn-outline-success" for="descGlobalPrecioFinal">
+                            <i class="ri-price-tag-line"></i> Precio Final Total
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Input de valor -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold" id="labelDescuentoGlobal">Porcentaje de Descuento</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text" id="descGlobalSimbolo">%</span>
+                        <input type="number" class="form-control form-control-lg" id="valorDescuentoGlobal" placeholder="0" min="0" step="1" oninput="actualizarPreviewDescuentoGlobal()">
+                    </div>
+                    <small class="text-muted" id="descGlobalAyuda">Ingrese el porcentaje de descuento para toda la venta</small>
+                    <div id="advertenciaLimiteDescuentoGlobal" class="text-danger fw-bold mt-1" style="display: none;">
+                        <i class="ri-alert-line"></i> Excede el límite permitido
+                    </div>
+                </div>
+
+                <!-- Preview de distribución -->
+                <div class="card border-warning" id="descGlobalPreviewCard">
+                    <div class="card-header bg-warning bg-opacity-25 py-2">
+                        <h6 class="mb-0 fw-bold"><i class="ri-eye-line me-1"></i> Vista Previa — Distribución del Descuento</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Producto</th>
+                                        <th class="text-end">Precio Unit.</th>
+                                        <th class="text-center">Cant.</th>
+                                        <th class="text-end">Dcto. Unit.</th>
+                                        <th class="text-end">Precio Final</th>
+                                        <th class="text-end">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="descGlobalPreviewTabla">
+                                    <tr><td colspan="6" class="text-center text-muted py-2">Ingrese un valor para ver la distribución</td></tr>
+                                </tbody>
+                                <tfoot class="table-warning" id="descGlobalPreviewTotales" style="display:none;">
+                                    <tr>
+                                        <td colspan="3" class="fw-bold text-end">Totales:</td>
+                                        <td class="text-end fw-bold text-warning" id="descGlobalPreviewTotalDcto">$0</td>
+                                        <td></td>
+                                        <td class="text-end fw-bold text-success fs-6" id="descGlobalPreviewTotalFinal">$0</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contraseña -->
+                <div class="mt-3">
+                    <div class="alert alert-warning mb-2 py-2">
+                        <i class="ri-shield-check-line"></i> <strong>Autorización Requerida</strong>
+                    </div>
+                    <label class="form-label fw-bold">
+                        <i class="ri-lock-password-line"></i> Ingrese su contraseña para autorizar:
+                    </label>
+                    <input type="password" class="form-control" id="passwordDescuentoGlobal"
+                           placeholder="Contraseña" autocomplete="off"
+                           style="border: 2px solid #ffc107;">
+                </div>
+                {% else %}
+                <div class="alert alert-danger border-0 mb-3">
+                    <div class="d-flex align-items-center">
+                        <i class="ri-error-warning-line me-2"></i>
+                        <strong>No tienes permiso para aplicar descuentos</strong>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="quitarTodosLosDescuentos()">
+                    <i class="ri-close-line"></i> Quitar Todos
+                </button>
+                <button type="button" class="btn btn-warning btn-lg" onclick="confirmarDescuentoGlobal()">
+                    <i class="ri-check-line"></i> Aplicar Descuento Global
                 </button>
             </div>
         </div>
@@ -2593,6 +2853,107 @@
     100% { background-color: transparent; }
 }
 .row-added-flash { animation: pulseGreen 0.6s ease-out; }
+
+/* Botones de denominación en efectivo */
+.denominacion-btn {
+    font-size: 0.72rem !important;
+    padding: 2px 8px !important;
+    font-weight: 600;
+    border-radius: 20px !important;
+    transition: all 0.15s ease;
+}
+.denominacion-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* Alerta pagos exceden */
+#alertaPagosExceden {
+    animation: pulseAlert 2s ease-in-out infinite;
+}
+@keyframes pulseAlert {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Descuento global modal */
+#modalDescuentoGlobal .table td,
+#modalDescuentoGlobal .table th {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.5rem;
+}
+
+/* Vuelto visual cards */
+#cardVueltoPositivo, #cardVueltoNegativo, #cardVueltoCero {
+    transition: all 0.3s ease;
+}
+#cardVueltoPositivo {
+    animation: fadeInUp 0.3s ease-out;
+}
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* POS Keyboard badges en botones de pago */
+.pos-pago-btn {
+    position: relative;
+}
+.pos-kbd-badge {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    font-size: 0.5rem !important;
+    padding: 1px 4px !important;
+    background: rgba(0,0,0,0.08);
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 3px;
+    color: inherit;
+    opacity: 0.6;
+    font-family: inherit;
+    line-height: 1.2;
+}
+.pos-pago-btn:hover .pos-kbd-badge {
+    opacity: 1;
+    background: rgba(0,0,0,0.15);
+}
+
+/* Keyboard help bar */
+.pos-keyboard-help {
+    font-size: 0.65rem;
+    background: var(--nexo-gray-100, #f5f5f7);
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+.pos-keyboard-help kbd {
+    font-size: 0.58rem;
+    padding: 1px 4px;
+    margin: 0 1px;
+}
+
+/* Keyboard flash animation for payment buttons */
+.pos-kbd-flash {
+    animation: kbdFlash 0.3s ease-out !important;
+}
+@keyframes kbdFlash {
+    0% { transform: scale(1); box-shadow: none; }
+    50% { transform: scale(0.95); box-shadow: 0 0 12px rgba(var(--bs-primary-rgb), 0.5); }
+    100% { transform: scale(1); box-shadow: none; }
+}
+
+/* Modal pago - Enter hint */
+.pos-enter-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-left: 8px;
+}
+.pos-enter-hint kbd {
+    font-size: 0.6rem;
+    padding: 1px 5px;
+}
 </style>
 
 {% include '../../layout/footer.html' %}
@@ -2607,6 +2968,81 @@ document.addEventListener('DOMContentLoaded', function() {
     let estadisticasDashboard = {};
     let cotizacionActual = null;  // Variable para cotización cargada
     let cotizacionesVigentes = []; // Lista de cotizaciones vigentes
+
+    // === PERSISTENCIA LOCAL — Auto-guardar estado del POS ===
+    const POS_STORAGE_PREFIX = 'pos_draft_';
+
+    function guardarEstadoPOS() {
+        if (!ticketActual || !ticketActual.ticket_id) return;
+        const key = POS_STORAGE_PREFIX + ticketActual.ticket_id;
+        const estado = {
+            timestamp: Date.now(),
+            ticket_id: ticketActual.ticket_id,
+            pasoActual: pasoActual,
+            productos: ticketActual.productos.map(p => ({
+                sku: p.sku,
+                producto_talla_id: p.producto_talla_id,
+                articulo: p.articulo,
+                descripcion: p.descripcion,
+                talla: p.talla,
+                cantidad: p.cantidad,
+                precio_unitario: p.precio_unitario || p.precio,
+                precio: p.precio,
+                precio_original: p.precio_original,
+                descuento_unitario: p.descuento_unitario || 0,
+                porcentaje_descuento: p.porcentaje_descuento || 0,
+                subtotal: p.subtotal,
+                stock: p.stock,
+                stock_actual: p.stock_actual,
+                usuario_descuento: p.usuario_descuento || null,
+                fecha_descuento: p.fecha_descuento || null,
+                es_pendiente_despacho: p.es_pendiente_despacho || false,
+                cotizacion_item_id: p.cotizacion_item_id || null,
+            })),
+            pagos: pagosActuales.map(p => ({...p})),
+            totales: ticketActual.totales ? {...ticketActual.totales} : null
+        };
+        try {
+            localStorage.setItem(key, JSON.stringify(estado));
+        } catch (e) {
+            console.warn('No se pudo guardar estado POS en localStorage:', e);
+        }
+    }
+
+    function restaurarEstadoPOS(ticketId) {
+        const key = POS_STORAGE_PREFIX + ticketId;
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
+            const estado = JSON.parse(raw);
+            // Expirar borradores después de 24 horas
+            if (Date.now() - estado.timestamp > 24 * 60 * 60 * 1000) {
+                localStorage.removeItem(key);
+                return null;
+            }
+            return estado;
+        } catch (e) {
+            console.warn('Error restaurando estado POS:', e);
+            return null;
+        }
+    }
+
+    function limpiarEstadoPOS(ticketId) {
+        if (ticketId) {
+            localStorage.removeItem(POS_STORAGE_PREFIX + ticketId);
+        }
+    }
+
+    function hayEstadoGuardado(ticketId) {
+        return restaurarEstadoPOS(ticketId) !== null;
+    }
+
+    function tieneModificacionesPendientes(estado) {
+        if (!estado) return false;
+        const tieneDescuentos = estado.productos.some(p => (p.descuento_unitario || 0) > 0);
+        const tienePagos = estado.pagos && estado.pagos.length > 0;
+        return tieneDescuentos || tienePagos;
+    }
 
     // URLs de API
     const apiUrls = {
@@ -3301,11 +3737,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function reiniciarWizard() {
+        // No limpiar localStorage aquí — solo al finalizar venta exitosamente
         pasoActual = 1;
         ticketActual = null;
         clienteActual = null;
         pagosActuales = [];
-        cotizacionActual = null;  // Limpiar cotización cargada
+        cotizacionActual = null;
         
         // Limpiar formularios
         document.getElementById('inputTicket').value = '';
@@ -3341,6 +3778,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const tipoDocumentoActual = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'BOLETA_ELECTRONICA';
             actualizarInfoTipoDocumento(tipoDocumentoActual);
             actualizarRequerimientosCliente(tipoDocumentoActual);
+            // Auto-detectar condición de pago para DTE basado en pagos ya registrados
+            if (tipoDocumentoActual === 'FACTURA_ELECTRONICA') {
+                autoDetectarCondicionPago();
+            }
         }
 
         // Si es el paso 4, mostrar modo de impresión activo en el label
@@ -3895,6 +4336,60 @@ document.addEventListener('DOMContentLoaded', function() {
         cargarProductosTicket(ticket.productos);
         actualizarListaPagos();
         actualizarResumenVenta();
+
+        // Verificar si hay un borrador guardado con modificaciones pendientes
+        const ticketId = ticket.ticket_id || ticket.correlativo;
+        const estadoGuardado = restaurarEstadoPOS(ticketId);
+        if (estadoGuardado && tieneModificacionesPendientes(estadoGuardado)) {
+            const descuentosGuardados = estadoGuardado.productos.filter(p => (p.descuento_unitario || 0) > 0).length;
+            const pagosGuardados = estadoGuardado.pagos ? estadoGuardado.pagos.length : 0;
+            const hace = Math.round((Date.now() - estadoGuardado.timestamp) / 60000);
+            const tiempoTexto = hace < 1 ? 'hace menos de 1 min' : hace < 60 ? `hace ${hace} min` : `hace ${Math.round(hace/60)} hrs`;
+
+            Swal.fire({
+                icon: 'question',
+                title: 'Borrador Encontrado',
+                html: `
+                    <div class="text-start">
+                        <p>Se encontró un borrador con cambios no finalizados para este ticket.</p>
+                        <div class="bg-light rounded p-3 mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted">Guardado:</span>
+                                <strong>${tiempoTexto}</strong>
+                            </div>
+                            ${descuentosGuardados > 0 ? `<div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted">Productos con descuento:</span>
+                                <strong class="text-warning">${descuentosGuardados}</strong>
+                            </div>` : ''}
+                            ${pagosGuardados > 0 ? `<div class="d-flex justify-content-between">
+                                <span class="text-muted">Pagos registrados:</span>
+                                <strong class="text-success">${pagosGuardados}</strong>
+                            </div>` : ''}
+                        </div>
+                        <p class="text-muted small mb-0">Si descarta el borrador, se usarán los datos del servidor.</p>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="ri-refresh-line"></i> Restaurar Borrador',
+                cancelButtonText: 'Descartar',
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Aplicar estado guardado
+                    ticketActual.productos = estadoGuardado.productos;
+                    pagosActuales = estadoGuardado.pagos || [];
+                    recalcularTotalesTicket();
+                    cargarProductosTicket(ticketActual.productos);
+                    actualizarListaPagos();
+                    actualizarResumenVenta();
+                    mostrarNotificacion('Borrador restaurado correctamente', 'success');
+                } else {
+                    limpiarEstadoPOS(ticketId);
+                }
+            });
+        }
     }
     
     // Función auxiliar para agregar referencia automática de cotización
@@ -4128,13 +4623,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     ` : (descuento > 0 ? `
                         <span class="text-decoration-line-through text-muted small">${formatearMoneda(precioOriginal)}</span><br>
                         <span class="text-success fw-bold">${formatearMoneda(precioConDescuento)}</span>
+                        <span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem">-${(precioOriginal > 0 ? (descuento/precioOriginal*100).toFixed(0) : 0)}%</span>
                     ` : formatearMoneda(precioMostrar))}
                 </td>
                 <td class="text-end">
                     ${esProductoDevuelto ? `
                         <span class="badge bg-danger">Devolución</span>
                     ` : (descuento > 0 ? `
-                        <span class="badge bg-warning text-dark">-${formatearMoneda(descuento * producto.cantidad)}</span>
+                        <div>
+                            <span class="badge bg-warning text-dark">-${formatearMoneda(descuento * producto.cantidad)}</span>
+                            ${producto.cantidad > 1 ? `<br><small class="text-muted" style="font-size:0.6rem">(-${formatearMoneda(descuento)} c/u)</small>` : ''}
+                        </div>
                     ` : '-')}
                 </td>
                 <td class="text-end fw-medium ${esProductoDevuelto ? 'text-danger' : ''}">
@@ -4711,11 +5210,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            if (!email) {
-                mostrarNotificacion('El email es obligatorio para facturas', 'warning');
-                document.getElementById('clienteEmail').focus();
-                return false;
-            }
+            // Email es opcional para facturas (no es campo requerido SII)
+            // Se lee desde clienteEmailFactura, que es el campo del formulario de factura
 
             // ✅ Validar referencias múltiples si existen (nuevo sistema)
             const contenedorRefs = document.getElementById('contenedorReferencias');
@@ -4806,12 +5302,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const labelVoucher = document.querySelector('#campoVoucher label');
         const selectTipoTarjeta = document.getElementById('pagoTipoTarjeta');
         
+        const campoDenominaciones = document.getElementById('campoDenominaciones');
+        
         // ✅ Mostrar campos según el método
         if (metodo === 'VENTA_INTERNET') {
             campoTarjeta.style.display = 'block';
             campoVoucher.style.display = 'block';
             campoVuelto.style.display = 'none';
             campoOrdenCompra.style.display = 'none';
+            if (campoDenominaciones) campoDenominaciones.style.display = 'none';
             
             labelTarjeta.textContent = 'Plataforma';
             labelVoucher.textContent = 'Número de Pedido';
@@ -4827,20 +5326,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 <option value="Falabella">Falabella</option>
             `;
         } else if (metodo.includes('TBK_')) {
-            // ✅ Para métodos Transbank: NO mostrar tipo_tarjeta, solo voucher
             campoTarjeta.style.display = 'none';
             campoVoucher.style.display = 'block';
             campoVuelto.style.display = 'none';
             campoOrdenCompra.style.display = 'none';
+            if (campoDenominaciones) campoDenominaciones.style.display = 'none';
             
             labelVoucher.textContent = 'N° Voucher/Autorización';
             document.getElementById('pagoVoucher').placeholder = 'Ej: 123456';
         } else if (metodo.includes('TARJETA')) {
-            // ✅ Para tarjetas genéricas: mostrar tipo y voucher
             campoTarjeta.style.display = 'block';
             campoVoucher.style.display = 'block';
             campoVuelto.style.display = 'none';
             campoOrdenCompra.style.display = 'none';
+            if (campoDenominaciones) campoDenominaciones.style.display = 'none';
             
             labelTarjeta.textContent = 'Tipo de Tarjeta';
             labelVoucher.textContent = 'N° Voucher/Autorización';
@@ -4854,20 +5353,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 <option value="DINERS">Diners Club</option>
             `;
         } else if (metodo === 'ORDEN_COMPRA') {
-            // ✅ Mostrar campo de orden de compra
             campoTarjeta.style.display = 'none';
             campoVoucher.style.display = 'none';
             campoVuelto.style.display = 'none';
             campoOrdenCompra.style.display = 'block';
+            if (campoDenominaciones) campoDenominaciones.style.display = 'none';
         } else {
             campoTarjeta.style.display = 'none';
             campoVoucher.style.display = 'none';
             campoOrdenCompra.style.display = 'none';
-            // Mostrar campo de vuelto solo para efectivo
             if (metodo === 'EFECTIVO') {
                 campoVuelto.style.display = 'block';
+                if (campoDenominaciones) campoDenominaciones.style.display = 'block';
             } else {
                 campoVuelto.style.display = 'none';
+                if (campoDenominaciones) campoDenominaciones.style.display = 'none';
             }
         }
 
@@ -4881,6 +5381,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Limpiar vuelto
         document.getElementById('pagoVuelto').value = '';
+        const _cvp = document.getElementById('cardVueltoPositivo');
+        const _cvn = document.getElementById('cardVueltoNegativo');
+        const _cvc = document.getElementById('cardVueltoCero');
+        if (_cvp) _cvp.style.display = 'none';
+        if (_cvn) _cvn.style.display = 'none';
+        if (_cvc) _cvc.style.display = 'none';
 
         // Si es efectivo, calcular vuelto al cambiar el monto
         if (metodo === 'EFECTIVO') {
@@ -4905,21 +5411,86 @@ document.addEventListener('DOMContentLoaded', function() {
         const saldoPendiente = calcularSaldoPendiente();
         const vuelto = monto - saldoPendiente;
 
-        const campoVuelto = document.getElementById('pagoVuelto');
-        
+        const cardPositivo = document.getElementById('cardVueltoPositivo');
+        const cardNegativo = document.getElementById('cardVueltoNegativo');
+        const cardCero = document.getElementById('cardVueltoCero');
+
+        // Mantener compatibilidad con el campo hidden
+        document.getElementById('pagoVuelto').value = vuelto >= 0 ? formatearMoneda(vuelto) : '';
+
         if (vuelto > 0) {
-            campoVuelto.value = formatearMoneda(vuelto);
-            campoVuelto.classList.remove('text-danger');
-            campoVuelto.classList.add('text-success');
+            cardPositivo.style.display = 'block';
+            cardNegativo.style.display = 'none';
+            cardCero.style.display = 'none';
+            document.getElementById('pagoVueltoMonto').textContent = formatearMoneda(vuelto);
+
+            // Desglose de billetes/monedas sugerido
+            const desglose = calcularDesgloseBilletes(vuelto);
+            const desgloseEl = document.getElementById('vueltoDesglose');
+            const desgloseTexto = document.getElementById('vueltoDesgloseTexto');
+            if (desglose.length > 0) {
+                desgloseEl.style.display = 'block';
+                desgloseTexto.innerHTML = '<i class="ri-hand-coin-line me-1"></i>Sugerencia: ' + desglose.join(' + ');
+            } else {
+                desgloseEl.style.display = 'none';
+            }
         } else if (vuelto < 0) {
-            campoVuelto.value = 'Falta: ' + formatearMoneda(Math.abs(vuelto));
-            campoVuelto.classList.remove('text-success');
-            campoVuelto.classList.add('text-danger');
+            cardPositivo.style.display = 'none';
+            cardNegativo.style.display = 'block';
+            cardCero.style.display = 'none';
+            document.getElementById('pagoFaltaMonto').textContent = formatearMoneda(Math.abs(vuelto));
         } else {
-            campoVuelto.value = formatearMoneda(0);
-            campoVuelto.classList.remove('text-danger');
-            campoVuelto.classList.add('text-success');
+            cardPositivo.style.display = 'none';
+            cardNegativo.style.display = 'none';
+            cardCero.style.display = (monto > 0) ? 'block' : 'none';
         }
+    }
+
+    function calcularDesgloseBilletes(monto) {
+        const denominaciones = [50000, 20000, 10000, 5000, 2000, 1000, 500, 100, 50, 10];
+        let restante = Math.round(monto);
+        let desglose = [];
+        for (const denom of denominaciones) {
+            const cantidad = Math.floor(restante / denom);
+            if (cantidad > 0) {
+                desglose.push(`${cantidad}×${formatearMoneda(denom)}`);
+                restante -= cantidad * denom;
+            }
+        }
+        return desglose;
+    }
+
+    function setMontoDenominacion(monto) {
+        document.getElementById('pagoMonto').value = monto;
+        calcularVuelto();
+    }
+
+    function setMontoExacto() {
+        const saldoPendiente = calcularSaldoPendiente();
+        document.getElementById('pagoMonto').value = saldoPendiente;
+        calcularVuelto();
+    }
+
+    function pagoRapidoEfectivoTotal() {
+        const saldoPendiente = calcularSaldoPendiente();
+        if (saldoPendiente <= 0) {
+            mostrarNotificacion('No hay saldo pendiente por pagar', 'info');
+            return;
+        }
+        // Register full payment in cash directly
+        const pago = {
+            metodo_pago: 'EFECTIVO',
+            monto: saldoPendiente,
+            tipo_tarjeta: '',
+            voucher: '',
+            numero_orden_compra: '',
+            notas: 'Pago rápido F4'
+        };
+        pagosActuales.push(pago);
+        actualizarListaPagos();
+        actualizarResumenVenta();
+        mostrarNotificacion(`Pago en efectivo de ${formatearMoneda(saldoPendiente)} registrado (F4)`, 'success');
+        guardarEstadoPOS();
     }
 
     function confirmarPago() {
@@ -4963,16 +5534,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // ✅ Validar que el pago no exceda el saldo pendiente
+        // Validar que el pago no exceda el saldo pendiente
         const saldoPendiente = calcularSaldoPendiente();
         if (monto > saldoPendiente) {
-            // Para efectivo, permitir monto mayor (se calcula vuelto)
             if (metodo !== 'EFECTIVO') {
-                mostrarNotificacion(`El monto ingresado (${formatearMoneda(monto)}) excede el saldo pendiente (${formatearMoneda(saldoPendiente)})`, 'warning');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Monto Excede el Saldo',
+                    html: `
+                        <div class="text-start">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Monto ingresado:</span>
+                                <strong class="text-danger">${formatearMoneda(monto)}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Saldo pendiente:</span>
+                                <strong class="text-success">${formatearMoneda(saldoPendiente)}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between bg-warning bg-opacity-10 rounded p-2">
+                                <span class="fw-bold">Exceso:</span>
+                                <strong class="text-danger">${formatearMoneda(monto - saldoPendiente)}</strong>
+                            </div>
+                            <p class="text-muted small mt-2 mb-0">Para pagos que no son en efectivo, el monto no puede exceder el saldo pendiente.</p>
+                        </div>
+                    `,
+                    confirmButtonText: 'Corregir Monto',
+                    confirmButtonColor: '#ffc107'
+                });
                 return;
             }
-            // Para efectivo, registrar solo el saldo pendiente (el vuelto se entrega en efectivo)
-            console.log(`Pago en efectivo: ${formatearMoneda(monto)}, Saldo: ${formatearMoneda(saldoPendiente)}, Vuelto: ${formatearMoneda(monto - saldoPendiente)}`);
+            // Para efectivo, registrar solo el saldo pendiente (vuelto se entrega)
             monto = saldoPendiente;
         }
 
@@ -4994,6 +5585,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('formPago').reset();
 
         mostrarNotificacion('Pago agregado correctamente', 'success');
+        guardarEstadoPOS();
     }
 
     function actualizarListaPagos() {
@@ -5061,12 +5653,63 @@ document.addEventListener('DOMContentLoaded', function() {
         actualizarListaPagos();
         actualizarResumenVenta();
         mostrarNotificacion('Pago eliminado', 'info');
+        guardarEstadoPOS();
     }
 
     function validarPagos() {
-        const saldo = calcularSaldoPendiente();
+        const total = ticketActual?.totales?.total || 0;
+        const totalPagado = pagosActuales.reduce((sum, pago) => sum + (pago.monto || 0), 0);
+        const saldo = total - totalPagado;
+
         if (saldo > 0) {
-            mostrarNotificacion('Aún queda saldo por pagar: ' + formatearMoneda(saldo), 'warning');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Pago Incompleto',
+                html: `
+                    <div class="text-start">
+                        <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                            <span>Total de la venta:</span>
+                            <strong>${formatearMoneda(total)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                            <span>Total pagado:</span>
+                            <strong class="text-success">${formatearMoneda(totalPagado)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between bg-danger bg-opacity-10 rounded p-2">
+                            <span class="fw-bold text-danger">Saldo pendiente:</span>
+                            <strong class="text-danger fs-5">${formatearMoneda(saldo)}</strong>
+                        </div>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#ffc107'
+            });
+            return false;
+        }
+        if (saldo < 0) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Pagos Exceden el Total',
+                html: `
+                    <div class="text-start">
+                        <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                            <span>Total de la venta:</span>
+                            <strong>${formatearMoneda(total)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                            <span>Total pagado:</span>
+                            <strong class="text-danger">${formatearMoneda(totalPagado)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between bg-danger bg-opacity-10 rounded p-2">
+                            <span class="fw-bold text-danger">Exceso:</span>
+                            <strong class="text-danger fs-5">+${formatearMoneda(Math.abs(saldo))}</strong>
+                        </div>
+                        <p class="text-muted small mt-2 mb-0">Elimine o ajuste los pagos registrados antes de continuar. Esto puede ocurrir si aplicó un descuento después de registrar los pagos.</p>
+                    </div>
+                `,
+                confirmButtonText: 'Ajustar Pagos',
+                confirmButtonColor: '#dc3545'
+            });
             return false;
         }
         return true;
@@ -5086,17 +5729,59 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('descuento').textContent = '-' + formatearMoneda(totales.descuento || 0);
         document.getElementById('total').textContent = formatearMoneda(totales.total || 0);
         document.getElementById('pagado').textContent = formatearMoneda(totalPagado);
-        document.getElementById('saldo').textContent = formatearMoneda(saldo);
+        document.getElementById('saldo').textContent = formatearMoneda(Math.abs(saldo));
 
-        // Mostrar/ocultar línea de descuento
+        // Mostrar/ocultar línea de descuento con detalle
         const lineaDescuento = document.getElementById('lineaDescuento');
         if (lineaDescuento) {
-            lineaDescuento.style.display = (totales.descuento > 0) ? 'flex' : 'none';
+            if (totales.descuento > 0) {
+                lineaDescuento.style.display = 'flex';
+                const porcDesc = totales.subtotal > 0 ? (totales.descuento / totales.subtotal * 100) : 0;
+                const descElement = document.getElementById('descuento');
+                descElement.innerHTML = `-${formatearMoneda(totales.descuento)} <span class="badge bg-warning text-dark" style="font-size:0.6rem">${porcDesc.toFixed(1)}%</span>`;
+            } else {
+                lineaDescuento.style.display = 'none';
+            }
         }
 
-        // Cambiar color del saldo
+        // Cambiar color y etiqueta del saldo
         const saldoElement = document.getElementById('saldo');
-        saldoElement.className = saldo > 0 ? 'text-danger' : 'text-success';
+        const saldoLabel = saldoElement.closest('.d-flex')?.querySelector('span:first-child');
+        if (saldo > 0) {
+            saldoElement.className = 'text-danger fw-bold fs-6';
+            if (saldoLabel) saldoLabel.innerHTML = '<i class="ri-arrow-down-circle-line text-danger me-1"></i>Pendiente:';
+        } else if (saldo < 0) {
+            saldoElement.className = 'text-danger fw-bold fs-6';
+            if (saldoLabel) saldoLabel.innerHTML = '<i class="ri-error-warning-fill text-danger me-1"></i>Exceso:';
+        } else {
+            saldoElement.className = 'text-success fw-bold fs-6';
+            if (saldoLabel) saldoLabel.innerHTML = '<i class="ri-checkbox-circle-fill text-success me-1"></i>Saldo:';
+        }
+
+        // Alerta inline cuando pagos exceden el total
+        let alertaExceso = document.getElementById('alertaPagosExceden');
+        if (saldo < 0 && totalPagado > 0) {
+            if (!alertaExceso) {
+                alertaExceso = document.createElement('div');
+                alertaExceso.id = 'alertaPagosExceden';
+                const resumenCard = saldoElement.closest('.card-body');
+                if (resumenCard) resumenCard.appendChild(alertaExceso);
+            }
+            alertaExceso.className = 'alert alert-danger py-1 px-2 mt-2 mb-0 border-danger';
+            alertaExceso.style.fontSize = '0.75rem';
+            alertaExceso.innerHTML = `
+                <div class="d-flex align-items-center gap-1">
+                    <i class="ri-error-warning-fill fs-6"></i>
+                    <div>
+                        <strong>Pagos exceden el total por ${formatearMoneda(Math.abs(saldo))}</strong>
+                        <div class="text-muted" style="font-size:0.65rem">Elimine pagos o revise los descuentos aplicados</div>
+                    </div>
+                </div>
+            `;
+            alertaExceso.style.display = 'block';
+        } else if (alertaExceso) {
+            alertaExceso.style.display = 'none';
+        }
     }
 
     function calcularSaldoPendiente() {
@@ -5468,6 +6153,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Actualizar UI
         cargarProductosTicket(ticketActual.productos);
         actualizarResumenVenta();
+        guardarEstadoPOS();
 
         // Cerrar modal
         const modalEl = document.getElementById('modalAgregarProducto');
@@ -5540,10 +6226,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cantidadInput !== cantidadAnterior) {
             const stockRestante = stock - cantidadInput;
             mostrarNotificacion(
-                `✅ Cantidad actualizada: ${cantidadAnterior} → ${cantidadInput}\n` +
-                `📦 Stock restante: ${stockRestante} unidades`, 
+                `Cantidad actualizada: ${cantidadAnterior} → ${cantidadInput} (Stock restante: ${stockRestante})`, 
                 'success'
             );
+            guardarEstadoPOS();
         }
     }
 
@@ -5735,9 +6421,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Actualizar preview
+        const porcentajePreview = precioOriginal > 0 ? (montoDescuento / precioOriginal * 100) : 0;
         document.getElementById('descuentoPreviewOriginal').textContent = formatearMoneda(precioOriginal);
         document.getElementById('descuentoPreviewMonto').textContent = '-' + formatearMoneda(montoDescuento);
         document.getElementById('descuentoPreviewFinal').textContent = formatearMoneda(precioFinal);
+        document.getElementById('descuentoPreviewPorcentaje').textContent = porcentajePreview > 0 ? `${porcentajePreview.toFixed(1)}%` : '';
+
+        // Mostrar impacto total si cantidad > 1
+        const cantidadProducto = producto.cantidad || 1;
+        const seccionCantidad = document.getElementById('descuentoPreviewCantidadSection');
+        if (cantidadProducto > 1) {
+            seccionCantidad.style.display = 'block';
+            document.getElementById('descuentoPreviewCantidad').textContent = `${cantidadProducto} unidades`;
+            document.getElementById('descuentoPreviewMontoTotal').textContent = '-' + formatearMoneda(montoDescuento * cantidadProducto);
+            document.getElementById('descuentoPreviewSubtotalFinal').textContent = formatearMoneda(precioFinal * cantidadProducto);
+        } else {
+            seccionCantidad.style.display = 'none';
+        }
     }
 
     async function confirmarDescuentoProducto() {
@@ -5848,25 +6548,51 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // ✅ Contraseña correcta - Aplicar descuento
+            // Aplicar descuento
             producto.descuento_unitario = montoDescuento;
             producto.precio_original = precioOriginal;
             producto.subtotal = (precioOriginal - montoDescuento) * producto.cantidad;
-            producto.usuario_descuento = data.usuario;  // Guardar quién autorizó
+            producto.usuario_descuento = data.usuario;
             producto.fecha_descuento = new Date().toISOString();
 
-            // Recalcular totales
             recalcularTotalesTicket();
-
-            // Actualizar UI
             cargarProductosTicket(ticketActual.productos);
             actualizarResumenVenta();
 
-            // Cerrar modal
             bootstrap.Modal.getInstance(document.getElementById('modalDescuento')).hide();
+            mostrarNotificacion(`Descuento de ${formatearMoneda(montoDescuento)} aplicado (${data.usuario})`, 'success');
+            guardarEstadoPOS();
             
-            // Mostrar confirmación
-            mostrarNotificacion(`✅ Descuento de ${formatearMoneda(montoDescuento)} aplicado (${data.usuario})`, 'success');
+            // Verificar si los pagos ahora exceden el nuevo total
+            const totalPagadoActual = pagosActuales.reduce((sum, p) => sum + (p.monto || 0), 0);
+            const nuevoTotal = ticketActual.totales?.total || 0;
+            if (totalPagadoActual > 0 && totalPagadoActual > nuevoTotal) {
+                const exceso = totalPagadoActual - nuevoTotal;
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Pagos Exceden el Nuevo Total',
+                    html: `
+                        <div class="text-start">
+                            <p>Al aplicar el descuento, los pagos registrados ahora <strong>exceden</strong> el total de la venta.</p>
+                            <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                                <span>Nuevo total:</span>
+                                <strong class="text-primary">${formatearMoneda(nuevoTotal)}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                                <span>Pagos registrados:</span>
+                                <strong class="text-danger">${formatearMoneda(totalPagadoActual)}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between bg-danger bg-opacity-10 rounded p-2">
+                                <span class="fw-bold text-danger">Exceso:</span>
+                                <strong class="text-danger fs-5">+${formatearMoneda(exceso)}</strong>
+                            </div>
+                            <p class="text-muted small mt-2 mb-0"><i class="ri-information-line"></i> Debe eliminar o ajustar los pagos antes de continuar.</p>
+                        </div>
+                    `,
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#ffc107'
+                });
+            }
             
             productoDescuentoIndex = null;
             
@@ -5901,6 +6627,265 @@ document.addEventListener('DOMContentLoaded', function() {
         bootstrap.Modal.getInstance(document.getElementById('modalDescuento')).hide();
         mostrarNotificacion('Descuento eliminado del producto', 'info');
         productoDescuentoIndex = null;
+        guardarEstadoPOS();
+    }
+
+    // === FUNCIONES DE DESCUENTO GLOBAL ===
+
+    function mostrarModalDescuentoGlobal() {
+        if (!ticketActual || !ticketActual.productos || ticketActual.productos.length === 0) {
+            mostrarNotificacion('No hay productos en el ticket', 'warning');
+            return;
+        }
+        if (LIMITE_DESCUENTO_ROL === 0) {
+            mostrarNotificacion('No tienes permisos para aplicar descuentos', 'error');
+            return;
+        }
+
+        const totales = ticketActual.totales || {};
+        document.getElementById('descGlobalSubtotal').textContent = formatearMoneda(totales.subtotal || 0);
+        document.getElementById('descGlobalDctoActual').textContent = formatearMoneda(totales.descuento || 0);
+        document.getElementById('descGlobalTotalActual').textContent = formatearMoneda(totales.total || 0);
+
+        document.getElementById('valorDescuentoGlobal').value = '';
+        document.getElementById('passwordDescuentoGlobal').value = '';
+        document.getElementById('descGlobalPorcentaje').checked = true;
+
+        document.querySelectorAll('input[name="tipoDescuentoGlobal"]').forEach(radio => {
+            radio.addEventListener('change', actualizarPreviewDescuentoGlobal);
+        });
+
+        actualizarPreviewDescuentoGlobal();
+        new bootstrap.Modal(document.getElementById('modalDescuentoGlobal')).show();
+    }
+
+    function actualizarPreviewDescuentoGlobal() {
+        if (!ticketActual || !ticketActual.productos) return;
+
+        const productos = ticketActual.productos;
+        const tipoDesc = document.querySelector('input[name="tipoDescuentoGlobal"]:checked').value;
+        const valorInput = parseFloat(document.getElementById('valorDescuentoGlobal').value) || 0;
+
+        const simbolo = document.getElementById('descGlobalSimbolo');
+        const label = document.getElementById('labelDescuentoGlobal');
+        const ayuda = document.getElementById('descGlobalAyuda');
+
+        const subtotalBruto = productos.reduce((sum, p) => sum + ((p.precio_unitario || p.precio) * p.cantidad), 0);
+
+        let montoDescuentoTotal = 0;
+
+        if (tipoDesc === 'PORCENTAJE') {
+            simbolo.textContent = '%';
+            label.textContent = 'Porcentaje de Descuento';
+            ayuda.textContent = `Ingrese el porcentaje para toda la venta (0-${LIMITE_DESCUENTO_ROL}%)`;
+            montoDescuentoTotal = Math.round(subtotalBruto * Math.min(valorInput, 100) / 100);
+        } else if (tipoDesc === 'MONTO') {
+            simbolo.textContent = '$';
+            label.textContent = 'Monto Total de Descuento';
+            ayuda.textContent = `Ingrese el monto total a descontar (máx: ${formatearMoneda(subtotalBruto)})`;
+            montoDescuentoTotal = Math.min(Math.round(valorInput), subtotalBruto);
+        } else if (tipoDesc === 'PRECIO_FINAL') {
+            simbolo.textContent = '$';
+            label.textContent = 'Precio Final Total Deseado';
+            ayuda.textContent = `Ingrese el total final de la venta (máx: ${formatearMoneda(subtotalBruto)})`;
+            const precioFinalDeseado = Math.max(0, Math.min(Math.round(valorInput), subtotalBruto));
+            montoDescuentoTotal = subtotalBruto - precioFinalDeseado;
+        }
+
+        // Calcular porcentaje equivalente
+        const porcEquiv = subtotalBruto > 0 ? (montoDescuentoTotal / subtotalBruto * 100) : 0;
+
+        // Validar límite
+        const advertencia = document.getElementById('advertenciaLimiteDescuentoGlobal');
+        if (porcEquiv > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
+            advertencia.style.display = 'block';
+            advertencia.innerHTML = `<i class="ri-alert-line"></i> Este descuento equivale a ${porcEquiv.toFixed(1)}%, excede el límite permitido de ${LIMITE_DESCUENTO_ROL}%`;
+        } else {
+            advertencia.style.display = 'none';
+        }
+
+        // Distribuir proporcionalmente
+        const tbody = document.getElementById('descGlobalPreviewTabla');
+        const tfoot = document.getElementById('descGlobalPreviewTotales');
+
+        if (montoDescuentoTotal <= 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-2">Ingrese un valor para ver la distribución</td></tr>';
+            tfoot.style.display = 'none';
+            return;
+        }
+
+        let distribucion = calcularDistribucionDescuento(productos, montoDescuentoTotal, subtotalBruto);
+        let totalDctoCheck = 0;
+        let totalFinalCheck = 0;
+
+        tbody.innerHTML = distribucion.map(d => {
+            totalDctoCheck += d.dctoUnit * d.cantidad;
+            totalFinalCheck += (d.precioOriginal - d.dctoUnit) * d.cantidad;
+            const porcProd = d.precioOriginal > 0 ? (d.dctoUnit / d.precioOriginal * 100) : 0;
+            return `
+                <tr>
+                    <td class="small">${d.nombre} <span class="badge bg-warning text-dark" style="font-size:0.6rem">-${porcProd.toFixed(1)}%</span></td>
+                    <td class="text-end small">${formatearMoneda(d.precioOriginal)}</td>
+                    <td class="text-center small">${d.cantidad}</td>
+                    <td class="text-end small text-warning fw-bold">-${formatearMoneda(d.dctoUnit)}</td>
+                    <td class="text-end small text-success fw-bold">${formatearMoneda(d.precioOriginal - d.dctoUnit)}</td>
+                    <td class="text-end small fw-bold">${formatearMoneda((d.precioOriginal - d.dctoUnit) * d.cantidad)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        tfoot.style.display = '';
+        document.getElementById('descGlobalPreviewTotalDcto').textContent = '-' + formatearMoneda(totalDctoCheck);
+        document.getElementById('descGlobalPreviewTotalFinal').textContent = formatearMoneda(totalFinalCheck);
+    }
+
+    function calcularDistribucionDescuento(productos, montoDescuentoTotal, subtotalBruto) {
+        let restante = montoDescuentoTotal;
+        let distribucion = [];
+
+        productos.forEach((producto, i) => {
+            const precioOriginal = producto.precio_unitario || producto.precio;
+            const pesoLinea = (precioOriginal * producto.cantidad) / subtotalBruto;
+            let dctoLinea = (i === productos.length - 1) ? restante : Math.round(montoDescuentoTotal * pesoLinea);
+            dctoLinea = Math.min(dctoLinea, precioOriginal * producto.cantidad);
+            let dctoUnit = Math.round(dctoLinea / producto.cantidad);
+            dctoUnit = Math.min(dctoUnit, precioOriginal);
+            restante -= dctoUnit * producto.cantidad;
+
+            distribucion.push({
+                index: i,
+                nombre: producto.articulo,
+                precioOriginal: precioOriginal,
+                cantidad: producto.cantidad,
+                dctoUnit: dctoUnit
+            });
+        });
+
+        // Ajustar residuo en el último producto
+        if (restante !== 0 && distribucion.length > 0) {
+            const ultimo = distribucion[distribucion.length - 1];
+            ultimo.dctoUnit = Math.min(ultimo.dctoUnit + Math.round(restante / ultimo.cantidad), ultimo.precioOriginal);
+        }
+
+        return distribucion;
+    }
+
+    async function confirmarDescuentoGlobal() {
+        if (!ticketActual || !ticketActual.productos || ticketActual.productos.length === 0) {
+            mostrarNotificacion('No hay productos para aplicar descuento', 'error');
+            return;
+        }
+        if (LIMITE_DESCUENTO_ROL === 0) {
+            mostrarNotificacion('No tienes permisos para aplicar descuentos', 'error');
+            return;
+        }
+
+        const productos = ticketActual.productos;
+        const tipoDesc = document.querySelector('input[name="tipoDescuentoGlobal"]:checked').value;
+        const valorInput = parseFloat(document.getElementById('valorDescuentoGlobal').value) || 0;
+        const subtotalBruto = productos.reduce((sum, p) => sum + ((p.precio_unitario || p.precio) * p.cantidad), 0);
+
+        let montoDescuentoTotal = 0;
+        if (tipoDesc === 'PORCENTAJE') {
+            if (valorInput <= 0 || valorInput > 100) { mostrarNotificacion('Porcentaje inválido', 'warning'); return; }
+            montoDescuentoTotal = Math.round(subtotalBruto * valorInput / 100);
+        } else if (tipoDesc === 'MONTO') {
+            if (valorInput <= 0 || valorInput > subtotalBruto) { mostrarNotificacion('Monto inválido', 'warning'); return; }
+            montoDescuentoTotal = Math.round(valorInput);
+        } else if (tipoDesc === 'PRECIO_FINAL') {
+            if (valorInput < 0 || valorInput >= subtotalBruto) { mostrarNotificacion('Precio final inválido', 'warning'); return; }
+            montoDescuentoTotal = subtotalBruto - Math.round(valorInput);
+        }
+
+        if (montoDescuentoTotal <= 0) {
+            mostrarNotificacion('Ingrese un descuento válido', 'warning');
+            return;
+        }
+
+        const porcEquiv = subtotalBruto > 0 ? (montoDescuentoTotal / subtotalBruto * 100) : 0;
+        if (porcEquiv > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
+            mostrarNotificacion(`El descuento equivale a ${porcEquiv.toFixed(1)}%, excede el límite de ${LIMITE_DESCUENTO_ROL}%`, 'error');
+            return;
+        }
+
+        const password = document.getElementById('passwordDescuentoGlobal').value.trim();
+        if (!password) {
+            mostrarNotificacion('Debe ingresar su contraseña', 'warning');
+            document.getElementById('passwordDescuentoGlobal').focus();
+            return;
+        }
+
+        try {
+            const response = await fetch('/app/api/validar-password/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({ password: password })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                mostrarNotificacion('Contraseña incorrecta', 'error');
+                document.getElementById('passwordDescuentoGlobal').value = '';
+                document.getElementById('passwordDescuentoGlobal').focus();
+                return;
+            }
+
+            // Aplicar distribución
+            const distribucion = calcularDistribucionDescuento(productos, montoDescuentoTotal, subtotalBruto);
+            distribucion.forEach(d => {
+                const producto = productos[d.index];
+                const precioOriginal = producto.precio_unitario || producto.precio;
+                producto.descuento_unitario = d.dctoUnit;
+                producto.precio_original = precioOriginal;
+                producto.subtotal = (precioOriginal - d.dctoUnit) * producto.cantidad;
+                producto.usuario_descuento = data.usuario;
+                producto.fecha_descuento = new Date().toISOString();
+            });
+
+            recalcularTotalesTicket();
+            cargarProductosTicket(ticketActual.productos);
+            actualizarResumenVenta();
+
+            bootstrap.Modal.getInstance(document.getElementById('modalDescuentoGlobal')).hide();
+            mostrarNotificacion(`Descuento global de ${formatearMoneda(montoDescuentoTotal)} distribuido en ${productos.length} productos (${data.usuario})`, 'success');
+            guardarEstadoPOS();
+
+        } catch (error) {
+            console.error('Error validando contraseña:', error);
+            mostrarNotificacion('Error al validar la contraseña', 'error');
+        }
+    }
+
+    function quitarTodosLosDescuentos() {
+        if (!ticketActual || !ticketActual.productos) return;
+
+        Swal.fire({
+            title: '¿Quitar todos los descuentos?',
+            text: 'Se eliminarán los descuentos de todos los productos del ticket.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, quitar todos',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                ticketActual.productos.forEach(producto => {
+                    const precioOriginal = producto.precio_unitario || producto.precio;
+                    producto.descuento_unitario = 0;
+                    producto.precio_original = 0;
+                    producto.subtotal = precioOriginal * producto.cantidad;
+                });
+                recalcularTotalesTicket();
+                cargarProductosTicket(ticketActual.productos);
+                actualizarResumenVenta();
+                bootstrap.Modal.getInstance(document.getElementById('modalDescuentoGlobal')).hide();
+                mostrarNotificacion('Todos los descuentos han sido eliminados', 'info');
+                guardarEstadoPOS();
+            }
+        });
     }
 
     // === FUNCIONES DE FINALIZACIÓN ===
@@ -5967,7 +6952,8 @@ document.addEventListener('DOMContentLoaded', function() {
             tipo_documento: tipoDocumento,
             estado: 'PAGADO',
             metodo_pago_principal: pagosActuales.length > 0 ? pagosActuales[0].metodo_pago : 'EFECTIVO',
-            referencias: referencias  // ✅ Array de referencias múltiples
+            referencias: referencias,  // ✅ Array de referencias múltiples
+            condicion_pago_dte: tipoDocumento === 'FACTURA_ELECTRONICA' ? obtenerCondicionPagoDTE() : 1
         };
         
         // =========================================================================
@@ -6013,9 +6999,11 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             if (data.success) {
-                // ✅ IMPORTANTE: Actualizar ticketActual con los datos del ticket creado/actualizado
+                // Limpiar borrador guardado en localStorage
+                limpiarEstadoPOS(ticketActual?.ticket_id || ticketActual?.correlativo);
+                
                 if (data.ticket) {
-                    console.log('✅ Actualizando ticketActual con datos del servidor:', data.ticket);
+                    console.log('Actualizando ticketActual con datos del servidor:', data.ticket);
                     ticketActual = data.ticket;
                 }
                 
@@ -7896,6 +8884,7 @@ body {
         const secEmpresa    = document.getElementById('busquedaEmpresaSection');
         const secFact       = document.getElementById('seccionFacturacion');
         const secRef        = document.getElementById('seccionReferencia');
+        const secCondPago   = document.getElementById('seccionCondicionPago');
         const cardDatos     = document.getElementById('cardDatosCliente');
         const stepBadge     = document.getElementById('stepBadgeDatos');
         const iconDatos     = document.getElementById('iconDatosCliente');
@@ -7910,6 +8899,7 @@ body {
             if (secEmpresa)   secEmpresa.style.display = 'block';
             if (secFact)      secFact.style.display = 'block';
             if (secRef)       secRef.style.display = 'block';
+            if (secCondPago)  { secCondPago.style.display = 'block'; autoDetectarCondicionPago(); }
             // Cambiar estilo del card de datos a "Paso 2 - Tributarios"
             if (stepBadge)   { stepBadge.style.display = 'inline-flex'; }
             if (iconDatos)   { iconDatos.className = 'ri-file-invoice-line'; }
@@ -7925,6 +8915,7 @@ body {
             if (secEmpresa)   secEmpresa.style.display = 'none';
             if (secFact)      secFact.style.display = 'none';
             if (secRef)       secRef.style.display = 'none';
+            if (secCondPago)  secCondPago.style.display = 'none';
             // Restaurar estilo del card de datos
             if (stepBadge)   { stepBadge.style.display = 'none'; }
             if (iconDatos)   { iconDatos.className = 'ri-user-line'; }
@@ -7938,6 +8929,38 @@ body {
         const origen  = document.getElementById(origenId);
         const destino = document.getElementById(destinoId);
         if (origen && destino) destino.value = origen.value;
+    }
+
+    // Métodos de pago que implican CRÉDITO (pago diferido) para el DTE
+    const METODOS_CREDITO_DTE = new Set(['CREDITO_TRABAJADOR', 'CREDITO_EXTERNO', 'CONVENIO', 'ORDEN_COMPRA']);
+
+    function autoDetectarCondicionPago() {
+        const esCredito = pagosActuales.some(p => METODOS_CREDITO_DTE.has(p.metodo_pago));
+        const radioContado = document.getElementById('condicionContado');
+        const radioCredito = document.getElementById('condicionCredito');
+        if (radioContado && radioCredito) {
+            radioContado.checked = !esCredito;
+            radioCredito.checked = esCredito;
+            actualizarBadgeCondicionPago();
+        }
+    }
+
+    function actualizarBadgeCondicionPago() {
+        const valor = document.querySelector('input[name="condicionPagoDTE"]:checked')?.value || '1';
+        const badge = document.getElementById('badge-condicion-pago');
+        if (badge) {
+            if (valor === '2') {
+                badge.className = 'badge ms-auto bg-warning text-dark';
+                badge.textContent = 'Crédito';
+            } else {
+                badge.className = 'badge ms-auto bg-success';
+                badge.textContent = 'Contado';
+            }
+        }
+    }
+
+    function obtenerCondicionPagoDTE() {
+        return parseInt(document.querySelector('input[name="condicionPagoDTE"]:checked')?.value || '1');
     }
 
     function actualizarPreviewFactura() {
@@ -8084,6 +9107,19 @@ body {
     window.mostrarModalDescuento = mostrarModalDescuento;
     window.confirmarDescuentoProducto = confirmarDescuentoProducto;
     window.quitarDescuentoProducto = quitarDescuentoProducto;
+    window.actualizarPreviewDescuento = actualizarPreviewDescuento;
+    
+    // Funciones de descuento global
+    window.mostrarModalDescuentoGlobal = mostrarModalDescuentoGlobal;
+    window.actualizarPreviewDescuentoGlobal = actualizarPreviewDescuentoGlobal;
+    window.confirmarDescuentoGlobal = confirmarDescuentoGlobal;
+    window.quitarTodosLosDescuentos = quitarTodosLosDescuentos;
+    
+    // Funciones de pago rápido y denominaciones
+    window.pagoRapidoEfectivoTotal = pagoRapidoEfectivoTotal;
+    window.setMontoDenominacion = setMontoDenominacion;
+    window.setMontoExacto = setMontoExacto;
+    window.calcularVuelto = calcularVuelto;
     
     // Funciones de gestión de tickets pendientes
     window.seleccionarTicketPendiente = seleccionarTicketPendiente;
@@ -9188,6 +10224,7 @@ body {
             recalcularTotalesTicket();
             cargarProductosTicket(ticketActual.productos);
             actualizarResumenVenta();
+            guardarEstadoPOS();
 
             // Flash verde en la última fila
             const rows = document.querySelectorAll('#tablaProductos tr');
@@ -9307,18 +10344,119 @@ body {
             }
         });
 
-        /* ---- F2 global: enfocar quick-add bar cuando estamos en paso 3 ---- */
+        /* ---- POS Global Keyboard Shortcuts ---- */
         document.addEventListener('keydown', function(e) {
+            // Check if a modal is open
+            const modalAbierto = document.querySelector('.modal.show');
+            const esModalPago = modalAbierto && modalAbierto.id === 'modalPago';
+
+            // ===== MODAL DE PAGO ABIERTO: Enter confirma, Numpad para denominaciones =====
+            if (esModalPago) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmarPago();
+                    return;
+                }
+                // Numpad shortcuts for denomination buttons (only for cash)
+                const metodo = document.getElementById('pagoMetodo').value;
+                if (metodo === 'EFECTIVO') {
+                    const denomMap = {
+                        'Numpad1': 1000, '1': 1000,
+                        'Numpad2': 2000, '2': 2000,
+                        'Numpad3': 5000,
+                        'Numpad4': 10000,
+                        'Numpad5': 20000,
+                        'Numpad6': 50000
+                    };
+                    // Only trigger numpad shortcuts when NOT focused on the amount input
+                    const focusedOnMonto = document.activeElement === document.getElementById('pagoMonto');
+                    if (!focusedOnMonto && denomMap[e.code]) {
+                        e.preventDefault();
+                        setMontoDenominacion(denomMap[e.code]);
+                        return;
+                    }
+                    // Numpad0 or key 0 = exact amount
+                    if (!focusedOnMonto && (e.code === 'Numpad0' || e.key === '0')) {
+                        e.preventDefault();
+                        setMontoExacto();
+                        return;
+                    }
+                }
+                return;
+            }
+
+            // If any other modal is open, don't intercept shortcuts
+            if (modalAbierto) return;
+
+            // ===== WIZARD VIEW SHORTCUTS =====
+            const wizardView = document.getElementById('wizard-view');
+            if (!wizardView || wizardView.style.display === 'none') return;
+
+            // F2: Focus quick-add bar (Step 3)
             if (e.key === 'F2') {
                 if (pasoActual === 3) {
                     e.preventDefault();
                     qaInput.focus();
                     qaInput.select();
                 }
+                return;
             }
+
+            // F3: Advanced search (Step 3)
             if (e.key === 'F3' && pasoActual === 3) {
                 e.preventDefault();
                 mostrarModalAgregarProducto();
+                return;
+            }
+
+            // F4: Quick full payment with cash (Step 3)
+            if (e.key === 'F4' && pasoActual === 3) {
+                e.preventDefault();
+                pagoRapidoEfectivoTotal();
+                return;
+            }
+
+            // F5-F9: Payment methods (Step 3)
+            if (pasoActual === 3) {
+                const paymentKeys = {
+                    'F5': { fn: () => agregarPago('EFECTIVO'), btn: 'btnPagoEfectivo' },
+                    'F6': { fn: () => agregarPago('TBK_DEBITO_POS'), btn: 'btnPagoDebito' },
+                    'F7': { fn: () => agregarPago('TBK_CREDITO_POS'), btn: 'btnPagoCredito' },
+                    'F8': { fn: () => agregarPago('TRANSFERENCIA'), btn: 'btnPagoTransferencia' },
+                    'F9': { fn: () => pagarConVentaInternet(), btn: 'btnPagoInternet' }
+                };
+                if (paymentKeys[e.key]) {
+                    e.preventDefault();
+                    // Visual feedback on button
+                    const btnEl = document.getElementById(paymentKeys[e.key].btn);
+                    if (btnEl) {
+                        btnEl.classList.add('pos-kbd-flash');
+                        setTimeout(() => btnEl.classList.remove('pos-kbd-flash'), 300);
+                    }
+                    paymentKeys[e.key].fn();
+                    return;
+                }
+            }
+
+            // F10: Next step (all steps)
+            if (e.key === 'F10') {
+                e.preventDefault();
+                pasoSiguiente();
+                return;
+            }
+
+            // F11: Previous step (all steps)
+            if (e.key === 'F11') {
+                e.preventDefault();
+                pasoAnterior();
+                return;
+            }
+
+            // F12: Discount global (Step 3)
+            if (e.key === 'F12' && pasoActual === 3) {
+                e.preventDefault();
+                mostrarModalDescuentoGlobal();
+                return;
             }
         });
 
@@ -9374,6 +10512,66 @@ if (typeof Transbank !== 'undefined' && Transbank.POS) {
 } else {
     console.error('❌ Error: Transbank Web Serial API no se cargó');
 }
+</script>
+
+<!-- Floating Keyboard Help Button -->
+<div id="posKeyboardHelp" style="position:fixed; bottom:12px; right:12px; z-index:1040;">
+    <button class="btn btn-sm btn-dark rounded-circle shadow" 
+            onclick="toggleKeyboardHelp()" 
+            title="Atajos de teclado (?)"
+            style="width:36px; height:36px; padding:0; opacity:0.7;"
+            id="btnKeyboardHelp">
+        <i class="ri-keyboard-box-line"></i>
+    </button>
+    <div id="panelKeyboardHelp" class="card shadow-lg" 
+         style="display:none; position:absolute; bottom:44px; right:0; width:320px; font-size:0.75rem; border-radius:10px; overflow:hidden;">
+        <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center">
+            <span><i class="ri-keyboard-box-line me-1"></i> <strong>Atajos de Teclado POS</strong></span>
+            <button class="btn-close btn-close-white btn-sm" onclick="toggleKeyboardHelp()"></button>
+        </div>
+        <div class="card-body py-2 px-3">
+            <div class="mb-2">
+                <small class="text-muted fw-bold text-uppercase">Navegación</small>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Paso siguiente</span><kbd>F10</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Paso anterior</span><kbd>F11</kbd></div>
+            </div>
+            <div class="mb-2">
+                <small class="text-muted fw-bold text-uppercase">Productos (Paso 3)</small>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Foco barra búsqueda</span><kbd>F2</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Búsqueda avanzada</span><kbd>F3</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Descuento global</span><kbd>F12</kbd></div>
+            </div>
+            <div class="mb-2">
+                <small class="text-muted fw-bold text-uppercase">Pagos (Paso 3)</small>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Pago rápido efectivo total</span><kbd>F4</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Efectivo</span><kbd>F5</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Débito</span><kbd>F6</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Crédito</span><kbd>F7</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Transferencia</span><kbd>F8</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Venta Internet</span><kbd>F9</kbd></div>
+            </div>
+            <div>
+                <small class="text-muted fw-bold text-uppercase">Modal de Pago</small>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>Confirmar pago</span><kbd>Enter</kbd></div>
+                <div class="d-flex justify-content-between py-1"><span>Cancelar</span><kbd>Esc</kbd></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleKeyboardHelp() {
+    const panel = document.getElementById('panelKeyboardHelp');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('keydown', function(e) {
+    if (e.key === '?' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const tag = document.activeElement ? document.activeElement.tagName : '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        e.preventDefault();
+        toggleKeyboardHelp();
+    }
+});
 </script>
 
 <!-- QZ TRAY — módulo ESC/POS compartido -->

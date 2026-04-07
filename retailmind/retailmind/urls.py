@@ -34,6 +34,9 @@ urlpatterns = [
     
     # === API v1 para App Desktop (POS Físico) ===
     path('api/v1/', include('app.api.urls', namespace='api_v1')),
+
+    # === API externa — contrato con AllConnected/VicentAllEcommercesConected ===
+    path('api/', include('app.api.external.urls')),
 ]
 
 # Servir archivos media SIEMPRE (desarrollo y producción local)

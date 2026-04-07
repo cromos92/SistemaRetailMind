@@ -76,6 +76,13 @@
                         <option value="TRANSFERENCIA">Transferencia</option>
                     </select>
                 </div>
+                <!-- Sucursal -->
+                <div class="col-auto" id="contenedorFiltroSucursal">
+                    <label for="filtroSucursal" class="form-label mb-1 small fw-semibold text-muted">Sucursal</label>
+                    <select class="form-select form-select-sm" id="filtroSucursal" style="width:180px">
+                        <option value="">Todas las sucursales</option>
+                    </select>
+                </div>
                 <!-- Botón buscar -->
                 <div class="col-auto">
                     <label class="form-label mb-1 d-block">&nbsp;</label>
@@ -120,10 +127,15 @@
             <i class="ri-price-tag-3-line kpi-ico"></i>
             <div><div class="kpi-lbl">Descuentos</div><div class="kpi-val" id="kpiDescuentos">$0</div></div>
         </div>
+        <div class="kpi-sep"></div>
+        <div class="kpi-item kpi-nc">
+            <i class="ri-file-reduce-line kpi-ico"></i>
+            <div><div class="kpi-lbl">Notas de Crédito</div><div class="kpi-val" id="kpiNC">$0</div></div>
+        </div>
         <div class="kpi-sep kpi-sep-total"></div>
         <div class="kpi-item kpi-total">
             <i class="ri-funds-line kpi-ico"></i>
-            <div><div class="kpi-lbl">TOTAL</div><div class="kpi-val fw-bold" id="kpiTotal">$0</div></div>
+            <div><div class="kpi-lbl">TOTAL NETO</div><div class="kpi-val fw-bold" id="kpiTotal">$0</div></div>
         </div>
     </div>
 
@@ -189,8 +201,9 @@
                     <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item"><span>Transferencia</span><strong id="totalTransferencia">$0</strong></div></div>
                     <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item"><span>Crédito Trab.</span><strong id="totalCreditoTrabajador">$0</strong></div></div>
                     <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item"><span>Otros</span><strong id="totalOtros">$0</strong></div></div>
-                    <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item resumen-descuento"><span>Descuentos</span><strong id="totalDescuentos">$0</strong></div></div>
-                    <div class="col-12 col-md-4 col-lg-6"><div class="resumen-item resumen-total"><span>TOTAL GLOBAL</span><strong id="totalGlobal">$0</strong></div></div>
+                    <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item resumen-descuento"><span>(-) Descuentos</span><strong id="totalDescuentos">$0</strong></div></div>
+                    <div class="col-6 col-md-4 col-lg-3"><div class="resumen-item resumen-nc"><span>(-) Notas de Crédito</span><strong id="totalNC">$0</strong></div></div>
+                    <div class="col-12 col-md-4 col-lg-6"><div class="resumen-item resumen-total"><span>TOTAL NETO</span><strong id="totalGlobal">$0</strong></div></div>
                 </div>
             </div>
         </div>
@@ -203,12 +216,17 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Sucursal activa de la sesión (pasada desde Django)
+    const sucursalActivaId = '{{ sucursal_activa_id|default:"" }}';
+    const sucursalActivaNombre = '{{ sucursal_activa_nombre|default:"" }}';
+    const esSuperuser = {{ es_superuser|yesno:"true,false" }};
+
     const hoy = new Date().toISOString().split('T')[0];
     document.getElementById('filtroFechaDesde').value = hoy;
     document.getElementById('filtroFechaHasta').value = hoy;
     actualizarLblPeriodo();
 
-    cargarDocumentos();
+    cargarSucursales();
 
     document.getElementById('btnBuscar').addEventListener('click', cargarDocumentos);
     document.getElementById('btnImprimir').addEventListener('click', imprimirDocumentos);
@@ -257,17 +275,50 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('filtroFechaDesde').addEventListener('change', actualizarLblPeriodo);
     document.getElementById('filtroFechaHasta').addEventListener('change', actualizarLblPeriodo);
 
+    function cargarSucursales() {
+        fetch('/app/api/reportes/sucursales/')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const selectSucursal = document.getElementById('filtroSucursal');
+                    if (esSuperuser) {
+                        selectSucursal.innerHTML = '<option value="">Todas las sucursales</option>';
+                    } else {
+                        selectSucursal.innerHTML = '';
+                    }
+                    if (data.sucursales && data.sucursales.length > 0) {
+                        data.sucursales.forEach(s => {
+                            const option = document.createElement('option');
+                            option.value = s.id;
+                            option.textContent = s.nombre;
+                            if (sucursalActivaId && s.id == sucursalActivaId) {
+                                option.selected = true;
+                            }
+                            selectSucursal.appendChild(option);
+                        });
+                        if (!esSuperuser && !sucursalActivaId && data.sucursales.length > 0) {
+                            selectSucursal.options[0].selected = true;
+                        }
+                    }
+                }
+            })
+            .catch(() => console.warn('No se pudieron cargar las sucursales'))
+            .finally(() => cargarDocumentos());
+    }
+
     function cargarDocumentos() {
         const fechaDesde = document.getElementById('filtroFechaDesde').value;
         const fechaHasta = document.getElementById('filtroFechaHasta').value;
         const tipoDoc    = document.getElementById('filtroTipoDoc').value;
         const metodoPago = document.getElementById('filtroMetodoPago').value;
+        const sucursalId = document.getElementById('filtroSucursal').value;
 
         let url = '/app/api/reportes/documentos-emitidos/?';
         if (fechaDesde)  url += `fecha_desde=${fechaDesde}&`;
         if (fechaHasta)  url += `fecha_hasta=${fechaHasta}&`;
         if (tipoDoc)     url += `tipo_documento=${tipoDoc}&`;
         if (metodoPago)  url += `metodo_pago=${metodoPago}&`;
+        if (sucursalId)  url += `sucursal_id=${sucursalId}&`;
 
         setLoading(true);
         actualizarLblPeriodo();
@@ -383,12 +434,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function actualizarResumenes(resumen) {
         if (!resumen) return;
         const fmt = (v) => '$' + formatearNumero(v || 0);
+        const fmtNeg = (v) => v ? '-$' + formatearNumero(v) : '$0';
 
         // KPIs principales
         document.getElementById('kpiEfectivo').textContent  = fmt(resumen.efectivo);
         document.getElementById('kpiDebito').textContent    = fmt(resumen.tbk_debito);
         document.getElementById('kpiCredito').textContent   = fmt(resumen.tbk_credito);
-        document.getElementById('kpiDescuentos').textContent = fmt(resumen.descuentos);
+        document.getElementById('kpiDescuentos').textContent = fmtNeg(resumen.descuentos);
+        document.getElementById('kpiNC').textContent        = fmtNeg(resumen.notas_credito);
         document.getElementById('kpiTotal').textContent     = fmt(resumen.total_global);
 
         const otros = (resumen.tarjeta_comercial || 0) + (resumen.convenio || 0)
@@ -402,7 +455,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('totalTBKDebito').textContent       = fmt(resumen.tbk_debito);
         document.getElementById('totalTarjetaComercial').textContent = fmt(resumen.tarjeta_comercial);
         document.getElementById('totalConvenio').textContent        = fmt(resumen.convenio);
-        document.getElementById('totalDescuentos').textContent      = fmt(resumen.descuentos);
+        document.getElementById('totalDescuentos').textContent      = fmtNeg(resumen.descuentos);
+        document.getElementById('totalNC').textContent              = fmtNeg(resumen.notas_credito);
         document.getElementById('totalVentaInternet').textContent   = fmt(resumen.venta_internet);
         document.getElementById('totalTransferencia').textContent   = fmt(resumen.transferencia);
         document.getElementById('totalCreditoTrabajador').textContent = fmt(resumen.credito_trabajador);
@@ -443,10 +497,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const fh = document.getElementById('filtroFechaHasta').value;
         const td = document.getElementById('filtroTipoDoc').value;
         const mp = document.getElementById('filtroMetodoPago').value;
+        const sc = document.getElementById('filtroSucursal').value;
         if (fd) params.append('fecha_desde', fd);
         if (fh) params.append('fecha_hasta', fh);
         if (td) params.append('tipo_documento', td);
         if (mp) params.append('metodo_pago', mp);
+        if (sc) params.append('sucursal_id', sc);
         window.location.href = `/app/api/reportes/documentos-emitidos-excel/?${params.toString()}`;
     }
 
@@ -749,6 +805,7 @@ td{padding:2px;border-bottom:1px dotted #ccc}
 .kpi-credito   { background: #faf5ff; color: #6b21a8; }
 .kpi-otros     { background: #fffbeb; color: #92400e; }
 .kpi-descuento { background: #fff1f2; color: #9f1239; }
+.kpi-nc        { background: #fef2f2; color: #7f1d1d; border-left: 3px solid #ef4444; }
 .kpi-total     { background: #1e293b; color: #fff; flex: 1.2; }
 .kpi-total .kpi-ico { opacity: .9; }
 .kpi-total .kpi-lbl { opacity: .8; }
@@ -767,6 +824,8 @@ td{padding:2px;border-bottom:1px dotted #ccc}
 .resumen-item span { color: #666; }
 .resumen-item strong { font-size: 13px; color: #212529; }
 .resumen-descuento strong { color: #dc3545; }
+.resumen-nc strong { color: #b91c1c; }
+.resumen-nc { border-left: 3px solid #ef4444; }
 .resumen-total {
     background: #2c3e50;
     border-color: #2c3e50;

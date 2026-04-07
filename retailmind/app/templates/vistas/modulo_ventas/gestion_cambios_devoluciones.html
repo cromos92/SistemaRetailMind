@@ -748,12 +748,41 @@
         100% { box-shadow: inset 0 0 0 rgba(0, 102, 255, 0); background-color: transparent; }
     }
 
+    .producto-row-pendiente td {
+        opacity: 0.55;
+    }
+    .producto-row-pendiente .check-producto {
+        cursor: not-allowed;
+    }
+    .producto-row-escaneado td {
+        opacity: 1;
+        background-color: rgba(25, 135, 84, 0.06);
+    }
+    .producto-row-escaneado .check-producto {
+        accent-color: var(--nexo-success, #198754);
+    }
+
     tr.cambio-cobro-pendiente td {
         background-color: rgba(255, 176, 32, 0.08);
+    }
+    tr.cambio-cobro-pendiente {
+        border-left: 4px solid var(--nexo-warning);
     }
 
     tr.cambio-aprobado td {
         background-color: rgba(0, 102, 255, 0.04);
+    }
+
+    tr.cambio-ticket-pendiente td {
+        background-color: rgba(255, 77, 77, 0.05);
+    }
+    tr.cambio-ticket-pendiente {
+        border-left: 4px solid var(--nexo-error);
+    }
+
+    tr.cambio-revertido td {
+        background-color: rgba(138, 138, 154, 0.06);
+        opacity: 0.75;
     }
 
     /* ========== DIFFERENCE INDICATORS ========== */
@@ -771,6 +800,65 @@
         color: var(--nexo-gray-500);
         font-weight: 700;
     }
+
+    /* ========== MONTOS COLUMN ========== */
+    .montos-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 0.82rem;
+    }
+    .montos-stack .monto-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+    }
+    .montos-stack .monto-label {
+        color: var(--nexo-gray-500);
+        font-size: 0.72rem;
+        font-weight: 500;
+    }
+    .montos-stack .monto-diff {
+        font-size: 0.95rem;
+        font-weight: 700;
+        padding-top: 2px;
+        border-top: 1px solid var(--nexo-gray-300);
+        margin-top: 2px;
+    }
+
+    /* ========== PRODUCTOS MINI ========== */
+    .productos-mini {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .productos-mini .prod-line {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.78rem;
+        line-height: 1.3;
+    }
+    .productos-mini .prod-line i {
+        font-size: 0.7rem;
+        flex-shrink: 0;
+    }
+    .productos-mini .prod-in { color: var(--nexo-success); }
+    .productos-mini .prod-out { color: var(--nexo-error); }
+
+    /* ========== TIME AGO ========== */
+    .time-ago {
+        font-size: 0.78rem;
+        color: var(--nexo-gray-500);
+        white-space: nowrap;
+    }
+    .time-ago.urgente {
+        color: var(--nexo-error);
+        font-weight: 600;
+    }
+
+    .status-revertido { background: rgba(138, 138, 154, 0.2); color: var(--nexo-gray-700); border: 1px solid rgba(138, 138, 154, 0.4); text-decoration: line-through; }
 
     /* ========== ALERTS NEXO ========== */
     .alert-nexo-info {
@@ -1186,72 +1274,88 @@
         border-radius: 4px;
     }
     
-    /* ========== MODAL NUEVO CAMBIO - FOOTER FIJO ========== */
-    #modalNuevoCambio .modal-footer {
-        display: none !important; /* navegación movida al modal-body */
+    /* ========== MODAL NUEVO CAMBIO - NAV BAR STICKY ========== */
+    #modalNuevoCambio .modal-body {
+        padding-bottom: 0 !important;
     }
-
-    /* Barra de navegación sticky dentro del modal-body */
     #modal-nav-bar {
-        background: var(--nexo-gray-100);
-        border-top: 1px solid rgba(0,0,0,.10);
-        padding: 10px 14px;
-        flex-shrink: 0;
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+        background: var(--nexo-white);
+        border-top: 2px solid var(--nexo-primary);
+        margin: 0.5rem -0.75rem 0 -0.75rem;
+        pointer-events: auto;
     }
-
-    /* Asegurar que los botones del nav bar sean clickeables */
-    #modal-nav-bar button {
+    #modal-nav-bar button,
+    #modal-nav-bar .btn {
         pointer-events: auto !important;
         cursor: pointer !important;
+        position: relative;
+        z-index: 21;
+    }
+    #modal-nav-bar .mnb-resumen {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 6px 14px;
+        background: linear-gradient(180deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
+        border-bottom: 1px solid var(--nexo-gray-200);
+        font-size: 0.82rem;
+    }
+    #modal-nav-bar .mnb-nav {
+        padding: 8px 14px;
+        background: var(--nexo-white);
     }
 
-    /* Puntos de paso en el footer */
     .footer-paso-dot {
         display: inline-block;
-        width: 12px;
-        height: 12px;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
-        background: #dee2e6;
-        border: 2px solid #dee2e6;
+        background: var(--nexo-gray-300);
+        border: 2px solid var(--nexo-gray-300);
         transition: background .3s, border-color .3s, transform .3s;
     }
     .footer-paso-dot.activo {
-        background: #0d6efd;
-        border-color: #0d6efd;
-        transform: scale(1.35);
+        background: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+        transform: scale(1.25);
     }
     .footer-paso-dot.completado {
-        background: #198754;
-        border-color: #198754;
+        background: var(--nexo-success);
+        border-color: var(--nexo-success);
     }
     .footer-paso-sep {
-        color: #adb5bd;
-        font-size: 0.75rem;
+        color: var(--nexo-gray-300);
+        font-size: 0.7rem;
         line-height: 1;
     }
 
-    /* Chips de resumen financiero en el footer */
     .fr-chip {
         display: inline-flex;
         align-items: center;
-        padding: 0 8px;
+        padding: 0 6px;
         white-space: nowrap;
+        font-size: 0.78rem;
     }
-    .fr-chip + .fr-chip { border-left: 1px solid #dee2e6; }
+    .fr-chip + .fr-chip { border-left: 1px solid var(--nexo-gray-300); }
     .fr-lbl {
-        font-size: 0.65rem;
-        color: #6c757d;
+        font-size: 0.62rem;
+        color: var(--nexo-gray-500);
         text-transform: uppercase;
         letter-spacing: .3px;
     }
     .fr-arrow {
-        color: #adb5bd;
-        font-size: 0.75rem;
-        padding: 0 3px;
+        color: var(--nexo-gray-300);
+        font-size: 0.7rem;
+        padding: 0 2px;
         user-select: none;
     }
-    #modalNuevoCambio .modal-content {
-        position: relative;
+    #footer-resumen {
+        padding-bottom: 5px !important;
+        margin-bottom: 5px !important;
     }
     
     /* Botón siguiente con animación */
@@ -1363,13 +1467,16 @@
 
     /* ========== POS NAV BAR BOTONES ========== */
     #modal-nav-bar .btn {
-        min-height: 36px;
-        font-size: 0.85rem;
+        min-height: 32px;
+        font-size: 0.8rem;
+        padding: 0.3rem 0.75rem;
+        border-radius: var(--nexo-radius-sm);
     }
     #modal-nav-bar #btn-siguiente,
     #modal-nav-bar #btn-crear-cambio {
-        padding-left: 1.25rem;
-        padding-right: 1.25rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        font-weight: 600;
     }
     #footer-hint {
         font-size: 0.78rem;
@@ -1488,9 +1595,18 @@
             padding: 0.25rem 0.4rem;
             font-size: 0.8rem;
         }
-        #modal-nav-bar {
-            padding: 7px 12px;
+        #modal-nav-bar .mnb-nav { padding: 6px 10px; }
+        #modal-nav-bar .mnb-resumen { padding: 4px 10px; }
+        #modal-nav-bar .btn {
+            min-height: 28px;
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
         }
+        .fr-chip { font-size: 0.72rem; padding: 0 4px; }
+        .fr-lbl { font-size: 0.58rem; }
+        #footer-paso-label { font-size: 0.72rem !important; }
+        #footer-paso-desc { font-size: 0.62rem !important; }
+        .footer-paso-dot { width: 8px; height: 8px; }
         #paso-resumen .resumen-monto-card .monto-valor {
             font-size: 1.15rem;
         }
@@ -1733,7 +1849,7 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab-cancelados" data-estado="CANCELADO" onclick="filtrarPorEstado('CANCELADO')" type="button">
-                    <i class="ri-forbid-line me-1"></i> Cancelados
+                    <i class="ri-forbid-line me-1"></i> Cancelados/Revertidos
                     <span class="badge bg-danger ms-1" id="badge-tab-cancelados">0</span>
                 </button>
             </li>
@@ -1761,20 +1877,18 @@
                 <table class="table table-nexo mb-0" id="tabla-cambios">
                     <thead>
                         <tr>
-                            <th width="140">Nº Operación</th>
-                            <th width="95">Fecha</th>
-                            <th>Tipo</th>
-                            <th width="130">Estado</th>
-                            <th width="110">Doc. Original</th>
+                            <th width="155">Operación</th>
                             <th>Cliente</th>
-                            <th class="text-end" width="110">Diferencia</th>
-                            <th class="text-center" width="160">Acciones</th>
+                            <th width="115">Tipo / Estado</th>
+                            <th width="140">Productos</th>
+                            <th class="text-end" width="145">Montos</th>
+                            <th width="80" class="text-center">Tiempo</th>
+                            <th class="text-center" width="170">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-cambios">
-                        <!-- Datos cargados dinámicamente -->
                         <tr>
-                            <td colspan="8" class="text-center py-5">
+                            <td colspan="7" class="text-center py-5">
                                 <div class="spinner-border text-primary" role="status">
                                     <span class="visually-hidden">Cargando...</span>
                                 </div>
@@ -1985,7 +2099,7 @@
                     <div class="row g-3">
                         <div class="col-12">
                             <div class="alert alert-primary border-primary mb-2 py-2 px-3">
-                                <span class="small"><i class="ri-information-line me-1"></i> <strong>Paso 2:</strong> Escanea productos a devolver → Agrega nuevos → Completa observaciones</span>
+                                <span class="small"><i class="ri-information-line me-1"></i> <strong>Paso 2:</strong> <strong>Escanee cada producto</strong> que el cliente devuelve → Agrega nuevos → Completa observaciones</span>
                             </div>
                             
                             <!-- Campo MOTIVO compacto inline -->
@@ -2006,7 +2120,7 @@
                     <!-- Sistema de Escaneo de Productos -->
                     <div class="card border-primary mb-3">
                         <div class="card-header bg-primary py-2">
-                            <h6 class="mb-0 small text-white"><i class="ri-barcode-line me-1"></i> Escaneo de Productos a Devolver/Cambiar <span class="badge bg-white text-primary ms-2" style="font-size:0.7rem; font-weight:600;">Opcional</span></h6>
+                            <h6 class="mb-0 small text-white"><i class="ri-barcode-line me-1"></i> Escanear Productos a Devolver/Cambiar <span class="badge bg-warning text-dark ms-2" style="font-size:0.65rem; font-weight:700;">Obligatorio</span></h6>
                         </div>
                         <div class="card-body py-2 px-3">
                             <div class="row g-2 align-items-center">
@@ -2019,7 +2133,7 @@
                                             type="text" 
                                             class="form-control" 
                                             id="input-escanear-sku" 
-                                            placeholder="Escanee o escriba SKU y presione Enter..."
+                                            placeholder="Escanee el código de barras del producto..."
                                             autocomplete="off">
                                         <button class="btn btn-primary" onclick="escanearProducto()">
                                             <i class="ri-add-line"></i> Agregar
@@ -2042,8 +2156,8 @@
                                     <span class="small text-success fw-bold">
                                         <i class="ri-check-line"></i> <span id="count-escaneados">0</span> escaneado(s)
                                     </span>
-                                    <button class="btn btn-sm btn-success py-0" onclick="aplicarProductosEscaneados()">
-                                        <i class="ri-checkbox-multiple-line"></i> Aplicar selección
+                                    <button class="btn btn-sm btn-outline-success py-0" onclick="aplicarProductosEscaneados()" title="Reaplicar todos los escaneos sobre la tabla">
+                                        <i class="ri-refresh-line"></i> Re-aplicar
                                     </button>
                                 </div>
                                 <div class="table-responsive" style="max-height: 100px; overflow-y: auto;">
@@ -2069,15 +2183,15 @@
                     <!-- Productos del Ticket Original -->
                     <div class="productos-section mb-2">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="mb-0 small"><i class="ri-shopping-bag-line text-primary"></i> Productos a Devolver/Cambiar <small class="text-muted">(selecciona directamente o escanea)</small></h6>
+                            <h6 class="mb-0 small"><i class="ri-shopping-bag-line text-primary"></i> Productos a Devolver/Cambiar <small class="text-muted">(escanee cada producto para seleccionarlo)</small></h6>
                             <span class="badge bg-info" id="badge-productos-seleccionados">0 seleccionados</span>
                         </div>
                         <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
                             <table class="table table-sm table-hover mb-0">
                                 <thead class="table-light sticky-top" style="font-size: 0.8rem;">
                                     <tr>
-                                        <th width="36">
-                                            <input type="checkbox" class="form-check-input" id="check-all-productos" onchange="toggleTodosProductos(this.checked)">
+                                        <th width="36" class="text-center" title="Se selecciona al escanear">
+                                            <i class="ri-barcode-line text-primary" style="font-size: 0.85rem;"></i>
                                         </th>
                                         <th class="columna-sku-validacion" style="display: none;">SKU</th>
                                         <th>Artículo / Talla</th>
@@ -2269,77 +2383,69 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- ─── Barra de navegación sticky (dentro del modal-body) ────────── -->
-            <div id="modal-nav-bar">
-
-                <!-- Resumen financiero compacto — visible solo en paso 3 -->
-                <div id="footer-resumen" style="display:none;"
-                     class="d-flex align-items-center flex-wrap gap-1 pb-2 mb-2 border-bottom">
-                    <span class="text-muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:.4px;">Resumen operación:</span>
-                    <span class="fr-chip">
-                        <i class="ri-arrow-down-circle-fill text-primary me-1" style="font-size:0.72rem;"></i>
-                        <span class="fr-lbl">Devuelve&nbsp;</span>
-                        <strong class="text-primary" id="footer-monto-original">$0</strong>
-                    </span>
-                    <span class="fr-arrow">›</span>
-                    <span class="fr-chip">
-                        <i class="ri-arrow-up-circle-fill text-success me-1" style="font-size:0.72rem;"></i>
-                        <span class="fr-lbl">Recibe&nbsp;</span>
-                        <strong class="text-success" id="footer-monto-nuevo">$0</strong>
-                    </span>
-                    <span class="fr-arrow">=</span>
-                    <span class="fr-chip" id="footer-diferencia-container">
-                        <i id="footer-diferencia-icon" class="ri-exchange-dollar-line me-1" style="font-size:0.72rem;"></i>
-                        <strong id="footer-diferencia">$0</strong>
-                    </span>
-                    <span class="badge ms-1" id="footer-tipo-badge" style="font-size:0.65rem;">-</span>
-                </div>
-
-                <!-- Indicador de paso -->
-                <div class="d-flex align-items-center justify-content-between">
-
-                    <!-- Izquierda: Cancelar + Anterior -->
-                    <div class="d-flex gap-2 align-items-center">
-                        <button type="button" class="btn btn-outline-danger"
-                                onclick="cerrarModalNuevoCambio(event)">
-                            <i class="ri-close-line me-1"></i>Cancelar
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary"
-                                id="btn-anterior" onclick="pasoAnterior(event)" style="display:none;">
-                            <i class="ri-arrow-left-line me-1"></i>Anterior
-                        </button>
+                <!-- NAV BAR FIJO: sticky al fondo del modal-body -->
+                <div id="modal-nav-bar">
+                    <!-- Resumen financiero — visible solo en paso 3 -->
+                    <div id="footer-resumen" class="mnb-resumen" style="display:none;">
+                        <span class="fr-chip">
+                            <i class="ri-arrow-left-up-line text-primary me-1" style="font-size:0.68rem;"></i>
+                            <span class="fr-lbl">Devuelve</span>
+                            <strong class="text-primary ms-1" id="footer-monto-original">$0</strong>
+                        </span>
+                        <span class="fr-arrow">&rarr;</span>
+                        <span class="fr-chip">
+                            <i class="ri-arrow-right-down-line text-success me-1" style="font-size:0.68rem;"></i>
+                            <span class="fr-lbl">Recibe</span>
+                            <strong class="text-success ms-1" id="footer-monto-nuevo">$0</strong>
+                        </span>
+                        <span class="fr-arrow">=</span>
+                        <span class="fr-chip" id="footer-diferencia-container">
+                            <strong id="footer-diferencia">$0</strong>
+                        </span>
+                        <span class="badge ms-1 bg-secondary" id="footer-tipo-badge" style="font-size:0.6rem; padding:2px 6px;">-</span>
                     </div>
 
-                    <!-- Centro: paso actual -->
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="footer-paso-dot" id="fdot-1" title="Paso 1: Buscar documento"></span>
-                        <span class="footer-paso-sep">›</span>
-                        <span class="footer-paso-dot" id="fdot-2" title="Paso 2: Seleccionar productos"></span>
-                        <span class="footer-paso-sep">›</span>
-                        <span class="footer-paso-dot" id="fdot-3" title="Paso 3: Revisar y enviar"></span>
-                        <div class="ms-1 lh-1">
-                            <span id="footer-paso-label" class="fw-semibold d-block" style="font-size:0.78rem; color:#0d6efd; line-height:1.1;">Paso 1 de 3</span>
-                            <span id="footer-paso-desc" class="text-muted" style="font-size:0.68rem;">Buscar documento</span>
+                    <!-- Navegación principal -->
+                    <div class="mnb-nav d-flex align-items-center justify-content-between">
+                        <div class="d-flex gap-1 align-items-center">
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                    onclick="cerrarModalNuevoCambio(event)">
+                                <i class="ri-close-line"></i><span class="d-none d-md-inline ms-1">Cancelar</span>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                    id="btn-anterior" onclick="pasoAnterior(event)" style="display:none;">
+                                <i class="ri-arrow-left-line"></i><span class="d-none d-md-inline ms-1">Anterior</span>
+                            </button>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-1 mnb-steps">
+                            <span class="footer-paso-dot" id="fdot-1" title="Paso 1"></span>
+                            <span class="footer-paso-sep">&middot;</span>
+                            <span class="footer-paso-dot" id="fdot-2" title="Paso 2"></span>
+                            <span class="footer-paso-sep">&middot;</span>
+                            <span class="footer-paso-dot" id="fdot-3" title="Paso 3"></span>
+                            <div class="ms-1 lh-1">
+                                <span id="footer-paso-label" class="fw-semibold d-block" style="font-size:0.72rem; color:var(--nexo-primary); line-height:1.1;">Paso 1 de 3</span>
+                                <span id="footer-paso-desc" class="text-muted" style="font-size:0.62rem;">Buscar documento</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-1 align-items-center">
+                            <span id="footer-hint" class="text-muted fst-italic d-none d-lg-inline" style="font-size:0.72rem;">Busca un documento</span>
+                            <button type="button" class="btn btn-primary btn-sm"
+                                    id="btn-siguiente" onclick="siguientePaso(event)" disabled>
+                                Continuar <i class="ri-arrow-right-line ms-1"></i>
+                            </button>
+                            <button type="button" class="btn btn-success btn-sm"
+                                    id="btn-crear-cambio" onclick="crearCambioDevolucion(event)" style="display:none;">
+                                <i class="ri-check-double-line me-1"></i>Crear Solicitud
+                            </button>
                         </div>
                     </div>
-
-                    <!-- Derecha: Continuar / Crear Solicitud -->
-                    <div class="d-flex gap-2 align-items-center">
-                        <span id="footer-hint" class="text-muted fst-italic" style="font-size:0.78rem;">Busca un documento para continuar</span>
-                        <button type="button" class="btn btn-primary px-4"
-                                id="btn-siguiente" onclick="siguientePaso(event)" disabled>
-                            Continuar <i class="ri-arrow-right-line ms-1"></i>
-                        </button>
-                        <button type="button" class="btn btn-success px-4"
-                                id="btn-crear-cambio" onclick="crearCambioDevolucion(event)" style="display:none;">
-                            <i class="ri-check-double-line me-1"></i>Crear Solicitud
-                        </button>
-                    </div>
                 </div>
+
             </div>
-            <!-- ─── /Barra navegación ─────────────────────────────────────────── -->
         </div>
     </div>
 </div>
@@ -2571,7 +2677,7 @@
                     </div>
                 </div>
 
-                <!-- Tabs para Productos y Autorizaciones -->
+                <!-- Tabs para Productos, Autorizaciones y Pago -->
                 <ul class="nav nav-tabs" role="tablist">
                     <li class="nav-item">
                         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-productos-aprobar">
@@ -2581,6 +2687,11 @@
                     <li class="nav-item">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-autorizaciones-aprobar">
                             <i class="ri-shield-keyhole-line"></i> Autorizaciones <span class="badge bg-danger">Requerido</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" id="tab-pago-diferencia-li" style="display: none;">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-pago-diferencia-aprobar">
+                            <i class="ri-money-dollar-circle-line"></i> Pago Diferencia <span class="badge bg-warning text-dark" id="badge-pago-monto">$0</span>
                         </button>
                     </li>
                 </ul>
@@ -2717,6 +2828,47 @@
                                 <i class="ri-message-3-line"></i> Observaciones <span class="text-muted">(Opcional)</span>
                             </label>
                             <textarea class="form-control" id="textarea-observaciones-aprobacion" rows="2" placeholder="Observaciones..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- TAB: Pago de Diferencia (solo visible cuando hay diferencia positiva) -->
+                    <div class="tab-pane fade" id="tab-pago-diferencia-aprobar">
+                        <div class="alert alert-warning mb-3">
+                            <i class="ri-alert-line me-1"></i>
+                            <strong>El cliente debe pagar una diferencia de <span id="pago-diferencia-monto-display">$0</span></strong>
+                            <p class="mb-0 mt-1 small">Registre el pago ahora para completar el cambio en un solo paso.</p>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Método de Pago <span class="text-danger">*</span></label>
+                                <select class="form-select" id="select-metodo-pago-aprobacion">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="EFECTIVO">Efectivo</option>
+                                    <option value="DEBITO">Tarjeta Débito</option>
+                                    <option value="CREDITO">Tarjeta Crédito</option>
+                                    <option value="TRANSFERENCIA">Transferencia</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Monto</label>
+                                <input type="text" class="form-control fw-bold text-end" id="input-monto-pago-aprobacion" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">Referencia / Voucher</label>
+                                <input type="text" class="form-control" id="input-referencia-pago-aprobacion" placeholder="N° voucher o referencia">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">N° Autorización</label>
+                                <input type="text" class="form-control" id="input-autorizacion-pago-aprobacion" placeholder="N° autorización">
+                            </div>
+                        </div>
+
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="check-cobrar-despues">
+                            <label class="form-check-label small text-muted" for="check-cobrar-despues">
+                                No cobrar ahora (el ticket quedará pendiente de pago y se podrá revertir)
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -3112,14 +3264,7 @@ function configurarEventos() {
         }
     });
     
-    // Checkbox seleccionar todos los productos
-    $(document).on('change', '#check-all-productos', function() {
-        const checked = $(this).is(':checked');
-        $('.check-producto').each(function(index) {
-            $(this).prop('checked', checked);
-            toggleProductoOriginal(index);
-        });
-    });
+    // Products can only be selected via scanning - no manual "select all"
     
     // Prevenir cierre accidental del modal con ESC o click fuera
     // NUEVA ESTRATEGIA: Remover el listener problemático y usar configuración de Bootstrap
@@ -3297,38 +3442,33 @@ function escanearProducto() {
     
     const indexProducto = ticketActual.productos.indexOf(productoEncontrado);
     if (indexProducto !== -1) {
-        // Marcar automáticamente el checkbox del producto
         const checkbox = $(`#check-producto-${indexProducto}`);
         const inputCantidad = $(`#cantidad-producto-${indexProducto}`);
         const selectCondicion = $(`#condicion-${indexProducto}`);
+        const fila = $(`#fila-producto-${indexProducto}`);
         
         if (checkbox.length) {
-            // HABILITAR el checkbox (desbloquearlo)
+            checkbox.data('scan-validated', true);
             checkbox.prop('disabled', false);
             checkbox.attr('title', 'Producto validado mediante escaneo');
             
-            // Marcar checkbox si no está marcado
             if (!checkbox.prop('checked')) {
                 checkbox.prop('checked', true);
-                
-                // Habilitar inputs
                 inputCantidad.prop('disabled', false);
                 selectCondicion.prop('disabled', false);
-                
-                actualizarBadgeProductosSeleccionados();
-                console.log(`✅ Checkbox habilitado y activado automáticamente para ${sku}`);
             }
             
-            // Actualizar cantidad (siempre, incluso si ya estaba marcado)
             if (inputCantidad.length) {
                 inputCantidad.val(productosEscaneados[sku].cantidad);
             }
+
+            fila.removeClass('producto-row-pendiente').addClass('producto-row-escaneado');
+            actualizarBadgeProductosSeleccionados();
+            actualizarVistaPreviaTotales();
         }
         
-        // Mostrar la columna SKU después del primer escaneo exitoso
         $('.columna-sku-validacion').show();
         
-        const fila = checkbox.closest('tr');
         if (fila.length) {
             fila.addClass('table-glow');
             setTimeout(() => fila.removeClass('table-glow'), 1600);
@@ -3381,6 +3521,19 @@ function actualizarListaProductosEscaneados() {
 
 function eliminarProductoEscaneado(sku) {
     delete productosEscaneados[sku];
+    
+    if (ticketActual && ticketActual.productos) {
+        const index = ticketActual.productos.findIndex(p => p.sku && String(p.sku).toUpperCase() === sku);
+        if (index !== -1) {
+            $(`#check-producto-${index}`).prop('checked', false).prop('disabled', true).data('scan-validated', false);
+            $(`#cantidad-producto-${index}`).val(1).prop('disabled', true);
+            $(`#condicion-${index}`).prop('disabled', true);
+            $(`#fila-producto-${index}`).removeClass('producto-row-escaneado').addClass('producto-row-pendiente');
+            actualizarBadgeProductosSeleccionados();
+            actualizarVistaPreviaTotales();
+        }
+    }
+    
     actualizarListaProductosEscaneados();
 }
 
@@ -3433,7 +3586,10 @@ function verDetalleDocumento() {
                         ${producto.cantidad_original || 0}
                         ${cantidadCambiada > 0 && !yaCambiado ? `<br><small class="text-success">Disp: ${producto.cantidad_disponible}</small>` : ''}
                     </td>
-                    <td class="text-end">$${formatearNumero(producto.precio_unitario || 0)}</td>
+                    <td class="text-end">
+                        $${formatearNumero(producto.precio_unitario || 0)}
+                        ${producto.tiene_descuento ? `<br><small class="text-danger" style="font-size:0.7rem;"><del>$${formatearNumero(producto.precio_lista)}</del> -$${formatearNumero(producto.descuento_unitario)}</small>` : ''}
+                    </td>
                     <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
                 </tr>
             `);
@@ -3452,7 +3608,7 @@ function limpiarEscaneos() {
     
     Swal.fire({
         title: '¿Limpiar todos los escaneos?',
-        text: 'Se eliminarán todos los productos escaneados',
+        text: 'Se desmarcarán todos los productos y deberá escanear de nuevo',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Sí, limpiar',
@@ -3461,6 +3617,18 @@ function limpiarEscaneos() {
         if (result.isConfirmed) {
             productosEscaneados = {};
             actualizarListaProductosEscaneados();
+            
+            if (ticketActual && ticketActual.productos) {
+                ticketActual.productos.forEach((_, index) => {
+                    $(`#check-producto-${index}`).prop('checked', false).prop('disabled', true).data('scan-validated', false);
+                    $(`#cantidad-producto-${index}`).val(1).prop('disabled', true);
+                    $(`#condicion-${index}`).prop('disabled', true);
+                    $(`#fila-producto-${index}`).removeClass('producto-row-escaneado').addClass('producto-row-pendiente');
+                });
+                actualizarBadgeProductosSeleccionados();
+                actualizarVistaPreviaTotales();
+            }
+            
             $('#input-escanear-sku').focus();
         }
     });
@@ -3472,34 +3640,26 @@ function aplicarProductosEscaneados() {
         return;
     }
     
-    console.log('📋 Aplicando productos escaneados:', productosEscaneados);
-    
-    // Primero desmarcar todos los productos
     ticketActual.productos.forEach((producto, index) => {
-        $(`#check-producto-${index}`).prop('checked', false);
-        $(`#cantidad-producto-${index}`).val(0).prop('disabled', true);
+        $(`#check-producto-${index}`).prop('checked', false).prop('disabled', true).data('scan-validated', false);
+        $(`#cantidad-producto-${index}`).val(1).prop('disabled', true);
+        $(`#condicion-${index}`).prop('disabled', true);
+        $(`#fila-producto-${index}`).removeClass('producto-row-escaneado').addClass('producto-row-pendiente');
     });
     
-    // Marcar y configurar solo los productos escaneados
     let productosAplicados = 0;
     Object.entries(productosEscaneados).forEach(([sku, data]) => {
-        // Buscar el índice del producto en el array
         const index = ticketActual.productos.findIndex(p => 
             p.sku && p.sku.toUpperCase() === sku
         );
         
         if (index !== -1) {
             const checkbox = $(`#check-producto-${index}`);
-            const inputCantidad = $(`#cantidad-producto-${index}`);
-            
-            // Marcar checkbox
-            checkbox.prop('checked', true);
-            
-            // Establecer cantidad y habilitar campos
-            inputCantidad.val(data.cantidad).prop('disabled', false);
+            checkbox.data('scan-validated', true).prop('disabled', false).prop('checked', true);
+            $(`#cantidad-producto-${index}`).val(data.cantidad).prop('disabled', false);
             $(`#condicion-${index}`).prop('disabled', false);
+            $(`#fila-producto-${index}`).removeClass('producto-row-pendiente').addClass('producto-row-escaneado');
             
-            // Highlight temporal para feedback visual
             const row = checkbox.closest('tr');
             row.addClass('table-glow');
             setTimeout(() => row.removeClass('table-glow'), 1600);
@@ -3508,8 +3668,7 @@ function aplicarProductosEscaneados() {
         }
     });
     
-    // Actualizar contador
-    actualizarContadorProductosSeleccionados();
+    actualizarBadgeProductosSeleccionados();
     actualizarVistaPreviaTotales();
     
     if (productosAplicados > 0) {
@@ -3560,24 +3719,38 @@ function cargarCambiosDevoluciones(page = 1) {
         });
 }
 
+function tiempoTranscurrido(isoDate) {
+    if (!isoDate) return '';
+    const ahora = new Date();
+    const fecha = new Date(isoDate);
+    const diffMs = ahora - fecha;
+    const mins = Math.floor(diffMs / 60000);
+    const hrs = Math.floor(mins / 60);
+    const dias = Math.floor(hrs / 24);
+    if (mins < 1) return 'ahora';
+    if (mins < 60) return `${mins}m`;
+    if (hrs < 24) return `${hrs}h`;
+    if (dias < 30) return `${dias}d`;
+    return `${Math.floor(dias / 30)}mes`;
+}
+
 function actualizarTablaCambios(cambios) {
     const tbody = $('#tbody-cambios');
     tbody.empty();
-    
-    // Update tab badge counts
+
     const todos = cambios.length;
     const pendientes = cambios.filter(c => c.estado === 'SOLICITADO').length;
     const completados = cambios.filter(c => c.estado === 'COMPLETADO').length;
-    const cancelados = cambios.filter(c => ['CANCELADO', 'RECHAZADO'].includes(c.estado)).length;
+    const cancelados = cambios.filter(c => ['CANCELADO', 'RECHAZADO', 'REVERTIDO'].includes(c.estado)).length;
     $('#badge-tab-todos').text(todos);
     $('#badge-tab-pendientes').text(pendientes);
     $('#badge-tab-completados').text(completados);
     $('#badge-tab-cancelados').text(cancelados);
-    
+
     if (cambios.length === 0) {
         tbody.append(`
             <tr>
-                <td colspan="8" class="text-center text-muted py-4">
+                <td colspan="7" class="text-center text-muted py-4">
                     <i class="ri-inbox-line" style="font-size:2rem; opacity:0.3;"></i>
                     <p class="mb-0 mt-1">No se encontraron cambios/devoluciones</p>
                 </td>
@@ -3585,56 +3758,90 @@ function actualizarTablaCambios(cambios) {
         `);
         return;
     }
-    
+
     cambios.forEach(cambio => {
         const estadoBadge = `<span class="status-badge status-${cambio.estado.toLowerCase()}">${cambio.estado_display}</span>`;
-        const tipoBadge = `<span class="tipo-badge tipo-${cambio.tipo_operacion.toLowerCase().replace('_', '-')}">${cambio.tipo_operacion_display}</span>`;
-        
-        const cobroPendiente = cambio.cobro_pendiente || false;
+        const tipoCss = cambio.tipo_operacion.toLowerCase().replace(/_/g, '-');
+        const tipoBadge = `<span class="tipo-badge tipo-${tipoCss}">${cambio.tipo_operacion_display}</span>`;
+
         const rowClasses = [];
-        if (cobroPendiente) {
+        if (cambio.ticket_pendiente_pago) {
+            rowClasses.push('cambio-ticket-pendiente');
+        } else if (cambio.cobro_pendiente) {
             rowClasses.push('cambio-cobro-pendiente');
         } else if (cambio.estado === 'APROBADO') {
             rowClasses.push('cambio-aprobado');
+        } else if (cambio.estado === 'REVERTIDO') {
+            rowClasses.push('cambio-revertido');
         }
 
-        let diferenciaMonto = '<span class="difference-zero">$0</span>';
-        if (cambio.diferencia_monto > 0) {
-            diferenciaMonto = `<span class="difference-positive">+$${formatearNumero(cambio.diferencia_monto)}</span>`;
-        } else if (cambio.diferencia_monto < 0) {
-            diferenciaMonto = `<span class="difference-negative">-$${formatearNumero(Math.abs(cambio.diferencia_monto))}</span>`;
+        // Productos resumen
+        let prodHtml = '<div class="productos-mini">';
+        if (cambio.cant_devueltos > 0) {
+            prodHtml += `<div class="prod-line prod-out"><i class="ri-arrow-left-up-line"></i> ${cambio.cant_devueltos} devuelto${cambio.cant_devueltos > 1 ? 's' : ''}</div>`;
         }
+        if (cambio.cant_nuevos > 0) {
+            prodHtml += `<div class="prod-line prod-in"><i class="ri-arrow-right-down-line"></i> ${cambio.cant_nuevos} nuevo${cambio.cant_nuevos > 1 ? 's' : ''}</div>`;
+        }
+        if ((cambio.productos_resumen || []).length > 0) {
+            cambio.productos_resumen.slice(0, 2).forEach(p => {
+                const icon = p.tipo === 'devuelto' ? 'ri-close-circle-line text-danger' : 'ri-checkbox-circle-line text-success';
+                prodHtml += `<div class="prod-line" title="${p.nombre}"><i class="${icon}" style="font-size:0.65rem;"></i> <span class="text-truncate" style="max-width:110px; display:inline-block;">${p.nombre}</span></div>`;
+            });
+            if (cambio.productos_resumen.length > 2) {
+                prodHtml += `<div class="prod-line text-muted">+${cambio.productos_resumen.length - 2} más</div>`;
+            }
+        }
+        prodHtml += '</div>';
 
-        const extras = [];
-        if (cambio.ticket_diferencia) {
-            extras.push(`<span class="badge badge-pending">Ticket diferencia #${cambio.ticket_diferencia}</span>`);
+        // Montos
+        let montosHtml = '<div class="montos-stack">';
+        montosHtml += `<div class="monto-line"><span class="monto-label">Original</span> <span>$${formatearNumero(cambio.monto_original)}</span></div>`;
+        if (cambio.monto_nuevo > 0) {
+            montosHtml += `<div class="monto-line"><span class="monto-label">Nuevo</span> <span>$${formatearNumero(cambio.monto_nuevo)}</span></div>`;
         }
-        if (cobroPendiente) {
-            extras.push('<span class="badge badge-pending">Cobro pendiente</span>');
+        let diffClass = 'difference-zero', diffSign = '';
+        if (cambio.diferencia_monto > 0) { diffClass = 'difference-positive'; diffSign = '+'; }
+        else if (cambio.diferencia_monto < 0) { diffClass = 'difference-negative'; diffSign = '-'; }
+        montosHtml += `<div class="monto-line monto-diff"><span class="monto-label">Diferencia</span> <span class="${diffClass}">${diffSign}$${formatearNumero(Math.abs(cambio.diferencia_monto))}</span></div>`;
+        if (cambio.ticket_pendiente_pago) {
+            const metodo = cambio.ticket_nuevo?.metodo_pago || '';
+            if (metodo === 'PENDIENTE_COBRO') {
+                montosHtml += `<div class="mt-1"><span class="badge bg-danger" style="font-size:0.68rem;">Cobro pendiente</span></div>`;
+            } else if (metodo === 'PENDIENTE_DEVOLUCION') {
+                montosHtml += `<div class="mt-1"><span class="badge bg-warning text-dark" style="font-size:0.68rem;">Devolucion pend.</span></div>`;
+            }
         }
-        if (extras.length) {
-            diferenciaMonto += `<div class="mt-1 d-flex flex-column gap-1">${extras.join('')}</div>`;
-        }
+        montosHtml += '</div>';
+
+        // Tiempo
+        const tiempo = tiempoTranscurrido(cambio.fecha_solicitud_iso);
+        const hrsAgo = (new Date() - new Date(cambio.fecha_solicitud_iso)) / 3600000;
+        const urgenteClass = (cambio.estado === 'SOLICITADO' && hrsAgo > 24) ? ' urgente' : '';
 
         tbody.append(`
             <tr class="${rowClasses.join(' ')}">
                 <td>
-                    <strong class="text-primary">${cambio.numero_operacion}</strong>
-                    <div><small class="text-muted"><i class="ri-user-line"></i> ${cambio.solicitado_por}</small></div>
+                    <strong class="text-primary" style="font-size:0.88rem;">${cambio.numero_operacion}</strong>
+                    <div><small class="text-muted">${cambio.fecha_solicitud}</small></div>
+                    <div><small class="text-muted"><i class="ri-user-line"></i> ${cambio.solicitado_por_nombre || cambio.solicitado_por}</small></div>
+                    <div><span class="badge bg-secondary" style="font-size:0.68rem;">#${cambio.ticket_original}</span></div>
                 </td>
-                <td><small>${cambio.fecha_solicitud}</small></td>
-                <td>${tipoBadge}</td>
-                <td>${estadoBadge}</td>
-                <td><span class="badge bg-secondary">#${cambio.ticket_original}</span></td>
                 <td>
-                    <div class="fw-semibold">${cambio.cliente_nombre}</div>
+                    <div class="fw-semibold" style="font-size:0.88rem;">${cambio.cliente_nombre}</div>
                     <small class="text-muted">${cambio.cliente_rut}</small>
+                    ${cambio.motivo_principal ? `<div><small class="text-muted fst-italic">${cambio.motivo_principal}</small></div>` : ''}
                 </td>
-                <td class="text-end">${diferenciaMonto}</td>
+                <td>
+                    <div class="d-flex flex-column gap-1">${tipoBadge}${estadoBadge}</div>
+                </td>
+                <td>${prodHtml}</td>
+                <td class="text-end">${montosHtml}</td>
+                <td class="text-center"><span class="time-ago${urgenteClass}" title="${cambio.fecha_solicitud}">${tiempo}</span></td>
                 <td class="text-nowrap">
                     <div class="btn-action-group d-flex flex-wrap gap-1 justify-content-center">
-                        <button class="btn btn-info btn-sm" onclick='verDetalleCambio(${cambio.id})' title='Ver detalle'>
-                            <i class="ri-eye-line me-1"></i><span class="d-none d-xl-inline">Ver</span>
+                        <button class="btn btn-outline-info btn-sm px-2" onclick='verDetalleCambio(${cambio.id})' title='Ver detalle'>
+                            <i class="ri-eye-line"></i>
                         </button>
                         ${generarBotonesAccion(cambio)}
                     </div>
@@ -3736,10 +3943,26 @@ function generarBotonesAccion(cambio) {
         `);
     }
     
+    if (cambio.estado === 'COMPLETADO' && cambio.ticket_pendiente_pago) {
+        botones.push(`
+            <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='Revertir: deshace stock y cancela ticket pendiente'>
+                <i class="ri-arrow-go-back-line me-1"></i>Revertir
+            </button>
+        `);
+    }
+
     if (cambio.estado === 'CANCELADO') {
         botones.push(`
             <span class="badge bg-secondary align-self-center px-3">
                 <i class="ri-forbid-line"></i> Cancelado
+            </span>
+        `);
+    }
+
+    if (cambio.estado === 'REVERTIDO') {
+        botones.push(`
+            <span class="badge bg-secondary align-self-center px-3">
+                <i class="ri-arrow-go-back-line"></i> Revertido
             </span>
         `);
     }
@@ -3885,7 +4108,7 @@ function resetearFormularioNuevoCambio() {
     const hoy = new Date().toISOString().split('T')[0];
     $('#input-ticket-correlativo').val('').prop('disabled', false);
     $('#input-fecha-compra').val(hoy).prop('disabled', false);
-    $('.btn-primary:contains("Buscar")').prop('disabled', false);
+    $('button[onclick*="buscarDocumentoParaCambio"]').prop('disabled', false);
     
     // Mostrar secciones de búsqueda y ocultar info del documento
     $('#seccion-tipo-documento').show();
@@ -4058,18 +4281,59 @@ function buscarDocumentoParaCambio(event) {
                 // ✅ DESHABILITAR CAMPOS Y BOTÓN DE BÚSQUEDA DESPUÉS DE ENCONTRAR
                 $('#input-ticket-correlativo').prop('disabled', true);
                 $('#input-fecha-compra').prop('disabled', true);
-                $('.btn-primary:contains("Buscar")').prop('disabled', true);
+                $('button[onclick*="buscarDocumentoParaCambio"]').prop('disabled', true);
                 
-                if (response.documento.puede_cambiar) {
+                const tieneProductos = response.documento.puede_cambiar || 
+                    ((response.documento.productos?.length || 0) > 0 && (response.documento.productos_disponibles || response.documento.productos?.length || 0) > 0);
+                const fueraDePlazo = !response.documento.dentro_del_plazo;
+                
+                if (tieneProductos) {
                     console.log('✅ DEBUG - Mostrando botón SIGUIENTE');
                     $('#btn-siguiente').prop('disabled', false).removeClass('btn-outline-secondary').addClass('btn-primary');
                     $('#footer-hint').hide();
-                    // Agregar animación
                     setTimeout(() => {
                         $('#btn-siguiente').addClass('show-animated');
                     }, 100);
                     
-                    // Mostrar mensaje si fue redirigido a otro ticket
+                    if (fueraDePlazo) {
+                        ticketActual._fuera_de_plazo = true;
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Plazo de cambio vencido',
+                            html: `
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered mb-2">
+                                        <tr>
+                                            <td width="45%"><strong>Fecha de compra:</strong></td>
+                                            <td>${response.documento.fecha}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Fecha límite:</strong></td>
+                                            <td class="text-danger fw-bold">${response.documento.fecha_limite_cambio}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Días transcurridos:</strong></td>
+                                            <td class="text-danger">${response.documento.dias_transcurridos} días</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="alert alert-warning py-2 mb-0">
+                                    <i class="ri-shield-keyhole-line me-1"></i>
+                                    <strong>Se requerirá código de supervisor</strong> para autorizar este cambio fuera de plazo.
+                                </div>
+                            `,
+                            confirmButtonText: 'Continuar con autorización',
+                            confirmButtonColor: '#e67e22',
+                            showCancelButton: true,
+                            cancelButtonText: 'Cancelar'
+                        }).then((result) => {
+                            if (!result.isConfirmed) {
+                                ticketActual = null;
+                                resetearFormularioNuevoCambio();
+                            }
+                        });
+                    }
+                    
                     if (response.documento.fue_redirigido) {
                         Swal.fire({
                             icon: 'success',
@@ -4084,12 +4348,10 @@ function buscarDocumentoParaCambio(event) {
                         });
                     }
                     
-                    // Si hay cambios anteriores, mostrar mensaje informativo (NO BLOQUEANTE)
                     const cambiosAnteriores = response.documento.cambios_anteriores || [];
                     const cambiosPendientes = cambiosAnteriores.filter(c => c.estado === 'Solicitado' || c.estado === 'Aprobado');
                     
                     if (cambiosPendientes.length > 0 && !response.documento.fue_redirigido) {
-                        // Mostrar como toast no bloqueante
                         Swal.fire({
                             toast: true,
                             position: 'top-end',
@@ -4102,53 +4364,17 @@ function buscarDocumentoParaCambio(event) {
                         });
                     }
                 } else {
-                    // NO PUEDE CAMBIAR - Mostrar razón específica
+                    // SIN PRODUCTOS DISPONIBLES - BLOQUEAR
                     console.log('⚠️ DEBUG - NO puede cambiar el documento');
-                    console.log('  → dentro_del_plazo:', response.documento.dentro_del_plazo);
-                    console.log('  → productos.length:', response.documento.productos?.length || 0);
-                    console.log('  → productos_disponibles:', response.documento.productos_disponibles);
                     
-                    // Ocultar botones de avance
                     $('#btn-siguiente').prop('disabled', true).removeClass('show-animated');
                     $('#footer-hint').show();
                     
-                    // Determinar razón específica por la que no puede cambiar
                     let razon = '';
                     let icono = 'warning';
                     let titulo = 'No se puede cambiar';
                     
-                    if (!response.documento.dentro_del_plazo) {
-                        razon = `
-                            <div class="alert alert-danger">
-                                <h5>⏰ El plazo de cambio ha vencido</h5>
-                            </div>
-                            <div class="table-responsive mt-3">
-                                <table class="table table-bordered">
-                                    <tr>
-                                        <td width="40%"><strong>Fecha de compra:</strong></td>
-                                        <td>${response.documento.fecha}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Fecha límite:</strong></td>
-                                        <td class="text-danger">${response.documento.fecha_limite_cambio}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Días transcurridos:</strong></td>
-                                        <td class="text-danger">${response.documento.dias_transcurridos} días</td>
-                                    </tr>
-                                    <tr class="table-info">
-                                        <td><strong>Plazo permitido:</strong></td>
-                                        <td>30 días desde la compra</td>
-                                    </tr>
-                                </table>
-                            </div>
-                            <div class="alert alert-info mt-3">
-                                <i class="ri-information-line"></i> <strong>Nota:</strong> Los cambios solo pueden realizarse dentro del plazo establecido por política de la tienda.
-                            </div>
-                        `;
-                        icono = 'error';
-                        titulo = 'Fuera de Plazo';
-                    } else if (response.documento.productos.length === 0 || response.documento.productos_disponibles === 0) {
+                    if (response.documento.productos.length === 0 || response.documento.productos_disponibles === 0) {
                         // Todos los productos ya fueron cambiados
                         const cambiosAnteriores = response.documento.cambios_anteriores || [];
                         let listaCambios = '';
@@ -4310,7 +4536,7 @@ function limpiarBusqueda() {
     const hoy = new Date().toISOString().split('T')[0];
     $('#input-ticket-correlativo').val('').prop('disabled', false);
     $('#input-fecha-compra').val(hoy).prop('disabled', false);
-    $('.btn-primary:contains("Buscar")').prop('disabled', false);
+    $('button[onclick*="buscarDocumentoParaCambio"]').prop('disabled', false);
     
     // Mostrar secciones de búsqueda y ocultar info del documento
     $('#seccion-tipo-documento').slideDown(200);
@@ -4454,6 +4680,7 @@ function siguientePaso(event) {
         pasoActual = 2;
         $('#paso-seleccionar-productos').show();
         cargarProductosOriginales();
+        setTimeout(() => $('#input-escanear-sku').focus(), 200);
         $('#btn-siguiente').prop('disabled', false).removeClass('show-animated')
             .html('Ver Resumen <i class="ri-arrow-right-circle-fill ms-1"></i>');
         $('#btn-anterior').show();
@@ -4461,9 +4688,6 @@ function siguientePaso(event) {
         actualizarStepper();
         actualizarFooterPaso();
         actualizarVistaPreviaTotales();
-        
-        // Auto-focus en campo escaneo al entrar al paso 2
-        setTimeout(() => { $('#input-escanear-sku').focus(); }, 150);
         
         console.log('  ✅ Paso 2 mostrado correctamente');
         console.log('  → pasoActual ahora es:', pasoActual);
@@ -4486,7 +4710,7 @@ function siguientePaso(event) {
         $('#btn-crear-cambio').show();
         $('#btn-anterior').show();
         $('#footer-hint').hide();
-        $('#footer-resumen').slideDown(200);  // mostrar resumen financiero en paso 3
+        $('#footer-resumen').css('display', 'flex');
         actualizarStepper();
         actualizarFooterPaso();
         
@@ -4532,7 +4756,7 @@ function pasoAnterior(event) {
         $('#btn-crear-cambio').hide();
         $('#btn-anterior').show();
         $('#footer-hint').hide();
-        $('#footer-resumen').slideUp(200);  // ocultar resumen al volver al paso 2
+        $('#footer-resumen').hide();
         
         // Actualizar vista previa de totales
         actualizarVistaPreviaTotales();
@@ -4606,12 +4830,14 @@ function cargarProductosOriginales() {
         const tallaText = producto.talla ? ` <span class="badge bg-light text-dark border">${producto.talla}</span>` : '';
         
         tbody.append(`
-            <tr>
-                <td>
+            <tr class="producto-row-pendiente" id="fila-producto-${index}">
+                <td class="text-center">
                     <input type='checkbox' class="form-check-input check-producto" 
                            id='check-producto-${index}' 
                            data-index='${index}'
                            data-sku='${producto.sku || ''}'
+                           disabled
+                           title='Escanee el producto para seleccionarlo'
                            onchange='toggleProductoOriginal(${index})'>
                 </td>
                 <td class="columna-sku-validacion" style="display: none;">${producto.sku || '-'}</td>
@@ -4624,7 +4850,10 @@ function cargarProductosOriginales() {
                     <strong class="${producto.cantidad_ya_cambiada > 0 ? 'text-warning' : ''}">${producto.cantidad_disponible || 0}</strong>
                     ${producto.cantidad_ya_cambiada > 0 ? `<br><small class="text-muted" style="font-size:0.7rem;">Ya: ${producto.cantidad_ya_cambiada}</small>` : ''}
                 </td>
-                <td class="text-end">$${formatearNumero(producto.precio_unitario || 0)}</td>
+                <td class="text-end">
+                    $${formatearNumero(producto.precio_unitario || 0)}
+                    ${producto.tiene_descuento ? `<br><small class="text-danger" style="font-size:0.65rem;"><del>$${formatearNumero(producto.precio_lista)}</del></small>` : ''}
+                </td>
                 <td>
                     <input type='number' class="form-control form-control-sm" 
                            id='cantidad-producto-${index}' 
@@ -4650,44 +4879,47 @@ function cargarProductosOriginales() {
     console.log('✅ Productos cargados en la tabla');
 }
 
-function toggleProductoOriginal(index) {
+function toggleProductoOriginal(index, fromScan) {
+    if (!fromScan) {
+        // Block manual checkbox clicks - revert the change
+        const checkbox = $(`#check-producto-${index}`);
+        if (!checkbox.data('scan-validated')) {
+            checkbox.prop('checked', false);
+            checkbox.prop('disabled', true);
+            mostrarToast('warning', 'Escanee el producto con la pistola para seleccionarlo');
+            return;
+        }
+    }
+    
     const checked = $(`#check-producto-${index}`).is(':checked');
     $(`#cantidad-producto-${index}`).prop('disabled', !checked);
     $(`#condicion-${index}`).prop('disabled', !checked);
     
-    // Si se desmarca, resetear cantidad a 1
-    if (!checked) {
+    const fila = $(`#fila-producto-${index}`);
+    if (checked) {
+        fila.removeClass('producto-row-pendiente').addClass('producto-row-escaneado');
+    } else {
+        fila.removeClass('producto-row-escaneado').addClass('producto-row-pendiente');
         $(`#cantidad-producto-${index}`).val(1);
+        $(`#check-producto-${index}`).prop('disabled', true).data('scan-validated', false);
     }
     
-    // Actualizar badge y vista previa de totales
     actualizarBadgeProductosSeleccionados();
     actualizarVistaPreviaTotales();
 }
 
-// Seleccionar / deseleccionar todos los productos
+// Disabled: products can only be selected by scanning
 function toggleTodosProductos(checked) {
-    if (!ticketActual || !ticketActual.productos) return;
-    ticketActual.productos.forEach((producto, index) => {
-        $(`#check-producto-${index}`).prop('checked', checked);
-        $(`#cantidad-producto-${index}`).prop('disabled', !checked);
-        $(`#condicion-${index}`).prop('disabled', !checked);
-        if (!checked) { $(`#cantidad-producto-${index}`).val(1); }
-    });
-    actualizarBadgeProductosSeleccionados();
-    actualizarVistaPreviaTotales();
+    return;
 }
 
-// Actualizar badge de productos seleccionados
 function actualizarBadgeProductosSeleccionados() {
     const cantidadSeleccionados = $('.check-producto:checked').length;
-    $('#badge-productos-seleccionados').text(`${cantidadSeleccionados} seleccionado${cantidadSeleccionados !== 1 ? 's' : ''}`);
-    
-    // Actualizar checkbox "seleccionar todos"
-    if (ticketActual && ticketActual.productos) {
-        const totalProductos = ticketActual.productos.length;
-        $('#check-all-productos').prop('checked', cantidadSeleccionados === totalProductos && totalProductos > 0);
-    }
+    const total = (ticketActual && ticketActual.productos) ? ticketActual.productos.length : 0;
+    const badge = $('#badge-productos-seleccionados');
+    badge.text(`${cantidadSeleccionados} de ${total} escaneado${cantidadSeleccionados !== 1 ? 's' : ''}`);
+    badge.toggleClass('bg-info', cantidadSeleccionados === 0)
+         .toggleClass('bg-success', cantidadSeleccionados > 0);
 }
 
 // Validar cantidad de producto a cambiar
@@ -5227,7 +5459,8 @@ function validarSeleccionProductos() {
     console.log('  Productos seleccionados (método original):', productosSeleccionadosOriginal);
     
     if (productosSeleccionados === 0 && productosSeleccionadosOriginal === 0) {
-        mostrarError('Debe seleccionar al menos un producto original a devolver/cambiar');
+        mostrarError('Debe escanear al menos un producto a devolver/cambiar');
+        setTimeout(() => $('#input-escanear-sku').focus(), 300);
         return false;
     }
     
@@ -5485,6 +5718,10 @@ function crearCambioDevolucion(event) {
     console.log('📦 Total productos en payload:', datos.productos.length);
     console.log('📦 Payload completo:', JSON.stringify(datos, null, 2));
     
+    enviarSolicitudCambio(datos);
+}
+
+function enviarSolicitudCambio(datos) {
     mostrarLoading('Creando solicitud de cambio...');
     
     $.ajax({
@@ -5513,18 +5750,78 @@ function crearCambioDevolucion(event) {
                     `,
                     confirmButtonText: 'Entendido'
                 });
-                // Permitir cierre del modal
                 window.permitirCierreModal();
                 $('#modalNuevoCambio').modal('hide');
                 cargarCambiosDevoluciones();
+            } else if (response.requiere_autorizacion) {
+                solicitarAutorizacionSupervisor(datos, response);
             } else {
                 mostrarError(response.error);
             }
         },
         error: function(xhr) {
             ocultarLoading();
-            const error = xhr.responseJSON?.error || 'Error de conexión al crear solicitud';
-            mostrarError(error);
+            const resp = xhr.responseJSON;
+            if (resp && resp.requiere_autorizacion) {
+                solicitarAutorizacionSupervisor(datos, resp);
+            } else {
+                const error = resp?.error || 'Error de conexión al crear solicitud';
+                mostrarError(error);
+            }
+        }
+    });
+}
+
+function solicitarAutorizacionSupervisor(datos, responseOriginal) {
+    Swal.fire({
+        title: 'Autorización de Supervisor',
+        html: `
+            <div class="text-start">
+                <div class="alert alert-warning py-2 mb-3">
+                    <i class="ri-shield-keyhole-line me-1"></i>
+                    <strong>Cambio fuera de plazo</strong>
+                    <div class="small mt-1">
+                        ${responseOriginal.fecha_compra ? `Compra: ${responseOriginal.fecha_compra} · ` : ''}
+                        ${responseOriginal.fecha_limite ? `Venció: ${responseOriginal.fecha_limite}` : ''}
+                        ${responseOriginal.dias_transcurridos ? ` · ${responseOriginal.dias_transcurridos} días` : ''}
+                    </div>
+                </div>
+                <label class="form-label fw-bold small">Código del supervisor / encargado:</label>
+                <input type="password" id="swal-codigo-supervisor" class="form-control form-control-lg text-center"
+                       placeholder="Ingrese contraseña del encargado" autocomplete="off"
+                       style="letter-spacing: 4px; font-size: 1.3rem;">
+                <div class="small text-muted mt-2">
+                    <i class="ri-information-line"></i> El supervisor debe ingresar su contraseña para autorizar esta operación.
+                </div>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-shield-check-line me-1"></i> Autorizar y Crear',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#e67e22',
+        focusConfirm: false,
+        didOpen: () => {
+            const input = document.getElementById('swal-codigo-supervisor');
+            if (input) {
+                input.focus();
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') Swal.clickConfirm();
+                });
+            }
+        },
+        preConfirm: () => {
+            const codigo = document.getElementById('swal-codigo-supervisor').value.trim();
+            if (!codigo) {
+                Swal.showValidationMessage('Ingrese el código del supervisor');
+                return false;
+            }
+            return codigo;
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            datos.codigo_autorizacion_supervisor = result.value;
+            enviarSolicitudCambio(datos);
         }
     });
 }
@@ -5823,7 +6120,6 @@ function mostrarDetalleCambio(data) {
 function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
     cambioActual = { id: cambioId, tipo_operacion: tipo, monto_original: montoDevuelto, monto_nuevo: montoNuevo };
     
-    // Llenar resumen básico en modal de aprobación
     $('#aprobar-num-operacion').text(cambioId);
     $('#aprobar-tipo').text(tipo === 'CAMBIO' ? 'Cambio' : 'Devolución');
     $('#aprobar-total-devuelto').text('$' + formatearNumero(montoDevuelto));
@@ -5837,8 +6133,21 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
     } else {
         $('#aprobar-diferencia').text('$0').removeClass('text-danger').addClass('text-success');
     }
+
+    // Show/hide payment tab based on difference
+    if (diferencia > 0) {
+        $('#tab-pago-diferencia-li').show();
+        $('#badge-pago-monto').text('$' + formatearNumero(diferencia));
+        $('#pago-diferencia-monto-display').text('$' + formatearNumero(diferencia));
+        $('#input-monto-pago-aprobacion').val('$' + formatearNumero(diferencia));
+        $('#select-metodo-pago-aprobacion').val('');
+        $('#input-referencia-pago-aprobacion').val('');
+        $('#input-autorizacion-pago-aprobacion').val('');
+        $('#check-cobrar-despues').prop('checked', false);
+    } else {
+        $('#tab-pago-diferencia-li').hide();
+    }
     
-    // Limpiar formulario y resetear validaciones
     $('#textarea-observaciones-aprobacion').val('');
     $('#input-codigo-vendedor-aprobacion').val('');
     $('#vendedor-id-validado').val('');
@@ -5848,7 +6157,6 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
     $('#info-autorizacion-error').hide();
     $('#btn-confirmar-aprobacion').prop('disabled', true);
     
-    // Resetear variables de validación
     vendedorValidado = false;
     autorizacionValidada = false;
     
@@ -6262,37 +6570,45 @@ function confirmarAprobacionYGenerarTicket() {
         mostrarError('Debe validar un vendedor antes de aprobar');
         return;
     }
+
+    // Check if payment is required and not deferred
+    const diferencia = (cambioActual.monto_nuevo || 0) - (cambioActual.monto_original || 0);
+    const cobrarDespues = $('#check-cobrar-despues').is(':checked');
+    const metodoPago = $('#select-metodo-pago-aprobacion').val();
+
+    if (diferencia > 0 && !cobrarDespues && !metodoPago) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Método de pago requerido',
+            html: 'Hay una diferencia de <strong>$' + formatearNumero(diferencia) + '</strong> a cobrar.<br>Seleccione un método de pago o marque "No cobrar ahora".',
+        });
+        return;
+    }
+
+    let resumenPago = '';
+    if (diferencia > 0) {
+        if (cobrarDespues) {
+            resumenPago = `<div class="alert alert-warning text-start"><strong>Cobro pendiente:</strong> $${formatearNumero(diferencia)} se cobrará después (ticket quedará pendiente)</div>`;
+        } else {
+            resumenPago = `<div class="alert alert-info text-start"><strong>Pago incluido:</strong> $${formatearNumero(diferencia)} por ${metodoPago}</div>`;
+        }
+    }
     
     Swal.fire({
-        title: '¿Aprobar y Ejecutar Cambio?',
+        title: 'Aprobar y Ejecutar Cambio',
         html: `
-            <p>Se ejecutarán las siguientes acciones automáticamente:</p>
+            <p>Se ejecutarán las siguientes acciones:</p>
             <hr>
-            <div class="alert alert-success text-start">
-                <strong>1. ✅ Generar Ticket de Venta</strong>
-                <ul class="mb-0 mt-2 small">
-                    <li>Productos devueltos (-)</li>
-                    <li>Productos entregados (+)</li>
-                    <li>Diferencia a cobrar/devolver</li>
-                </ul>
+            <div class="alert alert-success text-start small py-2">
+                <strong>1.</strong> Generar Ticket + Actualizar Inventario + Completar
             </div>
-            <div class="alert alert-info text-start">
-                <strong>2. 📦 Actualizar Inventario</strong>
-                <ul class="mb-0 mt-2 small">
-                    <li>Entrada: Productos devueltos (+stock)</li>
-                    <li>Salida: Productos entregados (-stock)</li>
-                </ul>
-            </div>
-            <div class="alert alert-warning text-start">
-                <strong>3. ✓ Completar Operación</strong>
-                <p class="mb-0 small">El cambio quedará como COMPLETADO</p>
-            </div>
+            ${resumenPago}
         `,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#28a745',
         cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="ri-check-line"></i> Sí, ejecutar todo',
+        confirmButtonText: '<i class="ri-check-line"></i> Confirmar',
         cancelButtonText: 'Cancelar'
     }).then((result) => {
         if (result.isConfirmed) {
@@ -6304,6 +6620,15 @@ function confirmarAprobacionYGenerarTicket() {
                 observaciones: observaciones,
                 generar_ticket: true
             };
+
+            if (diferencia > 0 && !cobrarDespues && metodoPago) {
+                datos.pago_diferencia = {
+                    metodo_pago: metodoPago,
+                    monto: diferencia,
+                    referencia_pago: $('#input-referencia-pago-aprobacion').val() || '',
+                    numero_autorizacion: $('#input-autorizacion-pago-aprobacion').val() || ''
+                };
+            }
             
             $.ajax({
                 url: '/app/ventas/api/aprobar-cambio-generar-ticket/',
@@ -6448,6 +6773,67 @@ function ejecutarCambio(cambioId) {
                     ocultarLoading();
                     const error = xhr.responseJSON?.error || 'Error al ejecutar cambio';
                     mostrarError(error);
+                }
+            });
+        }
+    });
+}
+
+function revertirCambio(cambioId) {
+    Swal.fire({
+        title: 'Revertir Cambio/Devolución',
+        html: `
+            <p>Esta acción <strong>deshará todos los movimientos de stock</strong> y anulará el ticket pendiente.</p>
+            <hr>
+            <div class="alert alert-danger text-start small">
+                <strong>Se revertirá:</strong>
+                <ul class="mb-0 mt-1">
+                    <li>Productos nuevos entregados volverán al stock</li>
+                    <li>Productos devueltos se retirarán del stock</li>
+                    <li>El ticket pendiente será anulado</li>
+                </ul>
+            </div>
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-semibold">Motivo de la reversión (opcional)</label>
+                <textarea id="motivo-reversion" class="form-control" rows="2" placeholder="Ej: Cliente no quiso pagar la diferencia"></textarea>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="ri-arrow-go-back-line"></i> Sí, revertir',
+        cancelButtonText: 'Cancelar',
+        focusCancel: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            mostrarLoading('Revirtiendo cambio...');
+            $.ajax({
+                url: '/app/ventas/api/revertir-cambio-devolucion/',
+                method: 'POST',
+                data: JSON.stringify({
+                    cambio_id: cambioId,
+                    motivo: document.getElementById('motivo-reversion')?.value || ''
+                }),
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    ocultarLoading();
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Cambio Revertido',
+                            text: response.message,
+                            timer: 3000
+                        });
+                        cargarCambiosDevoluciones();
+                    } else {
+                        mostrarError(response.error);
+                    }
+                },
+                error: function() {
+                    ocultarLoading();
+                    mostrarError('Error de conexión al revertir');
                 }
             });
         }

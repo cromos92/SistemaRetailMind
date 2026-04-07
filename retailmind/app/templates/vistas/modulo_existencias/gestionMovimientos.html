@@ -414,6 +414,139 @@
     white-space: nowrap;
 }
 
+/* ========== TABLA MOVIMIENTOS COMPACTA ========== */
+#tablaMovimientos {
+    font-size: 0.78rem;
+    table-layout: fixed;
+    width: 100%;
+}
+
+#tablaMovimientos thead th {
+    padding: 8px 7px;
+    font-size: 0.68rem;
+}
+
+#tablaMovimientos tbody td {
+    padding: 6px 7px;
+}
+
+/* Fecha/Hora */
+#tablaMovimientos .col-fecha {
+    width: 80px;
+    white-space: nowrap;
+}
+.fecha-hora {
+    display: block;
+    color: var(--nexo-gray-500);
+    font-size: 0.7rem;
+    margin-top: 1px;
+}
+
+/* Artículo */
+#tablaMovimientos .col-articulo {
+    width: 140px;
+}
+.col-articulo strong {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+}
+.sub-text {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--nexo-gray-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+}
+
+/* Características */
+#tablaMovimientos .col-caract {
+    width: 100px;
+}
+.caract-item {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--nexo-gray-700);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 96px;
+}
+
+/* Talla */
+#tablaMovimientos .col-talla {
+    width: 48px;
+    text-align: center;
+}
+
+/* SKU */
+#tablaMovimientos .col-sku {
+    width: 88px;
+}
+#tablaMovimientos .col-sku code {
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    max-width: 84px;
+    vertical-align: bottom;
+}
+
+/* Cantidad */
+#tablaMovimientos .col-cant {
+    width: 52px;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Tipo badge */
+#tablaMovimientos .col-tipo {
+    width: 72px;
+    text-align: center;
+}
+#tablaMovimientos .nexo-badge {
+    padding: 2px 6px;
+    font-size: 0.62rem;
+    white-space: nowrap;
+}
+
+/* Concepto */
+#tablaMovimientos .col-concepto {
+    width: 110px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+}
+
+/* Responsable + Referencia */
+#tablaMovimientos .col-resp {
+    width: 120px;
+}
+.resp-nombre {
+    display: block;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 116px;
+}
+.resp-referencia {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--nexo-gray-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 116px;
+    margin-top: 1px;
+}
+
 .referencia-devolucion {
     color: var(--nexo-accent);
     font-weight: 500;
@@ -579,25 +712,20 @@
                                 <table class="table nexo-table" id="tablaMovimientos">
                                     <thead>
                                         <tr>
-                                            <th>Fecha</th>
-                                            <th>Hora</th>
-                                            <th>Artículo</th>
-                                            <th>Descripción</th>
-                                            <th>Marca</th>
-                                            <th>Color</th>
-                                            <th>Género</th>
-                                            <th>Talla</th>
-                                            <th>SKU</th>
-                                            <th>Cantidad</th>
-                                            <th>Tipo</th>
-                                            <th>Concepto</th>
-                                            <th>Responsable</th>
-                                            <th>Referencia</th>
+                                            <th class="col-fecha">Fecha / Hora</th>
+                                            <th class="col-articulo">Artículo</th>
+                                            <th class="col-caract">Características</th>
+                                            <th class="col-talla">Talla</th>
+                                            <th class="col-sku">SKU</th>
+                                            <th class="col-cant">Cant.</th>
+                                            <th class="col-tipo">Tipo</th>
+                                            <th class="col-concepto">Concepto</th>
+                                            <th class="col-resp">Responsable / Ref.</th>
                                         </tr>
                                     </thead>
                                     <tbody id="tbodyMovimientos">
                                         <tr>
-                                            <td colspan="14">
+                                            <td colspan="9">
                                                 <div class="nexo-empty-state">
                                                     <i class="bi bi-hourglass-split"></i>
                                                     <p>Cargando movimientos...</p>
@@ -946,22 +1074,30 @@ function cargarMovimientos(page = 1) {
                     // Obtener clase para referencia
                     const referenciaClass = getReferenciaClass(mov.concepto, mov.referencia_externa);
                     
+                    const refTitle = `${mov.responsable} | ${mov.referencia_externa || '-'}`;
                     const fila = `
                         <tr>
-                            <td>${fechaFormateada}</td>
-                            <td>${mov.hora}</td>
-                            <td><strong>${mov.articulo}</strong></td>
-                            <td>${mov.descripcion || '-'}</td>
-                            <td>${mov.marca || '-'}</td>
-                            <td>${mov.color || '-'}</td>
-                            <td>${mov.genero || '-'}</td>
-                            <td>${mov.talla}</td>
-                            <td><code>${mov.sku}</code></td>
-                            <td class="${cantidadClass}">${cantidadSign}${mov.cantidad}</td>
-                            <td><span class="nexo-badge ${tipoBadgeClass}">${mov.tipo_movimiento}</span></td>
-                            <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
-                            <td>${mov.responsable}</td>
-                            <td class="referencia-cell ${referenciaClass}" title="${mov.referencia_externa || '-'}">${mov.referencia_externa || '-'}</td>
+                            <td class="col-fecha">
+                                ${fechaFormateada}
+                                <span class="fecha-hora">${mov.hora}</span>
+                            </td>
+                            <td class="col-articulo" title="${mov.articulo}${mov.descripcion ? ' — ' + mov.descripcion : ''}">
+                                <strong>${mov.articulo}</strong>
+                                <span class="sub-text">${mov.descripcion || ''}</span>
+                            </td>
+                            <td class="col-caract" title="${mov.marca || '-'} · ${mov.color || '-'} · ${mov.genero || '-'}">
+                                <span class="caract-item">${mov.marca || '-'}</span>
+                                <span class="caract-item">${mov.color || '-'} · ${mov.genero || '-'}</span>
+                            </td>
+                            <td class="col-talla">${mov.talla}</td>
+                            <td class="col-sku" title="${mov.sku}"><code>${mov.sku}</code></td>
+                            <td class="col-cant ${cantidadClass}">${cantidadSign}${mov.cantidad}</td>
+                            <td class="col-tipo"><span class="nexo-badge ${tipoBadgeClass}">${mov.tipo_movimiento}</span></td>
+                            <td class="col-concepto" title="${mov.concepto || ''}">${formatearConcepto(mov.concepto, mov.sucursal_destino)}</td>
+                            <td class="col-resp" title="${refTitle}">
+                                <span class="resp-nombre">${mov.responsable}</span>
+                                <span class="resp-referencia ${referenciaClass}">${mov.referencia_externa || '-'}</span>
+                            </td>
                         </tr>`;
                     tbody.append(fila);
                 });

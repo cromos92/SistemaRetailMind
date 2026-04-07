@@ -119,6 +119,70 @@
     }
     
     /* Estilos para Select2 en modal Crear Producto Manual - con !important para sobrescribir app.css */
+
+    /* ===== Stepper Crear Producto Manual ===== */
+    #stepperCrearManual {
+        gap: 0;
+    }
+    .stepper-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 0 0 auto;
+        position: relative;
+        min-width: 80px;
+    }
+    .stepper-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #e9ecef;
+        color: #adb5bd;
+        font-weight: 700;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #dee2e6;
+        transition: all .3s ease;
+        z-index: 1;
+    }
+    .stepper-label {
+        font-size: 0.65rem;
+        margin-top: 4px;
+        color: #adb5bd;
+        white-space: nowrap;
+        font-weight: 500;
+        transition: color .3s ease;
+    }
+    .stepper-step.active .stepper-circle {
+        background: #0d6efd;
+        color: #fff;
+        border-color: #0d6efd;
+    }
+    .stepper-step.active .stepper-label {
+        color: #0d6efd;
+    }
+    .stepper-step.completed .stepper-circle {
+        background: #0ab39c;
+        color: #fff;
+        border-color: #0ab39c;
+    }
+    .stepper-step.completed .stepper-label {
+        color: #0ab39c;
+    }
+    .stepper-line {
+        flex: 1;
+        height: 2px;
+        background: #dee2e6;
+        margin-top: -22px;
+        transition: background .3s ease;
+    }
+    .stepper-line.filled {
+        background: #0ab39c;
+    }
+    /* ===== fin Stepper ===== */
+
     #modalCrearProductoManual .select2-container--default .select2-selection--single {
         height: 38px !important;
         border: 1px solid #ced4da !important;
@@ -1060,6 +1124,24 @@
             </div>
         </div>
 
+        <!-- ========== BANNER ALERTAS PRECIOS OTRAS SUCURSALES ========== -->
+        <div id="bannerAlertaPrecios" class="alert alert-warning alert-dismissible fade show mb-3 d-none" role="alert"
+             style="border-left: 4px solid #f0a500; background: linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%); border-radius: 10px;">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-bell-fill text-warning fs-5"></i>
+                    <div>
+                        <strong id="bannerAlertaTitulo">Cambios de precio en otras sucursales</strong>
+                        <span class="ms-1 text-muted small" id="bannerAlertaDetalle"></span>
+                    </div>
+                </div>
+                <a href="/app/gestion-precios/revisar-pendientes/" class="btn btn-warning btn-sm">
+                    <i class="bi bi-eye me-1"></i>Revisar Cambios
+                </a>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+
         <!-- ========== TABLA PRINCIPAL ========== -->
         <div class="card shadow">
             <!-- Header estilo Chat del Proyecto -->
@@ -1180,6 +1262,9 @@
                                 </th>
                                 <th class="text-center">
                                     <i class="bi bi-check-circle me-1"></i>Estado
+                                </th>
+                                <th class="text-center">
+                                    <i class="bi bi-signpost-split me-1"></i>Origen
                                 </th>
                                 <th class="text-center">
                                     <i class="bi bi-currency-dollar me-1"></i>Costo
@@ -1328,6 +1413,20 @@
                 </div>
                 <form id="formCrearProductoDesdeRecepcion">
                     <div class="modal-body">
+                        <!-- Banner de trazabilidad de compra (oculto por defecto) -->
+                        <div id="bannerCompraRecepcion" class="alert alert-success py-2 mb-3 d-none" role="alert"
+                             style="border-left: 4px solid #0ab39c; background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);">
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <i class="bi bi-truck text-success fs-5"></i>
+                                <div>
+                                    <strong id="bannerCompraNombre" class="text-success"></strong>
+                                    <span class="ms-2 badge bg-success" id="bannerCompraTipo"></span>
+                                </div>
+                                <div class="ms-auto text-muted small">
+                                    <i class="bi bi-building me-1"></i><span id="bannerCompraProveedor"></span>
+                                </div>
+                            </div>
+                        </div>
                         <div class="row g-4">
                             <!-- Columna izquierda -->
                             <div class="col-md-4">
@@ -1511,6 +1610,34 @@
                 </div>
                 <form id="formCrearProductoManual">
                     <div class="modal-body">
+                        <!-- ===== STEPPER DE PROGRESO ===== -->
+                        <div class="d-flex align-items-center mb-4 px-2" id="stepperCrearManual">
+                            <div class="stepper-step active" id="step1" data-step="1">
+                                <div class="stepper-circle">1</div>
+                                <div class="stepper-label">Proveedor / DTE</div>
+                            </div>
+                            <div class="stepper-line" id="stepLine1"></div>
+                            <div class="stepper-step" id="step2" data-step="2">
+                                <div class="stepper-circle">2</div>
+                                <div class="stepper-label">Artículo / Atributos</div>
+                            </div>
+                            <div class="stepper-line" id="stepLine2"></div>
+                            <div class="stepper-step" id="step3" data-step="3">
+                                <div class="stepper-circle">3</div>
+                                <div class="stepper-label">Tallas / Stock</div>
+                            </div>
+                            <div class="stepper-line" id="stepLine3"></div>
+                            <div class="stepper-step" id="step4" data-step="4">
+                                <div class="stepper-circle">4</div>
+                                <div class="stepper-label">Precios</div>
+                            </div>
+                        </div>
+                        <!-- Resultado de sincronización multi-sucursal (se muestra post-creación) -->
+                        <div id="alertaSincManual" class="alert alert-info alert-dismissible fade d-none mb-3" role="alert">
+                            <i class="bi bi-arrow-repeat me-2"></i>
+                            <span id="alertaSincManualTexto"></span>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
                         <div class="row g-4">
                             <!-- Columna izquierda -->
                             <div class="col-md-4">
@@ -2060,42 +2187,82 @@
                         </div>
                     </div>
                     
-                    <!-- Toolbar: Sucursal + acciones masivas globales -->
-                    <div class="d-flex flex-wrap gap-2 align-items-end mb-2 p-2 rounded" style="background:#f0f2f5;">
-                        <div>
-                            <label class="form-label mb-1 small fw-semibold text-secondary"><i class="bi bi-building me-1"></i>Filtrar sucursal / bodega</label>
-                            <select class="form-select form-select-sm" id="filtroSucursalEditar" style="min-width:180px;">
-                                <option value="todas">— Todas las sucursales —</option>
-                            </select>
-                        </div>
-                        <div id="panelAccionSucursal" style="display:none;">
-                            <label class="form-label mb-1 small fw-semibold text-secondary d-block">Acción sobre esta sucursal</label>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-danger" id="btnExcluirSucursal" title="Excluir todos los productos de esta sucursal de la analítica">
-                                    <i class="bi bi-eye-slash me-1"></i>Excluir todos
-                                </button>
-                                <button class="btn btn-outline-success" id="btnIncluirSucursal" title="Incluir todos los productos de esta sucursal en la analítica">
-                                    <i class="bi bi-eye me-1"></i>Incluir todos
-                                </button>
+                    <!-- Toolbar: Sucursal + acciones de analítica -->
+                    <div class="border rounded mb-2" style="background:#f8f9fa;">
+                        <!-- Fila superior: filtro de bodega -->
+                        <div class="d-flex flex-wrap gap-2 align-items-center p-2 border-bottom">
+                            <i class="bi bi-building text-secondary fs-5"></i>
+                            <div>
+                                <label class="form-label mb-0 small fw-semibold text-secondary">Bodega / Sucursal</label>
+                                <select class="form-select form-select-sm ms-1 d-inline-block" id="filtroSucursalEditar" style="min-width:200px;">
+                                    <option value="todas">— Todas las bodegas —</option>
+                                </select>
                             </div>
+                            <span class="text-muted small ms-1" id="txtScopeActual">Mostrando productos de todas las bodegas</span>
                         </div>
-                        <div class="ms-auto d-flex flex-column align-items-end gap-1">
-                            <!-- Toggle propagación -->
-                            <div class="d-flex align-items-center gap-2 py-1 px-2 rounded" style="background:#e8f4fd; border:1px solid #b6d4f5;">
-                                <input class="form-check-input m-0" type="checkbox" id="chkPropagar" checked>
-                                <label class="form-check-label small fw-semibold text-primary mb-0" for="chkPropagar" style="cursor:pointer;">
-                                    <i class="bi bi-arrow-repeat me-1"></i>Aplicar en <strong>todas las sucursales</strong> del artículo
-                                </label>
-                            </div>
-                            <!-- Acción global -->
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                                    <i class="bi bi-sliders me-1"></i>Todas las sucursales
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><button class="dropdown-item text-danger" id="btnExcluirTodasAnalitica"><i class="bi bi-eye-slash me-2"></i>Excluir TODAS de Analítica</button></li>
-                                    <li><button class="dropdown-item text-success" id="btnIncluirTodasAnalitica"><i class="bi bi-eye me-2"></i>Incluir TODAS en Analítica</button></li>
-                                </ul>
+
+                        <!-- Sección de acciones de analítica (colapsable) -->
+                        <div class="p-2">
+                            <div class="d-flex flex-wrap gap-3 align-items-start">
+
+                                <!-- BLOQUE 1: Acciones para la bodega seleccionada -->
+                                <div id="panelAccionSucursal" style="display:none; min-width:260px;">
+                                    <div class="border rounded p-2" style="background:#fff3cd; border-color:#ffc107!important;">
+                                        <div class="small fw-bold text-warning-emphasis mb-1">
+                                            <i class="bi bi-building-check me-1"></i>Analítica — <span id="lblNombreSucursalPanel">esta bodega</span>
+                                        </div>
+                                        <div class="d-flex gap-1">
+                                            <button class="btn btn-sm btn-outline-danger flex-grow-1" id="btnExcluirSucursal"
+                                                    title="Excluir de dashboards y KPIs solo los productos de esta bodega">
+                                                <i class="bi bi-eye-slash me-1"></i>Excluir todos
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success flex-grow-1" id="btnIncluirSucursal"
+                                                    title="Incluir en dashboards y KPIs solo los productos de esta bodega">
+                                                <i class="bi bi-eye me-1"></i>Incluir todos
+                                            </button>
+                                        </div>
+                                        <div class="text-muted mt-1" style="font-size:.7rem;">
+                                            <i class="bi bi-info-circle me-1"></i>Solo afecta la analítica de los productos de <strong><span id="lblNombreSucursalPanel2">esta bodega</span></strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- BLOQUE 2: Opciones de propagación al editar -->
+                                <div class="border rounded p-2 flex-grow-1" style="background:#e8f4fd; border-color:#b6d4f5!important; min-width:260px;">
+                                    <div class="small fw-bold text-primary mb-1">
+                                        <i class="bi bi-arrow-repeat me-1"></i>Al cambiar analítica en un producto
+                                    </div>
+                                    <div class="form-check mb-0">
+                                        <input class="form-check-input" type="checkbox" id="chkPropagar">
+                                        <label class="form-check-label small" for="chkPropagar" style="cursor:pointer;">
+                                            Propagar el cambio a <strong>todas las bodegas</strong> que tengan el mismo artículo
+                                        </label>
+                                    </div>
+                                    <div class="text-muted mt-1" style="font-size:.7rem;">
+                                        <i class="bi bi-lightbulb me-1 text-warning"></i>Desmarcado: el cambio afecta <u>solo a esta instancia del producto</u>
+                                    </div>
+                                </div>
+
+                                <!-- BLOQUE 3: Acción global TOTAL (nuclear) -->
+                                <div class="border rounded p-2" style="background:#fff; border-color:#dee2e6!important; min-width:200px;">
+                                    <div class="small fw-bold text-secondary mb-1">
+                                        <i class="bi bi-exclamation-triangle me-1 text-danger"></i>Acción global — <u>todas las bodegas</u>
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-sm btn-danger flex-grow-1" id="btnExcluirTodasAnalitica"
+                                                title="Excluir de analítica TODOS los productos de TODAS las bodegas del sistema">
+                                            <i class="bi bi-eye-slash me-1"></i>Excluir todo
+                                        </button>
+                                        <button class="btn btn-sm btn-success flex-grow-1" id="btnIncluirTodasAnalitica"
+                                                title="Incluir en analítica TODOS los productos de TODAS las bodegas del sistema">
+                                            <i class="bi bi-eye me-1"></i>Incluir todo
+                                        </button>
+                                    </div>
+                                    <div class="text-danger mt-1" style="font-size:.7rem;">
+                                        <i class="bi bi-exclamation-octagon me-1"></i>Afecta <strong>todo el sistema</strong>, sin excepción
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
                     </div>
@@ -2637,6 +2804,21 @@ function showError(msg) {
                         ? `<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Creado</span>`
                         : `<span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Pendiente</span>`;
 
+                    // Origen badge
+                    let origenBadge = '';
+                    if (p.origen_tipo === 'RECEPCION') {
+                        origenBadge = `<span class="badge" style="background:#1976d2;color:#fff;" title="Creado desde recepción de compra"><i class="bi bi-truck me-1"></i>Recepción</span>`;
+                    } else if (p.origen_tipo === 'MANUAL') {
+                        origenBadge = `<span class="badge bg-secondary" title="Creado manualmente"><i class="bi bi-pencil me-1"></i>Manual</span>`;
+                    } else {
+                        origenBadge = `<span class="badge bg-light text-muted">-</span>`;
+                    }
+
+                    // Price alert bell
+                    const precioAlertaHtml = p.precio_alerta
+                        ? `<span class="ms-1" title="Hay cambios de precio no leídos en esta sucursal"><i class="bi bi-bell-fill text-warning" style="font-size:0.85rem;"></i></span>`
+                        : '';
+
                     const boton = !p.creado
                         ? `<div class="btn-group btn-group-sm" role="group">
                                <button class="btn btn-success abrir-crear-producto"
@@ -2672,7 +2854,8 @@ function showError(msg) {
                     <td><span class="badge bg-light text-dark">${p.atributo2 || '-'}</span></td>
                     <td><span class="badge bg-light text-dark">${p.atributo3 || '-'}</span></td>
                     <td>${estado}</td>
-                    <td><strong>$${Number(p.costo).toLocaleString()}</strong></td>
+                    <td class="text-center">${origenBadge}</td>
+                    <td><strong>$${Number(p.costo).toLocaleString()}</strong>${precioAlertaHtml}</td>
                     <td><span class="badge bg-info">${p.stock_total}</span></td>
                     <td><span class="badge bg-success">${p.stock_creado}</span></td>
                     <td class="text-center">${infoFIFO}</td>
@@ -2750,6 +2933,24 @@ function showError(msg) {
 
     
     // ========== INICIALIZACIÓN DE LA PÁGINA ==========
+
+    // Banner de alertas de precios en otras sucursales
+    function cargarAlertaBannerPrecios() {
+        $.get('/app/gestion-precios/indicadores-pendientes/', function(data) {
+            if (!data.success) return;
+            const total = (data.total_pendientes || 0) + (data.total_aplicados || 0);
+            if (total > 0) {
+                const txt = total === 1
+                    ? '1 cambio de precio sincronizado desde otra sucursal'
+                    : `${total} cambios de precio desde otras sucursales`;
+                $('#bannerAlertaDetalle').text('— ' + txt);
+                $('#bannerAlertaPrecios').removeClass('d-none');
+            }
+        }).fail(function() {
+            // Silenciosamente ignorar si el endpoint no está disponible
+        });
+    }
+
     $(document).ready(function () {
         console.log('🚀 Inicializando página de Gestión de Productos...');
         
@@ -2760,6 +2961,7 @@ function showError(msg) {
         const anioActual = new Date().getFullYear();
         cargarProductosParaCrear(anioActual);
         actualizarMetricasFIFO();
+        cargarAlertaBannerPrecios();
         
         // Configurar eventos de paginación
         $('#pageSize').on('change', function() {
@@ -2905,6 +3107,16 @@ function showError(msg) {
             form.find('[name="costo"]').val(data.costo);
             form.find('[name="precioventa"]').val(data.precioSugerido);
             form.find('[name="precio_sugerido"]').val(data.precioSugerido);
+
+            // Mostrar banner de trazabilidad de compra
+            if (data.compra_id) {
+                $('#bannerCompraNombre').text('Compra: ' + (data.compra_nombre || 'Sin nombre'));
+                $('#bannerCompraTipo').text(data.compra_tipo ? data.compra_tipo.toUpperCase() : '');
+                $('#bannerCompraProveedor').text(data.proveedor_nombre || '');
+                $('#bannerCompraRecepcion').removeClass('d-none');
+            } else {
+                $('#bannerCompraRecepcion').addClass('d-none');
+            }
 
             // Setear atributos por TEXTO (Marca, Color, Género)
             cargarOpcionesAtributoYSeleccionarPorTexto(ID_ATRIBUTO_MARCA, 'atributo1', data.atributo1_label);
@@ -5152,11 +5364,16 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
             if (res.success) {
                 // Mostrar mensaje detallado según resultado
                 let titulo = res.producto_actualizado ? 'Producto actualizado' : 'Producto creado';
-                showSuccessAlert(titulo, res.mensaje || 'El producto y sus variantes fueron procesados correctamente.');
+                // Enriquecer con datos de trazabilidad si están disponibles
+                const compraInfo = $('#bannerCompraNombre').text();
+                let msgExtra = res.mensaje || 'El producto y sus variantes fueron procesados correctamente.';
+                if (compraInfo) msgExtra += ` (${compraInfo})`;
+                showSuccessAlert(titulo, msgExtra);
                 $('#modalCrearProductoDesdeRecepcion').modal('hide');
                 // Refrescar la tabla de productos listos para crear
                 const anioActual = new Date().getFullYear();
                 cargarProductosParaCrear(anioActual);
+                cargarAlertaBannerPrecios();
             } else {
                 showErrorAlert('Error', res.error || 'No se pudo crear el producto.');
             }
@@ -5385,11 +5602,56 @@ function abrirModalCrearProductoManual() {
     // Inicializar selects
     inicializarSelect2Manual();
     
+    // Resetear stepper al paso 1
+    actualizarStepperManual(1);
+    
     // Mostrar modal usando la nueva función de inicialización
     inicializarModal('modalCrearProductoManual');
     
     console.log('✅ Modal Crear Producto Manual abierto - todo limpio');
 }
+
+/**
+ * Stepper para modalCrearProductoManual:
+ * Actualiza visualmente los pasos según el progreso del usuario.
+ * Paso 1: Proveedor/DTE | Paso 2: Artículo/Atributos | Paso 3: Tallas/Stock | Paso 4: Precios
+ */
+function actualizarStepperManual(pasoActivo) {
+    for (let i = 1; i <= 4; i++) {
+        const $step = $(`#step${i}`);
+        const $line = $(`#stepLine${i}`);
+        $step.removeClass('active completed');
+        if ($line.length) $line.removeClass('filled');
+        if (i < pasoActivo) {
+            $step.addClass('completed');
+            if ($line.length) $line.addClass('filled');
+        } else if (i === pasoActivo) {
+            $step.addClass('active');
+        }
+    }
+}
+
+function detectarPasoManual() {
+    const proveedor = $('#selectProveedorManual').val();
+    const dte = $('#hiddenDteManual').val();
+    const articulo = $('form#formCrearProductoManual input[name="articulo"]').val();
+    const atributo1 = $('form#formCrearProductoManual select[name="atributo1"]').val();
+    const tallas = $('#tablaTallasManual tbody tr').length;
+    const costo = $('form#formCrearProductoManual input[name="costo"]').val();
+
+    if (costo) return 4;
+    if (tallas > 0) return 3;
+    if (articulo || atributo1) return 2;
+    if (proveedor && dte) return 2;
+    return 1;
+}
+
+$(document).on('change input', '#selectProveedorManual, #hiddenDteManual, #formCrearProductoManual input[name="articulo"], #formCrearProductoManual select[name="atributo1"], #formCrearProductoManual input[name="costo"]', function() {
+    actualizarStepperManual(detectarPasoManual());
+});
+$(document).on('change', '#selectDteManual', function() {
+    setTimeout(() => actualizarStepperManual(detectarPasoManual()), 200);
+});
 
 function cargarProveedoresManual() {
     console.log('🔄 Cargando proveedores...');
@@ -7495,10 +7757,20 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                 // Mostrar mensaje detallado según resultado
                 let titulo = res.producto_actualizado ? 'Producto actualizado' : 'Producto creado';
                 showSuccessAlert(titulo, res.mensaje || 'El producto fue procesado correctamente.');
+                // Mostrar resultado de sincronización multi-sucursal
+                const nSync = res.sucursales_sincronizadas || res.productos_otras_sucursales?.length || 0;
+                if (nSync > 0) {
+                    const txtSync = nSync === 1
+                        ? 'Precio sincronizado con 1 sucursal adicional.'
+                        : `Precio sincronizado con ${nSync} sucursales adicionales.`;
+                    $('#alertaSincManualTexto').text(txtSync);
+                    $('#alertaSincManual').removeClass('d-none').addClass('show');
+                }
                 $('#modalCrearProductoManual').modal('hide');
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
                 cargarProductosParaCrear(anioActual);
+                cargarAlertaBannerPrecios();
             } else if (res.producto_existente) {
                 // Mostrar modal de producto existente
                 mostrarModalProductoExistente(res);
@@ -9189,6 +9461,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
             $('#edit_precioventa').val(producto.precioventa);
             $('#edit_precioSugerido').val(producto.precioSugerido);
             
+            // Mostrar bodega en el modal
+            const sucBadge = document.getElementById('editSucursalBadge');
+            if (sucBadge) sucBadge.textContent = producto.sucursal_nombre || 'Sin bodega';
+            
             // Estado analítica
             const excluir = producto.excluir_de_analitica === true;
             $('#edit_excluir_de_analitica').prop('checked', excluir);
@@ -9790,10 +10066,14 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // Al cambiar sucursal: mostrar/ocultar botones y auto-buscar
     $('#filtroSucursalEditar').on('change', function() {
         const val = $(this).val();
+        const nombreSucursal = $(this).find(':selected').text().trim();
         if (val === 'todas') {
             $('#panelAccionSucursal').hide();
+            $('#txtScopeActual').text('Mostrando productos de todas las bodegas');
         } else {
             $('#panelAccionSucursal').show();
+            $('#lblNombreSucursalPanel, #lblNombreSucursalPanel2').text(nombreSucursal);
+            $('#txtScopeActual').text(`Filtrando por bodega: ${nombreSucursal}`);
         }
         resetearSeleccion();
         buscarProductosParaEditar();
@@ -10062,18 +10342,18 @@ $('#btnConfirmarActualizacion').on('click', function() {
         }
 
         let html = `
-            <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
+            <div class="table-responsive" style="max-height:440px; overflow-y:auto;">
                 <table class="table table-hover table-sm align-middle" id="tablaResultadosBusqueda">
                     <thead style="background:#405189; position:sticky; top:0; z-index:1;">
                         <tr>
                             <th style="width:36px;" class="text-white text-center">
                                 <input type="checkbox" id="selectAllProductos" class="form-check-input" title="Seleccionar todo">
                             </th>
-                            <th class="text-white">Nombre / Código</th>
-                            <th class="text-white">Sucursal</th>
-                            <th class="text-white text-end">Precio</th>
-                            <th class="text-white text-center">Stock</th>
-                            <th class="text-white text-center" style="width:110px;">Analítica</th>
+                            <th class="text-white">Producto</th>
+                            <th class="text-white text-center" style="width:90px;">Tallas</th>
+                            <th class="text-white text-center" style="width:80px;">Stock</th>
+                            <th class="text-white text-end" style="width:100px;">Precio</th>
+                            <th class="text-white text-center" style="width:105px;">Analítica</th>
                             <th class="text-white text-center" style="width:60px;">Editar</th>
                         </tr>
                     </thead>
@@ -10082,12 +10362,44 @@ $('#btnConfirmarActualizacion').on('click', function() {
 
         productosFiltrados.forEach((producto) => {
             const stockClass = producto.stock_total === 0 ? 'text-danger' :
-                              producto.stock_total < 5 ? 'text-warning' : 'text-success';
+                              producto.stock_total < 5 ? 'text-warning fw-bold' : 'text-success fw-bold';
             const precioFormateado = new Intl.NumberFormat('es-CL', {
                 style: 'currency', currency: 'CLP', minimumFractionDigits: 0
             }).format(producto.precioventa);
+
+            // Badges de atributos
             const marcaBadge = (producto.marca && producto.marca !== '-')
-                ? `<span class="badge bg-light text-dark border ms-1" style="font-size:.7rem;">${producto.marca}</span>` : '';
+                ? `<span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 me-1" style="font-size:.68rem;">${producto.marca}</span>` : '';
+            const colorBadge = (producto.color && producto.color !== '-')
+                ? `<span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info border-opacity-25 me-1" style="font-size:.68rem;"><i class="bi bi-circle-fill me-1" style="font-size:.5rem;"></i>${producto.color}</span>` : '';
+            const generoBadge = (producto.genero && producto.genero !== '-')
+                ? `<span class="badge bg-secondary bg-opacity-10 text-secondary border me-1" style="font-size:.68rem;">${producto.genero}</span>` : '';
+
+            // Tallas como pills
+            let tallasPills = '';
+            if (producto.tallas && producto.tallas.length > 0) {
+                const maxMostrar = 4;
+                const tallasVisibles = producto.tallas.slice(0, maxMostrar);
+                tallasPills = tallasVisibles.map(t => {
+                    const cls = t.stock === 0 ? 'bg-danger bg-opacity-15 text-danger border border-danger border-opacity-25'
+                               : t.stock < 3  ? 'bg-warning bg-opacity-15 text-warning-emphasis border border-warning border-opacity-25'
+                               : 'bg-success bg-opacity-10 text-success border border-success border-opacity-25';
+                    return `<span class="badge ${cls} me-1" style="font-size:.68rem;" title="${t.talla}: ${t.stock} uds">${t.talla}</span>`;
+                }).join('');
+                if (producto.tallas.length > maxMostrar) {
+                    tallasPills += `<span class="badge bg-light text-muted border" style="font-size:.68rem;" 
+                        title="${producto.tallas.slice(maxMostrar).map(t=>t.talla).join(', ')}">+${producto.tallas.length - maxMostrar}</span>`;
+                }
+            } else {
+                tallasPills = '<span class="text-muted" style="font-size:.75rem;">—</span>';
+            }
+
+            // Stock badge
+            const stockBadgeStyle = producto.stock_total === 0
+                ? 'background:#ffeaea;color:#c0392b;border:1px solid #f5c6cb;'
+                : producto.stock_total < 5
+                    ? 'background:#fff8e1;color:#856404;border:1px solid #ffc107;'
+                    : 'background:#e9f7ef;color:#1a7d45;border:1px solid #a3d9a5;';
 
             html += `
                 <tr>
@@ -10095,12 +10407,20 @@ $('#btnConfirmarActualizacion').on('click', function() {
                         <input type="checkbox" class="form-check-input chk-producto" value="${producto.producto_id}">
                     </td>
                     <td>
-                        <div class="fw-semibold">${producto.nombre}${marcaBadge}</div>
-                        <code class="text-muted" style="font-size:.75rem;">${producto.codigo || '-'}</code>
+                        <div class="fw-semibold lh-sm">${producto.nombre}</div>
+                        <div class="mt-1">
+                            ${marcaBadge}${colorBadge}${generoBadge}
+                        </div>
+                        <div class="mt-1">
+                            <code class="text-muted" style="font-size:.7rem;">${producto.codigo || ''}</code>
+                            <span class="text-muted" style="font-size:.7rem;"> · ${producto.sucursal_nombre || '-'}</span>
+                        </div>
                     </td>
-                    <td><small class="text-muted">${producto.sucursal_nombre || '-'}</small></td>
-                    <td class="text-end fw-bold text-success">${precioFormateado}</td>
-                    <td class="text-center ${stockClass} fw-bold">${producto.stock_total}</td>
+                    <td class="text-center">${tallasPills}</td>
+                    <td class="text-center">
+                        <span class="px-2 py-1 rounded" style="font-size:.8rem; font-weight:600; ${stockBadgeStyle}">${producto.stock_total}</span>
+                    </td>
+                    <td class="text-end fw-semibold text-success" style="font-size:.9rem;">${precioFormateado}</td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-link p-0 btn-toggle-analitica"
                                 data-producto-id="${producto.producto_id}"
@@ -10108,8 +10428,8 @@ $('#btnConfirmarActualizacion').on('click', function() {
                                 title="${producto.excluir_de_analitica ? 'Click para incluir en analítica' : 'Click para excluir de analítica'}"
                                 style="text-decoration:none;">
                             ${producto.excluir_de_analitica
-                                ? '<span class="badge bg-warning text-dark" style="cursor:pointer;"><i class="bi bi-eye-slash me-1"></i>Excluido</span>'
-                                : '<span class="badge bg-success" style="cursor:pointer;"><i class="bi bi-eye me-1"></i>Incluido</span>'}
+                                ? '<span class="badge bg-warning text-dark" style="cursor:pointer;font-size:.72rem;"><i class="bi bi-eye-slash me-1"></i>Excluido</span>'
+                                : '<span class="badge bg-success" style="cursor:pointer;font-size:.72rem;"><i class="bi bi-eye me-1"></i>Incluido</span>'}
                         </button>
                     </td>
                     <td class="text-center">
@@ -10125,9 +10445,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     </tbody>
                 </table>
             </div>
-            <div class="mt-2 d-flex justify-content-between align-items-center">
-                <small class="text-muted">Mostrando ${productosFiltrados.length} de ${productos.length} productos</small>
-                <div class="d-flex gap-2">
+            <div class="mt-2 d-flex justify-content-between align-items-center flex-wrap gap-1">
+                <small class="text-muted">Mostrando <strong>${productosFiltrados.length}</strong> de <strong>${productos.length}</strong> productos</small>
+                <div class="d-flex gap-2 flex-wrap">
+                    <span class="small text-muted"><span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25" style="font-size:.68rem;">Marca</span> · <span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info border-opacity-25" style="font-size:.68rem;">Color</span> · <span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.68rem;">Género</span></span>
                     <span class="badge bg-success"><i class="bi bi-eye me-1"></i>Incluido en analítica</span>
                     <span class="badge bg-warning text-dark"><i class="bi bi-eye-slash me-1"></i>Excluido de analítica</span>
                 </div>

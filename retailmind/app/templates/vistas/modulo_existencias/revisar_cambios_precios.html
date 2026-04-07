@@ -475,6 +475,64 @@
     color: #8A2BE2;
     border: 1px solid rgba(138, 43, 226, 0.2);
 }
+
+/* ========== FILA DESTACADA (llegada desde notificación) ========== */
+@keyframes destacar-entrada {
+    0%   { background-color: rgba(255, 176, 32, 0.35); box-shadow: inset 0 0 0 2px rgba(255, 176, 32, 0.5); }
+    100% { background-color: rgba(255, 176, 32, 0.08); box-shadow: inset 0 0 0 2px rgba(255, 176, 32, 0.25); }
+}
+
+#tablaCambios tbody tr.fila-destacada {
+    animation: destacar-entrada 0.6s ease-out forwards;
+    border-left: 4px solid var(--nexo-warning) !important;
+}
+
+#tablaCambios tbody tr.fila-desvaneciendo {
+    transition: background-color 1.8s ease, border-color 1.8s ease, box-shadow 1.8s ease;
+    background-color: transparent !important;
+    border-left-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/* ========== BANNER NOTIFICACION ========== */
+.banner-notificacion {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 176, 32, 0.09);
+    border: 1px solid rgba(255, 176, 32, 0.4);
+    border-left: 4px solid var(--nexo-warning);
+    border-radius: var(--nexo-radius-md);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--nexo-gray-700);
+}
+
+.banner-notificacion .banner-icon {
+    color: var(--nexo-warning);
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.banner-notificacion strong {
+    color: var(--nexo-gray-900);
+}
+
+.banner-notificacion .btn-close-banner {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--nexo-gray-500);
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 2px;
+    transition: color var(--nexo-transition-fast);
+}
+
+.banner-notificacion .btn-close-banner:hover {
+    color: var(--nexo-gray-900);
 }
 
 .badge-warning-urgent {
@@ -1023,9 +1081,9 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <h1>
-                        <i class="ri-refresh-line"></i> Historial de Sincronizaciones
+                        <i class="ri-price-tag-3-line"></i> Revisar Cambios de Precio
                     </h1>
-                    <p class="subtitle">Registro de precios sincronizados automáticamente entre sucursales</p>
+                    <p class="subtitle">Alertas de precios sincronizados entre sucursales &mdash; descarta aquí para limpiar la notificación</p>
                 </div>
                 <div class="d-flex gap-2">
                     <a href="/app/gestion-precios/edicion-rapida/" class="btn btn-light btn-sm">
@@ -1040,9 +1098,22 @@
     </div>
 
     <div class="container-fluid">
-        <!-- Resumen de Indicadores - Simplificado a 2 tarjetas -->
-        <div class="summary-cards" id="summaryCards" style="grid-template-columns: repeat(2, 1fr);">
-            <div class="summary-card" onclick="filtrarPorEstado('APLICADO')" id="cardAplicado">
+        <!-- Banner de notificación (visible sólo cuando se llega desde una alerta) -->
+        <div class="banner-notificacion" id="bannerNotificacion" style="display:none;">
+            <i class="ri-notification-3-line banner-icon"></i>
+            <div>
+                <strong>Llegaste desde una notificación de cambio de precio.</strong>
+                La fila correspondiente está resaltada en la tabla.
+                Usa el botón <em>Descartar</em> en esa fila para limpiar la alerta.
+            </div>
+            <button class="btn-close-banner" onclick="document.getElementById('bannerNotificacion').style.display='none'" title="Cerrar">
+                <i class="ri-close-line"></i>
+            </button>
+        </div>
+
+        <!-- Resumen de Indicadores - 4 tarjetas -->
+        <div class="summary-cards" id="summaryCards" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="summary-card active" onclick="filtrarPorEstado('APLICADO')" id="cardAplicado">
                 <div class="summary-icon aprobado">
                     <i class="ri-refresh-line"></i>
                 </div>
@@ -1051,13 +1122,31 @@
                     <p>Sincronizados (activos)</p>
                 </div>
             </div>
+            <div class="summary-card" onclick="verPendientesAprobacion()" id="cardPendiente">
+                <div class="summary-icon pendiente">
+                    <i class="ri-time-line"></i>
+                </div>
+                <div class="summary-info">
+                    <h3 id="countPendiente">0</h3>
+                    <p>Esperan aprobación</p>
+                </div>
+            </div>
             <div class="summary-card" onclick="verDescartados()" id="cardDescartados">
                 <div class="summary-icon" style="background: rgba(108, 117, 125, 0.15); color: #6c757d;">
                     <i class="ri-archive-line"></i>
                 </div>
                 <div class="summary-info">
                     <h3 id="countDescartados">0</h3>
-                    <p>Descartados (archivados)</p>
+                    <p>Descartados</p>
+                </div>
+            </div>
+            <div class="summary-card" onclick="verTodos()" id="cardTodos">
+                <div class="summary-icon" style="background: rgba(0, 102, 255, 0.1); color: var(--nexo-primary);">
+                    <i class="ri-eye-line"></i>
+                </div>
+                <div class="summary-info">
+                    <h3 id="countTodos">0</h3>
+                    <p>Ver todo</p>
                 </div>
             </div>
         </div>
@@ -1070,9 +1159,11 @@
                     <select id="filterTipoCambio" class="form-select" onchange="onTipoCambioChange()">
                         <option value="">Todos los activos</option>
                         <option value="SINCRONIZACION" selected>🔄 Sincronización</option>
-                        <option value="MANUAL">✏️ Manual</option>
-                        <option value="REGULARIZACION">⚖️ Regularización</option>
-                        <option value="DESCARTADOS" style="background:#f8f9fa;border-top:1px solid #dee2e6;">📦 Descartados (archivo)</option>
+                        <option value="INDIVIDUAL">✏️ Propuesta individual</option>
+                        <option value="RECOMENDACION">💡 Por recomendación</option>
+                        <option value="PENDIENTE_APROBACION">⏳ Esperan aprobación</option>
+                        <option value="DESCARTADOS" style="background:#f8f9fa;">📦 Solo descartados</option>
+                        <option value="TODOS" style="background:#f8f9fa;">👁 Ver todo</option>
                     </select>
                 </div>
                 <div class="col-lg-2 col-md-3">
@@ -1187,11 +1278,20 @@ let totalPaginas = 1;
 let cambiosActuales = [];
 
 // Inicializar
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     cargarSucursales();
     cargarIndicadores();
-    cargarCambios();
-    
+    await cargarCambios();
+
+    // Manejar deep-link desde notificación (?cambio=ID)
+    const params = new URLSearchParams(location.search);
+    const cambioDestacado = params.get('cambio');
+    if (cambioDestacado) {
+        document.getElementById('bannerNotificacion').style.display = 'flex';
+        await esperarYDestacFila(parseInt(cambioDestacado));
+        marcarNotificacionLeidaPorCambio(parseInt(cambioDestacado));
+    }
+
     // Auto-refresh cada 60 segundos
     setInterval(() => {
         cargarIndicadores();
@@ -1199,33 +1299,85 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 60000);
 });
 
-// Cargar indicadores de resumen - SIMPLIFICADO
+// Espera a que aparezca la fila con el cambio dado y la resalta
+async function esperarYDestacFila(cambioId) {
+    let intentos = 0;
+    while (intentos < 20) {
+        const fila = document.querySelector(`tr[data-cambio-id="${cambioId}"]`);
+        if (fila) {
+            fila.classList.add('fila-destacada');
+            fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Desvanecer el resaltado suavemente después de 5 segundos
+            setTimeout(() => {
+                fila.classList.remove('fila-destacada');
+                fila.classList.add('fila-desvaneciendo');
+                setTimeout(() => fila.classList.remove('fila-desvaneciendo'), 1900);
+            }, 5000);
+            return;
+        }
+        await new Promise(r => setTimeout(r, 250));
+        intentos++;
+    }
+}
+
+// Marca como leída la notificación asociada a un cambio de precio
+async function marcarNotificacionLeidaPorCambio(cambioId) {
+    try {
+        await fetch('/app/gestion-precios/notificaciones/', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        // Llamar endpoint para marcar leída la notificación de este cambio específico
+        await fetch(`/app/gestion-precios/marcar-leida-por-cambio/${cambioId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+    } catch (e) {
+        // No crítico si falla — la notificación se limpiará al descartar
+    }
+}
+
+// Cargar indicadores de resumen
 async function cargarIndicadores() {
     try {
-        // Cargar desde listar-cambios que ya tiene los contadores
-        const response = await fetch('/app/gestion-precios/listar-cambios/?estado=APLICADO&per_page=1');
-        const data = await response.json();
+        // Activos (APLICADO) + descartados
+        const r1 = await fetch('/app/gestion-precios/listar-cambios/?estado=APLICADO&per_page=1');
+        const d1 = await r1.json();
+        // Pendientes de aprobación (estado PENDIENTE)
+        const r2 = await fetch('/app/gestion-precios/listar-cambios/?estado=PENDIENTE&per_page=1');
+        const d2 = await r2.json();
         
-        if (data.success && data.resumen) {
-            // Sincronizados (activos)
-            document.getElementById('countAplicado').textContent = data.resumen.aplicados || 0;
-            // Descartados
-            document.getElementById('countDescartados').textContent = data.resumen.descartados || 0;
+        if (d1.success && d1.resumen) {
+            const activos = d1.resumen.aplicados || 0;
+            const descartados = d1.resumen.descartados || 0;
+            const pendientes = (d2.success && d2.pagination) ? d2.pagination.total_items : 0;
+            document.getElementById('countAplicado').textContent = activos;
+            document.getElementById('countDescartados').textContent = descartados;
+            document.getElementById('countPendiente').textContent = pendientes;
+            document.getElementById('countTodos').textContent = activos + descartados + pendientes;
+            // Resaltar tarjeta pendiente si hay registros en espera
+            const cardPend = document.getElementById('cardPendiente');
+            if (pendientes > 0) {
+                cardPend.style.borderColor = 'var(--nexo-warning)';
+                cardPend.querySelector('h3').style.color = 'var(--nexo-warning)';
+            } else {
+                cardPend.style.borderColor = '';
+                cardPend.querySelector('h3').style.color = '';
+            }
         }
     } catch (error) {
         console.error('Error cargando indicadores:', error);
     }
 }
 
-// Filtrar por estado desde las tarjetas - SIMPLIFICADO
+// Filtrar por estado desde las tarjetas
 function filtrarPorEstado(estado) {
-    // Actualizar estado visual de las tarjetas
     document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
     document.getElementById('cardAplicado').classList.add('active');
-    
-    // Cambiar a tipo Sincronización (activos)
     document.getElementById('filterTipoCambio').value = 'SINCRONIZACION';
-    
     paginaActual = 1;
     cargarCambios();
 }
@@ -1239,15 +1391,36 @@ function verDescartados() {
     cargarCambios();
 }
 
+// Ver todos los registros (activos + descartados)
+function verTodos() {
+    document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
+    document.getElementById('cardTodos').classList.add('active');
+    document.getElementById('filterTipoCambio').value = 'TODOS';
+    paginaActual = 1;
+    cargarCambios();
+}
+
+// Ver registros PENDIENTE (esperan aprobación manual)
+function verPendientesAprobacion() {
+    document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
+    document.getElementById('cardPendiente').classList.add('active');
+    document.getElementById('filterTipoCambio').value = 'PENDIENTE_APROBACION';
+    paginaActual = 1;
+    cargarCambios();
+}
+
 // Manejar cambio en el select de tipo
 function onTipoCambioChange() {
     const tipo = document.getElementById('filterTipoCambio').value;
     
-    // Actualizar estado visual de las tarjetas
     document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
     
     if (tipo === 'DESCARTADOS') {
         document.getElementById('cardDescartados').classList.add('active');
+    } else if (tipo === 'TODOS') {
+        document.getElementById('cardTodos').classList.add('active');
+    } else if (tipo === 'PENDIENTE_APROBACION') {
+        document.getElementById('cardPendiente').classList.add('active');
     } else {
         document.getElementById('cardAplicado').classList.add('active');
     }
@@ -1330,17 +1503,19 @@ async function cargarCambios() {
     
     const tipoSeleccionado = document.getElementById('filterTipoCambio').value;
     const esDescartados = tipoSeleccionado === 'DESCARTADOS';
+    const esTodos = tipoSeleccionado === 'TODOS';
+    const esPendienteAprobacion = tipoSeleccionado === 'PENDIENTE_APROBACION';
     
-    // Configurar filtros según el tipo seleccionado
     const filtros = {
-        estado: 'APLICADO',
-        tipo_cambio: esDescartados ? '' : tipoSeleccionado,  // Si es descartados, no filtrar por tipo
+        // Si es "esperan aprobación" filtramos por estado PENDIENTE; si es TODOS no filtramos por estado; si no, solo APLICADO
+        estado: esPendienteAprobacion ? 'PENDIENTE' : (esTodos || esDescartados ? '' : 'APLICADO'),
+        tipo_cambio: (esDescartados || esTodos || esPendienteAprobacion) ? '' : tipoSeleccionado,
         sucursal_id: document.getElementById('filterSucursal').value,
         busqueda: document.getElementById('filterBusqueda').value,
         fecha_desde: document.getElementById('filterFechaDesde').value,
         fecha_hasta: document.getElementById('filterFechaHasta').value,
-        mostrar_descartados: esDescartados ? 'true' : 'false',  // Mostrar solo descartados
-        solo_descartados: esDescartados ? 'true' : 'false',     // Filtrar SOLO los descartados
+        mostrar_descartados: (esDescartados || esTodos) ? 'true' : 'false',
+        solo_descartados: esDescartados ? 'true' : 'false',
         page: paginaActual,
         per_page: 15
     };
@@ -1357,8 +1532,11 @@ async function cargarCambios() {
             
             // Actualizar contadores
             if (data.resumen) {
-                document.getElementById('countAplicado').textContent = data.resumen.aplicados || 0;
-                document.getElementById('countDescartados').textContent = data.resumen.descartados || 0;
+                const activos = data.resumen.aplicados || 0;
+                const descartados = data.resumen.descartados || 0;
+                document.getElementById('countAplicado').textContent = activos;
+                document.getElementById('countDescartados').textContent = descartados;
+                // countPendiente y countTodos se actualizan en cargarIndicadores
             }
         } else {
             console.error('Error:', data.error);
@@ -1391,44 +1569,68 @@ function renderizarCambios(cambios) {
     cambios.forEach(cambio => {
         const tr = document.createElement('tr');
         tr.dataset.id = cambio.id;
+        tr.dataset.cambioId = cambio.id;
         
         // Clase de cambio porcentual
         const cambioClass = cambio.porcentaje_cambio > 0 ? 'cambio-positivo' : 'cambio-negativo';
         const cambioIcon = cambio.porcentaje_cambio > 0 ? '▲' : '▼';
         
-        // Badge de tipo
+        // Badge de tipo — valores reales de CambioPrecioPendiente
         let tipoBadge = '';
         switch(cambio.tipo_cambio) {
             case 'Sincronización':
-                tipoBadge = `<span class="tipo-badge tipo-sync"><i class="ri-refresh-line"></i> Sync</span>`;
+            case 'SINCRONIZACION':
+                tipoBadge = `<span class="tipo-badge tipo-sync"><i class="ri-refresh-line"></i> Sincronización</span>`;
                 break;
-            case 'Manual':
-                tipoBadge = `<span class="tipo-badge tipo-manual"><i class="ri-edit-line"></i> Manual</span>`;
+            case 'Individual':
+            case 'INDIVIDUAL':
+                tipoBadge = `<span class="tipo-badge tipo-manual"><i class="ri-edit-line"></i> Individual</span>`;
                 break;
-            case 'Regularización':
-                tipoBadge = `<span class="tipo-badge" style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;"><i class="ri-scales-line"></i> Regulariz.</span>`;
+            case 'Por Recomendación del Sistema':
+            case 'RECOMENDACION':
+                tipoBadge = `<span class="tipo-badge" style="background:rgba(255,176,32,0.12);color:#8a5a00;border:1px solid rgba(255,176,32,0.3);"><i class="ri-lightbulb-line"></i> Recomendación</span>`;
+                break;
+            case 'Cambio Masivo':
+            case 'MASIVO':
+                tipoBadge = `<span class="tipo-badge" style="background:rgba(138,43,226,0.1);color:#6b1fa8;border:1px solid rgba(138,43,226,0.2);"><i class="ri-stack-line"></i> Masivo</span>`;
                 break;
             default:
-                tipoBadge = `<span class="tipo-badge" style="background:#f0f0f0;color:#666;">${cambio.tipo_cambio}</span>`;
+                tipoBadge = `<span class="tipo-badge" style="background:#f0f0f0;color:#666;">${cambio.tipo_cambio || '—'}</span>`;
         }
         
-        // Estado simplificado: Sincronizado o Descartado
+        // Estado real del registro
         const esDescartado = cambio.descartado === true;
-        let estadoBadge = esDescartado 
-            ? `<span class="estado-badge" style="background:#6c757d;color:#fff;"><i class="ri-archive-line"></i> Descartado</span>`
-            : `<span class="estado-badge estado-aplicado"><i class="ri-check-line"></i> Sincronizado</span>`;
+        const estadoReal = cambio.estado || 'APLICADO';
+        let estadoBadge = '';
+        if (esDescartado) {
+            estadoBadge = `<span class="estado-badge" style="background:#6c757d;color:#fff;"><i class="ri-archive-line"></i> Descartado</span>`;
+        } else if (estadoReal === 'PENDIENTE') {
+            estadoBadge = `<span class="estado-badge" style="background:rgba(255,176,32,0.15);color:#996B00;border:1px solid rgba(255,176,32,0.4);"><i class="ri-time-line"></i> Espera aprobación</span>`;
+        } else if (estadoReal === 'RECHAZADO') {
+            estadoBadge = `<span class="estado-badge" style="background:rgba(255,77,77,0.12);color:#c62828;border:1px solid rgba(255,77,77,0.3);"><i class="ri-close-circle-line"></i> Rechazado</span>`;
+        } else {
+            estadoBadge = `<span class="estado-badge estado-aplicado"><i class="ri-check-line"></i> Sincronizado</span>`;
+        }
         
-        // Solo botón de descartar (si no está ya descartado)
-        let acciones = esDescartado
-            ? `<span class="text-muted small"><i class="ri-eye-line"></i> Archivado</span>`
-            : `<button class="btn-accion btn-eliminar" onclick="descartarCambio(${cambio.id})" title="Descartar (archivar)">
-                    <i class="ri-archive-line"></i>
-               </button>`;
+        // Acciones según estado
+        let acciones = '';
+        if (esDescartado) {
+            acciones = `<span class="text-muted small"><i class="ri-eye-line"></i> Archivado</span>`;
+        } else if (estadoReal === 'PENDIENTE') {
+            acciones = `<span class="text-muted small" title="Gestionar desde Gestión de Precios"><i class="ri-time-line"></i> Pendiente</span>`;
+        } else {
+            acciones = `<button class="btn-accion btn-eliminar" onclick="descartarCambio(${cambio.id})" title="Descartar (archivar)">
+                            <i class="ri-archive-line"></i>
+                       </button>`;
+        }
         
-        // Estilo para descartados
+        // Estilo visual según estado
         if (esDescartado) {
             tr.style.opacity = '0.6';
             tr.style.backgroundColor = '#f8f9fa';
+        } else if (estadoReal === 'PENDIENTE') {
+            tr.style.borderLeft = '3px solid var(--nexo-warning)';
+            tr.style.backgroundColor = 'rgba(255,176,32,0.03)';
         }
         
         tr.innerHTML = `

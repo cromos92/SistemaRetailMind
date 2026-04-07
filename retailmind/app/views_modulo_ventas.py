@@ -33,7 +33,7 @@ from .models import (
     Ticket, Ticket_Productos, TicketDetallePago, TicketReferencia, Vendedor, Producto, Producto_Talla,
     Sucursal, EmpresaUser, Empresa, Movimientos_Producto, LoteProducto, Dte, Dte_Productos, Dte_Detalle_Pago,
     Correlativo, ESTADO_TICKET_CHOICES, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
-    ArqueoCaja, ESTADO_ARQUEO_CHOICES, DepositoBancario, ConfiguracionPOS, TransaccionPOS, LogPOS,
+    ArqueoCaja, ESTADO_ARQUEO_CHOICES, GrupoDeposito, DepositoBancario, ConfiguracionPOS, TransaccionPOS, LogPOS,
     TIPO_POS_CHOICES, ESTADO_TRANSACCION_POS_CHOICES, TIPO_TARJETA_CHOICES,
     # Modelos de Cambios y Devoluciones
     CambioDevolucion, CambioDevolucionDetalle, PagoCambioDevolucion, HistorialCambioDevolucion,
@@ -2117,7 +2117,6 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                 correoVendedor=ticket.cliente_email or '',
                 correoAdministrador=ticket.cliente_email_facturacion or ticket.cliente_email or '',
                 esProveedor=False,
-                responsable=usuario.username if usuario else 'Sistema'
             )
     
     # Obtener siguiente correlativo para el DTE
@@ -2818,6 +2817,17 @@ def registrar_pagos_ticket(request, correlativo):
     metodo_principal = payload.get('metodo_pago_principal')
     if metodo_principal and metodo_principal in dict(METODO_PAGO_TICKET_CHOICES):
         ticket.metodo_pago = metodo_principal
+
+    # Guardar condición de pago DTE elegida por el usuario (1=Contado, 2=Crédito)
+    condicion_pago_dte = payload.get('condicion_pago_dte')
+    if condicion_pago_dte in (1, 2):
+        import json as _json
+        try:
+            notas = _json.loads(ticket.observaciones_adicionales or '{}')
+        except (ValueError, TypeError):
+            notas = {}
+        notas['condicion_pago_dte'] = condicion_pago_dte
+        ticket.observaciones_adicionales = _json.dumps(notas)
 
     correlativo_confirmacion = payload.get('correlativo')
     # Solo validar correlativo si NO es una cotización (las cotizaciones tienen formato COT-xxx)
@@ -4241,6 +4251,29 @@ def anular_documento_venta(request):
 # ========== CUADRATURA Y ARQUEO DE CAJA ==========
 
 @login_required
+def revision_arqueos(request):
+    """Vista de supervisión: revisión de arqueos, comprobantes bancarios, depósitos."""
+    sucursal_actual_id = request.session.get('sucursalActual') or request.session.get('idSucursalActual')
+    sucursal_actual = None
+    if sucursal_actual_id:
+        try:
+            sucursal_actual = Sucursal.objects.get(id=sucursal_actual_id)
+        except Sucursal.DoesNotExist:
+            pass
+    if not sucursal_actual:
+        return redirect('dashboard')
+
+    rol_usuario = getattr(request.user, 'rol', None)
+    es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+    if not es_supervisor:
+        return redirect('cuadratura_caja')
+
+    return render(request, 'vistas/modulo_ventas/revisionArqueos.html', {
+        'sucursal_actual': sucursal_actual,
+    })
+
+
+@login_required
 def cuadratura_caja(request):
     """Vista principal para cuadratura y arqueo de caja"""
     sucursal_actual_id = request.session.get('sucursalActual') or request.session.get('idSucursalActual')
@@ -4431,7 +4464,7 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         sucursal=sucursal,
         fecha_emision=fecha_obj,
         estado_dte='EMITIDO',
-        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION']
     ).prefetch_related('dte_asociado')
     
     for dte in dtes_del_dia:
@@ -5056,11 +5089,15 @@ def obtener_detalle_arqueo(request, arqueo_id):
     try:
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         
-        arqueo = get_object_or_404(
-            ArqueoCaja.objects.select_related('usuario_responsable', 'sucursal').prefetch_related('depositos'),
-            id=arqueo_id,
-            sucursal_id=sucursal_id
-        )
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+        
+        qs = ArqueoCaja.objects.select_related('usuario_responsable', 'sucursal').prefetch_related('depositos')
+        if es_supervisor:
+            arqueo = get_object_or_404(qs, id=arqueo_id)
+            sucursal_id = arqueo.sucursal_id
+        else:
+            arqueo = get_object_or_404(qs, id=arqueo_id, sucursal_id=sucursal_id)
         
         # ========== RECALCULAR VALORES TEÓRICOS EN TIEMPO REAL ==========
         from datetime import time as dt_time, datetime
@@ -5676,6 +5713,184 @@ def obtener_depositos_pendientes(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
+# ========== DEPÓSITO MULTI-DÍA ==========
+
+@login_required
+@require_GET
+def listar_arqueos_para_deposito(request):
+    """
+    Retorna arqueos de la sucursal que tienen efectivo pendiente de depositar.
+    Se usa en el modal de depósito multi-día para elegir qué días incluir.
+    """
+    try:
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'Sin sucursal'})
+
+        arqueos = ArqueoCaja.objects.filter(
+            sucursal_id=sucursal_id,
+            estado__in=['CERRADO', 'CON_DIFERENCIAS', 'ABIERTO'],
+        ).order_by('-fecha_arqueo')[:60]
+
+        resultado = []
+        for a in arqueos:
+            efectivo_teorico = a.total_efectivo_teorico
+            total_depositado = a.total_depositos
+            pendiente = efectivo_teorico - total_depositado
+            resultado.append({
+                'id': a.id,
+                'fecha': a.fecha_arqueo.strftime('%Y-%m-%d'),
+                'fecha_display': a.fecha_arqueo.strftime('%d/%m/%Y'),
+                'efectivo_teorico': efectivo_teorico,
+                'efectivo_fisico': a.total_efectivo_fisico,
+                'total_depositado': total_depositado,
+                'pendiente_depositar': pendiente,
+                'estado': a.get_estado_display(),
+            })
+
+        return JsonResponse({'success': True, 'arqueos': resultado})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def crear_deposito_multidia(request):
+    """
+    Crea un GrupoDeposito (1 comprobante bancario) con desglose por día.
+    Valida que la suma del desglose coincida con el monto del comprobante.
+    """
+    try:
+        import json
+        from datetime import datetime
+
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'Sin sucursal'})
+
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+
+        fecha_deposito = request.POST.get('fecha_deposito')
+        monto_total = int(request.POST.get('monto_total', 0))
+        banco = request.POST.get('banco', 'ESTADO')
+        numero_comprobante = request.POST.get('numero_comprobante', '')
+        observaciones = request.POST.get('observaciones', '')
+        desglose_json = request.POST.get('desglose', '[]')
+
+        if not fecha_deposito or monto_total <= 0:
+            return JsonResponse({'success': False, 'error': 'Fecha y monto son requeridos'})
+
+        desglose = json.loads(desglose_json)
+        if not desglose:
+            return JsonResponse({'success': False, 'error': 'Debe incluir al menos un día en el desglose'})
+
+        suma_desglose = sum(int(d.get('monto', 0)) for d in desglose)
+        if suma_desglose != monto_total:
+            return JsonResponse({
+                'success': False,
+                'error': f'La suma del desglose (${suma_desglose:,}) no coincide con el monto del comprobante (${monto_total:,})'
+            })
+
+        fecha_obj = datetime.strptime(fecha_deposito, '%Y-%m-%d').date()
+
+        grupo = GrupoDeposito.objects.create(
+            sucursal=sucursal,
+            fecha_deposito=fecha_obj,
+            monto_total=monto_total,
+            banco=banco,
+            numero_comprobante=numero_comprobante,
+            observaciones=observaciones,
+            registrado_por=request.user,
+        )
+
+        if 'imagen_comprobante' in request.FILES:
+            grupo.imagen_comprobante = request.FILES['imagen_comprobante']
+            grupo.save()
+
+        depositos_creados = []
+        for item in desglose:
+            arqueo_id = int(item['arqueo_id'])
+            monto_dia = int(item['monto'])
+
+            arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id, sucursal=sucursal)
+
+            dep = DepositoBancario.objects.create(
+                arqueo=arqueo,
+                grupo=grupo,
+                fecha_deposito=fecha_obj,
+                monto=monto_dia,
+                banco=banco,
+                numero_comprobante=numero_comprobante,
+                observaciones=f"Depósito multi-día (Grupo #{grupo.id})",
+                registrado_por=request.user,
+            )
+            depositos_creados.append({
+                'id': dep.id,
+                'arqueo_id': arqueo.id,
+                'fecha_arqueo': arqueo.fecha_arqueo.strftime('%d/%m/%Y'),
+                'monto': dep.monto,
+            })
+
+            if abs(arqueo.diferencia_efectivo_real) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
+                arqueo.estado = 'CERRADO'
+            else:
+                arqueo.estado = 'CON_DIFERENCIAS'
+            arqueo.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Depósito multi-día registrado exitosamente ({len(depositos_creados)} días)',
+            'grupo_id': grupo.id,
+            'depositos': depositos_creados,
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"Error crear_deposito_multidia: {e}\n{traceback.format_exc()}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_GET
+def detalle_grupo_deposito(request, grupo_id):
+    """Retorna el detalle de un grupo de depósito con su desglose por día."""
+    try:
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        grupo = get_object_or_404(GrupoDeposito, id=grupo_id, sucursal_id=sucursal_id)
+
+        depositos = []
+        for d in grupo.depositos.select_related('arqueo').all():
+            depositos.append({
+                'id': d.id,
+                'arqueo_id': d.arqueo_id,
+                'fecha_arqueo': d.arqueo.fecha_arqueo.strftime('%d/%m/%Y'),
+                'monto': d.monto,
+                'efectivo_teorico': d.arqueo.total_efectivo_teorico,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'grupo': {
+                'id': grupo.id,
+                'fecha_deposito': grupo.fecha_deposito.strftime('%d/%m/%Y'),
+                'monto_total': grupo.monto_total,
+                'banco': grupo.get_banco_display(),
+                'numero_comprobante': grupo.numero_comprobante,
+                'observaciones': grupo.observaciones,
+                'esta_cuadrado': grupo.esta_cuadrado,
+                'suma_desglose': grupo.suma_desglose,
+                'diferencia': grupo.diferencia,
+                'cantidad_dias': grupo.cantidad_dias,
+                'registrado_por': grupo.registrado_por.get_full_name() or grupo.registrado_por.username,
+                'fecha_registro': grupo.fecha_registro.strftime('%d/%m/%Y %H:%M'),
+            },
+            'depositos': depositos,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
 @login_required
 @require_POST
 def editar_cuadratura(request, arqueo_id):
@@ -6031,6 +6246,14 @@ def listar_arqueos(request):
         from calendar import monthrange
         
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        
+        # Supervisores pueden consultar otra sucursal via query param
+        sucursal_override = request.GET.get('sucursal_id')
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+        if sucursal_override and es_supervisor:
+            sucursal_id = sucursal_override
+        
         print(f"🏢 Sucursal ID desde sesión: {sucursal_id}")
         print(f"🔑 Claves de sesión disponibles: {list(request.session.keys())}")
         
@@ -6159,6 +6382,8 @@ def listar_arqueos(request):
                 'observaciones': arqueo.observaciones or '',
                 'supervisor': arqueo.supervisor_revision.username if arqueo.supervisor_revision else '',
                 'fecha_cierre': arqueo.fecha_cierre.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_cierre else '',
+                'tiene_comprobante': arqueo.depositos.filter(verificado=True, numero_comprobante__gt='').exists(),
+                'total_depositado_verificado': sum(d.monto for d in arqueo.depositos.filter(verificado=True)),
             })
         
         return JsonResponse({
@@ -6746,6 +6971,19 @@ def registrar_comprobante_supervisor(request):
             })
         
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
+        
+        # Validar que no tenga ya un comprobante bancario verificado
+        comprobante_existente = DepositoBancario.objects.filter(
+            arqueo=arqueo,
+            verificado=True,
+            numero_comprobante__gt=''
+        ).exists()
+        if comprobante_existente:
+            return JsonResponse({
+                'success': False,
+                'error': f'Este arqueo ({arqueo.fecha_arqueo.strftime("%d/%m/%Y")}) ya tiene un comprobante bancario registrado. '
+                         'Si necesita corregirlo, primero elimine el existente.'
+            })
         
         # Convertir fecha
         from datetime import datetime
@@ -8537,7 +8775,10 @@ def listar_cambios_devoluciones(request):
         if tipo_operacion:
             queryset = queryset.filter(tipo_operacion=tipo_operacion)
         if estado:
-            queryset = queryset.filter(estado=estado)
+            if estado == 'CANCELADO':
+                queryset = queryset.filter(estado__in=['CANCELADO', 'RECHAZADO', 'REVERTIDO'])
+            else:
+                queryset = queryset.filter(estado=estado)
         if buscar:
             queryset = queryset.filter(
                 Q(numero_operacion__icontains=buscar) |
@@ -8555,14 +8796,40 @@ def listar_cambios_devoluciones(request):
         # Serializar datos
         cambios_data = []
         for cambio in cambios_page:
-            # Calcular totales de productos
-            total_productos_devueltos = cambio.detalles.count()
-            total_productos_nuevos = cambio.detalles.filter(producto_nuevo__isnull=False).count()
-            
+            detalles = cambio.detalles.all()
+            total_productos_devueltos = sum(1 for d in detalles if d.producto_original_id)
+            total_productos_nuevos = sum(1 for d in detalles if d.producto_nuevo_id)
+            cant_devueltos = sum(d.cantidad_original for d in detalles if d.producto_original_id)
+            cant_nuevos = sum(d.cantidad_nueva for d in detalles if d.producto_nuevo_id)
+
+            productos_resumen = []
+            for d in detalles[:3]:
+                if d.producto_original_id:
+                    try:
+                        nombre = d.producto_original.ProductoTalla.producto.articulo
+                    except Exception:
+                        nombre = 'Producto'
+                    productos_resumen.append({'nombre': nombre[:30], 'tipo': 'devuelto', 'cantidad': d.cantidad_original})
+                if d.producto_nuevo_id:
+                    try:
+                        nombre = d.producto_nuevo.producto.articulo
+                    except Exception:
+                        nombre = 'Producto'
+                    productos_resumen.append({'nombre': nombre[:30], 'tipo': 'nuevo', 'cantidad': d.cantidad_nueva})
+
+            solicitante_nombre = ''
+            if cambio.solicitado_por:
+                solicitante_nombre = cambio.solicitado_por.get_full_name() or cambio.solicitado_por.username
+
+            ticket_pendiente_pago = False
+            if cambio.ticket_nuevo and cambio.ticket_nuevo.estado == 'PENDIENTE':
+                ticket_pendiente_pago = True
+
             cambios_data.append({
                 'id': cambio.id,
                 'numero_operacion': cambio.numero_operacion,
                 'fecha_solicitud': cambio.fecha_solicitud.strftime('%d/%m/%Y %H:%M'),
+                'fecha_solicitud_iso': cambio.fecha_solicitud.isoformat(),
                 'tipo_operacion': cambio.tipo_operacion,
                 'tipo_operacion_display': cambio.get_tipo_operacion_display(),
                 'estado': cambio.estado,
@@ -8576,13 +8843,16 @@ def listar_cambios_devoluciones(request):
                     'metodo_pago': cambio.ticket_nuevo.metodo_pago,
                     'tipo_dte': cambio.ticket_nuevo.tipo_dte or ''
                 } if cambio.ticket_nuevo else None,
+                'ticket_pendiente_pago': ticket_pendiente_pago,
                 'cliente_nombre': cambio.ticket_original.cliente_nombre or 'Sin nombre',
                 'cliente_rut': cambio.ticket_original.cliente_rut or '',
                 'monto_original': float(cambio.monto_original),
                 'monto_nuevo': float(cambio.monto_nuevo),
                 'diferencia_monto': float(cambio.diferencia_monto),
                 'motivo_principal': cambio.get_motivo_principal_display(),
+                'motivo_principal_codigo': cambio.motivo_principal,
                 'solicitado_por': cambio.solicitado_por.username,
+                'solicitado_por_nombre': solicitante_nombre,
                 'aprobado_por': cambio.aprobado_por.username if cambio.aprobado_por else '',
                 'fecha_aprobacion': cambio.fecha_aprobacion.strftime('%d/%m/%Y %H:%M') if cambio.fecha_aprobacion else '',
                 'fecha_completado': cambio.fecha_completado.strftime('%d/%m/%Y %H:%M') if cambio.fecha_completado else '',
@@ -8594,6 +8864,9 @@ def listar_cambios_devoluciones(request):
                 'genera_devolucion': cambio.genera_devolucion,
                 'total_productos_devueltos': total_productos_devueltos,
                 'total_productos_nuevos': total_productos_nuevos,
+                'cant_devueltos': cant_devueltos,
+                'cant_nuevos': cant_nuevos,
+                'productos_resumen': productos_resumen,
                 'requiere_autorizacion': cambio.requiere_autorizacion,
                 'autorizado_excepcion': cambio.autorizado_excepcion,
             })
@@ -8771,41 +9044,74 @@ def crear_cambio_devolucion(request):
                 })
         
         # Verificar plazo (30 días por defecto)
-        # Si el documento es un DTE, usar fecha_emision del DTE como referencia;
-        # evita que un ticket de referencia creado en otra fecha altere el cálculo.
         from datetime import timedelta
         fecha_base_plazo = None
 
-        # Caso 1: el backend recibió el DTE directamente (documento_tipo == 'DTE')
+        # Caso 1: el backend recibió el DTE directamente
         if dte_original:
             fecha_base_plazo = dte_original.fecha_emision
 
-        # Caso 2: el frontend envía 'TICKET' pero indica que el documento original era un DTE
+        # Caso 2: el frontend indica que el documento original era un DTE
         if not fecha_base_plazo:
             dte_numero_original = data.get('dte_numero_original')
             if dte_numero_original:
                 try:
-                    dte_ref = Dte.objects.filter(
-                        numero_documento=dte_numero_original
-                    ).order_by('fecha_emision').first()
+                    dte_query = Dte.objects.filter(numero_documento=dte_numero_original)
+                    if sucursal:
+                        dte_query = dte_query.filter(sucursal=sucursal)
+                    dte_ref = dte_query.order_by('-fecha_emision').first()
                     if dte_ref:
                         fecha_base_plazo = dte_ref.fecha_emision
                 except Exception:
                     pass
 
-        # Caso 3: ticket puro, sin DTE asociado → usar fecha del ticket
+        # Caso 3: ticket puro → usar fecha del ticket
         if not fecha_base_plazo:
             fecha_base_plazo = ticket_original.fecha
 
         fecha_limite = fecha_base_plazo + timedelta(days=30)
-        if timezone.now().date() > fecha_limite:
-            return JsonResponse({
-                'success': False,
-                'error': f'El plazo para cambios venció el {fecha_limite.strftime("%d/%m/%Y")}'
-            })
+        fuera_de_plazo = timezone.now().date() > fecha_limite
+        
+        # Permitir cambios fuera de plazo SOLO con autorización de supervisor
+        codigo_autorizacion = data.get('codigo_autorizacion_supervisor')
+        supervisor_autorizo = False
+        
+        if fuera_de_plazo:
+            if not codigo_autorizacion:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El plazo para cambios venció el {fecha_limite.strftime("%d/%m/%Y")}',
+                    'requiere_autorizacion': True,
+                    'fecha_limite': fecha_limite.strftime('%d/%m/%Y'),
+                    'fecha_compra': fecha_base_plazo.strftime('%d/%m/%Y'),
+                    'dias_transcurridos': (timezone.now().date() - fecha_base_plazo).days,
+                })
+            
+            from django.contrib.auth import authenticate
+            from django.contrib.auth.models import User
+            
+            supervisor = None
+            try:
+                users = User.objects.filter(is_active=True)
+                for user in users:
+                    if user.check_password(codigo_autorizacion):
+                        if user.is_superuser or user.groups.filter(name__in=['Supervisor', 'Administrador', 'Encargado', 'Gerente']).exists():
+                            supervisor = user
+                            break
+            except Exception:
+                pass
+            
+            if not supervisor:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Código de autorización inválido o el usuario no tiene permisos de supervisor',
+                    'requiere_autorizacion': True,
+                })
+            
+            supervisor_autorizo = True
         
         with transaction.atomic():
-            # Calcular monto_original basado en los productos que se están cambiando/devolviendo
+            # Calcular monto_original basado en el precio efectivo (con descuento aplicado)
             monto_original_calculado = 0
             for item in productos_cambio:
                 try:
@@ -8814,11 +9120,16 @@ def crear_cambio_devolucion(request):
                         id=item['ticket_producto_id']
                     )
                     cantidad_cambio = item.get('cantidad', 0)
-                    monto_original_calculado += ticket_producto.precio * cantidad_cambio
+                    precio_efectivo = ticket_producto.precio - (ticket_producto.descuento_unitario or 0)
+                    monto_original_calculado += precio_efectivo * cantidad_cambio
                 except Ticket_Productos.DoesNotExist:
                     pass
             
             # Crear cambio/devolución con el monto correcto
+            obs_vendedor = data.get('observaciones_vendedor', '')
+            if supervisor_autorizo:
+                obs_vendedor = f'[AUTORIZADO FUERA DE PLAZO por {supervisor.get_full_name() or supervisor.username}] {obs_vendedor}'.strip()
+            
             cambio = CambioDevolucion.objects.create(
                 ticket_original=ticket_original,
                 sucursal=sucursal,
@@ -8826,9 +9137,9 @@ def crear_cambio_devolucion(request):
                 monto_original=monto_original_calculado,
                 motivo_principal=motivo_principal,
                 observaciones_cliente=data.get('observaciones_cliente', ''),
-                observaciones_vendedor=data.get('observaciones_vendedor', ''),
+                observaciones_vendedor=obs_vendedor,
                 solicitado_por=request.user,
-                requiere_autorizacion=data.get('requiere_autorizacion', False),
+                requiere_autorizacion=True if supervisor_autorizo else data.get('requiere_autorizacion', False),
                 fecha_limite_cambio=fecha_limite
             )
             
@@ -8861,7 +9172,8 @@ def crear_cambio_devolucion(request):
                     # Solo sumar al monto original si no hemos procesado este producto ya
                     producto_key = f"{ticket_producto.id}_{cantidad_cambio}"
                     if producto_key not in productos_procesados:
-                        monto_original_real += ticket_producto.precio * cantidad_cambio
+                        precio_efectivo = ticket_producto.precio - (ticket_producto.descuento_unitario or 0)
+                        monto_original_real += precio_efectivo * cantidad_cambio
                         productos_procesados.add(producto_key)
                 
                 # Producto nuevo (si es cambio)
@@ -8910,6 +9222,7 @@ def crear_cambio_devolucion(request):
                 else:
                     # Producto con DEVOLUCIÓN (puede o no tener producto nuevo asociado)
                     if cantidad_cambio > 0:
+                        precio_efectivo_unitario = ticket_producto.precio - (ticket_producto.descuento_unitario or 0)
                         detalle = CambioDevolucionDetalle.objects.create(
                             cambio_devolucion=cambio,
                             producto_original=ticket_producto,
@@ -8917,7 +9230,7 @@ def crear_cambio_devolucion(request):
                             producto_nuevo=producto_nuevo,
                             cantidad_nueva=cantidad_nueva,
                             precio_nuevo=precio_nuevo,
-                            precio_original_unitario=ticket_producto.precio,
+                            precio_original_unitario=precio_efectivo_unitario,
                             condicion_producto=item.get('condicion_producto', 'PERFECTO'),
                             apto_para_venta=item.get('apto_para_venta', True),
                             observaciones=item.get('observaciones', '')
@@ -9220,8 +9533,126 @@ def cancelar_cambio_devolucion(request):
 @login_required
 @require_POST
 @csrf_exempt
+def revertir_cambio_devolucion(request):
+    """Revertir un cambio completado cuyo ticket aún no fue pagado.
+    Deshace todos los movimientos de stock y cancela el ticket pendiente."""
+    try:
+        data = json.loads(request.body)
+        cambio_id = data.get('cambio_id')
+        motivo = data.get('motivo', '')
+
+        if not cambio_id:
+            return JsonResponse({'success': False, 'error': 'ID de cambio requerido'})
+
+        cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
+
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if cambio.sucursal_id != int(sucursal_id):
+            return JsonResponse({'success': False, 'error': 'No tiene acceso a este cambio'})
+
+        if cambio.estado != 'COMPLETADO':
+            return JsonResponse({'success': False, 'error': f'Solo se pueden revertir cambios completados, estado actual: {cambio.get_estado_display()}'})
+
+        if not cambio.ticket_nuevo or cambio.ticket_nuevo.estado != 'PENDIENTE':
+            return JsonResponse({'success': False, 'error': 'Solo se pueden revertir cambios cuyo ticket aún no fue pagado'})
+
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+
+        with transaction.atomic():
+            # 1) Revertir EGRESOS: devolver stock de productos nuevos que fueron entregados
+            for item in cambio.detalles.all():
+                if item.producto_nuevo and item.cantidad_nueva:
+                    producto_talla_nuevo = item.producto_nuevo
+                    producto_talla_nuevo.stock += item.cantidad_nueva
+                    producto_talla_nuevo.save()
+
+                    Movimientos_Producto.objects.create(
+                        ProductoTalla=producto_talla_nuevo,
+                        tipo_movimiento='INGRESO',
+                        concepto='REVERSION_CAMBIO',
+                        cantidad=item.cantidad_nueva,
+                        responsable=request.user.username,
+                        sucursal_destino=sucursal,
+                        precio=int(item.precio_nuevo),
+                        costo=0,
+                        estado='COMPLETADO',
+                        observaciones=f'REVERSION - Cambio #{cambio.numero_operacion}. Producto nuevo devuelto al stock.'
+                    )
+
+            # 2) Revertir INGRESOS: descontar stock de productos devueltos que se habían re-ingresado
+            for item in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
+                if item.apto_para_venta:
+                    producto_talla_devuelto = item.producto_original.ProductoTalla
+                    producto_talla_devuelto.stock -= item.cantidad_original
+                    producto_talla_devuelto.save()
+
+                    Movimientos_Producto.objects.create(
+                        ProductoTalla=producto_talla_devuelto,
+                        tipo_movimiento='EGRESO',
+                        concepto='REVERSION_CAMBIO',
+                        cantidad=item.cantidad_original,
+                        responsable=request.user.username,
+                        sucursal_origen=sucursal,
+                        precio=int(item.precio_original_unitario),
+                        costo=0,
+                        estado='COMPLETADO',
+                        observaciones=f'REVERSION - Cambio #{cambio.numero_operacion}. Se revierte ingreso de devolución.'
+                    )
+
+            # 3) Cancelar ticket pendiente
+            ticket = cambio.ticket_nuevo
+            ticket.estado = 'ANULADO'
+            ticket.observaciones = (ticket.observaciones or '') + f'\n\nANULADO por reversión de cambio #{cambio.numero_operacion}'
+            ticket.save()
+
+            # 4) Cancelar ticket de diferencia si existe
+            if cambio.ticket_diferencia and cambio.ticket_diferencia.estado == 'PENDIENTE':
+                cambio.ticket_diferencia.estado = 'ANULADO'
+                cambio.ticket_diferencia.observaciones = (cambio.ticket_diferencia.observaciones or '') + f'\n\nANULADO por reversión de cambio #{cambio.numero_operacion}'
+                cambio.ticket_diferencia.save()
+
+            # 5) Cambiar estado del cambio
+            estado_anterior = cambio.estado
+            cambio.estado = 'REVERTIDO'
+            cambio.save()
+
+            # 6) Registrar historial
+            HistorialCambioDevolucion.objects.create(
+                cambio_devolucion=cambio,
+                accion='REVERTIDO',
+                estado_anterior=estado_anterior,
+                estado_nuevo='REVERTIDO',
+                usuario=request.user,
+                descripcion=f'Cambio revertido por {request.user.get_full_name() or request.user.username}. Stock restaurado, ticket #{ticket.correlativo} anulado.' + (f' Motivo: {motivo}' if motivo else ''),
+                datos_adicionales={
+                    'motivo': motivo,
+                    'ticket_anulado': ticket.correlativo,
+                    'fecha_reversion': timezone.now().isoformat()
+                }
+            )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Cambio {cambio.numero_operacion} revertido exitosamente. Stock restaurado.',
+            'nuevo_estado': 'REVERTIDO'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': f'Error al revertir cambio: {str(e)}'})
+
+
+@login_required
+@require_POST
+@csrf_exempt
 def aprobar_cambio_devolucion(request):
-    """Aprobar o rechazar una solicitud de cambio/devolución"""
+    """Aprobar o rechazar una solicitud de cambio/devolución.
+    NOTA: Esta función es el camino alternativo (solo aprueba, no genera ticket ni mueve stock).
+    La UI principal usa aprobar_cambio_generar_ticket() que hace todo en un solo paso.
+    Se mantiene para compatibilidad con posibles integraciones externas."""
     try:
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
@@ -9251,8 +9682,9 @@ def aprobar_cambio_devolucion(request):
                 'error': 'Solo se pueden aprobar cambios en estado solicitado'
             })
         
-        # Verificar plazo
-        if not cambio.dentro_del_plazo:
+        # Verificar plazo (permitir si fue autorizado fuera de plazo)
+        fue_autorizado_fuera_plazo = '[AUTORIZADO FUERA DE PLAZO' in (cambio.observaciones_vendedor or '')
+        if not cambio.dentro_del_plazo and not fue_autorizado_fuera_plazo:
             return JsonResponse({
                 'success': False,
                 'error': 'El plazo para este cambio ya venció'
@@ -9315,7 +9747,9 @@ def aprobar_cambio_devolucion(request):
 @require_POST
 @csrf_exempt
 def ejecutar_cambio_devolucion(request):
-    """Ejecutar un cambio/devolución aprobado: generar tickets y movimientos de inventario"""
+    """Ejecutar un cambio/devolución aprobado: generar tickets y movimientos de inventario.
+    NOTA: Camino alternativo desde estado APROBADO. La UI principal usa
+    aprobar_cambio_generar_ticket() que combina aprobación + ejecución en un paso."""
     try:
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
@@ -9343,9 +9777,12 @@ def ejecutar_cambio_devolucion(request):
                 'error': 'Este cambio no puede ser ejecutado en su estado actual'
             })
         
-        # VALIDAR STOCK ANTES DE EJECUTAR
+        # VALIDAR STOCK ANTES DE EJECUTAR (usa stock_sucursal cuando está disponible)
         for detalle in cambio.detalles.filter(producto_nuevo__isnull=False):
-            stock_disponible = detalle.producto_nuevo.stock
+            try:
+                stock_disponible = detalle.producto_nuevo.stock_sucursal(sucursal_id)
+            except Exception:
+                stock_disponible = detalle.producto_nuevo.stock
             if stock_disponible < detalle.cantidad_nueva:
                 return JsonResponse({
                     'success': False,
@@ -9921,27 +10358,35 @@ def aprobar_cambio_generar_ticket(request):
                         )
                         print(f"   ⚠️ NO APTO: {producto_talla_devuelto.sku} (sin movimiento de stock)")
                 
-                # 2. SALIDA: Productos nuevos entregados al cliente
+                # 2. SALIDA: Productos nuevos entregados al cliente (FIFO)
                 for item in cambio.detalles.all():
                     if item.producto_nuevo and item.cantidad_nueva:
-                        producto_talla_nuevo = item.producto_nuevo
-                        producto_talla_nuevo.stock -= item.cantidad_nueva
-                        producto_talla_nuevo.save()
-                        
-                        # Registrar movimiento de salida
-                        Movimientos_Producto.objects.create(
-                            ProductoTalla=producto_talla_nuevo,
-                            tipo_movimiento='EGRESO',
-                            concepto='VENTA',
-                            cantidad=item.cantidad_nueva,
-                            responsable=request.user.username,
-                            sucursal_origen=sucursal,
-                            ticket=ticket,
-                            precio=int(item.precio_nuevo),
-                            costo=0,
-                            estado='COMPLETADO',
-                            observaciones=f'Entrega - Cambio #{cambio.numero_operacion}. Producto entregado al cliente.'
-                        )
+                        try:
+                            consumir_stock_fifo(
+                                producto_talla=item.producto_nuevo,
+                                cantidad_requerida=item.cantidad_nueva,
+                                responsable=request.user.username,
+                                ticket=ticket,
+                                observaciones=f'Entrega - Cambio #{cambio.numero_operacion}',
+                                referencia_externa=cambio.numero_operacion
+                            )
+                        except Exception as e_fifo:
+                            print(f"   ⚠️ FIFO falló para {item.producto_nuevo.sku}, usando decremento directo: {e_fifo}")
+                            item.producto_nuevo.stock -= item.cantidad_nueva
+                            item.producto_nuevo.save()
+                            Movimientos_Producto.objects.create(
+                                ProductoTalla=item.producto_nuevo,
+                                tipo_movimiento='EGRESO',
+                                concepto='VENTA',
+                                cantidad=item.cantidad_nueva,
+                                responsable=request.user.username,
+                                sucursal_origen=sucursal,
+                                ticket=ticket,
+                                precio=int(item.precio_nuevo),
+                                costo=0,
+                                estado='COMPLETADO',
+                                observaciones=f'Entrega - Cambio #{cambio.numero_operacion}. Fallback sin FIFO.'
+                            )
                 
                 print(f"   ✅ Movimientos de inventario ejecutados")
             except Exception as e:
@@ -9953,8 +10398,43 @@ def aprobar_cambio_generar_ticket(request):
             # Vincular ticket nuevo al cambio
             print(f"6️⃣ Vinculando ticket al cambio...")
             cambio.ticket_nuevo = ticket
-            
-            # CAMBIAR ESTADO A COMPLETADO DIRECTAMENTE
+
+            # Procesar pago integrado si se envió
+            pago_diferencia_data = data.get('pago_diferencia')
+            if pago_diferencia_data and diferencia > 0:
+                print(f"   💰 Procesando pago integrado de ${diferencia}...")
+                metodo_pago_diff = pago_diferencia_data.get('metodo_pago', '')
+                if metodo_pago_diff:
+                    ticket.estado = 'PAGADO'
+                    ticket.metodo_pago = metodo_pago_diff
+                    ticket.fecha_pago = timezone.now()
+                    ticket.save()
+
+                    PagoCambioDevolucion.objects.create(
+                        cambio_devolucion=cambio,
+                        tipo_pago='PAGO_DIFERENCIA',
+                        metodo_pago=metodo_pago_diff,
+                        monto=diferencia,
+                        referencia_pago=pago_diferencia_data.get('referencia_pago', ''),
+                        numero_autorizacion=pago_diferencia_data.get('numero_autorizacion', ''),
+                        procesado_por=request.user,
+                        observaciones=f'Pago integrado al aprobar cambio #{cambio.numero_operacion}'
+                    )
+
+                    try:
+                        TicketDetallePago.objects.create(
+                            ticket=ticket,
+                            metodo_pago=metodo_pago_diff,
+                            monto=int(diferencia),
+                            voucher=pago_diferencia_data.get('referencia_pago', ''),
+                            notas=f'Pago diferencia cambio #{cambio.numero_operacion}'
+                        )
+                    except Exception:
+                        pass
+
+                    cambio.fecha_pago_diferencia = timezone.now()
+                    print(f"   ✅ Pago procesado: {metodo_pago_diff} ${diferencia}")
+
             cambio.estado = 'COMPLETADO'
             cambio.fecha_completado = timezone.now()
             cambio.save()
@@ -10219,7 +10699,8 @@ def validar_codigo_autorizacion(request):
 @require_POST
 @csrf_exempt
 def completar_cambio_devolucion(request):
-    """Completar un cambio/devolución aprobado"""
+    """Completar un cambio/devolución aprobado.
+    NOTA: Camino alternativo. La UI principal usa aprobar_cambio_generar_ticket()."""
     try:
         data = json.loads(request.body)
         cambio_id = data.get('cambio_id')
@@ -10665,6 +11146,9 @@ def buscar_documento_cambio(request):
                 
                 # ✅ Incluir TODOS los productos (disponibles y ya cambiados)
                 if tp.ProductoTalla:
+                    descuento = tp.descuento_unitario or 0
+                    precio_pagado = tp.precio - descuento
+                    
                     productos_data.append({
                         'id': tp.id,
                         'sku': tp.ProductoTalla.sku,
@@ -10674,8 +11158,11 @@ def buscar_documento_cambio(request):
                         'cantidad_original': tp.stock,
                         'cantidad_ya_cambiada': cantidad_ya_cambiada,
                         'cantidad_disponible': cantidad_disponible,
-                        'precio_unitario': float(tp.precio),
-                        'subtotal': float(tp.subtotal),
+                        'precio_unitario': float(precio_pagado),
+                        'precio_lista': float(tp.precio),
+                        'descuento_unitario': float(descuento),
+                        'tiene_descuento': descuento > 0,
+                        'subtotal': float(precio_pagado * tp.stock),
                         'ya_cambiado': cantidad_disponible == 0,
                     })
                 else:
@@ -10702,7 +11189,7 @@ def buscar_documento_cambio(request):
                     'dias_transcurridos': (timezone.now().date() - dte.fecha_emision).days,
                     'productos': productos_data,
                     'productos_disponibles': productos_disponibles_count,
-                    'puede_cambiar': dentro_del_plazo and productos_disponibles_count > 0,
+                    'puede_cambiar': productos_disponibles_count > 0,
                 }
             })
         elif tipo_documento == 'ticket_cambio':
@@ -10871,8 +11358,9 @@ def buscar_documento_cambio(request):
                     'dentro_del_plazo': dentro_del_plazo,
                     'dias_transcurridos': (timezone.now().date() - ticket.fecha).days,
                     'productos': productos_data,
+                    'productos_disponibles': len(productos_data),
                     'cambios_anteriores': cambios_anteriores,
-                    'puede_cambiar': dentro_del_plazo and len(productos_data) > 0,
+                    'puede_cambiar': len(productos_data) > 0,
                 }
             })
         
@@ -10980,6 +11468,10 @@ def buscar_ticket_para_cambio_response(ticket, request):
         # ✅ Incluir TODOS los productos (disponibles y ya cambiados), omitir ítems sin SKU
         if tp.ProductoTalla is None:
             continue
+        
+        descuento = tp.descuento_unitario or 0
+        precio_pagado = tp.precio - descuento
+        
         productos_data.append({
             'id': tp.id,
             'sku': tp.ProductoTalla.sku,
@@ -10989,8 +11481,11 @@ def buscar_ticket_para_cambio_response(ticket, request):
             'cantidad_original': tp.stock,
             'cantidad_ya_cambiada': cantidad_ya_cambiada,
             'cantidad_disponible': cantidad_disponible,
-            'precio_unitario': float(tp.precio),
-            'subtotal': float(tp.subtotal),
+            'precio_unitario': float(precio_pagado),
+            'precio_lista': float(tp.precio),
+            'descuento_unitario': float(descuento),
+            'tiene_descuento': descuento > 0,
+            'subtotal': float(precio_pagado * tp.stock),
             'ya_cambiado': cantidad_disponible == 0,
         })
     
@@ -11032,12 +11527,12 @@ def buscar_ticket_para_cambio_response(ticket, request):
         'productos': productos_data,
         'productos_disponibles': productos_disponibles_count,
         'cambios_anteriores': cambios_anteriores,
-        'puede_cambiar': dentro_del_plazo and productos_disponibles_count > 0,
+        'puede_cambiar': productos_disponibles_count > 0,
     }
     
     return JsonResponse({
         'success': True,
-        'documento': ticket_data  # Cambiar de 'ticket' a 'documento' para compatibilidad
+        'documento': ticket_data
         })
 
 

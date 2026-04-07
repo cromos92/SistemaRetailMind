@@ -146,5 +146,21 @@
             </div>
         </div>
     </div>
+    <script>
+        // Si el formulario lleva más de 15 minutos cargado, recargar para CSRF token fresco
+        (function() {
+            var PAGE_LOADED_AT = Date.now();
+            var MAX_FORM_AGE_MS = 15 * 60 * 1000;
+            var form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    if (Date.now() - PAGE_LOADED_AT > MAX_FORM_AGE_MS) {
+                        e.preventDefault();
+                        window.location.reload();
+                    }
+                });
+            }
+        })();
+    </script>
 </body>
 </html>

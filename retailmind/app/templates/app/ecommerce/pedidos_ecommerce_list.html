@@ -1,0 +1,529 @@
+{% load static %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+/* ── badges y colores ── */
+.ticket-rm-badge{font-family:monospace;background:#f1f5f9;border:1px solid #cbd5e1;padding:2px 8px;border-radius:4px;font-size:.85rem;color:#1e40af;font-weight:700;}
+.badge-p{background:#fef9c3;color:#854d0e;font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;}
+.badge-f{background:#dcfce7;color:#166534;font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;}
+.badge-c{background:#fee2e2;color:#991b1b;font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;}
+.canal-shopify{background:#96bf48;color:#fff;}
+.canal-paris{background:#0033a0;color:#fff;}
+.canal-ripley{background:#6f42c1;color:#fff;}
+.canal-walmart{background:#0071ce;color:#fff;}
+.canal-otro{background:#6b7280;color:#fff;}
+.canal-b{font-size:.68rem;padding:2px 7px;border-radius:4px;font-weight:600;letter-spacing:.02em;}
+
+/* ── tabla ── */
+.tbl thead th{background:#f1f5f9;color:#334155;font-weight:700;font-size:.72rem;text-transform:uppercase;padding:10px 12px;white-space:nowrap;letter-spacing:.04em;border-bottom:2px solid #e2e8f0;}
+.tbl tbody td{padding:10px 12px;vertical-align:middle;font-size:.87rem;border-color:#f1f5f9;color:#1e293b;}
+.tbl tbody tr{border-bottom:1px solid #f1f5f9;}
+.tbl tbody tr:hover{background:#f0f9ff;}
+.tbl tbody tr.row-selected{background:#eff6ff !important;}
+.tbl .col-total{font-size:.95rem;font-weight:700;color:#0f172a;letter-spacing:-.01em;}
+.tbl .col-fecha{font-size:.78rem;color:#475569;white-space:nowrap;}
+.tbl .col-num-pedido{font-size:.78rem;color:#334155;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tbl .col-sucursal{font-size:.82rem;font-weight:600;color:#334155;}
+.tbl .col-cliente-nombre{font-weight:600;font-size:.87rem;color:#0f172a;}
+.tbl .col-cliente-doc{font-size:.74rem;color:#64748b;}
+
+/* ── checkbox ── */
+.cb-pedido{width:15px;height:15px;cursor:pointer;accent-color:#3b82f6;}
+
+/* ── barra de acción masiva ── */
+#bulk-bar{
+  position:fixed;bottom:0;left:0;right:0;
+  background:linear-gradient(135deg,#1e3a5f,#1d4ed8);
+  color:#fff;padding:12px 24px;z-index:9999;
+  display:none;
+  box-shadow:0 -4px 20px rgba(0,0,0,.25);
+  align-items:center;gap:12px;flex-wrap:wrap;
+}
+#bulk-bar.visible{display:flex;}
+#bulk-bar .bb-label{font-weight:700;font-size:.95rem;white-space:nowrap;}
+#bulk-bar select,#bulk-bar .btn{height:34px;font-size:.8rem;}
+#bulk-bar select{background:#fff;color:#1e293b;border:none;border-radius:6px;padding:0 10px;min-width:160px;}
+
+/* ── modal de resultados ── */
+#modal-resultados .r-ok{color:#16a34a;}
+#modal-resultados .r-err{color:#dc2626;}
+#modal-resultados .r-row{font-size:.82rem;padding:5px 0;border-bottom:1px solid #f1f5f9;}
+#modal-resultados .r-row:last-child{border-bottom:none;}
+.spinner-sm{width:18px;height:18px;}
+
+/* ── sin stock ── */
+.badge-sin-stock{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:700;white-space:nowrap;}
+.row-sin-stock{background:#fffbeb !important;}
+.row-sin-stock:hover{background:#fef3c7 !important;}
+.btn-sin-stock{font-size:.72rem;padding:2px 8px;cursor:not-allowed;opacity:.6;border-color:#fdba74;color:#c2410c;background:#fff7ed;}
+</style>
+
+<div class="page-content" style="padding-bottom:80px;">
+<div class="container-fluid">
+
+  <!-- encabezado -->
+  <div style="background:linear-gradient(135deg,#1e293b,#334155);border-radius:10px;padding:14px 22px;margin-bottom:18px;color:white;" class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <h4 style="margin:0;font-weight:700;font-size:1.15rem;"><i class="bi bi-cart-check me-2"></i>Pedidos Ecommerce</h4>
+      <p style="margin:3px 0 0;opacity:.7;font-size:.78rem;">Pedidos recibidos desde marketplaces · Selecciona con checkbox y factura masivamente.</p>
+    </div>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <!-- Sucursal activa de sesión -->
+      {% if sucursal_sesion_obj %}
+        <span style="background:rgba(0,212,170,.18);border:1px solid rgba(0,212,170,.45);border-radius:20px;padding:4px 14px;font-size:.8rem;font-weight:700;color:#6ffce0;white-space:nowrap;">
+          <i class="bi bi-building me-1"></i>{{ sucursal_sesion_obj.nombre|default:sucursal_sesion_obj.alias }}
+        </span>
+      {% else %}
+        <span style="background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.4);border-radius:20px;padding:4px 14px;font-size:.8rem;font-weight:600;color:#fca5a5;white-space:nowrap;">
+          <i class="bi bi-exclamation-triangle me-1"></i>Sin sucursal activa
+        </span>
+      {% endif %}
+      <span id="sel-count-header" style="display:none;background:rgba(255,255,255,.15);border-radius:20px;padding:3px 12px;font-size:.82rem;font-weight:600;">
+        <i class="bi bi-check2-square me-1"></i><span id="sel-n">0</span> seleccionados
+      </span>
+    </div>
+  </div>
+
+  <!-- filtros -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2 px-3">
+      <form method="get" class="row g-2 align-items-end" id="form-filtros">
+        <div class="col-md-2">
+          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Estado</label>
+          <select name="estado" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for val, lbl in estados_choices %}
+              <option value="{{ val }}" {% if estado_filtro == val %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Canal</label>
+          <select name="canal" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for val, lbl in canales_choices %}
+              <option value="{{ val }}" {% if canal_filtro == val %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Sucursal</label>
+          <select name="sucursal_id" class="form-select form-select-sm">
+            <option value="" {% if sucursal_filtro == '' %}selected{% endif %}>Todas</option>
+            {% for s in sucursales %}
+              <option value="{{ s.id }}" {% if sucursal_filtro == s.id|stringformat:"s" %}selected{% endif %}>{{ s.nombre|default:s.alias }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Buscar</label>
+          <input type="text" name="q" class="form-control form-control-sm" placeholder="N RM, pedido, cliente..." value="{{ q }}">
+        </div>
+        <div class="col-md-3 d-flex gap-1 align-self-end">
+          <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+          <a href="{% url 'pedidos_ecommerce_list' %}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if pedidos %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table tbl mb-0" id="tbl-pedidos">
+          <thead>
+            <tr>
+              <th style="width:36px;text-align:center;">
+                <input type="checkbox" id="cb-all" class="cb-pedido" title="Seleccionar todos">
+              </th>
+              <th>N RM</th>
+              <th>Canal</th>
+              <th>N Pedido Canal</th>
+              <th>Cliente</th>
+              <th>Sucursal</th>
+              <th class="text-end">Total</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in pedidos %}
+            {% if p.id in pedidos_sin_stock_ids %}
+            <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}" data-sin-stock="1" class="row-sin-stock">
+            {% else %}
+            <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}">
+            {% endif %}
+              <td style="text-align:center;">
+                {% if p.estado == 'PENDIENTE' %}
+                  {% if p.id in pedidos_sin_stock_ids %}
+                    <input type="checkbox" class="cb-pedido cb-pedido-row" value="{{ p.id }}" disabled title="Sin stock en sucursal activa">
+                  {% else %}
+                    <input type="checkbox" class="cb-pedido cb-pedido-row" value="{{ p.id }}">
+                  {% endif %}
+                {% endif %}
+              </td>
+              <td><span class="ticket-rm-badge">{{ p.numero_ticket_rm }}</span></td>
+              <td><span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span></td>
+              <td class="col-num-pedido">{{ p.numero_pedido_canal }}</td>
+              <td>
+                <div class="col-cliente-nombre">{{ p.cliente_nombre }}</div>
+                {% if p.cliente_documento %}<div class="col-cliente-doc">{{ p.cliente_documento }}</div>{% endif %}
+              </td>
+              <td class="col-sucursal">
+                {% if p.estado == 'FACTURADO' and p.ticket %}
+                  {{ p.ticket.sucursal.nombre|default:p.ticket.sucursal.alias }}
+                {% elif sucursal_sesion_obj %}
+                  {{ sucursal_sesion_obj.nombre|default:sucursal_sesion_obj.alias }}
+                {% else %}
+                  <span style="color:#94a3b8;font-style:italic;">Sin sesión</span>
+                {% endif %}
+                {% if p.id in pedidos_sin_stock_ids %}
+                  <br><span class="badge-sin-stock"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock insuficiente</span>
+                {% endif %}
+              </td>
+              <td class="text-end col-total"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
+              <td class="col-fecha">{{ p.fecha_recepcion|date:"d/m/Y H:i" }}</td>
+              <td>
+                {% if p.estado == 'PENDIENTE' %}<span class="badge-p">Pendiente</span>
+                {% elif p.estado == 'FACTURADO' %}
+                  <span class="badge-f">Facturado</span>
+                  {% if p.ticket %}<div style="font-size:.7rem;color:#475569;">Ticket #{{ p.ticket.correlativo }}</div>{% endif %}
+                  {% if p.dte %}<div style="font-size:.7rem;color:#475569;">DTE #{{ p.dte.numero_documento }}</div>{% endif %}
+                {% elif p.estado == 'CANCELADO' %}<span class="badge-c">Cancelado</span>
+                {% else %}<span>{{ p.estado }}</span>{% endif %}
+              </td>
+              <td>
+                {% if p.id in pedidos_sin_stock_ids %}
+                  <span class="btn btn-sm btn-sin-stock disabled" title="No se puede facturar: stock insuficiente en sucursal activa">
+                    <i class="bi bi-exclamation-circle me-1"></i>Stock insuficiente
+                  </span>
+                {% else %}
+                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.72rem;padding:2px 8px;">
+                    {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
+                  </a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if is_paginated %}
+      <div class="card-footer bg-white d-flex justify-content-center py-2">
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?estado={{ estado_filtro }}&canal={{ canal_filtro }}&q={{ q }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+              </li>
+            {% endif %}
+            <li class="page-item disabled">
+              <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            {% if page_obj.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?estado={{ estado_filtro }}&canal={{ canal_filtro }}&q={{ q }}&page={{ page_obj.next_page_number }}">Siguiente</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% else %}
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>No hay pedidos con los filtros seleccionados.
+    </div>
+  {% endif %}
+
+</div><!-- /container -->
+</div><!-- /page-content -->
+
+<!-- ═══════════════════════════════════════════════════════
+     BARRA DE ACCIÓN MASIVA (aparece cuando hay selección)
+     ═══════════════════════════════════════════════════════ -->
+<div id="bulk-bar">
+  <span class="bb-label"><i class="bi bi-check2-square me-2"></i><span id="bb-count">0</span> pedido(s) seleccionado(s)</span>
+
+  <select id="bb-tipo-doc" title="Tipo de documento">
+    <option value="BOLETA_ELECTRONICA">Boleta Electrónica</option>
+  </select>
+  <span style="font-size:.72rem;opacity:.7;font-style:italic;padding:0 2px;">
+    <i class="bi bi-info-circle me-1"></i>Factura Electrónica solo disponible en acción individual
+  </span>
+
+  <span style="font-size:.78rem;opacity:.85;padding:0 4px;">
+    <i class="bi bi-person-badge me-1"></i>{{ vendedor_ecommerce.nombre|default:"Venta Internet" }}
+    &nbsp;|&nbsp;
+    <i class="bi bi-credit-card me-1"></i>Método según canal
+  </span>
+
+  <button class="btn btn-light btn-sm fw-bold" id="btn-facturar-masivo" onclick="confirmarFacturacionMasiva()">
+    <i class="bi bi-receipt me-1"></i>Facturar seleccionados
+  </button>
+  <button class="btn btn-outline-light btn-sm" onclick="deseleccionarTodo()">
+    <i class="bi bi-x-lg me-1"></i>Cancelar
+  </button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL DE CONFIRMACIÓN
+     ═══════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modal-confirmar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header" style="background:#1d4ed8;color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-receipt me-2"></i>Confirmar Facturación Masiva</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Estás a punto de crear <strong id="conf-n">0</strong> Ticket(s) + DTE(s) automáticamente.</p>
+        <table class="table table-sm table-bordered mb-0" style="font-size:.8rem;">
+          <tr><th style="width:40%;">Tipo Documento</th><td id="conf-tipo">—</td></tr>
+          <tr><th>Vendedor</th><td>{{ vendedor_ecommerce.nombre|default:"Venta Internet" }} <span class="text-muted">(cód. 1000)</span></td></tr>
+          <tr><th>Método Pago</th><td>Deducido por canal <small class="text-muted">(Shopify→Internet · Paris/Ripley/Walmart→Transferencia)</small></td></tr>
+        </table>
+        <div class="alert alert-warning mt-3 mb-0 py-2" style="font-size:.78rem;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Esta acción creará documentos tributarios. Asegúrate de tener correlativos configurados para la sucursal.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary btn-sm fw-bold" id="btn-conf-ok" onclick="ejecutarFacturacionMasiva()">
+          <span id="conf-spinner" class="spinner-border spinner-sm me-1" style="display:none;"></span>
+          <i class="bi bi-check-lg me-1" id="conf-icon"></i>Confirmar y Facturar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL DE RESULTADOS
+     ═══════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modal-resultados" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header" id="res-header">
+        <h5 class="modal-title" id="res-title"><i class="bi bi-receipt me-2"></i>Resultados de Facturación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="res-summary" class="row g-2 mb-3"></div>
+        <div id="res-lista"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary btn-sm" data-bs-dismiss="modal" onclick="location.reload()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Recargar lista
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Separador de miles (formato chileno: $1.234.567) ── */
+document.querySelectorAll('.fmt-miles').forEach(el => {
+  const raw = parseInt(el.dataset.val, 10);
+  if (!isNaN(raw)) {
+    el.textContent = '$' + raw.toLocaleString('es-CL');
+  }
+});
+
+/* ─────────────────────────────────────────────────────
+   Selección de checkboxes
+   ───────────────────────────────────────────────────── */
+const cbAll = document.getElementById('cb-all');
+const getCbs = () => document.querySelectorAll('.cb-pedido-row:not(:disabled)');
+
+function actualizarContador(){
+  const n = document.querySelectorAll('.cb-pedido-row:not(:disabled):checked').length;
+  document.getElementById('bb-count').textContent = n;
+  document.getElementById('sel-n').textContent = n;
+  const bar = document.getElementById('bulk-bar');
+  const hdr = document.getElementById('sel-count-header');
+  if(n > 0){ bar.classList.add('visible'); hdr.style.display=''; }
+  else     { bar.classList.remove('visible'); hdr.style.display='none'; }
+  // estado indeterminado del cb-all
+  const total = getCbs().length;
+  cbAll.indeterminate = n > 0 && n < total;
+  cbAll.checked = n === total && total > 0;
+}
+
+cbAll.addEventListener('change', function(){
+  getCbs().forEach(cb => cb.checked = this.checked);
+  actualizarContador();
+});
+
+document.getElementById('tbl-pedidos')?.addEventListener('change', function(e){
+  if(e.target.classList.contains('cb-pedido-row')){
+    const tr = e.target.closest('tr');
+    tr.classList.toggle('row-selected', e.target.checked);
+    actualizarContador();
+  }
+});
+
+function deseleccionarTodo(){
+  getCbs().forEach(cb => { cb.checked = false; cb.closest('tr').classList.remove('row-selected'); });
+  cbAll.checked = false; cbAll.indeterminate = false;
+  actualizarContador();
+}
+
+/* ─────────────────────────────────────────────────────
+   Facturación masiva
+   ───────────────────────────────────────────────────── */
+function getSeleccionados(){
+  return [...document.querySelectorAll('.cb-pedido-row:not(:disabled):checked')].map(cb => parseInt(cb.value));
+}
+
+function confirmarFacturacionMasiva(){
+  const ids = getSeleccionados();
+  if(!ids.length){ alert('Selecciona al menos un pedido.'); return; }
+
+  const tipoDoc = document.getElementById('bb-tipo-doc');
+  document.getElementById('conf-n').textContent = ids.length;
+  document.getElementById('conf-tipo').textContent = tipoDoc.options[tipoDoc.selectedIndex].text;
+
+  const modal = new bootstrap.Modal(document.getElementById('modal-confirmar'));
+  modal.show();
+}
+
+function ejecutarFacturacionMasiva(){
+  const ids = getSeleccionados();
+  const tipoDoc = document.getElementById('bb-tipo-doc').value;
+
+  // UI: loading
+  document.getElementById('btn-conf-ok').disabled = true;
+  document.getElementById('conf-spinner').style.display = '';
+  document.getElementById('conf-icon').style.display = 'none';
+
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+  fetch("{% url 'facturar_ecommerce_masivo' %}", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken,
+    },
+    body: JSON.stringify({
+      pedido_ids: ids,
+      tipo_documento: tipoDoc,
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    bootstrap.Modal.getInstance(document.getElementById('modal-confirmar')).hide();
+    mostrarResultados(data);
+  })
+  .catch(err => {
+    bootstrap.Modal.getInstance(document.getElementById('modal-confirmar')).hide();
+    alert('Error de conexión: ' + err);
+  })
+  .finally(() => {
+    document.getElementById('btn-conf-ok').disabled = false;
+    document.getElementById('conf-spinner').style.display = 'none';
+    document.getElementById('conf-icon').style.display = '';
+  });
+}
+
+function mostrarResultados(data){
+  const header = document.getElementById('res-header');
+  const title  = document.getElementById('res-title');
+  const summary = document.getElementById('res-summary');
+  const lista  = document.getElementById('res-lista');
+
+  header.style.background = data.fallidos === 0 ? '#16a34a' : (data.exitosos === 0 ? '#dc2626' : '#d97706');
+  header.style.color = '#fff';
+  title.innerHTML = '<i class="bi bi-receipt me-2"></i>Resultados de Facturación';
+
+  summary.innerHTML = `
+    <div class="col-4 text-center">
+      <div style="font-size:2rem;font-weight:800;color:#1d4ed8;">${data.total}</div>
+      <div style="font-size:.75rem;color:#64748b;font-weight:600;">TOTAL</div>
+    </div>
+    <div class="col-4 text-center">
+      <div style="font-size:2rem;font-weight:800;color:#16a34a;">${data.exitosos}</div>
+      <div style="font-size:.75rem;color:#64748b;font-weight:600;">FACTURADOS</div>
+    </div>
+    <div class="col-4 text-center">
+      <div style="font-size:2rem;font-weight:800;color:#dc2626;">${data.fallidos}</div>
+      <div style="font-size:.75rem;color:#64748b;font-weight:600;">CON ERROR</div>
+    </div>
+  `;
+
+  let html = '';
+  let txtsDescargados = 0;
+
+  for(const r of data.resultados){
+    if(r.ok){
+      // Auto-descargar TXT si viene en la respuesta
+      if(r.archivo_txt && r.archivo_txt.contenido){
+        try {
+          const blob = new Blob([r.archivo_txt.contenido], { type: 'text/plain;charset=utf-8' });
+          const link = document.createElement('a');
+          link.href = window.URL.createObjectURL(blob);
+          link.download = r.archivo_txt.nombre_archivo;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(link.href);
+          txtsDescargados++;
+        } catch(e){ console.error('Error descargando TXT:', e); }
+      }
+
+      const btnTxt = r.dte_id
+        ? `<a href="/app/ecommerce/dte/${r.dte_id}/txt/" target="_blank" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.7rem;" title="Descargar TXT Acepta">
+             <i class="bi bi-file-earmark-text"></i> TXT
+           </a>`
+        : '';
+
+      html += `<div class="r-row d-flex align-items-start gap-2 py-2">
+        <i class="bi bi-check-circle-fill r-ok mt-1"></i>
+        <div class="flex-grow-1">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <span style="font-weight:600;">${r.numero_ticket_rm}</span>
+              <span class="text-muted ms-1">— ${r.cliente || ''}</span>
+            </div>
+            ${btnTxt}
+          </div>
+          <div style="font-size:.75rem;color:#475569;">
+            Ticket #${r.ticket_correlativo} · ${r.dte_tipo || 'DTE'} #${r.dte_numero} (id ${r.dte_id})
+          </div>
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="r-row d-flex align-items-start gap-2 py-2">
+        <i class="bi bi-x-circle-fill r-err mt-1"></i>
+        <div>
+          <div style="font-weight:600;">${r.numero_ticket_rm || 'Pedido #'+r.pedido_id} <span class="text-muted">— ${r.cliente || ''}</span></div>
+          <div style="font-size:.75rem;color:#dc2626;">${r.error}</div>
+        </div>
+      </div>`;
+    }
+  }
+
+  if(txtsDescargados > 0){
+    summary.innerHTML += `
+      <div class="col-12 mt-2">
+        <div class="alert alert-info py-2 mb-0" style="font-size:.78rem;">
+          <i class="bi bi-file-earmark-arrow-down me-1"></i>
+          ${txtsDescargados} archivo(s) TXT descargado(s) automáticamente.
+          Si no iniciaron la descarga, usa el botón <strong>TXT</strong> de cada fila.
+        </div>
+      </div>`;
+  }
+
+  lista.innerHTML = html;
+  new bootstrap.Modal(document.getElementById('modal-resultados')).show();
+}
+</script>
+
+{% include 'layout/footer.html' %}

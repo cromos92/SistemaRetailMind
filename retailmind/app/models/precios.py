@@ -304,6 +304,8 @@ class HistorialCambioPrecio(models.Model):
             ('MASIVO', 'Cambio Masivo'),
             ('SINCRONIZACION', 'Sincronización'),
             ('APROBACION', 'Por Aprobación'),
+            ('ACTUALIZACION_RECEPCION', 'Actualización por Recepción'),
+            ('ACTUALIZACION_MANUAL', 'Actualización Manual'),
         ],
         default='MANUAL'
     )

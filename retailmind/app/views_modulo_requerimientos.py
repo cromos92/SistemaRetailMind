@@ -317,9 +317,17 @@ def listar_requerimientos(request):
         if sucursal_id:
             requerimientos = requerimientos.filter(sucursal_id=sucursal_id)
         if fecha_inicio:
-            requerimientos = requerimientos.filter(fecha_creacion__gte=fecha_inicio)
+            try:
+                dt_inicio = timezone.make_aware(datetime.strptime(fecha_inicio, '%Y-%m-%d'))
+                requerimientos = requerimientos.filter(fecha_creacion__gte=dt_inicio)
+            except (ValueError, TypeError):
+                pass
         if fecha_fin:
-            requerimientos = requerimientos.filter(fecha_creacion__lte=fecha_fin)
+            try:
+                dt_fin = timezone.make_aware(datetime.strptime(fecha_fin, '%Y-%m-%d').replace(hour=23, minute=59, second=59))
+                requerimientos = requerimientos.filter(fecha_creacion__lte=dt_fin)
+            except (ValueError, TypeError):
+                pass
         if busqueda:
             requerimientos = requerimientos.filter(
                 Q(numero_requerimiento__icontains=busqueda) |
@@ -1375,9 +1383,17 @@ def exportar_requerimientos(request):
         if tipo:
             requerimientos = requerimientos.filter(tipo=tipo)
         if fecha_inicio:
-            requerimientos = requerimientos.filter(fecha_creacion__gte=fecha_inicio)
+            try:
+                dt_inicio = timezone.make_aware(datetime.strptime(fecha_inicio, '%Y-%m-%d'))
+                requerimientos = requerimientos.filter(fecha_creacion__gte=dt_inicio)
+            except (ValueError, TypeError):
+                pass
         if fecha_fin:
-            requerimientos = requerimientos.filter(fecha_creacion__lte=fecha_fin)
+            try:
+                dt_fin = timezone.make_aware(datetime.strptime(fecha_fin, '%Y-%m-%d').replace(hour=23, minute=59, second=59))
+                requerimientos = requerimientos.filter(fecha_creacion__lte=dt_fin)
+            except (ValueError, TypeError):
+                pass
         
         # Crear workbook
         wb = openpyxl.Workbook()

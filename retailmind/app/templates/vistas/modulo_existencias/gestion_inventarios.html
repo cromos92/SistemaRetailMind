@@ -759,48 +759,135 @@
     font-size: 1.1rem;
 }
 
-/* ========== RESPONSIVE ========== */
+/* ========== COMPACT HEADER BAR ========== */
+.compact-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.compact-stats {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1.5px solid transparent;
+    white-space: nowrap;
+}
+
+.stat-pill:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.stat-pill.primary  { background: var(--nexo-primary-light); color: var(--nexo-primary); border-color: rgba(0,102,255,0.2); }
+.stat-pill.warning  { background: rgba(255,176,32,0.15); color: #b87900; border-color: rgba(255,176,32,0.3); }
+.stat-pill.success  { background: rgba(0,212,170,0.15); color: #00997d; border-color: rgba(0,212,170,0.3); }
+.stat-pill.error    { background: rgba(255,77,77,0.12); color: var(--nexo-error); border-color: rgba(255,77,77,0.25); }
+.stat-pill.neutral  { background: var(--nexo-gray-100); color: var(--nexo-gray-700); border-color: var(--nexo-gray-300); }
+
+.stat-pill .stat-value {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.compact-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* ========== PROCESS WIZARD (compact, functional) ========== */
+.process-wizard-compact {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--nexo-white);
+}
+
+.wizard-steps-compact {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.wizard-step-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.6);
+    flex-shrink: 0;
+}
+
+.wizard-step-compact:hover {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.9);
+}
+
+.wizard-step-compact.active {
+    background: var(--nexo-accent);
+    color: var(--nexo-secondary);
+}
+
+.wizard-step-compact .step-num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.wizard-step-compact.active .step-num {
+    background: rgba(26,26,46,0.2);
+}
+
+.wizard-arrow {
+    color: rgba(255,255,255,0.25);
+    font-size: 0.75rem;
+    padding: 0 2px;
+    flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
-    .kpi-container {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .page-header {
+    .compact-header-bar {
         flex-direction: column;
-        gap: 1rem;
         align-items: flex-start;
     }
-    
-    .nexo-pagination {
-        flex-direction: column;
-        gap: 1rem;
+    .compact-stats {
+        width: 100%;
     }
-    
-    .wizard-steps {
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-    
-    .wizard-steps::before {
-        display: none;
-    }
-    
-    .wizard-step {
-        flex: 0 0 calc(33.33% - 1rem);
-    }
-    
-    .quick-actions-container {
-        grid-template-columns: 1fr;
-    }
-    
-    .diferencias-summary {
-        flex-direction: column;
-        gap: 1rem;
-        text-align: center;
-    }
-    
-    .diferencias-summary-content {
-        flex-direction: column;
+    .compact-actions {
+        width: 100%;
     }
 }
 </style>
@@ -815,106 +902,77 @@
             </h1>
         </div>
         
-        <!-- === WIZARD DE PROCESO === -->
-        <div class="process-wizard">
-            <div class="process-wizard-title">
-                <i class="bi bi-signpost-2"></i> Flujo del Proceso de Inventario
+        <!-- === COMPACT HEADER BAR: KPIs + Acciones rápidas === -->
+        <div class="compact-header-bar">
+            <div class="compact-stats">
+                <span class="stat-pill neutral" onclick="filtrarPorTab(document.querySelector('.inventory-tab'), '')" title="Ver todos los inventarios">
+                    <i class="bi bi-list-check"></i>
+                    <span class="stat-value" id="kpiTotalInventarios">0</span>
+                    <span>Total</span>
+                </span>
+                <span class="stat-pill warning" onclick="filtrarPorTabEstado('EN_CONTEO')" title="Inventarios en proceso de conteo">
+                    <i class="bi bi-clock-history"></i>
+                    <span class="stat-value" id="kpiEnProceso">0</span>
+                    <span>En Proceso</span>
+                    <span class="badge bg-warning text-dark ms-1" id="badgeEnProceso" style="display:none; font-size:0.65rem;"></span>
+                </span>
+                <span class="stat-pill error" onclick="filtrarPorTabEstado('PENDIENTE_APROBACION')" title="Inventarios esperando aprobación">
+                    <i class="bi bi-hourglass-split"></i>
+                    <span class="stat-value" id="kpiPendientesAprobacion">0</span>
+                    <span>Pendientes Aprob.</span>
+                    <span class="badge bg-danger ms-1" id="badgePendientes" style="display:none; font-size:0.65rem;"></span>
+                </span>
+                <span class="stat-pill success" onclick="filtrarPorTabEstado('COMPLETADO')" title="Inventarios completados">
+                    <i class="bi bi-check-circle"></i>
+                    <span class="stat-value" id="kpiCompletados">0</span>
+                    <span>Completados</span>
+                </span>
             </div>
-            <div class="wizard-steps">
-                <div class="wizard-step" onclick="abrirModalNuevoInventario()" title="Crear nuevo inventario">
-                    <div class="wizard-step-icon"><i class="bi bi-plus-circle"></i></div>
-                    <div class="wizard-step-label">1. Crear</div>
-                    <div class="wizard-step-sublabel">Definir alcance</div>
+            <div class="compact-actions">
+                <button class="nexo-btn nexo-btn-outline" onclick="exportarTodasDiferencias()" title="Exportar diferencias a Excel">
+                    <i class="bi bi-file-earmark-excel"></i> Exportar
+                </button>
+                <button class="nexo-btn nexo-btn-primary" onclick="abrirModalNuevoInventario()">
+                    <i class="bi bi-plus-lg"></i> Nuevo Inventario
+                </button>
+            </div>
+        </div>
+
+        <!-- === WIZARD DE PROCESO (compacto y funcional) === -->
+        <div class="process-wizard-compact">
+            <div class="wizard-steps-compact">
+                <div class="wizard-step-compact" onclick="abrirModalNuevoInventario()" title="Crear nuevo inventario">
+                    <span class="step-num">1</span>
+                    <i class="bi bi-plus-circle"></i> Crear
                 </div>
-                <div class="wizard-step" title="Cargar datos de pistola">
-                    <div class="wizard-step-icon"><i class="bi bi-upc-scan"></i></div>
-                    <div class="wizard-step-label">2. Cargar Pistola</div>
-                    <div class="wizard-step-sublabel">Importar conteo físico</div>
+                <span class="wizard-arrow"><i class="bi bi-chevron-right"></i></span>
+                <div class="wizard-step-compact" onclick="filtrarPorTabEstado('EN_CONTEO')" title="Ver inventarios en conteo / carga de pistola">
+                    <span class="step-num">2</span>
+                    <i class="bi bi-upc-scan"></i> Cargar Pistola
                 </div>
-                <div class="wizard-step" title="Comparar con sistema">
-                    <div class="wizard-step-icon"><i class="bi bi-arrows-expand"></i></div>
-                    <div class="wizard-step-label">3. Comparar</div>
-                    <div class="wizard-step-sublabel">Pistola vs Sistema</div>
+                <span class="wizard-arrow"><i class="bi bi-chevron-right"></i></span>
+                <div class="wizard-step-compact" onclick="filtrarPorTabEstado('CONTEO_FINALIZADO')" title="Ver inventarios listos para comparar">
+                    <span class="step-num">3</span>
+                    <i class="bi bi-arrows-expand"></i> Comparar
                 </div>
-                <div class="wizard-step" title="Analizar diferencias">
-                    <div class="wizard-step-icon"><i class="bi bi-graph-up-arrow"></i></div>
-                    <div class="wizard-step-label">4. Analizar</div>
-                    <div class="wizard-step-sublabel">Revisar diferencias</div>
+                <span class="wizard-arrow"><i class="bi bi-chevron-right"></i></span>
+                <div class="wizard-step-compact" onclick="filtrarPorTabEstado('EN_REVISION')" title="Ver inventarios en revisión / análisis">
+                    <span class="step-num">4</span>
+                    <i class="bi bi-graph-up-arrow"></i> Analizar
                 </div>
-                <div class="wizard-step" title="Aprobar y aplicar">
-                    <div class="wizard-step-icon"><i class="bi bi-check2-circle"></i></div>
-                    <div class="wizard-step-label">5. Aprobar</div>
-                    <div class="wizard-step-sublabel">Ajustar stock</div>
+                <span class="wizard-arrow"><i class="bi bi-chevron-right"></i></span>
+                <div class="wizard-step-compact" onclick="filtrarPorTabEstado('PENDIENTE_APROBACION')" title="Ver inventarios pendientes de aprobación">
+                    <span class="step-num">5</span>
+                    <i class="bi bi-check2-circle"></i> Aprobar
+                </div>
+                <span class="wizard-arrow"><i class="bi bi-chevron-right"></i></span>
+                <div class="wizard-step-compact" onclick="filtrarPorTabEstado('COMPLETADO')" title="Ver inventarios completados">
+                    <span class="step-num">6</span>
+                    <i class="bi bi-stars"></i> Completado
                 </div>
             </div>
         </div>
-        
-        <!-- === ACCIONES RÁPIDAS === -->
-        <div class="quick-actions-container">
-            <div class="quick-action-card highlighted" onclick="abrirModalNuevoInventario()">
-                <div class="quick-action-icon success">
-                    <i class="bi bi-plus-lg"></i>
-                </div>
-                <div class="quick-action-content">
-                    <h4>Nuevo Inventario</h4>
-                    <p>Crear inventario completo, por marca, departamento o selectivo</p>
-                </div>
-            </div>
-            <div class="quick-action-card" onclick="irAInventarioEnProceso()">
-                <div class="quick-action-icon warning">
-                    <i class="bi bi-upc-scan"></i>
-                </div>
-                <div class="quick-action-content">
-                    <h4>Cargar Pistola</h4>
-                    <p>Importar archivo de conteo desde pistola lectora</p>
-                </div>
-                <span class="quick-action-badge" id="badgeEnProceso" style="display: none;">0</span>
-            </div>
-            <div class="quick-action-card" onclick="verInventariosPendientesAprobacion()">
-                <div class="quick-action-icon primary">
-                    <i class="bi bi-file-earmark-check"></i>
-                </div>
-                <div class="quick-action-content">
-                    <h4>Pendientes de Aprobar</h4>
-                    <p>Revisar y aprobar inventarios con diferencias analizadas</p>
-                </div>
-                <span class="quick-action-badge" id="badgePendientes" style="display: none;">0</span>
-            </div>
-            <div class="quick-action-card" onclick="exportarTodasDiferencias()">
-                <div class="quick-action-icon info">
-                    <i class="bi bi-file-earmark-excel"></i>
-                </div>
-                <div class="quick-action-content">
-                    <h4>Exportar Diferencias</h4>
-                    <p>Descargar Excel con todas las diferencias para análisis</p>
-                </div>
-            </div>
-        </div>
-        
-        <!-- === KPI CARDS === -->
-        <div class="kpi-container">
-            <div class="kpi-card">
-                <div class="kpi-icon primary"><i class="bi bi-list-check"></i></div>
-                <div class="kpi-value" id="kpiTotalInventarios">0</div>
-                <div class="kpi-label">Total Inventarios</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon warning"><i class="bi bi-hourglass-split"></i></div>
-                <div class="kpi-value" id="kpiEnProceso">0</div>
-                <div class="kpi-label">En Proceso</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon success"><i class="bi bi-check-circle"></i></div>
-                <div class="kpi-value" id="kpiCompletados">0</div>
-                <div class="kpi-label">Completados</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon error"><i class="bi bi-exclamation-triangle"></i></div>
-                <div class="kpi-value" id="kpiPendientesAprobacion">0</div>
-                <div class="kpi-label">Pendientes Aprobación</div>
-            </div>
-        </div>
-        
+
         <!-- === ALERTA DE DIFERENCIAS (si hay inventarios con diferencias) === -->
         <div class="diferencias-summary" id="alertaDiferencias" style="display: none;">
             <div class="diferencias-summary-content">
@@ -938,9 +996,6 @@
             <div class="nexo-card-header">
                 <h5><i class="bi bi-table"></i> Inventarios</h5>
                 <div class="d-flex gap-2">
-                    <button class="nexo-btn nexo-btn-outline" style="background: rgba(255,255,255,0.1);" onclick="exportarTodasDiferencias()" title="Exportar todas las diferencias">
-                        <i class="bi bi-file-earmark-excel"></i> Exportar Diferencias
-                    </button>
                     <button class="nexo-btn nexo-btn-primary" onclick="abrirModalNuevoInventario()">
                         <i class="bi bi-plus-lg"></i> Crear Inventario
                     </button>
@@ -1242,6 +1297,11 @@ function cargarInventarios(page = 1) {
                         <button class="nexo-btn nexo-btn-sm nexo-btn-warning" onclick="event.stopPropagation(); aplicarAjustes(${inv.id})" title="Aplicar">
                             <i class="bi bi-arrow-right-circle"></i> Aplicar
                         </button>`;
+                } else if (inv.estado === 'APLICANDO') {
+                    accionPrincipal = `
+                        <button class="nexo-btn nexo-btn-sm nexo-btn-warning" onclick="event.stopPropagation(); _mostrarProgresoAjustes(${inv.id})" title="Ver Progreso">
+                            <i class="bi bi-hourglass-split"></i> Progreso...
+                        </button>`;
                 }
                 
                 tbody.append(`
@@ -1358,6 +1418,11 @@ function getAccionesRapidas(inv) {
             <i class="bi bi-arrow-right-circle"></i>
         </button>`;
     }
+    if (inv.estado === 'APLICANDO') {
+        return `<button class="nexo-btn nexo-btn-sm nexo-btn-warning ms-1" onclick="event.stopPropagation(); _mostrarProgresoAjustes(${inv.id})" title="Ver progreso">
+            <i class="bi bi-hourglass-split"></i>
+        </button>`;
+    }
     return '';
 }
 
@@ -1447,6 +1512,21 @@ function filtrarPorTab(element, filtro) {
         }
     }
     
+    cargarInventarios(1);
+}
+
+// Helper para filtrar por estado desde las pills del wizard compacto
+function filtrarPorTabEstado(estado) {
+    currentTabFilter = estado;
+    $('#filtroEstado').val(estado);
+    // Actualizar tabs activos si corresponde
+    $('.inventory-tab').removeClass('active');
+    const tabMatch = $(`.inventory-tab[data-filter="${estado}"]`);
+    if (tabMatch.length) {
+        tabMatch.addClass('active');
+    } else {
+        $('.inventory-tab[data-filter=""]').addClass('active');
+    }
     cargarInventarios(1);
 }
 
@@ -1807,7 +1887,7 @@ function aplicarAjustes(inventarioId) {
         title: '¿Aplicar Ajustes de Inventario?',
         html: `<p class="text-danger"><strong>¡ATENCIÓN!</strong></p>
                <p>Esta acción modificará el stock real del sistema según las diferencias encontradas.</p>
-               <p>Se crearán movimientos de ajuste para cada diferencia.</p>
+               <p>Se crearán movimientos de ajuste para cada diferencia detectada.</p>
                <p><strong>Esta acción no se puede deshacer.</strong></p>`,
         icon: 'warning',
         showCancelButton: true,
@@ -1816,35 +1896,102 @@ function aplicarAjustes(inventarioId) {
         confirmButtonColor: '#FFB020'
     }).then(result => {
         if (result.isConfirmed) {
-            Swal.fire({
-                title: 'Aplicando ajustes...',
-                text: 'Esto puede tomar varios minutos para inventarios grandes',
-                allowOutsideClick: false,
-                didOpen: () => { Swal.showLoading(); }
-            });
-            
+            // Iniciar el proceso en background
             $.ajax({
                 url: `/app/gestion-inventarios/api/aplicar-ajustes/${inventarioId}/`,
                 method: 'POST',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                timeout: 300000, // 5 minutos
                 success: function(response) {
                     if (response.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Ajustes Aplicados',
-                            html: `<p>${response.message}</p>
-                                   ${response.errores ? `<p class="text-warning">Errores: ${response.errores.length}</p>` : ''}`
-                        });
-                        cargarInventarios(currentPage);
+                        // Mostrar modal de progreso con polling
+                        _mostrarProgresoAjustes(inventarioId);
                     } else {
                         Swal.fire('Error', response.error, 'error');
                     }
                 },
                 error: function() {
-                    Swal.fire('Error', 'No se pudieron aplicar los ajustes', 'error');
+                    Swal.fire('Error', 'No se pudo iniciar el proceso de ajustes', 'error');
                 }
             });
+        }
+    });
+}
+
+// Muestra el modal de progreso y hace polling al endpoint de estado
+function _mostrarProgresoAjustes(inventarioId) {
+    let pollingInterval = null;
+
+    Swal.fire({
+        title: 'Aplicando Ajustes de Inventario',
+        html: `
+            <div class="mb-3">
+                <div class="progress" style="height: 22px; border-radius: 11px;">
+                    <div id="swal-progreso-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                         role="progressbar" style="width: 0%; font-size: 0.8rem; font-weight: 700;">0%</div>
+                </div>
+            </div>
+            <p id="swal-progreso-texto" class="mb-1" style="font-size: 0.9rem;">Iniciando proceso...</p>
+            <small id="swal-progreso-detalle" class="text-muted">Preparando ajustes...</small>
+        `,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        showCancelButton: false,
+        didOpen: () => {
+            // Polling cada 1.5 segundos
+            pollingInterval = setInterval(() => {
+                $.get(`/app/gestion-inventarios/api/estado-ajustes/${inventarioId}/`, function(data) {
+                    if (!data.success) return;
+
+                    const pct = data.porcentaje || 0;
+                    const bar = document.getElementById('swal-progreso-bar');
+                    const texto = document.getElementById('swal-progreso-texto');
+                    const detalle = document.getElementById('swal-progreso-detalle');
+
+                    if (bar) {
+                        bar.style.width = pct + '%';
+                        bar.textContent = pct + '%';
+                    }
+
+                    if (data.estado === 'EN_PROCESO') {
+                        if (texto) texto.textContent = 'Procesando ajustes de stock...';
+                        if (detalle) detalle.textContent = `${data.procesados} / ${data.total} SKUs procesados`;
+                    } else if (data.estado === 'COMPLETADO') {
+                        clearInterval(pollingInterval);
+                        if (bar) {
+                            bar.style.width = '100%';
+                            bar.textContent = '100%';
+                            bar.classList.remove('progress-bar-animated');
+                            bar.classList.remove('bg-warning');
+                            bar.classList.add('bg-success');
+                        }
+                        const errCount = data.errores ? data.errores.length : 0;
+                        const errHtml = errCount > 0
+                            ? `<p class="text-warning mt-2"><i class="bi bi-exclamation-triangle"></i> ${errCount} SKU(s) con errores</p>`
+                            : '';
+                        setTimeout(() => {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Ajustes Aplicados',
+                                html: `<p>${data.procesados} ajuste(s) aplicados exitosamente.</p>${errHtml}`,
+                                confirmButtonText: 'Cerrar'
+                            }).then(() => {
+                                cargarInventarios(currentPage);
+                            });
+                        }, 500);
+                    } else if (data.estado === 'ERROR') {
+                        clearInterval(pollingInterval);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error al Aplicar Ajustes',
+                            text: data.errores && data.errores[0] ? data.errores[0].error : 'Error desconocido',
+                            confirmButtonText: 'Cerrar'
+                        }).then(() => {
+                            cargarInventarios(currentPage);
+                        });
+                    }
+                });
+            }, 1500);
         }
     });
 }

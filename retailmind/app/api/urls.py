@@ -28,4 +28,7 @@ urlpatterns = [
 
     # Sincronización
     path('sync/', include('app.api.sync.urls', namespace='sync')),
+
+    # API externa para VicentAllEcommercesConected
+    path('external/', include('app.api.external.urls')),
 ]
