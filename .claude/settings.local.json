@@ -24,7 +24,8 @@
       "Bash(python -c \"import py_compile; py_compile.compile\\('app/views_modulo_reportes.py', doraise=True\\); print\\('OK'\\)\")",
       "Bash(python retailmind/manage.py makemigrations app --name add_permiso_usuario)",
       "Bash(python retailmind/manage.py migrate app 0120)",
-      "Bash(python retailmind/manage.py check)"
+      "Bash(python retailmind/manage.py check)",
+      "Bash(grep -l \"_qz_tray_module\\\\|imprimirConQZ\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas/*.html)"
     ]
   }
 }
