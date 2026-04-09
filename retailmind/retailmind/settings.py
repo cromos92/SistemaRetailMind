@@ -191,11 +191,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # ========== EMAIL configurado más abajo ==========
 
 # Whitenoise configuration for static files
-# Use CompressedStaticFilesStorage instead of Manifest for Railway
-if 'RAILWAY_ENVIRONMENT' in os.environ:
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-else:
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# CompressedStaticFilesStorage no valida referencias a .map faltantes
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # CSRF Failure View - redirige al login con mensaje en lugar de mostrar 403
 CSRF_FAILURE_VIEW = 'retailmind.views.csrf_failure'
