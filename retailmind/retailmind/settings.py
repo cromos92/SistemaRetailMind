@@ -111,8 +111,8 @@ WSGI_APPLICATION = 'retailmind.wsgi.application'
 AUTH_USER_MODEL = 'users.Usuario'
 
 # Database configuration
-if 'DATABASE_URL' in os.environ:
-    # Railway PostgreSQL
+if os.environ.get('DATABASE_URL'):
+    # Production (Railway / DigitalOcean)
     DATABASES = {
         'default': dj_database_url.config(
             default=os.environ.get('DATABASE_URL'),
