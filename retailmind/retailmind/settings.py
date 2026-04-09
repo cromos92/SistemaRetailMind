@@ -35,6 +35,10 @@ DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 # ALLOWED_HOSTS configuration
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
+# DigitalOcean
+ALLOWED_HOSTS.append('retail-ap-mh3y2.ondigitalocean.app')
+ALLOWED_HOSTS.append('*.ondigitalocean.app')
+
 # Railway specific
 if 'RAILWAY_ENVIRONMENT' in os.environ:
     ALLOWED_HOSTS.append(os.environ.get('RAILWAY_PUBLIC_DOMAIN', ''))
@@ -198,12 +202,17 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 CSRF_FAILURE_VIEW = 'retailmind.views.csrf_failure'
 
 # CSRF Trusted Origins - SIEMPRE configurar en producción
+CSRF_TRUSTED_ORIGINS = [
+    "https://retail-ap-mh3y2.ondigitalocean.app",
+    "https://*.ondigitalocean.app",
+    "https://retail.webappsolutions.cl",
+]
+
 if 'RAILWAY_ENVIRONMENT' in os.environ:
-    CSRF_TRUSTED_ORIGINS = [
+    CSRF_TRUSTED_ORIGINS += [
         f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')}",
         "https://*.railway.app",
         "https://*.up.railway.app",
-        "https://retail.webappsolutions.cl"
     ]
 
 # Security settings for production
