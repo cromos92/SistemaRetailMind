@@ -19,11 +19,8 @@ URL_PERMISO_MAP = {
     '/app/verDashboardCompras/': 'dashboard_compras_estrategico',
     '/app/ventas/dashboard': 'dashboard_ventas',
     '/app/dashboard-documentos/': 'dashboard_documentos',
-    '/app/dashboard-caja/': 'dashboard_caja',
     '/app/dashboard-requerimientos/': 'dashboard_requerimientos',
-    '/app/dashboard-crm/': 'dashboard_crm',
     '/app/prediccion/': 'prediccion_compras',
-    '/app/dashboard-integral/': 'dashboard_integral',
     
     # Ventas
     '/app/ticket-venta/': 'ticket_venta',
@@ -78,6 +75,7 @@ URL_PERMISO_MAP = {
     '/empresa_management/lista_clientes/': 'gestion_clientes',
     '/app/gestion_vendedores/': 'gestion_vendedores',
     '/app/permisos/gestion/': 'gestion_permisos',
+    '/app/permisos/': 'gestion_permisos',
     '/app/configuracion/interfaz-prueba-acepta/': 'interfaz_acepta',
     
     # Usuario
@@ -154,7 +152,7 @@ class PermisosMenuMiddleware:
             return None  # Django redirigirá al login si es necesario
         
         # 4. Buscar si la URL tiene un permiso asociado
-        # Nota: Todos los usuarios respetan los permisos por rol (is_superuser ya no da acceso automático)
+        # Nota: Todos los usuarios respetan los permisos por rol. is_superuser no otorga privilegios.
         codigo_opcion = self.obtener_codigo_opcion(path)
         
         if codigo_opcion is None:

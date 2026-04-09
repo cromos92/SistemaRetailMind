@@ -16,7 +16,8 @@ from .models import (
     Sucursal, EmpresaUser, Empresa, Compras, Compras_Producto, Compras_Producto_Talla,
     Productos_Recepcionados, Requerimiento, Movimientos_Producto, LoteProducto,
     CambioDevolucion, Solicitud_Regularizacion, Traspaso, AjusteInventario,
-    PermisoRol, OpcionMenu
+    PermisoRol, OpcionMenu,
+    ArqueoCaja, DepositoBancario, CambioPrecioPendiente,
 )
 
 
@@ -111,31 +112,45 @@ def dashboard_home(request):
         # ========== 5. KPIs OPERACIONALES ==========
         operaciones_data = calcular_kpis_operaciones(sucursal_id, empresa_id, hoy, inicio_mes)
         
-        # ========== 6. ALERTAS CRÍTICAS ==========
-        alertas = generar_alertas_criticas(stock_data, compras_data, requerimientos_data, operaciones_data)
-        
-        # ========== 7. TOP PRODUCTOS ==========
-        top_productos = obtener_top_productos(sucursal_id, inicio_mes, hoy)
-        
-        # ========== 8. PRODUCTOS SIN MOVIMIENTO ==========
-        productos_sin_movimiento = obtener_productos_sin_movimiento(sucursal_id, 30)
+        # ========== 6. KPIs CAJA Y DEPOSITOS ==========
+        try:
+            caja_data = calcular_kpis_caja_depositos(sucursal_id, hoy, inicio_mes)
+        except Exception:
+            caja_data = {
+                'arqueos_abiertos': 0, 'arqueos_con_diferencias': 0,
+                'diferencia_efectivo': 0, 'diferencia_transbank': 0,
+                'diferencia_total': 0, 'fecha_ultimo_arqueo': None,
+                'depositos_pendientes': 0, 'monto_sin_verificar': 0,
+                'total_arqueos_mes': 0,
+            }
+
+        # ========== 7. KPIs PRECIOS PENDIENTES ==========
+        try:
+            precios_data = calcular_kpis_precios_pendientes(sucursal_id)
+        except Exception:
+            precios_data = {
+                'total_pendientes': 0, 'urgentes': 0, 'impacto_estimado': 0,
+            }
+
+        # ========== 8. ALERTAS CRÍTICAS ==========
+        alertas = generar_alertas_criticas(
+            stock_data, compras_data, requerimientos_data, operaciones_data,
+            caja_data, precios_data
+        )
         
         context = {
-            # Información de la sucursal
             'sucursal_actual': sucursal_actual,
             'fecha_actual': hoy,
             
-            # KPIs principales
             'ventas': ventas_data,
             'stock': stock_data,
             'compras': compras_data,
             'requerimientos': requerimientos_data,
             'operaciones': operaciones_data,
+            'caja': caja_data,
+            'precios': precios_data,
             
-            # Alertas y listas
             'alertas': alertas,
-            'top_productos': top_productos,
-            'productos_sin_movimiento': productos_sin_movimiento,
         }
         
         return render(request, 'vistas/dashboard_home.html', context)
@@ -152,10 +167,16 @@ def dashboard_home(request):
             'stock': {'total_skus': 0, 'stock_critico': 0, 'sin_stock': 0, 'valor_inventario': 0},
             'compras': {'pendientes_recepcion': 0, 'dtes_pendientes': 0, 'monto_pendiente': 0},
             'requerimientos': {'pendientes': 0, 'en_proceso': 0, 'total_mes': 0},
-            'operaciones': {'traspasos_pendientes': 0, 'ajustes_pendientes': 0},
+            'operaciones': {'traspasos_pendientes': 0, 'ajustes_pendientes': 0, 'cambios_pendientes': 0, 'regularizaciones': 0},
+            'caja': {
+                'arqueos_abiertos': 0, 'arqueos_con_diferencias': 0,
+                'diferencia_efectivo': 0, 'diferencia_transbank': 0,
+                'diferencia_total': 0, 'fecha_ultimo_arqueo': None,
+                'depositos_pendientes': 0, 'monto_sin_verificar': 0,
+                'total_arqueos_mes': 0,
+            },
+            'precios': {'total_pendientes': 0, 'urgentes': 0, 'impacto_estimado': 0},
             'alertas': [],
-            'top_productos': [],
-            'productos_sin_movimiento': [],
             'fecha_actual': timezone.now().date(),
         })
 
@@ -204,17 +225,15 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
     ticket_promedio = round(ventas_hoy / tickets_hoy, 0) if tickets_hoy > 0 else 0
     ticket_promedio_mes = round(ventas_mes / tickets_mes, 0) if tickets_mes > 0 else 0
     
-    # Ventas por hora (últimas 24 horas para gráfico)
-    ventas_por_hora = []
-    for i in range(24):
-        hora_inicio = timezone.now().replace(hour=i, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        hora_fin = hora_inicio + timedelta(hours=1)
-        venta_hora = tickets_base.filter(
-            fecha=hoy,
-            hora__gte=hora_inicio.time(),
-            hora__lt=hora_fin.time()
-        ).aggregate(total=Sum('total'))['total'] or 0
-        ventas_por_hora.append({'hora': i, 'monto': int(venta_hora)})
+    # Ventas por hora (hoy - una sola query agrupada por hora)
+    from django.db.models.functions import ExtractHour
+    ventas_hora_qs = tickets_base.filter(fecha=hoy, hora__isnull=False).annotate(
+        hora_num=ExtractHour('hora')
+    ).values('hora_num').annotate(
+        monto=Sum('total')
+    ).order_by('hora_num')
+    ventas_hora_map = {item['hora_num']: int(item['monto'] or 0) for item in ventas_hora_qs}
+    ventas_por_hora = [{'hora': i, 'monto': ventas_hora_map.get(i, 0)} for i in range(24)]
     
     return {
         'hoy': int(ventas_hoy),
@@ -444,7 +463,7 @@ def calcular_kpis_operaciones(sucursal_id, empresa_id, hoy, inicio_mes):
     
     # Cambios y devoluciones pendientes
     cambios_pendientes = CambioDevolucion.objects.filter(
-        estado__in=['SOLICITADO', 'EN_PROCESO', 'APROBADO', 'EJECUTADO_COBRO_PENDIENTE']
+        estado__in=['SOLICITADO', 'EN_PROCESO', 'APROBADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']
     )
     if sucursal_id:
         cambios_pendientes = cambios_pendientes.filter(sucursal_id=sucursal_id)
@@ -476,7 +495,77 @@ def calcular_kpis_operaciones(sucursal_id, empresa_id, hoy, inicio_mes):
     }
 
 
-def generar_alertas_criticas(stock_data, compras_data, requerimientos_data, operaciones_data):
+def calcular_kpis_caja_depositos(sucursal_id, hoy, inicio_mes):
+    """Calcula KPIs de cuadraturas de caja y depositos bancarios"""
+    arqueos_qs = ArqueoCaja.objects.filter(fecha_arqueo__gte=inicio_mes)
+    if sucursal_id:
+        arqueos_qs = arqueos_qs.filter(sucursal_id=sucursal_id)
+
+    arqueos_abiertos = arqueos_qs.filter(estado='ABIERTO').count()
+    arqueos_con_diferencias = arqueos_qs.filter(estado='CON_DIFERENCIAS').count()
+
+    agg_dif = arqueos_qs.aggregate(
+        dif_efectivo=Sum('diferencia_efectivo'),
+        dif_transbank=Sum('diferencia_transbank'),
+    )
+    diferencia_efectivo = abs(int(agg_dif['dif_efectivo'] or 0))
+    diferencia_transbank = abs(int(agg_dif['dif_transbank'] or 0))
+    diferencia_total = diferencia_efectivo + diferencia_transbank
+
+    ultimo_arqueo = arqueos_qs.order_by('-fecha_arqueo').first()
+    fecha_ultimo_arqueo = ultimo_arqueo.fecha_arqueo if ultimo_arqueo else None
+
+    depositos_qs = DepositoBancario.objects.filter(fecha_deposito__gte=inicio_mes)
+    if sucursal_id:
+        depositos_qs = depositos_qs.filter(arqueo__sucursal_id=sucursal_id)
+
+    dep_sin_verificar = depositos_qs.filter(verificado=False)
+    depositos_pendientes = dep_sin_verificar.count()
+    monto_sin_verificar = int(dep_sin_verificar.aggregate(t=Sum('monto'))['t'] or 0)
+
+    total_arqueos_mes = arqueos_qs.count()
+
+    return {
+        'arqueos_abiertos': arqueos_abiertos,
+        'arqueos_con_diferencias': arqueos_con_diferencias,
+        'diferencia_efectivo': diferencia_efectivo,
+        'diferencia_transbank': diferencia_transbank,
+        'diferencia_total': diferencia_total,
+        'fecha_ultimo_arqueo': fecha_ultimo_arqueo,
+        'depositos_pendientes': depositos_pendientes,
+        'monto_sin_verificar': monto_sin_verificar,
+        'total_arqueos_mes': total_arqueos_mes,
+    }
+
+
+def calcular_kpis_precios_pendientes(sucursal_id):
+    """Calcula KPIs de precios pendientes de regularizar"""
+    precios_qs = CambioPrecioPendiente.objects.filter(
+        estado='PENDIENTE', descartado=False
+    )
+    if sucursal_id:
+        precios_qs = precios_qs.filter(sucursal_id=sucursal_id)
+
+    total_pendientes = precios_qs.count()
+
+    urgentes = precios_qs.filter(
+        Q(prioridad__in=['ALTA', 'URGENTE']) |
+        Q(fecha_creacion__lte=timezone.now() - timedelta(days=7))
+    ).count()
+
+    agg = precios_qs.aggregate(
+        impacto_total=Sum('diferencia'),
+    )
+    impacto_estimado = abs(int(agg['impacto_total'] or 0))
+
+    return {
+        'total_pendientes': total_pendientes,
+        'urgentes': urgentes,
+        'impacto_estimado': impacto_estimado,
+    }
+
+
+def generar_alertas_criticas(stock_data, compras_data, requerimientos_data, operaciones_data, caja_data=None, precios_data=None):
     """Genera lista de alertas críticas ordenadas por prioridad"""
     alertas = []
     
@@ -538,6 +627,60 @@ def generar_alertas_criticas(stock_data, compras_data, requerimientos_data, oper
             'url': '/app/cambios-devoluciones/',
             'prioridad': 5
         })
+
+    if caja_data:
+        if caja_data['arqueos_abiertos'] > 0:
+            alertas.append({
+                'tipo': 'warning',
+                'icono': 'ri-safe-2-fill',
+                'titulo': f"{caja_data['arqueos_abiertos']} arqueos de caja abiertos",
+                'descripcion': 'Hay cuadraturas pendientes de cierre',
+                'accion': 'Revisar arqueos',
+                'url': '/app/ventas/revision-arqueos/',
+                'prioridad': 2
+            })
+        if caja_data['depositos_pendientes'] > 0:
+            alertas.append({
+                'tipo': 'warning',
+                'icono': 'ri-bank-fill',
+                'titulo': f"{caja_data['depositos_pendientes']} depósitos sin verificar",
+                'descripcion': f"Monto pendiente: ${caja_data['monto_sin_verificar']:,}",
+                'accion': 'Verificar depósitos',
+                'url': '/app/ventas/revision-arqueos/',
+                'prioridad': 3
+            })
+        if caja_data['diferencia_total'] > 0:
+            alertas.append({
+                'tipo': 'danger',
+                'icono': 'ri-error-warning-fill',
+                'titulo': f"Diferencia acumulada en caja: ${caja_data['diferencia_total']:,}",
+                'descripcion': f"Efectivo: ${caja_data['diferencia_efectivo']:,} | Transbank: ${caja_data['diferencia_transbank']:,}",
+                'accion': 'Revisar cuadraturas',
+                'url': '/app/ventas/revision-arqueos/',
+                'prioridad': 1
+            })
+
+    if precios_data:
+        if precios_data['urgentes'] > 0:
+            alertas.append({
+                'tipo': 'danger',
+                'icono': 'ri-price-tag-3-fill',
+                'titulo': f"{precios_data['urgentes']} precios urgentes por regularizar",
+                'descripcion': f"Total pendientes: {precios_data['total_pendientes']}",
+                'accion': 'Regularizar precios',
+                'url': '/app/gestion-precios/revisar-pendientes/',
+                'prioridad': 2
+            })
+        elif precios_data['total_pendientes'] > 0:
+            alertas.append({
+                'tipo': 'info',
+                'icono': 'ri-price-tag-3-line',
+                'titulo': f"{precios_data['total_pendientes']} precios pendientes de regularizar",
+                'descripcion': 'Revisión de cambios de precio sugeridos',
+                'accion': 'Revisar precios',
+                'url': '/app/gestion-precios/revisar-pendientes/',
+                'prioridad': 5
+            })
     
     # Ordenar por prioridad
     alertas.sort(key=lambda x: x['prioridad'])

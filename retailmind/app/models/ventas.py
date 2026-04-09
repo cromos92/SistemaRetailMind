@@ -72,8 +72,10 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
     ('CAMBIO_PRODUCTO_ENTRADA', 'Cambio de Producto (Entrada)'),
     
     # === CORRECCIONES ===
-    ('CORRECCION_STOCK', 'Corrección de Stock'),  # ✅ AGREGADO: Para corregir errores
-    ('ANULACION_REGULARIZACION', 'Anulación de Regularización'),  # ✅ AGREGADO
+    ('CORRECCION_STOCK', 'Corrección de Stock'),
+    ('ANULACION_REGULARIZACION', 'Anulación de Regularización'),
+    ('ANULACION', 'Anulación de DTE'),
+    ('CANCELACION', 'Cancelación de DTE'),
     
     # === AJUSTES DE INVENTARIO FÍSICO ===
     ('AJUSTE_INVENTARIO_ENTRADA', 'Ajuste Inventario - Entrada (Sobrante)'),
@@ -90,6 +92,7 @@ ESTADO_MOVIMIENTO_CHOICES = [
     ('RECHAZADO', 'Rechazado'),
     ('ANULADO', 'Anulado'),
     ('COMPLETADO', 'Completado'),
+    ('CANCELADO', 'Cancelado'),
 ]
 
 ESTADO_TICKET_CHOICES = [
@@ -324,6 +327,7 @@ ESTADO_CAMBIO_CHOICES = [
     ('APROBADO', 'Aprobado'),
     ('EJECUTADO', 'Ejecutado'),
     ('EJECUTADO_COBRO_PENDIENTE', 'Ejecutado - Cobro Pendiente'),
+    ('EJECUTADO_DEVOL_PENDIENTE', 'Ejecutado - Devolución Pendiente'),
     ('COMPLETADO', 'Completado'),
     ('RECHAZADO', 'Rechazado'),
     ('CANCELADO', 'Cancelado'),
@@ -507,6 +511,9 @@ class CambioDevolucion(models.Model):
         if self.estado == 'APROBADO' and not self.fecha_aprobacion:
             from django.utils import timezone
             self.fecha_aprobacion = timezone.now()
+        elif self.estado in ('EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE') and not self.fecha_ejecucion:
+            from django.utils import timezone
+            self.fecha_ejecucion = timezone.now()
         elif self.estado == 'COMPLETADO' and not self.fecha_completado:
             from django.utils import timezone
             self.fecha_completado = timezone.now()
@@ -555,12 +562,26 @@ class CambioDevolucion(models.Model):
     @property
     def cobro_pendiente(self):
         """Verifica si hay un cobro de diferencia pendiente"""
-        return (
-            self.estado == 'EJECUTADO_COBRO_PENDIENTE' and
-            self.ticket_diferencia is not None and
-            self.ticket_diferencia.estado == 'PENDIENTE'
-        )
-    
+        if self.estado == 'EJECUTADO_COBRO_PENDIENTE':
+            if self.ticket_diferencia and self.ticket_diferencia.estado == 'PENDIENTE':
+                return True
+            if self.ticket_nuevo and self.ticket_nuevo.estado == 'PENDIENTE':
+                return True
+        return False
+
+    @property
+    def devolucion_pendiente(self):
+        """Verifica si hay una devolución de dinero pendiente al cliente"""
+        if self.estado == 'EJECUTADO_DEVOL_PENDIENTE':
+            if self.ticket_nuevo and self.ticket_nuevo.estado == 'PENDIENTE':
+                return True
+        return False
+
+    @property
+    def tiene_obligacion_pendiente(self):
+        """Verifica si hay cualquier obligación financiera pendiente (cobro o devolución)"""
+        return self.cobro_pendiente or self.devolucion_pendiente
+
     def aprobar_cambio(self, usuario_aprobador, observaciones=None):
         """Aprobar el cambio/devolución"""
         from django.utils import timezone
@@ -807,13 +828,16 @@ class HistorialCambioDevolucion(models.Model):
             ('RECHAZADO', 'Rechazado'),
             ('EJECUTADO', 'Ejecutado'),
             ('EJECUTADO_COBRO_PENDIENTE', 'Ejecutado - Cobro Pendiente'),
+            ('EJECUTADO_DEVOL_PENDIENTE', 'Ejecutado - Devolución Pendiente'),
             ('COMPLETADO', 'Completado'),
+            ('COMPLETADO_AUTO', 'Completado Automáticamente'),
             ('CANCELADO', 'Cancelado'),
             ('MODIFICADO', 'Modificado'),
             ('PAGO_PROCESADO', 'Pago Procesado'),
             ('PRODUCTO_EVALUADO', 'Producto Evaluado'),
             ('REVERTIDO', 'Revertido'),
             ('COBRO_DIFERENCIA', 'Cobro de Diferencia'),
+            ('DEVOLUCION_PROCESADA', 'Devolución Procesada'),
         ]
     )
     estado_anterior = models.CharField(max_length=20, blank=True, null=True)

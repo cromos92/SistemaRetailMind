@@ -153,8 +153,11 @@ class PrediccionDemanda(models.Model):
     factor_censura_aplicado = models.DecimalField(max_digits=6, decimal_places=4, default=1.0)
     metodo_usado = models.CharField(max_length=50, choices=[
         ('similitud', 'Por artículos similares'),
-        ('promedio_movil', 'Promedio móvil ponderado'),
+        ('demanda_observada', 'Demanda observada con corrección censura'),
+        ('promedio_movil_ponderado', 'Promedio móvil ponderado'),
+        ('regresion_lineal', 'Regresión lineal'),
         ('holt_winters', 'Holt-Winters'),
+        ('croston_sba', 'Croston SBA (demanda intermitente)'),
     ])
     confianza = models.DecimalField(max_digits=4, decimal_places=2, default=0.50,
         help_text='0.00 a 1.00')

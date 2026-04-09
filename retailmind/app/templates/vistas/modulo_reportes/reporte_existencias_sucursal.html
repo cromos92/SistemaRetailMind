@@ -386,6 +386,8 @@
     margin: 0 auto 14px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { display: inline-block; animation: spin .8s linear infinite; }
+  .nexo-btn:disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
 
   /* Toast */
   .nexo-toast {
@@ -656,12 +658,18 @@ function filtrarMarcas() {
    Cargar reporte
    ================================================================ */
 async function cargarReporte() {
+  const btnGenerar = document.getElementById('btn-generar');
+  if (btnGenerar.disabled) return;
+
   const sucursalId = document.getElementById('filtro-sucursal').value;
   if (!sucursalId) { toast('Selecciona una sucursal primero'); return; }
 
   const marcaId  = document.getElementById('filtro-marca').value;
   const sinStock = document.getElementById('check-sin-stock').checked;
 
+  // Bloquear botón y mostrar estado de carga
+  btnGenerar.disabled = true;
+  btnGenerar.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';
   mostrarLoading(true);
   setExportButtons(false);
   mostrarKpis(false);
@@ -706,6 +714,8 @@ async function cargarReporte() {
     mostrarError('Error inesperado al cargar el reporte');
   } finally {
     mostrarLoading(false);
+    btnGenerar.disabled = false;
+    btnGenerar.innerHTML = '<i class="ri-refresh-line"></i> Generar';
   }
 }
 

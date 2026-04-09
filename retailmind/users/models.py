@@ -148,9 +148,9 @@ class Usuario(AbstractUser):
     
     def tiene_permiso_usuarios(self, permiso):
         """Verifica si el usuario tiene un permiso específico de gestión de usuarios"""
-        if self.is_superuser:
+        if self.rol == 'administrador':
             return True
-        
+
         permisos = {
             'crear': self.puede_crear_usuarios,
             'editar': self.puede_editar_usuarios,

@@ -84,6 +84,8 @@ def agrupar_por_producto(rows: list) -> list:
                 'precio_costo':   int(row.get('producto__costo', 0) or 0),
                 'precio_interno': int(row.get('producto__precioSugerido', 0) or 0),
                 'imagenes':       [],   # llegan por webhook Shopify
+                'guia_talla_id':  row.get('producto__guia_talla_id'),
+                'tipo_talla':     row.get('producto__tipo_talla', '') or '',
                 'tallas':         [],
             }
             tallas_idx[prod_key] = {}
@@ -136,6 +138,8 @@ class ProductoExternalSerializer(serializers.Serializer):
     precio_costo   = serializers.IntegerField()
     precio_interno = serializers.IntegerField()
     imagenes       = serializers.ListField(child=serializers.CharField(), default=list)
+    guia_talla_id  = serializers.IntegerField(allow_null=True, required=False)
+    tipo_talla     = serializers.CharField(allow_blank=True, required=False, default='')
     tallas         = TallaExternalSerializer(many=True)
 
 

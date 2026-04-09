@@ -23,6 +23,8 @@ from ..models.inventario import Movimientos_Producto
 from ..models.compras import Compras, Compras_Producto_Talla
 
 CONCEPTOS_VENTA = ['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA_TICKET']
+TIPOS_SUCURSAL_VENTA = ['VENDEDORA', 'MIXTA']
+
 from ..models.predicciones import (
     ConfiguracionPrediccion,
     ClasificacionABC,
@@ -81,6 +83,65 @@ def _get_proveedor_empresa(producto):
     return None
 
 
+_lead_time_cache = {}
+
+def _calcular_lead_time_real(empresa):
+    """
+    Calcula lead time promedio real de un proveedor.
+    Cadena de fallback:
+      1) OCs completadas con fecha_envio y fecha_entrega_real
+      2) Movimientos RECEPCION_COMPRA migrados (estima desde primer ingreso
+         del producto hasta la recepcion)
+      3) empresa.lead_time_dias (default configurado)
+      4) 21 dias hardcoded
+    """
+    if empresa is None:
+        return 21
+    if empresa.id in _lead_time_cache:
+        return _lead_time_cache[empresa.id]
+
+    from ..models.compras import Compras as ComprasModel
+    from django.db.models import Avg
+
+    resultado = ComprasModel.objects.filter(
+        empresa=empresa,
+        estado='COMPLETADA',
+        fecha_envio_proveedor__isnull=False,
+        fecha_entrega_real__isnull=False,
+    ).annotate(
+        dias=F('fecha_entrega_real') - F('fecha_envio_proveedor'),
+    ).aggregate(avg_dias=Avg('dias'))
+
+    avg = resultado.get('avg_dias')
+    if avg is not None:
+        dias = avg.days if hasattr(avg, 'days') else int(avg)
+        lead_time = max(1, dias)
+        _lead_time_cache[empresa.id] = lead_time
+        return lead_time
+
+    from ..models.compras import Productos_Recepcionados
+    from django.db.models.functions import TruncDate
+    recep_avg = Productos_Recepcionados.objects.filter(
+        compra_producto_talla__compra_producto__compras__empresa=empresa,
+        fecha_recepcion__isnull=False,
+        compra_producto_talla__compra_producto__compras__fecha__isnull=False,
+    ).annotate(
+        fecha_recep_date=TruncDate('fecha_recepcion'),
+    ).annotate(
+        dias=F('fecha_recep_date') - F('compra_producto_talla__compra_producto__compras__fecha'),
+    ).aggregate(avg_dias=Avg('dias')).get('avg_dias')
+
+    if recep_avg is not None:
+        dias = recep_avg.days if hasattr(recep_avg, 'days') else int(recep_avg)
+        if 1 <= dias <= 180:
+            _lead_time_cache[empresa.id] = dias
+            return dias
+
+    lead_time = empresa.lead_time_dias if empresa.lead_time_dias else 21
+    _lead_time_cache[empresa.id] = lead_time
+    return lead_time
+
+
 def _semanas_entre(fecha_inicio, fecha_fin):
     if not fecha_inicio or not fecha_fin:
         return 0
@@ -110,7 +171,14 @@ def _obtener_ventas_producto(producto):
 def corregir_demanda_censurada(producto, semanas_activo):
     """
     Cuando stock llega a 0 antes de fin de temporada, las ventas
-    registradas subestiman la demanda real. Extrapolamos.
+    registradas subestiman la demanda real.
+
+    Usa curva de decaimiento logarítmico en vez de extrapolación lineal:
+    en retail la demanda real decrece a medida que avanza la temporada
+    (pico al inicio, cola al final). Extrapolar linealmente sobreestima.
+
+    Modelo: demanda_restante = velocidad_observada × factor_decaimiento × semanas_restantes
+    donde factor_decaimiento = ln(1 + semanas_activo) / ln(1 + semanas_esperadas)
 
     Returns: (demanda_estimada, factor_correccion, es_censurada)
     """
@@ -124,7 +192,16 @@ def corregir_demanda_censurada(producto, semanas_activo):
     se_agoto = stock_actual <= 0
     if se_agoto and semanas_activo > 0 and semanas_activo < semanas_esperadas:
         velocidad_observada = ventas / float(semanas_activo)
-        demanda_estimada = int(velocidad_observada * semanas_esperadas)
+        semanas_restantes = semanas_esperadas - semanas_activo
+
+        # Factor de decaimiento: la demanda en semanas posteriores es menor
+        # que en las primeras semanas. Usamos log para modelar la curva
+        # descendente típica de retail por temporada.
+        import math
+        factor_decaimiento = math.log(1 + semanas_activo) / math.log(1 + semanas_esperadas)
+        demanda_restante = velocidad_observada * factor_decaimiento * semanas_restantes
+        demanda_estimada = int(ventas + max(0, demanda_restante))
+
         factor = demanda_estimada / max(ventas, 1)
         return demanda_estimada, round(factor, 4), True
 
@@ -138,11 +215,16 @@ def corregir_demanda_censurada(producto, semanas_activo):
 def calcular_clasificacion_abc_xyz(temporada=None, anio=None, sucursal_id=None):
     """
     Clasifica todos los productos en ABC (ingreso) y XYZ (variabilidad).
+    Solo considera productos de sucursales vendedoras/mixtas.
     """
     config = ConfiguracionPrediccion.get_config()
     fecha_inicio = date.today() - timedelta(days=config.dias_historico_analisis)
 
-    filtros_mov = Q(concepto__in=CONCEPTOS_VENTA, fecha__gte=fecha_inicio)
+    filtros_mov = Q(
+        concepto__in=CONCEPTOS_VENTA,
+        fecha__gte=fecha_inicio,
+        ProductoTalla__producto__sucursal__tipo_sucursal__in=TIPOS_SUCURSAL_VENTA,
+    )
     if sucursal_id:
         filtros_mov &= Q(sucursal_origen_id=sucursal_id)
 
@@ -154,7 +236,11 @@ def calcular_clasificacion_abc_xyz(temporada=None, anio=None, sucursal_id=None):
     ).order_by('-ingreso_total')
 
     if not ventas_por_producto.exists():
-        filtros_ticket = Q(idTicket__estado='PAGADO', idTicket__fecha__gte=fecha_inicio)
+        filtros_ticket = Q(
+            idTicket__estado='PAGADO',
+            idTicket__fecha__gte=fecha_inicio,
+            ProductoTalla__producto__sucursal__tipo_sucursal__in=TIPOS_SUCURSAL_VENTA,
+        )
         if sucursal_id:
             filtros_ticket &= Q(idTicket__sucursal_id=sucursal_id)
         ventas_por_producto = Ticket_Productos.objects.filter(
@@ -210,12 +296,19 @@ def calcular_clasificacion_abc_xyz(temporada=None, anio=None, sucursal_id=None):
         else:
             cv = 0
 
-        if cv < float(config.umbral_cv_x):
-            xyz = 'X'
-        elif cv < float(config.umbral_cv_y):
-            xyz = 'Y'
+        # Clasificación XYZ mejorada con detección de demanda intermitente.
+        # Usa el framework Syntetos-Boylan: ADI (Average Demand Interval)
+        # para distinguir entre demanda errática (Z por CV alto pero continua)
+        # y demanda intermitente (Z por muchos ceros). Esto es crítico
+        # para retail con miles de SKUs y cantidades pequeñas.
+        es_intermitente, adi, cv2 = _es_demanda_intermitente(ventas_semanales)
+
+        if not es_intermitente and cv < float(config.umbral_cv_x):
+            xyz = 'X'  # Suave: demanda estable y continua
+        elif not es_intermitente and cv < float(config.umbral_cv_y):
+            xyz = 'Y'  # Moderada: algo variable pero continua
         else:
-            xyz = 'Z'
+            xyz = 'Z'  # Errática o intermitente
 
         sit = StockInicialTemporada.objects.filter(
             producto=producto, temporada=producto.temporada or temp,
@@ -256,33 +349,94 @@ def calcular_clasificacion_abc_xyz(temporada=None, anio=None, sucursal_id=None):
     return len(clasificaciones)
 
 
-def _calcular_ventas_semanales(producto_id, fecha_inicio):
+def _raw_ventas_semanales(producto_id, fecha_inicio=None):
+    """
+    Obtiene ventas semanales raw (lista de dicts {yr, semana, total}).
+    Si fecha_inicio es None busca en toda la historia.
+    """
     from django.db.models.functions import ExtractWeek, ExtractYear
-    datos = Movimientos_Producto.objects.filter(
-        ProductoTalla__producto_id=producto_id,
-        concepto__in=CONCEPTOS_VENTA,
-        fecha__gte=fecha_inicio,
-    ).annotate(
-        semana=ExtractWeek('fecha'),
-        yr=ExtractYear('fecha'),
-    ).values('semana', 'yr').annotate(
-        total=Sum(Abs(F('cantidad')))
-    ).order_by('yr', 'semana')
+    filtro = Q(ProductoTalla__producto_id=producto_id, concepto__in=CONCEPTOS_VENTA)
+    if fecha_inicio:
+        filtro &= Q(fecha__gte=fecha_inicio)
 
-    result = [d['total'] for d in datos]
-    if not result:
-        datos = Ticket_Productos.objects.filter(
+    datos = list(
+        Movimientos_Producto.objects.filter(filtro)
+        .annotate(semana=ExtractWeek('fecha'), yr=ExtractYear('fecha'))
+        .values('semana', 'yr')
+        .annotate(total=Sum(Abs(F('cantidad'))))
+        .order_by('yr', 'semana')
+    )
+    if not datos:
+        filtro_t = Q(
             ProductoTalla__producto_id=producto_id,
             idTicket__estado='PAGADO',
-            idTicket__fecha__gte=fecha_inicio,
-        ).annotate(
-            semana=ExtractWeek('idTicket__fecha'),
-            yr=ExtractYear('idTicket__fecha'),
-        ).values('semana', 'yr').annotate(
-            total=Sum('stock')
-        ).order_by('yr', 'semana')
-        result = [d['total'] for d in datos]
-    return result
+        )
+        if fecha_inicio:
+            filtro_t &= Q(idTicket__fecha__gte=fecha_inicio)
+        datos = list(
+            Ticket_Productos.objects.filter(filtro_t)
+            .annotate(semana=ExtractWeek('idTicket__fecha'), yr=ExtractYear('idTicket__fecha'))
+            .values('semana', 'yr')
+            .annotate(total=Sum('stock'))
+            .order_by('yr', 'semana')
+        )
+    return datos
+
+
+def _filtrar_brecha_inactiva(datos_semanales):
+    """
+    Detecta y elimina la brecha de inactividad (ej. 2021-2024) entre
+    periodos con actividad de venta real. Solo quita ceros que estan
+    en un hueco entre dos periodos activos, no ceros en los bordes.
+    """
+    if len(datos_semanales) < 4:
+        return datos_semanales
+
+    activos = [(d['yr'], d['semana']) for d in datos_semanales if d['total'] and d['total'] > 0]
+    if len(activos) < 2:
+        return datos_semanales
+
+    anios_activos = sorted(set(a[0] for a in activos))
+    if len(anios_activos) < 2:
+        return datos_semanales
+
+    brecha_anios = set()
+    for i in range(len(anios_activos) - 1):
+        gap = anios_activos[i + 1] - anios_activos[i]
+        if gap > 1:
+            for yr in range(anios_activos[i] + 1, anios_activos[i + 1]):
+                brecha_anios.add(yr)
+
+    if not brecha_anios:
+        return datos_semanales
+
+    return [d for d in datos_semanales if d['yr'] not in brecha_anios]
+
+
+def _calcular_ventas_semanales(producto_id, fecha_inicio):
+    """
+    Calcula ventas semanales con soporte para datos historicos migrados.
+    Estrategia:
+      1) Buscar en ventana reciente (fecha_inicio). Si >=8 semanas -> usar.
+      2) Si <8, extender a toda la historia y filtrar la brecha inactiva.
+    """
+    datos_recientes = _raw_ventas_semanales(producto_id, fecha_inicio)
+    semanas_con_datos = [d for d in datos_recientes if d['total'] and d['total'] > 0]
+
+    if len(semanas_con_datos) >= 8:
+        return [d['total'] for d in datos_recientes]
+
+    datos_completos = _raw_ventas_semanales(producto_id, fecha_inicio=None)
+    if not datos_completos:
+        return [d['total'] for d in datos_recientes] if datos_recientes else []
+
+    datos_filtrados = _filtrar_brecha_inactiva(datos_completos)
+    semanas_filtradas = [d for d in datos_filtrados if d['total'] and d['total'] > 0]
+
+    if len(semanas_filtradas) > len(semanas_con_datos):
+        return [d['total'] for d in datos_filtrados]
+
+    return [d['total'] for d in datos_recientes] if datos_recientes else []
 
 
 # ──────────────────────────────────────────────────────────────
@@ -292,10 +446,11 @@ def _calcular_ventas_semanales(producto_id, fecha_inicio):
 def calcular_velocidades_historicas():
     """
     Calcula benchmarks de rotación por grupo (marca, categoría, género, temporada).
-    Usa datos corregidos por censura.
+    Solo productos de sucursales vendedoras/mixtas.
     """
     productos = Producto.objects.filter(
         temporada__isnull=False,
+        sucursal__tipo_sucursal__in=TIPOS_SUCURSAL_VENTA,
     ).select_related('atributo1', 'atributo3', 'categoria', 'categoria__padre')
 
     grupos = defaultdict(list)
@@ -367,13 +522,14 @@ def calcular_velocidades_historicas():
 # ──────────────────────────────────────────────────────────────
 
 def calcular_curvas_talles():
-    """Distribución % de ventas por talle para cada grupo."""
+    """Distribución % de ventas por talle para cada grupo (solo vendedoras)."""
     config = ConfiguracionPrediccion.get_config()
     fecha_inicio = date.today() - timedelta(days=config.dias_historico_analisis)
 
     ventas = Movimientos_Producto.objects.filter(
         concepto__in=CONCEPTOS_VENTA,
         fecha__gte=fecha_inicio,
+        ProductoTalla__producto__sucursal__tipo_sucursal__in=TIPOS_SUCURSAL_VENTA,
     ).select_related(
         'ProductoTalla__producto__atributo1',
         'ProductoTalla__producto__atributo3',
@@ -424,56 +580,285 @@ def calcular_curvas_talles():
 
 
 # ──────────────────────────────────────────────────────────────
-#  5. Predicción de demanda
+#  5. Predicción de demanda (con métodos estadísticos reales)
 # ──────────────────────────────────────────────────────────────
+
+def _es_demanda_intermitente(serie):
+    """
+    Detecta demanda intermitente usando ADI (Average Demand Interval).
+    ADI > 1.32 = intermitente (Syntetos & Boylan, 2005).
+    También calcula CV² de los períodos con demanda.
+    Returns: (es_intermitente, adi, cv2_demanda)
+    """
+    if len(serie) < 4:
+        return True, 99.0, 99.0
+
+    periodos_con_demanda = [v for v in serie if v > 0]
+    if len(periodos_con_demanda) < 2:
+        return True, 99.0, 99.0
+
+    # ADI = total períodos / número de períodos con demanda
+    adi = len(serie) / len(periodos_con_demanda)
+
+    # CV² de las cantidades cuando hay demanda
+    media_demanda = np.mean(periodos_con_demanda)
+    std_demanda = np.std(periodos_con_demanda)
+    cv2 = (std_demanda / media_demanda) ** 2 if media_demanda > 0 else 99.0
+
+    # Clasificación Syntetos-Boylan:
+    #   ADI <= 1.32 y CV² <= 0.49 → Suave (smooth) → métodos clásicos OK
+    #   ADI >  1.32 y CV² <= 0.49 → Intermitente → Croston/SBA
+    #   ADI <= 1.32 y CV² >  0.49 → Errática → Croston/SBA
+    #   ADI >  1.32 y CV² >  0.49 → Lumpy → SBA preferido
+    es_intermitente = adi > 1.32 or cv2 > 0.49
+    return es_intermitente, round(adi, 2), round(cv2, 4)
+
+
+def _predecir_croston_sba(serie, semanas_restantes):
+    """
+    Croston's method con ajuste SBA (Syntetos-Boylan Approximation).
+    Diseñado para demanda intermitente: muchos ceros intercalados
+    con cantidades pequeñas.
+
+    Descompone en:
+      - z_t: tamaño promedio de demanda (cuando ocurre)
+      - p_t: intervalo promedio entre demandas
+    Forecast = (z_t / p_t) × factor_sba
+    """
+    alpha = 0.15  # suavizado conservador para datos escasos
+
+    # Extraer intervalos entre demandas y cantidades
+    intervalos = []
+    cantidades = []
+    periodo_desde_ultima = 0
+
+    for valor in serie:
+        periodo_desde_ultima += 1
+        if valor > 0:
+            intervalos.append(periodo_desde_ultima)
+            cantidades.append(float(valor))
+            periodo_desde_ultima = 0
+
+    if len(cantidades) < 2:
+        # Insuficientes eventos de demanda — fallback a promedio simple
+        total = float(np.sum(serie))
+        if total <= 0:
+            return max(1, int(semanas_restantes))  # mínimo 1 por temporada
+        promedio_sem = total / len(serie)
+        return max(1, int(promedio_sem * semanas_restantes))
+
+    # Inicializar con promedios
+    z_t = float(np.mean(cantidades))
+    p_t = float(np.mean(intervalos))
+
+    # Suavizado exponencial de Croston
+    for i in range(len(cantidades)):
+        z_t = alpha * cantidades[i] + (1 - alpha) * z_t
+        p_t = alpha * intervalos[i] + (1 - alpha) * p_t
+
+    # Factor SBA (Syntetos-Boylan): corrige el sesgo de Croston
+    # SBA = Croston × (1 - alpha/2)
+    factor_sba = 1.0 - alpha / 2.0
+
+    # Forecast por período
+    if p_t > 0:
+        forecast_por_semana = (z_t / p_t) * factor_sba
+    else:
+        forecast_por_semana = z_t * factor_sba
+
+    return max(1, int(forecast_por_semana * semanas_restantes))
+
+
+def _predecir_holt_winters(serie, semanas_restantes):
+    """Holt-Winters additive trend. Requires >=16 data points."""
+    try:
+        from statsmodels.tsa.holtwinters import ExponentialSmoothing
+        model = ExponentialSmoothing(
+            serie, trend='add', seasonal=None, initialization_method='estimated',
+        ).fit(optimized=True)
+        forecast = model.forecast(steps=int(semanas_restantes))
+        return max(0, int(np.sum(np.maximum(forecast, 0))))
+    except Exception:
+        return None
+
+
+def _predecir_wma(serie, semanas_restantes, alpha=0.3):
+    """Weighted Moving Average with exponential decay weights."""
+    n = len(serie)
+    pesos = np.array([alpha * (1 - alpha) ** i for i in range(n - 1, -1, -1)])
+    pesos /= pesos.sum()
+    promedio_ponderado = float(np.dot(serie, pesos))
+    return max(0, int(promedio_ponderado * semanas_restantes))
+
+
+def _predecir_regresion(serie, semanas_restantes):
+    """Linear regression on weekly data, extrapolate forward."""
+    x = np.arange(len(serie), dtype=float)
+    coefs = np.polyfit(x, serie, 1)
+    x_futuro = np.arange(len(serie), len(serie) + int(semanas_restantes))
+    forecast = np.polyval(coefs, x_futuro)
+    return max(0, int(np.sum(np.maximum(forecast, 0))))
+
+
+def _calcular_confianza(serie, metodo='clasico'):
+    """
+    Confianza mejorada según tipo de demanda y método.
+
+    Para demanda clásica: MAPE backtest (últimas 2 semanas).
+    Para demanda intermitente: basado en frecuencia de demanda + estabilidad.
+    Retorna confianza entre 0.10 y 0.95.
+    """
+    if len(serie) < 4:
+        return Decimal('0.20')
+
+    if metodo == 'croston_sba':
+        periodos_con_demanda = sum(1 for v in serie if v > 0)
+        ratio_actividad = periodos_con_demanda / len(serie)
+
+        # Más períodos con demanda = más confiable el patrón
+        confianza_base = 0.25 + (ratio_actividad * 0.40)
+
+        # Bonus por consistencia en cantidades
+        cantidades = [v for v in serie if v > 0]
+        if len(cantidades) >= 3:
+            cv_cantidades = float(np.std(cantidades) / np.mean(cantidades))
+            if cv_cantidades < 0.5:
+                confianza_base += 0.10  # cantidades estables
+            elif cv_cantidades > 1.5:
+                confianza_base -= 0.05  # cantidades muy erráticas
+
+        # Bonus por cantidad de observaciones
+        if len(serie) >= 16:
+            confianza_base += 0.05
+        elif len(serie) >= 8:
+            confianza_base += 0.02
+
+        confianza = max(0.15, min(0.85, confianza_base))
+        return Decimal(str(round(confianza, 2)))
+
+    # Método clásico: MAPE backtest
+    if len(serie) < 6:
+        return Decimal('0.40')
+    train = serie[:-2]
+    actual = serie[-2:]
+    actual_sum = float(np.sum(actual))
+    if actual_sum <= 0:
+        return Decimal('0.40')
+
+    promedio_train = float(np.mean(train))
+    pred_sum = promedio_train * 2
+    mape = abs(actual_sum - pred_sum) / actual_sum
+    confianza = max(0.10, min(0.95, 1.0 - mape))
+    return Decimal(str(round(confianza, 2)))
+
 
 def calcular_predicciones_demanda(temporada=None, anio=None):
     """
-    Para cada producto activo con temporada, predice demanda total.
-    Productos sin historial: usa VelocidadHistorica del grupo.
-    Productos con historial: promedio móvil ponderado + corrección censura.
+    Selección automática de método según tipo de demanda y datos disponibles.
+
+    Primero detecta si la demanda es intermitente (ADI > 1.32 o CV² > 0.49):
+      → Intermitente con >=4 sem datos: Croston/SBA
+      → Continua >=16 sem: Holt-Winters
+      → Continua 8-15 sem: WMA
+      → Continua 4-7 sem: Regresión lineal
+      → <4 sem con historial de grupo: Punto de reorden dinámico
+      → Sin datos: Fallback por velocidad de grupo
+
+    Solo productos de sucursales vendedoras/mixtas.
     """
     config = ConfiguracionPrediccion.get_config()
     temp = temporada or ''
     yr = anio or date.today().year
+    fecha_inicio_hist = date.today() - timedelta(days=config.dias_historico_analisis)
 
     productos = Producto.objects.filter(
         temporada__isnull=False,
+        sucursal__tipo_sucursal__in=TIPOS_SUCURSAL_VENTA,
     ).select_related('atributo1', 'atributo3', 'categoria', 'categoria__padre')
 
     predicciones = []
 
     for producto in productos:
-        cat = _get_categoria_nombre(producto)
-        genero = _get_genero_nombre(producto)
         semanas_temp = producto.semanas_temporada or 8
 
         sit = StockInicialTemporada.objects.filter(
             producto=producto, temporada=producto.temporada or temp,
         ).first()
 
-        if sit and sit.stock_inicial > 0:
+        serie_semanal = _calcular_ventas_semanales(producto.id, fecha_inicio_hist)
+        n_semanas = len(serie_semanal)
+
+        semanas_activo = 0
+        if sit and sit.fecha_primer_ingreso:
             semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, date.today()))
-            demanda_corr, factor, censurada = corregir_demanda_censurada(producto, semanas_activo)
-            metodo = 'promedio_movil'
-            confianza = min(Decimal('0.90'), Decimal(str(semanas_activo / semanas_temp)))
-            articulos_usados = 0
+
+        semanas_restantes = max(1, semanas_temp - semanas_activo)
+        demanda_corr = 0
+        factor = 1.0
+        censurada = False
+        metodo = 'similitud'
+        confianza = Decimal('0.20')
+        articulos_usados = 0
+
+        # --- Paso 1: Detectar tipo de demanda ---
+        es_intermitente = False
+        if n_semanas >= 4:
+            es_intermitente, adi, cv2 = _es_demanda_intermitente(serie_semanal)
+
+        # --- Paso 2: Seleccionar método según tipo de demanda ---
+        if es_intermitente and n_semanas >= 4:
+            # DEMANDA INTERMITENTE: Croston/SBA es el método correcto.
+            # Los métodos clásicos (HW, WMA, regresión) asumen demanda
+            # continua y fallan con muchos ceros intercalados.
+            serie = np.array(serie_semanal, dtype=float)
+            demanda_corr = _predecir_croston_sba(serie, semanas_restantes)
+            metodo = 'croston_sba'
+            confianza = _calcular_confianza(serie, metodo='croston_sba')
+
+        elif n_semanas >= 16:
+            serie = np.array(serie_semanal, dtype=float)
+            pred = _predecir_holt_winters(serie, semanas_restantes)
+            if pred is not None:
+                demanda_corr = pred
+                metodo = 'holt_winters'
+                confianza = _calcular_confianza(serie)
+            else:
+                demanda_corr = _predecir_wma(serie, semanas_restantes)
+                metodo = 'promedio_movil_ponderado'
+                confianza = _calcular_confianza(serie)
+
+        elif n_semanas >= 8:
+            serie = np.array(serie_semanal, dtype=float)
+            demanda_corr = _predecir_wma(serie, semanas_restantes)
+            metodo = 'promedio_movil_ponderado'
+            confianza = _calcular_confianza(serie)
+
+        elif n_semanas >= 4:
+            serie = np.array(serie_semanal, dtype=float)
+            demanda_corr = _predecir_regresion(serie, semanas_restantes)
+            metodo = 'regresion_lineal'
+            confianza = _calcular_confianza(serie)
+
+        elif sit and sit.stock_inicial > 0 and semanas_activo > 0:
+            demanda_corr_raw, factor, censurada = corregir_demanda_censurada(
+                producto, semanas_activo,
+            )
+            demanda_corr = demanda_corr_raw
+            metodo = 'demanda_observada'
+            confianza = min(Decimal('0.50'), Decimal(str(
+                round(semanas_activo / max(semanas_temp, 1), 2)
+            )))
         else:
             vel = _buscar_velocidad_historica(producto)
             if vel:
                 demanda_corr = int(float(vel.velocidad_semanas_p50) * semanas_temp)
-                factor = 1.0
-                censurada = False
                 metodo = 'similitud'
-                confianza = Decimal('0.50')
+                confianza = Decimal('0.35')
                 articulos_usados = vel.total_articulos_base
             else:
                 demanda_corr = semanas_temp * 5
-                factor = 1.0
-                censurada = False
                 metodo = 'similitud'
-                confianza = Decimal('0.20')
-                articulos_usados = 0
+                confianza = Decimal('0.15')
 
         abc_factor = _factor_seguridad_abc(producto, config)
         demanda_final = int(demanda_corr * float(abc_factor))
@@ -638,17 +1023,21 @@ def _obtener_curva_talles(producto):
 def evaluar_alertas_velocidad(producto_ids=None):
     """
     Detecta artículos que rotan más rápido de lo normal.
-    Los umbrales de urgencia son DINÁMICOS según lead_time del proveedor.
+    Solo productos de sucursales vendedoras/mixtas.
     """
     config = ConfiguracionPrediccion.get_config()
 
-    filtro = Q(temporada__isnull=False)
+    filtro = Q(
+        temporada__isnull=False,
+        producto__sucursal__tipo_sucursal__in=TIPOS_SUCURSAL_VENTA,
+    )
     if producto_ids:
         filtro &= Q(producto__id__in=producto_ids)
 
     sits = StockInicialTemporada.objects.filter(filtro).select_related(
         'producto', 'producto__atributo1', 'producto__atributo3',
         'producto__categoria', 'producto__categoria__padre',
+        'producto__sucursal',
     )
 
     alertas = []
@@ -691,7 +1080,7 @@ def evaluar_alertas_velocidad(producto_ids=None):
         semanas_temp_rest = max(0, (producto.semanas_temporada or 8) - semanas_activo)
 
         empresa = _get_proveedor_empresa(producto)
-        lead_time = empresa.lead_time_dias if empresa else 21
+        lead_time = _calcular_lead_time_real(empresa)
         semanas_lead = lead_time / 7
         buffer = float(config.semanas_buffer_seguridad)
 
@@ -765,11 +1154,14 @@ def evaluar_alertas_velocidad(producto_ids=None):
 def detectar_quiebres_talle(producto_ids=None):
     """
     Detecta productos donde los talles populares están agotados
-    aunque el stock total sea > 0.
+    aunque el stock total sea > 0.  Solo sucursales vendedoras/mixtas.
     """
     config = ConfiguracionPrediccion.get_config()
 
-    filtro = Q(temporada__isnull=False)
+    filtro = Q(
+        temporada__isnull=False,
+        sucursal__tipo_sucursal__in=TIPOS_SUCURSAL_VENTA,
+    )
     if producto_ids:
         filtro &= Q(id__in=producto_ids)
 
@@ -854,6 +1246,168 @@ def detectar_quiebres_talle(producto_ids=None):
 
 
 # ──────────────────────────────────────────────────────────────
+#  8b. Punto de reorden dinámico (alternativa a predicción pura)
+# ──────────────────────────────────────────────────────────────
+
+def calcular_punto_reorden(producto, config=None):
+    """
+    Calcula punto de reorden dinámico basado en:
+      - Velocidad del GRUPO (no del producto individual) → más robusto con datos escasos
+      - Clasificación ABC → más stock de seguridad para productos clase A
+      - Lead time real del proveedor
+
+    Para retail con miles de SKUs y cantidades pequeñas, este enfoque
+    es más confiable que predicción individual porque:
+      1) Usa datos agregados del grupo (marca+categoría+género)
+      2) No necesita historial largo por producto
+      3) Se adapta automáticamente al cambiar lead times
+
+    Returns: dict con punto_reorden, stock_seguridad, stock_maximo, velocidad_grupo
+    """
+    if config is None:
+        config = ConfiguracionPrediccion.get_config()
+
+    # 1. Velocidad del grupo (más robusta que la individual)
+    vel_hist = _buscar_velocidad_historica(producto)
+    sit = StockInicialTemporada.objects.filter(
+        producto=producto, temporada=producto.temporada,
+    ).first()
+
+    if vel_hist and sit and sit.stock_inicial > 0:
+        # Velocidad del grupo en unidades/semana
+        velocidad_grupo = sit.stock_inicial / float(vel_hist.velocidad_semanas_p50)
+    elif sit and sit.stock_inicial > 0:
+        velocidad_grupo = sit.stock_inicial / float(config.velocidad_default_semanas)
+    else:
+        return None
+
+    # 2. Lead time en semanas
+    empresa = _get_proveedor_empresa(producto)
+    lead_time_dias = _calcular_lead_time_real(empresa)
+    lead_time_semanas = lead_time_dias / 7.0
+
+    # 3. Factor de seguridad según ABC
+    abc = ClasificacionABC.objects.filter(
+        articulo=producto,
+    ).order_by('-fecha_calculo').first()
+
+    if abc and abc.clasificacion_abc == 'A':
+        factor_ss = float(config.factor_seguridad_clase_a)
+        semanas_review = 1.0  # Revisión más frecuente
+    elif abc and abc.clasificacion_abc == 'B':
+        factor_ss = float(config.factor_seguridad_clase_b)
+        semanas_review = 1.5
+    else:
+        factor_ss = float(config.factor_seguridad_clase_c)
+        semanas_review = 2.0
+
+    buffer = float(config.semanas_buffer_seguridad)
+
+    # 4. Cálculos de punto de reorden
+    demanda_lead_time = velocidad_grupo * lead_time_semanas
+    stock_seguridad = velocidad_grupo * buffer * factor_ss
+    punto_reorden = int(demanda_lead_time + stock_seguridad)
+    stock_maximo = int(velocidad_grupo * (lead_time_semanas + semanas_review) * factor_ss)
+
+    return {
+        'punto_reorden': punto_reorden,
+        'stock_seguridad': int(stock_seguridad),
+        'stock_maximo': stock_maximo,
+        'velocidad_grupo_sem': round(velocidad_grupo, 2),
+        'lead_time_semanas': round(lead_time_semanas, 2),
+        'factor_seguridad': factor_ss,
+    }
+
+
+def enriquecer_sugerencias_con_reorden(temporada=None, anio=None):
+    """
+    Para productos con predicción de baja confianza (<0.40),
+    complementa o reemplaza la sugerencia con punto de reorden dinámico.
+    Esto asegura que productos con datos escasos igual reciban
+    sugerencias de compra razonables basadas en el grupo.
+    """
+    config = ConfiguracionPrediccion.get_config()
+    filtro = Q(confianza__lt=Decimal('0.40'))
+    if temporada:
+        filtro &= Q(temporada=temporada)
+    if anio:
+        filtro &= Q(anio=anio)
+
+    predicciones_baja = PrediccionDemanda.objects.filter(filtro).select_related(
+        'articulo', 'articulo__atributo1', 'articulo__atributo3',
+        'articulo__categoria', 'articulo__categoria__padre',
+    )
+
+    sugerencias_nuevas = []
+    productos_actualizados = 0
+
+    for pred in predicciones_baja:
+        producto = pred.articulo
+        reorden = calcular_punto_reorden(producto, config)
+        if not reorden:
+            continue
+
+        talles = Producto_Talla.objects.filter(producto=producto)
+        if not talles.exists():
+            continue
+
+        curva = _obtener_curva_talles(producto)
+        stock_total = sum(max(0, t.stock or 0) for t in talles)
+
+        # Solo generar sugerencia si stock actual < punto de reorden
+        if stock_total >= reorden['punto_reorden']:
+            continue
+
+        unidades_necesarias = reorden['stock_maximo'] - stock_total
+
+        for pt in talles:
+            pct = curva.get(pt.talla, Decimal('0'))
+            if not pct and len(talles) > 0:
+                pct = Decimal('1') / len(talles)
+
+            unidades_talle = int(float(unidades_necesarias) * float(pct))
+            stock_actual = max(0, pt.stock or 0)
+
+            transito = Compras_Producto_Talla.objects.filter(
+                compra_producto__compras__estado='ACTIVA',
+                producto_talla=pt,
+            ).aggregate(
+                total=Sum(F('stock') - F('unidades_recibidas'))
+            )['total'] or 0
+            transito = max(0, transito)
+
+            a_pedir = max(0, unidades_talle - stock_actual - transito)
+
+            if a_pedir > 0:
+                # Eliminar sugerencia previa de baja confianza para este talle
+                SugerenciaCompra.objects.filter(
+                    prediccion=pred, articulo_talle=pt,
+                    origen='prediccion', aprobada=False,
+                ).delete()
+
+                sugerencias_nuevas.append(SugerenciaCompra(
+                    prediccion=pred,
+                    articulo_talle=pt,
+                    unidades_sugeridas=unidades_talle,
+                    stock_actual=stock_actual,
+                    unidades_en_transito=transito,
+                    unidades_a_pedir=a_pedir,
+                    origen='prediccion',
+                ))
+
+        productos_actualizados += 1
+
+    if sugerencias_nuevas:
+        SugerenciaCompra.objects.bulk_create(sugerencias_nuevas, batch_size=500)
+
+    logger.info(
+        "Reorden dinámico: %d productos actualizados, %d sugerencias generadas",
+        productos_actualizados, len(sugerencias_nuevas),
+    )
+    return len(sugerencias_nuevas)
+
+
+# ──────────────────────────────────────────────────────────────
 #  9. Procesar pendientes (mark-then-evaluate)
 # ──────────────────────────────────────────────────────────────
 
@@ -897,6 +1451,7 @@ def procesar_pendientes_reevaluacion():
 def ejecutar_pipeline_completo(temporada=None, anio=None, sucursal_id=None,
                                 solo_clasificacion=False, solo_alertas=False):
     """Ejecuta todo el pipeline de predicción."""
+    _lead_time_cache.clear()
     resultados = {}
 
     if solo_alertas:
@@ -916,6 +1471,10 @@ def ejecutar_pipeline_completo(temporada=None, anio=None, sucursal_id=None,
         temporada=temporada, anio=anio,
     )
     resultados['sugerencias'] = generar_sugerencias_compra(
+        temporada=temporada, anio=anio,
+    )
+    # Enriquecer sugerencias de baja confianza con punto de reorden dinámico
+    resultados['reorden_dinamico'] = enriquecer_sugerencias_con_reorden(
         temporada=temporada, anio=anio,
     )
     resultados['alertas_velocidad'] = evaluar_alertas_velocidad()

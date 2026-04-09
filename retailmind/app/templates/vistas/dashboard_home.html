@@ -4,1204 +4,531 @@
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 
+<link rel="stylesheet" href="{% static 'css/nexo-design-system.css' %}">
 <style>
-/* ========== NEXO DESIGN SYSTEM - Dashboard Home ========== */
-:root {
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-info: #0066FF;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
-    --nexo-radius-xl: 16px;
-}
-
-/* ===== Layout Principal ===== */
-.nexo-dashboard {
-    background: var(--nexo-gray-100);
-    min-height: 100vh;
-    padding: 1.1rem;
-}
-
-.nexo-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.25rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--nexo-gray-300);
-}
-
-.nexo-header h1 {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.nexo-header h1 i {
-    color: var(--nexo-primary);
-}
-
-.nexo-header-meta {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.nexo-date-badge {
-    background: var(--nexo-white);
-    padding: 0.5rem 1rem;
-    border-radius: var(--nexo-radius-md);
-    font-size: 0.875rem;
-    color: var(--nexo-gray-700);
-    box-shadow: var(--nexo-shadow-sm);
-}
-
-.nexo-sucursal-badge {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-    padding: 0.5rem 1rem;
-    border-radius: var(--nexo-radius-md);
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-/* ===== KPI Cards Principales ===== */
-.nexo-kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-@media (max-width: 1200px) {
-    .nexo-kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 768px) {
-    .nexo-kpi-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.nexo-kpi-card {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-xl);
-    padding: 1.1rem 1.25rem;
-    box-shadow: var(--nexo-shadow-md);
-    transition: all 0.25s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.nexo-kpi-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--nexo-shadow-lg);
-}
-
-.nexo-kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 4px;
-    height: 100%;
-}
-
-.nexo-kpi-card.ventas::before { background: var(--nexo-accent); }
-.nexo-kpi-card.stock::before { background: var(--nexo-warning); }
-.nexo-kpi-card.compras::before { background: var(--nexo-primary); }
-.nexo-kpi-card.requerimientos::before { background: var(--nexo-error); }
-
-.nexo-kpi-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 1rem;
-}
-
-.nexo-kpi-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: var(--nexo-radius-lg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.3rem;
-}
-
-.nexo-kpi-icon.ventas { background: rgba(0, 212, 170, 0.15); color: var(--nexo-accent); }
-.nexo-kpi-icon.stock { background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); }
-.nexo-kpi-icon.compras { background: rgba(0, 102, 255, 0.15); color: var(--nexo-primary); }
-.nexo-kpi-icon.requerimientos { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
-
-.nexo-kpi-trend {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--nexo-radius-md);
-}
-
-.nexo-kpi-trend.up { background: rgba(0, 212, 170, 0.15); color: #00A080; }
-.nexo-kpi-trend.down { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
-.nexo-kpi-trend.stable { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
-
-.nexo-kpi-value {
-    font-size: 1.6rem;
-    font-weight: 800;
-    color: var(--nexo-secondary);
-    line-height: 1;
-    margin-bottom: 0.2rem;
-}
-
-.nexo-kpi-label {
-    font-size: 0.875rem;
-    color: var(--nexo-gray-500);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.nexo-kpi-footer {
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--nexo-gray-100);
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.8rem;
-}
-
-.nexo-kpi-stat {
-    text-align: center;
-}
-
-.nexo-kpi-stat-value {
-    font-weight: 700;
-    color: var(--nexo-secondary);
-}
-
-.nexo-kpi-stat-label {
-    color: var(--nexo-gray-500);
-    font-size: 0.7rem;
-    text-transform: uppercase;
-}
-
-/* ===== Alertas Críticas ===== */
-.nexo-alerts-section {
-    margin-bottom: 2rem;
-}
-
-.nexo-section-title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.nexo-alert-card {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-lg);
-    padding: 1rem 1.25rem;
-    margin-bottom: 0.75rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    box-shadow: var(--nexo-shadow-sm);
-    transition: all 0.2s ease;
-    border-left: 4px solid;
-}
-
-.nexo-alert-card:hover {
-    box-shadow: var(--nexo-shadow-md);
-}
-
-.nexo-alert-card.danger { border-left-color: var(--nexo-error); }
-.nexo-alert-card.warning { border-left-color: var(--nexo-warning); }
-.nexo-alert-card.info { border-left-color: var(--nexo-primary); }
-
-.nexo-alert-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-}
-
-.nexo-alert-card.danger .nexo-alert-icon { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
-.nexo-alert-card.warning .nexo-alert-icon { background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); }
-.nexo-alert-card.info .nexo-alert-icon { background: rgba(0, 102, 255, 0.15); color: var(--nexo-primary); }
-
-.nexo-alert-content {
-    flex: 1;
-}
-
-.nexo-alert-title {
-    font-weight: 600;
-    color: var(--nexo-secondary);
-    margin-bottom: 0.25rem;
-}
-
-.nexo-alert-desc {
-    font-size: 0.8rem;
-    color: var(--nexo-gray-500);
-}
-
-.nexo-alert-action {
-    font-size: 0.8rem;
-    font-weight: 600;
-    padding: 0.5rem 1rem;
-    border-radius: var(--nexo-radius-md);
-    text-decoration: none;
-    transition: all 0.2s ease;
-}
-
-.nexo-alert-card.danger .nexo-alert-action { background: var(--nexo-error); color: var(--nexo-white); }
-.nexo-alert-card.warning .nexo-alert-action { background: var(--nexo-warning); color: var(--nexo-secondary); }
-.nexo-alert-card.info .nexo-alert-action { background: var(--nexo-primary); color: var(--nexo-white); }
-
-.nexo-alert-action:hover {
-    filter: brightness(1.1);
-    text-decoration: none;
-}
-
-/* ===== Grid de Módulos ===== */
-.nexo-modules-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-@media (max-width: 1200px) {
-    .nexo-modules-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 768px) {
-    .nexo-modules-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.nexo-module-card {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-xl);
-    overflow: hidden;
-    box-shadow: var(--nexo-shadow-md);
-}
-
-.nexo-module-header {
-    padding: 1rem 1.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.nexo-module-header.ventas { background: linear-gradient(135deg, var(--nexo-accent) 0%, #00A080 100%); }
-.nexo-module-header.stock { background: linear-gradient(135deg, var(--nexo-warning) 0%, #E09000 100%); }
-.nexo-module-header.compras { background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%); }
-.nexo-module-header.operaciones { background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%); }
-.nexo-module-header.requerimientos { background: linear-gradient(135deg, var(--nexo-error) 0%, #CC3333 100%); }
-.nexo-module-header.productos { background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%); }
-
-.nexo-module-title {
-    color: var(--nexo-white);
-    font-weight: 700;
-    font-size: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.nexo-module-badge {
-    background: rgba(255, 255, 255, 0.25);
-    color: var(--nexo-white);
-    padding: 0.25rem 0.75rem;
-    border-radius: var(--nexo-radius-md);
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.nexo-module-body {
-    padding: 1rem 1.25rem;
-}
-
-.nexo-stats-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 1rem;
-}
-
-.nexo-stat-item {
-    text-align: center;
-    flex: 1;
-}
-
-.nexo-stat-value {
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: var(--nexo-secondary);
-}
-
-.nexo-stat-label {
-    font-size: 0.7rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.nexo-module-list {
-    margin-top: 1rem;
-}
-
-.nexo-list-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid var(--nexo-gray-100);
-}
-
-.nexo-list-item:last-child {
-    border-bottom: none;
-}
-
-.nexo-list-label {
-    font-size: 0.85rem;
-    color: var(--nexo-gray-700);
-}
-
-.nexo-list-value {
-    font-weight: 600;
-    color: var(--nexo-secondary);
-}
-
-.nexo-module-footer {
-    padding: 1rem 1.5rem;
-    background: var(--nexo-gray-100);
-    text-align: center;
-}
-
-.nexo-module-link {
-    color: var(--nexo-primary);
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    transition: all 0.2s ease;
-}
-
-.nexo-module-link:hover {
-    color: var(--nexo-primary-dark);
-}
-
-/* ===== Tabla de Top Productos ===== */
-.nexo-table-card {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-xl);
-    overflow: hidden;
-    box-shadow: var(--nexo-shadow-md);
-}
-
-.nexo-table-header {
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid var(--nexo-gray-100);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.nexo-table-title {
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.nexo-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.nexo-table th {
-    background: var(--nexo-gray-100);
-    padding: 0.75rem 1rem;
-    text-align: left;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--nexo-gray-500);
-}
-
-.nexo-table td {
-    padding: 0.875rem 1rem;
-    border-bottom: 1px solid var(--nexo-gray-100);
-    font-size: 0.875rem;
-}
-
-.nexo-table tbody tr:hover {
-    background: var(--nexo-gray-100);
-}
-
-.nexo-position {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.75rem;
-}
-
-.nexo-position.gold { background: #FFD700; color: #1A1A2E; }
-.nexo-position.silver { background: #C0C0C0; color: #1A1A2E; }
-.nexo-position.bronze { background: #CD7F32; color: white; }
-.nexo-position.default { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
-
-/* ===== Acciones Rápidas ===== */
-.nexo-quick-actions {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin-top: 2rem;
-}
-
-@media (max-width: 992px) {
-    .nexo-quick-actions {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-.nexo-action-btn {
-    background: var(--nexo-white);
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-lg);
-    padding: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    text-decoration: none;
-    transition: all 0.2s ease;
-    color: var(--nexo-secondary);
-}
-
-.nexo-action-btn:hover {
-    border-color: var(--nexo-primary);
-    background: var(--nexo-primary-light);
-    transform: translateX(4px);
-    text-decoration: none;
-    color: var(--nexo-primary);
-}
-
-.nexo-action-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--nexo-radius-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-}
-
-.nexo-action-btn:nth-child(1) .nexo-action-icon { background: rgba(0, 212, 170, 0.15); color: var(--nexo-accent); }
-.nexo-action-btn:nth-child(2) .nexo-action-icon { background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); }
-.nexo-action-btn:nth-child(3) .nexo-action-icon { background: rgba(0, 102, 255, 0.15); color: var(--nexo-primary); }
-.nexo-action-btn:nth-child(4) .nexo-action-icon { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
-
-.nexo-action-label {
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-/* ===== Animaciones ===== */
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-.nexo-live-indicator {
-    width: 8px;
-    height: 8px;
-    background: var(--nexo-accent);
-    border-radius: 50%;
-    animation: pulse 2s ease-in-out infinite;
-}
-
-/* ===== Empty State ===== */
-.nexo-empty {
-    text-align: center;
-    padding: 2rem;
-    color: var(--nexo-gray-500);
-}
-
-.nexo-empty i {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    opacity: 0.3;
-}
-
-/* ===== Refresh Button ===== */
-.nexo-refresh-btn {
-    background: var(--nexo-white);
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-md);
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--nexo-gray-700);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.nexo-refresh-btn:hover {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-    border-color: var(--nexo-primary);
-}
-
-.nexo-refresh-btn.loading i {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-/* ===== Progress Bar ===== */
-.nexo-progress {
-    height: 6px;
-    background: var(--nexo-gray-100);
-    border-radius: 3px;
-    overflow: hidden;
-    margin-top: 0.5rem;
-}
-
-.nexo-progress-bar {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.5s ease;
-}
-
-.nexo-progress-bar.success { background: var(--nexo-accent); }
-.nexo-progress-bar.warning { background: var(--nexo-warning); }
-.nexo-progress-bar.danger { background: var(--nexo-error); }
+.home-dashboard { background: var(--nexo-gray-100); min-height: 100vh; padding: 1.1rem; }
+
+.home-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; padding-bottom:.75rem; border-bottom:1px solid var(--nexo-gray-300); }
+.home-header h1 { font-size:1.5rem; font-weight:700; color:var(--nexo-secondary); margin:0; display:flex; align-items:center; gap:.6rem; }
+.home-header h1 i { color:var(--nexo-primary); }
+.home-header-meta { display:flex; align-items:center; gap:.75rem; }
+.home-date { background:var(--nexo-white); padding:.4rem .8rem; border-radius:var(--nexo-radius-md); font-size:.8rem; color:var(--nexo-gray-700); box-shadow:var(--nexo-shadow-sm); }
+.home-sucursal { background:var(--nexo-primary); color:#fff; padding:.4rem .8rem; border-radius:var(--nexo-radius-md); font-size:.8rem; font-weight:600; }
+.home-refresh { background:var(--nexo-white); border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius-md); padding:.4rem .8rem; font-size:.8rem; cursor:pointer; display:flex; align-items:center; gap:.4rem; color:var(--nexo-gray-700); transition:all .2s; }
+.home-refresh:hover { background:var(--nexo-primary); color:#fff; border-color:var(--nexo-primary); }
+
+/* KPI grid */
+.home-kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.85rem; margin-bottom:1.25rem; }
+@media(max-width:1200px){ .home-kpi-grid { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:768px){ .home-kpi-grid { grid-template-columns:1fr; } }
+.home-kpi { background:#fff; border-radius:var(--nexo-radius-xl); padding:.9rem 1.1rem; box-shadow:var(--nexo-shadow-md); position:relative; overflow:hidden; transition:transform .2s,box-shadow .2s; }
+.home-kpi:hover { transform:translateY(-3px); box-shadow:var(--nexo-shadow-lg); }
+.home-kpi::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; }
+.home-kpi.kpi-ventas::before { background:var(--nexo-accent); }
+.home-kpi.kpi-stock::before { background:var(--nexo-warning); }
+.home-kpi.kpi-compras::before { background:var(--nexo-primary); }
+.home-kpi.kpi-req::before { background:var(--nexo-error); }
+.home-kpi-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:.6rem; }
+.home-kpi-icon { width:38px; height:38px; border-radius:var(--nexo-radius-lg); display:flex; align-items:center; justify-content:center; font-size:1.15rem; }
+.home-kpi-icon.ventas { background:rgba(0,212,170,.15); color:var(--nexo-accent); }
+.home-kpi-icon.stock { background:rgba(255,176,32,.15); color:var(--nexo-warning); }
+.home-kpi-icon.compras { background:rgba(0,102,255,.15); color:var(--nexo-primary); }
+.home-kpi-icon.req { background:rgba(255,77,77,.15); color:var(--nexo-error); }
+.home-kpi-trend { font-size:.7rem; font-weight:600; padding:.2rem .45rem; border-radius:var(--nexo-radius-md); display:flex; align-items:center; gap:.15rem; }
+.home-kpi-trend.up { background:rgba(0,212,170,.15); color:#00A080; }
+.home-kpi-trend.down { background:rgba(255,77,77,.15); color:var(--nexo-error); }
+.home-kpi-trend.stable { background:var(--nexo-gray-100); color:var(--nexo-gray-500); }
+.home-kpi-val { font-size:1.5rem; font-weight:800; color:var(--nexo-secondary); line-height:1; margin-bottom:.15rem; }
+.home-kpi-label { font-size:.78rem; color:var(--nexo-gray-500); font-weight:500; text-transform:uppercase; letter-spacing:.5px; }
+.home-kpi-footer { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--nexo-gray-100); display:flex; justify-content:space-between; font-size:.75rem; }
+.home-kpi-stat { text-align:center; }
+.home-kpi-sv { font-weight:700; color:var(--nexo-secondary); }
+.home-kpi-sl { color:var(--nexo-gray-500); font-size:.65rem; text-transform:uppercase; }
+
+/* Alerts */
+.home-alerts { margin-bottom:1.25rem; }
+.home-section-title { font-size:1rem; font-weight:700; color:var(--nexo-secondary); margin-bottom:.75rem; display:flex; align-items:center; gap:.5rem; }
+.home-alert { background:#fff; border-radius:var(--nexo-radius-lg); padding:.75rem 1rem; margin-bottom:.5rem; display:flex; align-items:center; gap:.75rem; box-shadow:var(--nexo-shadow-sm); border-left:4px solid; }
+.home-alert.danger { border-left-color:var(--nexo-error); }
+.home-alert.warning { border-left-color:var(--nexo-warning); }
+.home-alert.info { border-left-color:var(--nexo-primary); }
+.home-alert-icon { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+.home-alert.danger .home-alert-icon { background:rgba(255,77,77,.15); color:var(--nexo-error); }
+.home-alert.warning .home-alert-icon { background:rgba(255,176,32,.15); color:var(--nexo-warning); }
+.home-alert.info .home-alert-icon { background:rgba(0,102,255,.15); color:var(--nexo-primary); }
+.home-alert-body { flex:1; }
+.home-alert-title { font-weight:600; color:var(--nexo-secondary); font-size:.85rem; }
+.home-alert-desc { font-size:.75rem; color:var(--nexo-gray-500); }
+.home-alert-btn { font-size:.75rem; font-weight:600; padding:.4rem .75rem; border-radius:var(--nexo-radius-md); text-decoration:none; white-space:nowrap; transition:all .2s; }
+.home-alert.danger .home-alert-btn { background:var(--nexo-error); color:#fff; }
+.home-alert.warning .home-alert-btn { background:var(--nexo-warning); color:var(--nexo-secondary); }
+.home-alert.info .home-alert-btn { background:var(--nexo-primary); color:#fff; }
+.home-alert-btn:hover { filter:brightness(1.1); text-decoration:none; }
+
+/* Pending actions panel */
+.home-pending-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-bottom:1.25rem; }
+@media(max-width:1200px){ .home-pending-grid { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:576px){ .home-pending-grid { grid-template-columns:1fr; } }
+.home-pending-item { background:#fff; border-radius:var(--nexo-radius-lg); padding:.85rem 1rem; box-shadow:var(--nexo-shadow-sm); display:flex; align-items:center; gap:.75rem; text-decoration:none; color:var(--nexo-secondary); transition:all .2s; border:1px solid transparent; }
+.home-pending-item:hover { border-color:var(--nexo-primary); box-shadow:var(--nexo-shadow-md); transform:translateY(-2px); text-decoration:none; color:var(--nexo-primary); }
+.home-pending-icon { width:40px; height:40px; border-radius:var(--nexo-radius-md); display:flex; align-items:center; justify-content:center; font-size:1.15rem; flex-shrink:0; }
+.home-pending-info { flex:1; min-width:0; }
+.home-pending-label { font-size:.78rem; color:var(--nexo-gray-500); font-weight:500; }
+.home-pending-count { font-size:1.3rem; font-weight:800; line-height:1.1; }
+.home-pending-count.has-items { color:var(--nexo-error); }
+.home-pending-count.ok { color:var(--nexo-accent); }
+.home-pending-arrow { color:var(--nexo-gray-300); font-size:1.1rem; }
+
+/* Panels row */
+.home-panels-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:.85rem; margin-bottom:1.25rem; }
+@media(max-width:992px){ .home-panels-row { grid-template-columns:1fr; } }
+.home-panel { background:#fff; border-radius:var(--nexo-radius-xl); box-shadow:var(--nexo-shadow-md); overflow:hidden; }
+.home-panel-header { padding:.85rem 1.15rem; display:flex; justify-content:space-between; align-items:center; color:#fff; }
+.home-panel-header.caja { background:linear-gradient(135deg,#1A1A2E 0%,#2A2A4E 100%); }
+.home-panel-header.precios { background:linear-gradient(135deg,#8B5CF6 0%,#6D28D9 100%); }
+.home-panel-header.operaciones { background:linear-gradient(135deg,var(--nexo-accent) 0%,#00A080 100%); }
+.home-panel-title { font-weight:700; font-size:.9rem; display:flex; align-items:center; gap:.4rem; }
+.home-panel-badge { background:rgba(255,255,255,.25); padding:.2rem .6rem; border-radius:var(--nexo-radius-md); font-size:.7rem; font-weight:600; }
+.home-panel-body { padding:1rem 1.15rem; }
+.home-panel-stat { display:flex; justify-content:space-between; align-items:center; padding:.5rem 0; border-bottom:1px solid var(--nexo-gray-100); }
+.home-panel-stat:last-child { border-bottom:none; }
+.home-panel-stat-label { font-size:.82rem; color:var(--nexo-gray-700); display:flex; align-items:center; gap:.4rem; }
+.home-panel-stat-val { font-weight:700; color:var(--nexo-secondary); font-size:.9rem; }
+.home-panel-stat-val.danger { color:var(--nexo-error); }
+.home-panel-stat-val.warning { color:var(--nexo-warning); }
+.home-panel-stat-val.success { color:var(--nexo-accent); }
+.home-panel-footer { padding:.7rem 1.15rem; background:var(--nexo-gray-100); text-align:center; }
+.home-panel-link { color:var(--nexo-primary); font-size:.8rem; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; }
+.home-panel-link:hover { color:var(--nexo-primary-dark); text-decoration:none; }
+
+/* Dashboard navigation hub */
+.home-nav-row { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-bottom:1.25rem; }
+@media(max-width:992px){ .home-nav-row { grid-template-columns:repeat(2,1fr); } }
+.home-nav-btn { background:#fff; border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius-lg); padding:.85rem 1rem; display:flex; align-items:center; gap:.7rem; text-decoration:none; color:var(--nexo-secondary); transition:all .2s; }
+.home-nav-btn:hover { border-color:var(--nexo-primary); background:var(--nexo-primary-light); transform:translateX(3px); text-decoration:none; color:var(--nexo-primary); }
+.home-nav-icon { width:38px; height:38px; border-radius:var(--nexo-radius-md); display:flex; align-items:center; justify-content:center; font-size:1.15rem; }
+.home-nav-label { font-weight:600; font-size:.85rem; }
+
+/* Quick actions */
+.home-quick-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; }
+@media(max-width:992px){ .home-quick-grid { grid-template-columns:repeat(2,1fr); } }
+
+/* Pulse animation for live indicator */
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+.live-dot { width:7px; height:7px; background:var(--nexo-accent); border-radius:50%; animation:pulse 2s ease-in-out infinite; display:inline-block; }
 </style>
 
 <div class="page-content">
-    <div class="container-fluid nexo-dashboard">
-        
-        <!-- ===== Header del Dashboard ===== -->
-        <div class="nexo-header">
-            <h1>
-                <i class="ri-dashboard-3-line"></i>
-                Dashboard Sucursal
-            </h1>
-            <div class="nexo-header-meta">
-                <div class="nexo-date-badge">
-                    <i class="ri-calendar-line me-1"></i>
-                    {{ fecha_actual|date:"l, d M Y" }}
+<div class="container-fluid home-dashboard">
+
+    <!-- ===== Header ===== -->
+    <div class="home-header">
+        <h1>
+            <i class="ri-dashboard-3-line"></i>
+            Centro de Control
+        </h1>
+        <div class="home-header-meta">
+            <div class="home-date">
+                <i class="ri-calendar-line me-1"></i>
+                {{ fecha_actual|date:"l, d M Y" }}
+            </div>
+            {% if sucursal_actual %}
+            <div class="home-sucursal">
+                <i class="ri-store-2-line me-1"></i>
+                {{ sucursal_actual.alias }}
+            </div>
+            {% endif %}
+            <button class="home-refresh" onclick="location.reload()" id="refreshBtn">
+                <i class="ri-refresh-line"></i> Actualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== 4 KPI Cards ===== -->
+    <div class="home-kpi-grid">
+
+        <div class="home-kpi kpi-ventas">
+            <div class="home-kpi-top">
+                <div class="home-kpi-icon ventas"><i class="ri-shopping-cart-2-line"></i></div>
+                <div class="home-kpi-trend {{ ventas.tendencia }}">
+                    {% if ventas.tendencia == 'up' %}<i class="ri-arrow-up-line"></i>{% elif ventas.tendencia == 'down' %}<i class="ri-arrow-down-line"></i>{% else %}<i class="ri-subtract-line"></i>{% endif %}
+                    {{ ventas.variacion_mes }}%
                 </div>
-                {% if sucursal_actual %}
-                <div class="nexo-sucursal-badge">
-                    <i class="ri-store-2-line me-1"></i>
-                    {{ sucursal_actual.alias }}
+            </div>
+            <div class="home-kpi-val">${{ ventas.hoy|floatformat:0|intcomma }}</div>
+            <div class="home-kpi-label">Ventas Hoy</div>
+            <div class="home-kpi-footer">
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ ventas.tickets_hoy|intcomma }}</div><div class="home-kpi-sl">Tickets</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ ventas.unidades_hoy|intcomma }}</div><div class="home-kpi-sl">Unidades</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">${{ ventas.ticket_promedio|floatformat:0|intcomma }}</div><div class="home-kpi-sl">Promedio</div></div>
+            </div>
+        </div>
+
+        <div class="home-kpi kpi-stock">
+            <div class="home-kpi-top">
+                <div class="home-kpi-icon stock"><i class="ri-box-3-line"></i></div>
+                {% if stock.sin_stock > 0 %}<span class="badge bg-danger" style="font-size:.65rem"><i class="ri-alert-fill"></i> {{ stock.sin_stock }} sin stock</span>{% endif %}
+            </div>
+            <div class="home-kpi-val">{{ stock.stock_critico }}</div>
+            <div class="home-kpi-label">Stock Critico</div>
+            <div class="home-kpi-footer">
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.total_skus|intcomma }}</div><div class="home-kpi-sl">SKUs</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.total_unidades|intcomma }}</div><div class="home-kpi-sl">Unidades</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ stock.rotacion_mes }}%</div><div class="home-kpi-sl">Rotacion</div></div>
+            </div>
+        </div>
+
+        <div class="home-kpi kpi-compras">
+            <div class="home-kpi-top">
+                <div class="home-kpi-icon compras"><i class="ri-inbox-archive-line"></i></div>
+                {% if compras.dtes_pendientes > 0 %}<span class="badge bg-warning text-dark" style="font-size:.65rem">Pendiente</span>{% endif %}
+            </div>
+            <div class="home-kpi-val">{{ compras.dtes_pendientes }}</div>
+            <div class="home-kpi-label">DTEs por Recepcionar</div>
+            <div class="home-kpi-footer">
+                <div class="home-kpi-stat"><div class="home-kpi-sv">${{ compras.monto_pendiente|floatformat:0|intcomma }}</div><div class="home-kpi-sl">Monto Pend.</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ compras.compras_mes }}</div><div class="home-kpi-sl">Compras Mes</div></div>
+            </div>
+        </div>
+
+        <div class="home-kpi kpi-req">
+            <div class="home-kpi-top">
+                <div class="home-kpi-icon req"><i class="ri-customer-service-2-line"></i></div>
+                {% if requerimientos.pendientes > 0 %}<span class="badge bg-danger" style="font-size:.65rem">{{ requerimientos.dias_promedio }}d prom.</span>{% endif %}
+            </div>
+            <div class="home-kpi-val">{{ requerimientos.pendientes }}</div>
+            <div class="home-kpi-label">Requerimientos Pendientes</div>
+            <div class="home-kpi-footer">
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ requerimientos.esperando }}</div><div class="home-kpi-sl">Esperando</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ requerimientos.total_mes }}</div><div class="home-kpi-sl">Este Mes</div></div>
+                <div class="home-kpi-stat"><div class="home-kpi-sv">{{ requerimientos.tasa_aprobacion }}%</div><div class="home-kpi-sl">Aprobacion</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Alertas ===== -->
+    {% if alertas %}
+    <div class="home-alerts">
+        <div class="home-section-title">
+            <i class="ri-alarm-warning-line text-danger"></i> Alertas que Requieren Atencion
+        </div>
+        {% for alerta in alertas %}
+        <div class="home-alert {{ alerta.tipo }}">
+            <div class="home-alert-icon"><i class="{{ alerta.icono }}"></i></div>
+            <div class="home-alert-body">
+                <div class="home-alert-title">{{ alerta.titulo }}</div>
+                <div class="home-alert-desc">{{ alerta.descripcion }}</div>
+            </div>
+            <a href="{{ alerta.url }}" class="home-alert-btn">{{ alerta.accion }} <i class="ri-arrow-right-line ms-1"></i></a>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ===== Panel Acciones Pendientes ===== -->
+    <div class="home-section-title">
+        <i class="ri-task-line text-primary"></i> Acciones Pendientes
+    </div>
+    <div class="home-pending-grid">
+
+        <a href="{% url 'recepcion_dte' %}" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(0,102,255,.12); color:var(--nexo-primary);">
+                <i class="ri-inbox-archive-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">DTEs por Recepcionar</div>
+                <div class="home-pending-count {% if compras.dtes_pendientes > 0 %}has-items{% else %}ok{% endif %}">{{ compras.dtes_pendientes }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+
+        <a href="{% url 'regularizar_recepciones' %}" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(255,176,32,.12); color:var(--nexo-warning);">
+                <i class="ri-file-damage-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">Regularizaciones DTE</div>
+                <div class="home-pending-count {% if operaciones.regularizaciones > 0 %}has-items{% else %}ok{% endif %}">{{ operaciones.regularizaciones }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+
+        <a href="{% url 'gestion_cambios_devoluciones' %}" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(255,77,77,.12); color:var(--nexo-error);">
+                <i class="ri-exchange-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">Cambios / Devoluciones</div>
+                <div class="home-pending-count {% if operaciones.cambios_pendientes > 0 %}has-items{% else %}ok{% endif %}">{{ operaciones.cambios_pendientes }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+
+        <a href="{% url 'modulo_requerimientos' %}" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(139,92,246,.12); color:#8B5CF6;">
+                <i class="ri-customer-service-2-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">Requerimientos</div>
+                <div class="home-pending-count {% if requerimientos.pendientes > 0 %}has-items{% else %}ok{% endif %}">{{ requerimientos.pendientes }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+
+        <a href="{% url 'revisar_cambios_precios' %}" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(139,92,246,.12); color:#6D28D9;">
+                <i class="ri-price-tag-3-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">Precios por Regularizar</div>
+                <div class="home-pending-count {% if precios.total_pendientes > 0 %}has-items{% else %}ok{% endif %}">{{ precios.total_pendientes }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+
+        <a href="{% url 'revision_arqueos' %}" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(26,26,46,.1); color:var(--nexo-secondary);">
+                <i class="ri-safe-2-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">Arqueos Abiertos</div>
+                <div class="home-pending-count {% if caja.arqueos_abiertos > 0 %}has-items{% else %}ok{% endif %}">{{ caja.arqueos_abiertos }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+
+        <a href="{% url 'revision_arqueos' %}" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(0,212,170,.12); color:var(--nexo-accent);">
+                <i class="ri-bank-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">Depositos sin Verificar</div>
+                <div class="home-pending-count {% if caja.depositos_pendientes > 0 %}has-items{% else %}ok{% endif %}">{{ caja.depositos_pendientes }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+
+        <a href="{% url 'ver_resumen_existencias' %}" class="home-pending-item">
+            <div class="home-pending-icon" style="background:rgba(255,176,32,.12); color:var(--nexo-warning);">
+                <i class="ri-archive-fill"></i>
+            </div>
+            <div class="home-pending-info">
+                <div class="home-pending-label">Ajustes Inventario</div>
+                <div class="home-pending-count {% if operaciones.ajustes_pendientes > 0 %}has-items{% else %}ok{% endif %}">{{ operaciones.ajustes_pendientes }}</div>
+            </div>
+            <i class="ri-arrow-right-s-line home-pending-arrow"></i>
+        </a>
+    </div>
+
+    <!-- ===== Panels Row: Caja, Precios, Operaciones ===== -->
+    <div class="home-panels-row">
+
+        <!-- Panel Cuadraturas y Caja -->
+        <div class="home-panel">
+            <div class="home-panel-header caja">
+                <span class="home-panel-title"><i class="ri-safe-2-line"></i> Cuadraturas y Caja</span>
+                <span class="home-panel-badge">{{ caja.total_arqueos_mes }} arqueos mes</span>
+            </div>
+            <div class="home-panel-body">
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-lock-unlock-line"></i> Arqueos Abiertos</span>
+                    <span class="home-panel-stat-val {% if caja.arqueos_abiertos > 0 %}danger{% endif %}">{{ caja.arqueos_abiertos }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-error-warning-line"></i> Con Diferencias</span>
+                    <span class="home-panel-stat-val {% if caja.arqueos_con_diferencias > 0 %}warning{% endif %}">{{ caja.arqueos_con_diferencias }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-money-dollar-circle-line"></i> Dif. Efectivo</span>
+                    <span class="home-panel-stat-val {% if caja.diferencia_efectivo > 0 %}danger{% endif %}">${{ caja.diferencia_efectivo|floatformat:0|intcomma }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-bank-card-line"></i> Dif. Transbank</span>
+                    <span class="home-panel-stat-val {% if caja.diferencia_transbank > 0 %}danger{% endif %}">${{ caja.diferencia_transbank|floatformat:0|intcomma }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-bank-fill"></i> Depositos Pendientes</span>
+                    <span class="home-panel-stat-val {% if caja.depositos_pendientes > 0 %}warning{% endif %}">{{ caja.depositos_pendientes }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-wallet-3-line"></i> Monto sin Verificar</span>
+                    <span class="home-panel-stat-val {% if caja.monto_sin_verificar > 0 %}warning{% endif %}">${{ caja.monto_sin_verificar|floatformat:0|intcomma }}</span>
+                </div>
+            </div>
+            <div class="home-panel-footer">
+                <a href="{% url 'revision_arqueos' %}" class="home-panel-link">Revisar Arqueos <i class="ri-arrow-right-line"></i></a>
+                &nbsp;&middot;&nbsp;
+                <a href="{% url 'cuadratura_caja' %}" class="home-panel-link">Cuadratura <i class="ri-arrow-right-line"></i></a>
+            </div>
+        </div>
+
+        <!-- Panel Precios Pendientes -->
+        <div class="home-panel">
+            <div class="home-panel-header precios">
+                <span class="home-panel-title"><i class="ri-price-tag-3-line"></i> Precios Pendientes</span>
+                {% if precios.urgentes > 0 %}
+                <span class="home-panel-badge" style="background:rgba(255,77,77,.4);">{{ precios.urgentes }} urgentes</span>
+                {% endif %}
+            </div>
+            <div class="home-panel-body">
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-price-tag-3-line"></i> Total Pendientes</span>
+                    <span class="home-panel-stat-val {% if precios.total_pendientes > 0 %}warning{% endif %}">{{ precios.total_pendientes }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-alarm-warning-line"></i> Urgentes / Vencidos</span>
+                    <span class="home-panel-stat-val {% if precios.urgentes > 0 %}danger{% endif %}">{{ precios.urgentes }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-money-dollar-circle-line"></i> Impacto Estimado</span>
+                    <span class="home-panel-stat-val">${{ precios.impacto_estimado|floatformat:0|intcomma }}</span>
+                </div>
+                {% if precios.total_pendientes == 0 %}
+                <div style="text-align:center; padding:1.5rem 0; color:var(--nexo-accent);">
+                    <i class="ri-checkbox-circle-fill" style="font-size:2rem; display:block; margin-bottom:.4rem;"></i>
+                    <span style="font-size:.85rem; font-weight:600;">Sin precios pendientes</span>
                 </div>
                 {% endif %}
-                <button class="nexo-refresh-btn" onclick="location.reload()" id="refreshBtn">
-                    <i class="ri-refresh-line"></i>
-                    Actualizar
-                </button>
+            </div>
+            <div class="home-panel-footer">
+                <a href="{% url 'revisar_cambios_precios' %}" class="home-panel-link">Gestionar Precios <i class="ri-arrow-right-line"></i></a>
             </div>
         </div>
 
-        <!-- ===== KPIs Principales ===== -->
-        <div class="nexo-kpi-grid">
-            
-            <!-- KPI Ventas Hoy -->
-            <div class="nexo-kpi-card ventas">
-                <div class="nexo-kpi-header">
-                    <div class="nexo-kpi-icon ventas">
-                        <i class="ri-shopping-cart-2-line"></i>
-                    </div>
-                    <div class="nexo-kpi-trend {{ ventas.tendencia }}">
-                        {% if ventas.tendencia == 'up' %}
-                        <i class="ri-arrow-up-line"></i>
-                        {% elif ventas.tendencia == 'down' %}
-                        <i class="ri-arrow-down-line"></i>
-                        {% else %}
-                        <i class="ri-subtract-line"></i>
-                        {% endif %}
-                        {{ ventas.variacion_mes }}%
-                    </div>
+        <!-- Panel Operaciones -->
+        <div class="home-panel">
+            <div class="home-panel-header operaciones">
+                <span class="home-panel-title"><i class="ri-settings-3-line"></i> Operaciones</span>
+            </div>
+            <div class="home-panel-body">
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-exchange-funds-line"></i> Traspasos Pendientes</span>
+                    <span class="home-panel-stat-val {% if operaciones.traspasos_pendientes > 0 %}warning{% endif %}">{{ operaciones.traspasos_pendientes }}</span>
                 </div>
-                <div class="nexo-kpi-value">${{ ventas.hoy|floatformat:0|intcomma }}</div>
-                <div class="nexo-kpi-label">Ventas Hoy</div>
-                <div class="nexo-kpi-footer">
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ ventas.tickets_hoy|intcomma }}</div>
-                        <div class="nexo-kpi-stat-label">Tickets</div>
-                    </div>
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ ventas.unidades_hoy|intcomma }}</div>
-                        <div class="nexo-kpi-stat-label">Unidades</div>
-                    </div>
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">${{ ventas.ticket_promedio|floatformat:0|intcomma }}</div>
-                        <div class="nexo-kpi-stat-label">Ticket Prom.</div>
-                    </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-clipboard-line"></i> Ajustes Inventario</span>
+                    <span class="home-panel-stat-val {% if operaciones.ajustes_pendientes > 0 %}warning{% endif %}">{{ operaciones.ajustes_pendientes }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-money-dollar-circle-line"></i> DTEs por Cobrar</span>
+                    <span class="home-panel-stat-val">{{ operaciones.dtes_por_cobrar }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-money-dollar-box-line"></i> Monto por Cobrar</span>
+                    <span class="home-panel-stat-val" style="color:var(--nexo-primary);">${{ operaciones.monto_por_cobrar|floatformat:0|intcomma }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-line-chart-line"></i> Ventas Mes</span>
+                    <span class="home-panel-stat-val success">${{ ventas.mes|floatformat:0|intcomma }}</span>
+                </div>
+                <div class="home-panel-stat">
+                    <span class="home-panel-stat-label"><i class="ri-archive-line"></i> Valor Inventario</span>
+                    <span class="home-panel-stat-val">${{ stock.valor_inventario|floatformat:0|intcomma }}</span>
                 </div>
             </div>
-
-            <!-- KPI Stock -->
-            <div class="nexo-kpi-card stock">
-                <div class="nexo-kpi-header">
-                    <div class="nexo-kpi-icon stock">
-                        <i class="ri-box-3-line"></i>
-                    </div>
-                    {% if stock.sin_stock > 0 %}
-                    <span class="badge bg-danger"><i class="ri-alert-fill"></i> {{ stock.sin_stock }} sin stock</span>
-                    {% endif %}
-                </div>
-                <div class="nexo-kpi-value">{{ stock.stock_critico }}</div>
-                <div class="nexo-kpi-label">Productos Stock Crítico</div>
-                <div class="nexo-kpi-footer">
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ stock.total_skus|intcomma }}</div>
-                        <div class="nexo-kpi-stat-label">SKUs Total</div>
-                    </div>
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ stock.total_unidades|intcomma }}</div>
-                        <div class="nexo-kpi-stat-label">Unidades</div>
-                    </div>
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ stock.rotacion_mes }}%</div>
-                        <div class="nexo-kpi-stat-label">Rotación</div>
-                    </div>
-                </div>
+            <div class="home-panel-footer">
+                <a href="{% url 'ver_resumen_existencias' %}" class="home-panel-link">Ver Existencias <i class="ri-arrow-right-line"></i></a>
             </div>
-
-            <!-- KPI Compras Pendientes -->
-            <div class="nexo-kpi-card compras">
-                <div class="nexo-kpi-header">
-                    <div class="nexo-kpi-icon compras">
-                        <i class="ri-inbox-archive-line"></i>
-                    </div>
-                    {% if compras.dtes_pendientes > 0 %}
-                    <span class="badge bg-warning text-dark">Pendiente</span>
-                    {% endif %}
-                </div>
-                <div class="nexo-kpi-value">{{ compras.dtes_pendientes }}</div>
-                <div class="nexo-kpi-label">DTEs por Recepcionar</div>
-                <div class="nexo-kpi-footer">
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">${{ compras.monto_pendiente|floatformat:0|intcomma }}</div>
-                        <div class="nexo-kpi-stat-label">Monto Pend.</div>
-                    </div>
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ compras.compras_mes }}</div>
-                        <div class="nexo-kpi-stat-label">Compras Mes</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- KPI Requerimientos -->
-            <div class="nexo-kpi-card requerimientos">
-                <div class="nexo-kpi-header">
-                    <div class="nexo-kpi-icon requerimientos">
-                        <i class="ri-customer-service-2-line"></i>
-                    </div>
-                    {% if requerimientos.pendientes > 0 %}
-                    <span class="badge bg-danger">{{ requerimientos.dias_promedio }}d prom.</span>
-                    {% endif %}
-                </div>
-                <div class="nexo-kpi-value">{{ requerimientos.pendientes }}</div>
-                <div class="nexo-kpi-label">Requerimientos Pendientes</div>
-                <div class="nexo-kpi-footer">
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ requerimientos.esperando }}</div>
-                        <div class="nexo-kpi-stat-label">En Espera</div>
-                    </div>
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ requerimientos.total_mes }}</div>
-                        <div class="nexo-kpi-stat-label">Este Mes</div>
-                    </div>
-                    <div class="nexo-kpi-stat">
-                        <div class="nexo-kpi-stat-value">{{ requerimientos.tasa_aprobacion }}%</div>
-                        <div class="nexo-kpi-stat-label">Aprobación</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== Alertas Críticas ===== -->
-        {% if alertas %}
-        <div class="nexo-alerts-section">
-            <div class="nexo-section-title">
-                <i class="ri-alarm-warning-line text-danger"></i>
-                Alertas que Requieren Atención
-            </div>
-            {% for alerta in alertas %}
-            <div class="nexo-alert-card {{ alerta.tipo }}">
-                <div class="nexo-alert-icon">
-                    <i class="{{ alerta.icono }}"></i>
-                </div>
-                <div class="nexo-alert-content">
-                    <div class="nexo-alert-title">{{ alerta.titulo }}</div>
-                    <div class="nexo-alert-desc">{{ alerta.descripcion }}</div>
-                </div>
-                <a href="{{ alerta.url }}" class="nexo-alert-action">
-                    {{ alerta.accion }} <i class="ri-arrow-right-line ms-1"></i>
-                </a>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- ===== Grid de Módulos ===== -->
-        <div class="nexo-modules-grid">
-            
-            <!-- Módulo Ventas del Mes -->
-            <div class="nexo-module-card">
-                <div class="nexo-module-header ventas">
-                    <span class="nexo-module-title">
-                        <i class="ri-line-chart-line"></i>
-                        Ventas del Mes
-                    </span>
-                    <span class="nexo-module-badge">${{ ventas.mes|floatformat:0|intcomma }}</span>
-                </div>
-                <div class="nexo-module-body">
-                    <div class="nexo-stats-row">
-                        <div class="nexo-stat-item">
-                            <div class="nexo-stat-value">${{ ventas.semana|floatformat:0|intcomma }}</div>
-                            <div class="nexo-stat-label">Esta Semana</div>
-                        </div>
-                        <div class="nexo-stat-item">
-                            <div class="nexo-stat-value">{{ ventas.tickets_mes|intcomma }}</div>
-                            <div class="nexo-stat-label">Tickets</div>
-                        </div>
-                        <div class="nexo-stat-item">
-                            <div class="nexo-stat-value">${{ ventas.ticket_promedio_mes|floatformat:0|intcomma }}</div>
-                            <div class="nexo-stat-label">Promedio</div>
-                        </div>
-                    </div>
-                    <div class="nexo-list-item">
-                        <span class="nexo-list-label">Mes Anterior</span>
-                        <span class="nexo-list-value">${{ ventas.mes_pasado|floatformat:0|intcomma }}</span>
-                    </div>
-                    <div class="nexo-list-item">
-                        <span class="nexo-list-label">Variación</span>
-                        <span class="nexo-list-value {% if ventas.variacion_mes > 0 %}text-success{% elif ventas.variacion_mes < 0 %}text-danger{% endif %}">
-                            {% if ventas.variacion_mes > 0 %}+{% endif %}{{ ventas.variacion_mes }}%
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Módulo Inventario -->
-            <div class="nexo-module-card">
-                <div class="nexo-module-header stock">
-                    <span class="nexo-module-title">
-                        <i class="ri-archive-line"></i>
-                        Inventario
-                    </span>
-                    <span class="nexo-module-badge">{{ stock.skus_con_stock }} SKUs</span>
-                </div>
-                <div class="nexo-module-body">
-                    <div class="nexo-stats-row">
-                        <div class="nexo-stat-item">
-                            <div class="nexo-stat-value text-danger">{{ stock.sin_stock }}</div>
-                            <div class="nexo-stat-label">Sin Stock</div>
-                        </div>
-                        <div class="nexo-stat-item">
-                            <div class="nexo-stat-value text-warning">{{ stock.stock_critico }}</div>
-                            <div class="nexo-stat-label">Crítico</div>
-                        </div>
-                        <div class="nexo-stat-item">
-                            <div class="nexo-stat-value">{{ stock.total_unidades|intcomma }}</div>
-                            <div class="nexo-stat-label">Unidades</div>
-                        </div>
-                    </div>
-                    <div class="nexo-list-item">
-                        <span class="nexo-list-label">Valor Inventario</span>
-                        <span class="nexo-list-value">${{ stock.valor_inventario|floatformat:0|intcomma }}</span>
-                    </div>
-                    
-                    <!-- Mini lista de críticos -->
-                    {% if stock.productos_criticos %}
-                    <div class="mt-3">
-                        <small class="text-muted d-block mb-2">Críticos:</small>
-                        {% for p in stock.productos_criticos|slice:":3" %}
-                        <div class="d-flex justify-content-between align-items-center py-1">
-                            <small class="text-truncate" style="max-width: 60%;">{{ p.producto }}</small>
-                            <span class="badge bg-danger">{{ p.stock }} uds</span>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Módulo Operaciones -->
-            <div class="nexo-module-card">
-                <div class="nexo-module-header operaciones">
-                    <span class="nexo-module-title">
-                        <i class="ri-settings-3-line"></i>
-                        Operaciones
-                    </span>
-                </div>
-                <div class="nexo-module-body">
-                    <div class="nexo-list-item">
-                        <span class="nexo-list-label">
-                            <i class="ri-exchange-funds-line me-2"></i>Traspasos Pendientes
-                        </span>
-                        <span class="nexo-list-value {% if operaciones.traspasos_pendientes > 0 %}text-warning{% endif %}">
-                            {{ operaciones.traspasos_pendientes }}
-                        </span>
-                    </div>
-                    <div class="nexo-list-item">
-                        <span class="nexo-list-label">
-                            <i class="ri-exchange-line me-2"></i>Cambios/Devoluciones
-                        </span>
-                        <span class="nexo-list-value {% if operaciones.cambios_pendientes > 0 %}text-warning{% endif %}">
-                            {{ operaciones.cambios_pendientes }}
-                        </span>
-                    </div>
-                    <div class="nexo-list-item">
-                        <span class="nexo-list-label">
-                            <i class="ri-file-damage-line me-2"></i>Regularizaciones
-                        </span>
-                        <span class="nexo-list-value {% if operaciones.regularizaciones > 0 %}text-warning{% endif %}">
-                            {{ operaciones.regularizaciones }}
-                        </span>
-                    </div>
-                    <div class="nexo-list-item">
-                        <span class="nexo-list-label">
-                            <i class="ri-money-dollar-circle-line me-2"></i>DTEs por Cobrar
-                        </span>
-                        <span class="nexo-list-value">{{ operaciones.dtes_por_cobrar }}</span>
-                    </div>
-                    <div class="nexo-list-item">
-                        <span class="nexo-list-label">
-                            <i class="ri-money-dollar-box-line me-2"></i>Monto por Cobrar
-                        </span>
-                        <span class="nexo-list-value text-primary">${{ operaciones.monto_por_cobrar|floatformat:0|intcomma }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== Charts Visuales ===== -->
-        <div class="row mb-4">
-            <div class="col-lg-7">
-                <div class="nexo-table-card" style="padding:20px;">
-                    <div class="nexo-table-header" style="border:none;padding:0 0 12px;">
-                        <span class="nexo-table-title"><i class="ri-line-chart-line text-primary"></i> Ventas por Hora (Hoy)</span>
-                    </div>
-                    <div style="position:relative;height:260px;"><canvas id="chartVentasHora"></canvas></div>
-                </div>
-            </div>
-            <div class="col-lg-5">
-                <div class="nexo-table-card" style="padding:20px;">
-                    <div class="nexo-table-header" style="border:none;padding:0 0 12px;">
-                        <span class="nexo-table-title"><i class="ri-bar-chart-fill text-warning"></i> Top 5 Productos</span>
-                    </div>
-                    <div style="position:relative;height:260px;"><canvas id="chartTopProductos"></canvas></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== Fila de Tablas ===== -->
-        <div class="row">
-            
-            <!-- Top Productos del Mes -->
-            <div class="col-lg-7 mb-4">
-                <div class="nexo-table-card">
-                    <div class="nexo-table-header">
-                        <span class="nexo-table-title">
-                            <i class="ri-trophy-line text-warning"></i>
-                            Top 10 Productos del Mes
-                        </span>
-                        <span class="badge bg-light text-dark">{{ fecha_actual|date:"F Y" }}</span>
-                    </div>
-                    {% if top_productos %}
-                    <table class="nexo-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 50px;">#</th>
-                                <th>Producto</th>
-                                <th class="text-center">Unidades</th>
-                                <th class="text-end">Monto</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for producto in top_productos %}
-                            <tr>
-                                <td>
-                                    <span class="nexo-position {% if producto.posicion == 1 %}gold{% elif producto.posicion == 2 %}silver{% elif producto.posicion == 3 %}bronze{% else %}default{% endif %}">
-                                        {{ producto.posicion }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="fw-semibold">{{ producto.producto }}</div>
-                                    <small class="text-muted">{{ producto.marca }} {{ producto.color }}</small>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-primary">{{ producto.unidades }}</span>
-                                </td>
-                                <td class="text-end fw-semibold">${{ producto.monto|floatformat:0|intcomma }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <div class="nexo-empty">
-                        <i class="ri-shopping-bag-line"></i>
-                        <p>No hay ventas registradas este mes</p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Productos Sin Movimiento -->
-            <div class="col-lg-5 mb-4">
-                <div class="nexo-table-card">
-                    <div class="nexo-table-header">
-                        <span class="nexo-table-title">
-                            <i class="ri-time-line text-warning"></i>
-                            Sin Movimiento (30 días)
-                        </span>
-                    </div>
-                    {% if productos_sin_movimiento %}
-                    <table class="nexo-table">
-                        <thead>
-                            <tr>
-                                <th>Producto</th>
-                                <th class="text-center">Stock</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for producto in productos_sin_movimiento %}
-                            <tr>
-                                <td>
-                                    <div class="fw-semibold text-truncate" style="max-width: 200px;">{{ producto.producto }}</div>
-                                    <small class="text-muted">Talla: {{ producto.talla }}</small>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-warning text-dark">{{ producto.stock }} uds</span>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <div class="nexo-empty">
-                        <i class="ri-checkbox-circle-line text-success"></i>
-                        <p>¡Excelente! Todos los productos tienen movimiento</p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== Compras Pendientes de Recepcionar ===== -->
-        {% if compras.lista_pendientes %}
-        <div class="nexo-table-card mb-4">
-            <div class="nexo-table-header">
-                <span class="nexo-table-title">
-                    <i class="ri-inbox-archive-line text-primary"></i>
-                    DTEs de Compra Pendientes de Recepcionar
-                </span>
-                <a href="{% url 'recepcion_dte' %}" class="btn btn-sm btn-primary">
-                    <i class="ri-inbox-fill me-1"></i> Ir a Recepción
-                </a>
-            </div>
-            <table class="nexo-table">
-                <thead>
-                    <tr>
-                        <th>Documento</th>
-                        <th>Proveedor</th>
-                        <th class="text-center">Fecha</th>
-                        <th class="text-end">Monto</th>
-                        <th class="text-center">Días</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for dte in compras.lista_pendientes %}
-                    <tr>
-                        <td>
-                            <span class="badge bg-info me-2">{{ dte.tipo }}</span>
-                            <strong>#{{ dte.numero }}</strong>
-                        </td>
-                        <td>{{ dte.emisor }}</td>
-                        <td class="text-center">{{ dte.fecha }}</td>
-                        <td class="text-end fw-semibold">${{ dte.monto|floatformat:0|intcomma }}</td>
-                        <td class="text-center">
-                            {% if dte.urgente %}
-                            <span class="badge bg-danger">{{ dte.dias }}d</span>
-                            {% else %}
-                            <span class="badge bg-secondary">{{ dte.dias }}d</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-
-        <!-- ===== Acciones Rápidas ===== -->
-        <div class="nexo-section-title mt-4">
-            <i class="ri-flashlight-line"></i>
-            Acciones Rápidas
-        </div>
-        <div class="nexo-quick-actions">
-            <a href="{% url 'pos_dashboard' %}" class="nexo-action-btn">
-                <div class="nexo-action-icon">
-                    <i class="ri-shopping-cart-2-line"></i>
-                </div>
-                <span class="nexo-action-label">Nueva Venta (POS)</span>
-            </a>
-            <a href="{% url 'modulo_requerimientos' %}" class="nexo-action-btn">
-                <div class="nexo-action-icon">
-                    <i class="ri-customer-service-2-line"></i>
-                </div>
-                <span class="nexo-action-label">Nuevo Requerimiento</span>
-            </a>
-            <a href="{% url 'recepcion_dte' %}" class="nexo-action-btn">
-                <div class="nexo-action-icon">
-                    <i class="ri-inbox-archive-line"></i>
-                </div>
-                <span class="nexo-action-label">Recepcionar DTE</span>
-            </a>
-            <a href="{% url 'gestion_cambios_devoluciones' %}" class="nexo-action-btn">
-                <div class="nexo-action-icon">
-                    <i class="ri-exchange-line"></i>
-                </div>
-                <span class="nexo-action-label">Cambios y Devoluciones</span>
-            </a>
         </div>
 
     </div>
+
+    <!-- ===== DTEs Pendientes (compact table) ===== -->
+    {% if compras.lista_pendientes %}
+    <div class="home-panel" style="margin-bottom:1.25rem;">
+        <div style="padding:.85rem 1.15rem; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--nexo-gray-100);">
+            <span style="font-weight:700; color:var(--nexo-secondary); display:flex; align-items:center; gap:.4rem; font-size:.9rem;">
+                <i class="ri-inbox-archive-line text-primary"></i> DTEs Compra Pendientes de Recepcionar
+            </span>
+            <a href="{% url 'recepcion_dte' %}" class="btn btn-sm btn-primary" style="font-size:.75rem; padding:.3rem .7rem;">
+                <i class="ri-inbox-fill me-1"></i> Ir a Recepcion
+            </a>
+        </div>
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th style="background:var(--nexo-gray-100); padding:.55rem .85rem; text-align:left; font-size:.65rem; font-weight:700; text-transform:uppercase; color:var(--nexo-gray-500);">Documento</th>
+                    <th style="background:var(--nexo-gray-100); padding:.55rem .85rem; text-align:left; font-size:.65rem; font-weight:700; text-transform:uppercase; color:var(--nexo-gray-500);">Proveedor</th>
+                    <th style="background:var(--nexo-gray-100); padding:.55rem .85rem; text-align:center; font-size:.65rem; font-weight:700; text-transform:uppercase; color:var(--nexo-gray-500);">Fecha</th>
+                    <th style="background:var(--nexo-gray-100); padding:.55rem .85rem; text-align:right; font-size:.65rem; font-weight:700; text-transform:uppercase; color:var(--nexo-gray-500);">Monto</th>
+                    <th style="background:var(--nexo-gray-100); padding:.55rem .85rem; text-align:center; font-size:.65rem; font-weight:700; text-transform:uppercase; color:var(--nexo-gray-500);">Dias</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dte in compras.lista_pendientes %}
+                <tr>
+                    <td style="padding:.55rem .85rem; border-bottom:1px solid var(--nexo-gray-100); font-size:.8rem;">
+                        <span class="badge bg-info me-1" style="font-size:.6rem;">{{ dte.tipo }}</span>
+                        <strong>#{{ dte.numero }}</strong>
+                    </td>
+                    <td style="padding:.55rem .85rem; border-bottom:1px solid var(--nexo-gray-100); font-size:.8rem;">{{ dte.emisor }}</td>
+                    <td style="padding:.55rem .85rem; border-bottom:1px solid var(--nexo-gray-100); font-size:.8rem; text-align:center;">{{ dte.fecha }}</td>
+                    <td style="padding:.55rem .85rem; border-bottom:1px solid var(--nexo-gray-100); font-size:.8rem; text-align:right; font-weight:600;">${{ dte.monto|floatformat:0|intcomma }}</td>
+                    <td style="padding:.55rem .85rem; border-bottom:1px solid var(--nexo-gray-100); font-size:.8rem; text-align:center;">
+                        {% if dte.urgente %}<span class="badge bg-danger">{{ dte.dias }}d</span>{% else %}<span class="badge bg-secondary">{{ dte.dias }}d</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- ===== Links a Dashboards ===== -->
+    <div class="home-section-title">
+        <i class="ri-compass-3-line text-primary"></i> Ir a Dashboards
+    </div>
+    <div class="home-nav-row">
+        <a href="{% url 'dashboard_ventas_mejorado' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(0,212,170,.15); color:var(--nexo-accent);"><i class="ri-line-chart-line"></i></div>
+            <span class="home-nav-label">Dashboard Ventas</span>
+        </a>
+        <a href="{% url 'dashboard_productos' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(139,92,246,.15); color:#8B5CF6;"><i class="ri-t-shirt-line"></i></div>
+            <span class="home-nav-label">Dashboard Productos</span>
+        </a>
+        <a href="{% url 'dashboard_compras_estrategico' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(0,102,255,.15); color:var(--nexo-primary);"><i class="ri-shopping-bag-line"></i></div>
+            <span class="home-nav-label">Dashboard Compras</span>
+        </a>
+    </div>
+
+    <!-- ===== Acciones Rapidas ===== -->
+    <div class="home-section-title">
+        <i class="ri-flashlight-line"></i> Acciones Rapidas
+    </div>
+    <div class="home-quick-grid">
+        <a href="{% url 'pos_dashboard' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(0,212,170,.15); color:var(--nexo-accent);"><i class="ri-shopping-cart-2-line"></i></div>
+            <span class="home-nav-label">Nueva Venta (POS)</span>
+        </a>
+        <a href="{% url 'modulo_requerimientos' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(255,176,32,.15); color:var(--nexo-warning);"><i class="ri-customer-service-2-line"></i></div>
+            <span class="home-nav-label">Nuevo Requerimiento</span>
+        </a>
+        <a href="{% url 'recepcion_dte' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(0,102,255,.15); color:var(--nexo-primary);"><i class="ri-inbox-archive-line"></i></div>
+            <span class="home-nav-label">Recepcionar DTE</span>
+        </a>
+        <a href="{% url 'gestion_cambios_devoluciones' %}" class="home-nav-btn">
+            <div class="home-nav-icon" style="background:rgba(255,77,77,.15); color:var(--nexo-error);"><i class="ri-exchange-line"></i></div>
+            <span class="home-nav-label">Cambios y Devoluciones</span>
+        </a>
+    </div>
+
+</div>
 </div>
 
 <script>
-setInterval(function() {}, 300000);
-
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.nexo-kpi-value, .nexo-stat-value, .nexo-module-badge').forEach(function(el) {
-        let text = el.textContent.trim();
-        if (text.includes('$')) {
-            let digits = text.replace(/[^\d]/g, '');
-            let num = parseInt(digits, 10);
-            if (!isNaN(num)) {
-                el.textContent = '$' + num.toLocaleString('es-CL');
-            }
+    document.querySelectorAll('.home-kpi-val, .home-kpi-sv, .home-panel-stat-val, .home-panel-badge').forEach(function(el) {
+        var text = el.textContent.trim();
+        if (text.indexOf('$') === 0) {
+            var digits = text.replace(/[^\d]/g, '');
+            var num = parseInt(digits, 10);
+            if (!isNaN(num)) { el.textContent = '$' + num.toLocaleString('es-CL'); }
         }
     });
-
-    // Chart: Ventas por Hora
-    var ventasPorHora = {{ ventas.ventas_por_hora|safe }};
-    if (ventasPorHora && ventasPorHora.length > 0) {
-        new Chart(document.getElementById('chartVentasHora'), {
-            type: 'line',
-            data: {
-                labels: ventasPorHora.map(function(v) { return v.hora + ':00'; }),
-                datasets: [{
-                    label: 'Monto ($)',
-                    data: ventasPorHora.map(function(v) { return v.monto; }),
-                    borderColor: '#0066FF',
-                    backgroundColor: 'rgba(0,102,255,.1)',
-                    fill: true,
-                    tension: .4,
-                    pointRadius: 3,
-                    pointBackgroundColor: '#0066FF',
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, ticks: { callback: function(v) { return '$' + v.toLocaleString('es-CL'); } } },
-                    x: { ticks: { maxTicksLimit: 12 } }
-                }
-            }
-        });
-    }
-
-    // Chart: Top 5 Productos
-    {% if top_productos %}
-    var topData = [
-        {% for p in top_productos|slice:":5" %}
-        { nombre: "{{ p.producto|truncatechars:20 }}", unidades: {{ p.unidades }}, monto: {{ p.monto|floatformat:0 }} }{% if not forloop.last %},{% endif %}
-        {% endfor %}
-    ];
-    if (topData.length > 0) {
-        new Chart(document.getElementById('chartTopProductos'), {
-            type: 'bar',
-            data: {
-                labels: topData.map(function(p) { return p.nombre; }),
-                datasets: [{
-                    label: 'Unidades',
-                    data: topData.map(function(p) { return p.unidades; }),
-                    backgroundColor: ['#0066FF','#00D4AA','#FFB020','#FF4D4D','#6559cc'],
-                    borderRadius: 8,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: 'y',
-                plugins: { legend: { display: false } },
-                scales: { x: { beginAtZero: true } }
-            }
-        });
-    }
-    {% endif %}
-});
-
-document.getElementById('refreshBtn').addEventListener('click', function() {
-    this.classList.add('loading');
 });
 </script>
 

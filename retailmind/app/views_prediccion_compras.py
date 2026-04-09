@@ -33,11 +33,41 @@ from .services.prediccion_compras import ejecutar_pipeline_completo
 
 logger = logging.getLogger('app')
 
+TIPOS_SUCURSAL_VENTA = ['VENDEDORA', 'MIXTA']
+
 
 def _decimal_to_float(obj):
     if isinstance(obj, Decimal):
         return float(obj)
     raise TypeError
+
+
+def _get_sucursal_context(request):
+    """
+    Devuelve (sucursal, es_cd) desde la sesión del usuario.
+    - Si la sucursal activa es VENDEDORA/MIXTA: filtra a esa sucursal.
+    - Si es CENTRO_DISTRIBUCION: muestra vista agregada de todas las vendedoras.
+    - Si no hay sucursal en sesión: vista agregada.
+    """
+    suc_id = request.session.get('idSucursalActual')
+    if not suc_id:
+        return None, True
+    try:
+        suc = Sucursal.objects.get(id=suc_id)
+    except Sucursal.DoesNotExist:
+        return None, True
+    es_cd = suc.es_centro_distribucion or suc.tipo_sucursal == 'CENTRO_DISTRIBUCION'
+    return suc, es_cd
+
+
+def _q_sucursal_productos(suc, es_cd, prefix=''):
+    """
+    Q filter para productos según contexto de sucursal.
+    prefix: '' para Producto, 'articulo__' para ClasificacionABC, etc.
+    """
+    if es_cd or not suc:
+        return Q(**{f'{prefix}sucursal__tipo_sucursal__in': TIPOS_SUCURSAL_VENTA})
+    return Q(**{f'{prefix}sucursal': suc})
 
 
 # ──────────────────────────────────────────────────────────────
@@ -46,7 +76,12 @@ def _decimal_to_float(obj):
 
 @login_required
 def dashboard_prediccion(request):
-    return render(request, 'vistas/modulo_dashboards/prediccion_compras_dashboard.html')
+    suc, es_cd = _get_sucursal_context(request)
+    suc_nombre = suc.alias if suc else 'Todas las sucursales'
+    return render(request, 'vistas/modulo_dashboards/prediccion_compras_dashboard.html', {
+        'sucursal_nombre': suc_nombre,
+        'es_centro_distribucion': es_cd,
+    })
 
 
 # ──────────────────────────────────────────────────────────────
@@ -56,10 +91,16 @@ def dashboard_prediccion(request):
 @login_required
 @require_GET
 def api_prediccion_resumen(request):
-    alertas_vel = AlertaVelocidad.objects.filter(resuelta=False)
-    alertas_quiebre = AlertaQuiebreTalle.objects.filter(resuelta=False)
-    sugerencias = SugerenciaCompra.objects.filter(aprobada=False,
-                                                    articulo_talle__producto__excluir_de_analitica=False)
+    suc, es_cd = _get_sucursal_context(request)
+    q_prod = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
+    q_prod_sug = _q_sucursal_productos(suc, es_cd, prefix='articulo_talle__producto__')
+
+    alertas_vel = AlertaVelocidad.objects.filter(q_prod, resuelta=False)
+    alertas_quiebre = AlertaQuiebreTalle.objects.filter(q_prod, resuelta=False)
+    sugerencias = SugerenciaCompra.objects.filter(
+        q_prod_sug, aprobada=False,
+        articulo_talle__producto__excluir_de_analitica=False,
+    )
 
     vel_criticas = alertas_vel.filter(urgencia='CRITICA').count()
     vel_altas = alertas_vel.filter(urgencia='ALTA').count()
@@ -70,14 +111,37 @@ def api_prediccion_resumen(request):
         total=Sum('unidades_a_pedir'))['total'] or 0
     total_sugerencias = sugerencias.count()
 
+    q_abc_suc = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
     abc_dist = ClasificacionABC.objects.filter(
-        articulo__excluir_de_analitica=False,
+        q_abc_suc, articulo__excluir_de_analitica=False,
     ).values('clasificacion_abc').annotate(
         count=Count('id')).order_by('clasificacion_abc')
     xyz_dist = ClasificacionABC.objects.filter(
-        articulo__excluir_de_analitica=False,
+        q_abc_suc, articulo__excluir_de_analitica=False,
     ).values('clasificacion_xyz').annotate(
         count=Count('id')).order_by('clasificacion_xyz')
+
+    from .models.inventario import Movimientos_Producto
+    from django.db.models import Min, Max
+    from django.db.models.functions import ExtractYear
+
+    q_mov_suc = _q_sucursal_productos(suc, es_cd, prefix='ProductoTalla__producto__')
+    ventas_conceptos = ['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA_TICKET']
+    ventas_qs = Movimientos_Producto.objects.filter(
+        q_mov_suc, concepto__in=ventas_conceptos,
+    )
+    ventas_stats = ventas_qs.aggregate(
+        total=Count('id'),
+        fecha_min=Min('fecha'),
+        fecha_max=Max('fecha'),
+    )
+    ventas_migradas = ventas_qs.filter(referencia_externa__startswith='MIG:').count()
+    ventas_nuevas = (ventas_stats['total'] or 0) - ventas_migradas
+
+    ventas_por_anio = list(
+        ventas_qs.annotate(yr=ExtractYear('fecha'))
+        .values('yr').annotate(n=Count('id')).order_by('yr')
+    )
 
     return JsonResponse({
         'alertas': {
@@ -95,6 +159,14 @@ def api_prediccion_resumen(request):
         },
         'clasificacion_abc': {d['clasificacion_abc']: d['count'] for d in abc_dist},
         'clasificacion_xyz': {d['clasificacion_xyz']: d['count'] for d in xyz_dist},
+        'datos_historicos': {
+            'ventas_totales': ventas_stats['total'] or 0,
+            'ventas_migradas': ventas_migradas,
+            'ventas_nuevas': ventas_nuevas,
+            'fecha_min': ventas_stats['fecha_min'].isoformat() if ventas_stats['fecha_min'] else None,
+            'fecha_max': ventas_stats['fecha_max'].isoformat() if ventas_stats['fecha_max'] else None,
+            'por_anio': {str(r['yr']): r['n'] for r in ventas_por_anio if r['yr']},
+        },
     })
 
 
@@ -105,8 +177,10 @@ def api_prediccion_resumen(request):
 @login_required
 @require_GET
 def api_prediccion_clasificacion(request):
+    suc, es_cd = _get_sucursal_context(request)
+    q_suc = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
     clasificaciones = ClasificacionABC.objects.filter(
-        articulo__excluir_de_analitica=False,
+        q_suc, articulo__excluir_de_analitica=False,
     ).select_related(
         'articulo', 'articulo__atributo1', 'articulo__categoria',
     ).order_by('clasificacion_abc', '-ventas_corregidas')[:500]
@@ -140,7 +214,9 @@ def api_prediccion_clasificacion(request):
 @login_required
 @require_GET
 def api_prediccion_sugerencias(request):
-    filtro = Q(aprobada=False, unidades_a_pedir__gt=0, articulo_talle__producto__excluir_de_analitica=False)
+    suc, es_cd = _get_sucursal_context(request)
+    q_suc = _q_sucursal_productos(suc, es_cd, prefix='articulo_talle__producto__')
+    filtro = Q(q_suc, aprobada=False, unidades_a_pedir__gt=0, articulo_talle__producto__excluir_de_analitica=False)
     origen = request.GET.get('origen')
     if origen:
         filtro &= Q(origen=origen)
@@ -182,8 +258,10 @@ def api_prediccion_sugerencias(request):
 @login_required
 @require_GET
 def api_prediccion_alertas_velocidad(request):
+    suc, es_cd = _get_sucursal_context(request)
+    q_suc = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
     alertas = AlertaVelocidad.objects.filter(
-        resuelta=False,
+        q_suc, resuelta=False,
         articulo__excluir_de_analitica=False,
     ).select_related(
         'articulo', 'articulo__atributo1', 'articulo__categoria',
@@ -232,8 +310,10 @@ def models_urgencia_order():
 @login_required
 @require_GET
 def api_prediccion_alertas_quiebre(request):
+    suc, es_cd = _get_sucursal_context(request)
+    q_suc = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
     alertas = AlertaQuiebreTalle.objects.filter(
-        resuelta=False,
+        q_suc, resuelta=False,
     ).select_related(
         'articulo', 'articulo__atributo1', 'articulo__categoria',
     ).order_by('-porcentaje_demanda_sin_cubrir')[:200]
@@ -471,6 +551,120 @@ def api_prediccion_recalcular(request):
 
 
 # ──────────────────────────────────────────────────────────────
+#  API: Datos para gráficos avanzados
+# ──────────────────────────────────────────────────────────────
+
+@login_required
+@require_GET
+def api_prediccion_graficos(request):
+    """
+    Datos para la tab Gráficos mejorada:
+    1) Tendencia semanal de ventas (últimas 12 semanas)
+    2) Precisión del modelo (MAPE por método)
+    3) Comparativa vs temporada anterior
+    4) Alertas por categoría (heatmap data)
+    """
+    from .models.inventario import Movimientos_Producto
+    from django.db.models.functions import ExtractWeek, ExtractYear, Abs as AbsFunc
+
+    suc, es_cd = _get_sucursal_context(request)
+    q_prod = _q_sucursal_productos(suc, es_cd, prefix='ProductoTalla__producto__')
+    q_prod_alerta = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
+
+    from datetime import timedelta as _td
+    fecha_12sem = date.today() - _td(weeks=12)
+    ventas_sem = (
+        Movimientos_Producto.objects.filter(
+            q_prod,
+            concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA_TICKET'],
+            fecha__gte=fecha_12sem,
+        ).annotate(
+            semana=ExtractWeek('fecha'),
+            yr=ExtractYear('fecha'),
+        ).values('semana', 'yr')
+        .annotate(total=Sum(AbsFunc(F('cantidad'))))
+        .order_by('yr', 'semana')
+    )
+    tendencia = [
+        {'semana': v['semana'], 'anio': v['yr'], 'unidades': int(v['total'] or 0)}
+        for v in ventas_sem
+    ]
+
+    metodos_agg = (
+        PrediccionDemanda.objects.filter(
+            articulo__excluir_de_analitica=False,
+        ).values('metodo_usado')
+        .annotate(
+            n=Count('id'),
+            conf_avg=Avg('confianza'),
+        ).order_by('metodo_usado')
+    )
+    precision = [
+        {
+            'metodo': m['metodo_usado'],
+            'cantidad': m['n'],
+            'confianza_promedio': round(float(m['conf_avg'] or 0) * 100, 1),
+        }
+        for m in metodos_agg
+    ]
+
+    t_def, a_def = _prediccion_default_temporada_anio()
+    anio_actual = a_def
+    anio_anterior = anio_actual - 1
+
+    def _ventas_por_cat(anio_temp):
+        return dict(
+            Movimientos_Producto.objects.filter(
+                q_prod,
+                concepto__in=['VENTA_PUBLICO', 'VENTA_MAYORISTA', 'VENTA_DIRECTA', 'VENTA_TICKET'],
+                ProductoTalla__producto__anio_temporada=anio_temp,
+            ).values('ProductoTalla__producto__categoria__nombre')
+            .annotate(total=Sum(AbsFunc(F('cantidad'))))
+            .values_list('ProductoTalla__producto__categoria__nombre', 'total')
+        )
+
+    ventas_act = _ventas_por_cat(anio_actual)
+    ventas_ant = _ventas_por_cat(anio_anterior)
+    categorias_all = sorted(set(list(ventas_act.keys()) + list(ventas_ant.keys())))
+    comparativa = [
+        {
+            'categoria': cat or 'Sin categoría',
+            'actual': int(ventas_act.get(cat, 0) or 0),
+            'anterior': int(ventas_ant.get(cat, 0) or 0),
+        }
+        for cat in categorias_all[:15]
+    ]
+
+    alertas_cat = (
+        AlertaVelocidad.objects.filter(q_prod_alerta, resuelta=False)
+        .values('articulo__categoria__nombre', 'urgencia')
+        .annotate(n=Count('id'))
+        .order_by('articulo__categoria__nombre')
+    )
+    heatmap = {}
+    for row in alertas_cat:
+        cat = row['articulo__categoria__nombre'] or 'Sin categoría'
+        if cat not in heatmap:
+            heatmap[cat] = {'CRITICA': 0, 'ALTA': 0, 'MEDIA': 0}
+        heatmap[cat][row['urgencia']] = row['n']
+    heatmap_list = [
+        {'categoria': cat, **vals}
+        for cat, vals in sorted(heatmap.items(), key=lambda x: -(x[1].get('CRITICA', 0) + x[1].get('ALTA', 0)))
+    ][:15]
+
+    return JsonResponse({
+        'tendencia_semanal': tendencia,
+        'precision_modelo': precision,
+        'comparativa_temporal': {
+            'anio_actual': anio_actual,
+            'anio_anterior': anio_anterior,
+            'categorias': comparativa,
+        },
+        'heatmap_alertas': heatmap_list,
+    }, json_dumps_params={'default': _decimal_to_float})
+
+
+# ──────────────────────────────────────────────────────────────
 #  API: Configuración
 # ──────────────────────────────────────────────────────────────
 
@@ -582,27 +776,6 @@ def _q_categoria_canonical(canonical, prefix=''):
 
 
 def _weighted_velocidad_rows(rows):
-    """Promedio ponderado por total_articulos_base."""
-    wsum = 0
-    p25 = p50 = p75 = st = 0.0
-    for r in rows:
-        w = int(r.total_articulos_base or 0)
-        if w <= 0:
-            w = 1
-        p25 += float(r.velocidad_semanas_p25 or 0) * w
-        p50 += float(r.velocidad_semanas_p50 or 0) * w
-        p75 += float(r.velocidad_semanas_p75 or 0) * w
-        st += float(r.sellthrough_p50 or 0) * w
-        wsum += w
-    if wsum <= 0:
-        return None
-    inv = 1.0 / wsum
-    return {
-        'p25': p25 * inv,
-        'p50': p50 * inv,
-        'p75': p75 * inv,
-        'sellthrough': st * inv,
-    }
     """Promedio ponderado por total_articulos_base."""
     wsum = 0
     p25 = p50 = p75 = st = 0.0

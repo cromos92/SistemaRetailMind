@@ -702,11 +702,12 @@ class Command(BaseCommand):
                 duplicados += 1
                 continue
             
-            # Calcular precios
+            # Calcular precios (sobreprecio = precio - costo, misma formula que la UI)
             costo = self.safe_int(row['costo'])
+            precio_publico = self.safe_int(row['precio_publico'])
             precio_interno = self.safe_int(row['precio_interno'])
-            sobreprecio = max(0, precio_interno - costo)
-            precio = self.safe_int(row['precio_publico']) or precio_interno
+            precio = precio_publico or precio_interno
+            sobreprecio = max(0, precio - costo)
             
             if not self.dry_run:
                 batch.append(Dte_Productos(

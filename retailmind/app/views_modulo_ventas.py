@@ -1229,8 +1229,8 @@ def pos_dashboard(request):
                 limite_descuento_rol = float(resultado['max_limite'])
     
     # Verificar si el usuario es administrador
-    es_admin = request.user.is_staff or request.user.is_superuser
-    
+    es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+
     context = {
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
         'estado_ticket_choices': ESTADO_TICKET_CHOICES,
@@ -1613,7 +1613,7 @@ def anular_ticket_pendiente(request):
         # ===== ELIMINACIÓN DE DIFERENCIA DE CAMBIO (Solo Admin) =====
         if eliminar_diferencia:
             # Verificar que sea administrador
-            if not (request.user.is_staff or request.user.is_superuser):
+            if getattr(request.user, 'rol', '') not in ['administrador', 'administracion']:
                 return JsonResponse({
                     'success': False,
                     'error': '⛔ Solo los administradores pueden eliminar diferencias de cambio'
@@ -1648,6 +1648,13 @@ def anular_ticket_pendiente(request):
             })
         
         # ===== ANULACIÓN NORMAL DE TICKET =====
+        # No permitir anulación directa de tickets de cambio/devolución
+        if ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
+            return JsonResponse({
+                'success': False,
+                'error': 'Los tickets de cambio/devolución no se pueden anular. Use la opción "Eliminar diferencia" desde la sección de Cambios (solo Admin).'
+            })
+        
         # Verificar que esté en estado PENDIENTE
         if ticket.estado != 'PENDIENTE':
             return JsonResponse({
@@ -2171,6 +2178,10 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             sobreprecio_unitario = 0
             descripcion_prod = tp.descripcion_linea or 'Ítem pendiente de despacho'
 
+        dcto_unit = tp.descuento_unitario or 0
+        dcto_pct = float(tp.porcentaje_descuento or 0)
+        dcto_monto_linea = dcto_unit * tp.stock if dcto_unit else 0
+
         Dte_Productos.objects.create(
             dte=dte,
             productoTalla=tp.ProductoTalla,
@@ -2178,6 +2189,10 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             costo=costo_unitario,
             sobreprecio=sobreprecio_unitario,
             precio=tp.precio,
+            precio_unitario=tp.precio,
+            descuento_pct=dcto_pct if dcto_pct > 0 else None,
+            descuento_monto=dcto_monto_linea if dcto_monto_linea > 0 else None,
+            monto_item=tp.subtotal,
             descripcion=descripcion_prod[:255],
             es_pendiente_despacho=tp.es_pendiente_despacho,
         )
@@ -2319,16 +2334,24 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                         else:
                             nombre_producto = producto.articulo if producto else str(sku)
                     
-                    precio_con_iva = tp.precio
-                    total_linea = precio_con_iva * tp.stock
+                    if not es_boleta:
+                        precio_unitario_txt = int(round(Decimal(tp.precio) / Decimal('1.19')))
+                        monto_descuento_txt = int(round(Decimal(tp.descuento_unitario * tp.stock) / Decimal('1.19'))) if tp.descuento_unitario else 0
+                        monto_item_txt = int(round(Decimal(tp.subtotal) / Decimal('1.19')))
+                    else:
+                        precio_unitario_txt = tp.precio
+                        monto_descuento_txt = 0
+                        monto_item_txt = tp.precio * tp.stock
                     
                     productos_txt.append({
                         'sku': sku,
                         'nombre': nombre_producto[:80],
-                        'descripcion': '',  # Dejar vacío para evitar duplicados
+                        'descripcion': '',
                         'cantidad': tp.stock,
-                        'precio_unitario': precio_con_iva,
-                        'total': total_linea
+                        'precio_unitario': precio_unitario_txt,
+                        'descuento_pct': float(tp.porcentaje_descuento) if tp.porcentaje_descuento else 0,
+                        'monto_descuento': monto_descuento_txt,
+                        'total': monto_item_txt
                     })
             
             # Importar función de limpieza para eliminar acentos y caracteres especiales
@@ -2374,28 +2397,59 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     'monto_exento': 0,
                     'tasa_iva': 19,
                     'iva': int(iva),
-                    'monto_total': int(total)
+                    'monto_total': int(total),
+                    'descuento_global': 0
                 },
                 'detalle': [],
                 'observaciones': ticket.observaciones or '',
                 'observaciones_adicionales': ticket.observaciones_adicionales or ''
             }
             
-            # ✅ Agregar productos al detalle (usar productos_txt preparados arriba)
-            # ✅ Aplicar limpiar_texto para eliminar acentos y Ñ en nombres de productos
             for prod_txt in productos_txt:
-                # Asegurar que SKU sea string para poder hacer slicing
                 sku_str = str(prod_txt.get('sku', ''))
                 datos_txt['detalle'].append({
-                    'codigo': limpiar_texto(sku_str[:35]),  # SKU como código (máx 35 chars)
+                    'codigo': limpiar_texto(sku_str[:35]),
                     'sku': limpiar_texto(sku_str),
-                    'nombre': limpiar_texto(prod_txt['nombre']),  # Nombre/descripción del producto (sin acentos ni Ñ)
+                    'nombre': limpiar_texto(prod_txt['nombre']),
                     'descripcion': limpiar_texto(prod_txt.get('descripcion', '')),
                     'cantidad': prod_txt['cantidad'],
                     'unidad': 'UN',
                     'precio_unitario': prod_txt['precio_unitario'],
+                    'descuento_pct': prod_txt.get('descuento_pct', 0),
+                    'monto_descuento': prod_txt.get('monto_descuento', 0),
                     'monto_item': prod_txt['total']
                 })
+            
+            # Detect discounts (per-item or global) and add Tabla 4 block + fix total
+            descuento_items = sum(
+                (tp.descuento_unitario or 0) * tp.stock
+                for tp in ticket.ticket_productos.all()
+            )
+            descuento_ticket = int(ticket.descuento or 0)
+            descuento_efectivo = descuento_items if descuento_items > 0 else descuento_ticket
+
+            suma_items_txt = sum(d['monto_item'] for d in datos_txt['detalle'])
+
+            if descuento_efectivo > 0:
+                datos_txt['descuentos_recargos'] = [{
+                    'tpo_mov': 'D',
+                    'glosa_dr': 'Descuento',
+                    'tpo_valor': '$',
+                    'valor_dr': descuento_efectivo,
+                }]
+                total_correcto = suma_items_txt - descuento_efectivo
+                if total_correcto > 0:
+                    datos_txt['totales']['monto_total'] = total_correcto
+                print(f"TXT: Descuento ${descuento_efectivo:,} aplicado. Items: ${suma_items_txt:,}, Total: ${total_correcto:,}")
+            elif suma_items_txt > int(total) and int(total) > 0:
+                diferencia_desc = suma_items_txt - int(total)
+                print(f"TXT: Items sum ({suma_items_txt}) > Total ({int(total)}). Adding discount section: ${diferencia_desc:,}")
+                datos_txt['descuentos_recargos'] = [{
+                    'tpo_mov': 'D',
+                    'glosa_dr': 'Descuento',
+                    'tpo_valor': '$',
+                    'valor_dr': diferencia_desc,
+                }]
             
             # Generar TXT
             contenido_txt = generar_txt_dte_acepta(datos_txt)
@@ -2840,98 +2894,143 @@ def registrar_pagos_ticket(request, correlativo):
 
     # ✅ NUEVO: Procesar productos actualizados (incluye productos agregados como bolsas)
     # IMPORTANTE: Si es cotización, los productos ya fueron creados al crear el ticket
+    # IMPORTANTE: Si es cambio/devolución, NO se permiten cambios en los productos
     productos_payload = payload.get('productos', [])
-    if productos_ya_creados_desde_cotizacion:
+    if ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
+        print(f"⏭️ Saltando procesamiento de productos (ticket de cambio/devolución — productos bloqueados)")
+    elif productos_ya_creados_desde_cotizacion:
         print(f"⏭️ Saltando procesamiento de productos (ya creados desde cotización)")
     elif productos_payload and isinstance(productos_payload, list):
-        print(f"📦 Procesando {len(productos_payload)} productos del payload")
-        
-        # Obtener SKUs de productos existentes en el ticket (solo los que tienen ProductoTalla)
-        productos_existentes = {
-            tp.ProductoTalla.sku: tp
-            for tp in ticket.ticket_productos.select_related('ProductoTalla').all()
-            if tp.ProductoTalla is not None
-        }
-        skus_existentes = set(productos_existentes.keys())
-        skus_payload = set()
-        
+        print(f"📦 Procesando {len(productos_payload)} líneas del payload")
+
+        from collections import defaultdict
+
+        # --- Agrupar Ticket_Productos existentes por SKU (lista, no dict) ---
+        existentes_por_sku = defaultdict(list)
+        pt_por_sku = {}
+        for tp in ticket.ticket_productos.select_related('ProductoTalla', 'ProductoTalla__producto').all():
+            if tp.ProductoTalla is not None:
+                existentes_por_sku[tp.ProductoTalla.sku].append(tp)
+                pt_por_sku[tp.ProductoTalla.sku] = tp.ProductoTalla
+
+        # --- Validar stock total por SKU (solo cuando la cantidad total cambia) ---
+        cantidades_payload_sku = defaultdict(int)
+        for pd in productos_payload:
+            s = pd.get('sku', '')
+            if s:
+                cantidades_payload_sku[s] += int(pd.get('cantidad', 1))
+
+        for sku_val, cant_payload in cantidades_payload_sku.items():
+            cant_existente = sum(tp.stock for tp in existentes_por_sku.get(sku_val, []))
+            if cant_payload > cant_existente:
+                pt = pt_por_sku.get(sku_val)
+                if not pt:
+                    pt = Producto_Talla.objects.filter(
+                        sku=sku_val, producto__sucursal_id=ticket.sucursal_id
+                    ).select_related('producto').first()
+                if pt:
+                    stock_real = pt.stock_sucursal(ticket.sucursal_id)
+                    if cant_payload > stock_real:
+                        print(f"  ❌ Stock insuficiente total SKU {sku_val}: solicitado={cant_payload}, disponible={stock_real}")
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Stock insuficiente para SKU {sku_val} ({pt.producto.articulo}). '
+                                     f'Disponible: {stock_real}, Solicitado: {cant_payload}.',
+                            'error_tipo': 'STOCK_INSUFICIENTE',
+                            'sku': str(sku_val),
+                            'stock_disponible': stock_real,
+                            'stock_requerido': cant_payload,
+                        }, status=400)
+
+        ids_existentes_usados = set()
+
         for prod_data in productos_payload:
             sku = prod_data.get('sku', '')
             if not sku:
                 continue
-                
-            skus_payload.add(sku)
+
             cantidad = int(prod_data.get('cantidad', 1))
             precio_unitario = int(prod_data.get('precio_unitario', 0))
             descuento_unitario = int(prod_data.get('descuento_unitario', 0))
             subtotal = int(prod_data.get('subtotal', cantidad * precio_unitario))
-            
-            if sku in skus_existentes:
-                # Producto ya existe - validar stock ANTES de actualizar cantidad
-                tp_existente = productos_existentes[sku]
-                if tp_existente.stock != cantidad or tp_existente.precio != precio_unitario:
-                    # ✅ Validar stock real en sucursal antes de guardar
-                    stock_real = tp_existente.ProductoTalla.stock_sucursal(ticket.sucursal_id)
-                    if cantidad > stock_real:
-                        print(f"  ❌ Stock insuficiente payload (existente) SKU {sku}: solicitado={cantidad}, disponible={stock_real}")
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'Stock insuficiente para SKU {sku} ({tp_existente.ProductoTalla.producto.articulo}). '
-                                     f'Disponible: {stock_real}, Solicitado: {cantidad}.',
-                            'error_tipo': 'STOCK_INSUFICIENTE',
-                            'sku': str(sku),
-                            'stock_disponible': stock_real,
-                            'stock_requerido': cantidad,
-                        }, status=400)
-                    print(f"  📝 Actualizando producto {sku}: cantidad {tp_existente.stock} → {cantidad}")
-                    tp_existente.stock = cantidad
-                    tp_existente.precio = precio_unitario
-                    tp_existente.descuento_unitario = descuento_unitario
-                    tp_existente.subtotal = subtotal
-                    tp_existente.save()
+            porcentaje_descuento = round((descuento_unitario / precio_unitario) * 100, 2) if precio_unitario > 0 and descuento_unitario > 0 else 0
+
+            # Buscar un TP existente del mismo SKU que aún no haya sido emparejado
+            tp_match = None
+            candidatos = existentes_por_sku.get(sku, [])
+            for tp_c in candidatos:
+                if tp_c.id not in ids_existentes_usados:
+                    tp_match = tp_c
+                    break
+
+            if tp_match:
+                ids_existentes_usados.add(tp_match.id)
+                algo_cambio = (
+                    tp_match.stock != cantidad
+                    or tp_match.precio != precio_unitario
+                    or tp_match.descuento_unitario != descuento_unitario
+                    or tp_match.subtotal != subtotal
+                )
+                if algo_cambio:
+                    print(f"  📝 Actualizando línea #{tp_match.id} SKU {sku}: cant={tp_match.stock}→{cantidad}, dcto={tp_match.descuento_unitario}→{descuento_unitario}")
+                    tp_match.stock = cantidad
+                    tp_match.precio = precio_unitario
+                    tp_match.descuento_unitario = descuento_unitario
+                    tp_match.porcentaje_descuento = porcentaje_descuento
+                    tp_match.subtotal = subtotal
+                    tp_match.save()
             else:
-                # Producto NUEVO - buscar Producto_Talla y agregarlo
                 producto_talla_id = prod_data.get('producto_talla_id')
                 producto_talla = None
-                
                 if producto_talla_id:
                     producto_talla = Producto_Talla.objects.filter(id=producto_talla_id).first()
-                
                 if not producto_talla:
                     producto_talla = Producto_Talla.objects.filter(sku=sku).first()
-                
+
                 if producto_talla:
-                    # ✅ Validar stock real en sucursal antes de crear línea nueva
-                    stock_real = producto_talla.stock_sucursal(ticket.sucursal_id)
-                    if cantidad > stock_real:
-                        print(f"  ❌ Stock insuficiente payload (nuevo) SKU {sku}: solicitado={cantidad}, disponible={stock_real}")
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'Stock insuficiente para SKU {sku} ({producto_talla.producto.articulo}). '
-                                     f'Disponible: {stock_real}, Solicitado: {cantidad}.',
-                            'error_tipo': 'STOCK_INSUFICIENTE',
-                            'sku': str(sku),
-                            'stock_disponible': stock_real,
-                            'stock_requerido': cantidad,
-                        }, status=400)
-                    print(f"  ➕ Agregando nuevo producto {sku}: cantidad={cantidad}, precio=${precio_unitario}")
-                    Ticket_Productos.objects.create(
-                        idTicket=ticket,  # ✅ Nombre correcto del campo
+                    print(f"  ➕ Creando nueva línea SKU {sku}: cantidad={cantidad}, dcto={descuento_unitario}")
+                    tp_nuevo = Ticket_Productos.objects.create(
+                        idTicket=ticket,
                         ProductoTalla=producto_talla,
                         stock=cantidad,
                         precio=precio_unitario,
                         precio_original=precio_unitario,
                         descuento_unitario=descuento_unitario,
                         subtotal=subtotal,
-                        porcentaje_descuento=0
+                        porcentaje_descuento=porcentaje_descuento
                     )
+                    ids_existentes_usados.add(tp_nuevo.id)
                 else:
                     print(f"  ⚠️ ProductoTalla no encontrado para SKU {sku}")
-        
-        # Recalcular totales del ticket
-        nuevo_subtotal = sum(tp.subtotal for tp in ticket.ticket_productos.all())
-        ticket.total = nuevo_subtotal
-        print(f"  💰 Nuevo total del ticket: ${ticket.total:,}")
+
+        # Eliminar líneas huérfanas (existían en DB pero ya no están en el payload)
+        for sku_list in existentes_por_sku.values():
+            for tp_orphan in sku_list:
+                if tp_orphan.id not in ids_existentes_usados:
+                    print(f"  🗑️ Eliminando línea huérfana #{tp_orphan.id} SKU {tp_orphan.ProductoTalla.sku}")
+                    tp_orphan.delete()
+
+        # Recalcular totales del ticket — authoritative server-side calc
+        todas_lineas = list(ticket.ticket_productos.all())
+        nuevo_descuento_prod = sum((tp.descuento_unitario or 0) * tp.stock for tp in todas_lineas)
+
+        # Recalculate each line's subtotal so we never trust a faulty
+        # frontend value (e.g. JS `0 || gross` gives gross instead of 0).
+        for tp in todas_lineas:
+            correcto = (tp.precio - (tp.descuento_unitario or 0)) * tp.stock
+            if tp.subtotal != correcto:
+                print(f"  🔧 Corrigiendo subtotal SKU {tp.ProductoTalla.sku if tp.ProductoTalla else '?'}: {tp.subtotal} → {correcto}")
+                tp.subtotal = correcto
+                tp.save(update_fields=['subtotal'])
+
+        nuevo_subtotal = sum(tp.subtotal for tp in todas_lineas)
+        if nuevo_descuento_prod > 0:
+            ticket.descuento = nuevo_descuento_prod
+            ticket.total = nuevo_subtotal
+        else:
+            descuento_previo = ticket.descuento or 0
+            ticket.total = nuevo_subtotal - descuento_previo
+        print(f"  💰 Nuevo total del ticket: ${ticket.total:,} (descuento: ${ticket.descuento or 0:,})")
 
     pagos = payload.get('pagos') or []
     ids_existentes = list(ticket.pagos.values_list('id', flat=True))
@@ -3091,6 +3190,40 @@ def registrar_pagos_ticket(request, correlativo):
                     print(f"✓ Movimiento de registro creado sin descuento adicional")
     elif ticket_se_pago and ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
         print(f"ℹ️  TICKET DE CAMBIO/DEVOLUCIÓN #{ticket.correlativo}: Stock ya fue ajustado al aprobar el cambio. No se descuenta nuevamente.")
+        
+        # Auto-completar el CambioDevolucion asociado
+        cambio_asociado = CambioDevolucion.objects.filter(
+            ticket_nuevo=ticket,
+            estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']
+        ).first()
+        
+        if not cambio_asociado:
+            cambio_asociado = CambioDevolucion.objects.filter(
+                ticket_diferencia=ticket,
+                estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']
+            ).first()
+        
+        if cambio_asociado:
+            estado_anterior_cd = cambio_asociado.estado
+            cambio_asociado.estado = 'COMPLETADO'
+            cambio_asociado.fecha_completado = timezone.now()
+            if estado_anterior_cd == 'EJECUTADO_COBRO_PENDIENTE':
+                cambio_asociado.fecha_pago_diferencia = timezone.now()
+            cambio_asociado.save()
+            
+            HistorialCambioDevolucion.objects.create(
+                cambio_devolucion=cambio_asociado,
+                accion='COMPLETADO_AUTO',
+                estado_anterior=estado_anterior_cd,
+                estado_nuevo='COMPLETADO',
+                usuario=request.user,
+                descripcion=f'Cambio completado automáticamente al procesar pago del ticket #{ticket.correlativo}.',
+                datos_adicionales={
+                    'ticket_pagado': ticket.correlativo,
+                    'monto_pagado': float(ticket.total),
+                }
+            )
+            print(f"✅ CambioDevolucion #{cambio_asociado.numero_operacion} completado automáticamente (era {estado_anterior_cd})")
     
     # Guardar o actualizar cliente en la base de datos si tiene datos
     if datos_cliente and datos_cliente.get('rut') and datos_cliente.get('nombre'):
@@ -3384,6 +3517,7 @@ def listar_documentos_ventas(request):
             for dp in dte.dte_productos.all():
                 linea_subtotal = dp.precio * dp.stock
                 subtotal_bruto += linea_subtotal
+                dcto_monto = int(dp.descuento_monto or 0)
                 productos.append({
                     'sku': dp.productoTalla.sku if dp.productoTalla else '',
                     'nombre': dp.productoTalla.producto.articulo if dp.productoTalla and dp.productoTalla.producto else dp.descripcion,
@@ -3391,6 +3525,8 @@ def listar_documentos_ventas(request):
                     'cantidad': dp.stock,
                     'precio_unitario': dp.precio,
                     'subtotal': linea_subtotal,
+                    'descuento_monto': dcto_monto,
+                    'monto_item': dp.monto_item or (linea_subtotal - dcto_monto),
                     'costo': dp.costo,
                     'sobreprecio': dp.sobreprecio,
                 })
@@ -3410,8 +3546,6 @@ def listar_documentos_ventas(request):
                 })
             metodos_pago = agrupar_metodos_pago(metodos_pago_raw)
 
-            # monto_lista = precio de catálogo (monto_con_iva, antes de descuento)
-            # total_real  = lo que realmente se cobró (suma de pagos)
             monto_lista = int(dte.monto_con_iva or 0)
             total_real = total_pagos if total_pagos > 0 else monto_lista
 
@@ -3472,7 +3606,7 @@ def listar_documentos_ventas(request):
                 'cliente_comuna': dte.receptor.comuna if dte.receptor else '',
                 'vendedor_nombre': f"{dte.vendedor.codigo_vendedor} - {dte.vendedor.nombre}" if dte.vendedor else 'Sin vendedor',
                 'total': total_real,
-                'subtotal_bruto': monto_lista,
+                'subtotal_bruto': subtotal_bruto,
                 'monto_neto': int(dte.monto_neto or 0),
                 'descuento': descuento_efectivo,
                 'estado': estado_display,
@@ -3942,12 +4076,15 @@ def convertir_ticket_a_factura(request):
                 referencias=f'TICKET-{ticket.correlativo}'
             )
 
-            # Copiar productos del ticket a la factura
+            # Copiar productos del ticket a la factura (con descuentos)
             for ticket_producto in ticket.ticket_productos.all():
-                # Guardar sobreprecio tal cual está en el producto (es un DELTA/MARGEN)
                 costo_unitario = ticket_producto.ProductoTalla.producto.costo
                 sobreprecio_unitario = ticket_producto.ProductoTalla.producto.sobreprecio
                 
+                dcto_u = ticket_producto.descuento_unitario or 0
+                dcto_p = float(ticket_producto.porcentaje_descuento or 0)
+                dcto_linea = dcto_u * ticket_producto.stock if dcto_u else 0
+
                 Dte_Productos.objects.create(
                     dte=factura,
                     productoTalla=ticket_producto.ProductoTalla,
@@ -3955,6 +4092,10 @@ def convertir_ticket_a_factura(request):
                     costo=costo_unitario,
                     sobreprecio=sobreprecio_unitario,
                     precio=ticket_producto.precio,
+                    precio_unitario=ticket_producto.precio,
+                    descuento_pct=dcto_p if dcto_p > 0 else None,
+                    descuento_monto=dcto_linea if dcto_linea > 0 else None,
+                    monto_item=ticket_producto.subtotal,
                     stock=ticket_producto.stock,
                     activo=True
                 )
@@ -4264,7 +4405,7 @@ def revision_arqueos(request):
         return redirect('dashboard')
 
     rol_usuario = getattr(request.user, 'rol', None)
-    es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+    es_supervisor = rol_usuario in ['administrador', 'administracion']
     if not es_supervisor:
         return redirect('cuadratura_caja')
 
@@ -4292,10 +4433,10 @@ def cuadratura_caja(request):
     rol_usuario = getattr(request.user, 'rol', None)
     
     # Verificar si el usuario es administrador (para permisos de reabrir arqueos)
-    es_administrador = request.user.is_superuser or rol_usuario == 'administrador'
+    es_administrador = rol_usuario == 'administrador'
     
     # Verificar si tiene permisos de supervisión (administrador o administración)
-    es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+    es_supervisor = rol_usuario in ['administrador', 'administracion']
 
     # Cajero/vendedor/jefe_local: puede declarar depósitos pero no confirmarlos
     es_cajero = not es_supervisor and rol_usuario in ['cajero', 'vendedor', 'jefe_local']
@@ -5090,7 +5231,7 @@ def obtener_detalle_arqueo(request, arqueo_id):
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         
         rol_usuario = getattr(request.user, 'rol', None)
-        es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
         
         qs = ArqueoCaja.objects.select_related('usuario_responsable', 'sucursal').prefetch_related('depositos')
         if es_supervisor:
@@ -5598,7 +5739,7 @@ def confirmar_deposito(request, deposito_id):
 
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         rol_usuario = getattr(request.user, 'rol', None)
-        es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
 
         if not es_supervisor:
             return JsonResponse({'success': False, 'error': 'Sin permisos. Solo supervisores pueden confirmar depósitos.'}, status=403)
@@ -6250,7 +6391,7 @@ def listar_arqueos(request):
         # Supervisores pueden consultar otra sucursal via query param
         sucursal_override = request.GET.get('sucursal_id')
         rol_usuario = getattr(request.user, 'rol', None)
-        es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
         if sucursal_override and es_supervisor:
             sucursal_id = sucursal_override
         
@@ -6871,7 +7012,7 @@ def revisar_arqueo(request):
     try:
         # Verificar permisos de supervisor
         rol_usuario = getattr(request.user, 'rol', None)
-        es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
         
         if not es_supervisor:
             return JsonResponse({
@@ -6942,7 +7083,7 @@ def registrar_comprobante_supervisor(request):
     try:
         # Verificar permisos de supervisor
         rol_usuario = getattr(request.user, 'rol', None)
-        es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
         
         if not es_supervisor:
             return JsonResponse({
@@ -7038,7 +7179,7 @@ def verificar_deposito(request):
     try:
         # Verificar permisos de supervisor
         rol_usuario = getattr(request.user, 'rol', None)
-        es_supervisor = request.user.is_superuser or rol_usuario in ['administrador', 'administracion']
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
         
         if not es_supervisor:
             return JsonResponse({
@@ -7248,7 +7389,7 @@ def reabrir_arqueo(request):
     """
     try:
         # Verificar que el usuario sea administrador o superusuario
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         
         if not es_admin:
             return JsonResponse({
@@ -8777,6 +8918,8 @@ def listar_cambios_devoluciones(request):
         if estado:
             if estado == 'CANCELADO':
                 queryset = queryset.filter(estado__in=['CANCELADO', 'RECHAZADO', 'REVERTIDO'])
+            elif estado == 'EJECUTADO_COBRO_PENDIENTE':
+                queryset = queryset.filter(estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'])
             else:
                 queryset = queryset.filter(estado=estado)
         if buscar:
@@ -8869,6 +9012,9 @@ def listar_cambios_devoluciones(request):
                 'productos_resumen': productos_resumen,
                 'requiere_autorizacion': cambio.requiere_autorizacion,
                 'autorizado_excepcion': cambio.autorizado_excepcion,
+                'cobro_pendiente': cambio.cobro_pendiente,
+                'devolucion_pendiente': cambio.devolucion_pendiente,
+                'tiene_obligacion_pendiente': cambio.tiene_obligacion_pendiente,
             })
 
         # Estadísticas
@@ -8892,6 +9038,8 @@ def listar_cambios_devoluciones(request):
             'estadisticas': {
                 'total_cambios': total_cambios,
                 'cambios_pendientes': cambios_pendientes,
+                'cambios_aprobados': queryset.filter(estado='APROBADO').count(),
+                'cambios_por_cobrar': queryset.filter(estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']).count(),
                 'cambios_completados': cambios_completados,
                 'total_diferencia': float(total_diferencia),
             }
@@ -8957,14 +9105,24 @@ def crear_cambio_devolucion(request):
                     numero_documento=documento_numero
                 )
                 
-                # Buscar si ya existe un ticket asociado a este DTE
-                # Usar el patrón exacto con guión al final para evitar coincidencias parciales
-                # (ej: buscar DTE #1 no debe encontrar un ticket de DTE #123)
-                ticket_original = Ticket.objects.filter(
-                    observaciones__icontains=f'para DTE #{documento_numero} -'
-                ).first()
+                # Primero: intentar encontrar el ticket ORIGINAL del POS (tiene descuentos correctos)
+                if dte_original.referencias and 'TICKET-' in dte_original.referencias:
+                    try:
+                        corr_orig = dte_original.referencias.split('TICKET-')[1].strip().split()[0]
+                        ticket_original = Ticket.objects.filter(
+                            correlativo=corr_orig,
+                            sucursal_id=sucursal_id,
+                            estado='PAGADO'
+                        ).first()
+                    except Exception:
+                        pass
                 
-                # Fallback: buscar por el patrón antiguo si no se encontró con el nuevo
+                # Si no se encontró el original, buscar ticket de referencia existente
+                if not ticket_original:
+                    ticket_original = Ticket.objects.filter(
+                        observaciones__icontains=f'para DTE #{documento_numero} -'
+                    ).first()
+                
                 if not ticket_original:
                     ticket_original = Ticket.objects.filter(
                         observaciones__icontains=f'DTE #{documento_numero} -'
@@ -8996,18 +9154,29 @@ def crear_cambio_devolucion(request):
                         observaciones=f'Ticket de referencia para DTE #{documento_numero} - {dte_original.tipo_documento}'
                     )
                     
-                    # Copiar productos del DTE al ticket y crear mapeo
+                    # Copiar productos del DTE al ticket y crear mapeo (con descuentos)
                     mapeo_productos = {}  # dte_producto_id → ticket_producto_id
+                    es_boleta_ref = dte_original.tipo_documento in ['39', '41', 'BOLETA ELECTRONICA', 'BOLETA EXENTA']
                     
                     for dp in dte_original.dte_productos.all():
+                        dcto_u = 0
+                        if dp.descuento_monto and dp.stock and dp.stock > 0:
+                            dcto_u = int(dp.descuento_monto / dp.stock)
+                        elif es_boleta_ref and dp.monto_item and dp.stock and dp.stock > 0:
+                            precio_ef = int(dp.monto_item / dp.stock)
+                            if precio_ef < dp.precio:
+                                dcto_u = dp.precio - precio_ef
+                        sub = (dp.precio - dcto_u) * dp.stock
+
                         tp = Ticket_Productos.objects.create(
                             idTicket=ticket_original,
                             ProductoTalla=dp.productoTalla,
                             stock=dp.stock,
                             precio=dp.precio,
                             precio_original=dp.precio,
-                            descuento_unitario=0,
-                            subtotal=dp.precio * dp.stock,
+                            descuento_unitario=dcto_u,
+                            subtotal=sub,
+                            porcentaje_descuento=dp.descuento_pct or 0,
                             descripcion_linea=dp.descripcion if not dp.productoTalla else None,
                             es_pendiente_despacho=dp.es_pendiente_despacho,
                         )
@@ -9095,7 +9264,7 @@ def crear_cambio_devolucion(request):
                 users = User.objects.filter(is_active=True)
                 for user in users:
                     if user.check_password(codigo_autorizacion):
-                        if user.is_superuser or user.groups.filter(name__in=['Supervisor', 'Administrador', 'Encargado', 'Gerente']).exists():
+                        if getattr(user, 'rol', '') in ['administrador', 'administracion', 'jefe_local'] or user.groups.filter(name__in=['Supervisor', 'Administrador', 'Encargado', 'Gerente']).exists():
                             supervisor = user
                             break
             except Exception:
@@ -9109,6 +9278,27 @@ def crear_cambio_devolucion(request):
                 })
             
             supervisor_autorizo = True
+        
+        # Validar que no existan cambios con obligaciones financieras pendientes para este ticket
+        cambios_con_pago_pendiente = CambioDevolucion.objects.filter(
+            ticket_original=ticket_original,
+            estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']
+        ).first()
+        
+        if not cambios_con_pago_pendiente:
+            # También verificar el patrón legacy: COMPLETADO pero ticket_nuevo PENDIENTE
+            cambios_con_pago_pendiente = CambioDevolucion.objects.filter(
+                ticket_original=ticket_original,
+                estado='COMPLETADO',
+                ticket_nuevo__estado='PENDIENTE'
+            ).first()
+        
+        if cambios_con_pago_pendiente:
+            return JsonResponse({
+                'success': False,
+                'error': f'Existe un cambio anterior ({cambios_con_pago_pendiente.numero_operacion}) con pago/devolución pendiente para este documento. '
+                         f'Debe completar esa obligación antes de crear un nuevo cambio.'
+            })
         
         with transaction.atomic():
             # Calcular monto_original basado en el precio efectivo (con descuento aplicado)
@@ -9341,6 +9531,9 @@ def obtener_detalle_cambio(request, cambio_id):
             'diferencia_monto': float(cambio.diferencia_monto),
             'requiere_pago_adicional': cambio.requiere_pago_adicional,
             'genera_devolucion': cambio.genera_devolucion,
+            'cobro_pendiente': cambio.cobro_pendiente,
+            'devolucion_pendiente': cambio.devolucion_pendiente,
+            'tiene_obligacion_pendiente': cambio.tiene_obligacion_pendiente,
             
             # Responsables
             'solicitado_por': cambio.solicitado_por.username,
@@ -9365,6 +9558,8 @@ def obtener_detalle_cambio(request, cambio_id):
                 'cliente_nombre': cambio.ticket_original.cliente_nombre or '',
                 'cliente_rut': cambio.ticket_original.cliente_rut or '',
                 'vendedor': cambio.ticket_original.vendedor.nombre if cambio.ticket_original.vendedor else '',
+                'vendedor_id': cambio.ticket_original.vendedor.id if cambio.ticket_original.vendedor else None,
+                'vendedor_codigo': cambio.ticket_original.vendedor.codigo_vendedor if cambio.ticket_original.vendedor else '',
             },
             'ticket_nuevo': {
                 'correlativo': cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else '',
@@ -9550,11 +9745,15 @@ def revertir_cambio_devolucion(request):
         if cambio.sucursal_id != int(sucursal_id):
             return JsonResponse({'success': False, 'error': 'No tiene acceso a este cambio'})
 
-        if cambio.estado != 'COMPLETADO':
-            return JsonResponse({'success': False, 'error': f'Solo se pueden revertir cambios completados, estado actual: {cambio.get_estado_display()}'})
+        estados_revertibles = ['COMPLETADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'EJECUTADO']
+        if cambio.estado not in estados_revertibles:
+            return JsonResponse({'success': False, 'error': f'Solo se pueden revertir cambios ejecutados o completados, estado actual: {cambio.get_estado_display()}'})
 
-        if not cambio.ticket_nuevo or cambio.ticket_nuevo.estado != 'PENDIENTE':
-            return JsonResponse({'success': False, 'error': 'Solo se pueden revertir cambios cuyo ticket aún no fue pagado'})
+        if not cambio.ticket_nuevo or cambio.ticket_nuevo.estado not in ('PENDIENTE', 'PAGADO'):
+            if cambio.ticket_nuevo and cambio.ticket_nuevo.estado == 'PAGADO' and cambio.estado == 'COMPLETADO':
+                return JsonResponse({'success': False, 'error': 'Este cambio ya fue pagado y completado, no se puede revertir'})
+            if not cambio.ticket_nuevo:
+                return JsonResponse({'success': False, 'error': 'Este cambio no tiene ticket asociado para revertir'})
 
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
 
@@ -9903,9 +10102,10 @@ def ejecutar_cambio_devolucion(request):
                 
                 cambio.ticket_diferencia = ticket_diferencia
                 cambio.estado = 'EJECUTADO_COBRO_PENDIENTE'
+            elif cambio.diferencia_monto < 0:
+                cambio.estado = 'EJECUTADO_DEVOL_PENDIENTE'
             else:
-                # Sin diferencia o diferencia negativa
-                cambio.estado = 'EJECUTADO' if cambio.diferencia_monto == 0 else 'COMPLETADO'
+                cambio.estado = 'COMPLETADO'
             
             # Marcar fecha de ejecución
             cambio.fecha_ejecucion = timezone.now()
@@ -10109,10 +10309,10 @@ def aprobar_cambio_generar_ticket(request):
             })
         
         # Verificar estado
-        if cambio.estado != 'SOLICITADO':
+        if cambio.estado not in ('SOLICITADO', 'APROBADO'):
             return JsonResponse({
                 'success': False,
-                'error': 'Solo se pueden aprobar cambios en estado solicitado'
+                'error': 'Solo se pueden aprobar/ejecutar cambios en estado Solicitado o Aprobado'
             })
         
         # Validar vendedor (vendedor_id es el ID del modelo Vendedor, no User)
@@ -10155,10 +10355,13 @@ def aprobar_cambio_generar_ticket(request):
         print(f"🚀 Iniciando transacción atómica para aprobar cambio #{cambio.id}")
         
         with transaction.atomic():
-            # Aprobar el cambio
-            print(f"1️⃣ Aprobando cambio...")
-            cambio.aprobar_cambio(request.user, observaciones)
-            print(f"   ✅ Cambio aprobado, estado: {cambio.estado}")
+            # Aprobar el cambio (solo si no está ya aprobado)
+            if cambio.estado == 'SOLICITADO':
+                print(f"1️⃣ Aprobando cambio...")
+                cambio.aprobar_cambio(request.user, observaciones)
+                print(f"   ✅ Cambio aprobado, estado: {cambio.estado}")
+            else:
+                print(f"1️⃣ Cambio ya en estado {cambio.estado}, continuando ejecución...")
             
             # GENERAR TICKET DE VENTA
             # Obtener correlativo usando la función centralizada
@@ -10398,55 +10601,37 @@ def aprobar_cambio_generar_ticket(request):
             # Vincular ticket nuevo al cambio
             print(f"6️⃣ Vinculando ticket al cambio...")
             cambio.ticket_nuevo = ticket
+            estado_anterior_cambio = cambio.estado
 
-            # Procesar pago integrado si se envió
-            pago_diferencia_data = data.get('pago_diferencia')
-            if pago_diferencia_data and diferencia > 0:
-                print(f"   💰 Procesando pago integrado de ${diferencia}...")
-                metodo_pago_diff = pago_diferencia_data.get('metodo_pago', '')
-                if metodo_pago_diff:
-                    ticket.estado = 'PAGADO'
-                    ticket.metodo_pago = metodo_pago_diff
-                    ticket.fecha_pago = timezone.now()
-                    ticket.save()
+            # Determinar estado final según diferencia y estado del ticket
+            diferencia = float(cambio.diferencia_monto)
+            if ticket.estado == 'PENDIENTE' and diferencia > 0:
+                cambio.estado = 'EJECUTADO_COBRO_PENDIENTE'
+                cambio.fecha_ejecucion = timezone.now()
+            elif ticket.estado == 'PENDIENTE' and diferencia < 0:
+                cambio.estado = 'EJECUTADO_DEVOL_PENDIENTE'
+                cambio.fecha_ejecucion = timezone.now()
+            else:
+                cambio.estado = 'COMPLETADO'
+                cambio.fecha_ejecucion = timezone.now()
+                cambio.fecha_completado = timezone.now()
 
-                    PagoCambioDevolucion.objects.create(
-                        cambio_devolucion=cambio,
-                        tipo_pago='PAGO_DIFERENCIA',
-                        metodo_pago=metodo_pago_diff,
-                        monto=diferencia,
-                        referencia_pago=pago_diferencia_data.get('referencia_pago', ''),
-                        numero_autorizacion=pago_diferencia_data.get('numero_autorizacion', ''),
-                        procesado_por=request.user,
-                        observaciones=f'Pago integrado al aprobar cambio #{cambio.numero_operacion}'
-                    )
-
-                    try:
-                        TicketDetallePago.objects.create(
-                            ticket=ticket,
-                            metodo_pago=metodo_pago_diff,
-                            monto=int(diferencia),
-                            voucher=pago_diferencia_data.get('referencia_pago', ''),
-                            notas=f'Pago diferencia cambio #{cambio.numero_operacion}'
-                        )
-                    except Exception:
-                        pass
-
-                    cambio.fecha_pago_diferencia = timezone.now()
-                    print(f"   ✅ Pago procesado: {metodo_pago_diff} ${diferencia}")
-
-            cambio.estado = 'COMPLETADO'
-            cambio.fecha_completado = timezone.now()
             cambio.save()
             print(f"   ✅ Cambio actualizado: Estado={cambio.estado}, Ticket nuevo ID={ticket.id}")
             
-            # Crear historial de aprobación y completado
+            # Crear historial
             print(f"7️⃣ Creando historial...")
+            accion_historial = 'APROBADO_Y_EJECUTADO'
+            if cambio.estado == 'EJECUTADO_COBRO_PENDIENTE':
+                accion_historial = 'EJECUTADO_COBRO_PENDIENTE'
+            elif cambio.estado == 'EJECUTADO_DEVOL_PENDIENTE':
+                accion_historial = 'EJECUTADO_DEVOL_PENDIENTE'
+
             HistorialCambioDevolucion.objects.create(
                 cambio_devolucion=cambio,
-                accion='APROBADO_Y_EJECUTADO',
-                estado_anterior='SOLICITADO',
-                estado_nuevo='COMPLETADO',
+                accion=accion_historial,
+                estado_anterior=estado_anterior_cambio,
+                estado_nuevo=cambio.estado,
                 usuario=request.user,
                 descripcion=f'Cambio aprobado y ejecutado por {request.user.get_full_name() or request.user.username}. Ticket #{nuevo_correlativo} generado. Movimientos de inventario realizados.',
                 datos_adicionales={
@@ -10462,11 +10647,13 @@ def aprobar_cambio_generar_ticket(request):
             
             print(f"")
             print(f"{'='*60}")
-            print(f"✅ OPERACIÓN COMPLETADA EXITOSAMENTE")
+            print(f"✅ OPERACIÓN EJECUTADA EXITOSAMENTE")
             print(f"{'='*60}")
             print(f"   Ticket generado: #{nuevo_correlativo} (ID: {ticket.id})")
             print(f"   Cambio: #{cambio.numero_operacion} (Estado: {cambio.estado})")
             print(f"   Inventario: Actualizado")
+            if cambio.estado != 'COMPLETADO':
+                print(f"   Pendiente: {'Cobro' if diferencia > 0 else 'Devolución'} de ${abs(int(diferencia)):,}")
             print(f"{'='*60}")
         
         # Construir datos del ticket para impresión
@@ -10491,7 +10678,10 @@ def aprobar_cambio_generar_ticket(request):
             'ticket_correlativo': nuevo_correlativo,
             'diferencia_cobrar': cambio.diferencia_monto,
             'nuevo_estado': cambio.estado,
-            'ticket_data': ticket_data  # Datos completos para impresión
+            'nuevo_estado_display': cambio.get_estado_display(),
+            'cobro_pendiente': cambio.cobro_pendiente,
+            'devolucion_pendiente': cambio.devolucion_pendiente,
+            'ticket_data': ticket_data
         })
         
     except json.JSONDecodeError:
@@ -11058,10 +11248,47 @@ def buscar_documento_cambio(request):
             fecha_limite = dte.fecha_emision + timedelta(days=30)
             dentro_del_plazo = timezone.now().date() <= fecha_limite
             
-            # Buscar si ya existe un ticket asociado a este DTE
-            ticket_referencia = Ticket.objects.filter(
-                observaciones__icontains=f'DTE #{dte.numero_documento}'
-            ).first()
+            # Intentar encontrar el ticket ORIGINAL del POS (fuente con descuentos correctos)
+            ticket_original_pos = None
+            if dte.referencias and 'TICKET-' in dte.referencias:
+                try:
+                    corr_original = dte.referencias.split('TICKET-')[1].strip().split()[0]
+                    ticket_original_pos = Ticket.objects.filter(
+                        correlativo=corr_original,
+                        sucursal_id=sucursal_id,
+                        estado='PAGADO'
+                    ).first()
+                except Exception:
+                    pass
+
+            # Si encontramos el ticket original del POS, usarlo directamente
+            if ticket_original_pos:
+                ticket_referencia = ticket_original_pos
+            else:
+                # Buscar si ya existe un ticket de referencia asociado a este DTE
+                ticket_referencia = Ticket.objects.filter(
+                    observaciones__icontains=f'DTE #{dte.numero_documento}'
+                ).first()
+                
+                if ticket_referencia:
+                    # Repair: sync discounts from DTE or original ticket
+                    for dp in dte.dte_productos.all():
+                        if not dp.productoTalla:
+                            continue
+                        dcto_unit = 0
+                        if dp.descuento_monto and dp.stock and dp.stock > 0:
+                            dcto_unit = int(dp.descuento_monto / dp.stock)
+                        if dcto_unit > 0:
+                            tp_ref = ticket_referencia.ticket_productos.filter(
+                                ProductoTalla=dp.productoTalla,
+                                stock=dp.stock,
+                                descuento_unitario=0
+                            ).first()
+                            if tp_ref:
+                                tp_ref.descuento_unitario = dcto_unit
+                                tp_ref.subtotal = (dp.precio - dcto_unit) * dp.stock
+                                tp_ref.porcentaje_descuento = dp.descuento_pct or 0
+                                tp_ref.save()
             
             if not ticket_referencia:
                 # Crear ticket de referencia
@@ -11088,16 +11315,30 @@ def buscar_documento_cambio(request):
                     observaciones=f'Ticket de referencia para DTE #{dte.numero_documento} - {dte.tipo_documento}'
                 )
                 
-                # Copiar productos del DTE al ticket
+                # Copiar productos del DTE al ticket (con descuentos)
+                es_boleta = dte.tipo_documento in ['39', '41', 'BOLETA ELECTRONICA', 'BOLETA EXENTA']
                 for dp in dte.dte_productos.all():
+                    precio_lista = dp.precio
+                    dcto_unitario = 0
+
+                    if dp.descuento_monto and dp.stock and dp.stock > 0:
+                        dcto_unitario = int(dp.descuento_monto / dp.stock)
+                    elif es_boleta and dp.monto_item and dp.stock and dp.stock > 0:
+                        precio_efectivo_por_unidad = int(dp.monto_item / dp.stock)
+                        if precio_efectivo_por_unidad < dp.precio:
+                            dcto_unitario = dp.precio - precio_efectivo_por_unidad
+
+                    subtotal = (precio_lista - dcto_unitario) * dp.stock
+
                     Ticket_Productos.objects.create(
                         idTicket=ticket_referencia,
                         ProductoTalla=dp.productoTalla,
                         stock=dp.stock,
-                        precio=dp.precio,
-                        precio_original=dp.precio,
-                        descuento_unitario=0,
-                        subtotal=dp.precio * dp.stock,
+                        precio=precio_lista,
+                        precio_original=precio_lista,
+                        descuento_unitario=dcto_unitario,
+                        subtotal=subtotal,
+                        porcentaje_descuento=dp.descuento_pct or 0,
                         descripcion_linea=dp.descripcion if not dp.productoTalla else None,
                         es_pendiente_despacho=dp.es_pendiente_despacho,
                     )
@@ -11134,7 +11375,7 @@ def buscar_documento_cambio(request):
                 # Verificar si ya fue cambiado/devuelto
                 cantidad_ya_cambiada = CambioDevolucionDetalle.objects.filter(
                     producto_original=tp,
-                    cambio_devolucion__estado__in=['APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'COMPLETADO']
+                    cambio_devolucion__estado__in=['SOLICITADO', 'APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO']
                 ).aggregate(
                     total=Sum('cantidad_original')
                 )['total'] or 0
@@ -11192,6 +11433,21 @@ def buscar_documento_cambio(request):
                     'puede_cambiar': productos_disponibles_count > 0,
                 }
             })
+        elif tipo_documento == 'ticket':
+            # Buscar directamente por correlativo de ticket
+            ticket = Ticket.objects.filter(
+                correlativo=numero,
+                sucursal_id=sucursal_id
+            ).first()
+            
+            if not ticket:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Ticket #{numero} no encontrado en esta sucursal'
+                })
+            
+            return buscar_ticket_para_cambio_response(ticket, request)
+        
         elif tipo_documento == 'ticket_cambio':
             # Buscar por Ticket de Cambio (número del ticket original)
             
@@ -11307,7 +11563,7 @@ def buscar_documento_cambio(request):
             for tp in ticket.ticket_productos.all():
                 cantidad_ya_cambiada = CambioDevolucionDetalle.objects.filter(
                     producto_original=tp,
-                    cambio_devolucion__estado__in=['APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'COMPLETADO']
+                    cambio_devolucion__estado__in=['SOLICITADO', 'APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO']
                 ).aggregate(
                     total=Sum('cantidad_original')
                 )['total'] or 0
@@ -11452,10 +11708,9 @@ def buscar_ticket_para_cambio_response(ticket, request):
     productos_disponibles_count = 0
     
     for tp in ticket.ticket_productos.filter(precio__gt=0, stock__gt=0):
-        # Verificar si ya fue cambiado/devuelto
         cantidad_ya_cambiada = CambioDevolucionDetalle.objects.filter(
             producto_original=tp,
-            cambio_devolucion__estado__in=['APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'COMPLETADO']
+            cambio_devolucion__estado__in=['SOLICITADO', 'APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO']
         ).aggregate(
             total=Sum('cantidad_original')
         )['total'] or 0
@@ -11852,9 +12107,11 @@ def obtener_indicadores_globales_ventas(request):
             fecha__lte=fecha_fin
         )
         
-        # Aplicar filtros adicionales - Solo si no están vacíos
-        if estado:  # Solo filtrar si estado tiene valor
+        # Aplicar filtro de estado - por defecto solo tickets PAGADOS
+        if estado:
             queryset = queryset.filter(estado=estado)
+        else:
+            queryset = queryset.filter(estado='PAGADO')
         
         if sucursal_id:
             queryset = queryset.filter(sucursal_id=sucursal_id)
@@ -11929,6 +12186,21 @@ def obtener_indicadores_globales_ventas(request):
         cantidad_cambios = cambios.count()
         ratio_cambios = (cantidad_cambios / cantidad_ventas * 100) if cantidad_ventas > 0 else 0
         
+        # Descuentos aplicados en el periodo
+        ticket_ids_list = queryset.values_list('id', flat=True)
+        lineas_qs = Ticket_Productos.objects.filter(idTicket_id__in=ticket_ids_list)
+        desc_agg = lineas_qs.aggregate(
+            descuento_total=Sum(ExpressionWrapper(F('stock') * F('descuento_unitario'), output_field=DecimalField())),
+            descuento_prom_pct=Avg('porcentaje_descuento'),
+        )
+        descuento_total = float(desc_agg['descuento_total'] or 0)
+        descuento_prom_pct = float(desc_agg['descuento_prom_pct'] or 0)
+        
+        # Ventas por tipo de documento
+        ventas_con_factura = queryset.filter(tipo_dte__in=['FACTURA_ELECTRONICA', 'FACTURA_EXENTA']).count()
+        ventas_con_boleta = queryset.filter(tipo_dte='BOLETA_ELECTRONICA').count()
+        tickets_offline = queryset.filter(created_offline=True).count()
+        
         # Evolución diaria de ventas - Asegurar que haya datos para todos los días del período
         evolucion_diaria = queryset.values('fecha').annotate(
             total=Sum('total'),
@@ -11970,6 +12242,11 @@ def obtener_indicadores_globales_ventas(request):
             'crecimiento_cantidad': float(crecimiento_cantidad),
             'crecimiento_ticket': float(crecimiento_ticket),
             'evolucion_diaria': evolucion_data,
+            'descuento_total': descuento_total,
+            'descuento_prom_pct': round(descuento_prom_pct, 2),
+            'ventas_con_factura': ventas_con_factura,
+            'ventas_con_boleta': ventas_con_boleta,
+            'tickets_offline': tickets_offline,
             'periodo': {
                 'inicio': fecha_inicio.strftime('%d/%m/%Y'),
                 'fin': fecha_fin.strftime('%d/%m/%Y')
@@ -12098,50 +12375,35 @@ def obtener_ventas_por_vendedor(request):
 @login_required
 def obtener_sucursales_dashboard(request):
     """
-    API para obtener lista de sucursales para filtros del dashboard
-    - Si es administrador: retorna todas las sucursales
-    - Si no es administrador: retorna solo su sucursal
+    API para obtener lista de sucursales para filtros del dashboard.
+    Usa la utilidad centralizada de permisos para determinar visibilidad.
     """
     try:
-        # Obtener empresa y sucursal del usuario
-        empresa_user = EmpresaUser.objects.filter(
-            user=request.user,
-            active=True
-        ).select_related('empresa', 'sucursal').first()
-        
-        if not empresa_user:
-            return JsonResponse({
-                'success': False,
-                'error': 'Usuario sin empresa asignada'
-            }, status=403)
-        
-        # Si es superuser/administrador, puede ver todas las sucursales de la empresa
-        if request.user.is_superuser:
-            sucursales = Sucursal.objects.filter(
-                empresa=empresa_user.empresa
-            ).order_by('alias')
-        else:
-            # Usuario normal: solo ve su sucursal
-            sucursales = Sucursal.objects.filter(
-                id=empresa_user.sucursal_id
-            ) if empresa_user.sucursal else Sucursal.objects.none()
-        
+        from .utils_permisos import obtener_sucursales_usuario, usuario_puede_ver_todas_sucursales
+
+        sucursales = obtener_sucursales_usuario(request.user)
+
         sucursales_data = []
         for sucursal in sucursales:
             sucursales_data.append({
                 'id': sucursal.id,
-                'nombre': sucursal.alias,  # Usar alias como nombre principal
+                'nombre': sucursal.alias,
                 'alias': sucursal.alias,
                 'direccion': sucursal.direccion or ''
             })
-        
+
+        empresa_user = EmpresaUser.objects.filter(
+            user=request.user,
+            active=True
+        ).first()
+
         return JsonResponse({
             'success': True,
             'sucursales': sucursales_data,
-            'es_admin': request.user.is_superuser,
-            'sucursal_actual': empresa_user.sucursal_id
+            'es_admin': usuario_puede_ver_todas_sucursales(request.user),
+            'sucursal_actual': empresa_user.sucursal_id if empresa_user else None
         })
-        
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -12686,6 +12948,311 @@ def obtener_tendencias_ventas(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener tendencias de ventas: {str(e)}'
+        }, status=500)
+
+
+@require_GET
+@login_required
+def obtener_indicadores_avanzados_ventas(request):
+    """
+    API para obtener indicadores avanzados de retail con datos reales.
+    Calcula: Margen Bruto (FIFO), Sell-Through Rate, Rotacion, Dias de Stock,
+    GMROI, Descuento Promedio, Costo de Ventas real.
+    """
+    try:
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+        sucursal_id = request.GET.get('sucursal_id')
+        estado = request.GET.get('estado', '')
+
+        if not fecha_inicio or not fecha_fin:
+            fecha_fin = timezone.now().date()
+            fecha_inicio = fecha_fin - timedelta(days=30)
+        else:
+            fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+
+        tickets_qs = Ticket.objects.filter(
+            fecha__gte=fecha_inicio,
+            fecha__lte=fecha_fin
+        )
+        if estado:
+            tickets_qs = tickets_qs.filter(estado=estado)
+        else:
+            tickets_qs = tickets_qs.filter(estado='PAGADO')
+        if sucursal_id:
+            tickets_qs = tickets_qs.filter(sucursal_id=sucursal_id)
+
+        ticket_ids = tickets_qs.values_list('id', flat=True)
+
+        lineas = Ticket_Productos.objects.filter(idTicket_id__in=ticket_ids)
+
+        agg = lineas.aggregate(
+            ingresos=Sum(ExpressionWrapper(F('stock') * F('precio'), output_field=DecimalField())),
+            costo_ventas=Sum(ExpressionWrapper(F('stock') * F('costo_fifo'), output_field=DecimalField())),
+            unidades_vendidas=Sum('stock'),
+            descuento_prom=Avg('porcentaje_descuento'),
+            descuento_total_monto=Sum(ExpressionWrapper(F('stock') * F('descuento_unitario'), output_field=DecimalField())),
+        )
+
+        ingresos = float(agg['ingresos'] or 0)
+        costo_ventas = float(agg['costo_ventas'] or 0)
+        unidades_vendidas = int(agg['unidades_vendidas'] or 0)
+        descuento_promedio = float(agg['descuento_prom'] or 0)
+        descuento_total_monto = float(agg['descuento_total_monto'] or 0)
+
+        margen_bruto = ingresos - costo_ventas
+        margen_pct = (margen_bruto / ingresos * 100) if ingresos > 0 else 0
+
+        stock_filter = {}
+        if sucursal_id:
+            stock_filter['producto__sucursal_id'] = sucursal_id
+        stock_actual = Producto_Talla.objects.filter(
+            stock__gt=0, **stock_filter
+        ).aggregate(
+            total_unidades=Sum('stock'),
+        )
+        stock_total_unidades = int(stock_actual['total_unidades'] or 0)
+
+        sell_through = 0
+        if (unidades_vendidas + stock_total_unidades) > 0:
+            sell_through = (unidades_vendidas / (unidades_vendidas + stock_total_unidades)) * 100
+
+        dias_periodo = max(1, (fecha_fin - fecha_inicio).days + 1)
+
+        if stock_total_unidades > 0 and unidades_vendidas > 0:
+            venta_diaria = unidades_vendidas / dias_periodo
+            dias_stock = stock_total_unidades / venta_diaria
+            rotacion_periodo = unidades_vendidas / stock_total_unidades
+            rotacion_anualizada = rotacion_periodo * (365 / dias_periodo)
+        else:
+            dias_stock = 0
+            rotacion_periodo = 0
+            rotacion_anualizada = 0
+
+        inventario_costo_est = stock_total_unidades * (costo_ventas / unidades_vendidas) if unidades_vendidas > 0 else 0
+        gmroi = (margen_bruto / inventario_costo_est) if inventario_costo_est > 0 else 0
+
+        return JsonResponse({
+            'success': True,
+            'ingresos': ingresos,
+            'costo_ventas': costo_ventas,
+            'margen_bruto': margen_bruto,
+            'margen_pct': round(margen_pct, 2),
+            'unidades_vendidas': unidades_vendidas,
+            'stock_actual': stock_total_unidades,
+            'sell_through': round(sell_through, 2),
+            'rotacion_periodo': round(rotacion_periodo, 2),
+            'rotacion_anualizada': round(rotacion_anualizada, 2),
+            'dias_stock': round(dias_stock, 1),
+            'gmroi': round(gmroi, 2),
+            'descuento_promedio': round(descuento_promedio, 2),
+            'descuento_total_monto': descuento_total_monto,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener indicadores avanzados: {str(e)}'
+        }, status=500)
+
+
+@require_GET
+@login_required
+def obtener_estado_operacional_ventas(request):
+    """
+    API para obtener el estado operacional completo del modulo de ventas.
+    Cubre: tickets por estado, ventas por modulo, POS, cambios/devoluciones,
+    depositos, DTEs pendientes, regularizaciones.
+    """
+    try:
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+        sucursal_id = request.GET.get('sucursal_id')
+
+        if not fecha_inicio or not fecha_fin:
+            fecha_fin = timezone.now().date()
+            fecha_inicio = fecha_fin - timedelta(days=30)
+        else:
+            fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            fecha_fin = timezone.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+
+        tickets_qs = Ticket.objects.filter(
+            fecha__gte=fecha_inicio,
+            fecha__lte=fecha_fin
+        )
+        if sucursal_id:
+            tickets_qs = tickets_qs.filter(sucursal_id=sucursal_id)
+
+        # --- Tickets por estado ---
+        tickets_por_estado = list(
+            tickets_qs.values('estado').annotate(
+                cantidad=Count('id'),
+                monto=Sum('total')
+            ).order_by('estado')
+        )
+        total_tickets = tickets_qs.count()
+        anulados = tickets_qs.filter(estado='ANULADO').count()
+        pct_anulados = (anulados / total_tickets * 100) if total_tickets > 0 else 0
+
+        pendientes_pago = tickets_qs.filter(estado='PENDIENTE')
+        pendientes_count = pendientes_pago.count()
+        pendientes_monto = float(pendientes_pago.aggregate(t=Sum('total'))['t'] or 0)
+
+        # --- Ventas por modulo de origen ---
+        por_modulo = list(
+            tickets_qs.values('modulo_origen').annotate(
+                cantidad=Count('id'),
+                monto=Sum('total')
+            ).order_by('-monto')
+        )
+        for item in por_modulo:
+            item['monto'] = float(item['monto'] or 0)
+
+        # --- Ventas por tipo DTE ---
+        por_tipo_dte = list(
+            tickets_qs.exclude(tipo_dte__isnull=True).values('tipo_dte').annotate(
+                cantidad=Count('id')
+            ).order_by('-cantidad')
+        )
+
+        # --- Tickets offline ---
+        tickets_offline = tickets_qs.filter(created_offline=True).count()
+
+        # --- Transacciones POS ---
+        pos_qs = TransaccionPOS.objects.filter(
+            fecha_inicio__date__gte=fecha_inicio,
+            fecha_inicio__date__lte=fecha_fin
+        )
+        if sucursal_id:
+            pos_qs = pos_qs.filter(configuracion_pos__sucursal_id=sucursal_id)
+
+        pos_por_estado = list(
+            pos_qs.values('estado').annotate(
+                cantidad=Count('id'),
+                monto=Sum('monto')
+            ).order_by('estado')
+        )
+        for item in pos_por_estado:
+            item['monto'] = float(item['monto'] or 0)
+
+        pos_total = pos_qs.count()
+        pos_completadas = pos_qs.filter(estado='COMPLETADA').count()
+        pos_tasa_exito = (pos_completadas / pos_total * 100) if pos_total > 0 else 0
+
+        # --- Cambios y Devoluciones ---
+        cambios_qs = CambioDevolucion.objects.filter(
+            fecha_solicitud__date__gte=fecha_inicio,
+            fecha_solicitud__date__lte=fecha_fin
+        )
+        if sucursal_id:
+            cambios_qs = cambios_qs.filter(sucursal_id=sucursal_id)
+
+        cambios_por_estado = list(
+            cambios_qs.values('estado').annotate(
+                cantidad=Count('id'),
+                monto=Sum('monto_original')
+            ).order_by('estado')
+        )
+        for item in cambios_por_estado:
+            item['monto'] = float(item['monto'] or 0)
+            item['estado_display'] = dict(ESTADO_CAMBIO_CHOICES).get(item['estado'], item['estado'])
+
+        cambios_por_tipo = list(
+            cambios_qs.values('tipo_operacion').annotate(
+                cantidad=Count('id'),
+                monto=Sum('monto_original')
+            ).order_by('-cantidad')
+        )
+        for item in cambios_por_tipo:
+            item['monto'] = float(item['monto'] or 0)
+            item['tipo_display'] = dict(TIPO_OPERACION_CAMBIO_CHOICES).get(item['tipo_operacion'], item['tipo_operacion'])
+
+        motivos = list(
+            cambios_qs.filter(motivo_principal__isnull=False)
+            .values('motivo_principal')
+            .annotate(cantidad=Count('id'))
+            .order_by('-cantidad')[:5]
+        )
+        for item in motivos:
+            item['motivo_display'] = dict(MOTIVO_CAMBIO_CHOICES).get(item['motivo_principal'], item['motivo_principal'])
+
+        cambios_monto_total = float(cambios_qs.aggregate(t=Sum('monto_original'))['t'] or 0)
+        cambios_pendientes_aprobacion = cambios_qs.filter(estado__in=['SOLICITADO', 'EN_PROCESO']).count()
+
+        # --- Depositos Bancarios ---
+        depositos_qs = DepositoBancario.objects.filter(
+            fecha_deposito__gte=fecha_inicio,
+            fecha_deposito__lte=fecha_fin
+        )
+        if sucursal_id:
+            depositos_qs = depositos_qs.filter(arqueo__sucursal_id=sucursal_id)
+
+        depositos_verificados = depositos_qs.filter(verificado=True).count()
+        depositos_pendientes = depositos_qs.filter(verificado=False).count()
+        depositos_monto_verificado = float(
+            depositos_qs.filter(verificado=True).aggregate(t=Sum('monto'))['t'] or 0
+        )
+        depositos_monto_pendiente = float(
+            depositos_qs.filter(verificado=False).aggregate(t=Sum('monto'))['t'] or 0
+        )
+
+        # --- DTEs pendientes ---
+        dtes_pendientes = Dte.objects.filter(
+            estado_dte='EMITIDO',
+            tipo_transaccion='TRASPASO'
+        ).count()
+
+        # --- Regularizaciones pendientes ---
+        from .models import Solicitud_Regularizacion
+        regularizaciones_pendientes = Solicitud_Regularizacion.objects.filter(
+            estado__in=['PENDIENTE', 'EN_REVISION']
+        ).count()
+
+        return JsonResponse({
+            'success': True,
+            'tickets': {
+                'por_estado': [{
+                    'estado': t['estado'],
+                    'cantidad': t['cantidad'],
+                    'monto': float(t['monto'] or 0)
+                } for t in tickets_por_estado],
+                'total': total_tickets,
+                'anulados': anulados,
+                'pct_anulados': round(pct_anulados, 2),
+                'pendientes_pago': pendientes_count,
+                'pendientes_monto': pendientes_monto,
+            },
+            'modulo_origen': por_modulo,
+            'tipo_dte': por_tipo_dte,
+            'tickets_offline': tickets_offline,
+            'pos': {
+                'por_estado': pos_por_estado,
+                'total': pos_total,
+                'completadas': pos_completadas,
+                'tasa_exito': round(pos_tasa_exito, 2),
+            },
+            'cambios_devoluciones': {
+                'por_estado': cambios_por_estado,
+                'por_tipo': cambios_por_tipo,
+                'motivos_principales': motivos,
+                'monto_total': cambios_monto_total,
+                'pendientes_aprobacion': cambios_pendientes_aprobacion,
+            },
+            'depositos': {
+                'verificados': depositos_verificados,
+                'pendientes': depositos_pendientes,
+                'monto_verificado': depositos_monto_verificado,
+                'monto_pendiente': depositos_monto_pendiente,
+            },
+            'dtes_pendientes': dtes_pendientes,
+            'regularizaciones_pendientes': regularizaciones_pendientes,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener estado operacional: {str(e)}'
         }, status=500)
 
 

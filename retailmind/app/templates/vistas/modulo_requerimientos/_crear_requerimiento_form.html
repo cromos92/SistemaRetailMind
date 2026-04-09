@@ -1,303 +1,307 @@
-<div class="container-fluid p-0">
+<style>
+    .tipo-card-inner{cursor:pointer;transition:all .2s;border:2px solid #e9ecef !important}
+    .tipo-card-inner:hover{border-color:#0066FF !important;transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.08)}
+    .tipo-card-inner.selected{border-color:#0066FF !important;background:rgba(0,102,255,.04);box-shadow:0 0 0 3px rgba(0,102,255,.15)}
+    .tipo-card-inner i{font-size:1.8rem}
+    .foto-slot-card{border:2px dashed #dee2e6;border-radius:8px;transition:all .2s;min-height:180px}
+    .foto-slot-card:hover{border-color:#adb5bd}
+    .foto-slot-card.has-foto{border-style:solid;border-color:#198754}
+    .section-compact .card-header{padding:.5rem .75rem}
+    .section-compact .card-body{padding:.75rem}
+    .section-compact .form-label{font-size:.8rem;margin-bottom:.2rem}
+    .section-compact .form-control,.section-compact .form-select{font-size:.85rem;padding:.35rem .6rem}
+</style>
+
+<div class="container-fluid p-0 section-compact">
     <form id="form-requerimiento" enctype="multipart/form-data">
         {% csrf_token %}
-        <div class="row">
-            <!-- Formulario principal -->
-            <div class="col-lg-8">
-                
-                <!-- Búsqueda de Documento -->
-                <div class="card border-primary">
-                    <div class="card-header bg-soft-primary">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-file-search-line me-2"></i>Buscar Documento de Venta
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-8">
-                                <label class="form-label">Folio o Correlativo del Documento</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="buscar_folio" 
-                                           placeholder="Ingrese el folio o correlativo">
-                                    <button class="btn btn-primary" type="button" onclick="buscarDocumento()">
-                                        <i class="ri-search-line me-1"></i> Buscar
-                                    </button>
-                                </div>
-                                <small class="text-muted">Busca tickets, boletas y facturas de esta sucursal</small>
-                            </div>
-                            <div class="col-md-4 d-flex align-items-end">
-                                <button type="button" class="btn btn-soft-secondary w-100" onclick="limpiarDocumento()">
-                                    <i class="ri-refresh-line me-1"></i> Limpiar
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Información del documento encontrado -->
-                        <div id="info-documento" class="mt-3" style="display: none;">
-                            <div class="alert alert-success border-0 mb-0">
-                                <div class="d-flex">
-                                    <div class="flex-shrink-0">
-                                        <i class="ri-checkbox-circle-line fs-3"></i>
-                                    </div>
-                                    <div class="flex-grow-1 ms-3">
-                                        <h6 class="mb-1">Documento Encontrado</h6>
-                                        <p class="mb-1" id="doc-info-text"></p>
-                                        <small class="text-muted" id="doc-productos-info"></small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Información del Producto -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-product-hunt-line me-2 align-middle"></i>
-                            Información del Producto
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <!-- Checkbox para usar producto del documento -->
-                        <div class="mb-3" id="opcion-producto-documento" style="display: none;">
-                            <div class="form-check form-switch form-switch-lg">
-                                <input class="form-check-input" type="checkbox" id="usar_producto_documento" 
-                                       onchange="toggleProductoManual()">
-                                <label class="form-check-label fw-semibold" for="usar_producto_documento">
-                                    <i class="ri-checkbox-circle-line me-1"></i>Usar producto del documento
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Selección de producto del documento -->
-                        <div id="selector-producto-documento" class="mb-3" style="display: none;">
-                            <label class="form-label">Seleccione el Producto del Documento</label>
-                            <select class="form-select" id="producto_documento_select" onchange="seleccionarProductoDocumento()">
-                                <option value="">-- Seleccione un producto --</option>
-                            </select>
-                        </div>
-
-                        <!-- Entrada manual de producto -->
-                        <div id="entrada-manual-producto">
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label for="sku" class="form-label">SKU del Producto <span class="text-danger">*</span></label>
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" id="sku" name="sku" required 
-                                               placeholder="Ingrese SKU">
-                                        <button class="btn btn-outline-secondary" type="button" onclick="buscarProducto()">
-                                            <i class="ri-search-line"></i>
-                                        </button>
-                                    </div>
-                                    <div class="form-text">Ingrese el SKU y presione buscar</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="nombre_producto" class="form-label">Nombre del Producto <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="nombre_producto" name="nombre_producto" required>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Documento de Venta (Auto-rellenado) -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-file-text-line me-2 align-middle"></i>
-                            Datos del Documento
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label for="tipo_documento" class="form-label">Tipo de Documento</label>
-                                <input type="text" class="form-control" id="tipo_documento" name="tipo_documento" readonly>
-                                <small class="text-muted">Auto-completado desde búsqueda</small>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="numero_boleta" class="form-label">Número/Folio</label>
-                                <input type="text" class="form-control" id="numero_boleta" name="numero_boleta" readonly>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="fecha_compra" class="form-label">Fecha de Compra</label>
-                                <input type="date" class="form-control" id="fecha_compra" name="fecha_compra" readonly>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Información del Cliente -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-user-line me-2 align-middle"></i>
-                            Información del Cliente
-                        </h5>
-                        <button type="button" class="btn btn-sm btn-success" onclick="abrirModalCrearCliente()">
-                            <i class="ri-user-add-line me-1"></i> Crear Cliente
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label for="cliente_rut" class="form-label">RUT del Cliente</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="cliente_rut" name="cliente_rut" 
-                                           placeholder="12345678-9" onblur="validarRUTAutomatico()">
-                                    <button class="btn btn-outline-info" type="button" onclick="buscarClientePorRUT()" 
-                                            title="Buscar cliente por RUT">
-                                        <i class="ri-search-line"></i>
-                                    </button>
-                                </div>
-                                <small class="text-muted" id="rut-validacion-msg">Auto-completado desde documento o búsqueda</small>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="cliente_nombre" class="form-label">Nombre Completo <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="cliente_nombre" name="cliente_nombre" required
-                                       placeholder="Nombre completo del cliente">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="cliente_telefono" class="form-label">Teléfono</label>
-                                <input type="tel" class="form-control" id="cliente_telefono" name="cliente_telefono" 
-                                       placeholder="+56 9 1234 5678">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="cliente_email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="cliente_email" name="cliente_email" 
-                                       placeholder="cliente@ejemplo.com">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Descripción del Requerimiento -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-file-list-3-line me-2 align-middle"></i>
-                            Descripción del Requerimiento
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <label for="motivo" class="form-label">Motivo del Requerimiento <span class="text-danger">*</span></label>
-                                <textarea class="form-control" id="motivo" name="motivo" rows="3" required
-                                          placeholder="Describa brevemente el motivo del requerimiento"></textarea>
-                            </div>
-                            <div class="col-12">
-                                <label for="descripcion_problema" class="form-label">Descripción Detallada del Problema</label>
-                                <textarea class="form-control" id="descripcion_problema" name="descripcion_problema" rows="4"
-                                          placeholder="Describa en detalle el problema, falla o situación"></textarea>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Fotos Adjuntas -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-image-line me-2 align-middle"></i>
-                            Fotos Adjuntas (Máximo 5)
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3" id="fotos-container">
-                            <!-- Las fotos se agregarán dinámicamente aquí -->
-                        </div>
-                        <button type="button" class="btn btn-soft-primary btn-sm mt-2" onclick="agregarFoto()" id="btn-agregar-foto">
-                            <i class="ri-add-line me-1"></i> Agregar Foto
-                        </button>
-                    </div>
-                </div>
-                
+        <!-- PASO 1: TIPO -->
+        <div class="card border-0 shadow-sm mb-2">
+            <div class="card-header bg-white">
+                <h6 class="card-title mb-0"><span class="badge bg-primary rounded-pill me-1" style="font-size:.65rem">1</span> Tipo de Requerimiento <span class="text-danger">*</span></h6>
             </div>
-
-            <!-- Panel lateral -->
-            <div class="col-lg-4">
-                
-                <!-- Información General -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Información General</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="tipo" class="form-label">Tipo de Requerimiento <span class="text-danger">*</span></label>
-                            <select class="form-select" id="tipo" name="tipo" required>
-                                <option value="">Seleccione...</option>
-                                <option value="GARANTIA" selected>Garantia Producto</option>
-                                <option value="DEVOLUCION">Procedimiento Devolucion Proveedor</option>
-                                <option value="RECLAMO">Reclamo</option>
-                                <option value="CONSULTA">Consulta Tecnica</option>
-                                <option value="OTROS">Otros</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="prioridad" class="form-label">Prioridad</label>
-                            <select class="form-select" id="prioridad" name="prioridad">
-                                <option value="BAJA">Baja</option>
-                                <option value="MEDIA" selected>Media</option>
-                                <option value="ALTA">Alta</option>
-                                <option value="URGENTE">Urgente</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="proveedor_id" class="form-label">Proveedor</label>
-                            <select class="form-select" id="proveedor_id" name="proveedor_id">
-                                <option value="">Seleccione proveedor...</option>
-                                {% for proveedor in proveedores %}
-                                <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
-                                {% endfor %}
-                            </select>
-                            <div class="form-text">Opcional: Seleccione el proveedor si ya lo conoce</div>
-                        </div>
-                    </div>
+            <div class="card-body py-2">
+                <input type="hidden" id="tipo" name="tipo" value="">
+                <div class="row g-2" id="tipo-cards">
+                    <div class="col-4 col-md-2"><div class="tipo-card" data-tipo="PRODUCTO_FALLADO" onclick="seleccionarTipo(this)"><div class="tipo-card-inner rounded text-center p-2"><i class="ri-error-warning-line text-danger"></i><div class="small fw-semibold mt-1" style="font-size:.7rem;line-height:1.2">Producto Fallado</div></div></div></div>
+                    <div class="col-4 col-md-2"><div class="tipo-card" data-tipo="ERROR_DESPACHO" onclick="seleccionarTipo(this)"><div class="tipo-card-inner rounded text-center p-2"><i class="ri-exchange-line text-warning"></i><div class="small fw-semibold mt-1" style="font-size:.7rem;line-height:1.2">Error Despacho</div></div></div></div>
+                    <div class="col-4 col-md-2"><div class="tipo-card" data-tipo="GARANTIA" onclick="seleccionarTipo(this)"><div class="tipo-card-inner rounded text-center p-2"><i class="ri-shield-check-line text-info"></i><div class="small fw-semibold mt-1" style="font-size:.7rem;line-height:1.2">Garantia</div></div></div></div>
+                    <div class="col-4 col-md-2"><div class="tipo-card" data-tipo="DEVOLUCION" onclick="seleccionarTipo(this)"><div class="tipo-card-inner rounded text-center p-2"><i class="ri-arrow-go-back-line text-primary"></i><div class="small fw-semibold mt-1" style="font-size:.7rem;line-height:1.2">Devolucion</div></div></div></div>
+                    <div class="col-4 col-md-2"><div class="tipo-card" data-tipo="RECLAMO" onclick="seleccionarTipo(this)"><div class="tipo-card-inner rounded text-center p-2"><i class="ri-chat-delete-line text-secondary"></i><div class="small fw-semibold mt-1" style="font-size:.7rem;line-height:1.2">Reclamo</div></div></div></div>
+                    <div class="col-4 col-md-2"><div class="tipo-card" data-tipo="CONSULTA" onclick="seleccionarTipo(this)"><div class="tipo-card-inner rounded text-center p-2"><i class="ri-questionnaire-line text-success"></i><div class="small fw-semibold mt-1" style="font-size:.7rem;line-height:1.2">Consulta</div></div></div></div>
                 </div>
+                <div id="tipo-error" class="text-danger small mt-1" style="display:none;">Seleccione un tipo</div>
+            </div>
+        </div>
 
-                <!-- Información de ayuda -->
-                <div class="card bg-soft-info">
-                    <div class="card-body">
-                        <h6 class="text-info mb-3">
-                            <i class="ri-lightbulb-flash-line me-2"></i>
-                            Cómo Usar Este Formulario
-                        </h6>
-                        <ul class="text-muted mb-0 small">
-                            <li class="mb-2"><strong>1. Busque el documento:</strong> Ingrese el folio/correlativo del ticket o boleta</li>
-                            <li class="mb-2"><strong>2. Seleccione producto:</strong> Use el checkbox para elegir del documento o ingresar manual</li>
-                            <li class="mb-2"><strong>3. Datos auto-completados:</strong> Cliente y documento se llenan automáticamente</li>
-                            <li class="mb-2"><strong>4. Búsqueda adicional:</strong> Puede buscar cliente por RUT si no está en el documento</li>
-                            <li class="mb-2"><strong>5. Fotos:</strong> Adjunte hasta 5 fotos del problema</li>
-                            <li>Complete campos requeridos (<span class="text-danger">*</span>) y guarde</li>
-                        </ul>
+        <!-- CONTENIDO (se muestra al seleccionar tipo) -->
+        <div id="contenido-formulario" style="display:none;">
+            <div class="row g-2">
+                <div class="col-lg-8">
+
+                    <!-- Clasificacion defecto (PRODUCTO_FALLADO) -->
+                    <div class="card border-0 shadow-sm mb-2" id="seccion-defecto" style="display:none;">
+                        <div class="card-header bg-soft-danger"><h6 class="card-title mb-0 small"><i class="ri-error-warning-line me-1 text-danger"></i>Clasificacion del Defecto</h6></div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-5">
+                                    <label class="form-label">Tipo de Defecto <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="subtipo_defecto" name="subtipo">
+                                        <option value="">Seleccione...</option>
+                                        <option value="DEFECTO_FABRICACION">Defecto de Fabricacion</option>
+                                        <option value="CALIDAD_MATERIAL">Calidad de Material</option>
+                                        <option value="DESPEGUE_SUELA">Despegue de Suela</option>
+                                        <option value="COSTURA_DEFECTUOSA">Costura Defectuosa</option>
+                                        <option value="DECOLORACION">Decoloracion / Manchas</option>
+                                        <option value="PIEZA_FALTANTE">Pieza Faltante</option>
+                                        <option value="OTRO_DEFECTO">Otro</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Severidad</label>
+                                    <select class="form-select" id="severidad_defecto" name="severidad_defecto">
+                                        <option value="">Seleccione...</option>
+                                        <option value="LEVE">Leve (estetico)</option>
+                                        <option value="MODERADO">Moderado</option>
+                                        <option value="GRAVE">Grave (inutilizable)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Condicion</label>
+                                    <select class="form-select" id="condicion_producto" name="condicion_producto">
+                                        <option value="">Seleccione...</option>
+                                        <option value="NUEVO_SIN_USO">Nuevo</option>
+                                        <option value="USADO_POCO">Poco uso</option>
+                                        <option value="USADO_NORMAL">Uso normal</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Botones de acción -->
-                <div class="card">
-                    <div class="card-body">
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-success" id="btn-guardar">
-                                <i class="ri-save-line me-1"></i> Crear Requerimiento
+                    <!-- Error despacho -->
+                    <div class="card border-0 shadow-sm mb-2" id="seccion-error-despacho" style="display:none;">
+                        <div class="card-header bg-soft-warning"><h6 class="card-title mb-0 small"><i class="ri-exchange-line me-1 text-warning"></i>Detalle del Error</h6></div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-5">
+                                    <label class="form-label">Tipo de Error <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="subtipo_error" name="subtipo">
+                                        <option value="">Seleccione...</option>
+                                        <option value="PRODUCTO_EQUIVOCADO">Producto Equivocado</option>
+                                        <option value="TALLA_INCORRECTA">Talla Incorrecta</option>
+                                        <option value="COLOR_INCORRECTO">Color Incorrecto</option>
+                                        <option value="CANTIDAD_INCORRECTA">Cantidad Incorrecta</option>
+                                        <option value="OTRO_ERROR">Otro</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-7">
+                                    <label class="form-label">Producto/Talla/Color Esperado</label>
+                                    <input type="text" class="form-control" id="producto_esperado" name="producto_esperado" placeholder="Ej: Nike Air Max 90, Talla 42, Negro">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Garantia -->
+                    <div class="card border-0 shadow-sm mb-2" id="seccion-garantia" style="display:none;">
+                        <div class="card-header bg-soft-info"><h6 class="card-title mb-0 small"><i class="ri-shield-check-line me-1 text-info"></i>Garantia</h6></div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-5">
+                                    <label class="form-label">Condicion del Producto</label>
+                                    <select class="form-select" id="condicion_producto_garantia" name="condicion_producto">
+                                        <option value="">Seleccione...</option>
+                                        <option value="NUEVO_SIN_USO">Nuevo</option>
+                                        <option value="USADO_POCO">Poco uso</option>
+                                        <option value="USADO_NORMAL">Uso normal</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Documento + Producto -->
+                    <div class="card border-0 shadow-sm mb-2">
+                        <div class="card-header bg-white"><h6 class="card-title mb-0 small"><span class="badge bg-primary rounded-pill me-1" style="font-size:.6rem">2</span> Documento y Producto</h6></div>
+                        <div class="card-body">
+                            <!-- Busqueda de folio (todas las sucursales) -->
+                            <div class="row g-2 mb-2">
+                                <div class="col">
+                                    <label class="form-label">Folio / Correlativo <small class="text-muted">(busca en todas las sucursales)</small></label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" id="buscar_folio" placeholder="Ingrese folio..." onkeydown="if(event.key==='Enter'){event.preventDefault();buscarDocumento();}">
+                                        <button class="btn btn-primary" type="button" onclick="buscarDocumento()"><i class="ri-search-line me-1"></i>Buscar</button>
+                                        <button class="btn btn-outline-secondary" type="button" onclick="limpiarDocumento()" title="Limpiar"><i class="ri-close-line"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Selector de documento (cuando hay multiples resultados) -->
+                            <div id="selector-documento" class="mb-2" style="display:none;">
+                                <label class="form-label"><i class="ri-store-2-line me-1"></i>Se encontraron documentos en varias sucursales:</label>
+                                <select class="form-select form-select-sm" id="documento_select" onchange="seleccionarDocumento()">
+                                    <option value="">-- Seleccione documento --</option>
+                                </select>
+                            </div>
+
+                            <!-- Info del documento seleccionado -->
+                            <div id="info-documento" class="mb-2" style="display:none;">
+                                <div class="alert alert-success border-0 py-2 px-3 mb-0 small">
+                                    <i class="ri-checkbox-circle-fill me-1"></i><span id="doc-info-text"></span>
+                                    <span class="text-muted ms-1" id="doc-productos-info"></span>
+                                </div>
+                            </div>
+
+                            <input type="hidden" id="tipo_documento" name="tipo_documento">
+                            <input type="hidden" id="numero_boleta" name="numero_boleta">
+                            <input type="hidden" id="fecha_compra" name="fecha_compra">
+
+                            <hr class="my-2">
+
+                            <!-- Producto del documento (auto-seleccion) -->
+                            <div id="seccion-producto-documento" style="display:none;">
+                                <label class="form-label fw-semibold"><i class="ri-shopping-bag-line me-1"></i>Producto del documento</label>
+                                <select class="form-select form-select-sm mb-2" id="producto_documento_select" onchange="seleccionarProductoDocumento()">
+                                    <option value="">-- Seleccione producto --</option>
+                                </select>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" id="toggle_manual" onchange="toggleManual()">
+                                    <label class="form-check-label small text-muted" for="toggle_manual">Ingresar producto manualmente</label>
+                                </div>
+                            </div>
+
+                            <!-- Entrada manual -->
+                            <div id="entrada-manual-producto">
+                                <div class="row g-2">
+                                    <div class="col-md-5">
+                                        <label class="form-label">SKU <span class="text-danger">*</span></label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control" id="sku" name="sku" required placeholder="SKU">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="buscarProducto()"><i class="ri-search-line"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-7">
+                                        <label class="form-label">Producto <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" id="nombre_producto" name="nombre_producto" required placeholder="Nombre del producto">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cliente -->
+                    <div class="card border-0 shadow-sm mb-2">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <h6 class="card-title mb-0 small"><span class="badge bg-primary rounded-pill me-1" style="font-size:.6rem">3</span> Cliente</h6>
+                            <button type="button" class="btn btn-soft-success btn-sm py-0 px-2" style="font-size:.75rem" onclick="abrirModalCrearCliente()"><i class="ri-user-add-line me-1"></i>Nuevo</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">RUT</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" id="cliente_rut" name="cliente_rut" placeholder="12345678-9" onblur="validarRUTAutomatico()">
+                                        <button class="btn btn-outline-info" type="button" onclick="buscarClientePorRUT()"><i class="ri-search-line"></i></button>
+                                    </div>
+                                    <small class="text-muted" id="rut-validacion-msg" style="font-size:.7rem"></small>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Nombre <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="cliente_nombre" name="cliente_nombre" required placeholder="Nombre completo">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Telefono</label>
+                                    <input type="tel" class="form-control" id="cliente_telefono" name="cliente_telefono" placeholder="+56 9 1234 5678">
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="cliente_email" name="cliente_email" placeholder="cliente@email.com">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Descripcion -->
+                    <div class="card border-0 shadow-sm mb-2">
+                        <div class="card-header bg-white"><h6 class="card-title mb-0 small"><span class="badge bg-primary rounded-pill me-1" style="font-size:.6rem">4</span> Descripcion</h6></div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="motivo" name="motivo" rows="2" required placeholder="Describa brevemente el motivo"></textarea>
+                            </div>
+                            <div>
+                                <label class="form-label">Detalle del problema</label>
+                                <textarea class="form-control" id="descripcion_problema" name="descripcion_problema" rows="3" placeholder="Descripcion detallada (opcional)"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FOTOS GUIADAS -->
+                    <div class="card border-0 shadow-sm mb-2" id="seccion-fotos">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <h6 class="card-title mb-0 small"><span class="badge bg-primary rounded-pill me-1" style="font-size:.6rem">5</span> Fotos</h6>
+                            <span class="badge bg-soft-secondary text-secondary" style="font-size:.7rem" id="badge-max-fotos">Max: 5</span>
+                        </div>
+                        <div class="card-body">
+                            <div id="guia-fotos" class="alert alert-info border-0 py-2 px-3 mb-2 small" style="display:none;">
+                                <i class="ri-information-line me-1"></i>Las fotos <span class="badge bg-danger" style="font-size:.6rem">Obligatoria</span> son necesarias para enviar al proveedor.
+                            </div>
+                            <div class="row g-2" id="fotos-slots-container"></div>
+                            <div id="fotos-adicionales-container" class="mt-2"></div>
+                            <button type="button" class="btn btn-soft-primary btn-sm mt-1" style="font-size:.75rem" onclick="agregarFotoAdicional()" id="btn-agregar-foto-adicional">
+                                <i class="ri-add-line me-1"></i>Foto adicional
                             </button>
-                            {% if modo_embebido %}
-                            <button type="button" class="btn btn-soft-secondary" data-bs-dismiss="modal">
-                                <i class="ri-close-line me-1"></i> Cerrar
-                            </button>
-                            {% else %}
-                            <a href="{% url 'modulo_requerimientos' %}" class="btn btn-soft-secondary">
-                                <i class="ri-arrow-left-line me-1"></i> Volver
-                            </a>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
 
+                <!-- SIDEBAR -->
+                <div class="col-lg-4">
+                    <div class="card border-0 shadow-sm mb-2">
+                        <div class="card-body py-2">
+                            <div class="mb-2">
+                                <label class="form-label">Prioridad</label>
+                                <select class="form-select" id="prioridad" name="prioridad">
+                                    <option value="BAJA">Baja</option>
+                                    <option value="MEDIA" selected>Media</option>
+                                    <option value="ALTA">Alta</option>
+                                    <option value="URGENTE">Urgente</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Proveedor</label>
+                                <select class="form-select" id="proveedor_id" name="proveedor_id">
+                                    <option value="">Seleccione...</option>
+                                    {% for proveedor in proveedores %}
+                                    <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Checklist fotos -->
+                    <div class="card border-0 shadow-sm mb-2" id="checklist-fotos" style="display:none;">
+                        <div class="card-header bg-white py-2"><h6 class="card-title mb-0 small"><i class="ri-checkbox-multiple-line me-1"></i>Fotos Obligatorias</h6></div>
+                        <div class="card-body p-0">
+                            <ul class="list-group list-group-flush" id="checklist-fotos-list" style="font-size:.8rem"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Botones -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success" id="btn-guardar">
+                            <i class="ri-save-line me-1"></i>Crear Requerimiento
+                        </button>
+                        {% if modo_embebido %}
+                        <button type="button" class="btn btn-soft-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                        {% else %}
+                        <a href="{% url 'modulo_requerimientos' %}" class="btn btn-soft-secondary btn-sm">Volver</a>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
     </form>
@@ -305,60 +309,54 @@
 
 <!-- Modal Crear Cliente -->
 <div class="modal fade" id="modalCrearCliente" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-sm">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">
-                    <i class="ri-user-add-line me-2"></i>Crear Nuevo Cliente
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="modal-header bg-success text-white py-2">
+                <h6 class="modal-title"><i class="ri-user-add-line me-1"></i>Nuevo Cliente</h6>
+                <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body py-2 section-compact">
                 <form id="form-crear-cliente">
-                    <div class="row g-3">
-                        <div class="col-md-12">
+                    <div class="row g-2">
+                        <div class="col-12">
                             <label class="form-label">RUT <small class="text-muted">(opcional)</small></label>
-                            <input type="text" class="form-control" id="modal-cliente-rut" 
-                                   placeholder="12345678-9" onblur="validarRUTModal()">
-                            <small class="text-muted" id="modal-rut-validacion"></small>
+                            <input type="text" class="form-control" id="modal-cliente-rut" placeholder="12345678-9" onblur="validarRUTModal()">
+                            <small class="text-muted" id="modal-rut-validacion" style="font-size:.7rem"></small>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <label class="form-label">Nombre <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="modal-cliente-nombre" required>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <label class="form-label">Apellido <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="modal-cliente-apellido" required>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Teléfono</label>
-                            <input type="tel" class="form-control" id="modal-cliente-telefono" 
-                                   placeholder="+56 9 1234 5678">
+                        <div class="col-6">
+                            <label class="form-label">Telefono</label>
+                            <input type="tel" class="form-control" id="modal-cliente-telefono" placeholder="+56 9 ...">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <label class="form-label">Email</label>
                             <input type="email" class="form-control" id="modal-cliente-email">
                         </div>
-                        <div class="col-md-12">
-                            <label class="form-label">Dirección</label>
+                        <div class="col-12">
+                            <label class="form-label">Direccion</label>
                             <input type="text" class="form-control" id="modal-cliente-direccion">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <label class="form-label">Comuna</label>
                             <input type="text" class="form-control" id="modal-cliente-comuna">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-6">
                             <label class="form-label">Ciudad</label>
                             <input type="text" class="form-control" id="modal-cliente-ciudad">
                         </div>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" onclick="guardarNuevoCliente()">
-                    <i class="ri-save-line me-1"></i> Guardar Cliente
-                </button>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="guardarNuevoCliente()"><i class="ri-save-line me-1"></i>Guardar</button>
             </div>
         </div>
     </div>

@@ -961,6 +961,11 @@
                     <i class="ri-building-line me-2"></i>Permisos por Sucursal
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-usuarios" data-bs-toggle="tab" data-bs-target="#panel-usuarios" type="button" role="tab">
+                    <i class="ri-user-star-line me-2"></i>Permisos por Usuario
+                </button>
+            </li>
         </ul>
 
         <!-- KPI Cards -->
@@ -1015,11 +1020,11 @@
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <p class="kpi-label mb-1">Roles Definidos</p>
-                                <h3 class="kpi-value mb-0">{{ roles|length }}</h3>
+                                <p class="kpi-label mb-1">Overrides Usuario</p>
+                                <h3 class="kpi-value mb-0">{{ total_overrides }}</h3>
                             </div>
                             <div class="kpi-icon warning">
-                                <i class="ri-user-settings-line"></i>
+                                <i class="ri-user-star-line"></i>
                             </div>
                         </div>
                     </div>
@@ -1312,6 +1317,88 @@
             </div>
         </div>
         </div><!-- Fin panel-sucursales -->
+
+        <!-- ========== PANEL PERMISOS POR USUARIO ========== -->
+        <div class="tab-pane fade" id="panel-usuarios" role="tabpanel">
+        <div class="row">
+            <div class="col-12">
+                <div class="permisos-card card">
+                    <div class="permisos-card-header">
+                        <div class="row align-items-center">
+                            <div class="col-lg-5 mb-3 mb-lg-0">
+                                <h5>
+                                    <i class="ri-user-star-line me-2" style="color: var(--nexo-primary);"></i>
+                                    Permisos por Usuario
+                                </h5>
+                                <small class="text-muted">Override de permisos individuales. Prevalecen sobre el rol.</small>
+                            </div>
+                            <div class="col-lg-4 mb-3 mb-lg-0">
+                                <select id="selectorUsuario" class="form-select role-selector w-100" onchange="cargarPermisosUsuario()">
+                                    <option value="">-- Seleccionar Usuario --</option>
+                                    {% for u in usuarios_activos %}
+                                    <option value="{{ u.id }}" data-rol="{{ u.rol }}">
+                                        {{ u.get_full_name|default:u.username }} ({{ u.get_rol_display }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-lg-3 text-end">
+                                <button class="btn btn-nexo-success btn-sm" onclick="guardarPermisosUsuario()" id="btnGuardarUsuario" disabled>
+                                    <i class="ri-save-line me-1"></i>Guardar
+                                </button>
+                                <button class="btn btn-nexo-outline btn-sm" onclick="limpiarPermisosUsuario()" id="btnLimpiarUsuario" disabled>
+                                    <i class="ri-delete-bin-line me-1"></i>Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-4">
+                        <!-- Info del usuario seleccionado -->
+                        <div id="infoUsuarioSeleccionado" style="display:none;" class="mb-4">
+                            <div class="d-flex align-items-center gap-3 p-3 rounded-3" style="background: var(--nexo-gray-100);">
+                                <div>
+                                    <span class="badge-usuario-rol" id="badgeRolUsuario"></span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-0" id="nombreUsuarioInfo"></h6>
+                                    <small class="text-muted" id="sucursalesUsuarioInfo"></small>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="chkVerTodasSucursales" style="width:48px; height:24px;">
+                                    <label class="form-check-label fw-semibold ms-2" for="chkVerTodasSucursales">
+                                        Ver todas las sucursales
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Leyenda de estados -->
+                        <div id="leyendaUsuario" style="display:none;" class="mb-3">
+                            <div class="d-flex gap-3 flex-wrap align-items-center" style="font-size:0.8rem;">
+                                <span><span class="badge bg-secondary">--</span> Usa permiso del rol</span>
+                                <span><span class="badge bg-success">SI</span> Override: otorgar</span>
+                                <span><span class="badge bg-danger">NO</span> Override: denegar</span>
+                            </div>
+                        </div>
+
+                        <!-- Empty state -->
+                        <div id="emptyStateUsuario">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="ri-user-star-line"></i>
+                                </div>
+                                <h5>Selecciona un usuario</h5>
+                                <p>Elige un usuario del selector para configurar sus permisos individuales</p>
+                            </div>
+                        </div>
+
+                        <!-- Container de módulos usuario -->
+                        <div id="modulosPermisosUsuarioContainer" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div><!-- Fin panel-usuarios -->
 
         </div><!-- Fin tab-content -->
     </div>
@@ -3480,6 +3567,273 @@ marcarModulo = function(moduloId, tipo, valor) {
     actualizarResumenPermisos();
     actualizarTodosContadoresModulos();
 };
+
+// ========== PERMISOS POR USUARIO ==========
+let datosUsuarioActual = null;
+
+function cargarPermisosUsuario() {
+    const userId = document.getElementById('selectorUsuario').value;
+    const container = document.getElementById('modulosPermisosUsuarioContainer');
+    const emptyState = document.getElementById('emptyStateUsuario');
+    const infoUsuario = document.getElementById('infoUsuarioSeleccionado');
+    const leyenda = document.getElementById('leyendaUsuario');
+
+    if (!userId) {
+        container.style.display = 'none';
+        emptyState.style.display = 'block';
+        infoUsuario.style.display = 'none';
+        leyenda.style.display = 'none';
+        document.getElementById('btnGuardarUsuario').disabled = true;
+        document.getElementById('btnLimpiarUsuario').disabled = true;
+        return;
+    }
+
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando permisos...</p></div>';
+    container.style.display = 'block';
+    emptyState.style.display = 'none';
+
+    fetch(`/app/permisos/obtener-permisos-usuario/?usuario_id=${userId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                container.innerHTML = `<div class="alert alert-danger">${data.mensaje || 'Error'}</div>`;
+                return;
+            }
+            datosUsuarioActual = data;
+
+            // Mostrar info del usuario
+            infoUsuario.style.display = 'block';
+            leyenda.style.display = 'block';
+            document.getElementById('badgeRolUsuario').innerHTML = `<i class="ri-shield-user-line me-1"></i>${data.usuario.rol_display}`;
+            document.getElementById('nombreUsuarioInfo').textContent = data.usuario.nombre;
+
+            // Sucursales
+            fetch(`/app/permisos/usuarios/`)
+                .then(r => r.json())
+                .then(uData => {
+                    if (uData.success) {
+                        const u = uData.usuarios.find(x => x.id == userId);
+                        if (u && u.sucursales_asignadas.length > 0) {
+                            document.getElementById('sucursalesUsuarioInfo').textContent = 'Sucursales: ' + u.sucursales_asignadas.join(', ');
+                        } else {
+                            document.getElementById('sucursalesUsuarioInfo').textContent = 'Sin sucursales asignadas';
+                        }
+                    }
+                });
+
+            document.getElementById('chkVerTodasSucursales').checked = data.ve_todas_sucursales;
+            document.getElementById('btnGuardarUsuario').disabled = false;
+            document.getElementById('btnLimpiarUsuario').disabled = false;
+
+            renderPermisosUsuario(data.modulos);
+        })
+        .catch(err => {
+            container.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+        });
+}
+
+function renderPermisosUsuario(modulos) {
+    const container = document.getElementById('modulosPermisosUsuarioContainer');
+    let html = '';
+
+    const tipos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
+    const tiposLabel = {'puede_ver': 'Ver', 'puede_crear': 'Crear', 'puede_editar': 'Editar', 'puede_eliminar': 'Eliminar', 'puede_exportar': 'Exportar', 'puede_aprobar': 'Aprobar'};
+
+    modulos.forEach(modulo => {
+        html += `<div class="modulo-card mb-3">
+            <div class="modulo-header" data-bs-toggle="collapse" data-bs-target="#userMod_${modulo.codigo}">
+                <div class="modulo-title">
+                    <div class="modulo-icon"><i class="${modulo.icono || 'ri-folder-line'}"></i></div>
+                    <h6 class="modulo-name mb-0">${modulo.nombre}</h6>
+                </div>
+                <div class="modulo-toggle"><i class="ri-arrow-down-s-line"></i></div>
+            </div>
+            <div class="collapse show" id="userMod_${modulo.codigo}">
+                <div class="p-3">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">
+                            <thead>
+                                <tr>
+                                    <th style="min-width:200px;">Opcion</th>
+                                    ${tipos.map(t => `<th class="text-center" style="min-width:70px;">${tiposLabel[t]}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>`;
+
+        modulo.opciones.forEach(opcion => {
+            html += renderFilaPermisoUsuario(opcion, tipos);
+            if (opcion.subopciones) {
+                opcion.subopciones.forEach(sub => {
+                    html += renderFilaPermisoUsuario(sub, tipos, true);
+                });
+            }
+        });
+
+        html += `</tbody></table></div></div></div></div>`;
+    });
+
+    container.innerHTML = html;
+}
+
+function renderFilaPermisoUsuario(opcion, tipos, esSub = false) {
+    const indent = esSub ? 'ps-4' : '';
+    let celdas = `<td class="${indent}"><i class="${opcion.icono || 'ri-circle-line'} me-1 text-muted"></i>${opcion.nombre}</td>`;
+
+    tipos.forEach(tipo => {
+        const rolVal = opcion.permisos_rol[tipo];
+        const overrideVal = opcion.overrides[tipo];
+
+        // Estado visual: null = usa rol, true = grant, false = deny
+        let btnClass, btnText;
+        if (overrideVal === true) {
+            btnClass = 'btn-success';
+            btnText = 'SI';
+        } else if (overrideVal === false) {
+            btnClass = 'btn-danger';
+            btnText = 'NO';
+        } else {
+            btnClass = 'btn-secondary';
+            btnText = '--';
+        }
+
+        // Indicador del rol base
+        const rolIcon = rolVal ? '<i class="ri-check-line text-success" style="font-size:0.65rem;"></i>' : '<i class="ri-close-line text-danger" style="font-size:0.65rem;"></i>';
+
+        celdas += `<td class="text-center">
+            <button class="btn ${btnClass} btn-sm px-2 py-0" style="font-size:0.75rem; min-width:38px;"
+                    onclick="toggleOverrideUsuario(this, ${opcion.id}, '${tipo}')"
+                    data-opcion-id="${opcion.id}" data-tipo="${tipo}" data-override="${overrideVal}">
+                ${btnText}
+            </button>
+            <div style="font-size:0.6rem; color:#999;">Rol: ${rolIcon}</div>
+        </td>`;
+    });
+
+    return `<tr>${celdas}</tr>`;
+}
+
+function toggleOverrideUsuario(btn, opcionId, tipo) {
+    // Ciclo: null -> true -> false -> null
+    let current = btn.getAttribute('data-override');
+    let next;
+    if (current === 'null' || current === '') {
+        next = true;
+    } else if (current === 'true') {
+        next = false;
+    } else {
+        next = null;
+    }
+
+    btn.setAttribute('data-override', String(next));
+
+    if (next === true) {
+        btn.className = 'btn btn-success btn-sm px-2 py-0';
+        btn.style.fontSize = '0.75rem';
+        btn.style.minWidth = '38px';
+        btn.innerHTML = 'SI';
+    } else if (next === false) {
+        btn.className = 'btn btn-danger btn-sm px-2 py-0';
+        btn.style.fontSize = '0.75rem';
+        btn.style.minWidth = '38px';
+        btn.innerHTML = 'NO';
+    } else {
+        btn.className = 'btn btn-secondary btn-sm px-2 py-0';
+        btn.style.fontSize = '0.75rem';
+        btn.style.minWidth = '38px';
+        btn.innerHTML = '--';
+    }
+}
+
+function guardarPermisosUsuario() {
+    const userId = document.getElementById('selectorUsuario').value;
+    if (!userId) return;
+
+    const veTodasSucursales = document.getElementById('chkVerTodasSucursales').checked;
+
+    // Recopilar todos los overrides de los botones
+    const btns = document.querySelectorAll('#modulosPermisosUsuarioContainer button[data-opcion-id]');
+    const permisosMap = {};
+
+    btns.forEach(btn => {
+        const opId = btn.getAttribute('data-opcion-id');
+        const tipo = btn.getAttribute('data-tipo');
+        let val = btn.getAttribute('data-override');
+
+        if (val === 'true') val = true;
+        else if (val === 'false') val = false;
+        else val = null;
+
+        if (!permisosMap[opId]) permisosMap[opId] = {opcion_id: parseInt(opId), overrides: {}};
+        permisosMap[opId].overrides[tipo] = val;
+    });
+
+    const permisos = Object.values(permisosMap);
+
+    fetch('/app/permisos/guardar-permisos-usuario/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            usuario_id: parseInt(userId),
+            permisos: permisos,
+            ve_todas_sucursales: veTodasSucursales
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({icon:'success', title:'Guardado', text: data.mensaje, timer:2000, showConfirmButton:false});
+        } else {
+            Swal.fire({icon:'error', title:'Error', text: data.mensaje});
+        }
+    })
+    .catch(err => Swal.fire({icon:'error', title:'Error', text: err.message}));
+}
+
+function limpiarPermisosUsuario() {
+    const userId = document.getElementById('selectorUsuario').value;
+    if (!userId) return;
+
+    Swal.fire({
+        title: 'Limpiar overrides',
+        text: 'Se eliminarán todos los overrides de este usuario. Volverá a usar los permisos de su rol.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Si, limpiar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        fetch('/app/permisos/eliminar-permisos-usuario/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken')
+            },
+            body: JSON.stringify({usuario_id: parseInt(userId)})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({icon:'success', title:'Limpiado', text: data.mensaje, timer:2000, showConfirmButton:false});
+                cargarPermisosUsuario();
+            } else {
+                Swal.fire({icon:'error', title:'Error', text: data.mensaje});
+            }
+        });
+    });
+}
+
+function getCookie(name) {
+    const cookies = document.cookie.split(';');
+    for (let c of cookies) {
+        c = c.trim();
+        if (c.startsWith(name + '=')) return decodeURIComponent(c.substring(name.length + 1));
+    }
+    return '';
+}
 </script>
 
 {% include 'layout/footer.html' %}

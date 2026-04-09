@@ -509,6 +509,158 @@
     border-left: 3px solid var(--nexo-primary);
 }
 
+/* ========== ARTICLE GROUP CARDS ========== */
+.articulo-group {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: var(--nexo-transition-normal);
+}
+
+.articulo-group:hover {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 2px 8px rgba(0, 102, 255, 0.1);
+}
+
+.articulo-group-header {
+    background: var(--nexo-gray-100);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.articulo-group-header:hover {
+    background: var(--nexo-primary-light);
+}
+
+.articulo-group-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--nexo-radius-sm);
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.articulo-group-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.articulo-group-info .art-name {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--nexo-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.articulo-group-info .art-desc {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.articulo-group-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.articulo-group-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.articulo-group.expanded .articulo-group-body {
+    max-height: 500px;
+}
+
+.articulo-group-body-inner {
+    padding: 8px 14px 12px;
+    border-top: 1px solid var(--nexo-gray-300);
+}
+
+.articulo-group .sku-mini-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.articulo-group .sku-mini-table th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--nexo-gray-500);
+    font-weight: 600;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--nexo-gray-300);
+}
+
+.articulo-group .sku-mini-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    vertical-align: middle;
+}
+
+.articulo-group .sku-mini-table tr:hover {
+    background: var(--nexo-primary-light);
+}
+
+.btn-imprimir-articulo {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-sm);
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: var(--nexo-transition-fast);
+    white-space: nowrap;
+}
+
+.btn-imprimir-articulo:hover {
+    background: #00b894;
+}
+
+.sku-count-badge {
+    background: var(--nexo-primary);
+    color: #fff;
+    border-radius: 12px;
+    padding: 2px 9px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.articulo-group .chevron-icon {
+    transition: transform 0.25s ease;
+    color: var(--nexo-gray-500);
+    font-size: 1.1rem;
+}
+
+.articulo-group.expanded .chevron-icon {
+    transform: rotate(90deg);
+    color: var(--nexo-primary);
+}
+
 /* Ya impreso badge en tabla productos */
 .badge-impreso {
     background: rgba(0, 212, 170, 0.12);
@@ -751,49 +903,43 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
         </div>
     </div>
 
-    <!-- ===== FILA 2: SKU Rápido + Vista Previa ===== -->
+    <!-- ===== FILA 2: Búsqueda Artículo/SKU + Vista Previa ===== -->
     <div class="row g-3">
-        <!-- Búsqueda Rápida de SKU -->
+        <!-- Búsqueda por Artículo / SKU -->
         <div class="col-lg-5">
             <div class="nexo-card">
                 <div class="nexo-card-header" style="background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);">
-                    <h5><i class="ri-search-line"></i> Imprimir SKU Específico</h5>
+                    <h5><i class="ri-price-tag-3-line"></i> Imprimir por Artículo / SKU</h5>
                 </div>
                 <div class="nexo-card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-7">
-                            <label class="form-label small">Buscar por SKU o Artículo</label>
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col">
+                            <label class="form-label small">Buscar por SKU, artículo o descripción</label>
                             <input type="text" id="busquedaSkuRapida" class="form-control" 
-                                placeholder="Ingrese SKU o nombre..." 
+                                placeholder="Ej: 100234, Polera, Nike..." 
                                 onkeyup="debounceSkuSearch(event)">
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">Cantidad</label>
+                        <div class="col-auto" style="width: 80px;">
+                            <label class="form-label small">Cant.</label>
                             <input type="number" id="cantidadSkuRapida" class="form-control" 
                                 value="1" min="1" max="999">
                         </div>
-                        <div class="col-md-2">
-                            <button class="nexo-btn nexo-btn-primary w-100" onclick="buscarSkuRapido()">
+                        <div class="col-auto">
+                            <button class="nexo-btn nexo-btn-primary" onclick="buscarSkuRapido()" style="height:38px;">
                                 <i class="ri-search-line"></i>
                             </button>
                         </div>
                     </div>
-                    <!-- Resultados de búsqueda rápida -->
-                    <div id="resultadosSkuRapido" class="mt-3" style="display: none;">
-                        <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
-                            <table class="nexo-table">
-                                <thead>
-                                    <tr>
-                                        <th>SKU</th>
-                                        <th>Artículo</th>
-                                        <th>Talla</th>
-                                        <th>Precio</th>
-                                        <th>Etiq.</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaSkuRapido"></tbody>
-                            </table>
+
+                    <!-- Resultados agrupados por artículo -->
+                    <div id="resultadosSkuRapido" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small" id="resumenBusqueda"></span>
+                            <button class="nexo-btn nexo-btn-outline" style="padding:3px 10px;font-size:0.75rem;" onclick="limpiarBusqueda()" title="Limpiar resultados">
+                                <i class="ri-close-line"></i> Limpiar
+                            </button>
+                        </div>
+                        <div id="listaArticulosResultados" style="max-height: 380px; overflow-y: auto;">
                         </div>
                     </div>
                 </div>
@@ -1653,6 +1799,7 @@ async function confirmarImpresionModal() {
 
 let skuSearchTimeout = null;
 let productosSkuRapido = [];
+let articulosAgrupados = {};
 
 function debounceSkuSearch(event) {
     if (event.key === 'Enter') { buscarSkuRapido(); return; }
@@ -1674,69 +1821,188 @@ async function buscarSkuRapido() {
         const data = await response.json();
         if (data.success) {
             productosSkuRapido = data.productos;
-            renderizarResultadosSkuRapido(data.productos);
+            articulosAgrupados = agruparPorArticulo(data.productos);
+            renderizarArticulosAgrupados();
             document.getElementById('resultadosSkuRapido').style.display = 'block';
         }
     } catch (error) { console.error('Error búsqueda SKU:', error); }
 }
 
-function renderizarResultadosSkuRapido(productos) {
-    const tbody = document.getElementById('tablaSkuRapido');
+function agruparPorArticulo(productos) {
+    const grupos = {};
+    for (const prod of productos) {
+        const key = prod.articulo || prod.sku;
+        if (!grupos[key]) {
+            grupos[key] = {
+                articulo: prod.articulo,
+                descripcion: prod.descripcion || prod.articulo,
+                marca: prod.marca || '',
+                precio: prod.precio,
+                sucursal: prod.sucursal || '',
+                skus: []
+            };
+        }
+        grupos[key].skus.push(prod);
+    }
+    return grupos;
+}
+
+function renderizarArticulosAgrupados() {
+    const container = document.getElementById('listaArticulosResultados');
+    const keys = Object.keys(articulosAgrupados);
     const cantDefault = parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
 
-    if (!productos || productos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-muted">Sin resultados</td></tr>`;
+    const totalArticulos = keys.length;
+    const totalSkus = Object.values(articulosAgrupados).reduce((s, g) => s + g.skus.length, 0);
+    document.getElementById('resumenBusqueda').textContent =
+        `${totalArticulos} artículo${totalArticulos !== 1 ? 's' : ''} · ${totalSkus} SKU${totalSkus !== 1 ? 's' : ''}`;
+
+    if (keys.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4 text-muted">
+                <i class="ri-search-line" style="font-size:2rem; color:var(--nexo-gray-300);"></i>
+                <p class="mt-2 mb-0">Sin resultados</p>
+            </div>`;
         return;
     }
 
-    tbody.innerHTML = productos.map((prod, index) => `
-        <tr class="sku-result-row" 
-            onmouseenter="actualizarPreview({...productosSkuRapido[${index}], cantidad_etiquetas: getCantSkuRapido(${index})})"
-            onclick="abrirModalDesdeSkuRapido(${index})">
-            <td><code style="font-size:.82rem;">${prod.sku}</code></td>
-            <td title="${prod.descripcion || prod.articulo}">${prod.articulo.substring(0, 14)}</td>
-            <td><strong>${prod.talla}</strong></td>
-            <td>$${formatearPrecio(prod.precio)}</td>
-            <td onclick="event.stopPropagation()">
-                <div class="quantity-stepper">
-                    <button type="button" onclick="ajustarCantSkuRapido(${index}, -1)">−</button>
-                    <input type="number" class="sku-rapido-cantidad" data-index="${index}"
-                        value="${cantDefault}" min="1" max="999">
-                    <button type="button" onclick="ajustarCantSkuRapido(${index}, 1)">+</button>
+    container.innerHTML = keys.map((artKey, gIdx) => {
+        const grupo = articulosAgrupados[artKey];
+        const skuCount = grupo.skus.length;
+        const isSingleSku = skuCount === 1;
+
+        const skuRows = grupo.skus.map((s, sIdx) => `
+            <tr class="sku-result-row" onmouseenter="actualizarPreview(articulosAgrupados['${artKey}'].skus[${sIdx}])">
+                <td><code style="font-size:.8rem;">${s.sku}</code></td>
+                <td><strong>${s.talla || '—'}</strong></td>
+                <td>${s.color || '—'}</td>
+                <td>$${formatearPrecio(s.precio)}</td>
+                <td onclick="event.stopPropagation()">
+                    <div class="quantity-stepper">
+                        <button type="button" onclick="ajustarCantArticuloSku('${artKey}', ${sIdx}, -1)">−</button>
+                        <input type="number" class="sku-art-cantidad" data-art="${artKey}" data-sIdx="${sIdx}"
+                            value="${cantDefault}" min="1" max="999">
+                        <button type="button" onclick="ajustarCantArticuloSku('${artKey}', ${sIdx}, 1)">+</button>
+                    </div>
+                </td>
+                <td>
+                    <button class="nexo-btn nexo-btn-success" style="padding:3px 8px;font-size:0.78rem;"
+                        onclick="event.stopPropagation(); imprimirSkuIndividual('${artKey}', ${sIdx})"
+                        title="Imprimir este SKU">
+                        <i class="ri-printer-line"></i>
+                    </button>
+                </td>
+            </tr>`).join('');
+
+        return `
+        <div class="articulo-group ${isSingleSku ? 'expanded' : ''}" data-art-key="${artKey}" id="artGroup_${gIdx}">
+            <div class="articulo-group-header" onclick="toggleArticuloGroup('artGroup_${gIdx}')">
+                <div class="articulo-group-icon"><i class="ri-box-3-line"></i></div>
+                <div class="articulo-group-info">
+                    <div class="art-name">${artKey}</div>
+                    <div class="art-desc">${grupo.descripcion} ${grupo.marca ? '· ' + grupo.marca : ''} · $${formatearPrecio(grupo.precio)}</div>
                 </div>
-            </td>
-            <td>
-                <button class="nexo-btn nexo-btn-success" 
-                    onclick="event.stopPropagation(); abrirModalDesdeSkuRapido(${index})"
-                    title="Revisar e Imprimir">
-                    <i class="ri-printer-line"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+                <div class="articulo-group-meta">
+                    <span class="sku-count-badge">${skuCount} SKU${skuCount > 1 ? 's' : ''}</span>
+                    ${skuCount > 1 ? `
+                    <button class="btn-imprimir-articulo" onclick="event.stopPropagation(); imprimirArticuloCompleto('${artKey}')" title="Imprimir todas las tallas/colores de este artículo">
+                        <i class="ri-printer-fill"></i> Imprimir Todo
+                    </button>` : ''}
+                    <i class="ri-arrow-right-s-line chevron-icon"></i>
+                </div>
+            </div>
+            <div class="articulo-group-body">
+                <div class="articulo-group-body-inner">
+                    <table class="sku-mini-table">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Talla</th>
+                                <th>Color</th>
+                                <th>Precio</th>
+                                <th>Etiq.</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>${skuRows}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
 }
 
-function getCantSkuRapido(index) {
-    const el = document.querySelector(`.sku-rapido-cantidad[data-index="${index}"]`);
-    return parseInt(el?.value) || 1;
+function toggleArticuloGroup(groupId) {
+    const el = document.getElementById(groupId);
+    if (el) el.classList.toggle('expanded');
 }
 
-function ajustarCantSkuRapido(index, delta) {
-    const el = document.querySelector(`.sku-rapido-cantidad[data-index="${index}"]`);
-    if (el) { el.value = Math.max(1, (parseInt(el.value) || 1) + delta); }
+function ajustarCantArticuloSku(artKey, sIdx, delta) {
+    const el = document.querySelector(`.sku-art-cantidad[data-art="${artKey}"][data-sidx="${sIdx}"]`);
+    if (el) el.value = Math.max(1, (parseInt(el.value) || 1) + delta);
+}
+
+function getCantArticuloSku(artKey, sIdx) {
+    const el = document.querySelector(`.sku-art-cantidad[data-art="${artKey}"][data-sidx="${sIdx}"]`);
+    return parseInt(el?.value) || parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
+}
+
+function imprimirSkuIndividual(artKey, sIdx) {
+    const grupo = articulosAgrupados[artKey];
+    if (!grupo) return;
+    const prod = { ...grupo.skus[sIdx] };
+    prod.cantidad_etiquetas = getCantArticuloSku(artKey, sIdx);
+    prod.seleccionado = true;
+    prod.sucursal = document.getElementById('sucursalEtiqueta')?.value || prod.sucursal || '';
+    abrirModalImprimir([prod], null);
+}
+
+async function imprimirArticuloCompleto(artKey) {
+    const grupo = articulosAgrupados[artKey];
+    if (!grupo) return;
+
+    const sucursalId = document.getElementById('filtroSucursal').value || '';
+    const sucursal = document.getElementById('sucursalEtiqueta')?.value || grupo.sucursal || '';
+    const cantDefault = parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
+
+    try {
+        const params = new URLSearchParams({ articulo: artKey, sucursal_id: sucursalId, fuente: obtenerFuenteActual() });
+        const response = await fetch(`/app/etiquetas/skus-articulo/?${params}`);
+        const data = await response.json();
+
+        if (data.success && data.productos.length > 0) {
+            const prods = data.productos.map(p => ({
+                ...p,
+                cantidad_etiquetas: cantDefault,
+                seleccionado: true,
+                sucursal: sucursal || p.sucursal
+            }));
+            abrirModalImprimir(prods, null);
+        } else {
+            Swal.fire({ icon: 'info', title: 'Sin SKUs', text: 'No se encontraron SKUs para este artículo.', confirmButtonColor: '#0066FF' });
+        }
+    } catch (error) {
+        console.error('Error cargando SKUs del artículo:', error);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar los SKUs del artículo.', confirmButtonColor: '#0066FF' });
+    }
+}
+
+function limpiarBusqueda() {
+    document.getElementById('busquedaSkuRapida').value = '';
+    document.getElementById('resultadosSkuRapido').style.display = 'none';
+    document.getElementById('listaArticulosResultados').innerHTML = '';
+    productosSkuRapido = [];
+    articulosAgrupados = {};
 }
 
 function abrirModalDesdeSkuRapido(index) {
     const prod = { ...productosSkuRapido[index] };
-    const cant = getCantSkuRapido(index);
-    prod.cantidad_etiquetas = cant;
+    prod.cantidad_etiquetas = parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
     prod.seleccionado = true;
-    const sucursal = document.getElementById('sucursalEtiqueta')?.value || prod.sucursal || '';
-    prod.sucursal = sucursal;
+    prod.sucursal = document.getElementById('sucursalEtiqueta')?.value || prod.sucursal || '';
     abrirModalImprimir([prod], null);
 }
 
-// mantener compatibilidad (ya no se usa directo)
 async function imprimirSkuRapido(index) {
     abrirModalDesdeSkuRapido(index);
 }

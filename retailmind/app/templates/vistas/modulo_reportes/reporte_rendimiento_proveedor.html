@@ -1,0 +1,284 @@
+{% load static %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+{% include 'layout/footer.html' %}
+
+<style>
+    .rp-kpi-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px;
+        border: 1px solid #e9ecef;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    .rp-kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .rp-kpi-value { font-size: 1.5rem; font-weight: 700; color: #405189; }
+    .rp-kpi-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: #6c757d; margin-top: 4px; }
+    .rp-header { background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 12px 12px 0 0; padding: 16px 24px; }
+    .rp-table thead th {
+        background: #405189; color: #fff; font-size: .78rem; font-weight: 600;
+        text-transform: uppercase; letter-spacing: .3px; padding: 10px 12px; border: none;
+        position: sticky; top: 0; z-index: 2;
+    }
+    .rp-table tbody td { font-size: .82rem; padding: 8px 12px; vertical-align: middle; }
+    .rp-table tbody tr:hover { background: rgba(64,81,137,0.04); }
+    .rp-bar { height: 6px; border-radius: 3px; background: #e9ecef; overflow: hidden; min-width: 60px; }
+    .rp-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+    .rp-loader { display: flex; align-items: center; justify-content: center; padding: 60px; }
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+
+            <!-- Header -->
+            <div class="card shadow-sm border-0 mb-4" style="border-radius:12px;overflow:hidden;">
+                <div class="rp-header">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <h5 class="text-white mb-1"><i class="bi bi-people me-2"></i>Rendimiento por Proveedor</h5>
+                            <small class="text-white opacity-75">Comprados - Recepcionados - Vendidos a Publico</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="/app/verGestionCompras/" class="btn btn-light btn-sm"><i class="bi bi-cart me-1"></i>Compras</a>
+                            <a href="/app/reportes/compras/" class="btn btn-light btn-sm"><i class="bi bi-graph-up me-1"></i>Reporte Compras</a>
+                            <button class="btn btn-light btn-sm" id="btnExportar"><i class="bi bi-download me-1"></i>Excel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Filtros -->
+                    <div class="row g-2 mb-3 align-items-end">
+                        <div class="col-auto">
+                            <label class="form-label small mb-1">Anio</label>
+                            <select class="form-select form-select-sm" id="filtroAnio" style="width:100px;"></select>
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label small mb-1">Proveedor</label>
+                            <select class="form-select form-select-sm" id="filtroProveedor" style="width:200px;">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label small mb-1">Desde</label>
+                            <input type="date" class="form-control form-control-sm" id="filtroDesde">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label small mb-1">Hasta</label>
+                            <input type="date" class="form-control form-control-sm" id="filtroHasta">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label small mb-1">Sucursal (ventas)</label>
+                            <select class="form-select form-select-sm" id="filtroSucursal" style="width:160px;">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-primary btn-sm" id="btnAplicar"><i class="bi bi-search me-1"></i>Aplicar</button>
+                            <button class="btn btn-outline-secondary btn-sm" id="btnLimpiar"><i class="bi bi-x-circle me-1"></i>Limpiar</button>
+                        </div>
+                    </div>
+
+                    <!-- KPIs -->
+                    <div class="row g-2 mb-4" id="kpisContainer">
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiProveedores">-</div><div class="rp-kpi-label">Proveedores</div></div></div>
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiComprados">-</div><div class="rp-kpi-label">Comprados</div></div></div>
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiRecepcionados">-</div><div class="rp-kpi-label">Recepcionados</div></div></div>
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiVendidos">-</div><div class="rp-kpi-label">Vendidos Publico</div></div></div>
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-success" id="kpiPctRecep">-</div><div class="rp-kpi-label">% Recepcion</div></div></div>
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-info" id="kpiPctVenta">-</div><div class="rp-kpi-label">% Venta</div></div></div>
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiInversion">-</div><div class="rp-kpi-label">Inversion</div></div></div>
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-success" id="kpiMargen">-</div><div class="rp-kpi-label">Margen</div></div></div>
+                    </div>
+
+                    <!-- Loader -->
+                    <div class="rp-loader" id="rpLoader" style="display:none;">
+                        <div class="spinner-border text-primary me-2" role="status"></div>
+                        <span class="text-muted">Cargando datos...</span>
+                    </div>
+
+                    <!-- Grafico -->
+                    <div class="card border-0 mb-3" style="border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+                        <div class="card-body" style="height:300px;">
+                            <canvas id="chartRendimiento"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Tabla -->
+                    <div class="table-responsive" style="max-height:500px;overflow-y:auto;">
+                        <table class="table table-hover table-striped mb-0 rp-table" id="tablaRendimiento">
+                            <thead>
+                                <tr>
+                                    <th style="min-width:180px;">Proveedor</th>
+                                    <th class="text-center">Comprados</th>
+                                    <th class="text-center">Recepcionados</th>
+                                    <th class="text-center">Vendidos</th>
+                                    <th class="text-center">% Recep.</th>
+                                    <th class="text-center">% Venta</th>
+                                    <th class="text-end">Inversion</th>
+                                    <th class="text-end">Venta</th>
+                                    <th class="text-end">Margen</th>
+                                    <th class="text-center">Stock Disp.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyRendimiento">
+                                <tr><td colspan="10" class="text-center text-muted py-4">Selecciona filtros y haz click en Aplicar</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+let chartInstance = null;
+
+$(document).ready(function() {
+    // Poblar anios
+    const anioActual = new Date().getFullYear();
+    for (let y = anioActual; y >= anioActual - 5; y--) {
+        $('#filtroAnio').append(`<option value="${y}" ${y === anioActual ? 'selected' : ''}>${y}</option>`);
+    }
+
+    // Cargar proveedores
+    $.get('/app/empresas_proveedoras/', function(res) {
+        const provs = res.empresas || res || [];
+        provs.forEach(p => {
+            $('#filtroProveedor').append(`<option value="${p.id}">${p.nombre}</option>`);
+        });
+    });
+
+    // Cargar sucursales
+    $.get('/app/api/sucursales/listar/', function(res) {
+        const sucs = res.sucursales || res || [];
+        sucs.forEach(s => {
+            $('#filtroSucursal').append(`<option value="${s.id}">${s.alias || s.nombre}</option>`);
+        });
+    });
+
+    // Eventos
+    $('#btnAplicar').on('click', cargarDatos);
+    $('#btnLimpiar').on('click', function() {
+        $('#filtroProveedor').val('');
+        $('#filtroDesde').val('');
+        $('#filtroHasta').val('');
+        $('#filtroSucursal').val('');
+        cargarDatos();
+    });
+    $('#btnExportar').on('click', function() {
+        const params = buildParams();
+        window.location.href = `/app/api/exportar-rendimiento-proveedor-excel/?${params}`;
+    });
+
+    // Carga inicial
+    cargarDatos();
+});
+
+function buildParams() {
+    const params = new URLSearchParams();
+    params.set('anio', $('#filtroAnio').val());
+    if ($('#filtroProveedor').val()) params.set('proveedor_id', $('#filtroProveedor').val());
+    if ($('#filtroDesde').val()) params.set('fecha_inicio', $('#filtroDesde').val());
+    if ($('#filtroHasta').val()) params.set('fecha_fin', $('#filtroHasta').val());
+    if ($('#filtroSucursal').val()) params.set('sucursal_id', $('#filtroSucursal').val());
+    return params.toString();
+}
+
+function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
+function fmtMoney(n) { return '$' + fmt(n); }
+
+function cargarDatos() {
+    $('#rpLoader').show();
+    $('#tbodyRendimiento').html('<tr><td colspan="10" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td></tr>');
+
+    $.get('/app/api/reporte-rendimiento-proveedor/?' + buildParams(), function(res) {
+        $('#rpLoader').hide();
+        if (!res.success) {
+            $('#tbodyRendimiento').html(`<tr><td colspan="10" class="text-center text-danger py-4">${res.error || 'Error'}</td></tr>`);
+            return;
+        }
+
+        // KPIs
+        const k = res.kpis;
+        $('#kpiProveedores').text(k.total_proveedores);
+        $('#kpiComprados').text(fmt(k.total_comprados));
+        $('#kpiRecepcionados').text(fmt(k.total_recepcionados));
+        $('#kpiVendidos').text(fmt(k.total_vendidos));
+        $('#kpiPctRecep').text(k.pct_recepcion_global + '%');
+        $('#kpiPctVenta').text(k.pct_venta_global + '%');
+        $('#kpiInversion').text(fmtMoney(k.total_inversion));
+        $('#kpiMargen').text(fmtMoney(k.total_margen));
+
+        // Tabla
+        const tbody = $('#tbodyRendimiento');
+        tbody.empty();
+        if (res.proveedores.length === 0) {
+            tbody.html('<tr><td colspan="10" class="text-center text-muted py-4">Sin datos para los filtros seleccionados</td></tr>');
+        } else {
+            res.proveedores.forEach(p => {
+                const barRecep = `<div class="d-flex align-items-center gap-1"><span class="fw-bold" style="min-width:35px;">${p.pct_recepcion}%</span><div class="rp-bar flex-grow-1"><div class="rp-bar-fill" style="width:${Math.min(p.pct_recepcion, 100)}%;background:${p.pct_recepcion >= 90 ? '#0ab39c' : p.pct_recepcion >= 50 ? '#f7b84b' : '#f06548'};"></div></div></div>`;
+                const barVenta = `<div class="d-flex align-items-center gap-1"><span class="fw-bold" style="min-width:35px;">${p.pct_venta}%</span><div class="rp-bar flex-grow-1"><div class="rp-bar-fill" style="width:${Math.min(p.pct_venta, 100)}%;background:${p.pct_venta >= 70 ? '#0ab39c' : p.pct_venta >= 30 ? '#3577f1' : '#f7b84b'};"></div></div></div>`;
+                const margenClass = p.margen >= 0 ? 'text-success' : 'text-danger';
+
+                tbody.append(`<tr>
+                    <td><strong>${p.proveedor_nombre}</strong><br><small class="text-muted">${p.proveedor_rut}</small></td>
+                    <td class="text-center fw-bold">${fmt(p.pares_comprados)}</td>
+                    <td class="text-center">${fmt(p.pares_recepcionados)}</td>
+                    <td class="text-center fw-bold text-primary">${fmt(p.pares_vendidos)}</td>
+                    <td>${barRecep}</td>
+                    <td>${barVenta}</td>
+                    <td class="text-end">${fmtMoney(p.inversion_total)}</td>
+                    <td class="text-end">${fmtMoney(p.venta_total)}</td>
+                    <td class="text-end ${margenClass} fw-bold">${fmtMoney(p.margen)}</td>
+                    <td class="text-center"><span class="badge ${p.stock_disponible > 0 ? 'bg-info' : 'bg-secondary'}">${fmt(p.stock_disponible)}</span></td>
+                </tr>`);
+            });
+        }
+
+        // Grafico (top 10)
+        renderChart(res.proveedores.slice(0, 10));
+
+    }).fail(function() {
+        $('#rpLoader').hide();
+        $('#tbodyRendimiento').html('<tr><td colspan="10" class="text-center text-danger py-4">Error de conexion</td></tr>');
+    });
+}
+
+function renderChart(data) {
+    const ctx = document.getElementById('chartRendimiento').getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+
+    const labels = data.map(p => p.proveedor_nombre.length > 20 ? p.proveedor_nombre.substring(0, 20) + '...' : p.proveedor_nombre);
+
+    chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Comprados', data: data.map(p => p.pares_comprados), backgroundColor: 'rgba(64,81,137,0.7)', borderRadius: 4 },
+                { label: 'Recepcionados', data: data.map(p => p.pares_recepcionados), backgroundColor: 'rgba(247,184,75,0.7)', borderRadius: 4 },
+                { label: 'Vendidos', data: data.map(p => p.pares_vendidos), backgroundColor: 'rgba(10,179,156,0.7)', borderRadius: 4 },
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { usePointStyle: true, pointStyle: 'rectRounded', font: { size: 11 } } },
+                title: { display: true, text: 'Top 10 Proveedores - Comprados vs Recepcionados vs Vendidos', font: { size: 13, weight: '600' }, color: '#405189' }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } }
+            }
+        }
+    });
+}
+</script>

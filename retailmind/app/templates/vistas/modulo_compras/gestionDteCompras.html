@@ -214,6 +214,176 @@
         box-shadow: 0 2px 8px rgba(64, 81, 137, 0.3);
     }
 
+    /* ==================== MODAL SYSTEM ==================== */
+    .rm-modal .modal-content {
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    }
+
+    .rm-modal-header {
+        background: #fff;
+        border-bottom: 1px solid #edf0f5;
+        padding: 18px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .rm-modal-header .rm-modal-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+    .rm-modal-header .rm-modal-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0;
+        line-height: 1.3;
+    }
+    .rm-modal-header .rm-modal-subtitle {
+        font-size: 0.78rem;
+        color: #94a3b8;
+        margin: 0;
+        font-weight: 400;
+    }
+    .rm-modal-header .btn-close {
+        opacity: 0.4;
+        transition: opacity 0.2s;
+    }
+    .rm-modal-header .btn-close:hover {
+        opacity: 0.8;
+    }
+
+    .rm-modal-body {
+        padding: 24px;
+        background: #fafbfc;
+    }
+    .rm-modal-body.rm-modal-body--white {
+        background: #fff;
+    }
+    .rm-modal-body.rm-modal-body--scroll {
+        max-height: 68vh;
+        overflow-y: auto;
+    }
+
+    .rm-modal-footer {
+        background: #fff;
+        border-top: 1px solid #edf0f5;
+        padding: 14px 24px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+    .rm-modal-footer .btn {
+        border-radius: 8px;
+        font-weight: 500;
+        padding: 8px 20px;
+        font-size: 0.875rem;
+    }
+
+    /* Color variants for modal icon */
+    .rm-modal-icon--green  { background: #ecfdf5; color: #059669; }
+    .rm-modal-icon--blue   { background: #eff6ff; color: #2563eb; }
+    .rm-modal-icon--red    { background: #fef2f2; color: #dc2626; }
+    .rm-modal-icon--amber  { background: #fffbeb; color: #d97706; }
+    .rm-modal-icon--purple { background: #f5f3ff; color: #7c3aed; }
+    .rm-modal-icon--slate  { background: #f1f5f9; color: #475569; }
+
+    /* Accent bar (thin top border) */
+    .rm-accent--green  { border-top: 3px solid #059669; }
+    .rm-accent--blue   { border-top: 3px solid #2563eb; }
+    .rm-accent--red    { border-top: 3px solid #dc2626; }
+    .rm-accent--amber  { border-top: 3px solid #d97706; }
+    .rm-accent--purple { border-top: 3px solid #7c3aed; }
+    .rm-accent--slate  { border-top: 3px solid #475569; }
+
+    /* Section headers inside modals */
+    .rm-section-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #edf0f5;
+    }
+    .rm-section-label i {
+        font-size: 0.9rem;
+        color: #64748b;
+    }
+    .rm-section-label span {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+    }
+
+    /* Form tweaks inside modals */
+    .rm-modal .form-label {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 4px;
+    }
+    .rm-modal .form-control,
+    .rm-modal .form-select {
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        font-size: 0.875rem;
+        padding: 8px 12px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .rm-modal .form-control:focus,
+    .rm-modal .form-select:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    .rm-modal .form-text {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        margin-top: 4px;
+    }
+    .rm-modal .input-group-text {
+        border-radius: 8px 0 0 8px;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+    .rm-modal .form-check-label {
+        font-size: 0.82rem;
+        color: #4b5563;
+    }
+
+    /* Read-only summary row inside modals */
+    .rm-summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 14px;
+        background: #f8fafc;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        border: 1px solid #edf0f5;
+    }
+    .rm-summary-row .rm-summary-label {
+        font-size: 0.82rem;
+        color: #64748b;
+        font-weight: 500;
+    }
+    .rm-summary-row .rm-summary-value {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
     /* Responsive para controles */
     @media (max-width: 768px) {
         .pagination-controls .row>div {
@@ -691,6 +861,13 @@
                     </div>
                 </div>
                 <div class="dte-header-actions">
+                    <!-- Links de navegación -->
+                    <a href="{% url 'verGestionCompras' %}" class="btn btn-light" data-bs-toggle="tooltip" title="Gestión de Compras">
+                        <i class="bi bi-cart me-1"></i>Compras
+                    </a>
+                    <a href="{% url 'verGestionProducto' %}" class="btn btn-light" data-bs-toggle="tooltip" title="Crear productos desde recepciones">
+                        <i class="bi bi-archive me-1"></i>Crear Productos
+                    </a>
                     <!-- Dropdown de Importación -->
                     <div class="btn-group">
                         <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
@@ -971,291 +1148,346 @@
 
 
 </div>
-<div class="modal fade" id="modalNuevoDTE" tabindex="-1" aria-labelledby="modalNuevoDTELabel" aria-hidden="true">
+<div class="modal fade rm-modal" id="modalNuevoDTE" tabindex="-1" aria-labelledby="modalNuevoDTELabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
-            <div class="modal-header text-white" style="background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-bottom: none; padding: 20px 24px;">
+        <div class="modal-content rm-accent--green">
+            <div class="rm-modal-header">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-file-earmark-plus fs-5"></i>
+                    <div class="rm-modal-icon rm-modal-icon--green">
+                        <i class="bi bi-file-earmark-plus"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title mb-0" id="modalNuevoDTELabel">Nuevo DTE Compra</h5>
-                        <small style="opacity: 0.9;">Complete los campos requeridos</small>
+                        <h5 class="rm-modal-title" id="modalNuevoDTELabel">Nuevo DTE Compra</h5>
+                        <p class="rm-modal-subtitle">Complete los campos requeridos</p>
                     </div>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                    aria-label="Cerrar"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form id="formNuevoDTE">
-                <div class="modal-body">
-                    <div class="row g-3">
+                <div class="rm-modal-body rm-modal-body--scroll">
 
-                        <!-- Empresa emisora (proveedor) y receptora -->
-                        <div class="col-md-6">
-                            <label for="receptor" class="form-label">Empresa Emisora (Proveedor)</label>
-                            <select id="receptor" class="form-select select2" required>
-                                <option value="">Selecciona una empresa</option>
-                            </select>
-                            <div class="form-text">
-                                Selecciona la empresa que emite el DTE.
-                            </div>
+                    <!-- SECCIÓN: Empresas -->
+                    <div class="mb-4">
+                        <div class="rm-section-label">
+                            <i class="bi bi-building"></i>
+                            <span>Empresas</span>
                         </div>
-                        <div class="col-md-6">
-                            <label for="empresaReceptora" class="form-label">Empresa Recepciona</label>
-                            <select id="empresaReceptora" class="form-select select2" required>
-                                <option value="">Selecciona la empresa que recibirá el DTE</option>
-                            </select>
-                            <div class="form-text">
-                                Por defecto se utiliza la empresa con la que iniciaste sesión.
-                            </div>
-                            <!-- Shortcuts de empresas receptoras -->
-                            <div id="shortcutsEmpresasReceptoras" class="mt-2 d-flex flex-wrap gap-1" style="display: none;">
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="tipoDocumento" class="form-label">Tipo de Documento</label>
-                            <select id="tipoDocumento" class="form-select select2" required>
-                                <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
-                                <option value="GUIA">Guía Despacho</option>
-                                <option value="COTIZACION">Cotización</option>
-                                <option value="NOTA DE CREDITO">Nota de Crédito</option>
-                                <option value="NOTA DE DEBITO">Nota de Débito</option>
-                            </select>
-                        </div>
-                        <div class="col-12" id="divDocumentoBase" style="display: none;">
-                            <label for="documentoBase" class="form-label">Documento Base (Cotización / Guía)</label>
-                            <select id="documentoBase" class="form-select select2">
-                                <option value="">Sin documento base</option>
-                            </select>
-                            <div class="form-text">Selecciona la cotización o guía que regulariza esta factura.</div>
-                        </div>
-
-                        <div class="col-12" id="divNotaCredito" style="display: none;">
-                            <label for="notaCreditoBase" class="form-label">Nota de Crédito a Corregir</label>
-                            <select id="notaCreditoBase" class="form-select select2">
-                                <option value="">Selecciona una Nota de Crédito</option>
-                            </select>
-                            <div class="form-text">Selecciona la Nota de Crédito que deseas corregir con esta Nota de
-                                Débito.</div>
-                        </div>
-
-                        <!-- Información de asociación para NCs -->
-                        <div class="col-12" id="divAsociacionNC" style="display: none;">
-                            <div class="card border-info">
-                                <div class="card-header bg-info text-white">
-                                    <h6 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Asociación de Nota de Crédito
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <div id="infoAsociacionNC">
-                                        <!-- Se llenará dinámicamente -->
-                                    </div>
-                                    <div class="mt-2" id="accionesAsociacionNC">
-                                        <!-- Se llenará dinámicamente -->
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Información completa del DTE (solo lectura) -->
-                        <div class="col-12" id="divInfoCompleta">
-                            <div class="row">
-                                <!-- Historial de Pagos -->
-                                <div class="col-md-6" id="divHistorialPagos" style="display: none;">
-                                    <div class="card border-success">
-                                        <div class="card-header bg-success text-white">
-                                            <h6 class="mb-0"><i class="bi bi-cash-stack me-2"></i>Historial de Pagos
-                                            </h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="listaPagos">
-                                                <!-- Se llenará dinámicamente -->
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Incidencias -->
-                                <div class="col-md-6" id="divResumenIncidencias" style="display: none;">
-                                    <div class="card border-warning">
-                                        <div class="card-header bg-warning text-dark">
-                                            <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Incidencias
-                                            </h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="resumenIncidencias">
-                                                <!-- Se llenará dinámicamente -->
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Relaciones de Documentos -->
-                                <div class="col-12" id="divRelacionesDoc" style="display: none;">
-                                    <div class="card border-primary">
-                                        <div class="card-header bg-primary text-white">
-                                            <h6 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Relaciones de
-                                                Documentos</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="infoRelaciones">
-                                                <!-- Se llenará dinámicamente -->
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Número y Monto -->
-                        <div class="col-md-6">
-                            <label for="numeroDocumento" class="form-label">N° Documento</label>
-                            <input type="number" class="form-control" id="numeroDocumento" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="montoConIVA" class="form-label">Monto con IVA</label>
-                            <input type="number" class="form-control" id="montoConIVA" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="descuento" class="form-label">Descuento</label>
-                            <input type="number" class="form-control" id="descuento" min="0" value="0">
-                            <div class="form-check mt-1">
-                                <input class="form-check-input" type="checkbox" id="descuentoConIVA">
-                                <label class="form-check-label" for="descuentoConIVA">
-                                    Descuento incluye IVA
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="receptor" class="form-label">
+                                    Empresa Emisora (Proveedor) <span class="text-danger">*</span>
                                 </label>
+                                <select id="receptor" class="form-select select2" required>
+                                    <option value=""></option>
+                                </select>
+                                <div class="form-text">Proveedor que emite el DTE.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="empresaReceptora" class="form-label">
+                                    Empresa Receptora <span class="text-danger">*</span>
+                                </label>
+                                <select id="empresaReceptora" class="form-select select2" required>
+                                    <option value=""></option>
+                                </select>
+                                <div class="form-text">Por defecto, la empresa con la que iniciaste sesión.</div>
+                                <div id="shortcutsEmpresasReceptoras" class="mt-2 d-flex flex-wrap gap-1" style="display: none;"></div>
                             </div>
                         </div>
-
-                        <!-- Fechas -->
-                        <div class="col-md-6">
-                            <label for="fechaEmision" class="form-label">Fecha Emisión</label>
-                            <input type="date" class="form-control" id="fechaEmision" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="fechaRecepcion" class="form-label">Fecha Recepción</label>
-                            <input type="date" class="form-control" id="fechaRecepcion">
-                        </div>
-
-                        <!-- Estado DTE y Estado Pago -->
-                        <div class="col-md-6">
-                            <label for="estadoDTE" class="form-label">Estado DTE</label>
-                            <select id="estadoDTE" class="form-select select2" required>
-                                <option value="ACEPTADO">Aceptado</option>
-                                <option value="RECHAZADO">Rechazado</option>
-                            </select>
-                        </div>
-                        <input type="hidden" id="estadoPago" value="Pendiente">
-
-                        <!-- Campo de motivo de rechazo (solo se muestra si estado es Rechazado) -->
-                        <div class="col-md-12" id="divMotivoRechazo" style="display: none;">
-                            <label for="motivoRechazo" class="form-label">
-                                Motivo de Rechazo <span class="text-danger">*</span>
-                                <small class="text-muted">(máximo 100 caracteres)</small>
-                            </label>
-                            <input type="text" class="form-control" id="motivoRechazo" maxlength="100"
-                                placeholder="Especifica el motivo del rechazo">
-                            <div class="form-text">
-                                <span id="contadorCaracteres">0</span>/100 caracteres
-                            </div>
-                        </div>
-
-                        <!-- Días crédito, Bultos y Unidades -->
-                        <div class="col-md-4">
-                            <label for="diasCredito" class="form-label">Días de Crédito</label>
-                            <input type="number" class="form-control" id="diasCredito" min="0" value="30" placeholder="30">
-                            <div class="mt-2 d-flex gap-1">
-                                <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="30">30d</button>
-                                <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="60">60d</button>
-                                <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="90">90d</button>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="bultos" class="form-label">Bultos</label>
-                            <input type="number" class="form-control" id="bultos" min="0">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="unidadesProductos" class="form-label">Unidades de Productos</label>
-                            <input type="number" class="form-control" id="unidadesProductos" min="0">
-                        </div>
-
                     </div>
+
+                    <!-- SECCIÓN: Documento -->
+                    <div class="mb-4">
+                        <div class="rm-section-label">
+                            <i class="bi bi-file-earmark-text"></i>
+                            <span>Documento</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <label for="tipoDocumento" class="form-label">
+                                    Tipo de Documento <span class="text-danger">*</span>
+                                </label>
+                                <select id="tipoDocumento" class="form-select select2" required>
+                                    <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
+                                    <option value="GUIA">Guía Despacho</option>
+                                    <option value="COTIZACION">Cotización</option>
+                                    <option value="NOTA DE CREDITO">Nota de Crédito</option>
+                                    <option value="NOTA DE DEBITO">Nota de Débito</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="numeroDocumento" class="form-label">
+                                    N° Documento <span class="text-danger">*</span>
+                                </label>
+                                <input type="number" class="form-control" id="numeroDocumento" placeholder="Ej: 12345" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="estadoDTE" class="form-label">
+                                    Estado DTE <span class="text-danger">*</span>
+                                </label>
+                                <select id="estadoDTE" class="form-select select2" required>
+                                    <option value="ACEPTADO">Aceptado</option>
+                                    <option value="RECHAZADO">Rechazado</option>
+                                </select>
+                            </div>
+                            <input type="hidden" id="estadoPago" value="Pendiente">
+
+                            <div class="col-12" id="divMotivoRechazo" style="display: none;">
+                                <label for="motivoRechazo" class="form-label">
+                                    Motivo de Rechazo <span class="text-danger">*</span>
+                                    <small class="text-muted fw-normal ms-1">(máx. 100)</small>
+                                </label>
+                                <input type="text" class="form-control" id="motivoRechazo" maxlength="100"
+                                    placeholder="Especifica el motivo del rechazo">
+                                <div class="form-text">
+                                    <span id="contadorCaracteres">0</span>/100 caracteres
+                                </div>
+                            </div>
+
+                            <div class="col-12" id="divDocumentoBase" style="display: none;">
+                                <label for="documentoBase" class="form-label">Documento Base (Cotización / Guía)</label>
+                                <select id="documentoBase" class="form-select select2">
+                                    <option value="">Sin documento base</option>
+                                </select>
+                                <div class="form-text">Cotización o guía que regulariza esta factura.</div>
+                            </div>
+
+                            <div class="col-12" id="divNotaCredito" style="display: none;">
+                                <label for="notaCreditoBase" class="form-label">Nota de Crédito a Corregir</label>
+                                <select id="notaCreditoBase" class="form-select select2">
+                                    <option value="">Selecciona una Nota de Crédito</option>
+                                </select>
+                                <div class="form-text">NC que deseas corregir con esta Nota de Débito.</div>
+                            </div>
+
+                            <div class="col-12" id="divAsociacionNC" style="display: none;">
+                                <div class="card" style="border: 1px solid #bfdbfe; border-radius: 10px;">
+                                    <div class="card-header py-2" style="background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
+                                        <h6 class="mb-0" style="color: #1e40af; font-size: 0.85rem;"><i class="bi bi-link-45deg me-2"></i>Asociación de Nota de Crédito</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="infoAsociacionNC"></div>
+                                        <div class="mt-2" id="accionesAsociacionNC"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN: Info DTE (solo lectura, edición) -->
+                    <div id="divInfoCompleta">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6" id="divHistorialPagos" style="display: none;">
+                                <div class="card" style="border: 1px solid #bbf7d0; border-radius: 10px;">
+                                    <div class="card-header py-2" style="background: #f0fdf4; border-bottom: 1px solid #bbf7d0;">
+                                        <h6 class="mb-0" style="color: #166534; font-size: 0.85rem;"><i class="bi bi-cash-stack me-2"></i>Historial de Pagos</h6>
+                                    </div>
+                                    <div class="card-body"><div id="listaPagos"></div></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6" id="divResumenIncidencias" style="display: none;">
+                                <div class="card" style="border: 1px solid #fde68a; border-radius: 10px;">
+                                    <div class="card-header py-2" style="background: #fffbeb; border-bottom: 1px solid #fde68a;">
+                                        <h6 class="mb-0" style="color: #92400e; font-size: 0.85rem;"><i class="bi bi-exclamation-triangle me-2"></i>Incidencias</h6>
+                                    </div>
+                                    <div class="card-body"><div id="resumenIncidencias"></div></div>
+                                </div>
+                            </div>
+                            <div class="col-12" id="divRelacionesDoc" style="display: none;">
+                                <div class="card" style="border: 1px solid #bfdbfe; border-radius: 10px;">
+                                    <div class="card-header py-2" style="background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
+                                        <h6 class="mb-0" style="color: #1e40af; font-size: 0.85rem;"><i class="bi bi-diagram-3 me-2"></i>Relaciones de Documentos</h6>
+                                    </div>
+                                    <div class="card-body"><div id="infoRelaciones"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN: Montos -->
+                    <div class="mb-4">
+                        <div class="rm-section-label">
+                            <i class="bi bi-currency-dollar"></i>
+                            <span>Montos</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="montoConIVA" class="form-label">
+                                    Monto Total (con IVA) <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="text" class="form-control input-money" id="montoConIVA" inputmode="numeric" placeholder="Ej: 150.000" required autocomplete="off">
+                                </div>
+                                <div class="form-text">Monto bruto de la factura, incluyendo IVA.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="descuento" class="form-label">Descuento</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="text" class="form-control input-money" id="descuento" inputmode="numeric" value="0" placeholder="0" autocomplete="off">
+                                </div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="descuentoConIVA">
+                                    <label class="form-check-label" for="descuentoConIVA">
+                                        Descuento incluye IVA
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resumen de desglose calculado en vivo -->
+                        <div id="resumenDesglose" class="mt-3" style="display: none;">
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px;">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="bi bi-calculator" style="color: #64748b; font-size: 0.85rem;"></i>
+                                    <span style="font-size: 0.78rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Desglose</span>
+                                </div>
+                                <div class="row gx-3 gy-1">
+                                    <div class="col-md-4">
+                                        <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom: 1px dashed #e2e8f0;">
+                                            <span style="font-size: 0.82rem; color: #64748b;">Neto</span>
+                                            <span id="resumenNeto" style="font-size: 0.9rem; font-weight: 600; color: #334155;">$0</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom: 1px dashed #e2e8f0;">
+                                            <span style="font-size: 0.82rem; color: #64748b;">IVA (19%)</span>
+                                            <span id="resumenIVA" style="font-size: 0.9rem; font-weight: 600; color: #334155;">$0</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom: 2px solid #059669;">
+                                            <span style="font-size: 0.82rem; font-weight: 700; color: #059669;">Total a Pagar</span>
+                                            <span id="resumenTotal" style="font-size: 1rem; font-weight: 700; color: #059669;">$0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="resumenDescuentoInfo" class="mt-2" style="display: none;">
+                                    <span class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.75rem; font-weight: 500;">
+                                        <i class="bi bi-tag me-1"></i>Descuento aplicado: <span id="resumenDescuentoMonto">$0</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN: Fechas y Plazos -->
+                    <div class="mb-4">
+                        <div class="rm-section-label">
+                            <i class="bi bi-calendar3"></i>
+                            <span>Fechas y Plazos</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="fechaEmision" class="form-label">
+                                    Fecha Emisión <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" class="form-control" id="fechaEmision" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="fechaRecepcion" class="form-label">Fecha Recepción</label>
+                                <input type="date" class="form-control" id="fechaRecepcion">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="diasCredito" class="form-label">Días de Crédito</label>
+                                <input type="number" class="form-control" id="diasCredito" min="0" value="30" placeholder="30">
+                                <div class="mt-2 d-flex gap-1">
+                                    <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="30">30d</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="60">60d</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="90">90d</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN: Logística -->
+                    <div>
+                        <div class="rm-section-label">
+                            <i class="bi bi-box-seam"></i>
+                            <span>Logística</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="bultos" class="form-label">Bultos</label>
+                                <input type="number" class="form-control" id="bultos" min="0" placeholder="Ej: 5">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="unidadesProductos" class="form-label">Unidades de Productos</label>
+                                <input type="number" class="form-control" id="unidadesProductos" min="0" placeholder="Ej: 120">
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
-                <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">
-                        <i class="bi bi-x-circle me-1"></i>Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-success" style="border-radius: 10px;">
+                <div class="rm-modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
                         <i class="bi bi-save me-1"></i>Guardar DTE
                     </button>
                 </div>
             </form>
-
         </div>
     </div>
 </div>
 <!-- Modal Pago -->
-<div class="modal fade" id="modalPago" tabindex="-1" aria-labelledby="modalPagoLabel" aria-hidden="true">
+<div class="modal fade rm-modal" id="modalPago" tabindex="-1" aria-labelledby="modalPagoLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+        <div class="modal-content rm-accent--green">
             <form id="formPago">
-                <div class="modal-header text-white" style="background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="rm-modal-header">
                     <div class="d-flex align-items-center gap-3">
-                        <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                            <i class="bi bi-cash-coin fs-5"></i>
+                        <div class="rm-modal-icon rm-modal-icon--green">
+                            <i class="bi bi-cash-coin"></i>
                         </div>
                         <div>
-                            <h5 class="modal-title mb-0" id="modalPagoLabel">Registrar Pago</h5>
-                            <small style="opacity: 0.9;">Ingresa los datos del pago</small>
+                            <h5 class="rm-modal-title" id="modalPagoLabel">Registrar Pago</h5>
+                            <p class="rm-modal-subtitle">Ingresa los datos del pago</p>
                         </div>
                     </div>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
 
-                <div class="modal-body">
+                <div class="rm-modal-body">
                     <input type="hidden" id="pagoEditId">
                     <input type="hidden" id="pagoDteId">
 
-                    <!-- Método de pago -->
-                    <div class="mb-3">
-                        <label for="metodoPago" class="form-label">Método de pago</label>
-                        <select class="form-select select2" id="metodoPago" required>
-                            <option value="">Seleccionar...</option>
-                            <option value="Efectivo">Efectivo</option>
-                            <option value="Transferencia">Transferencia</option>
-                            <option value="Cheque">Cheque</option>
-                        </select>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="metodoPago" class="form-label">Método de pago <span class="text-danger">*</span></label>
+                            <select class="form-select select2" id="metodoPago" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Transferencia">Transferencia</option>
+                                <option value="Cheque">Cheque</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="voucher" class="form-label">N° Documento / Voucher</label>
+                            <input type="text" class="form-control" id="voucher" placeholder="Ej: TRF-001">
+                        </div>
                     </div>
 
-                    <!-- Voucher -->
-                    <div class="mb-3">
-                        <label for="voucher" class="form-label">Número de Documento / Voucher</label>
-                        <input type="text" class="form-control" id="voucher">
+                    <div class="rm-summary-row">
+                        <span class="rm-summary-label">Monto original del DTE</span>
+                        <span class="rm-summary-value" id="inputMontoOriginal"></span>
+                    </div>
+                    <div class="rm-summary-row">
+                        <span class="rm-summary-label">Monto abonado</span>
+                        <span class="rm-summary-value" id="inputMontoAbonado"></span>
+                    </div>
+                    <div class="rm-summary-row" style="background: #f0fdf4; border-color: #bbf7d0;">
+                        <span class="rm-summary-label" style="color: #166534; font-weight: 600;">Saldo pendiente</span>
+                        <span class="rm-summary-value" style="color: #059669;" id="inputSaldoPendiente"></span>
                     </div>
 
-                    <!-- Info de montos -->
-                    <div class="mb-3">
-                        <label class="form-label">Monto original del DTE</label>
-                        <input type="text" class="form-control bg-light" id="inputMontoOriginal" readonly>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Monto abonado</label>
-                        <input type="text" class="form-control bg-light" id="inputMontoAbonado" readonly>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Saldo a pagar</label>
-                        <input type="text" class="form-control bg-light" id="inputSaldoPendiente" readonly>
-                    </div>
-
-                    <!-- Monto a pagar -->
-                    <div class="mb-3">
-                        <label for="montoPago" class="form-label">Monto a pagar</label>
-                        <input type="number" class="form-control" id="montoPago" required>
-                        <div class="form-check mt-1">
+                    <div class="mt-3">
+                        <label for="montoPago" class="form-label">Monto a pagar <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="text" class="form-control input-money" id="montoPago" inputmode="numeric" placeholder="Ingresa el monto" required autocomplete="off">
+                        </div>
+                        <div class="form-check mt-2">
                             <input class="form-check-input" type="checkbox" id="pagarTodo">
                             <label class="form-check-label" for="pagarTodo">
                                 Pagar el total del saldo pendiente
@@ -1264,108 +1496,107 @@
                     </div>
                 </div>
 
-                <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">Cancelar</button>
-                    <button type="submit" class="btn btn-success" style="border-radius: 10px;"><i class="bi bi-check-circle me-1"></i>Registrar Pago</button>
+                <div class="rm-modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Registrar Pago</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="modalDetallePagos" tabindex="-1" aria-labelledby="modalDetallePagosLabel"
+<div class="modal fade rm-modal" id="modalDetallePagos" tabindex="-1" aria-labelledby="modalDetallePagosLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
-            <div class="modal-header text-white" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%); border-bottom: none; padding: 20px 24px;">
+        <div class="modal-content rm-accent--blue">
+            <div class="rm-modal-header">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-receipt fs-5"></i>
+                    <div class="rm-modal-icon rm-modal-icon--blue">
+                        <i class="bi bi-receipt"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title mb-0" id="modalDetallePagosLabel">Pagos del DTE</h5>
-                        <small style="opacity: 0.9;">Historial de pagos registrados</small>
+                        <h5 class="rm-modal-title" id="modalDetallePagosLabel">Pagos del DTE</h5>
+                        <p class="rm-modal-subtitle">Historial de pagos registrados</p>
                     </div>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4">
-                <table class="table table-sm text-center mb-0" style="border-radius: 12px; overflow: hidden;">
-                    <thead style="background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
-                        <tr>
-                            <th class="text-white py-3">Método</th>
-                            <th class="text-white py-3">Voucher</th>
-                            <th class="text-white py-3">Monto</th>
-                            <th class="text-white py-3">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tablaPagosDTEBody">
-                        <!-- pagos se insertan aquí -->
-                    </tbody>
-                </table>
+            <div class="rm-modal-body rm-modal-body--white" style="padding: 16px 24px;">
+                <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
+                    <table class="table table-sm text-center mb-0">
+                        <thead>
+                            <tr>
+                                <th class="py-3">Método</th>
+                                <th class="py-3">Voucher</th>
+                                <th class="py-3">Monto</th>
+                                <th class="py-3">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaPagosDTEBody"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 </div>
-<div class="modal fade" id="modalNotasCredito" tabindex="-1" aria-labelledby="modalNotasCreditoLabel"
+<div class="modal fade rm-modal" id="modalNotasCredito" tabindex="-1" aria-labelledby="modalNotasCreditoLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+        <div class="modal-content rm-accent--red">
             <form id="formNC">
-                <div class="modal-header text-white" style="background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="rm-modal-header">
                     <div class="d-flex align-items-center gap-3">
-                        <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                            <i class="bi bi-file-earmark-minus fs-5"></i>
+                        <div class="rm-modal-icon rm-modal-icon--red">
+                            <i class="bi bi-file-earmark-minus"></i>
                         </div>
                         <div>
-                            <h5 class="modal-title mb-0" id="modalNotasCreditoLabel">Notas de Crédito</h5>
-                            <small style="opacity: 0.9;">Gestiona las NC asignadas</small>
+                            <h5 class="rm-modal-title" id="modalNotasCreditoLabel">Notas de Crédito</h5>
+                            <p class="rm-modal-subtitle">Gestiona las NC asignadas</p>
                         </div>
                     </div>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
 
-                <div class="modal-body">
+                <div class="rm-modal-body">
                     <input type="hidden" id="ncDteId">
 
-                    <!-- Inputs para agregar una NC -->
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label for="ncNumero" class="form-label">N° Nota de Crédito</label>
-                            <input type="text" class="form-control" id="ncNumero" required>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label for="ncNumero" class="form-label">N° NC <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="ncNumero" placeholder="Ej: 450" required>
                         </div>
                         <div class="col-md-3">
-                            <label for="ncMonto" class="form-label">Monto</label>
-                            <input type="number" class="form-control" id="ncMonto" required>
+                            <label for="ncMonto" class="form-label">Monto <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="text" class="form-control input-money" id="ncMonto" inputmode="numeric" placeholder="0" required autocomplete="off">
+                            </div>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <label for="ncMotivo" class="form-label">Motivo <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="ncMotivo" maxlength="100"
-                                placeholder="Motivo de la nota de crédito" required>
+                                placeholder="Motivo de la NC" required>
                         </div>
-                    </div>
-                    <div class="row mb-3">
-                        <div class="col-md-12 text-end">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-plus-circle me-1"></i>Agregar Nota de Crédito
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-plus-lg me-1"></i>Agregar
                             </button>
                         </div>
                     </div>
 
-                    <!-- Tabla de NCs asignadas -->
-                    <table class="table table-sm mb-0" style="border-radius: 12px; overflow: hidden;">
-                        <thead style="background: linear-gradient(135deg, #f06548 0%, #d9534f 100%);">
-                            <tr>
-                                <th class="text-center text-white py-3">N° NC</th>
-                                <th class="text-center text-white py-3">Monto</th>
-                                <th class="text-white py-3">Motivo</th>
-                                <th class="text-center text-white py-3">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tablaNCBody">
-                            <!-- Notas de crédito se insertan aquí -->
-                        </tbody>
-                    </table>
+                    <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="text-center py-3">N° NC</th>
+                                    <th class="text-center py-3">Monto</th>
+                                    <th class="py-3">Motivo</th>
+                                    <th class="text-center py-3">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaNCBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </form>
         </div>
@@ -1373,36 +1604,31 @@
 </div>
 
 <!-- Modal Pago Masivo -->
-<div class="modal fade" id="modalPagoMasivo" tabindex="-1" aria-labelledby="modalPagoMasivoLabel" aria-hidden="true">
+<div class="modal fade rm-modal" id="modalPagoMasivo" tabindex="-1" aria-labelledby="modalPagoMasivoLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
-            <div class="modal-header text-white" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-bottom: none; padding: 20px 24px;">
+        <div class="modal-content rm-accent--purple">
+            <div class="rm-modal-header">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-cash-stack fs-5"></i>
+                    <div class="rm-modal-icon rm-modal-icon--purple">
+                        <i class="bi bi-cash-stack"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title mb-0" id="modalPagoMasivoLabel">Pago Masivo de Facturas</h5>
-                        <small style="opacity: 0.9;">Procesa múltiples pagos</small>
+                        <h5 class="rm-modal-title" id="modalPagoMasivoLabel">Pago Masivo de Facturas</h5>
+                        <p class="rm-modal-subtitle">Procesa múltiples pagos a la vez</p>
                     </div>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                    aria-label="Cerrar"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form id="formPagoMasivo">
-                <div class="modal-body">
-                    <!-- Resumen de selección -->
-                    <div class="alert alert-info">
-                        <h6><i class="bi bi-info-circle me-2"></i>Resumen de Facturas Seleccionadas</h6>
-                        <div id="resumenFacturasSeleccionadas">
-                            <!-- Se llenará dinámicamente -->
-                        </div>
+                <div class="rm-modal-body rm-modal-body--scroll">
+                    <div class="p-3 mb-3" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;">
+                        <h6 class="mb-2" style="color: #1e40af; font-size: 0.85rem;"><i class="bi bi-info-circle me-2"></i>Resumen de Facturas Seleccionadas</h6>
+                        <div id="resumenFacturasSeleccionadas"></div>
                     </div>
 
-                    <!-- Datos del pago -->
-                    <div class="row">
+                    <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label for="metodoPagoMasivo" class="form-label">Método de Pago</label>
+                            <label for="metodoPagoMasivo" class="form-label">Método de Pago <span class="text-danger">*</span></label>
                             <select class="form-select" id="metodoPagoMasivo" required>
                                 <option value="">Seleccionar...</option>
                                 <option value="Transferencia">Transferencia</option>
@@ -1411,15 +1637,12 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label for="voucherMasivo" class="form-label">Número de Documento / Voucher</label>
+                            <label for="voucherMasivo" class="form-label">N° Documento / Voucher</label>
                             <input type="text" class="form-control" id="voucherMasivo" placeholder="Ej: TRF-2025-001">
                         </div>
-                    </div>
-
-                    <div class="row mt-3">
                         <div class="col-12">
                             <label for="observacionesMasivo" class="form-label">Observaciones</label>
-                            <textarea class="form-control" id="observacionesMasivo" rows="3" maxlength="200"
+                            <textarea class="form-control" id="observacionesMasivo" rows="2" maxlength="200"
                                 placeholder="Información adicional sobre este pago masivo..."></textarea>
                             <div class="form-text">
                                 <span id="contadorObservacionesMasivo">0</span>/200 caracteres
@@ -1427,38 +1650,32 @@
                         </div>
                     </div>
 
-                    <!-- Tabla de facturas seleccionadas -->
-                    <div class="mt-3">
-                        <h6 class="fw-bold" style="color: #405189;"><i class="bi bi-list-check me-2"></i>Facturas a Pagar:</h6>
-                        <div class="table-responsive" style="border-radius: 12px; overflow: hidden;">
-                            <table class="table table-sm mb-0">
-                                <thead style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
-                                    <tr>
-                                        <th class="text-white py-3">Factura</th>
-                                        <th class="text-white py-3">Proveedor</th>
-                                        <th class="text-white py-3">Saldo Pendiente</th>
-                                        <th class="text-white py-3">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaFacturasSeleccionadas">
-                                    <!-- Se llenará dinámicamente -->
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="rm-section-label">
+                        <i class="bi bi-list-check"></i>
+                        <span>Facturas a Pagar</span>
+                    </div>
+                    <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="py-3">Factura</th>
+                                    <th class="py-3">Proveedor</th>
+                                    <th class="py-3">Saldo Pendiente</th>
+                                    <th class="py-3">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaFacturasSeleccionadas"></tbody>
+                        </table>
                     </div>
 
-                    <div class="row mt-3">
-                        <div class="col-md-6">
-                            <strong>Total a Pagar: $<span id="totalPagoMasivo">0</span></strong>
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <strong>Facturas: <span id="cantidadFacturasMasivo">0</span></strong>
-                        </div>
+                    <div class="d-flex justify-content-between align-items-center mt-3 p-3" style="background: #f8fafc; border-radius: 10px; border: 1px solid #edf0f5;">
+                        <span style="font-size: 0.9rem; font-weight: 600; color: #1e293b;">Total a Pagar: $<span id="totalPagoMasivo">0</span></span>
+                        <span style="font-size: 0.85rem; color: #64748b;">Facturas: <span id="cantidadFacturasMasivo" class="fw-bold">0</span></span>
                     </div>
                 </div>
-                <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" style="border-radius: 10px;">
+                <div class="rm-modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
                         <i class="bi bi-cash-stack me-1"></i>Procesar Pago Masivo
                     </button>
                 </div>
@@ -1468,32 +1685,30 @@
 </div>
 
 <!-- Modal Asociar NC Existente -->
-<div class="modal fade" id="modalAsociarNC" tabindex="-1" aria-labelledby="modalAsociarNCLabel" aria-hidden="true">
+<div class="modal fade rm-modal" id="modalAsociarNC" tabindex="-1" aria-labelledby="modalAsociarNCLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
-            <div class="modal-header text-white" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%); border-bottom: none; padding: 20px 24px;">
+        <div class="modal-content rm-accent--blue">
+            <div class="rm-modal-header">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-link-45deg fs-5"></i>
+                    <div class="rm-modal-icon rm-modal-icon--blue">
+                        <i class="bi bi-link-45deg"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title mb-0" id="modalAsociarNCLabel">Asociar Nota de Crédito</h5>
-                        <small style="opacity: 0.9;">Vincular NC existente a factura</small>
+                        <h5 class="rm-modal-title" id="modalAsociarNCLabel">Asociar Nota de Crédito</h5>
+                        <p class="rm-modal-subtitle">Vincular NC existente a factura</p>
                     </div>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                    aria-label="Cerrar"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body">
+            <div class="rm-modal-body rm-modal-body--scroll">
                 <input type="hidden" id="asociarNCDteId">
 
-                <div class="alert alert-info">
+                <div class="p-3 mb-3" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: 0.85rem; color: #1e40af;">
                     <i class="bi bi-info-circle me-2"></i>
                     Selecciona una Nota de Crédito existente para asociarla a esta factura.
                 </div>
 
-                <!-- Filtros -->
-                <div class="row mb-3">
+                <div class="row g-3 mb-3">
                     <div class="col-md-6">
                         <label for="filtroProveedorNC" class="form-label">Filtrar por Proveedor</label>
                         <select id="filtroProveedorNC" class="form-select">
@@ -1506,22 +1721,21 @@
                     </div>
                 </div>
 
-                <!-- Tabla de NCs disponibles -->
-                <div class="table-responsive" style="border-radius: 12px; overflow: hidden;">
+                <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
                     <table class="table table-hover mb-0">
-                        <thead style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);">
+                        <thead>
                             <tr>
-                                <th class="text-white py-3">Seleccionar</th>
-                                <th class="text-white py-3">Número</th>
-                                <th class="text-white py-3">Proveedor</th>
-                                <th class="text-white py-3">Fecha</th>
-                                <th class="text-white py-3">Monto</th>
-                                <th class="text-white py-3">Estado</th>
+                                <th class="py-3">Seleccionar</th>
+                                <th class="py-3">Número</th>
+                                <th class="py-3">Proveedor</th>
+                                <th class="py-3">Fecha</th>
+                                <th class="py-3">Monto</th>
+                                <th class="py-3">Estado</th>
                             </tr>
                         </thead>
                         <tbody id="tablaNCsDisponiblesBody">
                             <tr>
-                                <td colspan="6" class="text-center text-muted">
+                                <td colspan="6" class="text-center text-muted py-4">
                                     <div class="spinner-border spinner-border-sm me-2" role="status"></div>
                                     Cargando notas de crédito...
                                 </td>
@@ -1530,10 +1744,10 @@
                     </table>
                 </div>
             </div>
-            <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">Cancelar</button>
-                <button type="button" class="btn btn-info" id="btnAsociarNC" disabled style="border-radius: 10px;">
-                    <i class="bi bi-link-45deg me-2"></i>Asociar NC Seleccionada
+            <div class="rm-modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnAsociarNC" disabled>
+                    <i class="bi bi-link-45deg me-1"></i>Asociar NC Seleccionada
                 </button>
             </div>
         </div>
@@ -1541,83 +1755,73 @@
 </div>
 
 <!-- Modal Incidencias DTE -->
-<div class="modal fade" id="modalIncidencias" tabindex="-1" aria-labelledby="modalIncidenciasLabel" aria-hidden="true">
+<div class="modal fade rm-modal" id="modalIncidencias" tabindex="-1" aria-labelledby="modalIncidenciasLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
-            <div class="modal-header text-dark" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); border-bottom: none; padding: 20px 24px;">
+        <div class="modal-content rm-accent--amber">
+            <div class="rm-modal-header">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-exclamation-triangle fs-5"></i>
+                    <div class="rm-modal-icon rm-modal-icon--amber">
+                        <i class="bi bi-exclamation-triangle"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title mb-0" id="modalIncidenciasLabel">Gestión de Incidencias</h5>
-                        <small style="opacity: 0.8;">Registra y gestiona problemas</small>
+                        <h5 class="rm-modal-title" id="modalIncidenciasLabel">Gestión de Incidencias</h5>
+                        <p class="rm-modal-subtitle">Registra y gestiona problemas</p>
                     </div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="formIncidencia">
-                <div class="modal-body">
+                <div class="rm-modal-body rm-modal-body--scroll">
                     <input type="hidden" id="incidenciaDteId">
 
-                    <!-- Formulario para agregar incidencia -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0">Nueva Incidencia</h6>
+                    <div class="p-3 mb-4" style="background: #fff; border: 1px solid #edf0f5; border-radius: 10px;">
+                        <div class="rm-section-label" style="margin-bottom: 12px;">
+                            <i class="bi bi-plus-circle"></i>
+                            <span>Nueva Incidencia</span>
                         </div>
-                        <div class="card-body">
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <label for="incidenciaTipo" class="form-label">Tipo de Incidencia <span
-                                            class="text-danger">*</span></label>
-                                    <select class="form-select" id="incidenciaTipo" required>
-                                        <option value="">Seleccionar...</option>
-                                        <option value="FACTURACION">Error de Facturación</option>
-                                        <option value="MERCADERIA">Mercadería Faltante/Incompleta</option>
-                                        <option value="CALIDAD">Productos Dañados/Defectuosos</option>
-                                        <option value="DESCUENTOS">Descuentos Incorrectos</option>
-                                        <option value="DESCRIPCION">Error en Descripción</option>
-                                        <option value="OTRO">Otro</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-8">
-                                    <label for="incidenciaDescripcion" class="form-label">Descripción <span
-                                            class="text-danger">*</span></label>
-                                    <textarea class="form-control" id="incidenciaDescripcion" rows="2"
-                                        placeholder="Describe el problema (mínimo 10 caracteres)" required></textarea>
-                                </div>
-                                <div class="col-md-12 text-end">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="bi bi-plus-circle me-1"></i>Agregar Incidencia
-                                    </button>
-                                </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="incidenciaTipo" class="form-label">Tipo <span class="text-danger">*</span></label>
+                                <select class="form-select" id="incidenciaTipo" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="FACTURACION">Error de Facturación</option>
+                                    <option value="MERCADERIA">Mercadería Faltante/Incompleta</option>
+                                    <option value="CALIDAD">Productos Dañados/Defectuosos</option>
+                                    <option value="DESCUENTOS">Descuentos Incorrectos</option>
+                                    <option value="DESCRIPCION">Error en Descripción</option>
+                                    <option value="OTRO">Otro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="incidenciaDescripcion" class="form-label">Descripción <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="incidenciaDescripcion" rows="2"
+                                    placeholder="Describe el problema (mínimo 10 caracteres)" required></textarea>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-plus-lg me-1"></i>Agregar
+                                </button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Tabla de incidencias -->
-                    <div class="card">
-                        <div class="card-header" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);">
-                            <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Incidencias Registradas</h6>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover mb-0">
-                                    <thead style="background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
-                                        <tr>
-                                            <th class="text-white py-3" style="width: 15%;">Tipo</th>
-                                            <th class="text-white py-3" style="width: 35%;">Descripción</th>
-                                            <th class="text-white py-3" style="width: 12%;">Estado</th>
-                                            <th class="text-white py-3" style="width: 15%;">Fecha</th>
-                                            <th class="text-white py-3" style="width: 23%;">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tablaIncidenciasBody">
-                                        <!-- Incidencias se cargan aquí -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                    <div class="rm-section-label">
+                        <i class="bi bi-list-check"></i>
+                        <span>Incidencias Registradas</span>
+                    </div>
+                    <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="py-3" style="width: 15%;">Tipo</th>
+                                    <th class="py-3" style="width: 35%;">Descripción</th>
+                                    <th class="py-3" style="width: 12%;">Estado</th>
+                                    <th class="py-3" style="width: 15%;">Fecha</th>
+                                    <th class="py-3" style="width: 23%;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaIncidenciasBody"></tbody>
+                        </table>
                     </div>
                 </div>
             </form>
@@ -1628,68 +1832,61 @@
 </div>
 
 <!-- Modal Gestión de Proveedores -->
-<div class="modal fade" id="modalGestionProveedores" tabindex="-1" aria-labelledby="modalGestionProveedoresLabel"
+<div class="modal fade rm-modal" id="modalGestionProveedores" tabindex="-1" aria-labelledby="modalGestionProveedoresLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
-            <div class="modal-header text-dark" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); border-bottom: none; padding: 20px 24px;">
+        <div class="modal-content rm-accent--slate">
+            <div class="rm-modal-header">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-building fs-5"></i>
+                    <div class="rm-modal-icon rm-modal-icon--slate">
+                        <i class="bi bi-building"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title mb-0" id="modalGestionProveedoresLabel">Gestión de Proveedores</h5>
-                        <small style="opacity: 0.8;">Administra tus proveedores</small>
+                        <h5 class="rm-modal-title" id="modalGestionProveedoresLabel">Gestión de Proveedores</h5>
+                        <p class="rm-modal-subtitle">Administra tus proveedores</p>
                     </div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body">
-                <!-- Botones de acción -->
+            <div class="rm-modal-body rm-modal-body--white rm-modal-body--scroll">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalCrearProveedor">
-                        <i class="bi bi-plus-circle me-1"></i>Crear Nuevo Proveedor
+                    <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearProveedor">
+                        <i class="bi bi-plus-lg me-1"></i>Nuevo Proveedor
                     </button>
-                    <div class="input-group" style="max-width: 300px;">
-                        <input type="text" class="form-control" id="searchProveedores"
+                    <div class="input-group" style="max-width: 280px;">
+                        <input type="text" class="form-control form-control-sm" id="searchProveedores"
                             placeholder="Buscar proveedores...">
-                        <button class="btn btn-outline-secondary" type="button" id="btnSearchProveedores">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="btnSearchProveedores">
                             <i class="bi bi-search"></i>
                         </button>
                     </div>
                 </div>
 
-                <!-- Tabla de proveedores -->
-                <div class="table-responsive" style="max-height: 400px; border-radius: 12px; overflow: hidden;">
+                <div class="table-responsive" style="max-height: 400px; border-radius: 10px; overflow: auto; border: 1px solid #edf0f5;">
                     <table class="table table-hover mb-0">
-                        <thead class="sticky-top" style="background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
+                        <thead class="sticky-top">
                             <tr>
-                                <th class="text-white py-3">Nombre</th>
-                                <th class="text-white py-3">RUT</th>
-                                <th class="text-white py-3">Giro</th>
-                                <th class="text-white py-3">Ciudad</th>
-                                <th class="text-white py-3">DTEs</th>
-                                <th class="text-white py-3">Compras</th>
-                                <th class="text-white py-3">Acciones</th>
+                                <th class="py-3">Nombre</th>
+                                <th class="py-3">RUT</th>
+                                <th class="py-3">Giro</th>
+                                <th class="py-3">Ciudad</th>
+                                <th class="py-3">DTEs</th>
+                                <th class="py-3">Compras</th>
+                                <th class="py-3">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody id="tablaProveedores">
-                            <!-- Los proveedores se cargarán aquí -->
-                        </tbody>
+                        <tbody id="tablaProveedores"></tbody>
                     </table>
                 </div>
 
-                <!-- Paginación -->
                 <div class="d-flex justify-content-between align-items-center mt-3">
-                    <div class="text-muted">
-                        <span id="infoProveedores">Mostrando 0 proveedores</span>
-                    </div>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-outline-primary btn-sm" id="btnPrevProveedores">
+                    <span class="text-muted" style="font-size: 0.82rem;" id="infoProveedores">Mostrando 0 proveedores</span>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-primary" id="btnPrevProveedores">
                             <i class="bi bi-chevron-left"></i> Anterior
                         </button>
-                        <span class="btn btn-outline-secondary btn-sm" id="pageInfoProveedores">Página 1</span>
-                        <button type="button" class="btn btn-outline-primary btn-sm" id="btnNextProveedores">
+                        <span class="btn btn-outline-secondary disabled" id="pageInfoProveedores">Página 1</span>
+                        <button type="button" class="btn btn-outline-primary" id="btnNextProveedores">
                             Siguiente <i class="bi bi-chevron-right"></i>
                         </button>
                     </div>
@@ -1700,86 +1897,100 @@
 </div>
 
 <!-- Modal Crear/Editar Proveedor -->
-<div class="modal fade" id="modalCrearProveedor" tabindex="-1" aria-labelledby="modalCrearProveedorLabel"
+<div class="modal fade rm-modal" id="modalCrearProveedor" tabindex="-1" aria-labelledby="modalCrearProveedorLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
-            <div class="modal-header text-white" style="background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-bottom: none; padding: 20px 24px;">
+        <div class="modal-content rm-accent--green">
+            <div class="rm-modal-header">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                        <i class="bi bi-building-add fs-5"></i>
+                    <div class="rm-modal-icon rm-modal-icon--green">
+                        <i class="bi bi-building-add"></i>
                     </div>
                     <div>
-                        <h5 class="modal-title mb-0" id="modalCrearProveedorLabel">Crear Nuevo Proveedor</h5>
-                        <small style="opacity: 0.9;">Complete los datos del proveedor</small>
+                        <h5 class="rm-modal-title" id="modalCrearProveedorLabel">Crear Nuevo Proveedor</h5>
+                        <p class="rm-modal-subtitle">Complete los datos del proveedor</p>
                     </div>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                    aria-label="Cerrar"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form id="formProveedor">
-                <div class="modal-body">
+                <div class="rm-modal-body rm-modal-body--scroll">
                     <input type="hidden" id="proveedorId">
 
-                    <div class="row g-3">
-                        <!-- Información básica -->
-                        <div class="col-md-6">
-                            <label for="nombreProveedor" class="form-label">Nombre *</label>
-                            <input type="text" class="form-control" id="nombreProveedor" required>
+                    <div class="mb-4">
+                        <div class="rm-section-label">
+                            <i class="bi bi-person-vcard"></i>
+                            <span>Información Básica</span>
                         </div>
-                        <div class="col-md-6">
-                            <label for="rutProveedor" class="form-label">RUT *</label>
-                            <input type="text" class="form-control" id="rutProveedor" required>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="nombreProveedor" class="form-label">Nombre <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="nombreProveedor" placeholder="Nombre del proveedor" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="rutProveedor" class="form-label">RUT <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="rutProveedor" placeholder="Ej: 12345678-9" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="nombreFantasia" class="form-label">Nombre de Fantasía</label>
+                                <input type="text" class="form-control" id="nombreFantasia" placeholder="Opcional">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="razonSocial" class="form-label">Razón Social</label>
+                                <input type="text" class="form-control" id="razonSocial" placeholder="Opcional">
+                            </div>
+                            <div class="col-12">
+                                <label for="giroProveedor" class="form-label">Giro</label>
+                                <input type="text" class="form-control" id="giroProveedor" placeholder="Actividad comercial">
+                            </div>
                         </div>
+                    </div>
 
-                        <div class="col-md-6">
-                            <label for="nombreFantasia" class="form-label">Nombre de Fantasía</label>
-                            <input type="text" class="form-control" id="nombreFantasia">
+                    <div class="mb-4">
+                        <div class="rm-section-label">
+                            <i class="bi bi-geo-alt"></i>
+                            <span>Dirección</span>
                         </div>
-                        <div class="col-md-6">
-                            <label for="razonSocial" class="form-label">Razón Social</label>
-                            <input type="text" class="form-control" id="razonSocial">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="direccionProveedor" class="form-label">Dirección</label>
+                                <input type="text" class="form-control" id="direccionProveedor" placeholder="Calle y número">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="comunaProveedor" class="form-label">Comuna</label>
+                                <input type="text" class="form-control" id="comunaProveedor" placeholder="Comuna">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="ciudadProveedor" class="form-label">Ciudad</label>
+                                <input type="text" class="form-control" id="ciudadProveedor" placeholder="Ciudad">
+                            </div>
                         </div>
+                    </div>
 
-                        <div class="col-12">
-                            <label for="giroProveedor" class="form-label">Giro</label>
-                            <input type="text" class="form-control" id="giroProveedor">
+                    <div>
+                        <div class="rm-section-label">
+                            <i class="bi bi-envelope"></i>
+                            <span>Correos Electrónicos</span>
                         </div>
-
-                        <!-- Dirección -->
-                        <div class="col-md-6">
-                            <label for="direccionProveedor" class="form-label">Dirección</label>
-                            <input type="text" class="form-control" id="direccionProveedor">
-                        </div>
-                        <div class="col-md-3">
-                            <label for="comunaProveedor" class="form-label">Comuna</label>
-                            <input type="text" class="form-control" id="comunaProveedor">
-                        </div>
-                        <div class="col-md-3">
-                            <label for="ciudadProveedor" class="form-label">Ciudad</label>
-                            <input type="text" class="form-control" id="ciudadProveedor">
-                        </div>
-
-                        <!-- Correos -->
-                        <div class="col-md-4">
-                            <label for="correoVendedor" class="form-label">Correo Vendedor</label>
-                            <input type="email" class="form-control" id="correoVendedor">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="correoIntercambio" class="form-label">Correo Intercambio</label>
-                            <input type="email" class="form-control" id="correoIntercambio">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="correoAdministrador" class="form-label">Correo Administrador</label>
-                            <input type="email" class="form-control" id="correoAdministrador">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="correoVendedor" class="form-label">Vendedor</label>
+                                <input type="email" class="form-control" id="correoVendedor" placeholder="vendedor@empresa.cl">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="correoIntercambio" class="form-label">Intercambio</label>
+                                <input type="email" class="form-control" id="correoIntercambio" placeholder="intercambio@empresa.cl">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="correoAdministrador" class="form-label">Administrador</label>
+                                <input type="email" class="form-control" id="correoAdministrador" placeholder="admin@empresa.cl">
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">
-                        <i class="bi bi-x-circle me-1"></i>Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-success" style="border-radius: 10px;">
+                <div class="rm-modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
                         <i class="bi bi-save me-1"></i>Guardar Proveedor
                     </button>
                 </div>
@@ -1829,6 +2040,90 @@
         $('body').css('padding-right', '');
         $('body').css('overflow', '');
     }
+
+    // ==================== FORMATEADOR DE MONTOS ====================
+    function formatMoney(value) {
+        const num = String(value).replace(/[^\d]/g, '');
+        if (!num) return '';
+        return parseInt(num, 10).toLocaleString('es-CL');
+    }
+
+    function unformatMoney(value) {
+        return parseInt(String(value).replace(/[^\d]/g, '') || '0', 10);
+    }
+
+    function setMoneyVal(selector, rawNumber) {
+        const el = $(selector);
+        if (!rawNumber && rawNumber !== 0) { el.val(''); return; }
+        el.val(formatMoney(rawNumber));
+    }
+
+    $(document).on('input', '.input-money', function () {
+        const raw = this.value.replace(/[^\d]/g, '');
+        const pos = this.selectionStart;
+        const prevLen = this.value.length;
+        this.value = raw ? parseInt(raw, 10).toLocaleString('es-CL') : '';
+        const diff = this.value.length - prevLen;
+        this.setSelectionRange(pos + diff, pos + diff);
+    });
+
+    $(document).on('keydown', '.input-money', function (e) {
+        const allowed = ['Backspace','Delete','Tab','Escape','Enter','ArrowLeft','ArrowRight','Home','End'];
+        if (allowed.includes(e.key)) return;
+        if ((e.ctrlKey || e.metaKey) && ['a','c','v','x','z'].includes(e.key.toLowerCase())) return;
+        if (!/^\d$/.test(e.key)) e.preventDefault();
+    });
+
+    $(document).on('paste', '.input-money', function (e) {
+        e.preventDefault();
+        const pasted = (e.originalEvent.clipboardData || window.clipboardData).getData('text');
+        const clean = pasted.replace(/[^\d]/g, '');
+        if (clean) {
+            this.value = parseInt(clean, 10).toLocaleString('es-CL');
+            $(this).trigger('input');
+        }
+    });
+
+    // ==================== DESGLOSE DE MONTOS EN VIVO ====================
+    function calcularDesglose() {
+        const bruto = unformatMoney($('#montoConIVA').val());
+        const descRaw = unformatMoney($('#descuento').val());
+        const descIncluyeIVA = $('#descuentoConIVA').is(':checked');
+
+        if (!bruto || bruto <= 0) {
+            $('#resumenDesglose').slideUp(200);
+            return;
+        }
+
+        let descNeto, totalConIVA;
+        if (descIncluyeIVA) {
+            totalConIVA = bruto - descRaw;
+        } else {
+            const descConIVA = Math.round(descRaw * 1.19);
+            totalConIVA = bruto - descConIVA;
+        }
+        if (totalConIVA < 0) totalConIVA = 0;
+
+        const neto = Math.round(totalConIVA / 1.19);
+        const iva = totalConIVA - neto;
+        const fmt = (n) => '$' + n.toLocaleString('es-CL');
+
+        $('#resumenNeto').text(fmt(neto));
+        $('#resumenIVA').text(fmt(iva));
+        $('#resumenTotal').text(fmt(totalConIVA));
+
+        if (descRaw > 0) {
+            $('#resumenDescuentoMonto').text(fmt(descRaw) + (descIncluyeIVA ? ' (con IVA)' : ' (neto)'));
+            $('#resumenDescuentoInfo').show();
+        } else {
+            $('#resumenDescuentoInfo').hide();
+        }
+
+        $('#resumenDesglose').slideDown(200);
+    }
+
+    $(document).on('input', '#montoConIVA, #descuento', calcularDesglose);
+    $(document).on('change', '#descuentoConIVA', calcularDesglose);
 
     // Variables para paginación y búsqueda de DTE
     let currentPageDTE = 1;
@@ -2025,51 +2320,47 @@
         cargarDTEs(1, search);
     });
 
-    // Botón Ingresar DTE (redirección o abrir modal)
+    // Promesas de carga de selects (usadas por editarDTE para esperar)
+    let _promiseProveedores = null;
+    let _promiseReceptoras = null;
+
     $('#modalNuevoDTE').on('show.bs.modal', function () {
         const modal = $(this);
         const isEditing = modal.data('dte-id') !== undefined && modal.data('dte-id') !== null;
         
-        // Solo establecer valores por defecto si NO estamos editando
         if (!isEditing) {
             const hoy = new Date().toISOString().split('T')[0];
             $('#fechaEmision').val(hoy);
             $('#fechaRecepcion').val(hoy);
             $('#estadoPago').val('Pendiente');
-            $('#diasCredito').val(30); // Por defecto 30 días
-            // Resaltar botón de 30 días por defecto
+            $('#diasCredito').val(30);
             $('.dias-credito-shortcut').removeClass('btn-primary').addClass('btn-outline-primary');
             $('.dias-credito-shortcut[data-dias="30"]').removeClass('btn-outline-primary').addClass('btn-primary');
         }
         
         const valorEmpresaRecepcion = modal.data('empresa-recepcion-value') || null;
-        cargarEmpresasReceptoras();
-        cargarEmpresasRecepcion(valorEmpresaRecepcion);
-        cargarShortcutsEmpresasReceptoras(); // Cargar shortcuts de empresas receptoras
+        _promiseProveedores = cargarEmpresasReceptoras();
+        _promiseReceptoras = cargarEmpresasRecepcion(valorEmpresaRecepcion);
+        cargarShortcutsEmpresasReceptoras();
         modal.removeData('empresa-recepcion-value');
 
-        // Inicializar visibilidad del campo de motivo de rechazo
         toggleMotivoRechazo();
         
-        // Inicializar Select2 en los demás selects del modal
         setTimeout(function() {
-            // Tipo de Documento
             if (!$('#tipoDocumento').hasClass('select2-hidden-accessible')) {
                 $('#tipoDocumento').select2({
                     width: '100%',
                     dropdownParent: $('#modalNuevoDTE'),
                     placeholder: 'Selecciona tipo de documento',
-                    minimumResultsForSearch: Infinity // Sin búsqueda (pocas opciones)
+                    minimumResultsForSearch: Infinity
                 });
             }
-            
-            // Estado DTE
             if (!$('#estadoDTE').hasClass('select2-hidden-accessible')) {
                 $('#estadoDTE').select2({
                     width: '100%',
                     dropdownParent: $('#modalNuevoDTE'),
                     placeholder: 'Selecciona estado',
-                    minimumResultsForSearch: Infinity // Sin búsqueda (pocas opciones)
+                    minimumResultsForSearch: Infinity
                 });
             }
         }, 100);
@@ -2450,6 +2741,9 @@
             <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.1rem;"></i>
             ${dte.incidencias_count > 0 ? `<span class="badge bg-danger" style="font-size: 0.65rem; position: absolute; top: -5px; right: -5px;">${dte.incidencias_count}</span>` : ''}
         </button>
+        <a class="btn btn-sm btn-outline-primary" href="/app/verGestionCompras/?buscar=${encodeURIComponent(dte.nombre || '')}" title="Ver compras de ${dte.nombre || 'este proveedor'}">
+            <i class="bi bi-cart" style="font-size: 1.1rem;"></i>
+        </a>
     </div>
 </td>
 
@@ -2608,110 +2902,96 @@
             method: 'GET',
             success: function (dte) {
                 $('#modalNuevoDTELabel').text('Editar DTE Compra');
-                $('#formNuevoDTE button[type="submit"]').text('Actualizar DTE');
+                $('#formNuevoDTE button[type="submit"]').html('<i class="bi bi-save me-1"></i>Actualizar DTE');
                 
-                // Guardar datos para aplicar después de que el modal se abra
-                const empresaRecepcionId = dte.empresa_receptora_id ? dte.empresa_receptora_id : '';
+                const empresaRecepcionId = dte.empresa_receptora_id ? String(dte.empresa_receptora_id) : '';
                 $('#modalNuevoDTE').data('empresa-recepcion-value', empresaRecepcionId);
                 $('#modalNuevoDTE').data('dte-id', dte.id);
-                $('#modalNuevoDTE').data('dte-data', dte); // Guardar todos los datos del DTE
+                $('#modalNuevoDTE').data('dte-data', dte);
 
-                // Abrir el modal primero (esto dispara show.bs.modal que carga los selects)
                 const modal = new bootstrap.Modal(document.getElementById('modalNuevoDTE'));
                 modal.show();
 
-                // Esperar a que los selects se carguen y luego aplicar los valores
-                setTimeout(function() {
-                    // Campos de texto/número simples
-                    $('#numeroDocumento').val(dte.numero_documento);
-                    $('#montoConIVA').val(dte.monto_con_iva);
-                    $('#descuento').val(dte.descuento || 0);
-                    $('#descuentoConIVA').prop('checked', dte.descuento_con_iva || false);
-                    $('#fechaEmision').val(dte.fecha_emision);
-                    $('#fechaRecepcion').val(dte.fecha_recepcion || '');
-                    $('#estadoPago').val(dte.estado_pago);
-                    $('#diasCredito').val(dte.diasCredito || 0);
-                    $('#bultos').val(dte.bultos || 0);
-                    $('#unidadesProductos').val(dte.unidades_productos || 0);
+                // Esperar a que AMBAS cargas AJAX de selects terminen
+                $.when(_promiseProveedores, _promiseReceptoras).always(function() {
+                    setTimeout(function() {
+                        // === Campos simples ===
+                        $('#numeroDocumento').val(dte.numero_documento);
+                        setMoneyVal('#montoConIVA', dte.monto_con_iva);
+                        setMoneyVal('#descuento', dte.descuento || 0);
+                        $('#descuentoConIVA').prop('checked', dte.descuento_con_iva || false);
+                        calcularDesglose();
+                        $('#fechaEmision').val(dte.fecha_emision);
+                        $('#fechaRecepcion').val(dte.fecha_recepcion || '');
+                        $('#estadoPago').val(dte.estado_pago);
+                        $('#diasCredito').val(dte.diasCredito || 0);
+                        $('#bultos').val(dte.bultos || 0);
+                        $('#unidadesProductos').val(dte.unidades_productos || 0);
 
-                    // Actualizar highlight del botón de días
-                    $('.dias-credito-shortcut').removeClass('btn-primary').addClass('btn-outline-primary');
-                    const diasVal = dte.diasCredito || 0;
-                    if ([30, 60, 90].includes(diasVal)) {
-                        $(`.dias-credito-shortcut[data-dias="${diasVal}"]`).removeClass('btn-outline-primary').addClass('btn-primary');
-                    }
-
-                    // Cargar motivo de rechazo si existe
-                    if (dte.motivo_rechazo) {
-                        $('#motivoRechazo').val(dte.motivo_rechazo);
-                        $('#contadorCaracteres').text(dte.motivo_rechazo.length);
-                    }
-
-                    // Mostrar campo de motivo si el estado es Rechazado
-                    toggleMotivoRechazo();
-
-                    // Manejar documento padre si es factura
-                    if (dte.tipo_documento === 'FACTURA ELECTRONICA' && dte.documento_padre_id) {
-                        cargarDocumentosBase();
-                        $('#divDocumentoBase').show();
-                        setTimeout(() => {
-                            $('#documentoBase').val(dte.documento_padre_id);
-                        }, 300);
-                    } else if (dte.tipo_documento === 'FACTURA ELECTRONICA') {
-                        cargarDocumentosBase();
-                        $('#divDocumentoBase').show();
-                    } else {
-                        $('#divDocumentoBase').hide();
-                        $('#documentoBase').val('');
-                    }
-
-                    // Manejar asociación de NC si es una Nota de Crédito
-                    if (dte.tipo_documento === 'NOTA DE CREDITO') {
-                        cargarInfoAsociacionNC(dte.id);
-                        $('#divAsociacionNC').show();
-                    } else {
-                        $('#divAsociacionNC').hide();
-                    }
-
-                    // Cargar información completa (pagos, incidencias)
-                    cargarInfoCompletaDTE(dte.id, dte.tipo_documento);
-                }, 300);
-
-                // Esperar más tiempo para los selects con Select2
-                setTimeout(function() {
-                    // Empresa Emisora (Proveedor)
-                    if (dte.receptor_id) {
-                        if ($('#receptor').hasClass('select2-hidden-accessible')) {
-                            $('#receptor').val(dte.receptor_id).trigger('change');
-                        } else {
-                            $('#receptor').val(dte.receptor_id);
+                        $('.dias-credito-shortcut').removeClass('btn-primary').addClass('btn-outline-primary');
+                        const diasVal = dte.diasCredito || 0;
+                        if ([30, 60, 90].includes(diasVal)) {
+                            $(`.dias-credito-shortcut[data-dias="${diasVal}"]`).removeClass('btn-outline-primary').addClass('btn-primary');
                         }
-                    }
 
-                    // Tipo de Documento
-                    if (dte.tipo_documento) {
-                        const tipoDoc = dte.tipo_documento.toUpperCase();
-                        if ($('#tipoDocumento').hasClass('select2-hidden-accessible')) {
-                            $('#tipoDocumento').val(tipoDoc).trigger('change');
-                        } else {
-                            $('#tipoDocumento').val(tipoDoc);
+                        if (dte.motivo_rechazo) {
+                            $('#motivoRechazo').val(dte.motivo_rechazo);
+                            $('#contadorCaracteres').text(dte.motivo_rechazo.length);
                         }
-                    }
-
-                    // Estado DTE - normalizar a mayúsculas
-                    if (dte.estado_dte) {
-                        const estadoNormalizado = dte.estado_dte.toUpperCase();
-                        if ($('#estadoDTE').hasClass('select2-hidden-accessible')) {
-                            $('#estadoDTE').val(estadoNormalizado).trigger('change');
-                        } else {
-                            $('#estadoDTE').val(estadoNormalizado);
-                        }
-                        // Actualizar visibilidad del motivo de rechazo
                         toggleMotivoRechazo();
-                    }
 
-                    // Empresa Receptora (ya se maneja con data('empresa-recepcion-value') en show.bs.modal)
-                }, 600);
+                        // === Empresa Emisora (Proveedor) ===
+                        if (dte.receptor_id) {
+                            $('#receptor').val(dte.receptor_id).trigger('change');
+                        }
+
+                        // === Empresa Receptora ===
+                        if (dte.empresa_receptora_id) {
+                            const $empRec = $('#empresaReceptora');
+                            const recId = String(dte.empresa_receptora_id);
+                            if ($empRec.find(`option[value="${recId}"]`).length > 0) {
+                                $empRec.val(recId).trigger('change');
+                            }
+                        }
+
+                        // === Tipo de Documento ===
+                        if (dte.tipo_documento) {
+                            const tipoDoc = dte.tipo_documento.toUpperCase();
+                            $('#tipoDocumento').val(tipoDoc).trigger('change');
+                        }
+
+                        // === Estado DTE ===
+                        if (dte.estado_dte) {
+                            const estadoNormalizado = dte.estado_dte.toUpperCase();
+                            $('#estadoDTE').val(estadoNormalizado).trigger('change');
+                            toggleMotivoRechazo();
+                        }
+
+                        // === Documento base / NC ===
+                        if (dte.tipo_documento === 'FACTURA ELECTRONICA' && dte.documento_padre_id) {
+                            cargarDocumentosBase();
+                            $('#divDocumentoBase').show();
+                            setTimeout(() => {
+                                $('#documentoBase').val(dte.documento_padre_id);
+                            }, 300);
+                        } else if (dte.tipo_documento === 'FACTURA ELECTRONICA') {
+                            cargarDocumentosBase();
+                            $('#divDocumentoBase').show();
+                        } else {
+                            $('#divDocumentoBase').hide();
+                            $('#documentoBase').val('');
+                        }
+
+                        if (dte.tipo_documento === 'NOTA DE CREDITO') {
+                            cargarInfoAsociacionNC(dte.id);
+                            $('#divAsociacionNC').show();
+                        } else {
+                            $('#divAsociacionNC').hide();
+                        }
+
+                        cargarInfoCompletaDTE(dte.id, dte.tipo_documento);
+                    }, 150);
+                });
             },
             error: function () {
                 Swal.fire('Error', 'No se pudo cargar el DTE para edición', 'error');
@@ -2790,7 +3070,7 @@
         // Capturar valores
         const receptor_id = $('#receptor').val();
         const numero = $('#numeroDocumento').val();
-        const monto = $('#montoConIVA').val();
+        const monto = unformatMoney($('#montoConIVA').val());
         const fechaEmision = $('#fechaEmision').val();
         const fechaRecepcion = $('#fechaRecepcion').val();
         const estadoDTE = $('#estadoDTE').val();
@@ -2799,7 +3079,7 @@
         const diasCredito = $('#diasCredito').val();
         const bultos = $('#bultos').val();
         const unidades_productos = $('#unidadesProductos').val();
-        const descuento = $('#descuento').val();
+        const descuento = unformatMoney($('#descuento').val());
         const descuento_con_iva = $('#descuentoConIVA').is(':checked');
         const motivoRechazo = $('#motivoRechazo').val().trim();
         const documento_padre_id = $('#documentoBase').val();
@@ -2982,11 +3262,16 @@
         
         $('#formNuevoDTE')[0].reset();
         $('#modalNuevoDTELabel').text('Nuevo DTE Compra');
-        $('#formNuevoDTE button[type="submit"]').text('Guardar DTE');
+        $('#formNuevoDTE button[type="submit"]').html('<i class="bi bi-save me-1"></i>Guardar DTE');
         $(this).removeData('dte-id');
         $(this).removeData('dte-data');
         $(this).removeData('empresa-recepcion-value');
+        _promiseProveedores = null;
+        _promiseReceptoras = null;
         
+        // Ocultar desglose de montos
+        $('#resumenDesglose').hide();
+
         // Limpiar paneles de información adicional
         $('#divHistorialPagos').hide();
         $('#divResumenIncidencias').hide();
@@ -3036,7 +3321,7 @@
     });
 
     function cargarEmpresasReceptoras() {
-        $.ajax({
+        return $.ajax({
             url: '/app/empresas_proveedoras/',
             method: 'POST',
             contentType: 'application/json',
@@ -3046,23 +3331,20 @@
             success: function (data) {
                 const select = $('#receptor');
                 
-                // Destruir Select2 si ya existe
                 if (select.hasClass('select2-hidden-accessible')) {
                     select.select2('destroy');
                 }
                 
-                // Limpiar y cargar opciones
-                select.empty().append('<option value="">Selecciona una empresa</option>');
+                select.empty().append('<option value=""></option>');
 
                 data.forEach(emp => {
                     select.append(`<option value="${emp.id}">${emp.nombre} (${emp.rut})</option>`);
                 });
                 
-                // Inicializar Select2 con búsqueda habilitada
                 select.select2({
                     width: '100%',
                     dropdownParent: $('#modalNuevoDTE'),
-                    placeholder: 'Selecciona una empresa',
+                    placeholder: 'Buscar proveedor por nombre o RUT...',
                     allowClear: true,
                     language: { 
                         noResults: function() { 
@@ -3072,7 +3354,6 @@
                             return "Buscando...";
                         }
                     },
-                    // Habilitar búsqueda siempre (incluso con pocas opciones)
                     minimumResultsForSearch: 0
                 });
             },
@@ -3146,24 +3427,15 @@
         });
     }
 
-    // Click en shortcuts de empresas receptoras - seleccionar directamente
     $(document).on('click', '.empresa-receptora-shortcut', function() {
-        const value = $(this).data('value');
+        const value = String($(this).data('value'));
         const select = $('#empresaReceptora');
-        
-        // Seleccionar directamente el value
+        const empresaId = value.includes('||') ? value.split('||')[0] : value;
+
         if (select.find(`option[value="${value}"]`).length > 0) {
             select.val(value).trigger('change');
-        } else {
-            // Si no existe exactamente, buscar por empresa_id
-            const empresaId = value.split('||')[0];
-            select.find('option').each(function() {
-                const optValue = $(this).val();
-                if (optValue && optValue.startsWith(empresaId + '||')) {
-                    select.val(optValue).trigger('change');
-                    return false;
-                }
-            });
+        } else if (select.find(`option[value="${empresaId}"]`).length > 0) {
+            select.val(empresaId).trigger('change');
         }
     });
 
@@ -3249,16 +3521,21 @@
                 }
 
                 select.empty();
+                select.append('<option value=""></option>');
 
                 if (!data || data.length === 0) {
-                    select.append('<option value="">No hay empresas receptoras disponibles</option>');
                     select.prop('disabled', true);
+                    select.select2({
+                        width: '100%',
+                        dropdownParent: $('#modalNuevoDTE'),
+                        placeholder: 'No hay empresas receptoras disponibles',
+                        allowClear: false
+                    });
                     return;
                 }
 
                 select.prop('disabled', false);
 
-                // Agrupar empresas únicas (sin repetir por sucursal)
                 const empresasUnicas = new Map();
                 let defaultEmpresaId = null;
                 
@@ -3270,7 +3547,6 @@
                             rut: item.empresa_rut || ''
                         });
                     }
-                    // Si este item es default, guardar su empresa_id
                     if (item.is_default && !defaultEmpresaId) {
                         defaultEmpresaId = item.empresa_id;
                     }
@@ -3285,10 +3561,8 @@
                     select.append(option);
                 });
 
-                // Determinar valor a seleccionar
                 let valueToSet = null;
                 if (valorSeleccionado) {
-                    // Si viene valor seleccionado, puede ser solo empresa_id o empresa_id||sucursal_id
                     if (valorSeleccionado.includes('||')) {
                         const partes = valorSeleccionado.split('||');
                         valueToSet = partes[0] || null;
@@ -3296,8 +3570,8 @@
                         valueToSet = valorSeleccionado;
                     }
                 }
-                valueToSet = valueToSet || defaultEmpresaId || select.find('option:first').val();
-                
+                valueToSet = valueToSet || defaultEmpresaId;
+
                 if (valueToSet) {
                     select.val(valueToSet);
                 }
@@ -3366,12 +3640,12 @@
 
         // Reset textos y etiquetas
         $('#modalPagoLabel').text('Registrar Pago');
-        $('#formPago button[type="submit"]').text('Registrar Pago');
+        $('#formPago button[type="submit"]').html('<i class="bi bi-check-circle me-1"></i>Registrar Pago');
 
         // Limpiar resumen
-        $('#inputMontoOriginal').val('');
-        $('#inputMontoAbonado').val('');
-        $('#inputSaldoPendiente').val('');
+        $('#inputMontoOriginal').text('');
+        $('#inputMontoAbonado').text('');
+        $('#inputSaldoPendiente').text('');
 
         // Obtener info de pagos anteriores
         $.ajax({
@@ -3381,13 +3655,13 @@
                 const abonado = data.total_abonado || 0;
                 const saldo = montoTotal - abonado;
 
-                $('#inputMontoOriginal').val(`$${montoTotal.toLocaleString()}`);
-                $('#inputMontoAbonado').val(`$${abonado.toLocaleString()}`);
-                $('#inputSaldoPendiente').val(`$${saldo.toLocaleString()}`);
+                $('#inputMontoOriginal').text(`$${montoTotal.toLocaleString()}`);
+                $('#inputMontoAbonado').text(`$${abonado.toLocaleString()}`);
+                $('#inputSaldoPendiente').text(`$${saldo.toLocaleString()}`);
 
                 // Configurar checkbox
                 $('#pagarTodo').off('change').on('change', function () {
-                    $('#montoPago').val(this.checked ? saldo : '');
+                    this.checked ? setMoneyVal('#montoPago', saldo) : $('#montoPago').val('');
                 });
 
                 // Inicializar Select2 en método de pago
@@ -3420,8 +3694,8 @@
         const dteId = $('#pagoDteId').val();
         const metodo_pago = $('#metodoPago').val();
         const voucher = $('#voucher').val().trim();
-        const monto = parseInt($('#montoPago').val());
-        const saldoPermitido = parseInt($('#inputSaldoPendiente').val()?.replace(/[^\d]/g, '') || 0);
+        const monto = unformatMoney($('#montoPago').val());
+        const saldoPermitido = parseInt($('#inputSaldoPendiente').text()?.replace(/[^\d]/g, '') || 0);
 
         if (!metodo_pago || isNaN(monto) || monto <= 0) {
             return Swal.fire('Faltan datos', 'Completa todos los campos obligatorios.', 'warning');
@@ -3571,18 +3845,14 @@
                         $('#pagoDteId').val(pago.dte_id);
                         $('#metodoPago').val(pago.metodo_pago);
                         $('#voucher').val(pago.voucher || '');
-                        $('#montoPago').val(pago.monto);
+                        setMoneyVal('#montoPago', pago.monto);
 
-                        $('#inputMontoOriginal').val(`$${totalDTE.toLocaleString()}`);
-                        $('#inputMontoAbonado').val(`$${abonadoSinEste.toLocaleString()}`);
-                        $('#inputSaldoPendiente').val(`$${saldoDisponible.toLocaleString()}`);
+                        $('#inputMontoOriginal').text(`$${totalDTE.toLocaleString()}`);
+                        $('#inputMontoAbonado').text(`$${abonadoSinEste.toLocaleString()}`);
+                        $('#inputSaldoPendiente').text(`$${saldoDisponible.toLocaleString()}`);
 
                         $('#pagarTodo').prop('checked', false).off('change').on('change', function () {
-                            if (this.checked) {
-                                $('#montoPago').val(saldoDisponible);
-                            } else {
-                                $('#montoPago').val('');
-                            }
+                            this.checked ? setMoneyVal('#montoPago', saldoDisponible) : $('#montoPago').val('');
                         });
 
                         // 🔁 Cerrar modal detalle si está abierto
@@ -3639,7 +3909,7 @@
 
         const dteId = $('#ncDteId').val();
         const numero = $('#ncNumero').val();
-        const monto = parseFloat($('#ncMonto').val());
+        const monto = unformatMoney($('#ncMonto').val());
         const motivo = $('#ncMotivo').val().trim();
 
         if (!numero || isNaN(monto) || monto <= 0) {

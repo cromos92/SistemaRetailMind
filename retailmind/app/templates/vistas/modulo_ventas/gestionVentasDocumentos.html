@@ -1497,127 +1497,76 @@ document.addEventListener('DOMContentLoaded', function() {
             .map(p => `${p.metodo_display || p.metodo} ${formatearMoneda(p.monto || 0)}`)
             .join(' &nbsp;·&nbsp; ');
         return `
-            <!-- Header compacto con gradiente -->
-            <div style="background: linear-gradient(135deg, #0066FF 0%, #1A1A2E 100%); color: white;" class="px-4 py-3">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div class="d-flex align-items-center gap-3">
-                        <div style="background:rgba(255,255,255,0.15);border-radius:10px;padding:8px 10px;line-height:1;">
-                            <i class="${obtenerIconoTipo(doc.tipo)}" style="font-size:1.4rem;"></i>
-                        </div>
+            <!-- Header compacto -->
+            <div style="background: linear-gradient(135deg, #0066FF 0%, #1A1A2E 100%); color: white;" class="px-3 py-2">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-1">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="${obtenerIconoTipo(doc.tipo)}" style="font-size:1.2rem;opacity:.8;"></i>
                         <div>
-                            <div class="fw-bold mb-0" style="font-size:1rem;">
-                                ${doc.tipo} <span style="opacity:.7;">#${doc.numero || doc.numero_documento || doc.correlativo || 'S/N'}</span>
-                            </div>
-                            <div style="font-size:11px;opacity:.8;">
-                                <i class="ri-calendar-line me-1"></i>${formatearFecha(doc.fecha)}
-                                &nbsp;·&nbsp;
-                                <i class="ri-user-line me-1"></i>${doc.cliente_nombre || 'Sin nombre'}
-                                &nbsp;·&nbsp;
-                                <span class="badge ${obtenerClaseEstado(doc.estado)}" style="font-size:9px;vertical-align:middle;">${doc.estado}</span>
+                            <span class="fw-bold" style="font-size:.95rem;">
+                                ${doc.tipo} <span style="opacity:.6;">#${doc.numero || doc.numero_documento || doc.correlativo || 'S/N'}</span>
+                            </span>
+                            <div style="font-size:10px;opacity:.7;">
+                                ${formatearFecha(doc.fecha)} · ${doc.cliente_nombre || 'Sin nombre'} · <span class="badge ${obtenerClaseEstado(doc.estado)}" style="font-size:8px;vertical-align:middle;">${doc.estado}</span>
                             </div>
                         </div>
                     </div>
                     <div class="text-end">
-                        <div class="fw-bold" style="font-size:1.4rem;">${formatearMoneda(doc.total)}</div>
-                        ${(doc.descuento > 0) ? `<div style="font-size:10px;background:rgba(255,255,255,0.2);border-radius:4px;padding:1px 6px;display:inline-block;"><i class="ri-price-tag-3-line"></i> Dcto: ${formatearMoneda(doc.descuento)}</div>` : ''}
-                        <div style="font-size:11px;opacity:.7;">${doc.total_productos || 0} producto(s)</div>
+                        <div class="fw-bold" style="font-size:1.25rem;">${formatearMoneda(doc.total)}</div>
+                        ${(doc.descuento > 0) ? `<div style="font-size:9px;opacity:.7;"><i class="ri-price-tag-3-line"></i> Dcto: -${formatearMoneda(doc.descuento)}</div>` : ''}
                     </div>
                 </div>
             </div>
 
-            <!-- Cliente + Venta (compacto) -->
-            <div class="px-4 py-2 border-bottom">
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <div class="rounded p-2" style="background:#f8f9fa;font-size:11px;">
-                            <div class="d-flex align-items-center mb-1 gap-1">
-                                <i class="ri-user-line text-primary" style="font-size:10px;"></i>
-                                <span class="text-uppercase fw-semibold" style="font-size:9px;color:#6c757d;letter-spacing:.5px;">Cliente</span>
-                            </div>
-                            <div class="fw-semibold mb-1" style="font-size:12px;">${doc.cliente_nombre || 'Sin nombre'}</div>
-                            <div class="row g-0" style="color:#6c757d;">
-                                ${doc.cliente_rut ? `<div class="col-auto me-3"><i class="ri-id-card-line me-1"></i>${doc.cliente_rut}</div>` : ''}
-                                ${(doc.cliente_giro && doc.cliente_giro !== 'No especificado') ? `<div class="col-12 mt-1"><i class="ri-building-line me-1"></i>${doc.cliente_giro}</div>` : ''}
-                                ${(doc.cliente_email && doc.cliente_email !== 'No especificado') ? `<div class="col-12 mt-1"><i class="ri-mail-line me-1"></i>${doc.cliente_email}</div>` : ''}
-                                ${(doc.cliente_direccion && doc.cliente_direccion !== 'No especificada') ? `<div class="col-12 mt-1"><i class="ri-map-pin-line me-1"></i>${doc.cliente_direccion}${doc.cliente_comuna ? ', ' + doc.cliente_comuna : ''}</div>` : ''}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="rounded p-2" style="background:#f8f9fa;font-size:11px;">
-                            <div class="d-flex align-items-center mb-1 gap-1">
-                                <i class="ri-user-star-line text-primary" style="font-size:10px;"></i>
-                                <span class="text-uppercase fw-semibold" style="font-size:9px;color:#6c757d;letter-spacing:.5px;">Datos de Venta</span>
-                            </div>
-                            <div class="row g-1" style="color:#495057;">
-                                <div class="col-6"><span style="color:#6c757d;">Vendedor:</span> <strong>${doc.vendedor_nombre || '-'}</strong></div>
-                                <div class="col-6"><span style="color:#6c757d;">Emisión:</span> <strong>${formatearFecha(doc.fecha)}</strong></div>
-                                <div class="col-12 mt-1"><span style="color:#6c757d;">Pago:</span> <strong>${resumenPagos || doc.metodos_pago_str || 'Sin información'}</strong></div>
-                            </div>
-                        </div>
-                    </div>
+            <!-- Cliente + Venta (fila compacta) -->
+            <div class="px-3 py-1 border-bottom" style="font-size:10px;color:#6c757d;background:#f8f9fa;">
+                <div class="d-flex flex-wrap gap-3">
+                    <span><i class="ri-id-card-line me-1"></i>${doc.cliente_rut || '—'}</span>
+                    ${(doc.cliente_giro && doc.cliente_giro !== 'No especificado') ? `<span><i class="ri-building-line me-1"></i>${doc.cliente_giro}</span>` : ''}
+                    <span><i class="ri-user-star-line me-1"></i>${doc.vendedor_nombre || '—'}</span>
+                    <span><i class="ri-bank-card-line me-1"></i>${resumenPagos || doc.metodos_pago_str || '—'}</span>
                 </div>
             </div>
 
             <!-- Productos -->
-            <div class="px-4 py-2 border-bottom">
+            <div class="px-3 py-2 border-bottom">
                 <div class="d-flex align-items-center mb-1 gap-1">
                     <i class="ri-shopping-cart-line text-primary" style="font-size:10px;"></i>
-                    <span class="text-uppercase fw-semibold" style="font-size:9px;color:#6c757d;letter-spacing:.5px;">Productos — ${doc.total_productos || 0} items</span>
+                    <span class="text-uppercase fw-semibold" style="font-size:8px;color:#6c757d;letter-spacing:.5px;">Productos — ${doc.total_productos || 0} items</span>
                 </div>
                 ${generarTablaProductos(doc.productos || [])}
             </div>
 
-            <!-- Métodos de Pago -->
-            <div class="px-4 py-2 border-bottom">
-                <div class="d-flex align-items-center mb-1 gap-1">
-                    <i class="ri-bank-card-line text-primary" style="font-size:10px;"></i>
-                    <span class="text-uppercase fw-semibold" style="font-size:9px;color:#6c757d;letter-spacing:.5px;">Métodos de Pago</span>
-                </div>
-                ${generarTablaPagos(doc.metodos_pago || [])}
-            </div>
-
-            <!-- Total + Descuento + Observaciones -->
-            <div class="px-4 py-2" style="background:#f8f9fa;">
-                <div class="row align-items-start g-2">
+            <!-- Pagos + Totales compactos -->
+            <div class="px-3 py-2" style="background:#f8f9fa;">
+                <div class="row g-2">
                     <div class="col-md-7">
+                        ${generarTablaPagos(doc.metodos_pago || [])}
                         ${(doc.observaciones && doc.observaciones !== 'Sin observaciones adicionales') ? `
-                        <div style="font-size:11px;color:#6c757d;">
-                            <i class="ri-file-text-line me-1"></i><strong>Obs:</strong> ${doc.observaciones}
+                        <div class="mt-1" style="font-size:10px;color:#6c757d;">
+                            <i class="ri-file-text-line me-1"></i>${doc.observaciones}
                         </div>` : ''}
                     </div>
                     <div class="col-md-5">
-                        <div class="rounded px-3 py-2" style="background:#fff;border:1.5px solid #dee2e6;font-size:12px;">
+                        <div style="font-size:11px;">
                             ${(() => {
                                 const subtotalBruto = doc.subtotal_bruto || (doc.productos || []).reduce((s, p) => s + (p.subtotal || p.precio_unitario * p.cantidad || 0), 0);
                                 const descuento = doc.descuento || 0;
-                                const montoNeto = doc.monto_neto || 0;
                                 const total = doc.total || 0;
-                                const iva = (montoNeto > 0) ? total - montoNeto : 0;
                                 const tieneDescuento = descuento > 0;
-                                const tieneIva = iva > 0 && montoNeto > 0;
                                 return `
                                     ${tieneDescuento ? `
                                     <div class="d-flex justify-content-between py-1 border-bottom">
-                                        <span style="color:#6c757d;">Subtotal bruto</span>
+                                        <span style="color:#6c757d;">Subtotal</span>
                                         <span>${formatearMoneda(subtotalBruto)}</span>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 border-bottom" style="color:#dc3545;">
                                         <span><i class="ri-price-tag-3-line me-1"></i>Descuento</span>
                                         <span class="fw-semibold">- ${formatearMoneda(descuento)}</span>
                                     </div>` : ''}
-                                    ${tieneIva ? `
-                                    <div class="d-flex justify-content-between py-1 border-bottom" style="color:#6c757d;">
-                                        <span>Neto</span>
-                                        <span>${formatearMoneda(montoNeto)}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between py-1 border-bottom" style="color:#6c757d;">
-                                        <span>IVA (19%)</span>
-                                        <span>${formatearMoneda(iva)}</span>
-                                    </div>` : ''}
                                     <div class="d-flex justify-content-between align-items-center pt-1">
-                                        <span class="fw-bold text-primary" style="font-size:11px;letter-spacing:.5px;">TOTAL</span>
-                                        <span class="fw-bold text-primary" style="font-size:1.1rem;">${formatearMoneda(total)}</span>
+                                        <span class="fw-bold text-primary" style="letter-spacing:.5px;">TOTAL</span>
+                                        <span class="fw-bold text-primary" style="font-size:1.05rem;">${formatearMoneda(total)}</span>
                                     </div>
                                 `;
                             })()}
@@ -1630,53 +1579,57 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function generarTablaProductos(productos) {
         if (!productos || productos.length === 0) {
-            return `
-                <div class="text-center py-2">
-                    <i class="ri-shopping-cart-line fs-4 text-muted"></i>
-                    <p class="text-muted small mt-1 mb-0">No hay productos registrados</p>
-                </div>
-            `;
+            return `<div class="text-center py-1 text-muted" style="font-size:11px;"><i class="ri-shopping-cart-line"></i> Sin productos</div>`;
         }
+
+        const hayDescuentos = productos.some(p => (p.descuento_monto || 0) > 0);
 
         let html = `
             <div class="table-responsive">
-                <table class="table table-hover table-sm mb-0" style="font-size:12px;">
-                    <thead class="table-dark">
+                <table class="table table-hover table-sm mb-0 align-middle" style="font-size:11px;">
+                    <thead style="background:#1a1a2e;color:#fff;font-size:10px;">
                         <tr>
-                            <th>SKU</th>
-                            <th>Producto</th>
-                            <th>Talla</th>
-                            <th class="text-center">Cant.</th>
-                            <th class="text-end">P. Unit.</th>
-                            <th class="text-end">Subtotal</th>
+                            <th style="padding:4px 6px;">SKU</th>
+                            <th style="padding:4px 6px;">Producto</th>
+                            <th class="text-center" style="padding:4px 6px;">Talla</th>
+                            <th class="text-center" style="padding:4px 6px;">Cant.</th>
+                            <th class="text-end" style="padding:4px 6px;">P. Unit.</th>
+                            ${hayDescuentos ? '<th class="text-end" style="padding:4px 6px;">Dcto.</th>' : ''}
+                            <th class="text-end" style="padding:4px 6px;">Neto</th>
                         </tr>
                     </thead>
                     <tbody>
         `;
 
-        let totalGeneral = 0;
-        productos.forEach((producto) => {
-            const subtotal = producto.subtotal || (producto.precio_unitario * producto.cantidad);
-            totalGeneral += subtotal;
+        let totalBruto = 0;
+        let totalNeto = 0;
+        productos.forEach((p) => {
+            const bruto = p.subtotal || (p.precio_unitario * p.cantidad);
+            const dcto = p.descuento_monto || 0;
+            const neto = p.monto_item || (bruto - dcto);
+            totalBruto += bruto;
+            totalNeto += neto;
 
             html += `
                 <tr>
-                    <td><span class="badge bg-secondary" style="font-size:10px;">${producto.sku || 'N/A'}</span></td>
-                    <td class="fw-medium">${producto.nombre}</td>
-                    <td><span class="badge bg-info" style="font-size:10px;">${producto.talla || 'N/A'}</span></td>
-                    <td class="text-center"><span class="badge bg-primary" style="font-size:10px;">${producto.cantidad}</span></td>
-                    <td class="text-end">${formatearMoneda(producto.precio_unitario)}</td>
-                    <td class="text-end fw-semibold">${formatearMoneda(subtotal)}</td>
+                    <td style="padding:3px 6px;"><span class="badge bg-secondary" style="font-size:9px;">${p.sku || 'N/A'}</span></td>
+                    <td style="padding:3px 6px;" class="fw-medium">${p.nombre}</td>
+                    <td class="text-center" style="padding:3px 6px;"><span class="badge bg-info" style="font-size:9px;">${p.talla || '—'}</span></td>
+                    <td class="text-center" style="padding:3px 6px;">${p.cantidad}</td>
+                    <td class="text-end" style="padding:3px 6px;">${formatearMoneda(p.precio_unitario)}</td>
+                    ${hayDescuentos ? `<td class="text-end" style="padding:3px 6px;color:#dc3545;">${dcto > 0 ? '-' + formatearMoneda(dcto) : '—'}</td>` : ''}
+                    <td class="text-end fw-semibold" style="padding:3px 6px;">${formatearMoneda(neto)}</td>
                 </tr>
             `;
         });
 
+        const spanCols = hayDescuentos ? 6 : 5;
         html += `
                     </tbody>
-                    <tfoot class="table-dark">
+                    <tfoot style="background:#1a1a2e;color:#fff;font-size:10px;">
                         <tr>
-                            <th colspan="5" class="text-end" style="font-size:11px;">TOTAL:</th>
-                            <th class="text-end">${formatearMoneda(totalGeneral)}</th>
+                            <th colspan="${spanCols}" class="text-end" style="padding:4px 6px;">TOTAL:</th>
+                            <th class="text-end" style="padding:4px 6px;">${formatearMoneda(totalNeto)}</th>
                         </tr>
                     </tfoot>
                 </table>
@@ -1688,24 +1641,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function generarTablaPagos(pagos) {
         if (!pagos || pagos.length === 0) {
-            return `
-                <div class="text-center py-2">
-                    <i class="ri-bank-card-line fs-4 text-muted"></i>
-                    <p class="text-muted small mt-1 mb-0">No hay información de pagos</p>
-                </div>
-            `;
+            return `<div class="text-center py-1 text-muted" style="font-size:11px;"><i class="ri-bank-card-line"></i> Sin pagos</div>`;
         }
+
+        const tieneDetalle = pagos.some(p => p.voucher || p.tipo_tarjeta);
 
         let html = `
             <div class="table-responsive">
-                <table class="table table-hover table-sm mb-0" style="font-size:12px;">
-                    <thead class="table-success">
+                <table class="table table-sm mb-0 align-middle" style="font-size:11px;">
+                    <thead style="background:#198754;color:#fff;font-size:10px;">
                         <tr>
-                            <th>Método</th>
-                            <th>Voucher</th>
-                            <th>Tipo</th>
-                            <th>Detalles</th>
-                            <th class="text-end">Monto</th>
+                            <th style="padding:4px 6px;">Método</th>
+                            ${tieneDetalle ? '<th style="padding:4px 6px;">Detalle</th>' : ''}
+                            <th class="text-end" style="padding:4px 6px;">Monto</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1714,41 +1662,24 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalPagos = 0;
         pagos.forEach(pago => {
             totalPagos += pago.monto;
-
-            let datosConvenio = null;
-            if (pago.metodo === 'CREDITO_EXTERNO' && pago.notas) {
-                try {
-                    datosConvenio = JSON.parse(pago.notas);
-                } catch (e) {
-                    datosConvenio = null;
-                }
-            }
+            const detalle = [pago.tipo_tarjeta, pago.voucher].filter(Boolean).join(' · ');
 
             html += `
                 <tr>
-                    <td><span class="badge bg-success" style="font-size:10px;">${pago.metodo_display}</span></td>
-                    <td class="text-muted">${pago.voucher || '-'}</td>
-                    <td class="text-muted">${pago.tipo_tarjeta || '-'}</td>
-                    <td>
-                        ${datosConvenio ? `
-                            <small class="text-muted">
-                                <strong>${datosConvenio.nombre}</strong> · RUT: ${datosConvenio.rut}
-                                ${datosConvenio.fecha_convenio ? ' · ' + new Date(datosConvenio.fecha_convenio).toLocaleDateString('es-CL') : ''}
-                                ${datosConvenio.observaciones ? ' · ' + datosConvenio.observaciones : ''}
-                            </small>
-                        ` : '<small class="text-muted">-</small>'}
-                    </td>
-                    <td class="text-end fw-semibold">${formatearMoneda(pago.monto)}</td>
+                    <td style="padding:3px 6px;"><span class="badge bg-success" style="font-size:9px;">${pago.metodo_display}</span></td>
+                    ${tieneDetalle ? `<td style="padding:3px 6px;" class="text-muted">${detalle || '—'}</td>` : ''}
+                    <td class="text-end fw-semibold" style="padding:3px 6px;">${formatearMoneda(pago.monto)}</td>
                 </tr>
             `;
         });
 
+        const spanPago = tieneDetalle ? 2 : 1;
         html += `
                     </tbody>
-                    <tfoot class="table-success">
+                    <tfoot style="background:#198754;color:#fff;font-size:10px;">
                         <tr>
-                            <th colspan="4" class="text-end" style="font-size:11px;">TOTAL PAGADO:</th>
-                            <th class="text-end">${formatearMoneda(totalPagos)}</th>
+                            <th colspan="${spanPago}" class="text-end" style="padding:4px 6px;">PAGADO:</th>
+                            <th class="text-end" style="padding:4px 6px;">${formatearMoneda(totalPagos)}</th>
                         </tr>
                     </tfoot>
                 </table>

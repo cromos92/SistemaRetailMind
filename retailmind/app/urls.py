@@ -113,6 +113,8 @@ from .views_modulo_ventas import (
     obtener_productos_mas_vendidos,
     obtener_tendencias_ventas,
     exportar_dashboard_ventas_excel,
+    obtener_indicadores_avanzados_ventas,
+    obtener_estado_operacional_ventas,
 )
 from .views_modulo_creditos import (
     # Gestión de Créditos
@@ -218,6 +220,9 @@ from .views_edicion_productos import (
     eliminar_variacion,
     obtener_producto_desde_talla,
     excluir_analitica_masivo,
+    obtener_impacto_recategorizacion,
+    actualizar_productos_masivo,
+    preview_edicion_masiva,
 )
 from .views_modulo_requerimientos import (
     # Vistas principales
@@ -240,6 +245,7 @@ from .views_modulo_requerimientos import (
     crear_cliente_rapido,
     obtener_estadisticas_requerimientos,
     exportar_requerimientos,
+    obtener_tipos_foto,
 )
 from .views_permisos import (
     # Gestión de permisos por rol
@@ -263,6 +269,12 @@ from .views_permisos import (
     importar_permisos,
     exportar_permisos_sucursal,
     importar_permisos_sucursal,
+    # Gestión de permisos por usuario
+    obtener_usuarios_permisos,
+    obtener_permisos_usuario,
+    guardar_permisos_usuario,
+    eliminar_permisos_usuario,
+    copiar_permisos_usuario,
 )
 from .views_transbank_sdk import (
     # Vistas
@@ -285,20 +297,11 @@ from .views_transbank_sdk import (
     detalles,
     cerrar_dia,
 )
-from .views_dashboard_mejorado import (
-    dashboard_integral_mejorado,
-    obtener_metricas_dashboard_integral,
-    exportar_dashboard_integral_excel,
-)
 from .views_dashboards_kpi import (
     dashboard_documentos,
     api_dashboard_documentos,
-    dashboard_caja,
-    api_dashboard_caja,
     dashboard_requerimientos,
     api_dashboard_requerimientos,
-    dashboard_crm,
-    api_dashboard_crm,
 )
 from .views_prediccion_compras import (
     dashboard_prediccion,
@@ -316,6 +319,7 @@ from .views_prediccion_compras import (
     api_prediccion_analisis_marca,
     api_prediccion_analisis_proveedor,
     api_prediccion_marca_articulos,
+    api_prediccion_graficos,
 )
 from django.urls import path
 from django.conf.urls.static import static
@@ -406,6 +410,7 @@ urlpatterns = [
      path('procesar_pago_masivo/', views.procesar_pago_masivo, name='procesar_pago_masivo'),
      path('guardar_recepcion/', views.guardar_recepcion, name='guardar_recepcion'),
      path('agregar_producto_manual/', views.agregar_producto_manual, name='agregar_producto_manual'),
+     path('eliminar_producto_compra/', views.eliminar_producto_compra, name='eliminar_producto_compra'),
      path('productos_recepcionados/', views.productos_recepcionados, name='productos_recepcionados'),
      path('productos_para_crear/', views.obtener_productos_para_crear, name='productos_para_crear'),
      path('detalle_producto_para_crear/<int:producto_id>/', views.detalle_producto_para_crear, name='detalle_producto_para_crear'),
@@ -428,6 +433,7 @@ urlpatterns = [
      path('configuracion-sku/actualizar/', views.actualizar_configuracion_sku, name='actualizar_configuracion_sku'),
      path('verificar_producto_existente/', views.verificar_producto_existente, name='verificar_producto_existente'),
      path('buscar_productos_por_articulo/', views.buscar_productos_por_articulo, name='buscar_productos_por_articulo'),
+     path('buscar_articulo_autocomplete/', views.buscar_articulo_autocomplete, name='buscar_articulo_autocomplete'),
      path('crear_producto_desde_recepcion/', views.crear_producto_desde_recepcion, name='crear_producto_desde_recepcion'),
      path('obtener_recepciones_producto/<int:producto_id>/', views.obtener_recepciones_producto, name='obtener_recepciones_producto'),
      path('actualizar_recepciones_producto/', views.actualizar_recepciones_producto, name='actualizar_recepciones_producto'),
@@ -447,6 +453,9 @@ urlpatterns = [
     path('productos/variacion/historial/<int:variacion_id>/', obtener_historial_movimientos, name='obtener_historial_movimientos'),
     path('productos/variacion/eliminar/<int:variacion_id>/', eliminar_variacion, name='eliminar_variacion'),
     path('productos/excluir-analitica-masivo/', excluir_analitica_masivo, name='excluir_analitica_masivo'),
+    path('productos/impacto-recategorizacion/<int:producto_id>/', obtener_impacto_recategorizacion, name='obtener_impacto_recategorizacion'),
+    path('productos/actualizar-masivo/', actualizar_productos_masivo, name='actualizar_productos_masivo'),
+    path('productos/preview-edicion-masiva/', preview_edicion_masiva, name='preview_edicion_masiva'),
     
     # ========== NUEVAS URLs PARA MOVIMIENTOS ==========
      
@@ -531,6 +540,8 @@ urlpatterns = [
     path('dte/rechazar_recepcion/', views.rechazar_recepcion_api, name='rechazar_recepcion_api'),
     path('dte/rehabilitar_rechazado/', views.rehabilitar_dte_rechazado_api, name='rehabilitar_dte_rechazado_api'),
     path('dte/obtener_rechazados/', views.obtener_dtes_rechazados_api, name='obtener_dtes_rechazados_api'),
+    path('dte/cancelar_traspaso/', views.cancelar_dte_traspaso_api, name='cancelar_dte_traspaso_api'),
+    path('dte/editar_traspaso/', views.editar_dte_traspaso_api, name='editar_dte_traspaso_api'),
     path('regularizar-recepciones/', views.regularizar_recepciones, name='regularizar_recepciones'),
     path('dte/obtener_productos_regularizar/', views.obtener_productos_regularizar, name='obtener_productos_regularizar'),
     path('dte/obtener_solicitudes_recibidas/', views.obtener_solicitudes_recibidas, name='obtener_solicitudes_recibidas'),
@@ -552,6 +563,7 @@ urlpatterns = [
     path('obtener_categorias/', views.obtener_categorias, name='obtener_categorias'),
     path('obtener_sucursales/', views.obtener_sucursales, name='obtener_sucursales'),
     path('buscar_productos_bodega/', views.buscar_productos_bodega, name='buscar_productos_bodega'),
+    path('buscar_dte_referencia/', views.buscar_dte_referencia, name='buscar_dte_referencia'),
     path('emitir_dte/', views.emitir_dte, name='emitir_dte'),
     
     # === URLs PARA GESTIÓN DE USUARIOS ===
@@ -812,6 +824,8 @@ urlpatterns = [
     path('api/ventas/estado-cuadraturas/', obtener_estado_cuadraturas, name='obtener_estado_cuadraturas'),
     path('api/ventas/productos-mas-vendidos/', obtener_productos_mas_vendidos, name='obtener_productos_mas_vendidos'),
     path('api/ventas/tendencias/', obtener_tendencias_ventas, name='obtener_tendencias_ventas'),
+    path('api/ventas/indicadores-avanzados/', obtener_indicadores_avanzados_ventas, name='obtener_indicadores_avanzados_ventas'),
+    path('api/ventas/estado-operacional/', obtener_estado_operacional_ventas, name='obtener_estado_operacional_ventas'),
     
     # API de exportación
     path('api/ventas/exportar-dashboard/', exportar_dashboard_ventas_excel, name='exportar_dashboard_ventas_excel'),
@@ -879,7 +893,8 @@ urlpatterns = [
     path('configuracion/interfaz-prueba-acepta/', views_modulo_documentos.interfaz_prueba_acepta, name='interfaz_prueba_acepta'),
     path('documentos/generar-txt-acepta/', views_modulo_documentos.generar_txt_acepta_api, name='generar_txt_acepta_api'),
     path('documentos/generar-txt-desde-dte/', views_modulo_documentos.generar_txt_desde_dte_existente, name='generar_txt_desde_dte_existente'),
-    path('documentos/generar-dte-ticket/', views_modulo_documentos.generar_dte_desde_ticket_api, name='generar_dte_desde_ticket_api'),  # ✅ Nuevo endpoint
+    path('documentos/generar-dte-ticket/', views_modulo_documentos.generar_dte_desde_ticket_api, name='generar_dte_desde_ticket_api'),
+    path('documentos/importar-txt-acepta/', views_modulo_documentos.importar_txt_acepta_api, name='importar_txt_acepta_api'),
 
     # ========== MÓDULO DE REPORTE DE EXISTENCIAS ==========
     path('reportes/existencias/', views.ver_reporte_existencias, name='ver_reporte_existencias'),
@@ -890,6 +905,8 @@ urlpatterns = [
     path('reportes/ventas-sucursal/', views_modulo_reportes.ver_reporte_ventas_sucursal, name='ver_reporte_ventas_sucursal'),
     path('api/reportes/ventas-por-vendedor/', views_modulo_reportes.obtener_ventas_por_vendedor_reporte, name='obtener_ventas_por_vendedor_reporte'),
     path('api/reportes/ventas-por-sucursal/', views_modulo_reportes.obtener_ventas_por_sucursal_reporte, name='obtener_ventas_por_sucursal_reporte'),
+    path('reportes/ventas-global/', views_modulo_reportes.ver_reporte_ventas_global, name='ver_reporte_ventas_global'),
+    path('api/reportes/ventas-global-empresa/', views_modulo_reportes.obtener_ventas_global_por_empresa, name='obtener_ventas_global_por_empresa'),
     path('api/reportes/vendedores/', views_modulo_reportes.obtener_vendedores_reporte, name='obtener_vendedores_reporte'),
     path('api/reportes/sucursales/', views_modulo_reportes.obtener_sucursales_reporte, name='obtener_sucursales_reporte'),
     path('api/reportes/comparativa-mensual/', views_modulo_reportes.obtener_comparativa_mensual, name='obtener_comparativa_mensual'),
@@ -903,6 +920,11 @@ urlpatterns = [
     path('api/reporte-compras/', views_modulo_reportes.api_reporte_compras, name='api_reporte_compras'),
     path('api/exportar-reporte-compras-excel/', views_modulo_reportes.exportar_reporte_compras_excel, name='exportar_reporte_compras_excel'),
     path('api/rendimiento-compras/', views_modulo_reportes.api_rendimiento_compras, name='api_rendimiento_compras'),
+
+    # Reporte de rendimiento por proveedor (compra -> recepcion -> venta)
+    path('reportes/rendimiento-proveedor/', views_modulo_reportes.ver_reporte_rendimiento_proveedor, name='ver_reporte_rendimiento_proveedor'),
+    path('api/reporte-rendimiento-proveedor/', views_modulo_reportes.api_reporte_rendimiento_proveedor, name='api_reporte_rendimiento_proveedor'),
+    path('api/exportar-rendimiento-proveedor-excel/', views_modulo_reportes.exportar_rendimiento_proveedor_excel, name='exportar_rendimiento_proveedor_excel'),
 
     # Reportes mejorados: recepciones y despachos con datos reales
     path('api/reporte-recepciones-detallado/', views_modulo_reportes.api_reporte_recepciones_detallado, name='api_reporte_recepciones_detallado'),
@@ -954,6 +976,7 @@ urlpatterns = [
     path('api/requerimientos/crear-cliente/', crear_cliente_rapido, name='api_crear_cliente_requerimiento'),
     path('api/requerimientos/estadisticas/', obtener_estadisticas_requerimientos, name='api_estadisticas_requerimientos'),
     path('api/requerimientos/exportar/', exportar_requerimientos, name='api_exportar_requerimientos'),
+    path('api/requerimientos/tipos-foto/', obtener_tipos_foto, name='api_tipos_foto_requerimiento'),
 
     # ========== MÓDULO DE GESTIÓN DE PERMISOS ==========
     # Vista principal de gestión de permisos
@@ -988,11 +1011,13 @@ urlpatterns = [
     path('permisos/exportar-sucursal/', exportar_permisos_sucursal, name='exportar_permisos_sucursal'),
     path('permisos/importar-sucursal/', importar_permisos_sucursal, name='importar_permisos_sucursal'),
 
-    # ========== DASHBOARD INTEGRAL MEJORADO ==========
-    path('dashboard-integral/', dashboard_integral_mejorado, name='dashboard_integral_mejorado'),
-    path('api/dashboard-integral/metricas/', obtener_metricas_dashboard_integral, name='obtener_metricas_dashboard_integral'),
-    path('api/dashboard-integral/exportar/', exportar_dashboard_integral_excel, name='exportar_dashboard_integral_excel'),
-    path('obtener_metricas_dashboard_integral/', obtener_metricas_dashboard_integral, name='obtener_metricas_dashboard_integral_legacy'),
+    # Gestión de permisos por usuario
+    path('permisos/usuarios/', obtener_usuarios_permisos, name='obtener_usuarios_permisos'),
+    path('permisos/obtener-permisos-usuario/', obtener_permisos_usuario, name='obtener_permisos_usuario'),
+    path('permisos/guardar-permisos-usuario/', guardar_permisos_usuario, name='guardar_permisos_usuario'),
+    path('permisos/eliminar-permisos-usuario/', eliminar_permisos_usuario, name='eliminar_permisos_usuario'),
+    path('permisos/copiar-permisos-usuario/', copiar_permisos_usuario, name='copiar_permisos_usuario'),
+
 
     # ========== MÓDULO DE GESTIÓN DE INVENTARIOS (TOMA FÍSICA) ==========
     # Vistas principales
@@ -1047,19 +1072,16 @@ urlpatterns = [
     # APIs auxiliares
     path('etiquetas/sucursales/', views_etiquetas_zebra.obtener_sucursales_usuario, name='obtener_sucursales_etiquetas'),
     path('etiquetas/buscar-producto/', views_etiquetas_zebra.buscar_producto_etiqueta, name='buscar_producto_etiqueta'),
+    path('etiquetas/skus-articulo/', views_etiquetas_zebra.obtener_skus_articulo, name='obtener_skus_articulo'),
 
     # ========== DASHBOARDS KPI (nuevos) ==========
     path('dashboard-documentos/', dashboard_documentos, name='dashboard_documentos'),
     path('api/dashboard-documentos/datos/', api_dashboard_documentos, name='api_dashboard_documentos'),
 
-    path('dashboard-caja/', dashboard_caja, name='dashboard_caja'),
-    path('api/dashboard-caja/datos/', api_dashboard_caja, name='api_dashboard_caja'),
 
     path('dashboard-requerimientos/', dashboard_requerimientos, name='dashboard_requerimientos'),
     path('api/dashboard-requerimientos/datos/', api_dashboard_requerimientos, name='api_dashboard_requerimientos'),
 
-    path('dashboard-crm/', dashboard_crm, name='dashboard_crm'),
-    path('api/dashboard-crm/datos/', api_dashboard_crm, name='api_dashboard_crm'),
 
     # ========== MÓDULO DE PREDICCIÓN DE COMPRAS ==========
     path('prediccion/', dashboard_prediccion, name='dashboard_prediccion'),
@@ -1077,6 +1099,7 @@ urlpatterns = [
     path('api/prediccion/analisis-marca/', api_prediccion_analisis_marca, name='api_prediccion_analisis_marca'),
     path('api/prediccion/analisis-proveedor/', api_prediccion_analisis_proveedor, name='api_prediccion_analisis_proveedor'),
     path('api/prediccion/marca-articulos/', api_prediccion_marca_articulos, name='api_prediccion_marca_articulos'),
+    path('api/prediccion/graficos/', api_prediccion_graficos, name='api_prediccion_graficos'),
 
     # =====================================================
     # MÓDULO ECOMMERCE — Pedidos online externos

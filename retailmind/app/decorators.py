@@ -83,10 +83,6 @@ def requiere_rol(*roles_permitidos):
         @wraps(view_func)
         @login_required
         def _wrapped_view(request, *args, **kwargs):
-            # Superusuarios tienen acceso total
-            if request.user.is_superuser:
-                return view_func(request, *args, **kwargs)
-            
             # Verificar rol
             if hasattr(request.user, 'rol') and request.user.rol in roles_permitidos:
                 return view_func(request, *args, **kwargs)
@@ -152,10 +148,6 @@ def verificar_permisos_multiples(*permisos):
         @wraps(view_func)
         @login_required
         def _wrapped_view(request, *args, **kwargs):
-            # Superusuarios pasan automáticamente
-            if request.user.is_superuser:
-                return view_func(request, *args, **kwargs)
-            
             # Verificar todos los permisos
             sucursal_id = request.session.get('idSucursalActual')
             for codigo_opcion, tipo_permiso in permisos:

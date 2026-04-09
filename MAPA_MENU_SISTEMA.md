@@ -16,10 +16,7 @@
 | 1.4.1 | --- Productos | `dashboard_productos` | `/app/dashboard_productos_mejorado/` | [ ] |
 | 1.4.2 | --- FIFO / Lotes | `dashboard_fifo` | `/app/dashboard_fifo/` | [ ] |
 | 1.5 | Dashboard Documentos | *(sin permiso)* | `/app/dashboard-documentos/` | [ ] |
-| 1.6 | Dashboard Caja | *(sin permiso)* | `/app/dashboard-caja/` | [ ] |
 | 1.7 | Dashboard Requerimientos | *(sin permiso)* | `/app/dashboard-requerimientos/` | [ ] |
-| 1.8 | Dashboard CRM | *(sin permiso)* | `/app/dashboard-crm/` | [ ] |
-| 1.9 | Dashboard Integral | *(sin permiso)* | `/app/dashboard-integral/` | [ ] |
 
 ---
 

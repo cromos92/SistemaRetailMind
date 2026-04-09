@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from .models import (
     Producto, Producto_Talla, Sucursal, EmpresaUser, Empresa,
     Requerimiento, FotoRequerimiento, HistorialRequerimiento,
+    TipoFotoRequerimiento, MAX_FOTOS_POR_TIPO,
     Ticket, Dte, Dte_Productos
 )
 
@@ -34,13 +35,9 @@ from .models import (
 
 def obtener_rol_usuario(user):
     """Obtiene el rol del usuario"""
-    if user.is_superuser:
-        return 'administrador'
-    
-    # Obtener del campo rol del modelo Usuario personalizado
     if hasattr(user, 'rol'):
         return user.rol
-    
+
     return 'vendedor'  # Por defecto
 
 
@@ -56,7 +53,7 @@ def usuario_puede_realizar_accion(user, requerimiento, accion):
     rol = obtener_rol_usuario(user)
     
     # Administrador puede todo
-    if rol == 'administrador' or user.is_superuser:
+    if rol == 'administrador':
         return True
     
     # Jefe Local (Supervisor)
@@ -107,11 +104,14 @@ def obtener_sucursales_usuario(user):
 
 
 TRANSICIONES_PERMITIDAS = {
-    'PENDIENTE': ['ESPERANDO_RESPUESTA', 'CANCELADO'],
+    'PENDIENTE': ['EN_REVISION', 'ESPERANDO_RESPUESTA', 'CANCELADO'],
+    'EN_REVISION': ['ESPERANDO_RESPUESTA', 'APROBADO', 'RECHAZADO', 'CANCELADO'],
     'ESPERANDO_RESPUESTA': ['APROBADO', 'RECHAZADO'],
-    'APROBADO': [],  # Estado final
-    'RECHAZADO': [],  # Estado final
-    'CANCELADO': [],  # Estado final
+    'APROBADO': ['EN_PROCESO', 'COMPLETADO'],
+    'EN_PROCESO': ['COMPLETADO'],
+    'RECHAZADO': [],
+    'COMPLETADO': [],
+    'CANCELADO': [],
 }
 
 
@@ -206,9 +206,11 @@ def crear_requerimiento(request):
             pass  # El producto puede no existir en el sistema
         
         # Crear requerimiento
+        tipo_req = data.get('tipo')
         with transaction.atomic():
             requerimiento = Requerimiento.objects.create(
-                tipo=data.get('tipo'),
+                tipo=tipo_req,
+                subtipo=data.get('subtipo', '') or None,
                 sucursal=sucursal,
                 usuario_creador=request.user,
                 producto_talla=producto_talla,
@@ -225,8 +227,11 @@ def crear_requerimiento(request):
                 descripcion_problema=data.get('descripcion_problema', ''),
                 prioridad=data.get('prioridad', 'MEDIA'),
                 proveedor_id=data.get('proveedor_id') if data.get('proveedor_id') else None,
+                severidad_defecto=data.get('severidad_defecto', '') or None,
+                condicion_producto=data.get('condicion_producto', '') or None,
+                producto_esperado=data.get('producto_esperado', '') or None,
             )
-            
+
             # Registrar en historial
             HistorialRequerimiento.objects.create(
                 requerimiento=requerimiento,
@@ -235,19 +240,44 @@ def crear_requerimiento(request):
                 comentario='Requerimiento creado',
                 usuario=request.user
             )
-            
-            # Procesar fotos si existen
+
+            # Procesar fotos por tipo (foto_FOTO_GENERAL, foto_FOTO_DEFECTO, etc.)
+            max_fotos = MAX_FOTOS_POR_TIPO.get(tipo_req, 5)
+            orden_counter = 1
             if request.FILES:
-                for i in range(1, 6):  # Máximo 5 fotos
-                    foto_key = f'foto_{i}'
-                    if foto_key in request.FILES:
-                        FotoRequerimiento.objects.create(
-                            requerimiento=requerimiento,
-                            imagen=request.FILES[foto_key],
-                            descripcion=data.get(f'descripcion_foto_{i}', ''),
-                            orden=i,
-                            usuario=request.user
-                        )
+                # Fotos con tipo definido
+                tipos_foto_db = {
+                    tf.codigo: tf for tf in TipoFotoRequerimiento.objects.filter(activo=True)
+                }
+                for key in request.FILES:
+                    if orden_counter > max_fotos:
+                        break
+                    tipo_foto_obj = None
+                    if key.startswith('foto_FOTO_'):
+                        codigo = key.replace('foto_', '', 1)
+                        tipo_foto_obj = tipos_foto_db.get(codigo)
+                    elif key.startswith('foto_adicional_'):
+                        tipo_foto_obj = tipos_foto_db.get('FOTO_ADICIONAL')
+                    elif key.startswith('foto_'):
+                        # Retrocompatibilidad: foto_1, foto_2, etc.
+                        pass
+                    else:
+                        continue
+
+                    desc_key = f'descripcion_{key}'
+                    FotoRequerimiento.objects.create(
+                        requerimiento=requerimiento,
+                        imagen=request.FILES[key],
+                        tipo_foto=tipo_foto_obj,
+                        descripcion=data.get(desc_key, '') or '',
+                        orden=orden_counter,
+                        usuario=request.user
+                    )
+                    orden_counter += 1
+
+            # Verificar completitud de fotos obligatorias
+            requerimiento.fotos_completas = requerimiento.verificar_fotos_completas()
+            requerimiento.save(update_fields=['fotos_completas'])
         
         return JsonResponse({
             'success': True,
@@ -290,7 +320,7 @@ def listar_requerimientos(request):
         # Filtrar según rol del usuario
         rol_usuario = obtener_rol_usuario(request.user)
         
-        if rol_usuario == 'administrador' or request.user.is_superuser:
+        if rol_usuario == 'administrador':
             # Administrador ve TODO
             pass
         elif rol_usuario == 'jefe_local':
@@ -359,9 +389,11 @@ def listar_requerimientos(request):
                 'numero_requerimiento': req.numero_requerimiento,
                 'tipo': req.get_tipo_display(),
                 'tipo_codigo': req.tipo,
+                'subtipo': req.subtipo or '',
                 'estado': req.get_estado_display(),
                 'estado_codigo': req.estado,
                 'prioridad': req.get_prioridad_display(),
+                'prioridad_codigo': req.prioridad,
                 'sucursal': req.sucursal.alias,
                 'sku': req.sku,
                 'nombre_producto': req.nombre_producto,
@@ -369,10 +401,11 @@ def listar_requerimientos(request):
                 'fecha_creacion': req.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
                 'dias_transcurridos': req.dias_transcurridos,
                 'cantidad_fotos': req.cantidad_fotos,
+                'fotos_completas': req.fotos_completas,
+                'max_fotos': req.max_fotos,
                 'usuario_creador': req.usuario_creador.get_full_name() if req.usuario_creador else '',
                 'proveedor': req.proveedor.nombre if req.proveedor else '',
                 'asignado_a': req.asignado_a.get_full_name() if req.asignado_a else '',
-                # Datos de seguimiento de proveedor
                 'correo_enviado_proveedor': req.correo_enviado_proveedor,
                 'dias_sin_respuesta': req.dias_sin_respuesta,
                 'requiere_recordatorio': req.requiere_recordatorio,
@@ -420,15 +453,18 @@ def detalle_requerimiento(request, requerimiento_id):
         # Obtener rol del usuario actual
         rol_usuario = obtener_rol_usuario(request.user)
         
-        # Serializar fotos
+        # Serializar fotos con tipo
         fotos = []
-        for foto in requerimiento.fotos.all():
+        for foto in requerimiento.fotos.select_related('tipo_foto').all():
             fotos.append({
                 'id': foto.id,
                 'url': foto.imagen.url if foto.imagen else '',
                 'descripcion': foto.descripcion or '',
                 'orden': foto.orden,
-                'fecha': foto.fecha_subida.strftime('%d/%m/%Y %H:%M')
+                'fecha': foto.fecha_subida.strftime('%d/%m/%Y %H:%M'),
+                'tipo_foto_codigo': foto.tipo_foto.codigo if foto.tipo_foto else None,
+                'tipo_foto_nombre': foto.tipo_foto.nombre if foto.tipo_foto else 'Sin clasificar',
+                'tipo_foto_icono': foto.tipo_foto.icono if foto.tipo_foto else 'ri-image-line',
             })
         
         # Serializar historial
@@ -479,10 +515,21 @@ def detalle_requerimiento(request, requerimiento_id):
             'cliente_telefono': requerimiento.cliente_telefono or '',
             'cliente_email': requerimiento.cliente_email or '',
             
-            # Descripción
+            # Descripcion
             'motivo': requerimiento.motivo,
             'descripcion_problema': requerimiento.descripcion_problema or '',
-            
+
+            # Clasificacion de defecto
+            'subtipo': requerimiento.subtipo or '',
+            'severidad_defecto': requerimiento.get_severidad_defecto_display() if requerimiento.severidad_defecto else '',
+            'severidad_defecto_codigo': requerimiento.severidad_defecto or '',
+            'condicion_producto': requerimiento.get_condicion_producto_display() if requerimiento.condicion_producto else '',
+            'condicion_producto_codigo': requerimiento.condicion_producto or '',
+            'producto_esperado': requerimiento.producto_esperado or '',
+            'notas_internas': requerimiento.notas_internas or '' if rol_usuario in ['administrador'] else '',
+            'fotos_completas': requerimiento.fotos_completas,
+            'max_fotos': requerimiento.max_fotos,
+
             # Proveedor
             'proveedor': {
                 'id': requerimiento.proveedor.id if requerimiento.proveedor else None,
@@ -509,6 +556,21 @@ def detalle_requerimiento(request, requerimiento_id):
             'dias_transcurridos': requerimiento.dias_transcurridos,
             'nivel_urgencia': requerimiento.nivel_urgencia,
             
+            # Tipos de foto requeridos para este tipo de requerimiento
+            'tipos_foto_requeridos': [
+                {
+                    'codigo': tf.codigo,
+                    'nombre': tf.nombre,
+                    'descripcion_guia': tf.descripcion_guia,
+                    'icono': tf.icono,
+                    'es_obligatorio': tf.es_obligatorio,
+                }
+                for tf in TipoFotoRequerimiento.objects.filter(
+                    activo=True,
+                    tipos_requerimiento__contains=[requerimiento.tipo],
+                ).order_by('orden')
+            ],
+
             # Relacionados
             'fotos': fotos,
             'historial': historial,
@@ -944,168 +1006,146 @@ def buscar_producto_sku(request):
 
 @login_required
 def buscar_ticket_por_folio(request):
-    """Buscar ticket/documento por folio o correlativo en todas las sucursales del usuario"""
+    """Buscar ticket/documento por folio o correlativo en TODAS las sucursales de la DB"""
     try:
         folio = request.GET.get('folio', '').strip()
-        
+
         if not folio:
             return JsonResponse({
                 'success': False,
                 'error': 'Folio o correlativo es requerido'
             }, status=400)
-        
-        # Obtener sucursales a las que el usuario tiene acceso
-        sucursales_usuario = Sucursal.objects.filter(
-            empresa__empresauser__user=request.user
-        ).values_list('id', flat=True)
-        
-        if not sucursales_usuario:
+
+        resultados = []
+
+        if folio.isdigit():
+            folio_num = int(folio)
+
+            # 1. Buscar en Tickets por folio_dte (TODAS las sucursales)
+            for ticket in Ticket.objects.filter(
+                folio_dte=folio_num
+            ).select_related('vendedor', 'sucursal')[:10]:
+                resultados.append(_serializar_ticket(ticket))
+
+            # 2. Buscar en Tickets por correlativo (si no hay resultados por folio_dte)
+            if not resultados:
+                for ticket in Ticket.objects.filter(
+                    correlativo=folio_num
+                ).select_related('vendedor', 'sucursal')[:10]:
+                    resultados.append(_serializar_ticket(ticket))
+
+            # 3. Buscar en DTEs
+            if not resultados:
+                for dte in Dte.objects.filter(
+                    numero_documento=folio_num,
+                    tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+                ).select_related('vendedor', 'emisor', 'receptor', 'sucursal')[:10]:
+                    resultados.append(_serializar_dte(dte))
+
+        if not resultados:
             return JsonResponse({
                 'success': False,
-                'error': 'Usuario no tiene sucursales asignadas'
-            }, status=400)
-        
-        documento_encontrado = None
-        tipo_fuente = None  # 'ticket' o 'dte'
-        
-        try:
-            if folio.isdigit():
-                folio_num = int(folio)
-                
-                # 1. Buscar primero en Tickets por folio_dte (en todas las sucursales del usuario)
-                ticket = Ticket.objects.filter(
-                    sucursal_id__in=sucursales_usuario,
-                    folio_dte=folio_num
-                ).select_related('vendedor', 'sucursal').first()
-                
-                if ticket:
-                    documento_encontrado = ticket
-                    tipo_fuente = 'ticket'
-                
-                # 2. Si no encuentra, buscar en Tickets por correlativo
-                if not documento_encontrado:
-                    ticket = Ticket.objects.filter(
-                        sucursal_id__in=sucursales_usuario,
-                        correlativo=folio_num
-                    ).select_related('vendedor', 'sucursal').first()
-                    
-                    if ticket:
-                        documento_encontrado = ticket
-                        tipo_fuente = 'ticket'
-                
-                # 3. Si no encuentra, buscar en DTEs (Boletas/Facturas Electrónicas)
-                if not documento_encontrado:
-                    dte = Dte.objects.filter(
-                        sucursal_id__in=sucursales_usuario,
-                        numero_documento=folio_num,
-                        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
-                    ).select_related('vendedor', 'emisor', 'receptor', 'sucursal').first()
-                    
-                    if dte:
-                        documento_encontrado = dte
-                        tipo_fuente = 'dte'
-                        
-        except ValueError:
-            pass
-        
-        if not documento_encontrado:
-            return JsonResponse({
-                'success': False,
-                'error': 'Documento no encontrado en tus sucursales'
+                'error': 'Documento no encontrado'
             }, status=404)
-        
-        # Serializar según el tipo de documento
-        if tipo_fuente == 'ticket':
-            # Obtener productos del ticket
-            productos = []
-            for tp in documento_encontrado.ticket_productos.select_related('ProductoTalla__producto').all():
-                productos.append({
-                    'sku': tp.ProductoTalla.sku,
-                    'nombre': tp.ProductoTalla.producto.articulo,
-                    'cantidad': tp.stock,
-                    'precio': tp.precio,
-                })
-            
+
+        # Si hay un solo resultado, devolver directo (retrocompatible)
+        if len(resultados) == 1:
             return JsonResponse({
                 'success': True,
-                'documento': {
-                    'tipo_fuente': 'ticket',
-                    'sucursal': documento_encontrado.sucursal.alias,
-                    'sucursal_id': documento_encontrado.sucursal.id,
-                    'correlativo': documento_encontrado.correlativo,
-                    'folio_dte': documento_encontrado.folio_dte,
-                    'tipo_dte': documento_encontrado.get_tipo_dte_display() if documento_encontrado.tipo_dte else 'Ticket',
-                    'tipo_dte_codigo': documento_encontrado.tipo_dte or 'TICKET',
-                    'fecha': documento_encontrado.fecha.strftime('%Y-%m-%d'),
-                    'total': documento_encontrado.total,
-                    'vendedor': documento_encontrado.vendedor.nombre if documento_encontrado.vendedor else '',
-                    # Datos del cliente
-                    'cliente_nombre': documento_encontrado.cliente_nombre or '',
-                    'cliente_rut': documento_encontrado.cliente_rut or '',
-                    'cliente_email': documento_encontrado.cliente_email or '',
-                    'cliente_telefono': documento_encontrado.cliente_telefono or '',
-                    'cliente_direccion': documento_encontrado.cliente_direccion or '',
-                    'cliente_comuna': documento_encontrado.cliente_comuna or '',
-                    # Productos
-                    'productos': productos,
-                }
+                'documento': resultados[0],
             })
-            
-        else:  # tipo_fuente == 'dte'
-            # Obtener productos del DTE
-            productos = []
-            for dp in Dte_Productos.objects.filter(dte=documento_encontrado).select_related('productoTalla__producto'):
-                productos.append({
-                    'sku': dp.productoTalla.sku if dp.productoTalla else '',
-                    'nombre': dp.productoTalla.producto.articulo if dp.productoTalla else dp.descripcion,
-                    'cantidad': dp.stock,
-                    'precio': int(dp.precio),
-                })
-            
-            # Intentar obtener datos del cliente desde el receptor (si es venta a cliente externo)
-            cliente_nombre = ''
-            cliente_rut = ''
-            cliente_email = ''
-            cliente_direccion = ''
-            cliente_comuna = ''
-            
-            if documento_encontrado.receptor:
-                cliente_nombre = documento_encontrado.receptor.nombre
-                cliente_rut = documento_encontrado.receptor.rut
-                cliente_email = documento_encontrado.receptor.correoAdministrador or ''
-                cliente_direccion = documento_encontrado.receptor.direccion or ''
-                cliente_comuna = documento_encontrado.receptor.comuna or ''
-            
-            return JsonResponse({
-                'success': True,
-                'documento': {
-                    'tipo_fuente': 'dte',
-                    'sucursal': documento_encontrado.sucursal.alias if documento_encontrado.sucursal else 'N/A',
-                    'sucursal_id': documento_encontrado.sucursal.id if documento_encontrado.sucursal else None,
-                    'correlativo': documento_encontrado.numero_documento,
-                    'folio_dte': documento_encontrado.numero_documento,
-                    'tipo_dte': documento_encontrado.get_tipo_documento_display(),
-                    'tipo_dte_codigo': documento_encontrado.tipo_documento,
-                    'fecha': documento_encontrado.fecha_emision.strftime('%Y-%m-%d'),
-                    'total': int(documento_encontrado.monto_con_iva),
-                    'vendedor': documento_encontrado.vendedor.nombre if documento_encontrado.vendedor else '',
-                    # Datos del cliente (desde receptor)
-                    'cliente_nombre': cliente_nombre,
-                    'cliente_rut': cliente_rut,
-                    'cliente_email': cliente_email,
-                    'cliente_telefono': '',
-                    'cliente_direccion': cliente_direccion,
-                    'cliente_comuna': cliente_comuna,
-                    # Productos
-                    'productos': productos,
-                }
-            })
-        
+
+        # Multiples resultados: devolver lista para que el usuario elija
+        return JsonResponse({
+            'success': True,
+            'multiple': True,
+            'documentos': resultados,
+        })
+
     except Exception as e:
         return JsonResponse({
             'success': False,
             'error': f'Error al buscar documento: {str(e)}'
         }, status=500)
+
+
+def _serializar_ticket(ticket):
+    """Serializa un Ticket para la respuesta de busqueda"""
+    productos = []
+    for tp in ticket.ticket_productos.select_related('ProductoTalla__producto').all():
+        if tp.ProductoTalla:
+            productos.append({
+                'sku': tp.ProductoTalla.sku,
+                'nombre': tp.ProductoTalla.producto.articulo,
+                'talla': tp.ProductoTalla.talla,
+                'cantidad': tp.stock,
+                'precio': tp.precio,
+            })
+
+    return {
+        'tipo_fuente': 'ticket',
+        'sucursal': ticket.sucursal.alias if ticket.sucursal else '',
+        'sucursal_id': ticket.sucursal.id if ticket.sucursal else None,
+        'correlativo': ticket.correlativo,
+        'folio_dte': ticket.folio_dte,
+        'tipo_dte': ticket.get_tipo_dte_display() if ticket.tipo_dte else 'Ticket',
+        'tipo_dte_codigo': ticket.tipo_dte or 'TICKET',
+        'fecha': ticket.fecha.strftime('%Y-%m-%d'),
+        'total': ticket.total,
+        'vendedor': ticket.vendedor.nombre if ticket.vendedor else '',
+        'cliente_nombre': ticket.cliente_nombre or '',
+        'cliente_rut': ticket.cliente_rut or '',
+        'cliente_email': ticket.cliente_email or '',
+        'cliente_telefono': ticket.cliente_telefono or '',
+        'cliente_direccion': ticket.cliente_direccion or '',
+        'cliente_comuna': ticket.cliente_comuna or '',
+        'productos': productos,
+    }
+
+
+def _serializar_dte(dte):
+    """Serializa un DTE para la respuesta de busqueda"""
+    productos = []
+    for dp in Dte_Productos.objects.filter(dte=dte).select_related('productoTalla__producto'):
+        productos.append({
+            'sku': dp.productoTalla.sku if dp.productoTalla else '',
+            'nombre': dp.productoTalla.producto.articulo if dp.productoTalla else dp.descripcion,
+            'talla': dp.productoTalla.talla if dp.productoTalla else '',
+            'cantidad': dp.stock,
+            'precio': int(dp.precio),
+        })
+
+    cliente_nombre = ''
+    cliente_rut = ''
+    cliente_email = ''
+    cliente_direccion = ''
+    cliente_comuna = ''
+    if dte.receptor:
+        cliente_nombre = dte.receptor.nombre
+        cliente_rut = dte.receptor.rut
+        cliente_email = dte.receptor.correoAdministrador or ''
+        cliente_direccion = dte.receptor.direccion or ''
+        cliente_comuna = dte.receptor.comuna or ''
+
+    return {
+        'tipo_fuente': 'dte',
+        'sucursal': dte.sucursal.alias if dte.sucursal else 'N/A',
+        'sucursal_id': dte.sucursal.id if dte.sucursal else None,
+        'correlativo': dte.numero_documento,
+        'folio_dte': dte.numero_documento,
+        'tipo_dte': dte.get_tipo_documento_display(),
+        'tipo_dte_codigo': dte.tipo_documento,
+        'fecha': dte.fecha_emision.strftime('%Y-%m-%d'),
+        'total': int(dte.monto_con_iva),
+        'vendedor': dte.vendedor.nombre if dte.vendedor else '',
+        'cliente_nombre': cliente_nombre,
+        'cliente_rut': cliente_rut,
+        'cliente_email': cliente_email,
+        'cliente_telefono': '',
+        'cliente_direccion': cliente_direccion,
+        'cliente_comuna': cliente_comuna,
+        'productos': productos,
+    }
 
 
 @login_required
@@ -1293,7 +1333,8 @@ def obtener_estadisticas_requerimientos(request):
         # Filtrar por sucursal si no es admin
         requerimientos = Requerimiento.objects.all()
         
-        if not request.user.is_superuser:
+        rol_usuario = obtener_rol_usuario(request.user)
+        if rol_usuario != 'administrador':
             sucursales_usuario = Sucursal.objects.filter(
                 empresa__empresauser__user=request.user
             )
@@ -1459,3 +1500,35 @@ def exportar_requerimientos(request):
             'success': False,
             'error': f'Error al exportar: {str(e)}'
         }, status=500)
+
+
+# ========== API TIPOS DE FOTO ==========
+
+@login_required
+@require_GET
+def obtener_tipos_foto(request):
+    """Retorna los tipos de foto requeridos/opcionales para un tipo de requerimiento"""
+    tipo = request.GET.get('tipo', '')
+    if not tipo:
+        return JsonResponse({'success': False, 'error': 'Tipo es requerido'}, status=400)
+
+    tipos_foto = TipoFotoRequerimiento.objects.filter(
+        activo=True,
+        tipos_requerimiento__contains=[tipo],
+    ).order_by('orden')
+
+    return JsonResponse({
+        'success': True,
+        'tipos_foto': [
+            {
+                'codigo': tf.codigo,
+                'nombre': tf.nombre,
+                'descripcion_guia': tf.descripcion_guia,
+                'icono': tf.icono,
+                'es_obligatorio': tf.es_obligatorio,
+                'orden': tf.orden,
+            }
+            for tf in tipos_foto
+        ],
+        'max_fotos': MAX_FOTOS_POR_TIPO.get(tipo, 5),
+    })

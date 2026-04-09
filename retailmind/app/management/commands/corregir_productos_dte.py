@@ -189,11 +189,12 @@ class Command(BaseCommand):
                 sin_talla += 1
                 continue
             
-            # Calcular valores
+            # Calcular valores (sobreprecio = precio - costo, misma formula que la UI)
             costo = int(row['costo'] or 0)
+            precio_publico = int(row['precio_publico'] or 0)
             precio_interno = int(row['precio_interno'] or 0)
-            sobreprecio = max(0, precio_interno - costo)
-            precio = int(row['precio_publico'] or 0) or precio_interno
+            precio = precio_publico or precio_interno
+            sobreprecio = max(0, precio - costo)
             stock = int(row['cantidad'] or 0)
             
             # Verificar duplicado

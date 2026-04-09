@@ -2,39 +2,253 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
-let contadorFotos = 0;
-const maxFotos = 5;
+let contadorFotosAdicionales = 0;
+let maxFotos = 5;
+let tiposFotoActuales = [];
 let documentoEncontrado = null;
 let productosDocumento = [];
+let tipoSeleccionado = '';
 
-// ========== BÚSQUEDA DE DOCUMENTO ==========
-function buscarDocumento() {
-    const folio = document.getElementById('buscar_folio').value.trim();
-    if (!folio) {
-        Swal.fire('Atención', 'Ingrese un folio o correlativo', 'warning');
+// ========== SELECCION DE TIPO ==========
+
+function seleccionarTipo(card) {
+    const tipo = card.dataset.tipo;
+    tipoSeleccionado = tipo;
+    document.getElementById('tipo').value = tipo;
+    document.getElementById('tipo-error').style.display = 'none';
+
+    // Highlight card seleccionada
+    document.querySelectorAll('.tipo-card .tipo-card-inner').forEach(c => c.classList.remove('selected'));
+    card.querySelector('.tipo-card-inner').classList.add('selected');
+
+    // Mostrar contenido del formulario
+    document.getElementById('contenido-formulario').style.display = 'block';
+
+    // Mostrar/ocultar secciones condicionales
+    actualizarSeccionesCondicionales(tipo);
+
+    // Cargar tipos de foto requeridos
+    cargarTiposFoto(tipo);
+
+    // Scroll suave al contenido
+    setTimeout(() => {
+        document.getElementById('contenido-formulario').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+}
+
+function actualizarSeccionesCondicionales(tipo) {
+    // Ocultar todas las secciones condicionales
+    document.getElementById('seccion-defecto').style.display = 'none';
+    document.getElementById('seccion-error-despacho').style.display = 'none';
+    document.getElementById('seccion-garantia').style.display = 'none';
+
+    // Limpiar campos de subtipo para evitar enviar datos del tipo anterior
+    document.getElementById('subtipo_defecto').value = '';
+    document.getElementById('subtipo_error').value = '';
+    document.getElementById('producto_esperado').value = '';
+
+    if (tipo === 'PRODUCTO_FALLADO') {
+        document.getElementById('seccion-defecto').style.display = 'block';
+        // Deshabilitar el name del subtipo de error para que no se envie
+        document.getElementById('subtipo_error').removeAttribute('name');
+        document.getElementById('subtipo_defecto').setAttribute('name', 'subtipo');
+        document.getElementById('condicion_producto_garantia').removeAttribute('name');
+        document.getElementById('condicion_producto').setAttribute('name', 'condicion_producto');
+    } else if (tipo === 'ERROR_DESPACHO') {
+        document.getElementById('seccion-error-despacho').style.display = 'block';
+        document.getElementById('subtipo_defecto').removeAttribute('name');
+        document.getElementById('subtipo_error').setAttribute('name', 'subtipo');
+    } else if (tipo === 'GARANTIA') {
+        document.getElementById('seccion-garantia').style.display = 'block';
+        document.getElementById('condicion_producto').removeAttribute('name');
+        document.getElementById('condicion_producto_garantia').setAttribute('name', 'condicion_producto');
+    }
+}
+
+// ========== FOTOS GUIADAS ==========
+
+function cargarTiposFoto(tipo) {
+    fetch(`/app/api/requerimientos/tipos-foto/?tipo=${encodeURIComponent(tipo)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                tiposFotoActuales = data.tipos_foto;
+                maxFotos = data.max_fotos;
+                document.getElementById('badge-max-fotos').textContent = `Max: ${maxFotos}`;
+                renderizarSlotsFoto(data.tipos_foto);
+
+                // Mostrar guia de fotos para tipos que requieren evidencia
+                const tiposConGuia = ['PRODUCTO_FALLADO', 'GARANTIA', 'ERROR_DESPACHO'];
+                document.getElementById('guia-fotos').style.display =
+                    tiposConGuia.includes(tipo) ? 'block' : 'none';
+
+                // Mostrar/ocultar checklist
+                const obligatorias = data.tipos_foto.filter(t => t.es_obligatorio);
+                if (obligatorias.length > 0) {
+                    document.getElementById('checklist-fotos').style.display = 'block';
+                    actualizarChecklistFotos();
+                } else {
+                    document.getElementById('checklist-fotos').style.display = 'none';
+                }
+            }
+        })
+        .catch(err => console.error('Error cargando tipos de foto:', err));
+}
+
+function renderizarSlotsFoto(tiposFoto) {
+    const container = document.getElementById('fotos-slots-container');
+    container.innerHTML = '';
+    contadorFotosAdicionales = 0;
+
+    // Filtrar FOTO_ADICIONAL (se maneja por separado)
+    const slots = tiposFoto.filter(tf => tf.codigo !== 'FOTO_ADICIONAL');
+
+    slots.forEach((tf, idx) => {
+        const col = document.createElement('div');
+        col.className = 'col-6 col-lg-4';
+        col.id = `slot-${tf.codigo}`;
+        col.innerHTML = `
+            <div class="foto-slot-card text-center p-2" id="slotcard-${tf.codigo}">
+                <div id="placeholder-${tf.codigo}">
+                    <i class="${tf.icono} text-muted" style="font-size:1.5rem"></i>
+                </div>
+                <div id="preview-slot-${tf.codigo}" style="display:none;">
+                    <img class="img-fluid rounded" style="max-height:100px;object-fit:cover;width:100%" id="img-slot-${tf.codigo}">
+                </div>
+                <div class="small fw-semibold mt-1" style="font-size:.72rem;line-height:1.2">${tf.nombre}</div>
+                <div class="text-muted mt-1" style="font-size:.65rem;line-height:1.2" title="${tf.descripcion_guia}">${tf.descripcion_guia.substring(0,60)}${tf.descripcion_guia.length>60?'...':''}</div>
+                ${tf.es_obligatorio ? '<span class="badge bg-danger mt-1" style="font-size:.55rem">Obligatoria</span>' : '<span class="badge bg-light text-muted mt-1" style="font-size:.55rem">Opcional</span>'}
+                <input type="file" class="form-control form-control-sm mt-1" id="input-${tf.codigo}" name="foto_${tf.codigo}" accept="image/*" onchange="previsualizarFotoSlot(this,'${tf.codigo}')" style="font-size:.7rem">
+                <button type="button" class="btn btn-sm btn-outline-danger mt-1 w-100 py-0" style="display:none;font-size:.7rem" id="btn-quitar-${tf.codigo}" onclick="limpiarFotoSlot('${tf.codigo}')"><i class="ri-close-line"></i> Quitar</button>
+            </div>
+        `;
+        container.appendChild(col);
+    });
+
+    // Limpiar fotos adicionales
+    document.getElementById('fotos-adicionales-container').innerHTML = '';
+    document.getElementById('btn-agregar-foto-adicional').style.display = 'inline-block';
+}
+
+function previsualizarFotoSlot(input, codigo) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById(`placeholder-${codigo}`).style.display = 'none';
+            document.getElementById(`preview-slot-${codigo}`).style.display = 'block';
+            document.getElementById(`img-slot-${codigo}`).src = e.target.result;
+            document.getElementById(`btn-quitar-${codigo}`).style.display = 'block';
+            document.getElementById(`slotcard-${codigo}`).classList.add('has-foto');
+        };
+        reader.readAsDataURL(input.files[0]);
+        actualizarChecklistFotos();
+    }
+}
+
+function limpiarFotoSlot(codigo) {
+    document.getElementById(`input-${codigo}`).value = '';
+    document.getElementById(`placeholder-${codigo}`).style.display = 'block';
+    document.getElementById(`preview-slot-${codigo}`).style.display = 'none';
+    document.getElementById(`btn-quitar-${codigo}`).style.display = 'none';
+    document.getElementById(`slotcard-${codigo}`).classList.remove('has-foto');
+    actualizarChecklistFotos();
+}
+
+function actualizarChecklistFotos() {
+    const list = document.getElementById('checklist-fotos-list');
+    list.innerHTML = '';
+    const obligatorias = tiposFotoActuales.filter(t => t.es_obligatorio && t.codigo !== 'FOTO_ADICIONAL');
+    obligatorias.forEach(tf => {
+        const input = document.getElementById(`input-${tf.codigo}`);
+        const tiene = input && input.files && input.files.length > 0;
+        list.innerHTML += `
+            <li class="list-group-item d-flex align-items-center py-2 px-3">
+                <i class="${tiene ? 'ri-checkbox-circle-fill text-success' : 'ri-checkbox-blank-circle-line text-muted'} me-2 fs-5"></i>
+                <span class="small ${tiene ? '' : 'text-muted'}">${tf.nombre}</span>
+            </li>
+        `;
+    });
+}
+
+// Fotos adicionales
+function agregarFotoAdicional() {
+    const totalFotos = document.querySelectorAll('#fotos-slots-container .col-md-6').length +
+                       document.querySelectorAll('.foto-adicional-item').length;
+    if (totalFotos >= maxFotos) {
+        Swal.fire('Limite alcanzado', `Solo puede agregar hasta ${maxFotos} fotos en total`, 'warning');
         return;
     }
 
-    // Mostrar loading
+    contadorFotosAdicionales++;
+    const container = document.getElementById('fotos-adicionales-container');
+    const div = document.createElement('div');
+    div.className = 'row g-2 mb-2 foto-adicional-item';
+    div.id = `foto-adicional-${contadorFotosAdicionales}`;
+    div.innerHTML = `
+        <div class="col-md-5">
+            <input type="file" class="form-control form-control-sm" name="foto_adicional_${contadorFotosAdicionales}"
+                   accept="image/*">
+        </div>
+        <div class="col-md-5">
+            <input type="text" class="form-control form-control-sm" name="descripcion_foto_adicional_${contadorFotosAdicionales}"
+                   placeholder="Descripcion (opcional)">
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-sm btn-soft-danger w-100"
+                    onclick="document.getElementById('foto-adicional-${contadorFotosAdicionales}').remove()">
+                <i class="ri-delete-bin-line"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function validarFotosObligatorias() {
+    const obligatorias = tiposFotoActuales.filter(t => t.es_obligatorio && t.codigo !== 'FOTO_ADICIONAL');
+    const faltantes = [];
+    for (const tf of obligatorias) {
+        const input = document.getElementById(`input-${tf.codigo}`);
+        if (!input || !input.files || input.files.length === 0) {
+            faltantes.push(tf.nombre);
+        }
+    }
+    return faltantes;
+}
+
+// ========== BUSQUEDA DE DOCUMENTO (todas las sucursales) ==========
+let documentosEncontrados = []; // lista cuando hay multiples
+
+function buscarDocumento() {
+    const folio = document.getElementById('buscar_folio').value.trim();
+    if (!folio) {
+        Swal.fire('Atencion', 'Ingrese un folio o correlativo', 'warning');
+        return;
+    }
+
     Swal.fire({
         title: 'Buscando...',
-        text: 'Buscando documento en el sistema',
+        text: 'Buscando en todas las sucursales',
         allowOutsideClick: false,
         didOpen: () => { Swal.showLoading(); }
     });
 
     fetch(`/app/api/requerimientos/buscar-ticket/?folio=${encodeURIComponent(folio)}`)
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
             Swal.close();
-            if (data.success) {
-                documentoEncontrado = data.documento;
-                productosDocumento = data.documento.productos;
-                mostrarInformacionDocumento(data.documento);
-                autocompletarDatosDocumento(data.documento);
-                Swal.fire('Éxito', 'Documento encontrado', 'success');
+            if (!data.success) {
+                Swal.fire('No encontrado', data.error || 'Documento no encontrado', 'warning');
+                return;
+            }
+
+            if (data.multiple) {
+                // Multiples documentos: mostrar selector
+                documentosEncontrados = data.documentos;
+                mostrarSelectorDocumentos(data.documentos);
             } else {
-                Swal.fire('No encontrado', data.error, 'warning');
+                // Resultado unico
+                documentosEncontrados = [data.documento];
+                cargarDocumento(data.documento);
             }
         })
         .catch(error => {
@@ -44,105 +258,118 @@ function buscarDocumento() {
         });
 }
 
-function mostrarInformacionDocumento(doc) {
-    // Mostrar información del documento
-    document.getElementById('doc-info-text').innerHTML = 
-        `<strong>${doc.tipo_dte}</strong> N° ${doc.folio_dte || doc.correlativo} - Fecha: ${doc.fecha} - Total: $${parseInt(doc.total).toLocaleString()}<br>` +
-        `<span class="badge bg-info mt-1"><i class="ri-store-2-line me-1"></i>${doc.sucursal}</span>`;
-    
-    document.getElementById('doc-productos-info').textContent = 
-        `${doc.productos.length} producto(s) en el documento`;
-    
-    document.getElementById('info-documento').style.display = 'block';
-    
-    // Mostrar opción de usar productos del documento
-    if (doc.productos.length > 0) {
-        document.getElementById('opcion-producto-documento').style.display = 'block';
-        
-        // Llenar select de productos
-        const select = document.getElementById('producto_documento_select');
-        select.innerHTML = '<option value="">-- Seleccione un producto --</option>';
-        doc.productos.forEach((prod, index) => {
-            select.innerHTML += `<option value="${index}">${prod.sku} - ${prod.nombre} (Cant: ${prod.cantidad} - $${parseInt(prod.precio).toLocaleString()})</option>`;
-        });
-    }
+function mostrarSelectorDocumentos(docs) {
+    const sel = document.getElementById('documento_select');
+    sel.innerHTML = '<option value="">-- Seleccione documento --</option>';
+    docs.forEach((doc, i) => {
+        const total = parseInt(doc.total).toLocaleString();
+        sel.innerHTML += `<option value="${i}">[${doc.sucursal}] ${doc.tipo_dte} N°${doc.folio_dte || doc.correlativo} - ${doc.fecha} - $${total} (${doc.productos.length} prod.)</option>`;
+    });
+    document.getElementById('selector-documento').style.display = 'block';
+    Swal.fire({
+        icon: 'info',
+        title: `${docs.length} documentos encontrados`,
+        text: 'Seleccione el documento correcto de la lista',
+        timer: 2500,
+        showConfirmButton: false
+    });
 }
 
-function autocompletarDatosDocumento(doc) {
-    // Auto-completar datos del documento
+function seleccionarDocumento() {
+    const idx = document.getElementById('documento_select').value;
+    if (idx === '' || !documentosEncontrados[idx]) return;
+    cargarDocumento(documentosEncontrados[idx]);
+}
+
+function cargarDocumento(doc) {
+    documentoEncontrado = doc;
+    productosDocumento = doc.productos;
+
+    // Mostrar info
+    document.getElementById('doc-info-text').innerHTML =
+        `<strong>${doc.tipo_dte}</strong> N°${doc.folio_dte || doc.correlativo} — ${doc.fecha} — $${parseInt(doc.total).toLocaleString()} ` +
+        `<span class="badge bg-info ms-1" style="font-size:.65rem"><i class="ri-store-2-line me-1"></i>${doc.sucursal}</span>`;
+    document.getElementById('doc-productos-info').textContent = `${doc.productos.length} producto(s)`;
+    document.getElementById('info-documento').style.display = 'block';
+
+    // Auto-rellenar datos del documento
     document.getElementById('tipo_documento').value = doc.tipo_dte;
     document.getElementById('numero_boleta').value = doc.folio_dte || doc.correlativo;
     document.getElementById('fecha_compra').value = doc.fecha;
-    
-    // Auto-completar datos del cliente
+
+    // Auto-rellenar cliente
     if (doc.cliente_nombre) {
         document.getElementById('cliente_nombre').value = doc.cliente_nombre;
         document.getElementById('cliente_rut').value = doc.cliente_rut || '';
         document.getElementById('cliente_email').value = doc.cliente_email || '';
         document.getElementById('cliente_telefono').value = doc.cliente_telefono || '';
     }
-}
 
-function toggleProductoManual() {
-    const checked = document.getElementById('usar_producto_documento').checked;
-    
-    if (checked) {
-        // Mostrar selector de productos del documento
-        document.getElementById('selector-producto-documento').style.display = 'block';
+    // Mostrar productos del documento para seleccion
+    if (doc.productos.length > 0) {
+        const sel = document.getElementById('producto_documento_select');
+        sel.innerHTML = '<option value="">-- Seleccione producto --</option>';
+        doc.productos.forEach((prod, i) => {
+            const talla = prod.talla ? ` (${prod.talla})` : '';
+            sel.innerHTML += `<option value="${i}">${prod.sku}${talla} — ${prod.nombre} (x${prod.cantidad})</option>`;
+        });
+        document.getElementById('seccion-producto-documento').style.display = 'block';
         document.getElementById('entrada-manual-producto').style.display = 'none';
-        
-        // Deshabilitar required en campos manuales
-        document.getElementById('sku').removeAttribute('required');
-        document.getElementById('nombre_producto').removeAttribute('required');
-    } else {
-        // Mostrar entrada manual
-        document.getElementById('selector-producto-documento').style.display = 'none';
-        document.getElementById('entrada-manual-producto').style.display = 'block';
-        
-        // Activar required en campos manuales
-        document.getElementById('sku').setAttribute('required', 'required');
-        document.getElementById('nombre_producto').setAttribute('required', 'required');
-        
-        // Limpiar selección
-        document.getElementById('producto_documento_select').value = '';
-        document.getElementById('sku').value = '';
-        document.getElementById('nombre_producto').value = '';
+        document.getElementById('toggle_manual').checked = false;
+
+        // Si solo hay 1 producto, seleccionarlo automaticamente
+        if (doc.productos.length === 1) {
+            sel.value = '0';
+            seleccionarProductoDocumento();
+        }
     }
 }
 
 function seleccionarProductoDocumento() {
-    const index = document.getElementById('producto_documento_select').value;
-    
-    if (index !== '' && productosDocumento[index]) {
-        const producto = productosDocumento[index];
-        document.getElementById('sku').value = producto.sku;
-        document.getElementById('nombre_producto').value = producto.nombre;
+    const idx = document.getElementById('producto_documento_select').value;
+    if (idx !== '' && productosDocumento[idx]) {
+        const prod = productosDocumento[idx];
+        document.getElementById('sku').value = prod.sku;
+        document.getElementById('nombre_producto').value = prod.nombre;
+    }
+}
+
+function toggleManual() {
+    const manual = document.getElementById('toggle_manual').checked;
+    if (manual) {
+        document.getElementById('entrada-manual-producto').style.display = 'block';
+        document.getElementById('sku').value = '';
+        document.getElementById('nombre_producto').value = '';
+        document.getElementById('sku').setAttribute('required', 'required');
+        document.getElementById('nombre_producto').setAttribute('required', 'required');
+    } else {
+        document.getElementById('entrada-manual-producto').style.display = 'none';
+        // Re-seleccionar del documento si habia algo
+        seleccionarProductoDocumento();
     }
 }
 
 function limpiarDocumento() {
-    // Limpiar búsqueda de documento
     document.getElementById('buscar_folio').value = '';
     document.getElementById('info-documento').style.display = 'none';
-    document.getElementById('opcion-producto-documento').style.display = 'none';
-    document.getElementById('selector-producto-documento').style.display = 'none';
+    document.getElementById('selector-documento').style.display = 'none';
+    document.getElementById('seccion-producto-documento').style.display = 'none';
     document.getElementById('entrada-manual-producto').style.display = 'block';
-    document.getElementById('usar_producto_documento').checked = false;
-    
-    // Limpiar campos del documento
     document.getElementById('tipo_documento').value = '';
     document.getElementById('numero_boleta').value = '';
     document.getElementById('fecha_compra').value = '';
-    
+    document.getElementById('sku').value = '';
+    document.getElementById('nombre_producto').value = '';
     documentoEncontrado = null;
     productosDocumento = [];
+    documentosEncontrados = [];
 }
 
-// ========== BÚSQUEDA DE CLIENTE ==========
+// ========== BUSQUEDA DE CLIENTE ==========
 function buscarClientePorRUT() {
     const rut = document.getElementById('cliente_rut').value.trim();
     if (!rut) {
-        Swal.fire('Atención', 'Ingrese un RUT para buscar', 'warning');
+        Swal.fire('Atencion', 'Ingrese un RUT para buscar', 'warning');
         return;
     }
 
@@ -153,7 +380,7 @@ function buscarClientePorRUT() {
                 document.getElementById('cliente_nombre').value = data.cliente.nombre;
                 document.getElementById('cliente_email').value = data.cliente.email || '';
                 document.getElementById('cliente_telefono').value = data.cliente.telefono || '';
-                Swal.fire('Éxito', 'Cliente encontrado', 'success');
+                Swal.fire('Exito', 'Cliente encontrado', 'success');
             } else {
                 Swal.fire({
                     icon: 'info',
@@ -169,11 +396,11 @@ function buscarClientePorRUT() {
         });
 }
 
-// ========== BÚSQUEDA DE PRODUCTO ==========
+// ========== BUSQUEDA DE PRODUCTO ==========
 function buscarProducto() {
     const sku = document.getElementById('sku').value.trim();
     if (!sku) {
-        Swal.fire('Atención', 'Ingrese un SKU para buscar', 'warning');
+        Swal.fire('Atencion', 'Ingrese un SKU para buscar', 'warning');
         return;
     }
 
@@ -182,7 +409,7 @@ function buscarProducto() {
         .then(data => {
             if (data.success) {
                 document.getElementById('nombre_producto').value = data.producto.nombre;
-                Swal.fire('Éxito', 'Producto encontrado', 'success');
+                Swal.fire('Exito', 'Producto encontrado', 'success');
             } else {
                 Swal.fire({
                     icon: 'warning',
@@ -198,79 +425,49 @@ function buscarProducto() {
         });
 }
 
-// Agregar campo de foto
-function agregarFoto() {
-    if (contadorFotos >= maxFotos) {
-        Swal.fire('Límite alcanzado', `Solo puede agregar hasta ${maxFotos} fotos`, 'warning');
+// ========== ENVIAR FORMULARIO ==========
+document.getElementById('form-requerimiento').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    // Validar tipo seleccionado
+    if (!tipoSeleccionado) {
+        document.getElementById('tipo-error').style.display = 'block';
+        document.getElementById('tipo-cards').scrollIntoView({ behavior: 'smooth' });
         return;
     }
 
-    contadorFotos++;
-    const container = document.getElementById('fotos-container');
-    
-    const fotoDiv = document.createElement('div');
-    fotoDiv.className = 'col-md-6';
-    fotoDiv.id = `foto-container-${contadorFotos}`;
-    fotoDiv.innerHTML = `
-        <div class="card border">
-            <div class="card-body p-2">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label class="form-label mb-0 small">Foto ${contadorFotos}</label>
-                    <button type="button" class="btn btn-sm btn-soft-danger" onclick="eliminarFoto(${contadorFotos})">
-                        <i class="ri-delete-bin-line"></i>
-                    </button>
-                </div>
-                <input type="file" class="form-control form-control-sm mb-2" name="foto_${contadorFotos}" 
-                       accept="image/*" onchange="previsualizarFoto(this, ${contadorFotos})">
-                <input type="text" class="form-control form-control-sm" name="descripcion_foto_${contadorFotos}" 
-                       placeholder="Descripción (opcional)">
-                <div id="preview-${contadorFotos}" class="mt-2" style="display:none;">
-                    <img class="img-fluid rounded" style="max-height: 120px;" id="img-preview-${contadorFotos}">
-                </div>
-            </div>
-        </div>
-    `;
-    
-    container.appendChild(fotoDiv);
-    
-    if (contadorFotos >= maxFotos) {
-        document.getElementById('btn-agregar-foto').style.display = 'none';
+    // Validar fotos obligatorias (advertencia, no bloqueo)
+    const faltantes = validarFotosObligatorias();
+    if (faltantes.length > 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Fotos obligatorias faltantes',
+            html: `<p>Las siguientes fotos obligatorias no han sido adjuntadas:</p>
+                   <ul class="text-start">${faltantes.map(f => `<li>${f}</li>`).join('')}</ul>
+                   <p class="text-muted small">Puede crear el requerimiento sin ellas, pero seran necesarias para enviarlo al proveedor.</p>`,
+            showCancelButton: true,
+            confirmButtonText: 'Crear de todas formas',
+            cancelButtonText: 'Volver y adjuntar',
+            confirmButtonColor: '#f0ad4e',
+        }).then((result) => {
+            if (result.isConfirmed) {
+                enviarFormulario();
+            }
+        });
+        return;
     }
-}
 
-// Eliminar foto
-function eliminarFoto(numero) {
-    const container = document.getElementById(`foto-container-${numero}`);
-    if (container) {
-        container.remove();
-        contadorFotos--;
-        document.getElementById('btn-agregar-foto').style.display = 'block';
-    }
-}
+    enviarFormulario();
+});
 
-// Previsualizar foto
-function previsualizarFoto(input, numero) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById(`preview-${numero}`).style.display = 'block';
-            document.getElementById(`img-preview-${numero}`).src = e.target.result;
-        };
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-
-// Enviar formulario
-document.getElementById('form-requerimiento').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
+function enviarFormulario() {
+    const form = document.getElementById('form-requerimiento');
+    const formData = new FormData(form);
     const btnGuardar = document.getElementById('btn-guardar');
-    
-    // Deshabilitar botón
+
     btnGuardar.disabled = true;
     btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creando...';
-    
+
     fetch('/app/api/requerimientos/crear/', {
         method: 'POST',
         body: formData,
@@ -283,11 +480,10 @@ document.getElementById('form-requerimiento').addEventListener('submit', functio
         if (data.success) {
             Swal.fire({
                 icon: 'success',
-                title: '¡Requerimiento creado!',
-                text: `Número de requerimiento: ${data.numero_requerimiento}`,
+                title: 'Requerimiento creado!',
+                text: `Numero de requerimiento: ${data.numero_requerimiento}`,
                 confirmButtonText: 'Aceptar'
             }).then(() => {
-                // Redirigir siempre a la lista de requerimientos
                 window.location.href = '/app/requerimientos/';
             });
         } else {
@@ -302,25 +498,25 @@ document.getElementById('form-requerimiento').addEventListener('submit', functio
         btnGuardar.disabled = false;
         btnGuardar.innerHTML = '<i class="ri-save-line me-1"></i> Crear Requerimiento';
     });
-});
+}
 
-// ========== VALIDACIÓN DE RUT ==========
+// ========== VALIDACION DE RUT ==========
 function validarRUTAutomatico() {
     const rut = document.getElementById('cliente_rut').value.trim();
     if (!rut) return;
-    
+
     fetch(`/app/api/requerimientos/validar-rut/?rut=${encodeURIComponent(rut)}`)
         .then(response => response.json())
         .then(data => {
             if (data.success && data.valido) {
-                document.getElementById('rut-validacion-msg').innerHTML = 
-                    '<span class="text-success"><i class="ri-checkbox-circle-line me-1"></i>RUT válido</span>';
+                document.getElementById('rut-validacion-msg').innerHTML =
+                    '<span class="text-success"><i class="ri-checkbox-circle-line me-1"></i>RUT valido</span>';
                 document.getElementById('cliente_rut').value = data.rut_formateado;
                 document.getElementById('cliente_rut').classList.remove('is-invalid');
                 document.getElementById('cliente_rut').classList.add('is-valid');
             } else {
-                document.getElementById('rut-validacion-msg').innerHTML = 
-                    '<span class="text-danger"><i class="ri-close-circle-line me-1"></i>' + (data.message || 'RUT inválido') + '</span>';
+                document.getElementById('rut-validacion-msg').innerHTML =
+                    '<span class="text-danger"><i class="ri-close-circle-line me-1"></i>' + (data.message || 'RUT invalido') + '</span>';
                 document.getElementById('cliente_rut').classList.remove('is-valid');
                 document.getElementById('cliente_rut').classList.add('is-invalid');
             }
@@ -334,19 +530,19 @@ function validarRUTModal() {
         document.getElementById('modal-rut-validacion').textContent = '';
         return;
     }
-    
+
     fetch(`/app/api/requerimientos/validar-rut/?rut=${encodeURIComponent(rut)}`)
         .then(response => response.json())
         .then(data => {
             if (data.success && data.valido) {
-                document.getElementById('modal-rut-validacion').innerHTML = 
-                    '<span class="text-success"><i class="ri-checkbox-circle-line me-1"></i>RUT válido</span>';
+                document.getElementById('modal-rut-validacion').innerHTML =
+                    '<span class="text-success"><i class="ri-checkbox-circle-line me-1"></i>RUT valido</span>';
                 document.getElementById('modal-cliente-rut').value = data.rut_formateado;
                 document.getElementById('modal-cliente-rut').classList.remove('is-invalid');
                 document.getElementById('modal-cliente-rut').classList.add('is-valid');
             } else {
-                document.getElementById('modal-rut-validacion').innerHTML = 
-                    '<span class="text-danger"><i class="ri-close-circle-line me-1"></i>' + (data.message || 'RUT inválido') + '</span>';
+                document.getElementById('modal-rut-validacion').innerHTML =
+                    '<span class="text-danger"><i class="ri-close-circle-line me-1"></i>' + (data.message || 'RUT invalido') + '</span>';
                 document.getElementById('modal-cliente-rut').classList.remove('is-valid');
                 document.getElementById('modal-cliente-rut').classList.add('is-invalid');
             }
@@ -354,17 +550,13 @@ function validarRUTModal() {
         .catch(error => console.error('Error:', error));
 }
 
-// ========== GESTIÓN DE CLIENTES ==========
+// ========== GESTION DE CLIENTES ==========
 function abrirModalCrearCliente() {
-    // Prellenar con datos si ya están en el formulario
     const rut = document.getElementById('cliente_rut').value.trim();
     const nombre = document.getElementById('cliente_nombre').value.trim();
-    
-    if (rut) {
-        document.getElementById('modal-cliente-rut').value = rut;
-    }
+
+    if (rut) document.getElementById('modal-cliente-rut').value = rut;
     if (nombre) {
-        // Intentar separar nombre y apellido
         const partes = nombre.split(' ');
         if (partes.length > 1) {
             document.getElementById('modal-cliente-nombre').value = partes[0];
@@ -373,19 +565,18 @@ function abrirModalCrearCliente() {
             document.getElementById('modal-cliente-nombre').value = nombre;
         }
     }
-    
+
     const modal = new bootstrap.Modal(document.getElementById('modalCrearCliente'));
     modal.show();
 }
 
 function guardarNuevoCliente() {
     const form = document.getElementById('form-crear-cliente');
-    
     if (!form.checkValidity()) {
         form.reportValidity();
         return;
     }
-    
+
     const clienteData = {
         rut: document.getElementById('modal-cliente-rut').value.trim(),
         nombre: document.getElementById('modal-cliente-nombre').value.trim(),
@@ -396,7 +587,7 @@ function guardarNuevoCliente() {
         comuna: document.getElementById('modal-cliente-comuna').value.trim(),
         ciudad: document.getElementById('modal-cliente-ciudad').value.trim(),
     };
-    
+
     fetch('/app/api/requerimientos/crear-cliente/', {
         method: 'POST',
         headers: {
@@ -408,20 +599,15 @@ function guardarNuevoCliente() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Llenar formulario principal con datos del nuevo cliente
             document.getElementById('cliente_nombre').value = data.cliente.nombre;
             document.getElementById('cliente_rut').value = data.cliente.rut;
             document.getElementById('cliente_email').value = data.cliente.email;
             document.getElementById('cliente_telefono').value = data.cliente.telefono;
-            
-            // Cerrar modal
+
             const modal = bootstrap.Modal.getInstance(document.getElementById('modalCrearCliente'));
             modal.hide();
-            
-            // Limpiar formulario modal
             document.getElementById('form-crear-cliente').reset();
-            
-            Swal.fire('Éxito', 'Cliente creado y datos completados', 'success');
+            Swal.fire('Exito', 'Cliente creado y datos completados', 'success');
         } else {
             Swal.fire('Error', data.error || 'No se pudo crear el cliente', 'error');
         }
@@ -432,24 +618,16 @@ function guardarNuevoCliente() {
     });
 }
 
-// ========== INICIALIZACIÓN ==========
+// ========== INICIALIZACION ==========
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar Select2 para proveedores
     $('#proveedor_id').select2({
         theme: 'bootstrap-5',
         placeholder: 'Buscar proveedor...',
         allowClear: true,
         language: {
-            noResults: function() {
-                return 'No se encontraron proveedores';
-            },
-            searching: function() {
-                return 'Buscando...';
-            }
+            noResults: function() { return 'No se encontraron proveedores'; },
+            searching: function() { return 'Buscando...'; }
         }
     });
-    
-    // Agregar primera foto
-    agregarFoto();
 });
 </script>

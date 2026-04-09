@@ -16,7 +16,8 @@ from decimal import Decimal
 
 from .models import (
     Producto, Producto_Talla, Movimientos_Producto, LoteProducto,
-    Categoria, AtributoOpcion, Productos_Atributos, Sucursal
+    Categoria, AtributoOpcion, Productos_Atributos, Sucursal,
+    Ticket_Productos, Dte_Productos
 )
 
 
@@ -801,4 +802,249 @@ def eliminar_variacion(request, variacion_id):
             'success': False,
             'error': f'Error al eliminar variación: {str(e)}'
         }, status=500)
+
+
+# ========== IMPACTO DE RECATEGORIZACIÓN ==========
+
+@require_GET
+@login_required
+def obtener_impacto_recategorizacion(request, producto_id):
+    """
+    Calcula cuántos registros se verían afectados al cambiar atributos de un producto.
+    Los movimientos/ventas/DTEs referencian Producto_Talla → Producto vía FK,
+    por lo que cambiar atributos en Producto se refleja automáticamente.
+    Este endpoint solo muestra el alcance para que el usuario tenga visibilidad.
+    """
+    try:
+        producto = get_object_or_404(Producto, id=producto_id)
+
+        # Encontrar todos los productos con el mismo artículo (en todas las sucursales)
+        productos_mismo_articulo = Producto.objects.filter(
+            articulo=producto.articulo
+        ).select_related('sucursal')
+
+        producto_ids = list(productos_mismo_articulo.values_list('id', flat=True))
+        sucursales = list(
+            productos_mismo_articulo.exclude(sucursal__isnull=True)
+            .values_list('sucursal__alias', flat=True).distinct()
+        )
+
+        # Producto_Tallas asociadas
+        talla_ids = list(
+            Producto_Talla.objects.filter(producto_id__in=producto_ids)
+            .values_list('id', flat=True)
+        )
+
+        # Contar movimientos
+        total_movimientos = Movimientos_Producto.objects.filter(
+            ProductoTalla_id__in=talla_ids
+        ).count()
+
+        # Contar tickets de venta
+        total_tickets = Ticket_Productos.objects.filter(
+            ProductoTalla_id__in=talla_ids
+        ).count()
+
+        # Contar líneas DTE
+        total_dtes = Dte_Productos.objects.filter(
+            productoTalla_id__in=talla_ids
+        ).count()
+
+        return JsonResponse({
+            'success': True,
+            'impacto': {
+                'total_sucursales': len(sucursales),
+                'sucursales': sucursales,
+                'total_productos': len(producto_ids),
+                'total_tallas': len(talla_ids),
+                'total_movimientos': total_movimientos,
+                'total_tickets': total_tickets,
+                'total_dtes': total_dtes,
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al calcular impacto: {str(e)}'
+        }, status=500)
+
+
+# ========== EDICIÓN MASIVA DE PRODUCTOS ==========
+
+@require_POST
+@login_required
+@transaction.atomic
+def actualizar_productos_masivo(request):
+    """
+    Actualiza campos seleccionados en múltiples productos a la vez.
+    Solo modifica los campos que vienen con 'aplicar_<campo>': True.
+    Los movimientos históricos NO se modifican: al estar vinculados por FK
+    (Movimiento → Producto_Talla → Producto), las consultas reflejan
+    automáticamente los nuevos atributos del producto.
+    Las cantidades, precios y fechas almacenadas en cada movimiento permanecen intactas.
+    """
+    try:
+        data = json.loads(request.body)
+        producto_ids = data.get('producto_ids', [])
+        campos = data.get('campos', {})
+        propagar = data.get('propagar_sucursales', False)
+
+        if not producto_ids:
+            return JsonResponse({'success': False, 'error': 'No se seleccionaron productos'}, status=400)
+        if not campos:
+            return JsonResponse({'success': False, 'error': 'No se seleccionaron campos a modificar'}, status=400)
+
+        productos_base = Producto.objects.filter(id__in=producto_ids).select_related('sucursal')
+        if not productos_base.exists():
+            return JsonResponse({'success': False, 'error': 'Productos no encontrados'}, status=404)
+
+        if propagar:
+            articulos = list(productos_base.values_list('articulo', flat=True).distinct())
+            productos = Producto.objects.filter(articulo__in=articulos).select_related('sucursal')
+        else:
+            productos = productos_base
+
+        update_kwargs = {}
+        campos_aplicados = []
+
+        if campos.get('aplicar_categoria'):
+            cat_id = campos.get('categoria_id')
+            if cat_id:
+                try:
+                    cat = Categoria.objects.get(id=cat_id)
+                    update_kwargs['categoria'] = cat
+                    campos_aplicados.append('categoría')
+                except Categoria.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Categoría no encontrada'}, status=400)
+            else:
+                update_kwargs['categoria'] = None
+                campos_aplicados.append('categoría')
+
+        for i in range(1, 5):
+            key = f'aplicar_atributo{i}'
+            if campos.get(key):
+                attr_id = campos.get(f'atributo{i}_id')
+                if attr_id:
+                    try:
+                        attr = AtributoOpcion.objects.get(id=attr_id)
+                        update_kwargs[f'atributo{i}'] = attr
+                    except AtributoOpcion.DoesNotExist:
+                        return JsonResponse({'success': False, 'error': f'Atributo {i} no encontrado'}, status=400)
+                else:
+                    update_kwargs[f'atributo{i}'] = None
+                nombres = {1: 'marca', 2: 'color', 3: 'género', 4: 'otro'}
+                campos_aplicados.append(nombres.get(i, f'atributo{i}'))
+
+        if campos.get('aplicar_precios'):
+            try:
+                costo = int(campos.get('costo', 0))
+                sobreprecio = int(campos.get('sobreprecio', 0))
+                precioventa = int(campos.get('precioventa', 0))
+                if precioventa <= 0:
+                    return JsonResponse({'success': False, 'error': 'Precio de venta debe ser mayor a 0'}, status=400)
+                update_kwargs['costo'] = costo
+                update_kwargs['sobreprecio'] = sobreprecio
+                update_kwargs['precioventa'] = precioventa
+                campos_aplicados.append('precios')
+            except (ValueError, TypeError):
+                return JsonResponse({'success': False, 'error': 'Valores de precio inválidos'}, status=400)
+
+        if not update_kwargs:
+            return JsonResponse({'success': False, 'error': 'No hay campos válidos para actualizar'}, status=400)
+
+        count = 0
+        sucursales_set = set()
+        lotes_total = 0
+
+        for prod in productos:
+            for field, value in update_kwargs.items():
+                setattr(prod, field, value)
+            prod.save()
+            count += 1
+            if prod.sucursal:
+                sucursales_set.add(prod.sucursal.alias)
+
+            if 'precioventa' in update_kwargs:
+                lotes = LoteProducto.objects.filter(
+                    producto_talla__producto=prod,
+                    cantidad_disponible__gt=0,
+                    activo=True
+                ).update(
+                    precio_venta_unitario=update_kwargs['precioventa'],
+                    costo_unitario=update_kwargs.get('costo', prod.costo),
+                    sobreprecio_unitario=update_kwargs.get('sobreprecio', prod.sobreprecio),
+                )
+                lotes_total += lotes
+
+        talla_ids = list(
+            Producto_Talla.objects.filter(producto__in=productos).values_list('id', flat=True)
+        )
+        movimientos_afectados = Movimientos_Producto.objects.filter(ProductoTalla_id__in=talla_ids).count()
+        tickets_afectados = Ticket_Productos.objects.filter(ProductoTalla_id__in=talla_ids).count()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'{count} producto(s) actualizados',
+            'detalle': {
+                'productos_actualizados': count,
+                'campos_aplicados': campos_aplicados,
+                'sucursales': list(sucursales_set),
+                'lotes_actualizados': lotes_total,
+                'movimientos_vinculados': movimientos_afectados,
+                'tickets_vinculados': tickets_afectados,
+            }
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+@login_required
+def preview_edicion_masiva(request):
+    """
+    Calcula el impacto de una edición masiva antes de aplicarla.
+    """
+    try:
+        data = json.loads(request.body)
+        producto_ids = data.get('producto_ids', [])
+        propagar = data.get('propagar_sucursales', False)
+
+        productos_base = Producto.objects.filter(id__in=producto_ids).select_related('sucursal')
+
+        if propagar:
+            articulos = list(productos_base.values_list('articulo', flat=True).distinct())
+            productos = Producto.objects.filter(articulo__in=articulos).select_related('sucursal')
+        else:
+            productos = productos_base
+
+        prod_ids = list(productos.values_list('id', flat=True))
+        sucursales = list(
+            productos.exclude(sucursal__isnull=True)
+            .values_list('sucursal__alias', flat=True).distinct()
+        )
+        talla_ids = list(
+            Producto_Talla.objects.filter(producto_id__in=prod_ids).values_list('id', flat=True)
+        )
+        movimientos = Movimientos_Producto.objects.filter(ProductoTalla_id__in=talla_ids).count()
+        tickets = Ticket_Productos.objects.filter(ProductoTalla_id__in=talla_ids).count()
+        dtes = Dte_Productos.objects.filter(productoTalla_id__in=talla_ids).count()
+
+        return JsonResponse({
+            'success': True,
+            'impacto': {
+                'productos_seleccionados': len(producto_ids),
+                'productos_total': len(prod_ids),
+                'sucursales': sucursales,
+                'total_tallas': len(talla_ids),
+                'total_movimientos': movimientos,
+                'total_tickets': tickets,
+                'total_dtes': dtes,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 

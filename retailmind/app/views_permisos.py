@@ -7,9 +7,10 @@ from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Count, Q, Max
 from django.views.decorators.http import require_http_methods
-from .models import ModuloSistema, OpcionMenu, PermisoRol, ConfiguracionPermisoGlobal, PermisoSucursal, Sucursal
+from .models import ModuloSistema, OpcionMenu, PermisoRol, ConfiguracionPermisoGlobal, PermisoSucursal, PermisoUsuario, Sucursal, EmpresaUser
 from users.models import Usuario
 from .decorators import solo_administrador
+from .utils_permisos import obtener_sucursales_usuario
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import json
@@ -32,15 +33,23 @@ def gestion_permisos(request):
     total_modulos = modulos.count()
     total_opciones = OpcionMenu.objects.filter(activo=True).count()
     total_permisos = PermisoRol.objects.count()
-    
+    total_overrides = PermisoUsuario.objects.count()
+
+    # Usuarios activos para el selector de permisos por usuario
+    usuarios_activos = Usuario.objects.filter(
+        es_activo=True
+    ).order_by('first_name', 'last_name', 'username')
+
     context = {
         'modulos': modulos,
         'roles': roles,
         'total_modulos': total_modulos,
         'total_opciones': total_opciones,
         'total_permisos': total_permisos,
+        'total_overrides': total_overrides,
+        'usuarios_activos': usuarios_activos,
     }
-    
+
     return render(request, 'gestion_permisos/index.html', context)
 
 
@@ -1396,7 +1405,7 @@ def importar_permisos_sucursal(request):
             'mensaje': f'Permisos importados a {sucursal_destino.alias}',
             'resultados': resultados
         })
-        
+
     except json.JSONDecodeError as e:
         return JsonResponse({
             'error': True,
@@ -1405,6 +1414,302 @@ def importar_permisos_sucursal(request):
     except Exception as e:
         return JsonResponse({
             'error': True,
-            'mensaje': f'Error al importar permisos: {str(e)}'
+            'mensaje': f'Error al importar permisos de sucursal: {str(e)}'
         }, status=500)
 
+
+# ========== PERMISOS POR USUARIO ==========
+
+@login_required
+@solo_administrador
+@require_http_methods(["GET"])
+def obtener_usuarios_permisos(request):
+    """API para obtener usuarios activos con info de overrides"""
+    try:
+        usuarios = Usuario.objects.filter(es_activo=True).order_by('first_name', 'last_name')
+        usuarios_data = []
+        for u in usuarios:
+            overrides_count = PermisoUsuario.objects.filter(usuario=u).count()
+            sucursales_asignadas = EmpresaUser.objects.filter(
+                user=u, status=True, sucursal__isnull=False
+            ).select_related('sucursal').values_list('sucursal__alias', flat=True)
+
+            usuarios_data.append({
+                'id': u.id,
+                'username': u.username,
+                'nombre': u.get_full_name() or u.username,
+                'rol': u.rol,
+                'rol_display': u.get_rol_display() if hasattr(u, 'get_rol_display') else u.rol,
+                'overrides': overrides_count,
+                've_todas_sucursales': PermisoUsuario.usuario_ve_todas_sucursales(u),
+                'sucursales_asignadas': list(sucursales_asignadas),
+            })
+
+        return JsonResponse({'success': True, 'usuarios': usuarios_data})
+    except Exception as e:
+        return JsonResponse({'error': True, 'mensaje': str(e)}, status=500)
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["GET"])
+def obtener_permisos_usuario(request):
+    """API para obtener overrides de un usuario específico"""
+    usuario_id = request.GET.get('usuario_id')
+    if not usuario_id:
+        return JsonResponse({'error': True, 'mensaje': 'usuario_id requerido'}, status=400)
+
+    try:
+        usuario = Usuario.objects.get(id=usuario_id)
+    except Usuario.DoesNotExist:
+        return JsonResponse({'error': True, 'mensaje': 'Usuario no encontrado'}, status=404)
+
+    ve_todas = PermisoUsuario.usuario_ve_todas_sucursales(usuario)
+
+    modulos_data = []
+    modulos = ModuloSistema.objects.filter(activo=True).prefetch_related('opciones').order_by('orden')
+
+    for modulo in modulos:
+        opciones_data = []
+        opciones = modulo.opciones.filter(activo=True, padre__isnull=True).order_by('orden')
+
+        for opcion in opciones:
+            override = PermisoUsuario.objects.filter(usuario=usuario, opcion_menu=opcion).first()
+            permiso_rol = PermisoRol.objects.filter(rol=usuario.rol, opcion_menu=opcion).first()
+
+            opcion_info = {
+                'id': opcion.id,
+                'codigo': opcion.codigo,
+                'nombre': opcion.nombre,
+                'icono': opcion.icono,
+                'es_submenu': opcion.es_submenu,
+                'permisos_rol': {
+                    'puede_ver': permiso_rol.puede_ver if permiso_rol else False,
+                    'puede_crear': permiso_rol.puede_crear if permiso_rol else False,
+                    'puede_editar': permiso_rol.puede_editar if permiso_rol else False,
+                    'puede_eliminar': permiso_rol.puede_eliminar if permiso_rol else False,
+                    'puede_exportar': permiso_rol.puede_exportar if permiso_rol else False,
+                    'puede_aprobar': permiso_rol.puede_aprobar if permiso_rol else False,
+                },
+                'overrides': {
+                    'puede_ver': override.puede_ver if override else None,
+                    'puede_crear': override.puede_crear if override else None,
+                    'puede_editar': override.puede_editar if override else None,
+                    'puede_eliminar': override.puede_eliminar if override else None,
+                    'puede_exportar': override.puede_exportar if override else None,
+                    'puede_aprobar': override.puede_aprobar if override else None,
+                },
+                'notas': override.notas if override else '',
+            }
+
+            if opcion.es_submenu:
+                subopciones_data = []
+                for sub in opcion.hijos.filter(activo=True).order_by('orden'):
+                    sub_override = PermisoUsuario.objects.filter(usuario=usuario, opcion_menu=sub).first()
+                    sub_rol = PermisoRol.objects.filter(rol=usuario.rol, opcion_menu=sub).first()
+                    subopciones_data.append({
+                        'id': sub.id,
+                        'codigo': sub.codigo,
+                        'nombre': sub.nombre,
+                        'icono': sub.icono,
+                        'permisos_rol': {
+                            'puede_ver': sub_rol.puede_ver if sub_rol else False,
+                            'puede_crear': sub_rol.puede_crear if sub_rol else False,
+                            'puede_editar': sub_rol.puede_editar if sub_rol else False,
+                            'puede_eliminar': sub_rol.puede_eliminar if sub_rol else False,
+                            'puede_exportar': sub_rol.puede_exportar if sub_rol else False,
+                            'puede_aprobar': sub_rol.puede_aprobar if sub_rol else False,
+                        },
+                        'overrides': {
+                            'puede_ver': sub_override.puede_ver if sub_override else None,
+                            'puede_crear': sub_override.puede_crear if sub_override else None,
+                            'puede_editar': sub_override.puede_editar if sub_override else None,
+                            'puede_eliminar': sub_override.puede_eliminar if sub_override else None,
+                            'puede_exportar': sub_override.puede_exportar if sub_override else None,
+                            'puede_aprobar': sub_override.puede_aprobar if sub_override else None,
+                        },
+                        'notas': sub_override.notas if sub_override else '',
+                    })
+                opcion_info['subopciones'] = subopciones_data
+
+            opciones_data.append(opcion_info)
+
+        modulos_data.append({
+            'id': modulo.id,
+            'codigo': modulo.codigo,
+            'nombre': modulo.nombre,
+            'icono': modulo.icono,
+            'opciones': opciones_data,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'usuario': {
+            'id': usuario.id,
+            'username': usuario.username,
+            'nombre': usuario.get_full_name() or usuario.username,
+            'rol': usuario.rol,
+            'rol_display': usuario.get_rol_display() if hasattr(usuario, 'get_rol_display') else usuario.rol,
+        },
+        've_todas_sucursales': ve_todas,
+        'modulos': modulos_data,
+    })
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["POST"])
+def guardar_permisos_usuario(request):
+    """API para guardar overrides de permisos de un usuario"""
+    try:
+        data = json.loads(request.body)
+        usuario_id = data.get('usuario_id')
+        permisos_data = data.get('permisos', [])
+        ve_todas_sucursales = data.get('ve_todas_sucursales', False)
+
+        if not usuario_id:
+            return JsonResponse({'error': True, 'mensaje': 'usuario_id requerido'}, status=400)
+
+        try:
+            usuario = Usuario.objects.get(id=usuario_id)
+        except Usuario.DoesNotExist:
+            return JsonResponse({'error': True, 'mensaje': 'Usuario no encontrado'}, status=404)
+
+        creados = 0
+        actualizados = 0
+        eliminados = 0
+
+        for item in permisos_data:
+            opcion_id = item.get('opcion_id')
+            overrides = item.get('overrides', {})
+
+            opcion = OpcionMenu.objects.filter(id=opcion_id).first()
+            if not opcion:
+                continue
+
+            all_none = all(v is None for v in overrides.values())
+            if all_none:
+                deleted, _ = PermisoUsuario.objects.filter(
+                    usuario=usuario, opcion_menu=opcion
+                ).delete()
+                eliminados += deleted
+                continue
+
+            permiso, created = PermisoUsuario.objects.get_or_create(
+                usuario=usuario,
+                opcion_menu=opcion
+            )
+            permiso.puede_ver = overrides.get('puede_ver')
+            permiso.puede_crear = overrides.get('puede_crear')
+            permiso.puede_editar = overrides.get('puede_editar')
+            permiso.puede_eliminar = overrides.get('puede_eliminar')
+            permiso.puede_exportar = overrides.get('puede_exportar')
+            permiso.puede_aprobar = overrides.get('puede_aprobar')
+            permiso.puede_ver_todas_sucursales = ve_todas_sucursales
+            permiso.notas = item.get('notas', '')
+            permiso.save()
+
+            if created:
+                creados += 1
+            else:
+                actualizados += 1
+
+        PermisoUsuario.objects.filter(usuario=usuario).update(
+            puede_ver_todas_sucursales=ve_todas_sucursales
+        )
+
+        if ve_todas_sucursales and not PermisoUsuario.objects.filter(usuario=usuario).exists():
+            primera_opcion = OpcionMenu.objects.filter(activo=True).first()
+            if primera_opcion:
+                PermisoUsuario.objects.create(
+                    usuario=usuario,
+                    opcion_menu=primera_opcion,
+                    puede_ver_todas_sucursales=True
+                )
+                creados += 1
+
+        return JsonResponse({
+            'success': True,
+            'mensaje': 'Permisos de usuario guardados',
+            'creados': creados,
+            'actualizados': actualizados,
+            'eliminados': eliminados,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': True, 'mensaje': 'JSON invalido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': True, 'mensaje': str(e)}, status=500)
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["POST"])
+def eliminar_permisos_usuario(request):
+    """API para eliminar todos los overrides de un usuario"""
+    try:
+        data = json.loads(request.body)
+        usuario_id = data.get('usuario_id')
+
+        if not usuario_id:
+            return JsonResponse({'error': True, 'mensaje': 'usuario_id requerido'}, status=400)
+
+        deleted, _ = PermisoUsuario.objects.filter(usuario_id=usuario_id).delete()
+
+        return JsonResponse({
+            'success': True,
+            'mensaje': f'{deleted} overrides eliminados',
+            'eliminados': deleted,
+        })
+    except Exception as e:
+        return JsonResponse({'error': True, 'mensaje': str(e)}, status=500)
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["POST"])
+def copiar_permisos_usuario(request):
+    """API para copiar overrides de un usuario a otro"""
+    try:
+        data = json.loads(request.body)
+        origen_id = data.get('usuario_origen_id')
+        destino_id = data.get('usuario_destino_id')
+
+        if not origen_id or not destino_id:
+            return JsonResponse({'error': True, 'mensaje': 'IDs origen y destino requeridos'}, status=400)
+
+        if str(origen_id) == str(destino_id):
+            return JsonResponse({'error': True, 'mensaje': 'Origen y destino no pueden ser iguales'}, status=400)
+
+        permisos_origen = PermisoUsuario.objects.filter(usuario_id=origen_id)
+        creados = 0
+        actualizados = 0
+
+        for p_orig in permisos_origen:
+            p_dest, created = PermisoUsuario.objects.get_or_create(
+                usuario_id=destino_id,
+                opcion_menu=p_orig.opcion_menu
+            )
+            p_dest.puede_ver = p_orig.puede_ver
+            p_dest.puede_crear = p_orig.puede_crear
+            p_dest.puede_editar = p_orig.puede_editar
+            p_dest.puede_eliminar = p_orig.puede_eliminar
+            p_dest.puede_exportar = p_orig.puede_exportar
+            p_dest.puede_aprobar = p_orig.puede_aprobar
+            p_dest.puede_ver_todas_sucursales = p_orig.puede_ver_todas_sucursales
+            p_dest.notas = f"Copiado de usuario ID {origen_id}"
+            p_dest.save()
+
+            if created:
+                creados += 1
+            else:
+                actualizados += 1
+
+        return JsonResponse({
+            'success': True,
+            'mensaje': f'Permisos copiados: {creados} creados, {actualizados} actualizados',
+            'creados': creados,
+            'actualizados': actualizados,
+        })
+    except Exception as e:
+        return JsonResponse({'error': True, 'mensaje': str(e)}, status=500)

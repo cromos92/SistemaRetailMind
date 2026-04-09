@@ -42,6 +42,7 @@ from .dte import (  # noqa: F401
     Dte_Productos,
     NotificacionDTE,
     DteAlertaDescartada,
+    DescuentoRecargo,
 )
 
 from .ventas import (  # noqa: F401
@@ -132,13 +133,18 @@ from .permisos import (  # noqa: F401
     PermisoRol,
     ConfiguracionPermisoGlobal,
     PermisoSucursal,
+    PermisoUsuario,
     CodigoAutorizacionDinamico,
     RegistroAutorizacion,
 )
 
 from .requerimientos import (  # noqa: F401
     TIPO_REQUERIMIENTO_CHOICES,
+    SUBTIPO_DEFECTO_CHOICES,
+    SUBTIPO_ERROR_CHOICES,
     ESTADO_REQUERIMIENTO_CHOICES,
+    MAX_FOTOS_POR_TIPO,
+    TipoFotoRequerimiento,
     Requerimiento,
     FotoRequerimiento,
     HistorialRequerimiento,

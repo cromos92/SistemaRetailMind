@@ -182,7 +182,7 @@ def gestion_usuarios(request):
     RESTRINGIDO: Solo usuarios con rol 'administrador' o superusuarios pueden acceder
     """
     # Verificar si es administrador o superusuario
-    es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+    es_admin = getattr(request.user, 'rol', None) == 'administrador'
     
     if not es_admin:
         messages.error(request, "Acceso restringido. Solo los administradores pueden gestionar usuarios.")
@@ -198,7 +198,7 @@ def listar_usuarios(request):
     RESTRINGIDO: Solo administradores
     """
     # Verificar si es administrador
-    es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+    es_admin = getattr(request.user, 'rol', None) == 'administrador'
     if not es_admin:
         return JsonResponse({'error': 'No tienes permisos para acceder a esta información'}, status=403)
     
@@ -312,7 +312,7 @@ def crear_usuario(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -455,7 +455,7 @@ def editar_usuario(request, usuario_id):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -512,8 +512,8 @@ def editar_usuario(request, usuario_id):
         usuario.rol = data.get('rol', usuario.rol)
         usuario.requiere_2fa = data.get('requiere_2fa', usuario.requiere_2fa)
         
-        # Actualizar permisos solo si el usuario actual tiene permisos de superuser
-        if request.user.is_superuser:
+        # Actualizar permisos solo si el usuario actual es administrador
+        if getattr(request.user, 'rol', None) == 'administrador':
             usuario.puede_crear_usuarios = data.get('puede_crear_usuarios', usuario.puede_crear_usuarios)
             usuario.puede_editar_usuarios = data.get('puede_editar_usuarios', usuario.puede_editar_usuarios)
             usuario.puede_eliminar_usuarios = data.get('puede_eliminar_usuarios', usuario.puede_eliminar_usuarios)
@@ -552,7 +552,7 @@ def toggle_estado_usuario(request, usuario_id):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -600,7 +600,7 @@ def obtener_usuario(request, usuario_id):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -706,7 +706,7 @@ def resetear_password(request, usuario_id):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -783,7 +783,7 @@ def reenviar_credenciales(request, usuario_id):
     RESTRINGIDO: Solo administradores
     """
     try:
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -845,7 +845,7 @@ def exportar_usuarios(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -915,7 +915,7 @@ def descargar_plantilla_importacion(request):
     RESTRINGIDO: Solo administradores
     """
     try:
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -976,7 +976,7 @@ def importar_usuarios(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -2048,7 +2048,7 @@ def usuarios_por_rol(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -2103,7 +2103,7 @@ def cambiar_rol_usuario(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -2181,7 +2181,7 @@ def obtener_empresas_sucursales(request):
     Obtener todas las empresas con sus sucursales para el selector
     """
     try:
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
@@ -2213,7 +2213,7 @@ def obtener_asignaciones_usuario(request, usuario_id):
     Obtener todas las asignaciones (EmpresaUser) de un usuario específico
     """
     try:
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
@@ -2272,7 +2272,7 @@ def agregar_asignacion_usuario(request, usuario_id):
     - sucursales_ids: Array de IDs (múltiple selección)
     """
     try:
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
@@ -2379,7 +2379,7 @@ def eliminar_asignacion_usuario(request, usuario_id, empresa_user_id):
     Eliminar (desactivar) una asignación empresa/sucursal de un usuario
     """
     try:
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
@@ -2423,7 +2423,7 @@ def cambiar_sucursal_activa_usuario(request, usuario_id):
     Cambiar la sucursal activa de un usuario (sin crear nueva asignación)
     """
     try:
-        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = getattr(request.user, 'rol', None) == 'administrador'
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         

@@ -1057,7 +1057,16 @@
                             <a href="{% url 'verDashboardCompras' %}" class="btn btn-soft-info btn-sm" data-bs-toggle="tooltip" title="Dashboard Estratégico">
                                 <i class="bi bi-graph-up me-1"></i> <span class="d-none d-lg-inline">Dashboard</span>
                             </a>
-                            
+                            <a href="{% url 'verGestionDteCompras' %}" class="btn btn-soft-warning btn-sm" data-bs-toggle="tooltip" title="Gestión de DTEs de Compras">
+                                <i class="bi bi-file-earmark-text me-1"></i> <span class="d-none d-lg-inline">DTEs Compras</span>
+                            </a>
+                            <a href="{% url 'ver_reporte_rendimiento_proveedor' %}" class="btn btn-soft-primary btn-sm" data-bs-toggle="tooltip" title="Rendimiento por Proveedor: comprados, recepcionados, vendidos">
+                                <i class="bi bi-people me-1"></i> <span class="d-none d-lg-inline">Rendimiento Proveedor</span>
+                            </a>
+                            <a href="{% url 'verGestionProducto' %}" class="btn btn-soft-success btn-sm" data-bs-toggle="tooltip" title="Crear productos desde recepciones">
+                                <i class="bi bi-archive me-1"></i> <span class="d-none d-lg-inline">Crear Productos</span>
+                            </a>
+
                             <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearCompra">
                                 <i class="bi bi-plus-lg me-1"></i> Nueva Compra
                             </button>
@@ -1109,6 +1118,33 @@
                                 </ul>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== STEPPER WORKFLOW ========== -->
+            <div class="px-4 py-3" style="background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%);border-bottom:1px solid #dee2e6;">
+                <div class="d-flex align-items-center justify-content-center gap-0 flex-wrap" style="font-size:.78rem;">
+                    <div class="d-flex align-items-center">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold" style="width:26px;height:26px;background:#405189;font-size:.7rem;">1</span>
+                        <span class="fw-bold ms-1" style="color:#405189;">Crear Compra</span>
+                    </div>
+                    <div style="width:30px;height:2px;background:linear-gradient(90deg,#405189,#0ab39c);margin:0 6px;"></div>
+                    <div class="d-flex align-items-center">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold" style="width:26px;height:26px;background:#3577f1;font-size:.7rem;">2</span>
+                        <span class="fw-semibold ms-1" style="color:#3577f1;">Cargar Productos</span>
+                    </div>
+                    <div style="width:30px;height:2px;background:linear-gradient(90deg,#3577f1,#f7b84b);margin:0 6px;"></div>
+                    <div class="d-flex align-items-center">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold" style="width:26px;height:26px;background:#f7b84b;font-size:.7rem;">3</span>
+                        <span class="fw-semibold ms-1" style="color:#c59220;">Recepcionar</span>
+                    </div>
+                    <div style="width:30px;height:2px;background:linear-gradient(90deg,#f7b84b,#0ab39c);margin:0 6px;"></div>
+                    <div class="d-flex align-items-center">
+                        <a href="/app/verGestionProducto/" class="d-flex align-items-center text-decoration-none">
+                            <span class="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold" style="width:26px;height:26px;background:#0ab39c;font-size:.7rem;">4</span>
+                            <span class="fw-semibold ms-1" style="color:#0ab39c;">Crear Productos <i class="bi bi-arrow-right" style="font-size:.65rem;"></i></span>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -1696,7 +1732,43 @@
 
                     <div class="modal-body p-2" style="background: #f8f9fa;">
                         <input type="hidden" id="globalIDCompraRecepcion">
-                        
+
+                        <!-- Panel resumen DTEs del proveedor -->
+                        <div id="panelDtesRecepcion" class="mb-2" style="display:none;">
+                            <div class="card border-0" style="border-radius:10px;background:linear-gradient(135deg,#e8f5e9,#e3f2fd);box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+                                <div class="card-body py-2 px-3">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <span style="font-size:.78rem;font-weight:600;color:#405189;">
+                                            <i class="bi bi-file-earmark-text me-1"></i>DTEs del proveedor
+                                        </span>
+                                        <button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="collapse" data-bs-target="#listaDtesRecepcion" style="font-size:.72rem;">
+                                            <i class="bi bi-chevron-down"></i> Ver detalle
+                                        </button>
+                                    </div>
+                                    <div class="d-flex gap-3 mt-1" style="font-size:.75rem;">
+                                        <span><strong id="dtesRecepcionCount">0</strong> DTEs encontrados</span>
+                                        <span>Total: <strong id="dtesRecepcionTotal">$0</strong></span>
+                                    </div>
+                                    <div class="collapse mt-2" id="listaDtesRecepcion">
+                                        <div class="table-responsive" style="max-height:150px;overflow-y:auto;">
+                                            <table class="table table-sm table-bordered mb-0" style="font-size:.72rem;">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>N° Doc</th>
+                                                        <th>Tipo</th>
+                                                        <th class="text-end">Monto</th>
+                                                        <th>Estado</th>
+                                                        <th>Pago</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="tbodyDtesRecepcion"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Indicador de carga -->
                         <div id="recepcionLoader" class="text-center py-4" style="display: none;">
                             <div class="spinner-grow text-success" style="width: 2rem; height: 2rem;" role="status">
@@ -1754,6 +1826,12 @@
                                     </div>
                                     <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnLimpiarTodo" title="Limpiar todo"><i class="bi bi-eraser"></i></button>
                                     <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnRecargarFacturas" title="Recargar facturas"><i class="bi bi-arrow-clockwise"></i></button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm py-1" id="btnToggleEliminar" title="Modo eliminar productos">
+                                        <i class="bi bi-trash3 me-1"></i>Eliminar
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm py-1" id="btnEliminarSeleccionados" style="display: none;" title="Eliminar productos seleccionados">
+                                        <i class="bi bi-trash3-fill me-1"></i>Eliminar (<span id="contadorSeleccionados">0</span>)
+                                    </button>
                                     <div class="ms-auto d-flex align-items-center gap-3 text-white" style="font-size: 0.75rem;">
                                         <span><i class="bi bi-hourglass-split text-warning me-1"></i><strong id="quickStatPendientes">0</strong> pend.</span>
                                         <span><i class="bi bi-check-circle text-success me-1"></i><strong id="quickStatIngresados">0</strong> ingr.</span>
@@ -1783,6 +1861,9 @@
                                                 <th class="text-white" style="width: 100px; background: rgba(10,179,156,0.3);">Cantidad</th>
                                                 <th class="text-white" style="min-width: 160px; background: rgba(10,179,156,0.3);">Factura</th>
                                                 <th class="text-white" style="width: 100px;">Estado</th>
+                                                <th class="text-white col-eliminar" style="width: 50px; display: none;">
+                                                    <input type="checkbox" class="form-check-input" id="checkEliminarTodos" title="Seleccionar todos">
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody class="text-center" style="font-size: 0.82rem;"></tbody>
@@ -2221,7 +2302,8 @@ const GestionCompras = (function() {
         importarCSV: '/app/importar_csv_compra/',
         agregarProductoManual: '/app/agregar_producto_manual/',
         guardarRecepcion: '/app/guardar_recepcion/',
-        recepcionarCompra: '/app/compra/recepcionar/'
+        recepcionarCompra: '/app/compra/recepcionar/',
+        eliminarProductoCompra: '/app/eliminar_producto_compra/'
     };
     // Centralizar AJAX POST
     function ajaxPost(url, data, success, error) {
@@ -2296,9 +2378,9 @@ const GestionCompras = (function() {
     // Cargar año actual por defecto
     $(document).ready(function() {
         $('#anioSeleccionado').val(anioActual);
-        
-        // Cargar automáticamente las compras del año actual
-        cargarComprasPorAnio(anioActual, 1, '');
+
+        // Cargar automáticamente las compras del año actual (respeta ?buscar= de URL)
+        cargarComprasPorAnio(anioActual, 1, currentSearchCompras || '');
 
         // Cargar DTEs disponibles y atributos al abrir el modal de producto manual
         $('#modalProductoManual').on('show.bs.modal', function(e) {
@@ -2543,9 +2625,55 @@ const GestionCompras = (function() {
         $('#searchRecepcion').val('');
         $('#modalRecepcionProductos').modal('show');
         $('#tablaRecepcionProductos tbody').empty();
-        
+
         cargarDatosRecepcion(compraId, 1, '');
+        cargarDtesParaRecepcion(compraId);
     });
+
+    function cargarDtesParaRecepcion(compraId) {
+        // Obtener proveedor de la compra desde la fila de la tabla
+        const $fila = $(`.gestionar-compra[data-id="${compraId}"]`).closest('tr');
+        const proveedor = $fila.find('td').eq(1).text().trim();
+        if (!proveedor) {
+            $('#panelDtesRecepcion').hide();
+            return;
+        }
+
+        $.ajax({
+            url: '/app/cargarDteCompra/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ buscar: proveedor, page: 1 }),
+            success: function(res) {
+                const dtes = res.dtes || [];
+                if (dtes.length === 0) {
+                    $('#panelDtesRecepcion').hide();
+                    return;
+                }
+                $('#dtesRecepcionCount').text(dtes.length);
+                const total = dtes.reduce((s, d) => s + (parseFloat(d.monto_con_iva) || 0), 0);
+                $('#dtesRecepcionTotal').text('$' + Math.round(total).toLocaleString('es-CL'));
+
+                const tbody = $('#tbodyDtesRecepcion');
+                tbody.empty();
+                dtes.forEach(d => {
+                    const estadoBadge = d.estado === 'RECHAZADO' ? 'danger' : (d.estado_pago === 'Pagado' ? 'success' : 'warning');
+                    tbody.append(`<tr>
+                        <td>${d.numero_documento || '-'}</td>
+                        <td><span class="badge bg-light text-dark">${d.tipo || '-'}</span></td>
+                        <td class="text-end">$${Math.round(d.monto_con_iva || 0).toLocaleString('es-CL')}</td>
+                        <td><span class="badge bg-${estadoBadge}" style="font-size:.65rem;">${d.estado || '-'}</span></td>
+                        <td><span class="badge bg-${d.estado_pago === 'Pagado' ? 'success' : 'secondary'}" style="font-size:.65rem;">${d.estado_pago || 'Pendiente'}</span></td>
+                    </tr>`);
+                });
+                $('#panelDtesRecepcion').show();
+            },
+            error: function() {
+                $('#panelDtesRecepcion').hide();
+            }
+        });
+    }
 
     function cargarDatosRecepcion(compraId, page, search) {
         $('#recepcionLoader').show();
@@ -2619,6 +2747,11 @@ const GestionCompras = (function() {
                 setTimeout(() => {
                     restaurarDatosTemporales();
                     recalcularTotalesRecepcion();
+                    if (modoEliminarActivo) {
+                        $('.col-eliminar').show();
+                        $('#checkEliminarTodos').prop('checked', false);
+                        actualizarContadorSeleccionados();
+                    }
                 }, 100);
             },
             error: function (xhr) {
@@ -2653,9 +2786,10 @@ const GestionCompras = (function() {
             
             // Generar datalist de facturas para el producto
             const datalistIdProducto = `facturas-producto-${grupoId}`;
-            const facturaOptions = (producto.tallas[0]?.facturas || []).map(f => 
-                `<option value="${f.numero}" data-id="${f.id}"></option>`
-            ).join('');
+            const facturaOptions = (producto.tallas[0]?.facturas || []).map(f => {
+                const label = `#${f.numero}${f.tipo ? ' - ' + f.tipo : ''}${f.monto ? ' - $' + Math.round(f.monto).toLocaleString('es-CL') : ''}`;
+                return `<option value="${f.numero}" data-id="${f.id}" label="${label}">${label}</option>`;
+            }).join('');
             
             // Fila principal del producto agrupado
             const filaGrupo = `
@@ -2701,6 +2835,15 @@ const GestionCompras = (function() {
                 : '<span class="badge bg-secondary" style="font-size:0.65rem">Pend.</span>')
         }
     </td>
+    <td class="col-eliminar" style="display: none;">
+        ${recepcionadoTotal > 0
+            ? '<i class="bi bi-lock-fill text-muted" title="Tiene recepciones"></i>'
+            : `<input type="checkbox" class="form-check-input check-eliminar-producto"
+                    data-ids='${JSON.stringify(producto.compra_producto_ids || [])}' 
+                    data-nombre="${(producto.nombre || '').replace(/"/g, '&quot;')}"
+                    data-stock="${stockTotal}">`
+        }
+    </td>
 </tr>`;
             tbody.append(filaGrupo);
             
@@ -2710,9 +2853,10 @@ const GestionCompras = (function() {
                 const tallaIds = talla.compra_producto_talla_ids || [talla.compra_producto_talla_id];
                 const tallaIdsStr = JSON.stringify(tallaIds);
                 const datalistId = `facturas-list-${tallaIds[0]}`;
-                const facturaOptions = (talla.facturas || []).map(f => 
-                    `<option value="${f.numero}" data-id="${f.id}"></option>`
-                ).join('');
+                const facturaOptions = (talla.facturas || []).map(f => {
+                    const label = `#${f.numero}${f.tipo ? ' - ' + f.tipo : ''}${f.monto ? ' - $' + Math.round(f.monto).toLocaleString('es-CL') : ''}`;
+                    return `<option value="${f.numero}" data-id="${f.id}" label="${label}">${label}</option>`;
+                }).join('');
                 
                 // Determinar valor de factura a mostrar
                 let selectedFacturaValue = '';
@@ -2779,13 +2923,15 @@ const GestionCompras = (function() {
                 : '<span class="badge bg-secondary" style="font-size:0.6rem"><i class="bi bi-dash"></i></span>')
         }
     </td>
+    <td class="col-eliminar" style="display: none;"></td>
 </tr>`;
                 tbody.append(filaTalla);
             });
         });
         
         // Manejar click en filas de grupo para expandir/colapsar
-        $('.producto-grupo').off('click').on('click', function() {
+        $('.producto-grupo').off('click').on('click', function(e) {
+            if ($(e.target).is('.check-eliminar-producto, .form-check-input')) return;
             const grupoId = $(this).data('grupo');
             const icon = $(this).find('.expand-icon');
             const tallasRows = $(`.talla-detalle[data-grupo="${grupoId}"]`);
@@ -2880,9 +3026,10 @@ const GestionCompras = (function() {
             const tallaIds = item.compra_producto_talla_ids || [item.compra_producto_talla_id];
             const tallaIdsStr = JSON.stringify(tallaIds);
             const datalistId = `facturas-list-${tallaIds[0] || ''}`;
-            const facturaOptions = (item.facturas || []).map(f => 
-                `<option value="${f.numero}" data-id="${f.id}"></option>`
-            ).join('');
+            const facturaOptions = (item.facturas || []).map(f => {
+                const label = `#${f.numero}${f.tipo ? ' - ' + f.tipo : ''}${f.monto ? ' - $' + Math.round(f.monto).toLocaleString('es-CL') : ''}`;
+                return `<option value="${f.numero}" data-id="${f.id}" label="${label}">${label}</option>`;
+            }).join('');
             
             // Calcular pendiente
             const pendiente = (item.stock || 0) - (item.recepcionado || 0);
@@ -2977,6 +3124,15 @@ const GestionCompras = (function() {
                      }
                    </div>`
                 : '<span class="badge bg-secondary"><i class="bi bi-dash"></i></span>')
+        }
+    </td>
+    <td class="col-eliminar" style="display: none;">
+        ${tieneRecepcion
+            ? '<i class="bi bi-lock-fill text-muted" title="Tiene recepciones"></i>'
+            : `<input type="checkbox" class="form-check-input check-eliminar-producto"
+                    data-ids='${JSON.stringify(item.compra_producto_ids || [])}' 
+                    data-nombre="${(item.nombre || '').replace(/"/g, '&quot;')}"
+                    data-stock="${item.stock}">`
         }
     </td>
 </tr>`;
@@ -3197,6 +3353,123 @@ const GestionCompras = (function() {
                 
                 GestionCompras.showSuccess('Datos limpiados correctamente');
             }
+        });
+    });
+
+    // Toggle modo eliminar productos
+    let modoEliminarActivo = false;
+
+    function actualizarContadorSeleccionados() {
+        const total = $('.check-eliminar-producto:checked').length;
+        $('#contadorSeleccionados').text(total);
+        if (modoEliminarActivo) {
+            $('#btnEliminarSeleccionados').toggle(total > 0);
+        }
+    }
+
+    function desactivarModoEliminar() {
+        modoEliminarActivo = false;
+        $('#btnToggleEliminar').removeClass('btn-danger').addClass('btn-outline-danger');
+        $('.col-eliminar').hide();
+        $('#btnEliminarSeleccionados').hide();
+        $('#checkEliminarTodos').prop('checked', false);
+    }
+
+    $('#btnToggleEliminar').on('click', function() {
+        modoEliminarActivo = !modoEliminarActivo;
+        const $btn = $(this);
+        if (modoEliminarActivo) {
+            $btn.removeClass('btn-outline-danger').addClass('btn-danger');
+            $('.col-eliminar').show();
+            actualizarContadorSeleccionados();
+        } else {
+            desactivarModoEliminar();
+        }
+    });
+
+    // Select all / deselect all
+    $(document).on('change', '#checkEliminarTodos', function() {
+        const checked = $(this).is(':checked');
+        $('.check-eliminar-producto').prop('checked', checked);
+        actualizarContadorSeleccionados();
+    });
+
+    // Actualizar contador al marcar/desmarcar individual
+    $(document).on('change', '.check-eliminar-producto', function() {
+        const totalCheckboxes = $('.check-eliminar-producto').length;
+        const totalChecked = $('.check-eliminar-producto:checked').length;
+        $('#checkEliminarTodos').prop('checked', totalChecked === totalCheckboxes && totalCheckboxes > 0);
+        actualizarContadorSeleccionados();
+    });
+
+    // Al cerrar el modal, desactivar modo eliminar
+    $('#modalRecepcionProductos').on('hidden.bs.modal', function() {
+        desactivarModoEliminar();
+    });
+
+    // Eliminar seleccionados masivamente
+    $('#btnEliminarSeleccionados').on('click', function() {
+        const $checks = $('.check-eliminar-producto:checked');
+        if ($checks.length === 0) return;
+
+        // Recopilar todos los IDs y nombres
+        let allIds = [];
+        let nombres = [];
+        let totalStock = 0;
+
+        $checks.each(function() {
+            const ids = $(this).data('ids') || [];
+            allIds = allIds.concat(ids);
+            nombres.push($(this).data('nombre') || '?');
+            totalStock += parseInt($(this).data('stock')) || 0;
+        });
+
+        const uniqueIds = [...new Set(allIds)];
+        const listaHtml = nombres.length <= 5
+            ? nombres.map(n => `<li>${n}</li>`).join('')
+            : nombres.slice(0, 5).map(n => `<li>${n}</li>`).join('') + `<li class="text-muted">...y ${nombres.length - 5} más</li>`;
+
+        Swal.fire({
+            title: `¿Eliminar ${$checks.length} producto(s)?`,
+            html: `<div class="text-start">
+                <ul class="mb-2" style="font-size:0.9rem">${listaHtml}</ul>
+                <p class="text-muted mb-0"><i class="bi bi-box me-1"></i>${totalStock} unidad(es) pendientes serán removidas.</p>
+            </div>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: `<i class="bi bi-trash3 me-1"></i>Sí, eliminar ${$checks.length}`,
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+
+            const $btnMasivo = $('#btnEliminarSeleccionados');
+            $btnMasivo.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Eliminando...');
+
+            const deletePromises = uniqueIds.map(id =>
+                $.ajax({
+                    url: GestionCompras.urls.eliminarProductoCompra,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ compra_producto_id: id }),
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                })
+            );
+
+            Promise.allSettled(deletePromises).then(results => {
+                const exitosos = results.filter(r => r.status === 'fulfilled').length;
+                const fallidos = results.filter(r => r.status === 'rejected').length;
+
+                if (exitosos > 0) {
+                    GestionCompras.showSuccess(`${exitosos} producto(s) eliminado(s)${fallidos > 0 ? `, ${fallidos} no se pudieron eliminar` : ''}`);
+                } else {
+                    GestionCompras.showError('No se pudo eliminar ningún producto');
+                }
+
+                $btnMasivo.prop('disabled', false).html('<i class="bi bi-trash3-fill me-1"></i>Eliminar (<span id="contadorSeleccionados">0</span>)');
+                cargarDatosRecepcion($('#globalIDCompraRecepcion').val(), currentPage, currentSearch);
+            });
         });
     });
     
@@ -4233,11 +4506,18 @@ function resetCSVUpload() {
                         console.log(`✅ Compras cargadas en ${loadTime}s - ${response.compras.length} de ${response.pagination.total_count} compras encontradas`);
                         
                         response.compras.forEach(function (compra) {
-                            const estadoBadge = compra.unidades == 0
-                                ? '<span class="badge bg-danger ms-1">Falta Compra</span>'
-                                : (compra.recepcionado >= compra.unidades
-                                    ? '<span class="badge bg-success ms-1">Completado</span>'
-                                    : '<span class="badge bg-warning text-dark ms-1">Pendiente</span>');
+                            let estadoBadge;
+                            if (compra.unidades == 0) {
+                                estadoBadge = '<span class="badge bg-danger ms-1">Falta Compra</span>';
+                            } else if (compra.recepcionado >= compra.unidades && (compra.pendientes_crear || 0) > 0) {
+                                estadoBadge = `<a href="/app/verGestionProducto/" class="badge text-white ms-1 text-decoration-none" style="background:#0ab39c;" title="${compra.pendientes_crear} producto(s) por crear en sistema"><i class="bi bi-archive me-1"></i>Por crear (${compra.pendientes_crear})</a>`;
+                            } else if (compra.recepcionado >= compra.unidades) {
+                                estadoBadge = '<span class="badge bg-success ms-1">Completado</span>';
+                            } else if (compra.recepcionado > 0 && (compra.pendientes_crear || 0) > 0) {
+                                estadoBadge = `<a href="/app/verGestionProducto/" class="badge bg-info text-white ms-1 text-decoration-none" title="${compra.pendientes_crear} recepcionado(s) por crear"><i class="bi bi-archive me-1"></i>Por crear (${compra.pendientes_crear})</a>`;
+                            } else {
+                                estadoBadge = '<span class="badge bg-warning text-dark ms-1">Pendiente</span>';
+                            }
                             const diasBadge = `<span class="badge ${compra.dias_temporada > 30 ? 'bg-success' : (compra.dias_temporada > 0 ? 'bg-warning text-dark' : 'bg-danger')}">${compra.dias_temporada > 0 ? compra.dias_temporada + ' días' : 'Finalizada'}</span>`;
                             const fila = `
 <tr>
@@ -4271,6 +4551,9 @@ function resetCSVUpload() {
             </a>
             ${compra.recepcionado > 0 ? `<a class="btn btn-soft-warning editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}" title="Editar Recepciones">
                 <i class="bi bi-pencil-square"></i>
+            </a>` : ''}
+            ${compra.recepcionado > 0 ? `<a class="btn btn-soft-teal" href="/app/verGestionProducto/" title="Crear Productos Recepcionados" style="color:#0ab39c;border-color:#0ab39c;">
+                <i class="bi bi-archive"></i>
             </a>` : ''}
             ${PUEDE_ELIMINAR_COMPRA ? `<a class="btn btn-soft-danger eliminar-compra" href="#" data-id="${compra.id}" title="Eliminar">
                 <i class="bi bi-trash"></i>
@@ -4355,6 +4638,17 @@ function resetCSVUpload() {
         currentPageCompras = 1;
         cargarComprasPorAnio(anioSeleccionado, 1, search);
     });
+
+    // Auto-busqueda desde parametro URL (?buscar=...)
+    (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const buscarParam = urlParams.get('buscar');
+        if (buscarParam) {
+            $('#searchCompras').val(buscarParam);
+            currentSearchCompras = buscarParam;
+            // La busqueda se ejecutara cuando cargarComprasPorAnio se llame en ready
+        }
+    })();
 
     // Búsqueda al presionar Enter en tabla principal
     $('#searchCompras').on('keypress', function(e) {
@@ -4948,11 +5242,27 @@ function resetCSVUpload() {
                 success: function(data) {
                     hideGlobalLoader();
                     if (data.success) {
-                        Swal.fire('Recepción guardada', '', 'success');
                         $('#modalRecepcionProductos').modal('hide');
-                        // Recargar la tabla con el año seleccionado
                         const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
                         cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
+
+                        const totalRecepcionados = datos.length;
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Recepcion guardada',
+                            html: `<p>Se recepcionaron <strong>${totalRecepcionados}</strong> item(s) correctamente.</p>
+                                   <p class="text-muted mb-0" style="font-size:.85rem;">Los productos estan listos para ser creados en el sistema.</p>`,
+                            showCancelButton: true,
+                            confirmButtonText: '<i class="bi bi-archive me-1"></i>Ir a Crear Productos',
+                            cancelButtonText: 'Seguir en Compras',
+                            confirmButtonColor: '#0ab39c',
+                            cancelButtonColor: '#6c757d',
+                            reverseButtons: true
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = '/app/verGestionProducto/';
+                            }
+                        });
                     } else {
                         Swal.fire('Error', data.error || 'No se pudo guardar.', 'error');
                     }

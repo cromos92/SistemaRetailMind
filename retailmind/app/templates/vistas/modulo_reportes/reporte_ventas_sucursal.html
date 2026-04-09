@@ -236,11 +236,12 @@
                                                             <tr>
                                                                 <th>#</th>
                                                                 <th>Vendedor</th>
-                                                                <th>Código</th>
+                                                                <th>Codigo</th>
                                                                 <th class="text-end">Total Ventas</th>
-                                                                <th class="text-center">N° Documentos</th>
-                                                                <th class="text-end">Ticket Promedio</th>
-                                                                <th class="text-center">% Participación</th>
+                                                                <th class="text-end">Dcto</th>
+                                                                <th class="text-center">Docs</th>
+                                                                <th class="text-end">Ticket Prom.</th>
+                                                                <th class="text-center">%</th>
                                                                 <th class="text-center">Detalle</th>
                                                             </tr>
                                                         </thead>
@@ -322,13 +323,14 @@
                                                                 <th>#</th>
                                                                 <th>Sucursal</th>
                                                                 <th class="text-end">Neto</th>
+                                                                <th class="text-end">Dcto</th>
                                                                 <th class="text-end">IVA</th>
                                                                 <th class="text-end">Total Ventas</th>
-                                                                <th class="text-center">N° Documentos</th>
-                                                                <th class="text-end">Ticket Promedio</th>
-                                                                <th class="text-center">% Participación</th>
-                                                                <th class="text-center">N° Vendedores</th>
-                                                                <th class="text-center no-print">Acciones</th>
+                                                                <th class="text-center">Docs</th>
+                                                                <th class="text-end">Ticket Prom.</th>
+                                                                <th class="text-center">%</th>
+                                                                <th class="text-center">Vend.</th>
+                                                                <th class="text-center no-print"></th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -338,6 +340,7 @@
                                                             <tr>
                                                                 <td colspan="2" class="text-end">TOTALES:</td>
                                                                 <td class="text-end" id="totalNetoSucursales">$0</td>
+                                                                <td class="text-end text-danger" id="totalDctoSucursales">$0</td>
                                                                 <td class="text-end" id="totalIVASucursales">$0</td>
                                                                 <td class="text-end" id="totalVentasSucursales">$0</td>
                                                                 <td class="text-center" id="totalDocsSucursales">0</td>
@@ -385,7 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Sucursal activa de la sesión (pasada desde Django)
     const sucursalActivaId = '{{ sucursal_activa_id|default:"" }}';
     const sucursalActivaNombre = '{{ sucursal_activa_nombre|default:"" }}';
-    const esSuperuser = {{ es_superuser|yesno:"true,false" }};
+    const esSuperuser = {{ puede_ver_todas_sucursales|yesno:"true,false" }};
 
     // Cargar sucursales primero; vendedores y datos se cargan desde dentro de cargarSucursales()
     cargarSucursales();
@@ -735,7 +738,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tbody.innerHTML = '';
 
         if (!datos || datos.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos para mostrar</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No hay datos para mostrar</td></tr>';
             document.getElementById('totalVentasVendedores').textContent = '$0';
             document.getElementById('totalDocsVendedores').textContent = '0';
             document.getElementById('promedioVendedores').textContent = '$0';
@@ -744,21 +747,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
         datos.forEach((vendedor, index) => {
             const ticketPromedio = vendedor.documentos > 0 ? vendedor.ventas / vendedor.documentos : 0;
+            const dcto = vendedor.descuentos || 0;
             const row = `
                 <tr>
                     <td>${index + 1}</td>
                     <td><strong>${vendedor.nombre}</strong></td>
                     <td>${vendedor.codigo || '-'}</td>
-                    <td class="text-end">$${formatearNumero(vendedor.ventas)}</td>
+                    <td class="text-end fw-semibold">$${formatearNumero(vendedor.ventas)}</td>
+                    <td class="text-end ${dcto > 0 ? 'text-danger' : ''}">${dcto > 0 ? '-$' + formatearNumero(dcto) : '-'}</td>
                     <td class="text-center">${vendedor.documentos}</td>
                     <td class="text-end">$${formatearNumero(ticketPromedio)}</td>
                     <td class="text-center">
                         <span class="badge bg-primary">${vendedor.participacion.toFixed(1)}%</span>
                     </td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-outline-info" 
+                        <button class="btn btn-sm btn-outline-info"
                                 onclick="verDocumentosVendedor(${vendedor.id}, '${vendedor.nombre.replace(/'/g, "\\'")}')"
-                                title="Ver documentos del período">
+                                title="Ver documentos">
                             <i class="ri-file-list-2-line"></i>
                         </button>
                     </td>
@@ -779,8 +784,9 @@ document.addEventListener('DOMContentLoaded', function() {
         tbody.innerHTML = '';
 
         if (!datos || datos.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No hay datos para mostrar</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No hay datos para mostrar</td></tr>';
             document.getElementById('totalNetoSucursales').textContent = '$0';
+            document.getElementById('totalDctoSucursales').textContent = '$0';
             document.getElementById('totalIVASucursales').textContent = '$0';
             document.getElementById('totalVentasSucursales').textContent = '$0';
             document.getElementById('totalDocsSucursales').textContent = '0';
@@ -790,18 +796,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const totalVentas = datos.reduce((sum, s) => sum + s.ventas, 0);
         const totalNeto = datos.reduce((sum, s) => sum + s.neto, 0);
+        const totalDcto = datos.reduce((sum, s) => sum + (s.descuentos || 0), 0);
         const totalIVA = datos.reduce((sum, s) => sum + s.iva, 0);
         const totalDocs = datos.reduce((sum, s) => sum + s.documentos, 0);
 
         datos.forEach((sucursal, index) => {
             const ticketPromedio = sucursal.documentos > 0 ? sucursal.ventas / sucursal.documentos : 0;
+            const dcto = sucursal.descuentos || 0;
             const row = `
                 <tr>
                     <td>${index + 1}</td>
                     <td><strong>${sucursal.nombre}</strong></td>
                     <td class="text-end">$${formatearNumero(sucursal.neto)}</td>
+                    <td class="text-end ${dcto > 0 ? 'text-danger' : ''}">${dcto > 0 ? '-$' + formatearNumero(dcto) : '-'}</td>
                     <td class="text-end">$${formatearNumero(sucursal.iva)}</td>
-                    <td class="text-end">$${formatearNumero(sucursal.ventas)}</td>
+                    <td class="text-end fw-semibold">$${formatearNumero(sucursal.ventas)}</td>
                     <td class="text-center">${sucursal.documentos}</td>
                     <td class="text-end">$${formatearNumero(ticketPromedio)}</td>
                     <td class="text-center">
@@ -820,6 +829,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const promedioTicket = totalDocs > 0 ? totalVentas / totalDocs : 0;
         document.getElementById('totalNetoSucursales').textContent = '$' + formatearNumero(totalNeto);
+        document.getElementById('totalDctoSucursales').textContent = totalDcto > 0 ? '-$' + formatearNumero(totalDcto) : '$0';
         document.getElementById('totalIVASucursales').textContent = '$' + formatearNumero(totalIVA);
         document.getElementById('totalVentasSucursales').textContent = '$' + formatearNumero(totalVentas);
         document.getElementById('totalDocsSucursales').textContent = totalDocs;

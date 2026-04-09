@@ -4,9 +4,48 @@ Permite verificar permisos y filtrar menús en templates
 """
 from django import template
 from django.db.models import Q
-from app.models import PermisoRol, OpcionMenu, ModuloSistema
+from app.models import PermisoRol, PermisoUsuario, OpcionMenu, ModuloSistema
 
 register = template.Library()
+
+
+def _opciones_ids_usuario(user, modulo=None, padre=None):
+    """
+    Helper: retorna IDs de OpcionMenu que un usuario puede ver,
+    considerando PermisoUsuario overrides + PermisoRol.
+    """
+    filtro_opcion = Q(activo=True)
+    if modulo:
+        filtro_opcion &= Q(modulo=modulo)
+    if padre is not None:
+        filtro_opcion &= Q(padre=padre)
+    elif padre is None and modulo:
+        filtro_opcion &= Q(padre__isnull=True)
+
+    todas_opciones = OpcionMenu.objects.filter(filtro_opcion)
+
+    # IDs con puede_ver=True por rol
+    ids_por_rol = set(PermisoRol.objects.filter(
+        rol=user.rol,
+        puede_ver=True,
+        opcion_menu__in=todas_opciones
+    ).values_list('opcion_menu_id', flat=True))
+
+    # IDs con override usuario: puede_ver=True (agregar)
+    ids_usuario_grant = set(PermisoUsuario.objects.filter(
+        usuario=user,
+        puede_ver=True,
+        opcion_menu__in=todas_opciones
+    ).values_list('opcion_menu_id', flat=True))
+
+    # IDs con override usuario: puede_ver=False (quitar)
+    ids_usuario_deny = set(PermisoUsuario.objects.filter(
+        usuario=user,
+        puede_ver=False,
+        opcion_menu__in=todas_opciones
+    ).values_list('opcion_menu_id', flat=True))
+
+    return (ids_por_rol | ids_usuario_grant) - ids_usuario_deny
 
 
 @register.simple_tag(takes_context=True)
@@ -141,27 +180,12 @@ def mostrar_modulo(context, modulo_codigo):
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
         
         if user and user.is_authenticated:
-            # ✅ Superusuarios ven TODAS las opciones
-            if user.is_superuser:
-                opciones = modulo.opciones.filter(
-                    activo=True,
-                    padre__isnull=True
-                )
-            else:
-                # Obtener opciones que el usuario puede ver según su rol
-                opciones_permitidas = PermisoRol.objects.filter(
-                    rol=user.rol,
-                    puede_ver=True,
-                    opcion_menu__modulo=modulo,
-                    opcion_menu__activo=True,
-                    opcion_menu__padre__isnull=True
-                ).values_list('opcion_menu_id', flat=True)
-                
-                opciones = modulo.opciones.filter(
-                    id__in=opciones_permitidas,
-                    activo=True,
-                    padre__isnull=True
-                )
+            opciones_ids = _opciones_ids_usuario(user, modulo=modulo, padre=None)
+            opciones = modulo.opciones.filter(
+                id__in=opciones_ids,
+                activo=True,
+                padre__isnull=True
+            )
         else:
             opciones = []
         
@@ -197,18 +221,13 @@ def obtener_modulos_usuario(context):
     if not user or not user.is_authenticated:
         return []
     
-    # ✅ Superusuarios ven TODOS los módulos
-    if user.is_superuser:
-        return ModuloSistema.objects.filter(activo=True).order_by('orden')
-    
-    # Obtener módulos que tienen al menos una opción visible para el usuario según su rol
-    modulos_ids = PermisoRol.objects.filter(
-        rol=user.rol,
-        puede_ver=True,
-        opcion_menu__activo=True,
-        opcion_menu__modulo__activo=True
-    ).values_list('opcion_menu__modulo_id', flat=True).distinct()
-    
+    # Obtener módulos con al menos una opción visible (rol + usuario overrides)
+    opciones_ids = _opciones_ids_usuario(user)
+    modulos_ids = OpcionMenu.objects.filter(
+        id__in=opciones_ids,
+        modulo__activo=True
+    ).values_list('modulo_id', flat=True).distinct()
+
     return ModuloSistema.objects.filter(
         id__in=modulos_ids,
         activo=True
@@ -232,21 +251,7 @@ def obtener_opciones_modulo(context, modulo_codigo):
     try:
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
         
-        # ✅ Superusuarios ven TODAS las opciones
-        if user.is_superuser:
-            return OpcionMenu.objects.filter(
-                modulo=modulo,
-                activo=True
-            ).order_by('orden')
-        
-        # Filtrar por permisos del rol del usuario
-        opciones_ids = PermisoRol.objects.filter(
-            rol=user.rol,
-            puede_ver=True,
-            opcion_menu__modulo=modulo,
-            opcion_menu__activo=True
-        ).values_list('opcion_menu_id', flat=True)
-        
+        opciones_ids = _opciones_ids_usuario(user, modulo=modulo)
         return OpcionMenu.objects.filter(
             id__in=opciones_ids,
             activo=True
@@ -321,21 +326,7 @@ def obtener_subopciones(context, opcion_codigo):
     try:
         opcion_padre = OpcionMenu.objects.get(codigo=opcion_codigo, activo=True)
         
-        # ✅ Superusuarios ven TODAS las subopciones
-        if user.is_superuser:
-            return OpcionMenu.objects.filter(
-                padre=opcion_padre,
-                activo=True
-            ).order_by('orden')
-        
-        # Filtrar subopciones por permisos del rol
-        subopciones_ids = PermisoRol.objects.filter(
-            rol=user.rol,
-            puede_ver=True,
-            opcion_menu__padre=opcion_padre,
-            opcion_menu__activo=True
-        ).values_list('opcion_menu_id', flat=True)
-        
+        subopciones_ids = _opciones_ids_usuario(user, padre=opcion_padre)
         return OpcionMenu.objects.filter(
             id__in=subopciones_ids,
             activo=True
@@ -362,20 +353,7 @@ def contar_opciones_disponibles(user, modulo_codigo):
     try:
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
         
-        # ✅ Superusuarios tienen acceso a todas las opciones
-        if user.is_superuser:
-            return OpcionMenu.objects.filter(
-                modulo=modulo,
-                activo=True
-            ).count()
-        
-        # Contar por permisos del rol
-        return PermisoRol.objects.filter(
-            rol=user.rol,
-            puede_ver=True,
-            opcion_menu__modulo=modulo,
-            opcion_menu__activo=True
-        ).count()
+        return len(_opciones_ids_usuario(user, modulo=modulo))
     except ModuloSistema.DoesNotExist:
         return 0
 

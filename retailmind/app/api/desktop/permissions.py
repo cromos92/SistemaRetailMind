@@ -137,10 +137,6 @@ class CanSyncTickets(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         
-        # Superuser siempre puede
-        if request.user.is_superuser:
-            return True
-        
         # Verificar rol
         user_rol = getattr(request.user, 'rol', None)
         if user_rol and user_rol in self.ROLES_PERMITIDOS:
@@ -163,9 +159,6 @@ class CanManageDevices(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        
-        if request.user.is_superuser:
-            return True
         
         user_rol = getattr(request.user, 'rol', None)
         return user_rol in self.ROLES_PERMITIDOS

@@ -189,9 +189,11 @@
     .status-en_proceso { background: rgba(0, 102, 255, 0.15); color: var(--nexo-primary-dark); border: 1px solid rgba(0, 102, 255, 0.3); }
     .status-ejecutado { background: rgba(0, 102, 255, 0.2); color: var(--nexo-primary-dark); border: 1px solid rgba(0, 102, 255, 0.35); }
     .status-ejecutado_cobro_pendiente { background: rgba(255, 176, 32, 0.2); color: #B87C00; border: 1px solid rgba(255, 176, 32, 0.4); }
+    .status-ejecutado_devol_pendiente { background: rgba(0, 172, 230, 0.2); color: #0077A8; border: 1px solid rgba(0, 172, 230, 0.4); }
     .status-completado { background: rgba(0, 212, 170, 0.15); color: #00A080; border: 1px solid rgba(0, 212, 170, 0.3); }
     .status-rechazado { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); border: 1px solid rgba(255, 77, 77, 0.3); }
     .status-cancelado { background: rgba(138, 138, 154, 0.15); color: var(--nexo-gray-700); border: 1px solid rgba(138, 138, 154, 0.3); }
+    .status-revertido { background: rgba(138, 138, 154, 0.15); color: var(--nexo-gray-700); border: 1px solid rgba(138, 138, 154, 0.3); }
     
     /* ========== TIPO BADGES NEXO ========== */
     .tipo-badge {
@@ -1566,9 +1568,91 @@
         font-weight: 700;
         line-height: 1.1;
     }
-    #paso-resumen .tabla-productos-resumen {
-        max-height: 150px;
-        overflow-y: auto;
+    /* Resumen de productos involucrados */
+    .resumen-flujo {
+        display: flex;
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+    .resumen-flujo-col {
+        flex: 1;
+        min-width: 0;
+    }
+    .resumen-flujo-arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        color: var(--nexo-gray-400);
+        flex-shrink: 0;
+        width: 30px;
+    }
+    .resumen-prod-card {
+        border-radius: var(--nexo-radius-md);
+        padding: 0.5rem 0.65rem;
+        height: 100%;
+    }
+    .resumen-prod-card.devuelve {
+        background: #fff5f5;
+        border: 1px solid #fecaca;
+    }
+    .resumen-prod-card.recibe {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+    }
+    .resumen-prod-card .rp-header {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.35rem;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .resumen-prod-card.devuelve .rp-header { color: #dc2626; }
+    .resumen-prod-card.recibe .rp-header { color: #16a34a; }
+    .resumen-prod-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.3rem 0;
+        border-bottom: 1px dashed rgba(0,0,0,0.06);
+        font-size: 0.8rem;
+    }
+    .resumen-prod-item:last-child { border-bottom: none; }
+    .resumen-prod-item .rpi-nombre {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 600;
+    }
+    .resumen-prod-item .rpi-talla {
+        font-size: 0.68rem;
+        background: var(--nexo-gray-200);
+        padding: 1px 5px;
+        border-radius: 3px;
+        color: var(--nexo-gray-600);
+        flex-shrink: 0;
+    }
+    .resumen-prod-item .rpi-cant {
+        font-size: 0.72rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    .resumen-prod-item .rpi-precio {
+        font-weight: 700;
+        flex-shrink: 0;
+        min-width: 60px;
+        text-align: right;
+    }
+    .resumen-prod-card.devuelve .rpi-precio { color: #dc2626; }
+    .resumen-prod-card.recibe .rpi-precio { color: #16a34a; }
+    .resumen-prod-item .rpi-dcto {
+        font-size: 0.62rem;
+        color: #dc2626;
     }
 
     /* ========== MEDIA QUERY POS 15" ========== */
@@ -1610,6 +1694,11 @@
         #paso-resumen .resumen-monto-card .monto-valor {
             font-size: 1.15rem;
         }
+        .resumen-prod-card { padding: 0.35rem 0.5rem; }
+        .resumen-prod-item { font-size: 0.75rem; padding: 0.2rem 0; }
+        .resumen-prod-card .rp-header { font-size: 0.6rem; margin-bottom: 0.2rem; }
+        .resumen-flujo { gap: 0.35rem; }
+        .resumen-flujo-arrow { font-size: 1rem; width: 22px; }
     }
 </style>
 
@@ -1837,8 +1926,20 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab-pendientes" data-estado="SOLICITADO" onclick="filtrarPorEstado('SOLICITADO')" type="button">
-                    <i class="ri-time-line me-1"></i> Pendientes
+                    <i class="ri-time-line me-1"></i> Solicitados
                     <span class="badge bg-warning text-dark ms-1" id="badge-tab-pendientes">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-aprobados" data-estado="APROBADO" onclick="filtrarPorEstado('APROBADO')" type="button">
+                    <i class="ri-check-line me-1"></i> Aprobados
+                    <span class="badge bg-info ms-1" id="badge-tab-aprobados">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-por-cobrar" data-estado="EJECUTADO_COBRO_PENDIENTE" onclick="filtrarPorEstado('EJECUTADO_COBRO_PENDIENTE')" type="button">
+                    <i class="ri-money-dollar-circle-line me-1"></i> Por Cobrar/Devolver
+                    <span class="badge bg-warning text-dark ms-1" id="badge-tab-por-cobrar">0</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -2354,33 +2455,28 @@
                     
                     <div class="row g-2 mb-3">
                         <div class="col-md-4">
-                            <div class="resumen-monto-card">
-                                <span class="monto-label">Monto Original (devuelve)</span>
+                            <div class="resumen-monto-card" style="border-left: 3px solid #dc2626;">
+                                <span class="monto-label"><i class="ri-arrow-go-back-line" style="color:#dc2626;"></i> Valor lo que devuelve</span>
                                 <span class="monto-valor text-dark" id="resumen-monto-original">$0</span>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="resumen-monto-card">
-                                <span class="monto-label">Monto Nuevo (recibe)</span>
+                            <div class="resumen-monto-card" style="border-left: 3px solid #16a34a;">
+                                <span class="monto-label"><i class="ri-shopping-bag-3-line" style="color:#16a34a;"></i> Valor lo que recibe</span>
                                 <span class="monto-valor text-primary" id="resumen-monto-nuevo">$0</span>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="resumen-monto-card" id="card-diferencia">
-                                <span class="monto-label" id="label-diferencia">Diferencia</span>
+                                <span class="monto-label"><i class="ri-exchange-dollar-line"></i> Diferencia a pagar</span>
                                 <span class="monto-valor" id="resumen-diferencia">$0</span>
                                 <span class="badge bg-secondary d-block mt-1" id="resumen-diferencia-texto" style="font-size:0.72rem;">Sin diferencia</span>
                             </div>
                         </div>
                     </div>
 
-                    <div>
-                        <h6 class="small fw-bold mb-2"><i class="ri-list-check me-1 text-primary"></i>Productos Involucrados:</h6>
-                        <div class="tabla-productos-resumen border rounded">
-                            <div id="resumen-productos" class="p-2">
-                                <!-- Resumen de productos -->
-                            </div>
-                        </div>
+                    <div id="resumen-productos-container">
+                        <!-- Populated by generarResumenProductos() -->
                     </div>
                 </div>
 
@@ -2482,82 +2578,82 @@
                 <!-- BARRA DE PROGRESO ESTADO -->
                 <div style="background:#161b27; border-bottom:1px solid #2a3045; padding:6px 12px;">
                     <div class="d-flex align-items-center gap-2">
-                        <span class="text-secondary" style="font-size:0.7rem;white-space:nowrap;">ESTADO:</span>
+                        <span style="font-size:0.7rem;white-space:nowrap; color:#8b9dc3;">ESTADO:</span>
                         <div class="progress flex-grow-1" style="height:14px; background:#2a3045;">
                             <div class="progress-bar" id="detalle-progreso" role="progressbar" style="width:33%; font-size:0.65rem; line-height:14px;">
                                 <span id="detalle-progreso-texto">Pendiente</span>
                             </div>
                         </div>
-                        <span class="text-secondary" style="font-size:0.65rem;">📝 Solicitado</span>
-                        <span class="text-secondary" style="font-size:0.65rem;">→</span>
-                        <span class="text-secondary" style="font-size:0.65rem;">✅ Aprobado</span>
-                        <span class="text-secondary" style="font-size:0.65rem;">→</span>
-                        <span class="text-secondary" style="font-size:0.65rem;">🎉 Completo</span>
+                        <span style="font-size:0.65rem; color:#c0c8d8;">📝 Solicitado</span>
+                        <span style="font-size:0.65rem; color:#5a6a80;">→</span>
+                        <span style="font-size:0.65rem; color:#c0c8d8;">✅ Aprobado</span>
+                        <span style="font-size:0.65rem; color:#5a6a80;">→</span>
+                        <span style="font-size:0.65rem; color:#c0c8d8;">🎉 Completo</span>
                     </div>
                 </div>
 
                 <!-- FILA INFO COMPACTA -->
                 <div class="d-flex flex-wrap gap-0" style="background:#161b27; border-bottom:1px solid #2a3045; font-size:0.78rem;">
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:150px;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Operación</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Operación</div>
                         <div class="text-white fw-bold" style="font-family:monospace;" id="detalle-numero-operacion">-</div>
                     </div>
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:120px;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Tipo</div>
-                        <div id="detalle-tipo-operacion">-</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Tipo</div>
+                        <div id="detalle-tipo-operacion" style="color:#e0e0e0;">-</div>
                     </div>
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:140px;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Motivo</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Motivo</div>
                         <div><span class="badge bg-warning text-dark" id="detalle-motivo">-</span></div>
                     </div>
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:140px;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Doc. Original</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Doc. Original</div>
                         <div class="text-white fw-semibold" id="detalle-doc-original">-</div>
                     </div>
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:130px;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Vendedor</div>
-                        <div class="text-light" id="detalle-vendedor">-</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Vendedor</div>
+                        <div style="color:#e0e0e0;" id="detalle-vendedor">-</div>
                     </div>
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:110px;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Fecha Doc</div>
-                        <div class="text-light" id="detalle-doc-fecha">-</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Fecha Doc</div>
+                        <div style="color:#e0e0e0;" id="detalle-doc-fecha">-</div>
                     </div>
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:110px;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Plazo</div>
-                        <div class="text-light" id="detalle-plazo">-</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Plazo</div>
+                        <div style="color:#e0e0e0;" id="detalle-plazo">-</div>
                     </div>
                     <!-- RESUMEN FINANCIERO INLINE -->
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:110px; background:#1a0a0a;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Sale Caja</div>
-                        <div class="text-danger fw-bold" id="detalle-monto-original">-$0</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Sale Caja</div>
+                        <div class="fw-bold" style="color:#ff8a8a;" id="detalle-monto-original">-$0</div>
                     </div>
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:110px; background:#0a1a0a;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Entra Caja</div>
-                        <div class="text-success fw-bold" id="detalle-monto-nuevo">+$0</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Entra Caja</div>
+                        <div class="fw-bold" style="color:#86efac;" id="detalle-monto-nuevo">+$0</div>
                     </div>
                     <div class="px-3 py-2" style="min-width:120px; background:#161b27;">
-                        <div class="text-secondary" style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px;">Diferencia</div>
-                        <div class="fw-bold fs-6" id="detalle-diferencia">$0</div>
-                        <div style="font-size:0.62rem;" id="detalle-texto-diferencia" class="text-secondary">-</div>
+                        <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:.5px; color:#7b8ba3;">Diferencia</div>
+                        <div class="fw-bold fs-6" id="detalle-diferencia" style="color:#fff;">$0</div>
+                        <div style="font-size:0.62rem; color:#c0c8d8;" id="detalle-texto-diferencia">-</div>
                     </div>
                 </div>
 
-                <!-- SPLIT PANEL: SALE BODEGA | ENTRA BODEGA -->
+                <!-- SPLIT PANEL: ENTRA BODEGA (devuelve) | SALE BODEGA (recibe) -->
                 <div class="row g-0" style="min-height:260px;">
 
-                    <!-- ======== SALE DE BODEGA ======== -->
+                    <!-- ======== ENTRA A BODEGA (cliente devuelve) ======== -->
                     <div class="col-md-6" style="border-right:3px solid #2a3045;">
-                        <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#2d0a0a; border-bottom:2px solid #dc3545;">
-                            <div class="rounded d-flex align-items-center justify-content-center" style="width:26px;height:26px;background:#dc3545;">
-                                <i class="ri-arrow-up-circle-fill text-white" style="font-size:1rem;"></i>
+                        <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#0a2d0a; border-bottom:2px solid #198754;">
+                            <div class="rounded d-flex align-items-center justify-content-center" style="width:26px;height:26px;background:#198754;">
+                                <i class="ri-arrow-down-circle-fill text-white" style="font-size:1rem;"></i>
                             </div>
-                            <span class="text-white fw-bold" style="font-size:0.85rem; letter-spacing:.5px;">SALE DE BODEGA</span>
-                            <span class="text-secondary ms-1" style="font-size:0.72rem;">← cliente devuelve</span>
-                            <span class="ms-auto text-danger fw-bold" id="detalle-total-salientes" style="font-family:monospace;">$0</span>
+                            <span class="text-white fw-bold" style="font-size:0.85rem; letter-spacing:.5px;">ENTRA A BODEGA</span>
+                            <span style="font-size:0.72rem; color:#86efac;">← cliente devuelve</span>
+                            <span class="ms-auto fw-bold" id="detalle-total-salientes" style="font-family:monospace; color:#86efac;">$0</span>
                         </div>
                         <div class="p-0">
                             <table class="table table-sm mb-0" style="font-size:0.78rem;">
-                                <thead style="background:#1f0808; color:#ff8a8a; border-bottom:1px solid #3d1515;">
+                                <thead style="background:#082008; color:#86efac; border-bottom:1px solid #153d15;">
                                     <tr>
                                         <th class="px-2 py-1">SKU</th>
                                         <th class="py-1">Artículo / Talla</th>
@@ -2567,26 +2663,26 @@
                                         <th class="py-1">Cond.</th>
                                     </tr>
                                 </thead>
-                                <tbody id="detalle-productos-salientes" style="background:#0f1117; color:#e0e0e0;">
+                                <tbody id="detalle-productos-salientes" style="background:#0f1117; color:#f0f0f0;">
                                     <!-- Dinámico -->
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <!-- ======== ENTRA A BODEGA ======== -->
+                    <!-- ======== SALE DE BODEGA (cliente recibe) ======== -->
                     <div class="col-md-6">
-                        <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#0a2d0a; border-bottom:2px solid #198754;">
-                            <div class="rounded d-flex align-items-center justify-content-center" style="width:26px;height:26px;background:#198754;">
-                                <i class="ri-arrow-down-circle-fill text-white" style="font-size:1rem;"></i>
+                        <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#2d0a0a; border-bottom:2px solid #dc3545;">
+                            <div class="rounded d-flex align-items-center justify-content-center" style="width:26px;height:26px;background:#dc3545;">
+                                <i class="ri-arrow-up-circle-fill text-white" style="font-size:1rem;"></i>
                             </div>
-                            <span class="text-white fw-bold" style="font-size:0.85rem; letter-spacing:.5px;">ENTRA A BODEGA</span>
-                            <span class="text-secondary ms-1" style="font-size:0.72rem;">→ cliente recibe</span>
-                            <span class="ms-auto text-success fw-bold" id="detalle-total-entrantes" style="font-family:monospace;">$0</span>
+                            <span class="text-white fw-bold" style="font-size:0.85rem; letter-spacing:.5px;">SALE DE BODEGA</span>
+                            <span style="font-size:0.72rem; color:#fca5a5;">→ cliente recibe</span>
+                            <span class="ms-auto fw-bold" id="detalle-total-entrantes" style="font-family:monospace; color:#fca5a5;">$0</span>
                         </div>
                         <div class="p-0">
                             <table class="table table-sm mb-0" style="font-size:0.78rem;">
-                                <thead style="background:#082008; color:#6fcf6f; border-bottom:1px solid #153d15;">
+                                <thead style="background:#1f0808; color:#fca5a5; border-bottom:1px solid #3d1515;">
                                     <tr>
                                         <th class="px-2 py-1">SKU</th>
                                         <th class="py-1">Artículo / Talla</th>
@@ -2596,7 +2692,7 @@
                                         <th class="text-end px-2 py-1">Subtotal</th>
                                     </tr>
                                 </thead>
-                                <tbody id="detalle-productos-entrantes" style="background:#0f1117; color:#e0e0e0;">
+                                <tbody id="detalle-productos-entrantes" style="background:#0f1117; color:#f0f0f0;">
                                     <!-- Dinámico -->
                                 </tbody>
                             </table>
@@ -2636,405 +2732,165 @@
 <div class="modal fade" id="modalAprobarCambio" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white py-2">
-                <h5 class="modal-title mb-0">
-                    <i class="ri-check-line"></i> Aprobar Cambio/Devolución y Generar Ticket
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="modal-header bg-success text-white py-2 px-3">
+                <h6 class="modal-title mb-0 d-flex align-items-center gap-2">
+                    <i class="ri-check-line"></i> Aprobar y Ejecutar Cambio/Devolución
+                    <span class="badge bg-white text-success ms-1" id="aprobar-num-operacion" style="font-size:.75rem;">-</span>
+                </h6>
+                <div class="d-flex align-items-center gap-2 me-3">
+                    <span class="text-white-50 small">Cliente:</span>
+                    <span class="fw-semibold small" id="aprobar-cliente">-</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-3">
-                <!-- Resumen Compacto -->
-                <div class="row g-2 mb-3">
-                    <div class="col-md-3">
-                        <div class="border rounded p-2 bg-light">
-                            <small class="text-muted d-block">Operación #</small>
-                            <strong id="aprobar-num-operacion">-</strong>
+            <div class="modal-body p-2">
+                <!-- Resumen Montos - Barra compacta -->
+                <div class="d-flex align-items-center gap-2 px-2 py-1 mb-2 rounded" style="background:#f8f9fa; border:1px solid #e9ecef;">
+                    <div class="d-flex align-items-center gap-1 flex-fill">
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1" style="font-size:.8rem;">
+                            <i class="ri-arrow-left-line"></i> Devueltos <strong id="aprobar-total-devuelto">$0</strong>
+                        </span>
+                        <i class="ri-arrow-right-s-line text-muted"></i>
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1" style="font-size:.8rem;">
+                            <i class="ri-arrow-right-line"></i> Nuevos <strong id="aprobar-total-nuevo">$0</strong>
+                        </span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 border-start ps-2">
+                        <span class="text-muted small">Diferencia:</span>
+                        <strong class="fs-6" id="aprobar-diferencia" style="min-width:60px; text-align:right;">$0</strong>
+                    </div>
+                </div>
+
+                <!-- Productos: lado a lado -->
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <div class="rounded overflow-hidden border border-danger border-opacity-50">
+                            <div class="bg-danger text-white py-1 px-2 d-flex align-items-center" style="font-size:.78rem;">
+                                <i class="ri-arrow-left-line me-1"></i><strong>Devueltos</strong>
+                            </div>
+                            <div class="table-responsive" style="max-height:185px; overflow-y:auto;">
+                                <table class="table table-sm mb-0" style="font-size:.78rem;">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th class="py-1">Artículo</th>
+                                            <th class="py-1" width="50">Talla</th>
+                                            <th class="py-1 text-center" width="35">Qty</th>
+                                            <th class="py-1 text-end" width="70">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="aprobar-productos-devueltos">
+                                        <tr><td colspan="4" class="text-center text-muted py-2"><i class="ri-loader-4-line"></i> Cargando...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="border rounded p-2 bg-light">
-                            <small class="text-muted d-block">Cliente</small>
-                            <strong id="aprobar-cliente" class="small">-</strong>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="border rounded p-2 text-center" style="background: #fee;">
-                            <small class="text-muted d-block">Devueltos</small>
-                            <strong class="text-danger" id="aprobar-total-devuelto">$0</strong>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="border rounded p-2 text-center" style="background: #efe;">
-                            <small class="text-muted d-block">Nuevos</small>
-                            <strong class="text-success" id="aprobar-total-nuevo">$0</strong>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="border rounded p-2 text-center bg-warning bg-opacity-10">
-                            <small class="text-muted d-block">Diferencia</small>
-                            <strong class="fs-5" id="aprobar-diferencia">$0</strong>
+                    <div class="col-md-6">
+                        <div class="rounded overflow-hidden border border-success border-opacity-50">
+                            <div class="bg-success text-white py-1 px-2 d-flex align-items-center" style="font-size:.78rem;">
+                                <i class="ri-arrow-right-line me-1"></i><strong>Nuevos</strong>
+                            </div>
+                            <div class="table-responsive" style="max-height:185px; overflow-y:auto;">
+                                <table class="table table-sm mb-0" style="font-size:.78rem;">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th class="py-1">Artículo</th>
+                                            <th class="py-1" width="50">Talla</th>
+                                            <th class="py-1 text-center" width="35">Qty</th>
+                                            <th class="py-1 text-end" width="70">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="aprobar-productos-nuevos">
+                                        <tr><td colspan="4" class="text-center text-muted py-2"><i class="ri-loader-4-line"></i> Cargando...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Tabs para Productos, Autorizaciones y Pago -->
-                <ul class="nav nav-tabs" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-productos-aprobar">
-                            <i class="ri-box-3-line"></i> Productos
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-autorizaciones-aprobar">
-                            <i class="ri-shield-keyhole-line"></i> Autorizaciones <span class="badge bg-danger">Requerido</span>
-                        </button>
-                    </li>
-                    <li class="nav-item" id="tab-pago-diferencia-li" style="display: none;">
-                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-pago-diferencia-aprobar">
-                            <i class="ri-money-dollar-circle-line"></i> Pago Diferencia <span class="badge bg-warning text-dark" id="badge-pago-monto">$0</span>
-                        </button>
-                    </li>
-                </ul>
-
-                <div class="tab-content border border-top-0 p-3">
-                    <!-- TAB: Productos -->
-                    <div class="tab-pane fade show active" id="tab-productos-aprobar">
-                        <div class="row g-3">
-                            <!-- Productos Devueltos -->
-                            <div class="col-md-6">
-                                <div class="card border-danger mb-0">
-                                    <div class="card-header bg-danger text-white py-1 px-2">
-                                        <small><i class="ri-arrow-left-line"></i> <strong>Productos Devueltos</strong></small>
-                                    </div>
-                                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                                        <table class="table table-sm table-hover mb-0">
-                                            <thead class="table-light sticky-top">
-                                                <tr style="font-size: 0.85rem;">
-                                                    <th>Artículo</th>
-                                                    <th width="60">Talla</th>
-                                                    <th width="50" class="text-center">Cant.</th>
-                                                    <th width="80" class="text-end">Subtotal</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="aprobar-productos-devueltos" style="font-size: 0.85rem;">
-                                                <tr>
-                                                    <td colspan="4" class="text-center text-muted py-2">
-                                                        <i class="ri-loader-4-line"></i> Cargando...
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
+                <!-- Autorizaciones: compactas en fila -->
+                <div class="rounded border p-2 mb-2" style="background:#fafafa;">
+                    <div class="d-flex align-items-center gap-1 mb-2" style="font-size:.78rem;">
+                        <i class="ri-shield-keyhole-line text-danger"></i>
+                        <strong>Autorizaciones</strong>
+                        <span class="badge bg-danger" style="font-size:.65rem;">Requerido</span>
+                    </div>
+                    <div class="row g-2">
+                        <!-- Vendedor -->
+                        <div class="col-md-6">
+                            <div class="d-flex flex-column gap-1">
+                                <div id="vendedor-prefilled" style="display:none;" class="d-flex align-items-center gap-1 px-2 py-1 rounded bg-info bg-opacity-10 border border-info border-opacity-25" >
+                                    <i class="ri-user-star-line text-info" style="font-size:.8rem;"></i>
+                                    <small class="text-truncate">Vendedor original: <strong id="vendedor-original-nombre">-</strong></small>
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-auto" id="btn-cambiar-vendedor" onclick="habilitarCambioVendedor()" style="font-size:.7rem; white-space:nowrap;">
+                                        <i class="ri-edit-line"></i> Cambiar
+                                    </button>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text py-0 px-2" style="font-size:.75rem;"><i class="ri-user-line"></i></span>
+                                    <input type="text" class="form-control form-control-sm" id="input-codigo-vendedor-aprobacion" placeholder="Código vendedor" autocomplete="off" required style="font-size:.8rem;">
+                                    <button class="btn btn-primary btn-sm px-2" onclick="validarCodigoVendedorAprobacion()" style="font-size:.75rem;">
+                                        <i class="ri-checkbox-line"></i> Validar
+                                    </button>
+                                </div>
+                                <div id="info-vendedor-validado" style="display:none;" class="d-flex align-items-center gap-1 px-2 py-1 rounded bg-success bg-opacity-10 border border-success border-opacity-25">
+                                    <i class="ri-checkbox-circle-line text-success" style="font-size:.8rem;"></i>
+                                    <small class="text-success"><strong>Validado:</strong> <span id="nombre-vendedor-validado">-</span></small>
                                 </div>
                             </div>
-
-                            <!-- Productos Nuevos -->
-                            <div class="col-md-6">
-                                <div class="card border-success mb-0">
-                                    <div class="card-header bg-success text-white py-1 px-2">
-                                        <small><i class="ri-arrow-right-line"></i> <strong>Productos Nuevos</strong></small>
-                                    </div>
-                                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                                        <table class="table table-sm table-hover mb-0">
-                                            <thead class="table-light sticky-top">
-                                                <tr style="font-size: 0.85rem;">
-                                                    <th>Artículo</th>
-                                                    <th width="60">Talla</th>
-                                                    <th width="50" class="text-center">Cant.</th>
-                                                    <th width="80" class="text-end">Subtotal</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="aprobar-productos-nuevos" style="font-size: 0.85rem;">
-                                                <tr>
-                                                    <td colspan="4" class="text-center text-muted py-2">
-                                                        <i class="ri-loader-4-line"></i> Cargando...
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
+                        </div>
+                        <!-- Supervisor -->
+                        <div class="col-md-6">
+                            <div class="d-flex flex-column gap-1">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text py-0 px-2 bg-danger bg-opacity-10 text-danger border-danger border-opacity-25" style="font-size:.75rem;"><i class="ri-shield-keyhole-line"></i></span>
+                                    <input type="text" class="form-control form-control-sm fw-bold text-center" id="input-codigo-autorizacion-aprobacion" placeholder="Código autorización" autocomplete="off" maxlength="6" style="letter-spacing:2px; font-size:.8rem;" required>
+                                    <button class="btn btn-danger btn-sm px-2" onclick="validarCodigoAutorizacionAprobacion()" style="font-size:.75rem;">
+                                        <i class="ri-checkbox-line"></i> Validar
+                                    </button>
+                                </div>
+                                <div id="info-autorizacion-validada" style="display:none;" class="d-flex align-items-center gap-1 px-2 py-1 rounded bg-success bg-opacity-10 border border-success border-opacity-25">
+                                    <i class="ri-shield-check-line text-success" style="font-size:.8rem;"></i>
+                                    <small class="text-success"><strong>Válido hasta:</strong> <span id="autorizacion-valido-hasta">--:--</span></small>
+                                </div>
+                                <div id="info-autorizacion-error" style="display:none;" class="d-flex align-items-center gap-1 px-2 py-1 rounded bg-danger bg-opacity-10 border border-danger border-opacity-25">
+                                    <i class="ri-close-circle-line text-danger" style="font-size:.8rem;"></i>
+                                    <small class="text-danger"><strong id="autorizacion-error-mensaje">Código inválido</strong></small>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- TAB: Autorizaciones -->
-                    <div class="tab-pane fade" id="tab-autorizaciones-aprobar">
-                        <div class="row g-3">
-                            <!-- Código de Vendedor -->
-                            <div class="col-md-6">
-                                <div class="card border-warning mb-0">
-                                    <div class="card-header bg-warning text-dark py-2 px-3">
-                                        <strong><i class="ri-user-line"></i> Vendedor</strong>
-                                    </div>
-                                    <div class="card-body p-3">
-                                        <label class="form-label fw-bold small mb-1">Código de Vendedor <span class="text-danger">*</span></label>
-                                        <div class="input-group">
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   id="input-codigo-vendedor-aprobacion" 
-                                                   placeholder="Código"
-                                                   autocomplete="off"
-                                                   required>
-                                            <button class="btn btn-primary btn-sm" onclick="validarCodigoVendedorAprobacion()">
-                                                <i class="ri-checkbox-line"></i> Validar
-                                            </button>
-                                        </div>
-                                        <div id="info-vendedor-validado" style="display: none;" class="alert alert-success p-2 mt-2 mb-0">
-                                            <small><i class="ri-checkbox-circle-line"></i> <strong>Validado:</strong> <span id="nombre-vendedor-validado">-</span></small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Código de Autorización -->
-                            <div class="col-md-6">
-                                <div class="card border-danger mb-0" style="border-width: 2px;">
-                                    <div class="card-header bg-danger text-white py-2 px-3">
-                                        <strong><i class="ri-shield-keyhole-line"></i> Autorización Supervisor</strong>
-                                    </div>
-                                    <div class="card-body p-3">
-                                        <label class="form-label fw-bold small mb-1">Código de Autorización <span class="text-danger">*</span></label>
-                                        <div class="input-group">
-                                            <input type="text" 
-                                                   class="form-control fw-bold text-center" 
-                                                   id="input-codigo-autorizacion-aprobacion" 
-                                                   placeholder="000000"
-                                                   autocomplete="off"
-                                                   maxlength="6"
-                                                   style="letter-spacing: 3px;"
-                                                   required>
-                                            <button class="btn btn-danger btn-sm" onclick="validarCodigoAutorizacionAprobacion()">
-                                                <i class="ri-checkbox-line"></i> Validar
-                                            </button>
-                                        </div>
-                                        <small class="text-muted d-block mt-1">
-                                            <i class="ri-information-line"></i> Solicitar código al Administrador o Jefe de Local
-                                        </small>
-                                        <div id="info-autorizacion-validada" style="display: none;" class="alert alert-success p-2 mt-2 mb-0">
-                                            <small><i class="ri-shield-check-line"></i> <strong>Válido hasta:</strong> <span id="autorizacion-valido-hasta">--:--</span></small>
-                                        </div>
-                                        <div id="info-autorizacion-error" style="display: none;" class="alert alert-danger p-2 mt-2 mb-0">
-                                            <small><i class="ri-close-circle-line"></i> <strong id="autorizacion-error-mensaje">Código inválido</strong></small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Observaciones -->
-                        <div class="mt-3">
-                            <label class="form-label fw-bold small mb-1">
-                                <i class="ri-message-3-line"></i> Observaciones <span class="text-muted">(Opcional)</span>
-                            </label>
-                            <textarea class="form-control" id="textarea-observaciones-aprobacion" rows="2" placeholder="Observaciones..."></textarea>
-                        </div>
+                <!-- Observaciones -->
+                <div class="mb-2">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text py-0 px-2" style="font-size:.75rem;"><i class="ri-message-3-line"></i> Obs.</span>
+                        <input type="text" class="form-control form-control-sm" id="textarea-observaciones-aprobacion" placeholder="Observaciones (opcional)" style="font-size:.8rem;">
                     </div>
+                </div>
 
-                    <!-- TAB: Pago de Diferencia (solo visible cuando hay diferencia positiva) -->
-                    <div class="tab-pane fade" id="tab-pago-diferencia-aprobar">
-                        <div class="alert alert-warning mb-3">
-                            <i class="ri-alert-line me-1"></i>
-                            <strong>El cliente debe pagar una diferencia de <span id="pago-diferencia-monto-display">$0</span></strong>
-                            <p class="mb-0 mt-1 small">Registre el pago ahora para completar el cambio en un solo paso.</p>
-                        </div>
-
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small">Método de Pago <span class="text-danger">*</span></label>
-                                <select class="form-select" id="select-metodo-pago-aprobacion">
-                                    <option value="">Seleccionar...</option>
-                                    <option value="EFECTIVO">Efectivo</option>
-                                    <option value="DEBITO">Tarjeta Débito</option>
-                                    <option value="CREDITO">Tarjeta Crédito</option>
-                                    <option value="TRANSFERENCIA">Transferencia</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small">Monto</label>
-                                <input type="text" class="form-control fw-bold text-end" id="input-monto-pago-aprobacion" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small">Referencia / Voucher</label>
-                                <input type="text" class="form-control" id="input-referencia-pago-aprobacion" placeholder="N° voucher o referencia">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small">N° Autorización</label>
-                                <input type="text" class="form-control" id="input-autorizacion-pago-aprobacion" placeholder="N° autorización">
-                            </div>
-                        </div>
-
-                        <div class="form-check mt-3">
-                            <input class="form-check-input" type="checkbox" id="check-cobrar-despues">
-                            <label class="form-check-label small text-muted" for="check-cobrar-despues">
-                                No cobrar ahora (el ticket quedará pendiente de pago y se podrá revertir)
-                            </label>
-                        </div>
-                    </div>
+                <!-- Info: diferencia se cobra en POS -->
+                <div id="info-diferencia-pos" class="d-flex align-items-center gap-1 rounded px-2 py-1 mb-0" style="display:none; background:#e7f3ff; border:1px solid #b6d4fe; font-size:.8rem;">
+                    <i class="ri-information-line text-primary"></i>
+                    <span>Diferencia de <strong id="pago-diferencia-monto-display">$0</strong> — cobro desde <strong>POS Dashboard</strong> (ticket pendiente de pago)</span>
                 </div>
                 
                 <input type="hidden" id="vendedor-id-validado">
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <div class="modal-footer py-2 px-3">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
                     <i class="ri-close-line"></i> Cancelar
                 </button>
-                <button type="button" class="btn btn-success btn-lg" id="btn-confirmar-aprobacion" onclick="confirmarAprobacionYGenerarTicket()" disabled>
-                    <i class="ri-check-line"></i> Aprobar y Generar Ticket
+                <button type="button" class="btn btn-success" id="btn-confirmar-aprobacion" onclick="confirmarAprobacionYGenerarTicket()" disabled>
+                    <i class="ri-check-line"></i> Aprobar y Ejecutar
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal: Completar Cambio -->
-<div class="modal fade" id="modalCompletarCambio" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">
-                    <i class="ri-check-double-line"></i> Completar Cambio/Devolución
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-warning">
-                    <i class="ri-alert-line"></i> 
-                    <strong>¡Atención!</strong> Esta acción completará el cambio/devolución y realizará los movimientos de inventario correspondientes.
-                </div>
-                
-                <!-- Resumen del cambio -->
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h6 class="card-title"><i class="ri-file-list-line"></i> Resumen del Cambio</h6>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <small class="text-muted">Monto Original</small>
-                                <div class="h5" id="resumen-monto-original-modal">$0</div>
-                            </div>
-                            <div class="col-md-4">
-                                <small class="text-muted">Monto Nuevos Productos</small>
-                                <div class="h5" id="resumen-monto-nuevo-modal">$0</div>
-                            </div>
-                            <div class="col-md-4">
-                                <small class="text-muted">Diferencia</small>
-                                <div class="h5" id="resumen-diferencia-modal">$0</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Sección: Pago de Diferencia (Cliente debe pagar) -->
-                <div id="seccion-pago-diferencia" style="display: none;">
-                    <div class="card border-danger">
-                        <div class="card-header bg-danger text-white">
-                            <h6 class="mb-0"><i class="ri-money-dollar-circle-line"></i> Cliente Debe Pagar Diferencia</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="alert alert-danger">
-                                <i class="ri-information-line"></i> El cliente debe pagar <strong id="texto-monto-diferencia">$0</strong> de diferencia
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">
-                                        <i class="ri-bank-card-line"></i> Método de Pago *
-                                    </label>
-                                    <select class="form-control form-control-lg" id="select-metodo-pago-diferencia" required>
-                                        {% for value, display in metodo_pago_choices %}
-                                        <option value="{{ value }}">{{ display }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Monto a Pagar</label>
-                                    <input type="number" class="form-control form-control-lg fw-bold text-danger" id="input-monto-diferencia" readonly>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Referencia/Voucher</label>
-                                    <input type="text" class="form-control" id="input-referencia-pago" placeholder="Ej: Voucher 1234">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Nº Autorización</label>
-                                    <input type="text" class="form-control" id="input-autorizacion-pago" placeholder="Ej: AUTH-5678">
-                                </div>
-                            </div>
-                            <hr>
-                            <p class="mb-0"><strong>Al completar se generará:</strong></p>
-                            <ul class="mb-0">
-                                <li>✓ Ticket con productos y diferencia a pagar</li>
-                                <li>✓ Código de barras para inventario</li>
-                                <li>✓ Registro del pago recibido</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Sección: Devolución de Dinero (A favor del cliente) -->
-                <div id="seccion-devolucion-dinero" style="display: none;">
-                    <div class="card border-success">
-                        <div class="card-header bg-success text-white">
-                            <h6 class="mb-0"><i class="ri-refund-2-line"></i> Devolución de Dinero al Cliente</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="alert alert-success">
-                                <i class="ri-information-line"></i> Se debe devolver <strong id="texto-monto-devolucion">$0</strong> al cliente
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">
-                                        <i class="ri-refund-line"></i> Método de Devolución *
-                                    </label>
-                                    <select class="form-control form-control-lg" id="select-metodo-devolucion" required>
-                                        <option value="DEVOLUCION_EFECTIVO">💵 Efectivo</option>
-                                        <option value="DEVOLUCION_TARJETA">💳 Devolución a Tarjeta</option>
-                                        <option value="CREDITO_TIENDA">🎁 Crédito en Tienda</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Monto a Devolver</label>
-                                    <input type="number" class="form-control form-control-lg fw-bold text-success" id="input-monto-devolucion" readonly>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Sección: Sin diferencia -->
-                <div id="seccion-sin-diferencia" style="display: none;">
-                    <div class="card border-info">
-                        <div class="card-header bg-info text-white">
-                            <h6 class="mb-0"><i class="ri-arrow-left-right-line"></i> Cambio Exacto</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="alert alert-info mb-0">
-                                <i class="ri-information-line"></i> 
-                                <strong>Cambio sin diferencia de precio</strong>
-                                <p class="mb-0 mt-2">Los productos tienen el mismo valor. Se realizará solo el intercambio de mercadería.</p>
-                            </div>
-                            <hr>
-                            <p class="mb-0"><strong>Al completar se generará:</strong></p>
-                            <ul class="mb-0">
-                                <li>✓ Ticket con detalle de productos intercambiados</li>
-                                <li>✓ Código de barras para cada producto</li>
-                                <li>✓ Actualización automática de inventario</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="ri-close-line"></i> Cancelar
-                </button>
-                <button type="button" class="btn btn-success btn-lg" onclick="completarCambioDevolucion()">
-                    <i class="ri-check-double-line"></i> Completar Cambio
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Modal: Ver Detalle del Documento -->
 <div class="modal fade" id="modalDetalleDocumento" tabindex="-1">
@@ -3740,10 +3596,14 @@ function actualizarTablaCambios(cambios) {
 
     const todos = cambios.length;
     const pendientes = cambios.filter(c => c.estado === 'SOLICITADO').length;
+    const aprobados = cambios.filter(c => c.estado === 'APROBADO').length;
+    const porCobrar = cambios.filter(c => ['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'].includes(c.estado)).length;
     const completados = cambios.filter(c => c.estado === 'COMPLETADO').length;
     const cancelados = cambios.filter(c => ['CANCELADO', 'RECHAZADO', 'REVERTIDO'].includes(c.estado)).length;
     $('#badge-tab-todos').text(todos);
     $('#badge-tab-pendientes').text(pendientes);
+    $('#badge-tab-aprobados').text(aprobados);
+    $('#badge-tab-por-cobrar').text(porCobrar);
     $('#badge-tab-completados').text(completados);
     $('#badge-tab-cancelados').text(cancelados);
 
@@ -3765,10 +3625,12 @@ function actualizarTablaCambios(cambios) {
         const tipoBadge = `<span class="tipo-badge tipo-${tipoCss}">${cambio.tipo_operacion_display}</span>`;
 
         const rowClasses = [];
-        if (cambio.ticket_pendiente_pago) {
-            rowClasses.push('cambio-ticket-pendiente');
-        } else if (cambio.cobro_pendiente) {
+        if (cambio.estado === 'EJECUTADO_COBRO_PENDIENTE' || cambio.cobro_pendiente) {
             rowClasses.push('cambio-cobro-pendiente');
+        } else if (cambio.estado === 'EJECUTADO_DEVOL_PENDIENTE' || cambio.devolucion_pendiente) {
+            rowClasses.push('cambio-cobro-pendiente');
+        } else if (cambio.ticket_pendiente_pago) {
+            rowClasses.push('cambio-ticket-pendiente');
         } else if (cambio.estado === 'APROBADO') {
             rowClasses.push('cambio-aprobado');
         } else if (cambio.estado === 'REVERTIDO') {
@@ -3856,7 +3718,12 @@ function generarBotonesAccion(cambio) {
 
     if (cambio.estado === 'SOLICITADO') {
         botones.push(`
-            <button class="btn btn-success btn-sm px-2" onclick='aprobarCambio(${cambio.id})' title='Aprobar y ejecutar cambio'>
+            <button class="btn btn-success btn-sm px-2" onclick='aprobarCambioConDatos(${cambio.id}, "${cambio.tipo_operacion}", ${cambio.monto_original}, ${cambio.monto_nuevo})' title='Aprobar y ejecutar en un solo paso'>
+                <i class="ri-check-double-line me-1"></i>Aprobar y Ejecutar
+            </button>
+        `);
+        botones.push(`
+            <button class="btn btn-outline-success btn-sm px-2" onclick='soloAprobarCambio(${cambio.id})' title='Solo aprobar (sin ejecutar)'>
                 <i class="ri-check-line me-1"></i>Aprobar
             </button>
         `);
@@ -3869,7 +3736,12 @@ function generarBotonesAccion(cambio) {
     
     if (cambio.estado === 'APROBADO') {
         botones.push(`
-            <button class="btn btn-primary btn-sm px-2" onclick='ejecutarCambio(${cambio.id})' title='Ejecutar: generar tickets y movimientos de stock'>
+            <span class="badge bg-info align-self-center px-2 me-1">
+                <i class="ri-check-line"></i> Aprobado
+            </span>
+        `);
+        botones.push(`
+            <button class="btn btn-primary btn-sm px-2" onclick='aprobarCambioConDatos(${cambio.id}, "${cambio.tipo_operacion}", ${cambio.monto_original}, ${cambio.monto_nuevo})' title='Ejecutar: generar tickets y movimientos de stock'>
                 <i class="ri-play-circle-line me-1"></i>Ejecutar
             </button>
         `);
@@ -3879,74 +3751,68 @@ function generarBotonesAccion(cambio) {
             </button>
         `);
     }
-    
+
     if (cambio.estado === 'EJECUTADO_COBRO_PENDIENTE') {
         botones.push(`
-            <button class="btn btn-warning btn-sm px-2" onclick='cobrarDiferencia(${cambio.id}, ${cambio.diferencia_monto})' title='Cobrar diferencia pendiente'>
-                <i class="ri-money-dollar-circle-line me-1"></i>Cobrar $${formatearNumero(cambio.diferencia_monto)}
+            <span class="badge bg-warning text-dark align-self-center px-2">
+                <i class="ri-money-dollar-circle-line"></i> Por Cobrar
+            </span>
+        `);
+        if (cambio.ticket_nuevo && cambio.ticket_nuevo.correlativo) {
+            botones.push(`
+                <a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-warning btn-sm px-2" title='Ir al POS para cobrar'>
+                    <i class="ri-money-dollar-circle-line me-1"></i>Cobrar
+                </a>
+            `);
+        }
+        botones.push(`
+            <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='Revertir: deshace stock y cancela ticket pendiente'>
+                <i class="ri-arrow-go-back-line me-1"></i>Revertir
             </button>
         `);
     }
-    
-    if (cambio.estado === 'EJECUTADO') {
+
+    if (cambio.estado === 'EJECUTADO_DEVOL_PENDIENTE') {
         botones.push(`
-            <button class="btn btn-success btn-sm px-2" onclick='marcarCompletado(${cambio.id})' title='Marcar como completado'>
-                <i class="ri-check-double-line me-1"></i>Completar
+            <span class="badge bg-info align-self-center px-2">
+                <i class="ri-refund-line"></i> Por Devolver
+            </span>
+        `);
+        if (cambio.ticket_nuevo && cambio.ticket_nuevo.correlativo) {
+            botones.push(`
+                <a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-info btn-sm px-2" title='Ir al POS para procesar devolución'>
+                    <i class="ri-refund-line me-1"></i>Devolver
+                </a>
+            `);
+        }
+        botones.push(`
+            <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='Revertir: deshace stock y cancela ticket pendiente'>
+                <i class="ri-arrow-go-back-line me-1"></i>Revertir
             </button>
         `);
     }
     
     if (cambio.estado === 'COMPLETADO') {
-        // Mostrar estado del cambio
         botones.push(`
             <span class="badge bg-success align-self-center px-3">
                 <i class="ri-check-line"></i> Completado
             </span>
         `);
         
-        // Mostrar estado del ticket de pago si existe
-        if (cambio.ticket_nuevo && cambio.ticket_nuevo.estado) {
-            if (cambio.ticket_nuevo.estado === 'PENDIENTE') {
-                const tipoPago = cambio.ticket_nuevo.metodo_pago || '';
-                let iconoPago = 'ri-money-dollar-circle-line';
-                let textoPago = 'Pago Pendiente';
-                
-                if (tipoPago === 'PENDIENTE_COBRO') {
-                    iconoPago = 'ri-money-dollar-circle-line';
-                    textoPago = 'Por Cobrar';
-                } else if (tipoPago === 'PENDIENTE_DEVOLUCION') {
-                    iconoPago = 'ri-refund-line';
-                    textoPago = 'Por Devolver';
-                }
-                
-                botones.push(`
-                    <span class="badge bg-warning text-dark align-self-center px-2" title='Ticket ${cambio.ticket_nuevo.correlativo || ''} - Estado: ${cambio.ticket_nuevo.estado_display || ''}'>
-                        <i class="${iconoPago}"></i> ${textoPago}
-                    </span>
-                `);
-            } else if (cambio.ticket_nuevo.estado === 'PAGADO') {
-                botones.push(`
-                    <span class="badge bg-info align-self-center px-2" title='Ticket ${cambio.ticket_nuevo.correlativo || ''} pagado'>
-                        <i class="ri-checkbox-circle-line"></i> Pagado
-                    </span>
-                `);
-            }
+        if (cambio.ticket_nuevo && cambio.ticket_nuevo.estado === 'PAGADO') {
+            botones.push(`
+                <span class="badge bg-success-subtle text-success align-self-center px-2" title='Ticket ${cambio.ticket_nuevo.correlativo || ''} pagado'>
+                    <i class="ri-checkbox-circle-line"></i> Pagado
+                </span>
+            `);
         }
     }
     
-    // Botón de imprimir ticket solo si existe y está PENDIENTE de pago
+    // Imprimir ticket si existe y tiene obligación pendiente
     if (cambio.ticket_nuevo && cambio.ticket_nuevo.id && cambio.ticket_nuevo.estado === 'PENDIENTE') {
         botones.push(`
             <button class="btn btn-outline-secondary btn-sm px-2" onclick='imprimirTicketDesdeCambio(${cambio.id})' title='Imprimir ticket pendiente'>
                 <i class="ri-printer-line me-1"></i>Ticket
-            </button>
-        `);
-    }
-    
-    if (cambio.estado === 'COMPLETADO' && cambio.ticket_pendiente_pago) {
-        botones.push(`
-            <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='Revertir: deshace stock y cancela ticket pendiente'>
-                <i class="ri-arrow-go-back-line me-1"></i>Revertir
             </button>
         `);
     }
@@ -4023,7 +3889,14 @@ function actualizarEstadisticas(stats) {
     $('#stat-total').text(formatearNumero(stats.total_cambios));
     $('#stat-pendientes').text(formatearNumero(stats.cambios_pendientes));
     $('#stat-completados').text(formatearNumero(stats.cambios_completados));
-    $('#stat-diferencia').text('$' + formatearNumero(stats.total_diferencia));
+    
+    const totalPorCobrar = stats.cambios_por_cobrar || 0;
+    $('#stat-pendientes-cobro').text(formatearNumero(totalPorCobrar));
+    if (totalPorCobrar > 0) {
+        $('#stat-pendientes-cobro').addClass('text-danger').closest('.card-stats-nexo').addClass('border border-danger border-2');
+    } else {
+        $('#stat-pendientes-cobro').removeClass('text-danger').closest('.card-stats-nexo').removeClass('border border-danger border-2');
+    }
 }
 
 // ========== FILTROS ==========
@@ -5530,21 +5403,42 @@ function validarSeleccionProductos() {
 }
 
 function generarResumen() {
-    // Calcular montos
     let montoOriginal = 0;
     let montoNuevo = 0;
     
-    // Calcular monto original de productos seleccionados
+    // Recopilar productos seleccionados para el resumen visual
+    const productosDevueltos = [];
     ticketActual.productos.forEach((producto, index) => {
         if ($(`#check-producto-${index}`).is(':checked')) {
             const cantidad = parseInt($(`#cantidad-producto-${index}`).val()) || 0;
-            montoOriginal += cantidad * producto.precio_unitario;
+            const subtotal = cantidad * (producto.precio_unitario || 0);
+            montoOriginal += subtotal;
+            productosDevueltos.push({
+                nombre: producto.articulo || producto.descripcion || '-',
+                talla: producto.talla || '-',
+                cantidad: cantidad,
+                precio: producto.precio_unitario || 0,
+                subtotal: subtotal,
+                tiene_descuento: producto.tiene_descuento || false,
+                precio_lista: producto.precio_lista || 0,
+                descuento_unitario: producto.descuento_unitario || 0
+            });
         }
     });
     
-    // Calcular monto nuevo de productos de cambio
+    const productosRecibidos = [];
     productosNuevos.forEach(producto => {
-        montoNuevo += (producto.cantidad || 0) * (producto.precio_venta || 0);
+        const cantidad = producto.cantidad || 0;
+        const precio = producto.precio_venta || 0;
+        const subtotal = cantidad * precio;
+        montoNuevo += subtotal;
+        productosRecibidos.push({
+            nombre: producto.articulo || producto.nombre || '-',
+            talla: producto.talla || '-',
+            cantidad: cantidad,
+            precio: precio,
+            subtotal: subtotal
+        });
     });
     
     const diferencia = montoNuevo - montoOriginal;
@@ -5569,16 +5463,13 @@ function generarResumen() {
     } else {
         $badge.attr('class', 'badge fs-6 px-3 py-1 bg-secondary').text('Pendiente');
     }
-    const prodDev = $('.check-producto:checked').length;
-    const prodNuev = productosNuevos.length;
-    $desc.text(`Devuelve ${prodDev} prod. → Entrega ${prodNuev} prod.`);
+    $desc.text(`Devuelve ${productosDevueltos.length} prod. → Entrega ${productosRecibidos.length} prod.`);
     
     // Limpiar clases anteriores
     $('#resumen-diferencia').removeClass('diferencia-positiva diferencia-negativa diferencia-cero text-danger text-success text-secondary');
     $('#card-diferencia').removeClass('bg-danger bg-success bg-secondary bg-light');
     $('#resumen-diferencia-texto').removeClass('badge-danger badge-success badge-secondary bg-danger bg-success bg-secondary').addClass('badge');
     
-    // Aplicar estilos según la diferencia
     if (diferencia > 0) {
         $('#resumen-diferencia').addClass('diferencia-positiva text-danger');
         $('#card-diferencia').addClass('border-danger');
@@ -5590,6 +5481,98 @@ function generarResumen() {
     } else {
         $('#resumen-diferencia').addClass('diferencia-cero text-secondary');
         $('#resumen-diferencia-texto').addClass('bg-secondary text-white').text('Sin diferencia');
+    }
+    
+    // Generar resumen visual de productos
+    generarResumenProductos(productosDevueltos, productosRecibidos, montoOriginal, montoNuevo, diferencia);
+}
+
+function generarResumenProductos(devueltos, recibidos, montoOrig, montoNuev, diferencia) {
+    const $container = $('#resumen-productos-container');
+    
+    let htmlDevueltos = '';
+    devueltos.forEach(p => {
+        const dctoHtml = p.tiene_descuento
+            ? `<span class="rpi-dcto"><del>$${formatearNumero(p.precio_lista)}</del></span>` : '';
+        htmlDevueltos += `
+            <div class="resumen-prod-item">
+                <span class="rpi-nombre" title="${p.nombre}">${p.nombre}</span>
+                <span class="rpi-talla">${p.talla}</span>
+                <span class="rpi-cant">×${p.cantidad}</span>
+                <span class="rpi-precio">
+                    $${formatearNumero(p.subtotal)}
+                    ${dctoHtml}
+                </span>
+            </div>`;
+    });
+    
+    let htmlRecibidos = '';
+    recibidos.forEach(p => {
+        htmlRecibidos += `
+            <div class="resumen-prod-item">
+                <span class="rpi-nombre" title="${p.nombre}">${p.nombre}</span>
+                <span class="rpi-talla">${p.talla}</span>
+                <span class="rpi-cant">×${p.cantidad}</span>
+                <span class="rpi-precio">$${formatearNumero(p.subtotal)}</span>
+            </div>`;
+    });
+    
+    const esCambio = recibidos.length > 0;
+    
+    if (esCambio) {
+        // Cambio: mostrar dos columnas con flecha
+        let diferenciaHtml = '';
+        if (diferencia > 0) {
+            diferenciaHtml = `
+                <div class="text-center mt-2 py-1" style="background: #fef2f2; border-radius: 6px; border: 1px solid #fecaca;">
+                    <small class="fw-bold text-danger">
+                        <i class="ri-arrow-up-line"></i> Cliente paga diferencia: $${formatearNumero(diferencia)}
+                    </small>
+                </div>`;
+        } else if (diferencia === 0) {
+            diferenciaHtml = `
+                <div class="text-center mt-2 py-1" style="background: #f0f9ff; border-radius: 6px; border: 1px solid #bae6fd;">
+                    <small class="fw-bold text-primary">
+                        <i class="ri-check-line"></i> Cambio sin diferencia de precio
+                    </small>
+                </div>`;
+        }
+        
+        $container.html(`
+            <div class="resumen-flujo">
+                <div class="resumen-flujo-col">
+                    <div class="resumen-prod-card devuelve">
+                        <div class="rp-header"><i class="ri-arrow-go-back-line"></i> Cliente devuelve</div>
+                        ${htmlDevueltos}
+                        <div class="text-end mt-1" style="font-size:0.72rem; font-weight:700; color:#dc2626;">
+                            Total: $${formatearNumero(montoOrig)}
+                        </div>
+                    </div>
+                </div>
+                <div class="resumen-flujo-arrow"><i class="ri-arrow-right-line"></i></div>
+                <div class="resumen-flujo-col">
+                    <div class="resumen-prod-card recibe">
+                        <div class="rp-header"><i class="ri-shopping-bag-3-line"></i> Cliente recibe</div>
+                        ${htmlRecibidos}
+                        <div class="text-end mt-1" style="font-size:0.72rem; font-weight:700; color:#16a34a;">
+                            Total: $${formatearNumero(montoNuev)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ${diferenciaHtml}
+        `);
+    } else {
+        // Devolución: solo una columna
+        $container.html(`
+            <div class="resumen-prod-card devuelve">
+                <div class="rp-header"><i class="ri-arrow-go-back-line"></i> Cliente devuelve</div>
+                ${htmlDevueltos}
+                <div class="text-end mt-1" style="font-size:0.72rem; font-weight:700; color:#dc2626;">
+                    Total a devolver: $${formatearNumero(montoOrig)}
+                </div>
+            </div>
+        `);
     }
 }
 
@@ -5863,31 +5846,44 @@ function mostrarDetalleCambio(data) {
     // ===== HEADER Y ESTADO =====
     $('#detalle-numero-op').text(cambio.numero_operacion);
     
-    // Actualizar barra de progreso según estado
-    let progreso = 33;
+    let progreso = 25;
     let progresoTexto = 'Solicitado';
     let badgeClass = 'bg-warning';
     let badgeTexto = cambio.estado_display;
     
     if (cambio.estado === 'APROBADO') {
-        progreso = 66;
+        progreso = 50;
         progresoTexto = 'Aprobado';
+        badgeClass = 'bg-info';
+    } else if (cambio.estado === 'EJECUTADO_COBRO_PENDIENTE') {
+        progreso = 75;
+        progresoTexto = 'Por Cobrar';
+        badgeClass = 'bg-warning';
+    } else if (cambio.estado === 'EJECUTADO_DEVOL_PENDIENTE') {
+        progreso = 75;
+        progresoTexto = 'Por Devolver';
+        badgeClass = 'bg-info';
+    } else if (cambio.estado === 'EJECUTADO') {
+        progreso = 75;
+        progresoTexto = 'Ejecutado';
         badgeClass = 'bg-info';
     } else if (cambio.estado === 'COMPLETADO') {
         progreso = 100;
         progresoTexto = 'Completado';
         badgeClass = 'bg-success';
-    } else if (cambio.estado === 'CANCELADO') {
+    } else if (['CANCELADO', 'RECHAZADO', 'REVERTIDO'].includes(cambio.estado)) {
         progreso = 0;
-        progresoTexto = 'Cancelado';
+        progresoTexto = cambio.estado_display;
         badgeClass = 'bg-danger';
     }
     
-    $('#detalle-progreso').css('width', progreso + '%').removeClass('bg-warning bg-info bg-success bg-danger').addClass(
-        cambio.estado === 'SOLICITADO' ? 'bg-warning' :
-        cambio.estado === 'APROBADO' ? 'bg-info' :
-        cambio.estado === 'COMPLETADO' ? 'bg-success' : 'bg-danger'
-    );
+    let progresoBarClass = 'bg-warning';
+    if (['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'].includes(cambio.estado)) progresoBarClass = 'bg-warning';
+    else if (cambio.estado === 'APROBADO' || cambio.estado === 'EJECUTADO') progresoBarClass = 'bg-info';
+    else if (cambio.estado === 'COMPLETADO') progresoBarClass = 'bg-success';
+    else if (['CANCELADO', 'RECHAZADO', 'REVERTIDO'].includes(cambio.estado)) progresoBarClass = 'bg-danger';
+
+    $('#detalle-progreso').css('width', progreso + '%').removeClass('bg-warning bg-info bg-success bg-danger').addClass(progresoBarClass);
     $('#detalle-progreso-texto').text(progresoTexto);
     $('#detalle-badge-estado').text(badgeTexto).removeClass('bg-warning bg-info bg-success bg-danger bg-secondary').addClass(badgeClass);
     
@@ -5950,7 +5946,7 @@ function mostrarDetalleCambio(data) {
         $('#detalle-texto-diferencia').html(`<i class="ri-check-line"></i> Sin diferencia - Cambio directo`);
     }
     
-    // ===== PRODUCTOS SALIENTES (Devueltos) =====
+    // ===== ENTRA A BODEGA (productos que el cliente devuelve) =====
     const tbodySalientes = $('#detalle-productos-salientes');
     tbodySalientes.empty();
     
@@ -5961,11 +5957,11 @@ function mostrarDetalleCambio(data) {
         
         tbodySalientes.append(`
             <tr>
-                <td style="font-family:monospace;font-size:0.72rem;color:#aaa;">${producto.producto_original.sku}</td>
-                <td><span style="color:#f0f0f0;font-weight:600;">${producto.producto_original.articulo}</span> <span class="badge bg-secondary ms-1" style="font-size:0.65rem;">${producto.producto_original.talla || '-'}</span></td>
-                <td class="text-center"><span class="badge bg-danger">${producto.cantidad_cambio}</span></td>
-                <td class="text-end" style="color:#ccc;">$${formatearNumero(producto.precio_original_unitario)}</td>
-                <td class="text-end fw-bold" style="color:#ff8a8a;">$${formatearNumero(subtotal)}</td>
+                <td style="font-family:monospace;font-size:0.72rem;color:#bbb;">${producto.producto_original.sku}</td>
+                <td><span style="color:#fff;font-weight:600;">${producto.producto_original.articulo}</span> <span class="badge ms-1" style="font-size:0.65rem; background:#2d5a2d; color:#86efac;">${producto.producto_original.talla || '-'}</span></td>
+                <td class="text-center"><span class="badge" style="background:#198754;">${producto.cantidad_cambio}</span></td>
+                <td class="text-end" style="color:#e0e0e0;">$${formatearNumero(producto.precio_original_unitario)}</td>
+                <td class="text-end fw-bold" style="color:#86efac;">$${formatearNumero(subtotal)}</td>
                 <td>
                     <span class="badge bg-${producto.apto_para_venta ? 'success' : 'warning'}" style="font-size:0.65rem;">
                         ${producto.condicion_producto_display}
@@ -5977,7 +5973,7 @@ function mostrarDetalleCambio(data) {
     
     $('#detalle-total-salientes').text('$' + formatearNumero(totalSalientes));
     
-    // ===== PRODUCTOS ENTRANTES (Nuevos) =====
+    // ===== SALE DE BODEGA (productos que el cliente recibe) =====
     const tbodyEntrantes = $('#detalle-productos-entrantes');
     tbodyEntrantes.empty();
     
@@ -5989,12 +5985,12 @@ function mostrarDetalleCambio(data) {
             
             tbodyEntrantes.append(`
                 <tr>
-                    <td style="font-family:monospace;font-size:0.72rem;color:#aaa;">${producto.producto_nuevo.sku}</td>
-                    <td><span style="color:#f0f0f0;font-weight:600;">${producto.producto_nuevo.articulo}</span> <span class="badge bg-info ms-1" style="font-size:0.65rem;">${producto.producto_nuevo.talla || '-'}</span></td>
-                    <td style="color:#ccc;font-size:0.72rem;">${producto.producto_nuevo.marca || '-'}</td>
-                    <td class="text-center"><span class="badge bg-success">${producto.cantidad_nueva}</span></td>
-                    <td class="text-end" style="color:#ccc;">$${formatearNumero(producto.producto_nuevo.precio_unitario)}</td>
-                    <td class="text-end fw-bold" style="color:#6fcf6f;">$${formatearNumero(subtotal)}</td>
+                    <td style="font-family:monospace;font-size:0.72rem;color:#bbb;">${producto.producto_nuevo.sku}</td>
+                    <td><span style="color:#fff;font-weight:600;">${producto.producto_nuevo.articulo}</span> <span class="badge ms-1" style="font-size:0.65rem; background:#5a2d2d; color:#fca5a5;">${producto.producto_nuevo.talla || '-'}</span></td>
+                    <td style="color:#e0e0e0;font-size:0.72rem;">${producto.producto_nuevo.marca || '-'}</td>
+                    <td class="text-center"><span class="badge" style="background:#dc3545;">${producto.cantidad_nueva}</span></td>
+                    <td class="text-end" style="color:#e0e0e0;">$${formatearNumero(producto.producto_nuevo.precio_unitario)}</td>
+                    <td class="text-end fw-bold" style="color:#fca5a5;">$${formatearNumero(subtotal)}</td>
                 </tr>
             `);
         }
@@ -6003,7 +5999,7 @@ function mostrarDetalleCambio(data) {
     if (totalEntrantes === 0) {
         tbodyEntrantes.append(`
             <tr>
-                <td colspan="6" class="text-center py-3" style="color:#555;">
+                <td colspan="6" class="text-center py-3" style="color:#888;">
                     <i class="ri-information-line"></i> No hay productos nuevos — Solo devolución
                 </td>
             </tr>
@@ -6025,12 +6021,17 @@ function mostrarDetalleCambio(data) {
             'APROBADO':                { icon: 'ri-check-line',             color: 'bg-success',  label: 'Aprobado' },
             'APROBADO_Y_EJECUTADO':    { icon: 'ri-check-double-line',      color: 'bg-success',  label: 'Aprobado y Ejecutado' },
             'EJECUTADO':               { icon: 'ri-play-circle-line',       color: 'bg-primary',  label: 'Ejecutado' },
-            'EJECUTADO_COBRO_PENDIENTE':{ icon: 'ri-money-dollar-circle-line', color: 'bg-info',  label: 'Ejecutado (Cobro Pendiente)' },
-            'COMPLETADO':              { icon: 'ri-check-double-line',      color: 'bg-primary',  label: 'Completado' },
+            'EJECUTADO_COBRO_PENDIENTE':{ icon: 'ri-money-dollar-circle-line', color: 'bg-warning', label: 'Ejecutado - Cobro Pendiente' },
+            'EJECUTADO_DEVOL_PENDIENTE':{ icon: 'ri-refund-line',           color: 'bg-info',    label: 'Ejecutado - Devolución Pendiente' },
+            'COMPLETADO':              { icon: 'ri-check-double-line',      color: 'bg-success',  label: 'Completado' },
+            'COMPLETADO_AUTO':         { icon: 'ri-check-double-line',      color: 'bg-success',  label: 'Completado Automáticamente' },
             'RECHAZADO':               { icon: 'ri-thumb-down-line',        color: 'bg-danger',   label: 'Rechazado' },
             'CANCELADO':               { icon: 'ri-close-circle-line',      color: 'bg-danger',   label: 'Cancelado' },
+            'REVERTIDO':               { icon: 'ri-arrow-go-back-line',     color: 'bg-secondary',label: 'Revertido' },
             'MODIFICADO':              { icon: 'ri-edit-line',              color: 'bg-secondary','label': 'Modificado' },
             'PAGO_PROCESADO':          { icon: 'ri-money-dollar-circle-line', color: 'bg-success', label: 'Pago Procesado' },
+            'COBRO_DIFERENCIA':        { icon: 'ri-money-dollar-circle-line', color: 'bg-success', label: 'Cobro de Diferencia' },
+            'DEVOLUCION_PROCESADA':    { icon: 'ri-refund-line',            color: 'bg-success',  label: 'Devolución Procesada' },
             'PRODUCTO_EVALUADO':       { icon: 'ri-search-eye-line',        color: 'bg-info',     label: 'Producto Evaluado' },
         };
         
@@ -6057,12 +6058,12 @@ function mostrarDetalleCambio(data) {
                         </span>
                         <div class="flex-grow-1">
                             <div class="d-flex justify-content-between align-items-start flex-wrap gap-1">
-                                <strong style="font-size:0.9rem;">${accionDisplay}</strong>
-                                <small class="text-muted"><i class="ri-time-line me-1"></i>${item.timestamp}</small>
+                                <strong style="font-size:0.9rem; color:#f0f0f0;">${accionDisplay}</strong>
+                                <small style="color:#8b9dc3;"><i class="ri-time-line me-1"></i>${item.timestamp}</small>
                             </div>
                             ${estadoTransicion ? `<div class="mt-1">${estadoTransicion}</div>` : ''}
-                            <p class="mb-0 text-muted" style="font-size:0.82rem;">${item.descripcion || '-'}</p>
-                            <small class="text-muted" style="font-size:0.78rem;"><i class="ri-user-line me-1"></i>${item.usuario}</small>
+                            <p class="mb-0" style="font-size:0.82rem; color:#c0c8d8;">${item.descripcion || '-'}</p>
+                            <small style="font-size:0.78rem; color:#7b8ba3;"><i class="ri-user-line me-1"></i>${item.usuario}</small>
                         </div>
                     </div>
                 </div>
@@ -6086,7 +6087,10 @@ function mostrarDetalleCambio(data) {
         const tipoOp = cambio.tipo_operacion || '';
         accionesEl.append(`
             <button class="btn btn-sm btn-success me-2" onclick='aprobarCambioConDatos(${cambio.id}, "${tipoOp}", ${montoDevuelto}, ${montoNuevo})'>
-                <i class="ri-check-line"></i> Aprobar y Ejecutar
+                <i class="ri-check-double-line"></i> Aprobar y Ejecutar
+            </button>
+            <button class="btn btn-sm btn-outline-success me-2" onclick='soloAprobarCambio(${cambio.id})'>
+                <i class="ri-check-line"></i> Solo Aprobar
             </button>
             <button class="btn btn-sm btn-danger" onclick='cancelarCambio(${cambio.id})'>
                 <i class="ri-delete-bin-line"></i> Eliminar
@@ -6094,6 +6098,48 @@ function mostrarDetalleCambio(data) {
         `);
     }
     
+    if (cambio.estado === 'APROBADO') {
+        const tipoOp = cambio.tipo_operacion || '';
+        accionesEl.append(`
+            <button class="btn btn-sm btn-primary me-2" onclick='aprobarCambioConDatos(${cambio.id}, "${tipoOp}", ${montoDevuelto}, ${montoNuevo})'>
+                <i class="ri-play-circle-line"></i> Ejecutar
+            </button>
+            <button class="btn btn-sm btn-danger" onclick='cancelarCambio(${cambio.id})'>
+                <i class="ri-delete-bin-line"></i> Cancelar
+            </button>
+        `);
+    }
+
+    if (cambio.estado === 'EJECUTADO_COBRO_PENDIENTE') {
+        accionesEl.append(`
+            <div class="alert alert-warning mb-0 p-2 d-flex align-items-center gap-2">
+                <small>
+                    <i class="ri-money-dollar-circle-line"></i> 
+                    <strong>Cobro pendiente</strong> - Ticket: #${cambio.ticket_nuevo?.correlativo || '-'}
+                </small>
+                ${cambio.ticket_nuevo ? `<a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-sm btn-warning ms-auto"><i class="ri-money-dollar-circle-line me-1"></i>Cobrar</a>` : ''}
+                <button class="btn btn-sm btn-outline-danger" onclick='revertirCambio(${cambio.id})'>
+                    <i class="ri-arrow-go-back-line"></i> Revertir
+                </button>
+            </div>
+        `);
+    }
+
+    if (cambio.estado === 'EJECUTADO_DEVOL_PENDIENTE') {
+        accionesEl.append(`
+            <div class="alert alert-info mb-0 p-2 d-flex align-items-center gap-2">
+                <small>
+                    <i class="ri-refund-line"></i> 
+                    <strong>Devolución pendiente</strong> - Ticket: #${cambio.ticket_nuevo?.correlativo || '-'}
+                </small>
+                ${cambio.ticket_nuevo ? `<a href="/app/ventas/?ticket=${cambio.ticket_nuevo.correlativo}" class="btn btn-sm btn-info ms-auto"><i class="ri-refund-line me-1"></i>Devolver</a>` : ''}
+                <button class="btn btn-sm btn-outline-danger" onclick='revertirCambio(${cambio.id})'>
+                    <i class="ri-arrow-go-back-line"></i> Revertir
+                </button>
+            </div>
+        `);
+    }
+
     if (cambio.estado === 'COMPLETADO') {
         accionesEl.append(`
             <div class="alert alert-success mb-0 p-2">
@@ -6105,10 +6151,18 @@ function mostrarDetalleCambio(data) {
         `);
     }
     
-    if (cambio.estado === 'CANCELADO') {
+    if (['CANCELADO', 'RECHAZADO'].includes(cambio.estado)) {
         accionesEl.append(`
             <div class="alert alert-secondary mb-0 p-2">
-                <small><i class="ri-forbid-line"></i> <strong>Cancelado</strong></small>
+                <small><i class="ri-forbid-line"></i> <strong>${cambio.estado_display}</strong></small>
+            </div>
+        `);
+    }
+
+    if (cambio.estado === 'REVERTIDO') {
+        accionesEl.append(`
+            <div class="alert alert-secondary mb-0 p-2">
+                <small><i class="ri-arrow-go-back-line"></i> <strong>Revertido</strong></small>
             </div>
         `);
     }
@@ -6134,24 +6188,18 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
         $('#aprobar-diferencia').text('$0').removeClass('text-danger').addClass('text-success');
     }
 
-    // Show/hide payment tab based on difference
     if (diferencia > 0) {
-        $('#tab-pago-diferencia-li').show();
-        $('#badge-pago-monto').text('$' + formatearNumero(diferencia));
+        $('#info-diferencia-pos').show();
         $('#pago-diferencia-monto-display').text('$' + formatearNumero(diferencia));
-        $('#input-monto-pago-aprobacion').val('$' + formatearNumero(diferencia));
-        $('#select-metodo-pago-aprobacion').val('');
-        $('#input-referencia-pago-aprobacion').val('');
-        $('#input-autorizacion-pago-aprobacion').val('');
-        $('#check-cobrar-despues').prop('checked', false);
     } else {
-        $('#tab-pago-diferencia-li').hide();
+        $('#info-diferencia-pos').hide();
     }
     
     $('#textarea-observaciones-aprobacion').val('');
-    $('#input-codigo-vendedor-aprobacion').val('');
+    $('#input-codigo-vendedor-aprobacion').val('').prop('readonly', false);
     $('#vendedor-id-validado').val('');
     $('#info-vendedor-validado').hide();
+    $('#vendedor-prefilled').hide();
     $('#input-codigo-autorizacion-aprobacion').val('');
     $('#info-autorizacion-validada').hide();
     $('#info-autorizacion-error').hide();
@@ -6299,10 +6347,33 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
                 const diferenciaReal = totalNuevos - totalDevueltos;
                 if (diferenciaReal > 0) {
                     $('#aprobar-diferencia').text('+$' + formatearNumero(diferenciaReal)).removeClass('text-success').addClass('text-danger');
+                    cambioActual.monto_original = totalDevueltos;
+                    cambioActual.monto_nuevo = totalNuevos;
                 } else if (diferenciaReal < 0) {
                     $('#aprobar-diferencia').text('-$' + formatearNumero(Math.abs(diferenciaReal))).removeClass('text-danger').addClass('text-success');
+                    cambioActual.monto_original = totalDevueltos;
+                    cambioActual.monto_nuevo = totalNuevos;
                 } else {
                     $('#aprobar-diferencia').text('$0').removeClass('text-danger').addClass('text-success');
+                    cambioActual.monto_original = totalDevueltos;
+                    cambioActual.monto_nuevo = totalNuevos;
+                }
+
+                // Pre-fill vendedor from original sale
+                const ticketOriginal = cambio.ticket_original;
+                if (ticketOriginal && ticketOriginal.vendedor_id) {
+                    $('#vendedor-id-validado').val(ticketOriginal.vendedor_id);
+                    $('#nombre-vendedor-validado').text(ticketOriginal.vendedor);
+                    $('#info-vendedor-validado').show();
+                    $('#vendedor-original-nombre').text(ticketOriginal.vendedor);
+                    $('#vendedor-prefilled').show();
+                    $('#input-codigo-vendedor-aprobacion').val(ticketOriginal.vendedor_codigo);
+                    $('#input-codigo-vendedor-aprobacion').prop('readonly', true);
+                    vendedorValidado = true;
+                    verificarValidacionesCompletas();
+                } else {
+                    $('#vendedor-prefilled').hide();
+                    $('#input-codigo-vendedor-aprobacion').prop('readonly', false);
                 }
             },
             error: function(xhr) {
@@ -6329,13 +6400,70 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
 }
 
 function aprobarCambio(cambioId) {
-    // Función legacy - redirige a la nueva
     aprobarCambioConDatos(cambioId, 'CAMBIO', 0, 0);
+}
+
+function soloAprobarCambio(cambioId) {
+    Swal.fire({
+        title: '¿Aprobar esta solicitud?',
+        html: `<p class="mb-2">Se aprobará la solicitud <strong>sin ejecutar</strong> movimientos de inventario ni generar tickets.</p>
+               <p class="text-muted small">Luego deberá ejecutar el cambio en un paso separado.</p>
+               <div class="mt-3">
+                   <label class="form-label small">Observaciones (opcional)</label>
+                   <textarea id="swal-obs-aprobar" class="form-control form-control-sm" rows="2"></textarea>
+               </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-check-line"></i> Aprobar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#198754',
+        preConfirm: () => {
+            return { observaciones: document.getElementById('swal-obs-aprobar').value };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: '/app/ventas/api/aprobar-cambio-devolucion/',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    cambio_id: cambioId,
+                    accion: 'aprobar',
+                    observaciones: result.value.observaciones
+                }),
+                headers: { 'X-CSRFToken': csrfToken },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Aprobado',
+                            text: 'El cambio fue aprobado. Ahora puede ejecutarlo cuando esté listo.',
+                            timer: 2500
+                        });
+                        cargarCambiosDevoluciones();
+                    } else {
+                        Swal.fire('Error', response.error, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    Swal.fire('Error', 'No se pudo aprobar el cambio', 'error');
+                }
+            });
+        }
+    });
 }
 
 // Variables para controlar las validaciones
 let vendedorValidado = false;
 let autorizacionValidada = false;
+
+function habilitarCambioVendedor() {
+    $('#input-codigo-vendedor-aprobacion').val('').prop('readonly', false).focus();
+    $('#vendedor-id-validado').val('');
+    $('#info-vendedor-validado').hide();
+    vendedorValidado = false;
+    $('#btn-confirmar-aprobacion').prop('disabled', true);
+}
 
 function validarCodigoVendedorAprobacion() {
     const codigo = $('#input-codigo-vendedor-aprobacion').val().trim();
@@ -6571,27 +6699,19 @@ function confirmarAprobacionYGenerarTicket() {
         return;
     }
 
-    // Check if payment is required and not deferred
     const diferencia = (cambioActual.monto_nuevo || 0) - (cambioActual.monto_original || 0);
-    const cobrarDespues = $('#check-cobrar-despues').is(':checked');
-    const metodoPago = $('#select-metodo-pago-aprobacion').val();
 
-    if (diferencia > 0 && !cobrarDespues && !metodoPago) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Método de pago requerido',
-            html: 'Hay una diferencia de <strong>$' + formatearNumero(diferencia) + '</strong> a cobrar.<br>Seleccione un método de pago o marque "No cobrar ahora".',
-        });
-        return;
-    }
-
-    let resumenPago = '';
+    let resumenDiferencia = '';
     if (diferencia > 0) {
-        if (cobrarDespues) {
-            resumenPago = `<div class="alert alert-warning text-start"><strong>Cobro pendiente:</strong> $${formatearNumero(diferencia)} se cobrará después (ticket quedará pendiente)</div>`;
-        } else {
-            resumenPago = `<div class="alert alert-info text-start"><strong>Pago incluido:</strong> $${formatearNumero(diferencia)} por ${metodoPago}</div>`;
-        }
+        resumenDiferencia = `<div class="alert alert-warning text-start small py-2">
+            <i class="ri-money-dollar-circle-line me-1"></i>
+            <strong>Diferencia de $${formatearNumero(diferencia)}</strong> — se cobrará en el POS Dashboard
+        </div>`;
+    } else if (diferencia < 0) {
+        resumenDiferencia = `<div class="alert alert-info text-start small py-2">
+            <i class="ri-refund-2-line me-1"></i>
+            <strong>Devolver $${formatearNumero(Math.abs(diferencia))}</strong> al cliente
+        </div>`;
     }
     
     Swal.fire({
@@ -6600,9 +6720,9 @@ function confirmarAprobacionYGenerarTicket() {
             <p>Se ejecutarán las siguientes acciones:</p>
             <hr>
             <div class="alert alert-success text-start small py-2">
-                <strong>1.</strong> Generar Ticket + Actualizar Inventario + Completar
+                <strong>1.</strong> Aprobar solicitud + Generar Ticket + Actualizar Inventario
             </div>
-            ${resumenPago}
+            ${resumenDiferencia}
         `,
         icon: 'question',
         showCancelButton: true,
@@ -6620,15 +6740,6 @@ function confirmarAprobacionYGenerarTicket() {
                 observaciones: observaciones,
                 generar_ticket: true
             };
-
-            if (diferencia > 0 && !cobrarDespues && metodoPago) {
-                datos.pago_diferencia = {
-                    metodo_pago: metodoPago,
-                    monto: diferencia,
-                    referencia_pago: $('#input-referencia-pago-aprobacion').val() || '',
-                    numero_autorizacion: $('#input-autorizacion-pago-aprobacion').val() || ''
-                };
-            }
             
             $.ajax({
                 url: '/app/ventas/api/aprobar-cambio-generar-ticket/',
@@ -6642,23 +6753,32 @@ function confirmarAprobacionYGenerarTicket() {
                     ocultarLoading();
                     
                     if (response.success) {
+                        let mensajeDiferencia = '';
+                        let estadoTexto = response.nuevo_estado_display || response.nuevo_estado;
+                        let alertClass = 'alert-success';
+
+                        if (response.cobro_pendiente) {
+                            alertClass = 'alert-warning';
+                            mensajeDiferencia = `<p class="text-warning fw-bold fs-6"><i class="ri-money-dollar-circle-line"></i> Cobro pendiente: $${formatearNumero(response.diferencia_cobrar)}</p>
+                                <p class="small text-muted">Debe cobrar en el POS para completar el cambio</p>`;
+                        } else if (response.devolucion_pendiente) {
+                            alertClass = 'alert-info';
+                            mensajeDiferencia = `<p class="text-info fw-bold fs-6"><i class="ri-refund-2-line"></i> Devolución pendiente: $${formatearNumero(Math.abs(response.diferencia_cobrar))}</p>
+                                <p class="small text-muted">Debe procesar la devolución en el POS para completar</p>`;
+                        } else {
+                            mensajeDiferencia = `<p class="text-success fw-bold fs-6"><i class="ri-check-double-line"></i> Sin diferencia - Cambio completado</p>`;
+                        }
+
                         Swal.fire({
-                            icon: 'success',
-                            title: '✅ Cambio Ejecutado Completamente',
+                            icon: response.nuevo_estado === 'COMPLETADO' ? 'success' : 'info',
+                            title: 'Cambio Aprobado y Ejecutado',
                             html: `
-                                <div class="alert alert-success">
-                                    <h5 class="mb-3">Operación Completada</h5>
-                                    <hr>
-                                    <p class="mb-2"><i class="ri-check-line"></i> <strong>Estado:</strong> COMPLETADO</p>
+                                <div class="alert ${alertClass}">
+                                    <p class="mb-2"><i class="ri-check-line"></i> <strong>Estado:</strong> ${estadoTexto}</p>
                                     <p class="mb-2"><i class="ri-ticket-line"></i> <strong>Ticket generado:</strong> #${response.ticket_correlativo}</p>
                                     <p class="mb-2"><i class="ri-truck-line"></i> <strong>Inventario:</strong> Actualizado</p>
                                     <hr>
-                                    ${response.diferencia_cobrar > 0 ? 
-                                        `<p class="text-danger fw-bold fs-5">💰 A cobrar al cliente: $${formatearNumero(response.diferencia_cobrar)}</p>` : 
-                                        response.diferencia_cobrar < 0 ?
-                                        `<p class="text-success fw-bold fs-5">💵 A devolver al cliente: $${formatearNumero(Math.abs(response.diferencia_cobrar))}</p>` :
-                                        `<p class="text-success fw-bold fs-5">✅ Sin diferencia - Cambio directo</p>`
-                                    }
+                                    ${mensajeDiferencia}
                                 </div>
                             `,
                             confirmButtonText: '<i class="ri-printer-line"></i> Imprimir Ticket',
@@ -6666,7 +6786,6 @@ function confirmarAprobacionYGenerarTicket() {
                             cancelButtonText: 'Cerrar'
                         }).then((result) => {
                             if (result.isConfirmed && response.ticket_data) {
-                                // Imprimir ticket directamente
                                 imprimirTicketCambio(response.ticket_data);
                             }
                         });
@@ -6978,97 +7097,7 @@ function marcarCompletado(cambioId) {
 }
 
 function completarCambio(cambioId) {
-    // Función legacy - redirige a ejecutarCambio
-    ejecutarCambio(cambioId);
-}
-
-function completarCambioDevolucion() {
-    const datos = {
-        cambio_id: cambioActual.id,
-        pagos: []
-    };
-    
-    // Agregar datos de pago si aplica
-    if (cambioActual.requiere_pago_adicional) {
-        datos.pagos.push({
-            tipo_pago: 'PAGO_DIFERENCIA',
-            metodo_pago: $('#select-metodo-pago-diferencia').val(),
-            monto: $('#input-monto-diferencia').val(),
-            referencia_pago: $('#input-referencia-pago').val(),
-            numero_autorizacion: $('#input-autorizacion-pago').val()
-        });
-    }
-    
-    if (cambioActual.genera_devolucion) {
-        datos.pagos.push({
-            tipo_pago: $('#select-metodo-devolucion').val(),
-            metodo_pago: $('#select-metodo-devolucion').val(),
-            monto: $('#input-monto-devolucion').val()
-        });
-    }
-    
-    mostrarLoading('Completando cambio...');
-    
-    $.ajax({
-        url: '/app/ventas/api/completar-cambio-devolucion/',
-        method: 'POST',
-        data: JSON.stringify(datos),
-        contentType: 'application/json',
-        success: function(response) {
-            ocultarLoading();
-            
-            if (response.success) {
-                // Mostrar mensaje de éxito con opciones
-                if (response.ticket_nuevo) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Cambio Completado!',
-                        html: `
-                            <div class="text-start">
-                                <p class="mb-2"><strong>Operación:</strong> ${response.numero_operacion || ''}</p>
-                                <p class="mb-2"><strong>Nuevo Ticket:</strong> #${response.ticket_nuevo}</p>
-                                ${response.diferencia_monto > 0 ? 
-                                    `<p class="mb-2 text-danger"><strong>Diferencia a pagar:</strong> $${Math.abs(response.diferencia_monto).toLocaleString()}</p>` :
-                                    response.diferencia_monto < 0 ?
-                                    `<p class="mb-2 text-success"><strong>Diferencia a favor:</strong> $${Math.abs(response.diferencia_monto).toLocaleString()}</p>` :
-                                    '<p class="mb-2 text-info"><strong>Cambio sin diferencia</strong></p>'
-                                }
-                            </div>
-                        `,
-                        showCancelButton: response.puede_imprimir,
-                        confirmButtonText: response.puede_imprimir ? '<i class="ri-printer-line"></i> Imprimir Ticket' : 'Aceptar',
-                        cancelButtonText: 'Cerrar',
-                        confirmButtonColor: '#198754',
-                        cancelButtonColor: '#6c757d'
-                    }).then((result) => {
-                        if (result.isConfirmed && response.ticket_data) {
-                            imprimirTicketCambio(response.ticket_data);
-                        }
-                    });
-                } else {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Devolución Completada!',
-                        html: `
-                            <p>Operación: ${response.numero_operacion || ''}</p>
-                            <p class="text-success">Devolución procesada exitosamente</p>
-                        `,
-                        confirmButtonText: 'Aceptar'
-                    });
-                }
-                
-                $('#modalCompletarCambio').modal('hide');
-                $('#modalDetalleCambio').modal('hide');
-                cargarCambiosDevoluciones();
-            } else {
-                mostrarError(response.error);
-            }
-        },
-        error: function() {
-            ocultarLoading();
-            mostrarError('Error de conexión');
-        }
-    });
+    aprobarCambioConDatos(cambioId, 'CAMBIO', 0, 0);
 }
 
 // Función para imprimir ticket desde la tabla de cambios

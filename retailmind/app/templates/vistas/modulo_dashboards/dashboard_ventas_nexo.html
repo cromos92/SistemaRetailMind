@@ -514,14 +514,324 @@
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card" data-bs-toggle="tooltip" data-bs-placement="top" title="🛒 % de visitantes que compran. Requiere contador de visitas para calcular. ✅ Excelente: >30% | 👍 Bueno: 20-30% | ⚠️ Bajo: 10-20% | ❌ Crítico: <10%">
+                <div class="nexo-chart-card" data-bs-toggle="tooltip" data-bs-placement="top" title="🏷️ Descuento promedio aplicado a productos vendidos en el período. Monitorea la presión sobre márgenes por promociones.">
                     <div class="nexo-chart-body text-center">
                         <div style="font-size: 3rem; color: #6C5CE7;">
-                            <i class="bi bi-cart-check"></i>
+                            <i class="bi bi-tags"></i>
                         </div>
-                        <h2 class="mt-2 mb-1" id="kpiConversion">-</h2>
-                        <div class="nexo-kpi-label">Conversion Rate <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
-                        <small class="text-muted">Tasa de conversión estimada</small>
+                        <h2 class="mt-2 mb-1" id="kpiDescuento">0%</h2>
+                        <div class="nexo-kpi-label">Descuento Promedio <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
+                        <small class="text-muted" id="kpiDescuentoMonto">$0 total descontado</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
+             ESTADO DE TICKETS
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <div class="nexo-section-header mt-4 nexo-animate-fadein">
+            <div class="nexo-section-icon" style="background: linear-gradient(135deg, #4FACFE 0%, #0066FF 100%);">
+                <i class="bi bi-receipt-cutoff"></i>
+            </div>
+            <h3 class="nexo-section-title">Estado de Tickets</h3>
+        </div>
+
+        <div class="row nexo-animate-fadein">
+            <div class="col-lg-4">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-pie-chart"></i>
+                            Tickets por Estado
+                        </h5>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartTicketsEstado"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-shop"></i>
+                            Ventas por Canal
+                        </h5>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartModuloOrigen"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-clipboard-data"></i>
+                            Resumen de Tickets
+                        </h5>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Total Tickets</span>
+                            <span class="nexo-stats-mini-value" id="ticketsTotal">0</span>
+                        </div>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Tickets Anulados</span>
+                            <span class="nexo-stats-mini-value danger" id="ticketsAnulados">0</span>
+                        </div>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">% Anulación</span>
+                            <span class="nexo-stats-mini-value" id="ticketsPctAnulados">0%</span>
+                        </div>
+                        <hr>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Pendientes de Pago</span>
+                            <span class="nexo-stats-mini-value warning" id="ticketsPendientes">0</span>
+                        </div>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Monto Pendiente</span>
+                            <span class="nexo-stats-mini-value warning" id="ticketsMontoPendiente">$0</span>
+                        </div>
+                        <hr>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Con Factura</span>
+                            <span class="nexo-stats-mini-value" id="ticketsFactura">0</span>
+                        </div>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Con Boleta</span>
+                            <span class="nexo-stats-mini-value" id="ticketsBoleta">0</span>
+                        </div>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Creados Offline</span>
+                            <span class="nexo-stats-mini-value" id="ticketsOffline">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
+             GESTIÓN DE CAMBIOS Y DEVOLUCIONES
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <div class="nexo-section-header mt-4 nexo-animate-fadein">
+            <div class="nexo-section-icon" style="background: linear-gradient(135deg, #FF6B9D 0%, #FF4D4D 100%);">
+                <i class="bi bi-arrow-left-right"></i>
+            </div>
+            <h3 class="nexo-section-title">Gestión de Cambios y Devoluciones</h3>
+        </div>
+
+        <div class="row nexo-animate-fadein">
+            <div class="col-lg-4">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-bar-chart"></i>
+                            Por Tipo de Operación
+                        </h5>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartCambiosTipo"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-question-circle"></i>
+                            Motivos Principales
+                        </h5>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartCambiosMotivos"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-funnel"></i>
+                            Pipeline de Estados
+                        </h5>
+                    </div>
+                    <div class="nexo-chart-body" id="containerPipelineCambios">
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-hourglass-split"></i> Cargando...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row nexo-animate-fadein mt-3">
+            <div class="col-lg-12">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <h3 class="mb-1" style="color: var(--nexo-error);" id="cambiosMontoTotal">$0</h3>
+                                <small class="text-muted">Monto Total Impactado</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h3 class="mb-1" style="color: var(--nexo-warning);" id="cambiosPendientesAprobacion">0</h3>
+                                <small class="text-muted">Pendientes de Aprobación</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h3 class="mb-1" style="color: var(--nexo-primary);" id="cambiosTotalPeriodo">0</h3>
+                                <small class="text-muted">Total del Período</small>
+                            </div>
+                            <div class="col-md-3">
+                                <h3 class="mb-1" style="color: var(--nexo-success);" id="cambiosRatioPeriodo">0%</h3>
+                                <small class="text-muted">Ratio sobre Ventas</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
+             ESTADO POS Y DEPÓSITOS BANCARIOS
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <div class="nexo-section-header mt-4 nexo-animate-fadein">
+            <div class="nexo-section-icon" style="background: linear-gradient(135deg, #00D4AA 0%, #00B894 100%);">
+                <i class="bi bi-credit-card-2-front"></i>
+            </div>
+            <h3 class="nexo-section-title">Estado POS y Depósitos Bancarios</h3>
+        </div>
+
+        <div class="row nexo-animate-fadein">
+            <div class="col-lg-6">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-terminal"></i>
+                            Transacciones POS
+                        </h5>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <h2 class="mb-1" style="color: var(--nexo-success);" id="posCompletadas">0</h2>
+                                <small class="text-muted">Completadas</small>
+                            </div>
+                            <div class="col-4">
+                                <h2 class="mb-1" style="color: var(--nexo-error);" id="posFallidas">0</h2>
+                                <small class="text-muted">Fallidas</small>
+                            </div>
+                            <div class="col-4">
+                                <h2 class="mb-1" style="color: var(--nexo-primary);" id="posTasaExito">0%</h2>
+                                <small class="text-muted">Tasa de Éxito</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Total Transacciones POS</span>
+                            <span class="nexo-stats-mini-value" id="posTotal">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-bank"></i>
+                            Depósitos Bancarios
+                        </h5>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="row text-center mb-3">
+                            <div class="col-6">
+                                <h2 class="mb-1" style="color: var(--nexo-success);" id="depositosVerificados">0</h2>
+                                <small class="text-muted">Verificados</small>
+                            </div>
+                            <div class="col-6">
+                                <h2 class="mb-1" style="color: var(--nexo-warning);" id="depositosPendientes">0</h2>
+                                <small class="text-muted">Pendientes</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Monto Verificado</span>
+                            <span class="nexo-stats-mini-value success" id="depositosMontoVerificado">$0</span>
+                        </div>
+                        <div class="nexo-stats-mini">
+                            <span class="nexo-stats-mini-label">Monto Pendiente</span>
+                            <span class="nexo-stats-mini-value warning" id="depositosMontoPendiente">$0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
+             OPERACIONES PENDIENTES (RESUMEN CRUZADO)
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <div class="nexo-section-header mt-4 nexo-animate-fadein">
+            <div class="nexo-section-icon" style="background: linear-gradient(135deg, #FFB020 0%, #FF8C00 100%);">
+                <i class="bi bi-clipboard-check"></i>
+            </div>
+            <h3 class="nexo-section-title">Operaciones Pendientes</h3>
+        </div>
+
+        <div class="row nexo-animate-fadein mb-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-body text-center">
+                        <div style="font-size: 2.5rem; color: var(--nexo-warning);">
+                            <i class="bi bi-file-earmark-arrow-down"></i>
+                        </div>
+                        <h2 class="mt-2 mb-1" id="pendDtes">0</h2>
+                        <div class="nexo-kpi-label">DTEs Pendientes</div>
+                        <small class="text-muted">Traspasos por recepcionar</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-body text-center">
+                        <div style="font-size: 2.5rem; color: var(--nexo-error);">
+                            <i class="bi bi-exclamation-diamond"></i>
+                        </div>
+                        <h2 class="mt-2 mb-1" id="pendRegularizaciones">0</h2>
+                        <div class="nexo-kpi-label">Regularizaciones</div>
+                        <small class="text-muted">Pendientes de resolución</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-body text-center">
+                        <div style="font-size: 2.5rem; color: #FF6B9D;">
+                            <i class="bi bi-arrow-left-right"></i>
+                        </div>
+                        <h2 class="mt-2 mb-1" id="pendCambios">0</h2>
+                        <div class="nexo-kpi-label">Cambios Pendientes</div>
+                        <small class="text-muted">Por aprobar/procesar</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="nexo-chart-card">
+                    <div class="nexo-chart-body text-center">
+                        <div style="font-size: 2.5rem; color: var(--nexo-primary);">
+                            <i class="bi bi-bank2"></i>
+                        </div>
+                        <h2 class="mt-2 mb-1" id="pendDepositos">0</h2>
+                        <div class="nexo-kpi-label">Depósitos sin Verificar</div>
+                        <small class="text-muted">Requieren confirmación</small>
                     </div>
                 </div>
             </div>
@@ -770,7 +1080,6 @@ function cargarIndicadoresGlobalesComparativo(params) {
 }
 
 function cargarDatosPeriodoActual(params) {
-    // Cargar todos los datos en paralelo
     Promise.all([
         cargarIndicadoresGlobales(params),
         cargarVentasPorVendedor(params),
@@ -778,10 +1087,11 @@ function cargarDatosPeriodoActual(params) {
         cargarProductosMasVendidos(params),
         cargarTendencias(params),
         cargarCuadraturas(params),
-        cargarCambiosDevoluciones(params)
+        cargarCambiosDevoluciones(params),
+        cargarIndicadoresAvanzados(params),
+        cargarEstadoOperacional(params)
     ]).then(() => {
         generarAlertas();
-        calcularIndicadoresAvanzados();
     }).catch(err => {
         console.error('Error cargando dashboard:', err);
     });
@@ -893,7 +1203,6 @@ function cargarProductosMasVendidos(params) {
             dashboardData.productos = response.productos;
             actualizarTablaProductos(response.productos);
             
-            // Calcular KPIs de unidades y UPT
             const totalUnidades = response.productos.reduce((sum, p) => sum + (p.cantidad || 0), 0);
             const transacciones = dashboardData.indicadores?.cantidad_ventas || 1;
             const upt = totalUnidades / transacciones;
@@ -902,20 +1211,7 @@ function cargarProductosMasVendidos(params) {
             $('#kpiUnidadesDia').text(Math.round(totalUnidades / calcularDias()));
             $('#kpiUPT').text(upt.toFixed(2));
             
-            // Usar total_ventas que es el campo correcto de la API
-            const totalVentas = response.productos.reduce((sum, p) => sum + (p.total_ventas || p.total || 0), 0);
-            // Estimación de costo si no hay datos reales (margen promedio ~35% en retail)
-            const totalCosto = response.productos.reduce((sum, p) => sum + (p.costo_total || (p.total_ventas || p.total || 0) * 0.65), 0);
-            const margenBruto = totalVentas - totalCosto;
-            const margenPct = totalVentas > 0 ? (margenBruto / totalVentas * 100) : 0;
-            
-            $('#kpiMargen').text(formatMoney(margenBruto));
-            $('#kpiMargenPct').text(margenPct.toFixed(1) + '%');
-            
-            // Guardar para cálculos avanzados
             dashboardData.totalUnidades = totalUnidades;
-            dashboardData.totalCosto = totalCosto;
-            dashboardData.margenBruto = margenBruto;
         }
     });
 }
@@ -968,6 +1264,96 @@ function cargarCambiosDevoluciones(params) {
         if (response.success) {
             dashboardData.cambios = response;
             $('#cambiosPendientes').text(response.pendientes || 0);
+        }
+    });
+}
+
+function cargarIndicadoresAvanzados(params) {
+    return $.get('/app/api/ventas/indicadores-avanzados/', params, function(response) {
+        if (response.success) {
+            dashboardData.avanzados = response;
+            
+            $('#kpiMargen').text(formatMoney(response.margen_bruto || 0));
+            $('#kpiMargenPct').text((response.margen_pct || 0) + '%');
+            $('#kpiSellThrough').text((response.sell_through || 0) + '%');
+            $('#kpiRotacion').text((response.rotacion_periodo || 0).toFixed(2));
+            $('#kpiDiasStock').text(Math.round(response.dias_stock || 0));
+            $('#kpiGMROI').text((response.gmroi || 0).toFixed(2));
+            $('#kpiDescuento').text((response.descuento_promedio || 0).toFixed(1) + '%');
+            $('#kpiDescuentoMonto').text(formatMoney(response.descuento_total_monto || 0) + ' total descontado');
+            
+            actualizarStatusKPIs();
+        }
+    });
+}
+
+function cargarEstadoOperacional(params) {
+    return $.get('/app/api/ventas/estado-operacional/', params, function(response) {
+        if (response.success) {
+            dashboardData.operacional = response;
+            
+            // --- Tickets por estado ---
+            const tickets = response.tickets || {};
+            $('#ticketsTotal').text(formatNumber(tickets.total || 0));
+            $('#ticketsAnulados').text(formatNumber(tickets.anulados || 0));
+            $('#ticketsPctAnulados').text((tickets.pct_anulados || 0).toFixed(1) + '%');
+            $('#ticketsPendientes').text(formatNumber(tickets.pendientes_pago || 0));
+            $('#ticketsMontoPendiente').text(formatMoney(tickets.pendientes_monto || 0));
+            
+            // DTE info from indicadores globales
+            const ind = dashboardData.indicadores || {};
+            $('#ticketsFactura').text(formatNumber(ind.ventas_con_factura || 0));
+            $('#ticketsBoleta').text(formatNumber(ind.ventas_con_boleta || 0));
+            $('#ticketsOffline').text(formatNumber(ind.tickets_offline || 0));
+            
+            if (tickets.por_estado && tickets.por_estado.length > 0) {
+                actualizarChartTicketsEstado(tickets.por_estado);
+            }
+            
+            // --- Modulo origen ---
+            if (response.modulo_origen && response.modulo_origen.length > 0) {
+                actualizarChartModuloOrigen(response.modulo_origen);
+            }
+            
+            // --- POS ---
+            const pos = response.pos || {};
+            $('#posCompletadas').text(formatNumber(pos.completadas || 0));
+            const fallidas = (pos.total || 0) - (pos.completadas || 0);
+            $('#posFallidas').text(formatNumber(fallidas));
+            $('#posTasaExito').text((pos.tasa_exito || 0).toFixed(1) + '%');
+            $('#posTotal').text(formatNumber(pos.total || 0));
+            
+            // --- Cambios y Devoluciones detallado ---
+            const cd = response.cambios_devoluciones || {};
+            $('#cambiosMontoTotal').text(formatMoney(cd.monto_total || 0));
+            $('#cambiosPendientesAprobacion').text(formatNumber(cd.pendientes_aprobacion || 0));
+            const totalCambios = (cd.por_estado || []).reduce((s, e) => s + (e.cantidad || 0), 0);
+            $('#cambiosTotalPeriodo').text(formatNumber(totalCambios));
+            const ticketsTotal = tickets.total || 1;
+            $('#cambiosRatioPeriodo').text((totalCambios / ticketsTotal * 100).toFixed(1) + '%');
+            
+            if (cd.por_tipo && cd.por_tipo.length > 0) {
+                actualizarChartCambiosTipo(cd.por_tipo);
+            }
+            if (cd.motivos_principales && cd.motivos_principales.length > 0) {
+                actualizarChartCambiosMotivos(cd.motivos_principales);
+            }
+            if (cd.por_estado && cd.por_estado.length > 0) {
+                renderPipelineCambios(cd.por_estado);
+            }
+            
+            // --- Depositos ---
+            const dep = response.depositos || {};
+            $('#depositosVerificados').text(formatNumber(dep.verificados || 0));
+            $('#depositosPendientes').text(formatNumber(dep.pendientes || 0));
+            $('#depositosMontoVerificado').text(formatMoney(dep.monto_verificado || 0));
+            $('#depositosMontoPendiente').text(formatMoney(dep.monto_pendiente || 0));
+            
+            // --- Operaciones Pendientes ---
+            $('#pendDtes').text(formatNumber(response.dtes_pendientes || 0));
+            $('#pendRegularizaciones').text(formatNumber(response.regularizaciones_pendientes || 0));
+            $('#pendCambios').text(formatNumber(cd.pendientes_aprobacion || 0));
+            $('#pendDepositos').text(formatNumber(dep.pendientes || 0));
         }
     });
 }
@@ -1346,6 +1732,57 @@ function generarAlertas() {
         });
     }
     
+    // Alto % de anulaciones
+    const ops = dashboardData.operacional || {};
+    if (ops.tickets && ops.tickets.pct_anulados > 5) {
+        alertas.push({
+            tipo: 'danger',
+            icono: 'bi-x-circle',
+            titulo: 'Alto porcentaje de anulaciones',
+            mensaje: `${ops.tickets.pct_anulados.toFixed(1)}% de tickets fueron anulados. Revisar procedimientos.`
+        });
+    }
+    
+    // POS con baja tasa de éxito
+    if (ops.pos && ops.pos.total > 0 && ops.pos.tasa_exito < 90) {
+        alertas.push({
+            tipo: 'warning',
+            icono: 'bi-terminal',
+            titulo: 'Problemas con terminales POS',
+            mensaje: `Tasa de éxito POS: ${ops.pos.tasa_exito.toFixed(1)}%. Verificar conexión de terminales.`
+        });
+    }
+    
+    // Depósitos pendientes de verificación
+    if (ops.depositos && ops.depositos.pendientes > 3) {
+        alertas.push({
+            tipo: 'info',
+            icono: 'bi-bank',
+            titulo: `${ops.depositos.pendientes} depósitos sin verificar`,
+            mensaje: `Monto pendiente de verificación: ${formatMoney(ops.depositos.monto_pendiente)}`
+        });
+    }
+    
+    // Regularizaciones pendientes
+    if ((ops.regularizaciones_pendientes || 0) > 0) {
+        alertas.push({
+            tipo: 'warning',
+            icono: 'bi-exclamation-diamond',
+            titulo: `${ops.regularizaciones_pendientes} regularizaciones pendientes`,
+            mensaje: 'Hay recepciones con problemas que requieren atención.'
+        });
+    }
+    
+    // Sell-Through bajo
+    if (dashboardData.avanzados && dashboardData.avanzados.sell_through > 0 && dashboardData.avanzados.sell_through < 30) {
+        alertas.push({
+            tipo: 'warning',
+            icono: 'bi-percent',
+            titulo: 'Sell-Through Rate bajo',
+            mensaje: `Solo se ha vendido el ${dashboardData.avanzados.sell_through}% del inventario. Riesgo de acumulación de stock.`
+        });
+    }
+    
     if (alertas.length === 0) {
         container.html(`
             <div class="nexo-alert nexo-alert-success">
@@ -1372,33 +1809,184 @@ function generarAlertas() {
     });
 }
 
-function calcularIndicadoresAvanzados() {
-    // GMROI = (Margen Bruto / Costo Promedio Inventario) 
-    // Estimación simplificada: Margen / Costo de lo vendido
-    const margen = dashboardData.margenBruto || 0;
-    const costo = dashboardData.totalCosto || 1;
-    const gmroi = margen / costo;
-    $('#kpiGMROI').text(gmroi.toFixed(2));
+function actualizarChartTicketsEstado(data) {
+    const ctx = document.getElementById('chartTicketsEstado');
+    if (!ctx) return;
+    if (charts.ticketsEstado) charts.ticketsEstado.destroy();
     
-    // Sell-Through Rate (estimado)
-    // Total vendido / (Total vendido + Stock actual) * 100
-    // Como no tenemos stock actual, usamos una estimación
-    const sellThrough = Math.min(85, Math.random() * 30 + 55); // Placeholder
-    $('#kpiSellThrough').text(sellThrough.toFixed(1) + '%');
+    const estadoColors = {
+        'PAGADO': NEXO_COLORS.success,
+        'PENDIENTE': NEXO_COLORS.warning,
+        'ANULADO': NEXO_COLORS.error,
+    };
     
-    // Rotación estimada
-    const rotacion = dashboardData.totalUnidades ? (dashboardData.totalUnidades / 1000).toFixed(1) : '0.0';
-    $('#kpiRotacion').text(rotacion);
+    charts.ticketsEstado = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => d.estado),
+            datasets: [{
+                data: data.map(d => d.cantidad),
+                backgroundColor: data.map(d => estadoColors[d.estado] || NEXO_COLORS.gray),
+                borderWidth: 3,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+                tooltip: {
+                    backgroundColor: '#1A1A2E', cornerRadius: 8,
+                    callbacks: { label: c => c.label + ': ' + formatNumber(c.parsed) + ' tickets' }
+                }
+            }
+        }
+    });
+}
+
+function actualizarChartModuloOrigen(data) {
+    const ctx = document.getElementById('chartModuloOrigen');
+    if (!ctx) return;
+    if (charts.moduloOrigen) charts.moduloOrigen.destroy();
     
-    // Días de stock (estimado)
-    const diasStock = Math.round(Math.random() * 30 + 15); // Placeholder
-    $('#kpiDiasStock').text(diasStock);
+    const moduloLabels = {
+        'VENTA_PUBLICO': 'Venta Público',
+        'VENTA_MAYORISTA': 'Mayorista',
+        'POS': 'POS',
+        'CAMBIO_DEVOLUCION': 'Cambio/Dev.',
+        'ECOMMERCE': 'Ecommerce',
+    };
     
-    // Tasa de conversión (estimada)
-    $('#kpiConversion').text('N/A');
+    charts.moduloOrigen = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => moduloLabels[d.modulo_origen] || d.modulo_origen),
+            datasets: [{
+                data: data.map(d => d.monto),
+                backgroundColor: NEXO_COLORS.gradients.slice(0, data.length),
+                borderWidth: 3,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+                tooltip: {
+                    backgroundColor: '#1A1A2E', cornerRadius: 8,
+                    callbacks: { label: c => c.label + ': ' + formatMoney(c.parsed) }
+                }
+            }
+        }
+    });
+}
+
+function actualizarChartCambiosTipo(data) {
+    const ctx = document.getElementById('chartCambiosTipo');
+    if (!ctx) return;
+    if (charts.cambiosTipo) charts.cambiosTipo.destroy();
     
-    // Actualizar indicadores de estado visual
-    actualizarStatusKPIs();
+    charts.cambiosTipo = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.tipo_display || d.tipo_operacion),
+            datasets: [{
+                label: 'Cantidad',
+                data: data.map(d => d.cantidad),
+                backgroundColor: [NEXO_COLORS.primary, NEXO_COLORS.warning, NEXO_COLORS.error, NEXO_COLORS.pink],
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { display: false },
+                tooltip: { backgroundColor: '#1A1A2E', cornerRadius: 8 }
+            },
+            scales: {
+                x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#8A8A9A' } },
+                y: { grid: { display: false }, ticks: { color: '#4A4A5A', font: { size: 11 } } }
+            }
+        }
+    });
+}
+
+function actualizarChartCambiosMotivos(data) {
+    const ctx = document.getElementById('chartCambiosMotivos');
+    if (!ctx) return;
+    if (charts.cambiosMotivos) charts.cambiosMotivos.destroy();
+    
+    charts.cambiosMotivos = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => d.motivo_display || d.motivo_principal),
+            datasets: [{
+                data: data.map(d => d.cantidad),
+                backgroundColor: NEXO_COLORS.gradients.slice(0, data.length),
+                borderWidth: 3,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '55%',
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 10, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
+                tooltip: { backgroundColor: '#1A1A2E', cornerRadius: 8 }
+            }
+        }
+    });
+}
+
+function renderPipelineCambios(data) {
+    const container = $('#containerPipelineCambios');
+    container.empty();
+    
+    const estadoOrder = ['SOLICITADO', 'EN_PROCESO', 'APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO', 'RECHAZADO', 'CANCELADO', 'REVERTIDO'];
+    const estadoColors = {
+        'SOLICITADO': '#4FACFE',
+        'EN_PROCESO': NEXO_COLORS.warning,
+        'APROBADO': NEXO_COLORS.primary,
+        'EJECUTADO': NEXO_COLORS.success,
+        'EJECUTADO_COBRO_PENDIENTE': NEXO_COLORS.warning,
+        'EJECUTADO_DEVOL_PENDIENTE': NEXO_COLORS.warning,
+        'COMPLETADO': '#00B894',
+        'RECHAZADO': NEXO_COLORS.error,
+        'CANCELADO': NEXO_COLORS.gray,
+        'REVERTIDO': '#6C5CE7',
+    };
+    
+    const dataMap = {};
+    data.forEach(d => { dataMap[d.estado] = d; });
+    const total = data.reduce((s, d) => s + (d.cantidad || 0), 0) || 1;
+    
+    estadoOrder.forEach(estado => {
+        const item = dataMap[estado];
+        if (!item) return;
+        const pct = (item.cantidad / total * 100).toFixed(0);
+        const color = estadoColors[estado] || NEXO_COLORS.gray;
+        container.append(`
+            <div class="d-flex align-items-center mb-2">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: ${color}; margin-right: 8px;"></div>
+                <span class="small flex-grow-1" style="min-width: 100px;">${item.estado_display || estado}</span>
+                <strong class="small me-2">${item.cantidad}</strong>
+                <div style="width: 80px; height: 6px; background: #E8E8ED; border-radius: 3px; overflow: hidden;">
+                    <div style="width: ${pct}%; height: 100%; background: ${color}; border-radius: 3px;"></div>
+                </div>
+            </div>
+        `);
+    });
+    
+    if (container.is(':empty')) {
+        container.html('<div class="text-center text-muted py-3"><small>Sin cambios/devoluciones en el período</small></div>');
+    }
 }
 
 function actualizarStatusKPIs() {

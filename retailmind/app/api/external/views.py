@@ -5,6 +5,7 @@ Endpoints (montados bajo /api/ en urls.py raíz del proyecto):
   GET /api/skus/?rut_empresa=XXXXXXXX-X
   GET /api/articulos/{articulo_codigo}/tallas/?rut_empresa=XXXXXXXX-X
   GET /api/stock/movimientos/?rut_empresa=XXXXXXXX-X[&fecha_desde=YYYY-MM-DD]
+  GET /api/guias-talla/?rut_empresa=XXXXXXXX-X
   GET /api/health/                          (sin autenticación)
 
 Autenticación soportada:
@@ -23,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 
-from app.models import Producto_Talla
+from app.models import Producto_Talla, Producto, GuiaTalla, GuiaTallaItem
 
 from .authentication import ApiKeyAuthentication, ApiKeyPermission
 from .serializers import ProductoExternalSerializer, agrupar_por_producto
@@ -47,6 +48,8 @@ _VALUES_FIELDS = (
     'producto__precioventa',
     'producto__precioSugerido',
     'producto__sucursal__alias',
+    'producto__guia_talla_id',
+    'producto__tipo_talla',
 )
 
 
@@ -216,3 +219,97 @@ class HealthCheckExternalView(APIView):
 
     def get(self, request):
         return Response({'status': 'ok'})
+
+
+# ──────────────────────────────────────────────
+# Endpoint 5 — Guías de talla por empresa
+# GET /api/guias-talla/?rut_empresa=XXXXXXXX-X
+# ──────────────────────────────────────────────
+
+class GuiasTallaExternalView(APIView):
+    """
+    Retorna todas las guías de talla asociadas a productos de la empresa,
+    incluyendo los items de conversión y los códigos de artículo vinculados.
+
+    AllConnected usa esta información para crear/sincronizar GuiaTallas
+    en su modelo multi-sistema y asignarlas a los ProductoMaster importados.
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    def get(self, request):
+        rut = request.query_params.get('rut_empresa', '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'El parámetro rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.info(f"[external/guias-talla] rut={rut}")
+
+        productos_empresa = Producto.objects.filter(
+            sucursal__empresa__rut=rut,
+        )
+
+        guia_ids_directo = set(
+            productos_empresa
+            .filter(guia_talla__isnull=False)
+            .values_list('guia_talla_id', flat=True)
+        )
+
+        from app.models import GuiaTallaProducto
+        guia_ids_m2m = set(
+            GuiaTallaProducto.objects
+            .filter(producto__sucursal__empresa__rut=rut)
+            .values_list('guia_id', flat=True)
+        )
+
+        all_guia_ids = guia_ids_directo | guia_ids_m2m
+        if not all_guia_ids:
+            logger.info(f"[external/guias-talla] rut={rut} → 0 guías")
+            return Response({
+                'success': True, 'data': [], 'total': 0, 'error': None,
+            })
+
+        guias = (
+            GuiaTalla.objects
+            .filter(id__in=all_guia_ids)
+            .prefetch_related('items', 'productos_principales', 'productos')
+        )
+
+        data = []
+        for guia in guias:
+            items = list(
+                guia.items.order_by('orden').values(
+                    'cl', 'us', 'eu', 'uk', 'br', 'cm', 'orden',
+                )
+            )
+
+            articulos_fk = set(
+                guia.productos_principales
+                .filter(sucursal__empresa__rut=rut)
+                .values_list('articulo', flat=True)
+            )
+            articulos_m2m = set(
+                guia.productos
+                .filter(sucursal__empresa__rut=rut)
+                .values_list('articulo', flat=True)
+            )
+            productos_articulos = sorted(articulos_fk | articulos_m2m)
+
+            data.append({
+                'id': guia.id,
+                'nombre': guia.nombre,
+                'marca': guia.marca.valor if guia.marca else '',
+                'items': items,
+                'productos_articulos': productos_articulos,
+            })
+
+        logger.info(f"[external/guias-talla] rut={rut} → {len(data)} guías")
+        return Response({
+            'success': True,
+            'data': data,
+            'total': len(data),
+            'error': None,
+        })

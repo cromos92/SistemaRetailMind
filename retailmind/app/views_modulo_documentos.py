@@ -18,7 +18,7 @@ import re
 from decimal import Decimal
 
 from .models import (
-    Dte, Dte_Productos, Correlativo, Empresa, Sucursal, EmpresaUser,
+    Dte, Dte_Productos, Dte_Detalle_Pago, Correlativo, Empresa, Sucursal, EmpresaUser,
     Producto_Talla, Movimientos_Producto, TIPO_DOCUMENTO_CHOICES,
     CreditoTrabajador, PagoCreditoTrabajador, FirmaCreditoTrabajador,
     Vendedor, ESTADO_CREDITO_CHOICES, TIPO_CREDITO_CHOICES, METODO_PAGO_TICKET_CHOICES
@@ -50,30 +50,30 @@ def detalle_dte(request, dte_id):
         
         # Obtener productos del DTE
         productos = []
-        for dte_producto in dte.dte_productos.select_related('productoTalla__producto', 'productoTalla__talla'):
+        for dte_producto in dte.dte_productos.select_related('productoTalla__producto'):
+            pt = dte_producto.productoTalla
             productos.append({
                 'id': dte_producto.id,
-                'sku': dte_producto.productoTalla.sku,
-                'nombre_producto': dte_producto.productoTalla.producto.articulo,
-                'talla': dte_producto.productoTalla.talla.nombre if dte_producto.productoTalla.talla else 'Sin talla',
-                'cantidad': dte_producto.cantidad,
-                'precio_unitario': float(dte_producto.precio_unitario),
-                'descuento_unitario': float(dte_producto.descuento_unitario),
-                'total_linea': float(dte_producto.cantidad * (dte_producto.precio_unitario - dte_producto.descuento_unitario))
+                'sku': pt.sku if pt else None,
+                'nombre_producto': pt.producto.articulo if pt and pt.producto else dte_producto.descripcion,
+                'talla': pt.talla if pt else 'Sin talla',
+                'cantidad': dte_producto.stock,
+                'precio_unitario': float(dte_producto.precio),
+                'descuento_monto': float(dte_producto.descuento_monto or 0),
+                'total_linea': float(dte_producto.monto_item or (dte_producto.precio * dte_producto.stock))
             })
         
         # Obtener pagos si existen
         pagos = []
-        if hasattr(dte, 'dte_detalle_pago'):
-            for pago in dte.dte_detalle_pago.all():
-                pagos.append({
-                    'id': pago.id,
-                    'fecha_pago': pago.fecha_pago.strftime('%d/%m/%Y'),
-                    'monto': float(pago.monto),
-                    'metodo_pago': pago.metodo_pago,
-                    'referencia': pago.referencia or '',
-                    'observaciones': pago.observaciones or ''
-                })
+        for pago in Dte_Detalle_Pago.objects.filter(dte=dte):
+            pagos.append({
+                'id': pago.id,
+                'monto': float(pago.monto),
+                'metodo_pago': pago.metodo_pago,
+                'voucher': pago.voucher or '',
+                'tipo_tarjeta': pago.tipo_tarjeta or '',
+                'notas': pago.notas or ''
+            })
         
         # Obtener movimientos asociados
         movimientos = []
@@ -85,15 +85,19 @@ def detalle_dte(request, dte_id):
                 'cantidad': movimiento.cantidad,
                 'producto': movimiento.producto_talla.producto.articulo if movimiento.producto_talla else '',
                 'sku': movimiento.producto_talla.sku if movimiento.producto_talla else '',
-                'sucursal_origen': movimiento.sucursal_origen.nombre if movimiento.sucursal_origen else '',
-                'sucursal_destino': movimiento.sucursal_destino.nombre if movimiento.sucursal_destino else '',
+                'sucursal_origen': movimiento.sucursal_origen.alias if movimiento.sucursal_origen else '',
+                'sucursal_destino': movimiento.sucursal_destino.alias if movimiento.sucursal_destino else '',
                 'estado': movimiento.estado,
                 'fecha_creacion': movimiento.fecha_creacion.strftime('%d/%m/%Y %H:%M')
             })
         
+        monto_neto = float(dte.monto_neto or 0)
+        monto_con_iva = float(dte.monto_con_iva or 0)
+        iva = monto_con_iva - monto_neto
+
         dte_data = {
             'id': dte.id,
-            'numero_dte': dte.numero_dte,
+            'numero_documento': dte.numero_documento,
             'tipo_documento': dte.tipo_documento,
             'tipo_transaccion': dte.tipo_transaccion,
             'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y'),
@@ -108,13 +112,14 @@ def detalle_dte(request, dte_id):
                 'nombre': dte.receptor.nombre,
                 'rut': dte.receptor.rut
             } if dte.receptor else None,
-            'subtotal': float(dte.subtotal),
-            'descuento_global': float(dte.descuento_global),
-            'iva': float(dte.iva),
-            'total': float(dte.total),
+            'monto_neto': monto_neto,
+            'descuento': float(dte.descuento or 0),
+            'iva': iva,
+            'monto_con_iva': monto_con_iva,
             'estado_dte': dte.estado_dte,
-            'fecha_recepcion': dte.fecha_recepcion.strftime('%d/%m/%Y %H:%M') if dte.fecha_recepcion else None,
-            'observaciones': dte.observaciones or '',
+            'estado_pago': dte.estado_pago,
+            'fecha_recepcion': dte.fecha_recepcion.strftime('%d/%m/%Y') if dte.fecha_recepcion else None,
+            'referencias': dte.referencias or '',
             'productos': productos,
             'pagos': pagos,
             'movimientos': movimientos
@@ -1154,6 +1159,218 @@ def validar_datos_dte_acepta(datos):
     return True, "OK"
 
 
+# =====================================================================
+# PARSER DE TXT ACEPTA
+# =====================================================================
+
+def _campo_o_none(valor):
+    """Convierte campo vacío del TXT en None, numérico en int/float según corresponda."""
+    if valor is None or valor.strip() == '':
+        return None
+    valor = valor.strip()
+    try:
+        if '.' in valor:
+            return float(valor)
+        return int(valor)
+    except ValueError:
+        return valor
+
+
+def parsear_txt_acepta(contenido_txt):
+    """
+    Parsea un archivo TXT en formato Acepta y retorna un dict con la misma
+    estructura que usan las funciones de generación.
+
+    Soporta:
+      - Boleta  (39/41)  — sin transporte, detalle sin campos descuento por ítem
+      - Factura (33/34/43/52) — con transporte, detalle con descuento_pct/monto_descuento
+      - Nota de Crédito (61) — similar a factura
+
+    Returns:
+        dict con claves: documento, emisor, receptor, transporte (factura),
+                         totales, detalle, descuentos_recargos, referencias, observaciones
+    """
+    lineas_raw = contenido_txt.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    lineas = [l for l in lineas_raw if l.strip()]
+
+    # Separar en secciones por ~
+    secciones = []
+    seccion_actual = []
+    for linea in lineas:
+        if linea.strip() == '~':
+            secciones.append(seccion_actual)
+            seccion_actual = []
+        elif linea.strip() == '\\':
+            secciones.append(seccion_actual)
+            break
+        else:
+            seccion_actual.append(linea)
+    else:
+        if seccion_actual:
+            secciones.append(seccion_actual)
+
+    def split_campos(linea):
+        """Divide por pipe y elimina cierre }"""
+        campos = linea.split('|')
+        if campos and campos[-1].strip() == '}':
+            campos = campos[:-1]
+        if campos and campos[-1].strip() == '':
+            campos = campos[:-1]
+        return campos
+
+    resultado = {
+        'documento': {},
+        'emisor': {},
+        'receptor': {},
+        'transporte': {},
+        'totales': {},
+        'detalle': [],
+        'descuentos_recargos': [],
+        'referencias': [],
+        'observaciones': '',
+    }
+
+    if not secciones or not secciones[0]:
+        return resultado
+
+    # --- SECCION CABECERA (antes del primer ~) ---
+    cabecera = secciones[0]
+
+    # Linea 1: documento
+    if len(cabecera) >= 1:
+        c = split_campos(cabecera[0])
+        tipo_doc = _campo_o_none(c[0]) if len(c) > 0 else None
+        resultado['documento'] = {
+            'tipo_documento': tipo_doc,
+            'folio': _campo_o_none(c[1]) if len(c) > 1 else None,
+            'fecha_emision': _campo_o_none(c[2]) if len(c) > 2 else None,
+        }
+
+    es_boleta = tipo_doc in (39, 41)
+    es_nc = tipo_doc == 61
+
+    # Linea 2: emisor
+    if len(cabecera) >= 2:
+        c = split_campos(cabecera[1])
+        resultado['emisor'] = {
+            'rut': _campo_o_none(c[0]) if len(c) > 0 else None,
+            'razon_social': _campo_o_none(c[1]) if len(c) > 1 else None,
+            'giro': _campo_o_none(c[2]) if len(c) > 2 else None,
+            'acteco': _campo_o_none(c[3]) if len(c) > 3 else None,
+        }
+
+    # Linea 3: receptor
+    if len(cabecera) >= 3:
+        c = split_campos(cabecera[2])
+        resultado['receptor'] = {
+            'rut': _campo_o_none(c[0]) if len(c) > 0 else None,
+            'razon_social': _campo_o_none(c[2]) if len(c) > 2 else None,
+            'giro': _campo_o_none(c[3]) if len(c) > 3 else None,
+        }
+
+    if es_boleta:
+        # Boleta: linea 4 = totales (no hay transporte)
+        if len(cabecera) >= 4:
+            c = split_campos(cabecera[3])
+            resultado['totales'] = {
+                'monto_total': _campo_o_none(c[1]) if len(c) > 1 else None,
+            }
+    else:
+        # Factura/NC: linea 4 = transporte, linea 5 = totales
+        if len(cabecera) >= 4:
+            c = split_campos(cabecera[3])
+            resultado['transporte'] = {
+                'patente': _campo_o_none(c[0]) if len(c) > 0 else None,
+                'rut_transportista': _campo_o_none(c[1]) if len(c) > 1 else None,
+            }
+        if len(cabecera) >= 5:
+            c = split_campos(cabecera[4])
+            resultado['totales'] = {
+                'monto_neto': _campo_o_none(c[0]) if len(c) > 0 else None,
+                'monto_exento': _campo_o_none(c[1]) if len(c) > 1 else None,
+                'tasa_iva': _campo_o_none(c[2]) if len(c) > 2 else None,
+                'iva': _campo_o_none(c[3]) if len(c) > 3 else None,
+                'monto_total': _campo_o_none(c[4]) if len(c) > 4 else None,
+            }
+
+    # --- SECCIONES DESPUES DEL PRIMER ~ ---
+    # Seccion 1: detalle productos
+    if len(secciones) > 1:
+        for linea in secciones[1]:
+            c = split_campos(linea)
+            if not c:
+                continue
+            if es_boleta:
+                # INT1|codigo||nombre||cantidad|unidad|precio|monto|}
+                resultado['detalle'].append({
+                    'tipo': _campo_o_none(c[0]) if len(c) > 0 else None,
+                    'codigo': _campo_o_none(c[1]) if len(c) > 1 else None,
+                    'nombre': _campo_o_none(c[3]) if len(c) > 3 else None,
+                    'cantidad': _campo_o_none(c[5]) if len(c) > 5 else None,
+                    'unidad': _campo_o_none(c[6]) if len(c) > 6 else None,
+                    'precio_unitario': _campo_o_none(c[7]) if len(c) > 7 else None,
+                    'monto_item': _campo_o_none(c[8]) if len(c) > 8 else None,
+                })
+            else:
+                # ind_exe|nombre|desc|qty|unidad|precio|dcto_pct|dcto_monto|monto|codigo|}
+                resultado['detalle'].append({
+                    'indicador_exencion': _campo_o_none(c[0]) if len(c) > 0 else None,
+                    'nombre': _campo_o_none(c[1]) if len(c) > 1 else None,
+                    'descripcion': _campo_o_none(c[2]) if len(c) > 2 else None,
+                    'cantidad': _campo_o_none(c[3]) if len(c) > 3 else None,
+                    'unidad': _campo_o_none(c[4]) if len(c) > 4 else None,
+                    'precio_unitario': _campo_o_none(c[5]) if len(c) > 5 else None,
+                    'descuento_pct': _campo_o_none(c[6]) if len(c) > 6 else None,
+                    'monto_descuento': _campo_o_none(c[7]) if len(c) > 7 else None,
+                    'monto_item': _campo_o_none(c[8]) if len(c) > 8 else None,
+                    'codigo': _campo_o_none(c[9]) if len(c) > 9 else None,
+                })
+
+    # Seccion 2: descuentos/recargos globales (factura) o observaciones (boleta)
+    if len(secciones) > 2:
+        for linea in secciones[2]:
+            c = split_campos(linea)
+            if not c:
+                continue
+            tpo_mov = (c[0] or '').strip() if len(c) > 0 else ''
+            if tpo_mov in ('D', 'R'):
+                resultado['descuentos_recargos'].append({
+                    'tpo_mov': tpo_mov,
+                    'glosa_dr': _campo_o_none(c[1]) if len(c) > 1 else None,
+                    'tpo_valor': _campo_o_none(c[2]) if len(c) > 2 else None,
+                    'valor_dr': _campo_o_none(c[3]) if len(c) > 3 else None,
+                    'ind_exe_dr': _campo_o_none(c[4]) if len(c) > 4 else None,
+                })
+            else:
+                resultado['observaciones'] = linea
+
+    # Secciones restantes: referencias, observaciones
+    for sec_idx in range(3, len(secciones)):
+        for linea in secciones[sec_idx]:
+            c = split_campos(linea)
+            if not c:
+                continue
+            first = (c[0] or '').strip() if c else ''
+            if first.isdigit() and int(first) in (33, 34, 39, 41, 52, 61):
+                resultado['referencias'].append({
+                    'tipo_documento': _campo_o_none(c[0]),
+                    'folio': _campo_o_none(c[2]) if len(c) > 2 else None,
+                    'fecha': _campo_o_none(c[3]) if len(c) > 3 else None,
+                })
+            elif first in ('D', 'R'):
+                resultado['descuentos_recargos'].append({
+                    'tpo_mov': first,
+                    'glosa_dr': _campo_o_none(c[1]) if len(c) > 1 else None,
+                    'tpo_valor': _campo_o_none(c[2]) if len(c) > 2 else None,
+                    'valor_dr': _campo_o_none(c[3]) if len(c) > 3 else None,
+                    'ind_exe_dr': _campo_o_none(c[4]) if len(c) > 4 else None,
+                })
+            elif not resultado['observaciones'] and len(c) >= 3:
+                resultado['observaciones'] = linea
+
+    return resultado
+
+
 def generar_txt_nota_credito_acepta(datos):
     """
     Genera el contenido de un archivo TXT para NOTAS DE CRÉDITO (tipo 61) en formato Acepta
@@ -1438,27 +1655,45 @@ def generar_txt_boleta_acepta(datos):
     # ===== SEPARADOR =====
     lineas.append('~')
     
+    # ===== DESCUENTOS / RECARGOS GLOBALES (Tabla 4 Boleta) =====
+    # Debe ir ANTES de observaciones en formato Acepta
+    descuentos_recargos = datos.get('descuentos_recargos', [])
+    descuento_global = totales.get('descuento_global', 0)
+
+    if descuentos_recargos:
+        for dr in descuentos_recargos:
+            linea_dr = separador.join([
+                str(dr.get('tpo_mov', 'D')),
+                limpiar_texto(str(dr.get('glosa_dr', 'Descuento')), 45),
+                str(dr.get('tpo_valor', '$')),
+                formatear_monto(dr.get('valor_dr', 0)),
+                str(dr.get('ind_exe_dr', '')) if dr.get('ind_exe_dr') else '',
+                '}'
+            ])
+            lineas.append(linea_dr)
+        lineas.append('~')
+    elif descuento_global and descuento_global > 0:
+        linea_desc = separador.join(['D', 'Descuento Global', '$', formatear_monto(descuento_global), '', '}'])
+        lineas.append(linea_desc)
+        lineas.append('~')
+    
     # ===== OBSERVACIONES CON FORMATO ESPECIAL =====
-    # ✅ Incluir información del vendedor y métodos de pago
-    # ✅ Usar alias de sucursal en lugar de codigo_vendedor
     vendedor_codigo = emisor.get('sucursal', '') or emisor.get('codigo_vendedor', '') or 'USUARIO'
     vendedor_nombre = emisor.get('nombre_vendedor', '') or 'Sin vendedor'
     correlativo = doc.get('folio', '')
     correlativo_ticket = emisor.get('correlativo_ticket', '')
     metodos_pago = emisor.get('metodos_pago', '')
     
-    # ✅ Obtener nombre de impresora para BOLETAS desde configuración de sucursal
     nombre_impresora = emisor.get('nombre_impresora_boleta', 'boleta') or 'boleta'
     
-    # Construir observación con toda la información
     observacion = f"^ Vendedor: {vendedor_nombre} (Cod: {vendedor_codigo}) ^ Ticket: {correlativo_ticket} ^ DTE: {correlativo} ^ Pago: {metodos_pago} "
     
     linea_obs = [
         vendedor_codigo,
         '', '',
         observacion,
-        '', '', '',  # ✅ 3 campos vacíos = 4 pipes
-        nombre_impresora,  # ✅ Nombre de impresora configurable por sucursal
+        '', '', '',
+        nombre_impresora,
         '4',
         '}'
     ]
@@ -1466,14 +1701,7 @@ def generar_txt_boleta_acepta(datos):
     
     # ===== SEPARADOR =====
     lineas.append('~')
-    
-    # ===== DESCUENTO GLOBAL (si existe) =====
-    descuento_global = totales.get('descuento_global', 0)
-    if descuento_global and descuento_global > 0:
-        linea_desc = f"1|D|Descuento Global|$|{formatear_monto(descuento_global)}" + "|}"
-        lineas.append(linea_desc)
-        lineas.append('~')
-    
+
     # ===== CIERRE =====
     lineas.append('\\')
     
@@ -1722,17 +1950,25 @@ def generar_txt_dte_acepta(datos):
     # ===== PRIMER SEPARADOR =====
     lineas.append('~')
     
-    # ===== DESCUENTO GLOBAL (Opcional) =====
+    # ===== DESCUENTOS / RECARGOS GLOBALES (Tabla 3) =====
+    descuentos_recargos = datos.get('descuentos_recargos', [])
     descuento_global = totales.get('descuento_global', 0)
-    
-    if descuento_global and descuento_global > 0:
-        # CON descuento global
-        logger.warning(f"✅ Agregando línea de descuento global: {descuento_global}")
-        linea_descuento = f"D|Descuento|$|{formatear_monto(descuento_global)}|1|" + "|}"
+
+    if descuentos_recargos:
+        for dr in descuentos_recargos:
+            linea_dr = separador.join([
+                str(dr.get('tpo_mov', 'D')),
+                limpiar_texto(str(dr.get('glosa_dr', 'Descuento')), 45),
+                str(dr.get('tpo_valor', '$')),
+                formatear_monto(dr.get('valor_dr', 0)),
+                str(dr.get('ind_exe_dr', '')) if dr.get('ind_exe_dr') else '',
+                '}'
+            ])
+            lineas.append(linea_dr)
+    elif descuento_global and descuento_global > 0:
+        linea_descuento = separador.join(['D', 'Descuento', '$', formatear_monto(descuento_global), '1', '}'])
         lineas.append(linea_descuento)
-    
-    # ===== SEPARADOR =====
-    # ✅ CORRECCIÓN: NO agregar línea vacía |||||||}
+
     lineas.append('~')
     
     # ===== REFERENCIAS A OTROS DOCUMENTOS (Opcional) =====
@@ -1977,26 +2213,14 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         })
     
     # Calcular totales
-    # Los precios en BD son IVA-inclusive; para facturas el neto se extrae dividiendo por 1.19.
-    # Para boletas se usa el precio IVA-inclusive directamente (el total ya incluye IVA).
-    subtotal_iva = sum(item.subtotal for item in ticket.ticket_productos.all())
-    descuento_global_iva = ticket.descuento or 0   # descuento global IVA-inclusive (normalmente 0 en POS)
-    total_con_iva = subtotal_iva - descuento_global_iva
+    # ticket.total is always the NET amount the customer pays (IVA-inclusive).
+    # Per-item discounts are already reflected in tp.subtotal, so we must NOT
+    # subtract ticket.descuento again (that would double-count).
+    total_con_iva = int(ticket.total or 0)
 
-    if 'FACTURA' in tipo_dte:
-        # Extraer neto correcto desde el total IVA-inclusive
-        neto = int(round(Decimal(total_con_iva) / Decimal('1.19')))
-        iva = total_con_iva - neto
-        total = total_con_iva
-        # Descuento global en neto (para la línea D del TXT)
-        descuento_global = int(round(Decimal(descuento_global_iva) / Decimal('1.19'))) if descuento_global_iva else 0
-    else:
-        # Boletas: monto_total = total IVA-inclusive (lo que paga el cliente)
-        # El TXT de boleta solo usa monto_total; neto/iva son de uso interno.
-        total = total_con_iva
-        neto  = int(round(Decimal(total_con_iva) / Decimal('1.19')))
-        iva   = total_con_iva - neto
-        descuento_global = descuento_global_iva
+    neto = int(round(Decimal(total_con_iva) / Decimal('1.19')))
+    iva = total_con_iva - neto
+    total = total_con_iva
     
     totales = {
         'monto_neto': neto,
@@ -2004,7 +2228,7 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         'tasa_iva': 19,
         'iva': iva,
         'monto_total': total,
-        'descuento_global': descuento_global
+        'descuento_global': 0
     }
     
     # Preparar referencias (sistema nuevo de múltiples referencias)
@@ -2285,64 +2509,77 @@ def generar_txt_desde_dte_existente(request):
             'referencias': []
         }
         
-        # ✅ Agrupar productos por artículo para consolidar tallas
         from collections import defaultdict
         productos_agrupados = defaultdict(lambda: {
             'tallas': [],
             'cantidad_total': 0,
             'precio': 0,
             'monto_total': 0,
+            'descuento_monto_total': 0,
+            'descuento_pct': 0,
             'producto': None,
             'articulo': '',
             'marca': '',
             'color': ''
         })
-        
-        # Agrupar por artículo
+
         for dte_producto in dte.dte_productos.select_related('productoTalla__producto'):
             producto = dte_producto.productoTalla.producto
             producto_talla = dte_producto.productoTalla
             articulo_key = producto.articulo
-            
+
             grupo = productos_agrupados[articulo_key]
-            
-            # Agregar talla al grupo
+
             talla_nombre = str(producto_talla.talla) if hasattr(producto_talla, 'talla') and producto_talla.talla else 'U'
             grupo['tallas'].append(f"{dte_producto.stock}:{talla_nombre}")
             grupo['cantidad_total'] += dte_producto.stock
-            grupo['precio'] = dte_producto.precio  # Mismo precio
-            grupo['monto_total'] += dte_producto.stock * dte_producto.precio
+            grupo['precio'] = dte_producto.precio_unitario or dte_producto.precio
+            grupo['monto_total'] += dte_producto.monto_item or (dte_producto.stock * dte_producto.precio)
+            grupo['descuento_monto_total'] += int(dte_producto.descuento_monto or 0)
+            if dte_producto.descuento_pct:
+                grupo['descuento_pct'] = float(dte_producto.descuento_pct)
             grupo['producto'] = producto
             grupo['articulo'] = producto.articulo
-            
-            # Obtener marca y color si existen
+
             if not grupo['marca'] and producto.atributo1:
                 grupo['marca'] = producto.atributo1.valor
             if not grupo['color'] and producto.atributo2:
                 grupo['color'] = producto.atributo2.valor
-        
-        # Convertir grupos a detalle
+
         for articulo, grupo in productos_agrupados.items():
-            # Formato: MARCA COLOR <tallas>
-            tallas_str = ' '.join(grupo['tallas'])  # 2:5,5 3:6
-            # ✅ Limpiar marca y color de caracteres especiales
+            tallas_str = ' '.join(grupo['tallas'])
             marca_limpia = limpiar_texto(grupo['marca'] or '')
             color_limpio = limpiar_texto(grupo['color'] or '')
             marca_color = f"{marca_limpia} {color_limpio}".strip() if marca_limpia or color_limpio else ''
             nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
-            
+
             datos['detalle'].append({
                 'nombre': limpiar_texto(nombre_final),
                 'descripcion': '',
                 'cantidad': grupo['cantidad_total'],
                 'unidad': 'UN',
                 'precio_unitario': grupo['precio'],
-                'descuento_pct': 0,
-                'monto_descuento': 0,
+                'descuento_pct': grupo['descuento_pct'],
+                'monto_descuento': grupo['descuento_monto_total'],
                 'monto_item': grupo['monto_total'],
-                'codigo': limpiar_texto(grupo['articulo'])  # Artículo como código
+                'codigo': limpiar_texto(grupo['articulo'])
             })
-        
+
+        # Poblar descuentos/recargos globales desde BD
+        from .models import DescuentoRecargo
+        drs = dte.descuentos_recargos.all()
+        if drs.exists():
+            datos['descuentos_recargos'] = [
+                {
+                    'tpo_mov': dr.tpo_mov,
+                    'glosa_dr': dr.glosa_dr,
+                    'tpo_valor': dr.tpo_valor,
+                    'valor_dr': dr.valor_dr,
+                    'ind_exe_dr': dr.ind_exe_dr,
+                }
+                for dr in drs
+            ]
+
         # Agregar referencias si existen
         if dte.referencias:
             try:
@@ -2375,3 +2612,35 @@ def generar_txt_desde_dte_existente(request):
             'success': False,
             'error': f'Error al generar archivo TXT: {str(e)}'
         }, status=500)
+
+
+@require_POST
+@login_required
+def importar_txt_acepta_api(request):
+    """
+    Parsea un archivo TXT de Acepta y retorna JSON estructurado.
+    Acepta multipart (campo 'archivo') o JSON (campo 'contenido').
+    """
+    try:
+        contenido = None
+
+        if request.content_type and 'multipart' in request.content_type:
+            archivo = request.FILES.get('archivo')
+            if not archivo:
+                return JsonResponse({'success': False, 'error': 'No se recibió archivo'}, status=400)
+            contenido = archivo.read().decode('utf-8', errors='replace')
+        else:
+            data = json.loads(request.body or '{}')
+            contenido = data.get('contenido', '')
+
+        if not contenido or not contenido.strip():
+            return JsonResponse({'success': False, 'error': 'Contenido del TXT vacío'}, status=400)
+
+        resultado = parsear_txt_acepta(contenido)
+
+        return JsonResponse({'success': True, 'data': resultado})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al parsear TXT: {str(e)}'}, status=500)

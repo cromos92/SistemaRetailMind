@@ -358,7 +358,7 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         # Filtrar por empresa del usuario (a través del rut_empresa del pedido)
         # Si el usuario tiene sucursal activa, filtra por el RUT de su empresa
         user = self.request.user
-        if not user.is_superuser:
+        if getattr(user, 'rol', '') != 'administrador':
             try:
                 from app.models import EmpresaUser
                 empresa_user = EmpresaUser.objects.filter(user=user).select_related('empresa__sucursales_app').first()

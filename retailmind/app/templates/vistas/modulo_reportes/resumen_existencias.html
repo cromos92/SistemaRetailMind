@@ -404,6 +404,8 @@
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+.spin { display: inline-block; animation: spin .8s linear infinite; }
+.nexo-btn:disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
 
 .nexo-empty-state {
     text-align: center;
@@ -511,8 +513,8 @@
             </select>
         </div>
 
-        <button class="nexo-btn nexo-btn-primary" onclick="cargarResumen()">
-            🔄 Generar Resumen
+        <button class="nexo-btn nexo-btn-primary" id="btn-generar-resumen" onclick="cargarResumen()">
+            <i class="ri-refresh-line"></i> Generar Resumen
         </button>
 
         <button class="nexo-btn nexo-btn-success" onclick="exportarExcel()">
@@ -631,10 +633,17 @@ async function cargarCategorias() {
 
 // ==================== CARGAR RESUMEN ====================
 async function cargarResumen() {
+    const btnGenerar = document.getElementById('btn-generar-resumen');
+    if (btnGenerar.disabled) return;
+
     const marcaId = document.getElementById('filtro-marca').value;
     const categoriaId = document.getElementById('filtro-categoria').value;
     const fechaCorte = document.getElementById('filtro-fecha').value;
-    
+
+    // Bloquear boton y mostrar estado de carga
+    btnGenerar.disabled = true;
+    btnGenerar.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';
+
     const contenido = document.getElementById('contenido-resumen');
     contenido.innerHTML = `
         <div class="nexo-loading">
@@ -642,21 +651,21 @@ async function cargarResumen() {
             <p>Generando resumen...</p>
         </div>
     `;
-    
+
     try {
         let url = '/app/api/resumen-existencias/';
         const params = new URLSearchParams();
-        
+
         params.append('agrupar_por', agruparPor);
         if (marcaId) params.append('marca_id', marcaId);
         if (categoriaId && agruparPor !== 'categoria') params.append('categoria_id', categoriaId);
         if (fechaCorte) params.append('fecha_corte', fechaCorte);
-        
+
         if (params.toString()) url += '?' + params.toString();
-        
+
         const response = await fetch(url);
         const data = await response.json();
-        
+
         if (data.success) {
             esHistorico = data.es_historico;
             actualizarUIHistorico(data);
@@ -665,7 +674,7 @@ async function cargarResumen() {
         } else {
             contenido.innerHTML = `
                 <div class="nexo-empty-state">
-                    <div class="icon">⚠️</div>
+                    <div class="icon"><i class="ri-error-warning-line" style="font-size:2rem;color:var(--nexo-warning);"></i></div>
                     <p>${data.error || 'Error al cargar datos'}</p>
                 </div>
             `;
@@ -674,10 +683,13 @@ async function cargarResumen() {
         console.error('Error al cargar resumen:', error);
         contenido.innerHTML = `
             <div class="nexo-empty-state">
-                <div class="icon">⚠️</div>
-                <p>Error de conexión al cargar el resumen</p>
+                <div class="icon"><i class="ri-error-warning-line" style="font-size:2rem;color:var(--nexo-warning);"></i></div>
+                <p>Error de conexion al cargar el resumen</p>
             </div>
         `;
+    } finally {
+        btnGenerar.disabled = false;
+        btnGenerar.innerHTML = '<i class="ri-refresh-line"></i> Generar Resumen';
     }
 }
 

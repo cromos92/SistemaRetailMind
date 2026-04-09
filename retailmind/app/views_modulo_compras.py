@@ -2880,41 +2880,50 @@ def dashboard_compras_mejorado_api(request):
         insights = generar_insights_compras_mejorado(metricas, pareto_proveedores, comparativa_anual)
         
         # ===== MÉTRICAS DE DISTRIBUCIÓN (CENTRO DE COMPRAS) =====
-        # Estas funciones pueden fallar si no se ha aplicado la migración de nuevos campos
+        import logging
+        _logger = logging.getLogger(__name__)
+
         try:
             distribucion = calcular_metricas_distribucion(anio, compras_ids)
-        except:
+        except Exception as e:
+            _logger.warning(f'Error en metricas distribucion: {e}')
             distribucion = {'unidades_compradas': 0, 'unidades_despachadas': 0, 'stock_centro_distribucion': 0, 'eficiencia_distribucion': 0}
-        
+
         try:
             despachos_sucursal = calcular_despachos_por_sucursal(anio)
-        except:
+        except Exception as e:
+            _logger.warning(f'Error en despachos sucursal: {e}')
             despachos_sucursal = []
-        
+
         try:
             sucursales_destino = calcular_rendimiento_sucursales_destino(anio)
-        except:
+        except Exception as e:
+            _logger.warning(f'Error en rendimiento sucursales destino: {e}')
             sucursales_destino = []
-        
+
         try:
             flujo_distribucion = calcular_flujo_distribucion_mensual(anio)
-        except:
+        except Exception as e:
+            _logger.warning(f'Error en flujo distribucion: {e}')
             flujo_distribucion = []
-        
+
         # ===== MÁRGENES CENTRO DE DISTRIBUCIÓN =====
         try:
             margenes_cd = calcular_margenes_centro_distribucion(anio)
-        except:
+        except Exception as e:
+            _logger.warning(f'Error en margenes CD: {e}')
             margenes_cd = {'margen_total_cd': 0, 'costo_proveedor_total': 0, 'costo_destino_total': 0, 'margen_promedio_pct': 0, 'unidades_despachadas': 0, 'detalle_por_sucursal': [], 'centros_distribucion': []}
-        
+
         try:
             comparativa_costos = calcular_comparativa_costos_cd_vs_sucursales(anio)
-        except:
+        except Exception as e:
+            _logger.warning(f'Error en comparativa costos: {e}')
             comparativa_costos = []
-        
+
         try:
             rentabilidad_tipo = calcular_rentabilidad_por_tipo_sucursal(anio)
-        except:
+        except Exception as e:
+            _logger.warning(f'Error en rentabilidad tipo: {e}')
             rentabilidad_tipo = {'centros_distribucion': [], 'sucursales_vendedoras': []}
         
         return JsonResponse({

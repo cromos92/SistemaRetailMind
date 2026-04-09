@@ -49,99 +49,56 @@
             </div>
         </div>
 
-        <!-- Tarjetas de estadísticas -->
-        <div class="row">
-            <div class="col-xl-3 col-md-6">
-                <div class="card card-animate">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Total Requerimientos</p>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-end justify-content-between mt-4">
+        <!-- KPIs compactos -->
+        <div class="row g-2 mb-2">
+            <div class="col-6 col-md-3">
+                <div class="card card-animate mb-0">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h4 class="fs-22 fw-semibold ff-secondary mb-4">
-                                    <span class="counter-value" id="total-requerimientos">0</span>
-                                </h4>
+                                <p class="text-uppercase fw-medium text-muted mb-0" style="font-size:.7rem">Total</p>
+                                <h4 class="fs-5 fw-semibold mb-0"><span id="total-requerimientos">0</span></h4>
                             </div>
-                            <div class="avatar-sm flex-shrink-0">
-                                <span class="avatar-title bg-soft-info rounded fs-3">
-                                    <i class="bx bx-file text-info"></i>
-                                </span>
-                            </div>
+                            <span class="avatar-xs"><span class="avatar-title bg-soft-info rounded"><i class="bx bx-file text-info"></i></span></span>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-xl-3 col-md-6">
-                <div class="card card-animate cursor-pointer" onclick="filtrarPorEstado('PENDIENTE')">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Pendientes</p>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-end justify-content-between mt-4">
+            <div class="col-6 col-md-3">
+                <div class="card card-animate mb-0 cursor-pointer" onclick="filtrarPorEstado('PENDIENTE')">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h4 class="fs-22 fw-semibold ff-secondary mb-4">
-                                    <span class="counter-value" id="pendientes">0</span>
-                                </h4>
+                                <p class="text-uppercase fw-medium text-muted mb-0" style="font-size:.7rem">Pendientes</p>
+                                <h4 class="fs-5 fw-semibold mb-0"><span id="pendientes">0</span></h4>
                             </div>
-                            <div class="avatar-sm flex-shrink-0">
-                                <span class="avatar-title bg-soft-warning rounded fs-3">
-                                    <i class="bx bx-time text-warning"></i>
-                                </span>
-                            </div>
+                            <span class="avatar-xs"><span class="avatar-title bg-soft-warning rounded"><i class="bx bx-time text-warning"></i></span></span>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-xl-3 col-md-6">
-                <div class="card card-animate cursor-pointer" onclick="filtrarPorEstado('ESPERANDO_RESPUESTA')">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Esperando Proveedor</p>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-end justify-content-between mt-4">
+            <div class="col-6 col-md-3">
+                <div class="card card-animate mb-0 cursor-pointer" onclick="filtrarPorEstado('ESPERANDO_RESPUESTA')">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h4 class="fs-22 fw-semibold ff-secondary mb-4">
-                                    <span class="counter-value text-primary" id="esperando-proveedor">0</span>
-                                </h4>
+                                <p class="text-uppercase fw-medium text-muted mb-0" style="font-size:.7rem">Esperando</p>
+                                <h4 class="fs-5 fw-semibold text-primary mb-0"><span id="esperando-proveedor">0</span></h4>
                             </div>
-                            <div class="avatar-sm flex-shrink-0">
-                                <span class="avatar-title bg-soft-primary rounded fs-3">
-                                    <i class="bx bx-mail-send text-primary"></i>
-                                </span>
-                            </div>
+                            <span class="avatar-xs"><span class="avatar-title bg-soft-primary rounded"><i class="bx bx-mail-send text-primary"></i></span></span>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-xl-3 col-md-6">
-                <div class="card card-animate cursor-pointer" onclick="filtrarAprobados()">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Aprobados</p>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-end justify-content-between mt-4">
+            <div class="col-6 col-md-3">
+                <div class="card card-animate mb-0 cursor-pointer" onclick="filtrarAprobados()">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h4 class="fs-22 fw-semibold ff-secondary mb-4">
-                                    <span class="counter-value text-success" id="aprobados">0</span>
-                                </h4>
+                                <p class="text-uppercase fw-medium text-muted mb-0" style="font-size:.7rem">Aprobados</p>
+                                <h4 class="fs-5 fw-semibold text-success mb-0"><span id="aprobados">0</span></h4>
                             </div>
-                            <div class="avatar-sm flex-shrink-0">
-                                <span class="avatar-title bg-soft-success rounded fs-3">
-                                    <i class="bx bx-check-circle text-success"></i>
-                                </span>
-                            </div>
+                            <span class="avatar-xs"><span class="avatar-title bg-soft-success rounded"><i class="bx bx-check-circle text-success"></i></span></span>
                         </div>
                     </div>
                 </div>
@@ -155,22 +112,14 @@
         <div class="row">
             <div class="col-lg-12">
                 <div class="card">
-                    <div class="card-header">
-                        <div class="d-flex align-items-center flex-wrap gap-2">
-                            <div class="flex-grow-1">
-                                <button type="button" class="btn btn-success add-btn" data-bs-toggle="modal" data-bs-target="#modalCrearRequerimiento" aria-controls="modalCrearRequerimiento">
-                                    <i class="ri-add-fill me-1 align-bottom"></i> Nuevo Requerimiento
-                                </button>
-                            </div>
-                            <div class="flex-shrink-0">
-                                <div class="hstack text-nowrap gap-2">
-                                    <button type="button" class="btn btn-soft-info" onclick="filtrarRequerimientos()">
-                                        <i class="ri-filter-3-line align-bottom me-1"></i> Filtrar
-                                    </button>
-                                    <button type="button" class="btn btn-soft-success" onclick="exportarRequerimientos()">
-                                        <i class="ri-file-excel-2-line align-bottom me-1"></i> Exportar
-                                    </button>
-                                </div>
+                    <div class="card-header py-2">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearRequerimiento">
+                                <i class="ri-add-fill me-1"></i>Nuevo
+                            </button>
+                            <div class="hstack gap-1">
+                                <button type="button" class="btn btn-soft-info btn-sm" onclick="filtrarRequerimientos()"><i class="ri-filter-3-line me-1"></i>Filtrar</button>
+                                <button type="button" class="btn btn-soft-success btn-sm" onclick="exportarRequerimientos()"><i class="ri-file-excel-2-line me-1"></i>Excel</button>
                             </div>
                         </div>
                     </div>
@@ -185,9 +134,12 @@
                                         <select class="form-select" id="filtro-estado" name="estado">
                                             <option value="">Todos</option>
                                             <option value="PENDIENTE">Pendiente</option>
+                                            <option value="EN_REVISION">En Revision</option>
                                             <option value="ESPERANDO_RESPUESTA">Esperando Proveedor</option>
                                             <option value="APROBADO">Aprobado</option>
                                             <option value="RECHAZADO">Rechazado</option>
+                                            <option value="EN_PROCESO">En Proceso</option>
+                                            <option value="COMPLETADO">Completado</option>
                                             <option value="CANCELADO">Cancelado</option>
                                         </select>
                                     </div>
@@ -197,8 +149,10 @@
                                         <label class="form-label mb-0">Tipo</label>
                                         <select class="form-select" id="filtro-tipo" name="tipo">
                                             <option value="">Todos</option>
-                                            <option value="GARANTIA">Garantia Producto</option>
-                                            <option value="DEVOLUCION">Procedimiento Devolucion Proveedor</option>
+                                            <option value="PRODUCTO_FALLADO">Producto Fallado</option>
+                                            <option value="ERROR_DESPACHO">Error de Despacho</option>
+                                            <option value="GARANTIA">Garantia</option>
+                                            <option value="DEVOLUCION">Devolucion</option>
                                             <option value="RECLAMO">Reclamo</option>
                                             <option value="CONSULTA">Consulta Tecnica</option>
                                             <option value="OTROS">Otros</option>
@@ -235,6 +189,39 @@
                     </div>
 
                     <div class="card-body">
+                        <!-- Tabs de filtro rapido -->
+                        <ul class="nav nav-tabs nav-tabs-custom nav-primary mb-3" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="javascript:void(0);" onclick="filtroRapido('', this)">
+                                    Todos
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('PENDIENTE', this)">
+                                    Pendientes <span class="badge bg-warning ms-1" id="tab-pendiente">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('EN_REVISION', this)">
+                                    En Revision <span class="badge bg-info ms-1" id="tab-revision">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('ESPERANDO_RESPUESTA', this)">
+                                    Esperando <span class="badge bg-primary ms-1" id="tab-esperando">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('APROBADO', this)">
+                                    Aprobados <span class="badge bg-success ms-1" id="tab-aprobado">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="javascript:void(0);" onclick="filtroRapido('COMPLETADO', this)">
+                                    Completados <span class="badge bg-success ms-1" id="tab-completado">0</span>
+                                </a>
+                            </li>
+                        </ul>
                         <div class="table-responsive">
                             <table class="table align-middle table-nowrap mb-0">
                                 <thead class="table-light">
@@ -316,11 +303,19 @@ function cargarEstadisticas() {
                     data.estadisticas.por_estado.ESPERANDO_RESPUESTA?.cantidad || 0;
                 
                 // Aprobados
-                document.getElementById('aprobados').textContent = 
+                document.getElementById('aprobados').textContent =
                     data.estadisticas.por_estado.APROBADO?.cantidad || 0;
+
+                // Actualizar badges de tabs
+                const pe = data.estadisticas.por_estado;
+                document.getElementById('tab-pendiente').textContent = pe.PENDIENTE?.cantidad || 0;
+                document.getElementById('tab-revision').textContent = pe.EN_REVISION?.cantidad || 0;
+                document.getElementById('tab-esperando').textContent = pe.ESPERANDO_RESPUESTA?.cantidad || 0;
+                document.getElementById('tab-aprobado').textContent = pe.APROBADO?.cantidad || 0;
+                document.getElementById('tab-completado').textContent = pe.COMPLETADO?.cantidad || 0;
             }
         })
-        .catch(error => console.error('Error al cargar estadísticas:', error));
+        .catch(error => console.error('Error al cargar estadisticas:', error));
 }
 
 // Cargar requerimientos
@@ -371,7 +366,7 @@ function mostrarRequerimientos(requerimientos) {
                 </a>
                 ${req.nivel_urgencia === 'CRITICA' ? '<br><span class="badge bg-danger"><i class="ri-alarm-warning-line me-1"></i>CRÍTICO</span>' : ''}
             </td>
-            <td><span class="badge badge-soft-info">${req.tipo}</span></td>
+            <td>${obtenerBadgeTipo(req.tipo_codigo, req.tipo)}</td>
             <td>${obtenerBadgeEstado(req.estado_codigo, req.estado)}</td>
             <td>
                 <div class="d-flex align-items-center">
@@ -384,10 +379,12 @@ function mostrarRequerimientos(requerimientos) {
             <td>${req.cliente_nombre}</td>
             <td><span class="badge badge-soft-secondary">${req.sucursal}</span></td>
             <td class="text-center">
-                ${req.cantidad_fotos > 0 ? 
-                    `<span class="badge bg-primary">
+                ${req.cantidad_fotos > 0 ?
+                    `<span class="badge ${req.fotos_completas ? 'bg-success' : 'bg-warning'}">
                         <i class="ri-image-line me-1"></i>${req.cantidad_fotos}
-                    </span>` 
+                    </span>
+                    ${!req.fotos_completas && ['PRODUCTO_FALLADO','GARANTIA','ERROR_DESPACHO'].includes(req.tipo_codigo) ?
+                        '<br><small class="text-warning">Incompletas</small>' : ''}`
                 : '<span class="text-muted">-</span>'}
             </td>
             <td>
@@ -415,13 +412,31 @@ function mostrarRequerimientos(requerimientos) {
 function obtenerBadgeEstado(codigo, nombre) {
     const badges = {
         'PENDIENTE': 'warning',
+        'EN_REVISION': 'info',
         'ESPERANDO_RESPUESTA': 'primary',
         'APROBADO': 'success',
         'RECHAZADO': 'danger',
+        'EN_PROCESO': 'info',
+        'COMPLETADO': 'success',
         'CANCELADO': 'secondary'
     };
     const color = badges[codigo] || 'secondary';
     return `<span class="badge badge-soft-${color}">${nombre}</span>`;
+}
+
+// Obtener badge de tipo con icono y color
+function obtenerBadgeTipo(codigo, nombre) {
+    const config = {
+        'PRODUCTO_FALLADO': { color: 'danger', icon: 'ri-error-warning-line' },
+        'ERROR_DESPACHO': { color: 'warning', icon: 'ri-exchange-line' },
+        'GARANTIA': { color: 'info', icon: 'ri-shield-check-line' },
+        'DEVOLUCION': { color: 'primary', icon: 'ri-arrow-go-back-line' },
+        'RECLAMO': { color: 'secondary', icon: 'ri-chat-delete-line' },
+        'CONSULTA': { color: 'success', icon: 'ri-questionnaire-line' },
+        'OTROS': { color: 'dark', icon: 'ri-more-line' },
+    };
+    const c = config[codigo] || { color: 'secondary', icon: 'ri-file-line' };
+    return `<span class="badge badge-soft-${c.color}"><i class="${c.icon} me-1"></i>${nombre}</span>`;
 }
 
 // Actualizar paginación
@@ -534,7 +549,18 @@ function filtrarAprobados() {
     filtrarPorEstado('APROBADO');
 }
 
-// Filtrar requerimientos sin respuesta > 7 días
+// Filtro rapido desde tabs
+function filtroRapido(estado, tab) {
+    // Actualizar tabs activos
+    document.querySelectorAll('.nav-tabs-custom .nav-link').forEach(t => t.classList.remove('active'));
+    if (tab) tab.classList.add('active');
+
+    filtrosActuales = estado ? { estado: estado } : {};
+    document.getElementById('filtro-estado').value = estado;
+    cargarRequerimientos(1);
+}
+
+// Filtrar requerimientos sin respuesta > 7 dias
 function filtrarSinRespuesta() {
     filtrosActuales = {
         estado: 'ESPERANDO_RESPUESTA',
@@ -547,17 +573,15 @@ function filtrarSinRespuesta() {
 }
 </script>
 
-<!-- Modal para crear requerimiento -->
-<div class="modal fade" id="modalCrearRequerimiento" tabindex="-1" aria-labelledby="modalCrearRequerimientoLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalCrearRequerimientoLabel">
-                    <i class="ri-add-circle-line me-2"></i>Crear Requerimiento
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- Modal crear requerimiento -->
+<div class="modal fade" id="modalCrearRequerimiento" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header py-2 bg-primary text-white">
+                <h6 class="modal-title"><i class="ri-add-circle-line me-1"></i>Nuevo Requerimiento</h6>
+                <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-2" style="max-height:80vh;overflow-y:auto;">
                 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_form.html' with modo_embebido=True %}
             </div>
         </div>

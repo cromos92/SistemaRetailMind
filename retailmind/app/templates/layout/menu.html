@@ -1903,31 +1903,10 @@
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_caja' %}
-                                    <li class="nav-item">
-                                        <a href="/app/dashboard-caja/" class="nav-link" data-key="t-dashboard-caja">
-                                            <i class="ri-calculator-line"></i> Dashboard Caja
-                                        </a>
-                                    </li>
-                                    {% endif %}
                                     {% if user|puede_ver_opcion:'dashboard_requerimientos' %}
                                     <li class="nav-item">
                                         <a href="/app/dashboard-requerimientos/" class="nav-link" data-key="t-dashboard-requerimientos">
                                             <i class="ri-customer-service-2-line"></i> Dashboard Requerimientos
-                                        </a>
-                                    </li>
-                                    {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_crm' %}
-                                    <li class="nav-item">
-                                        <a href="/app/dashboard-crm/" class="nav-link" data-key="t-dashboard-crm">
-                                            <i class="ri-contacts-book-line"></i> Dashboard CRM
-                                        </a>
-                                    </li>
-                                    {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_integral' %}
-                                    <li class="nav-item">
-                                        <a href="/app/dashboard-integral/" class="nav-link" data-key="t-dashboard-integral">
-                                            <i class="ri-pie-chart-line"></i> Dashboard Integral
                                         </a>
                                     </li>
                                     {% endif %}
@@ -2241,6 +2220,11 @@
                                                 <li class="nav-item">
                                                     <a href="/app/reportes/compras/" class="nav-link" data-key="t-reporte-compras">
                                                         <i class="bi bi-bag"></i> Reporte de Compras
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="/app/reportes/rendimiento-proveedor/" class="nav-link" data-key="t-rendimiento-proveedor">
+                                                        <i class="bi bi-people"></i> Rendimiento por Proveedor
                                                     </a>
                                                 </li>
                                                 {% endif %}

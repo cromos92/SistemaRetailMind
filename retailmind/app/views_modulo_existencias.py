@@ -1443,10 +1443,13 @@ def obtener_datos_dashboard_fifo(request):
         lotes_activos = LoteProducto.objects.filter(activo=True, cantidad_disponible__gt=0).count()
         lotes_agotados = LoteProducto.objects.filter(activo=True, cantidad_disponible=0).count()
         
-        # Valor total del inventario
-        valor_total_inventario = 0
-        for lote in LoteProducto.objects.filter(activo=True, cantidad_disponible__gt=0):
-            valor_total_inventario += lote.cantidad_disponible * lote.costo_unitario
+        # Valor total del inventario (agregacion en DB, no Python)
+        from django.db.models import F as _F
+        valor_total_inventario = LoteProducto.objects.filter(
+            activo=True, cantidad_disponible__gt=0
+        ).aggregate(
+            total=Sum(_F('cantidad_disponible') * _F('costo_unitario'))
+        )['total'] or 0
         
         # Lotes próximos a vencer (30 días)
         fecha_limite = timezone.now().date() + timezone.timedelta(days=30)

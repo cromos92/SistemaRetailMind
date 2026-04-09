@@ -35,6 +35,7 @@ ESTADO_DTE_CHOICES = [
     ('EN_REGULARIZACION', 'En Regularización'),
     ('RECHAZADO', 'Rechazado'),
     ('ANULADO', 'Anulado'),
+    ('CANCELADO', 'Cancelado'),
 ]
 
 ESTADO_RECEPCION_PRODUCTO_CHOICES = [
@@ -156,6 +157,38 @@ class Dte(models.Model):
         help_text="Motivo por el cual se descartó"
     )
 
+    # Transiciones de estado permitidas: origen -> {destinos válidos}
+    TRANSICIONES_VALIDAS = {
+        'EMITIDO': {'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL', 'RECHAZADO', 'ANULADO', 'CANCELADO'},
+        'ACEPTADO': {'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL', 'RECHAZADO', 'ANULADO', 'CANCELADO'},
+        'RECEPCIONADO_PARCIAL': {'EN_REGULARIZACION', 'RECEPCIONADO_COMPLETO'},
+        'EN_REGULARIZACION': {'RECEPCIONADO_COMPLETO'},
+        'RECHAZADO': {'EMITIDO'},
+        'RECEPCIONADO_COMPLETO': set(),
+        'ANULADO': set(),
+        'CANCELADO': set(),
+    }
+
+    def clean(self):
+        super().clean()
+        if not self.pk:
+            return
+        from django.core.exceptions import ValidationError
+        try:
+            old = Dte.objects.only('estado_dte').get(pk=self.pk)
+        except Dte.DoesNotExist:
+            return
+        if old.estado_dte == self.estado_dte:
+            return
+        destinos = self.TRANSICIONES_VALIDAS.get(old.estado_dte, set())
+        if self.estado_dte not in destinos:
+            raise ValidationError({
+                'estado_dte': (
+                    f'Transición inválida: {old.estado_dte} → {self.estado_dte}. '
+                    f'Transiciones permitidas desde {old.estado_dte}: {destinos or "ninguna"}.'
+                )
+            })
+
     def __str__(self):
         return f"DTE {self.numero_documento} - {self.tipo_documento}"
     
@@ -163,6 +196,38 @@ class Dte(models.Model):
         """Verifica si emisor y receptor son la misma empresa"""
         return self.emisor_id == self.receptor_id if self.receptor else False
     
+    def calcular_totales(self):
+        """Recalcula MntNeto/IVA/MntTotal desde detalle y descuentos/recargos globales."""
+        from decimal import Decimal
+
+        suma_items = Decimal(0)
+        for p in self.dte_productos.all():
+            if p.monto_item:
+                suma_items += Decimal(p.monto_item)
+            else:
+                monto_linea = Decimal(p.precio * p.stock) - Decimal(p.descuento_monto or 0)
+                suma_items += monto_linea
+
+        for dr in self.descuentos_recargos.all():
+            if dr.ind_exe_dr == 2:
+                continue
+            valor = dr.valor_dr
+            if dr.tpo_valor == '%':
+                valor = suma_items * dr.valor_dr / Decimal('100')
+            if dr.tpo_mov == 'D':
+                suma_items -= valor
+            else:
+                suma_items += valor
+
+        es_boleta = self.tipo_documento in ('BOLETA ELECTRONICA', 'BOLETA EXENTA')
+        if es_boleta:
+            self.monto_con_iva = int(suma_items)
+            self.monto_neto = int((suma_items / Decimal('1.19')).quantize(Decimal('1')))
+        else:
+            self.monto_neto = int(suma_items)
+            iva = int((suma_items * Decimal('0.19')).quantize(Decimal('1')))
+            self.monto_con_iva = self.monto_neto + iva
+
     def requiere_nota_credito_check(self):
         """
         Determina si requiere NC para regularización.
@@ -234,19 +299,28 @@ class Dte_Productos(models.Model):
         Producto_Talla,
         related_name='producto_talla_dte',
         on_delete=models.SET_NULL,
-        null=True, blank=True,   # Nullable para ítems manuales/pendientes de despacho
+        null=True, blank=True,
     )
     descripcion = models.CharField(max_length=255)
     costo = models.IntegerField(default=0)
     sobreprecio = models.IntegerField(default=0)
     precio = models.IntegerField()
+    precio_unitario = models.IntegerField(default=0, help_text="Precio unitario neto (factura) o IVA-inclusive (boleta)")
+    descuento_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Porcentaje de descuento por item (solo factura)")
+    descuento_monto = models.DecimalField(max_digits=18, decimal_places=0, null=True, blank=True, help_text="Monto descuento total linea")
+    monto_item = models.IntegerField(default=0, help_text="Monto final de la linea (PrcItem*QtyItem - DescuentoMonto)")
     stock = models.IntegerField()
     activo = models.BooleanField(default=True)
     es_pendiente_despacho = models.BooleanField(
         default=False,
         help_text="True cuando corresponde a un ítem de cotización sin SKU asignado"
     )
-  
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.descuento_pct and not self.descuento_monto:
+            raise ValidationError({'descuento_monto': 'Si descuento_pct tiene valor, descuento_monto es obligatorio.'})
+
     def __str__(self):
         if self.productoTalla:
             return f"Dte_Producto {self.dte} - {self.productoTalla}"
@@ -483,3 +557,29 @@ class DteAlertaDescartada(models.Model):
 
     def __str__(self):
         return f"Alerta DTE #{self.dte.numero_documento} descartada por {self.usuario}"
+
+
+class DescuentoRecargo(models.Model):
+    """Descuentos/recargos globales de un DTE (Tabla 3 Factura / Tabla 4 Boleta)."""
+
+    TPO_MOV_CHOICES = [('D', 'Descuento'), ('R', 'Recargo')]
+    TPO_VALOR_CHOICES = [('%', 'Porcentaje'), ('$', 'Monto')]
+    IND_EXE_CHOICES = [(1, 'Exento/No afecto'), (2, 'No facturable')]
+
+    dte = models.ForeignKey(Dte, related_name='descuentos_recargos', on_delete=models.CASCADE)
+    nro_linea = models.PositiveIntegerField()
+    tpo_mov = models.CharField(max_length=1, choices=TPO_MOV_CHOICES)
+    glosa_dr = models.CharField(max_length=45)
+    tpo_valor = models.CharField(max_length=1, choices=TPO_VALOR_CHOICES)
+    valor_dr = models.DecimalField(max_digits=18, decimal_places=2)
+    ind_exe_dr = models.IntegerField(null=True, blank=True, choices=IND_EXE_CHOICES)
+    valor_dr_otra_mnda = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True, help_text="Solo facturas: valor en otra moneda")
+
+    class Meta:
+        ordering = ['nro_linea']
+        unique_together = ('dte', 'nro_linea')
+        verbose_name = 'Descuento/Recargo DTE'
+        verbose_name_plural = 'Descuentos/Recargos DTE'
+
+    def __str__(self):
+        return f"{'Dcto' if self.tpo_mov == 'D' else 'Recargo'} {self.glosa_dr} {self.tpo_valor}{self.valor_dr}"

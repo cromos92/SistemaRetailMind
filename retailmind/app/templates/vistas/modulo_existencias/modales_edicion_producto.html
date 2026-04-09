@@ -1,268 +1,309 @@
-<!-- ========== MODAL: EDICIÓN DE PRODUCTO ========== -->
+<!-- ========== MODAL: EDICIÓN DE PRODUCTO (REDISEÑADO) ========== -->
 <div class="modal fade" id="modalEdicionProducto" tabindex="-1" aria-labelledby="modalEdicionProductoLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <div>
-                    <h5 class="modal-title mb-0" id="modalEdicionProductoLabel">
-                        <i class="bi bi-pencil-square me-1"></i> Editar Producto
-                    </h5>
-                    <div class="small mt-1 opacity-75">
-                        Bodega: <span class="badge bg-white text-primary ms-1" id="editSucursalBadge">—</span>
-                    </div>
-                </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="edit_producto_id">
-                
-                <!-- PANEL DE SINCRONIZACIÓN GLOBAL -->
-                <div class="rounded mb-3 border overflow-hidden" id="panelSincronizacion">
-                    <div class="d-flex align-items-center justify-content-between px-3 py-2" style="background:#e8f0fe;">
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-arrow-repeat text-primary fs-5"></i>
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:16px; overflow:hidden;">
+            
+            <!-- Header con gradiente -->
+            <div class="modal-header p-0 border-0">
+                <div class="w-100" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
+                    <div class="d-flex align-items-center justify-content-between px-4 py-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div style="width:44px;height:44px;background:rgba(255,255,255,0.18);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+                                <i class="bi bi-pencil-square text-white fs-4"></i>
+                            </div>
                             <div>
-                                <div class="fw-semibold text-primary" style="font-size:.9rem;">Sincronización global de atributos</div>
-                                <div class="small text-muted">
-                                    Cuando está <strong>activado</strong>: nombre, descripción, categoría, marca, color, género y precios se aplicarán en <strong>todas las bodegas</strong> que tengan el mismo artículo.
+                                <h5 class="modal-title mb-0 text-white fw-bold" id="modalEdicionProductoLabel">Editar Producto</h5>
+                                <div class="d-flex align-items-center gap-2 mt-1">
+                                    <span class="badge bg-white bg-opacity-25 text-white" id="editSucursalBadge" style="font-size:.75rem;">—</span>
                                 </div>
                             </div>
                         </div>
-                        <div class="form-check form-switch ms-3 flex-shrink-0 d-flex align-items-center gap-2">
-                            <input class="form-check-input" type="checkbox" id="edit_propagar_sucursales" checked style="width: 3em; height: 1.5em; cursor:pointer;">
-                            <label class="form-check-label fw-bold" for="edit_propagar_sucursales" id="lblPropagar" style="min-width:90px; cursor:pointer;">
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-body px-0 py-0">
+                <input type="hidden" id="edit_producto_id">
+                
+                <!-- Panel de sincronización compacto -->
+                <div class="px-4 pt-3 pb-2">
+                    <div class="d-flex align-items-center gap-3 p-2 rounded-3" id="panelSincronizacion" style="background:#f0f4ff; border:1px solid #cfe2ff;">
+                        <i class="bi bi-arrow-repeat text-primary fs-5"></i>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold" style="font-size:.85rem; color:#405189;">Sincronización entre bodegas</div>
+                            <div class="text-muted" style="font-size:.72rem;">Activo: cambios se aplican en todas las bodegas con el mismo artículo</div>
+                        </div>
+                        <div class="form-check form-switch flex-shrink-0">
+                            <input class="form-check-input" type="checkbox" id="edit_propagar_sucursales" checked style="width:2.8em; height:1.4em; cursor:pointer;">
+                            <label class="form-check-label fw-bold small" for="edit_propagar_sucursales" id="lblPropagar" style="cursor:pointer;">
                                 <span class="text-success"><i class="bi bi-check-circle me-1"></i>Global</span>
                             </label>
                         </div>
                     </div>
-                    <div class="px-3 py-1 d-flex gap-4 flex-wrap" style="background:#f0f4ff; border-top:1px solid #cfe2ff; font-size:.75rem; color:#5a6a8a;">
-                        <span><i class="bi bi-check2 text-success me-1"></i>Lotes FIFO activos se actualizan con nuevos precios</span>
-                        <span><i class="bi bi-x text-muted me-1"></i>Movimientos históricos no se modifican</span>
-                        <span><i class="bi bi-x text-muted me-1"></i>Stock de tallas no se altera</span>
-                    </div>
                 </div>
                 
                 <!-- TABS DE NAVEGACIÓN -->
-                <ul class="nav nav-tabs" id="tabsEdicionProducto" role="tablist">
-                    <li class="nav-item">
-                        <a class="nav-link active" id="tab-datos-generales" data-bs-toggle="tab" href="#contenido-datos-generales" role="tab">
-                            <i class="bi bi-info-circle"></i> Datos Generales
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="tab-variaciones" data-bs-toggle="tab" href="#contenido-variaciones" role="tab">
-                            <i class="bi bi-list-ul"></i> Variaciones / Tallas
-                        </a>
-                    </li>
-                </ul>
+                <div class="px-4 pt-2">
+                    <ul class="nav nav-pills gap-1" id="tabsEdicionProducto" role="tablist" style="border-bottom:2px solid #e9ecef; padding-bottom:8px;">
+                        <li class="nav-item">
+                            <a class="nav-link active rounded-pill px-3 py-2" id="tab-datos-generales" data-bs-toggle="tab" href="#contenido-datos-generales" role="tab" style="font-size:.85rem;">
+                                <i class="bi bi-info-circle me-1"></i>Datos Generales
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link rounded-pill px-3 py-2" id="tab-variaciones" data-bs-toggle="tab" href="#contenido-variaciones" role="tab" style="font-size:.85rem;">
+                                <i class="bi bi-list-ul me-1"></i>Tallas & Stock
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link rounded-pill px-3 py-2" id="tab-recategorizacion" data-bs-toggle="tab" href="#contenido-recategorizacion" role="tab" style="font-size:.85rem;">
+                                <i class="bi bi-arrow-left-right me-1"></i>Recategorizar
+                            </a>
+                        </li>
+                    </ul>
+                </div>
                 
                 <!-- CONTENIDO DE TABS -->
-                <div class="tab-content" id="contenidoTabsEdicion">
+                <div class="tab-content px-4 py-3" id="contenidoTabsEdicion">
                     
                     <!-- TAB: DATOS GENERALES -->
                     <div class="tab-pane fade show active" id="contenido-datos-generales" role="tabpanel">
-                        <div class="p-3">
-                            
-                            <!-- INFORMACIÓN BÁSICA -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3 text-secondary"><i class="bi bi-card-text me-1"></i>Información Básica</h6>
-                                </div>
+
+                        <!-- Info básica -->
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label for="edit_articulo" class="form-label fw-semibold" style="font-size:.82rem;">
+                                    <i class="bi bi-box text-primary me-1"></i>Nombre del Producto <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="edit_articulo" placeholder="Ej: Zapatilla Nike Air Max">
                             </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group mb-3">
-                                        <label for="edit_articulo" class="form-label">Nombre del Producto <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control" id="edit_articulo" placeholder="Ej: Zapatilla Nike Air Max">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group mb-3">
-                                        <label for="edit_categoria_id" class="form-label">Categoría</label>
-                                        <select class="form-select select2-edicion" id="edit_categoria_id" style="width: 100%;">
-                                            <option value="">Seleccionar categoría...</option>
-                                        </select>
-                                    </div>
-                                </div>
+                            <div class="col-md-4">
+                                <label for="edit_categoria_id" class="form-label fw-semibold" style="font-size:.82rem;">
+                                    <i class="bi bi-folder text-primary me-1"></i>Categoría
+                                </label>
+                                <select class="form-select select2-edicion" id="edit_categoria_id" style="width: 100%;">
+                                    <option value="">Seleccionar categoría...</option>
+                                </select>
                             </div>
-                            
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="form-group mb-3">
-                                        <label for="edit_descripcion" class="form-label">Descripción</label>
-                                        <textarea class="form-control" id="edit_descripcion" rows="2" placeholder="Descripción del producto"></textarea>
-                                    </div>
-                                </div>
+                        </div>
+                        
+                        <div class="row g-3 mt-0">
+                            <div class="col-12">
+                                <label for="edit_descripcion" class="form-label fw-semibold" style="font-size:.82rem;">
+                                    <i class="bi bi-card-text text-muted me-1"></i>Descripción
+                                </label>
+                                <textarea class="form-control" id="edit_descripcion" rows="2" placeholder="Descripción del producto" style="resize:none;"></textarea>
                             </div>
-                            
-                            <!-- ATRIBUTOS -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3 mt-2 text-secondary"><i class="bi bi-tags me-1"></i>Atributos del Producto</h6>
-                                </div>
+                        </div>
+                        
+                        <!-- Atributos en una fila -->
+                        <div class="mt-3 p-3 rounded-3" style="background:#f8f9fa;">
+                            <div class="fw-semibold mb-2" style="font-size:.82rem; color:#405189;">
+                                <i class="bi bi-tags me-1"></i>Atributos del Producto
                             </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group mb-3">
-                                        <label for="edit_atributo1_id" class="form-label"><i class="bi bi-bookmark me-1 text-primary"></i>Marca</label>
-                                        <select class="form-select select2-edicion" id="edit_atributo1_id" data-atributo="marca" style="width: 100%;">
-                                            <option value="">Seleccionar marca...</option>
-                                        </select>
-                                    </div>
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <label for="edit_atributo1_id" class="form-label small text-muted mb-1">
+                                        <i class="bi bi-bookmark text-primary me-1"></i>Marca
+                                    </label>
+                                    <select class="form-select form-select-sm select2-edicion" id="edit_atributo1_id" data-atributo="marca" style="width: 100%;">
+                                        <option value="">Seleccionar...</option>
+                                    </select>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-group mb-3">
-                                        <label for="edit_atributo2_id" class="form-label"><i class="bi bi-palette me-1 text-info"></i>Color</label>
-                                        <select class="form-select select2-edicion" id="edit_atributo2_id" data-atributo="color" style="width: 100%;">
-                                            <option value="">Seleccionar color...</option>
-                                        </select>
-                                    </div>
+                                <div class="col-md-3">
+                                    <label for="edit_atributo2_id" class="form-label small text-muted mb-1">
+                                        <i class="bi bi-palette text-info me-1"></i>Color
+                                    </label>
+                                    <select class="form-select form-select-sm select2-edicion" id="edit_atributo2_id" data-atributo="color" style="width: 100%;">
+                                        <option value="">Seleccionar...</option>
+                                    </select>
                                 </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group mb-3">
-                                        <label for="edit_atributo3_id" class="form-label"><i class="bi bi-person me-1 text-secondary"></i>Género</label>
-                                        <select class="form-select select2-edicion" id="edit_atributo3_id" data-atributo="genero" style="width: 100%;">
-                                            <option value="">Seleccionar género...</option>
-                                        </select>
-                                    </div>
+                                <div class="col-md-3">
+                                    <label for="edit_atributo3_id" class="form-label small text-muted mb-1">
+                                        <i class="bi bi-person text-secondary me-1"></i>Género
+                                    </label>
+                                    <select class="form-select form-select-sm select2-edicion" id="edit_atributo3_id" data-atributo="genero" style="width: 100%;">
+                                        <option value="">Seleccionar...</option>
+                                    </select>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-group mb-3">
-                                        <label for="edit_atributo4_id" class="form-label">Otro Atributo</label>
-                                        <select class="form-select select2-edicion" id="edit_atributo4_id" data-atributo="otro" style="width: 100%;">
+                                <div class="col-md-3">
+                                    <div class="form-group" id="containerAtributo4">
+                                        <label for="edit_atributo4_id" class="form-label small text-muted mb-1">Otro</label>
+                                        <select class="form-select form-select-sm select2-edicion" id="edit_atributo4_id" data-atributo="otro" style="width: 100%;">
                                             <option value="">Seleccionar...</option>
                                         </select>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- PRECIOS -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3 mt-3 text-secondary"><i class="bi bi-currency-dollar me-1"></i>Precios Base</h6>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <div class="form-group">
-                                        <label for="edit_costo">Costo <span class="text-danger">*</span></label>
-                                        <div class="input-group">
-                                            <div class="input-group-prepend">
-                                                <span class="input-group-text">$</span>
-                                            </div>
-                                            <input type="number" class="form-control" id="edit_costo" min="0" placeholder="0">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-group">
-                                        <label for="edit_sobreprecio">Sobreprecio</label>
-                                        <div class="input-group">
-                                            <div class="input-group-prepend">
-                                                <span class="input-group-text">$</span>
-                                            </div>
-                                            <input type="number" class="form-control" id="edit_sobreprecio" min="0" placeholder="0">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-group">
-                                        <label for="edit_precioventa">Precio Venta <span class="text-danger">*</span></label>
-                                        <div class="input-group">
-                                            <div class="input-group-prepend">
-                                                <span class="input-group-text">$</span>
-                                            </div>
-                                            <input type="number" class="form-control" id="edit_precioventa" min="1" placeholder="0">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-group">
-                                        <label for="edit_precioSugerido">Precio Sugerido</label>
-                                        <div class="input-group">
-                                            <div class="input-group-prepend">
-                                                <span class="input-group-text">$</span>
-                                            </div>
-                                            <input type="number" class="form-control" id="edit_precioSugerido" min="0" placeholder="0">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- ESTADO ANALÍTICA -->
-                            <div class="row mt-3">
-                                <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3 text-secondary"><i class="bi bi-bar-chart me-1"></i>Estado Analítica</h6>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="alert alert-light border d-flex align-items-center justify-content-between py-2" id="alertExcluirAnalitica">
-                                        <div class="d-flex align-items-center">
-                                            <i class="bi bi-bar-chart-fill me-2 fs-5 text-secondary"></i>
-                                            <div>
-                                                <strong>Excluir de dashboards y predicciones</strong>
-                                                <div class="small text-muted">Activar para productos de exhibición, consignación o catálogo histórico que no deben aparecer en KPIs.</div>
-                                            </div>
-                                        </div>
-                                        <div class="form-check form-switch ms-3 flex-shrink-0">
-                                            <input class="form-check-input" type="checkbox" id="edit_excluir_de_analitica" style="width: 3em; height: 1.5em;">
-                                            <label class="form-check-label fw-bold" for="edit_excluir_de_analitica" id="labelExcluirAnalitica">Incluido</label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
                         </div>
+                        
+                        <!-- Precios en una fila -->
+                        <div class="mt-3 p-3 rounded-3" style="background:#f0faf7;">
+                            <div class="fw-semibold mb-2" style="font-size:.82rem; color:#0ab39c;">
+                                <i class="bi bi-currency-dollar me-1"></i>Precios Base
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <label for="edit_costo" class="form-label small text-muted mb-1">Costo <span class="text-danger">*</span></label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="edit_costo" min="0" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="edit_sobreprecio" class="form-label small text-muted mb-1">Sobreprecio</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="edit_sobreprecio" min="0" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="edit_precioventa" class="form-label small text-muted mb-1">Precio Venta <span class="text-danger">*</span></label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="edit_precioventa" min="1" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="edit_precioSugerido" class="form-label small text-muted mb-1">P. Sugerido</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="edit_precioSugerido" min="0" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Analítica -->
+                        <div class="mt-3 d-flex align-items-center gap-3 p-2 rounded-3 border" id="alertExcluirAnalitica">
+                            <i class="bi bi-bar-chart-fill fs-5 text-secondary"></i>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold" style="font-size:.82rem;">Excluir de dashboards y predicciones</div>
+                                <div class="text-muted" style="font-size:.7rem;">Para productos de exhibición, consignación o catálogo histórico</div>
+                            </div>
+                            <div class="form-check form-switch flex-shrink-0">
+                                <input class="form-check-input" type="checkbox" id="edit_excluir_de_analitica" style="width:2.5em; height:1.3em;">
+                                <label class="form-check-label fw-bold small" for="edit_excluir_de_analitica" id="labelExcluirAnalitica">Incluido</label>
+                            </div>
+                        </div>
+                        
                     </div>
                     
                     <!-- TAB: VARIACIONES -->
                     <div class="tab-pane fade" id="contenido-variaciones" role="tabpanel">
-                        <div class="p-3">
-                            
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle"></i> 
-                                <strong>Gestión de Variaciones:</strong> Desde aquí puedes ajustar el stock de cada talla y ver su historial de movimientos.
-                            </div>
-                            
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-hover" id="tablaVariacionesEdicion">
-                                    <thead class="thead-light">
-                                        <tr>
-                                            <th>Talla</th>
-                                            <th>SKU</th>
-                                            <th>Stock</th>
-                                            <th>Ajustar Stock</th>
-                                            <th>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td colspan="5" class="text-center text-muted">
-                                                <i class="fas fa-spinner fa-spin"></i> Cargando variaciones...
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            
+                        
+                        <div class="alert alert-light border rounded-3 d-flex align-items-center gap-2 py-2 mb-3">
+                            <i class="bi bi-info-circle text-primary"></i>
+                            <span style="font-size:.82rem;">Gestiona el stock por talla: ajusta cantidades y consulta el historial de movimientos.</span>
                         </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="tablaVariacionesEdicion" style="font-size:.88rem;">
+                                <thead>
+                                    <tr style="background:#405189;">
+                                        <th class="text-white" style="border-radius:8px 0 0 0;">Talla</th>
+                                        <th class="text-white">SKU</th>
+                                        <th class="text-white text-center">Stock</th>
+                                        <th class="text-white text-center">Ajustar</th>
+                                        <th class="text-white text-center" style="border-radius:0 8px 0 0;">Historial</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted py-4">
+                                            <i class="bi bi-hourglass-split"></i> Cargando variaciones...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                    </div>
+
+                    <!-- TAB: RECATEGORIZACIÓN -->
+                    <div class="tab-pane fade" id="contenido-recategorizacion" role="tabpanel">
+
+                        <div class="alert alert-info border-0 rounded-3 d-flex align-items-start gap-2 mb-3" style="background:#e8f4fd;">
+                            <i class="bi bi-info-circle fs-5 text-primary mt-1"></i>
+                            <div>
+                                <div class="fw-bold" style="font-size:.88rem;">Recategorización de Producto</div>
+                                <div style="font-size:.8rem;">
+                                    Al cambiar la <strong>marca, color, género o categoría</strong> de un producto, todos los
+                                    <strong>movimientos, ventas y recepciones</strong> asociados verán automáticamente los nuevos atributos, 
+                                    ya que están vinculados por relación directa (FK) al producto.<br>
+                                    <strong class="text-primary">No se modifican datos históricos</strong>: precios, cantidades y fechas de los movimientos permanecen intactos.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Impacto actual -->
+                        <div class="border rounded-3 p-3 mb-3" id="panelImpactoRecategorizacion">
+                            <div class="fw-bold mb-3" style="font-size:.88rem; color:#405189;">
+                                <i class="bi bi-diagram-3 me-1"></i>Impacto del cambio de atributos
+                            </div>
+                            <div class="row g-3" id="statsImpactoRecat">
+                                <div class="col-6 col-md-3">
+                                    <div class="text-center p-2 rounded-3" style="background:#f0f4ff;">
+                                        <div class="fw-bold fs-5 text-primary" id="recat_total_sucursales">—</div>
+                                        <div class="small text-muted">Sucursales</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="text-center p-2 rounded-3" style="background:#e9f7ef;">
+                                        <div class="fw-bold fs-5 text-success" id="recat_total_movimientos">—</div>
+                                        <div class="small text-muted">Movimientos</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="text-center p-2 rounded-3" style="background:#fff8e1;">
+                                        <div class="fw-bold fs-5" style="color:#b78103;" id="recat_total_tickets">—</div>
+                                        <div class="small text-muted">Tickets/Ventas</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="text-center p-2 rounded-3" style="background:#fce4ec;">
+                                        <div class="fw-bold fs-5 text-danger" id="recat_total_dtes">—</div>
+                                        <div class="small text-muted">DTEs</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-muted mt-2" style="font-size:.72rem;">
+                                <i class="bi bi-lightbulb text-warning me-1"></i>
+                                Estos registros <strong>no se modifican</strong>. Solo cambia la referencia del atributo en el producto. 
+                                Todos los reportes, dashboards y analíticas reflejarán la nueva categorización automáticamente.
+                            </div>
+                        </div>
+
+                        <!-- Instrucciones -->
+                        <div class="border rounded-3 p-3" style="background:#f8f9fa;">
+                            <div class="fw-bold mb-2" style="font-size:.85rem;">
+                                <i class="bi bi-question-circle text-primary me-1"></i>Cómo recategorizar
+                            </div>
+                            <ol class="mb-0" style="font-size:.82rem; padding-left:1.2rem;">
+                                <li class="mb-1">Ve a la pestaña <strong>Datos Generales</strong> y cambia los atributos (marca, color, género, categoría)</li>
+                                <li class="mb-1">Activa <strong>Sincronización Global</strong> (arriba) para aplicar el cambio en todas las bodegas</li>
+                                <li class="mb-1">Pulsa <strong>Guardar Cambios</strong> — el sistema actualizará el producto en todas las bodegas y recalculará los lotes FIFO activos</li>
+                            </ol>
+                            <div class="mt-2 p-2 rounded-2" style="background:#e8eaf6; font-size:.78rem;">
+                                <i class="bi bi-database me-1 text-primary"></i>
+                                <strong>Datos migrados desde Laravel:</strong> los productos importados con <code>migrate_from_laravel</code> 
+                                mantienen sus atributos originales. Al recategorizar, la cadena FK <code>Movimiento → Producto_Talla → Producto</code> 
+                                garantiza que los movimientos históricos (incluidos los migrados) reflejen los nuevos atributos automáticamente.
+                            </div>
+                        </div>
+
                     </div>
                     
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle"></i> Cancelar
+
+            <div class="modal-footer border-0 bg-light px-4" style="border-radius:0 0 16px 16px;">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cancelar
                 </button>
-                <button type="button" class="btn btn-primary" onclick="guardarProductoBase()">
-                    <i class="bi bi-save"></i> Guardar Cambios
+                <button type="button" class="btn btn-primary rounded-pill px-4" onclick="guardarProductoBase()">
+                    <i class="bi bi-save me-1"></i>Guardar Cambios
                 </button>
             </div>
         </div>
@@ -271,132 +312,105 @@
 
 <!-- ========== MODAL: AJUSTAR STOCK ========== -->
 <div class="modal fade" id="modalAjustarStock" tabindex="-1" aria-labelledby="modalAjustarStockLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title" id="modalAjustarStockLabel">
-                    <i class="bi bi-box-seam"></i> Ajustar Stock
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:16px; overflow:hidden;">
+            <div class="modal-header border-0" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);">
+                <h5 class="modal-title text-white fw-bold" id="modalAjustarStockLabel">
+                    <i class="bi bi-box-seam me-2"></i>Ajustar Stock
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="ajuste_variacion_id">
                 
-                <!-- INFORMACIÓN DE LA VARIACIÓN -->
-                <div class="alert alert-light border">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <strong>Talla:</strong> <span id="ajuste_talla_nombre" class="badge badge-primary"></span>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Stock Actual:</strong> 
-                            <span id="ajuste_stock_actual" class="badge badge-info"></span> unidades
-                        </div>
+                <!-- Info de variación -->
+                <div class="d-flex gap-3 p-3 rounded-3 mb-3" style="background:#f0f4ff;">
+                    <div>
+                        <span class="text-muted small">Talla</span><br>
+                        <span id="ajuste_talla_nombre" class="fw-bold fs-5 text-primary"></span>
+                    </div>
+                    <div class="vr"></div>
+                    <div>
+                        <span class="text-muted small">Stock Actual</span><br>
+                        <span id="ajuste_stock_actual" class="fw-bold fs-5"></span> <small class="text-muted">unidades</small>
                     </div>
                 </div>
                 
-                <!-- TIPO DE AJUSTE -->
-                <div class="form-group">
-                    <label class="font-weight-bold">Tipo de Ajuste <span class="text-danger">*</span></label>
-                    <div class="custom-control custom-radio">
-                        <input type="radio" id="tipo_entrada" name="tipo_ajuste" class="custom-control-input" value="ENTRADA" checked>
-                        <label class="custom-control-label" for="tipo_entrada">
-                            <i class="bi bi-arrow-up-circle text-success"></i> <strong>Entrada</strong> (Incrementar stock)
-                        </label>
-                    </div>
-                    <div class="custom-control custom-radio">
-                        <input type="radio" id="tipo_salida" name="tipo_ajuste" class="custom-control-input" value="SALIDA">
-                        <label class="custom-control-label" for="tipo_salida">
-                            <i class="bi bi-arrow-down-circle text-danger"></i> <strong>Salida</strong> (Decrementar stock)
-                        </label>
-                    </div>
+                <!-- Tipo de ajuste -->
+                <div class="d-flex gap-2 mb-3">
+                    <label class="flex-grow-1">
+                        <input type="radio" name="tipo_ajuste" value="ENTRADA" checked class="btn-check">
+                        <div class="btn btn-outline-success w-100 rounded-3 py-2">
+                            <i class="bi bi-arrow-up-circle me-1"></i><strong>Entrada</strong>
+                            <div class="small opacity-75">Incrementar stock</div>
+                        </div>
+                    </label>
+                    <label class="flex-grow-1">
+                        <input type="radio" name="tipo_ajuste" value="SALIDA" class="btn-check">
+                        <div class="btn btn-outline-danger w-100 rounded-3 py-2">
+                            <i class="bi bi-arrow-down-circle me-1"></i><strong>Salida</strong>
+                            <div class="small opacity-75">Decrementar stock</div>
+                        </div>
+                    </label>
                 </div>
                 
-                <!-- CANTIDAD -->
-                <div class="form-group">
-                    <label for="ajuste_cantidad">Cantidad <span class="text-danger">*</span></label>
+                <!-- Cantidad -->
+                <div class="mb-3">
+                    <label for="ajuste_cantidad" class="form-label fw-semibold">Cantidad <span class="text-danger">*</span></label>
                     <input type="number" class="form-control form-control-lg" id="ajuste_cantidad" min="1" placeholder="Ingrese la cantidad">
                 </div>
                 
-                <!-- CAMPOS ESPECÍFICOS PARA ENTRADA -->
-                <div id="campos_entrada">
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i> 
-                        <strong>Campos requeridos para ajustes de ENTRADA:</strong>
+                <!-- Campos de entrada -->
+                <div id="campos_entrada" class="p-3 rounded-3 mb-3" style="background:#f8f9fa;">
+                    <div class="small fw-bold text-warning-emphasis mb-2">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Datos para ingreso
                     </div>
-                    
-                    <div class="row">
+                    <div class="row g-2">
                         <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="ajuste_costo_unitario">Costo Unitario <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">$</span>
-                                    </div>
-                                    <input type="number" class="form-control" id="ajuste_costo_unitario" min="0" step="0.01" placeholder="0">
-                                </div>
+                            <label for="ajuste_costo_unitario" class="form-label small mb-1">Costo Unit. <span class="text-danger">*</span></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="ajuste_costo_unitario" min="0" step="0.01" placeholder="0">
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="ajuste_sobreprecio_unitario">Sobreprecio Unitario</label>
-                                <div class="input-group">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">$</span>
-                                    </div>
-                                    <input type="number" class="form-control" id="ajuste_sobreprecio_unitario" min="0" step="0.01" placeholder="0">
-                                </div>
+                            <label for="ajuste_sobreprecio_unitario" class="form-label small mb-1">Sobreprecio</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="ajuste_sobreprecio_unitario" min="0" step="0.01" placeholder="0">
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="ajuste_precio_venta_unitario">Precio Venta <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">$</span>
-                                    </div>
-                                    <input type="number" class="form-control" id="ajuste_precio_venta_unitario" min="0" step="0.01" placeholder="0">
-                                </div>
+                            <label for="ajuste_precio_venta_unitario" class="form-label small mb-1">P. Venta <span class="text-danger">*</span></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="ajuste_precio_venta_unitario" min="0" step="0.01" placeholder="0">
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="ajuste_numero_lote">Número de Lote (opcional)</label>
-                        <input type="text" class="form-control" id="ajuste_numero_lote" placeholder="Ej: LOTE-2024-001">
-                        <small class="form-text text-muted">Si no se especifica, se generará automáticamente</small>
+                    <div class="mt-2">
+                        <label for="ajuste_numero_lote" class="form-label small mb-1">Nro. Lote (opcional)</label>
+                        <input type="text" class="form-control form-control-sm" id="ajuste_numero_lote" placeholder="Ej: LOTE-2025-001">
                     </div>
                 </div>
                 
-                <!-- MOTIVO -->
-                <div class="form-group">
-                    <label for="ajuste_motivo">Motivo del Ajuste <span class="text-danger">*</span></label>
-                    <textarea class="form-control" id="ajuste_motivo" rows="3" placeholder="Describa el motivo del ajuste (mínimo 10 caracteres)"></textarea>
-                    <small class="form-text text-muted">Mínimo 10 caracteres</small>
+                <!-- Motivo -->
+                <div class="mb-3">
+                    <label for="ajuste_motivo" class="form-label fw-semibold">Motivo <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="ajuste_motivo" rows="2" placeholder="Describa el motivo del ajuste (mín. 10 caracteres)"></textarea>
                 </div>
                 
-                <!-- STOCK RESULTANTE -->
-                <div class="alert alert-secondary">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <strong>Stock Resultante:</strong>
-                        </div>
-                        <div class="col-md-6 text-right">
-                            <h3 class="mb-0">
-                                <span id="ajuste_stock_resultante" class="badge badge-lg badge-success">0</span> 
-                                <small>unidades</small>
-                            </h3>
-                        </div>
-                    </div>
+                <!-- Stock resultante -->
+                <div class="d-flex align-items-center justify-content-between p-3 rounded-3" style="background:#e9ecef;">
+                    <strong>Stock Resultante:</strong>
+                    <span class="fw-bold fs-4" id="ajuste_stock_resultante">0</span>
                 </div>
                 
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle"></i> Cancelar
-                </button>
-                <button type="button" class="btn btn-info" onclick="guardarAjusteStock()">
-                    <i class="bi bi-check-circle"></i> Confirmar Ajuste
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info rounded-pill px-4 text-white" onclick="guardarAjusteStock()">
+                    <i class="bi bi-check-circle me-1"></i>Confirmar Ajuste
                 </button>
             </div>
         </div>
@@ -405,146 +419,97 @@
 
 <!-- ========== MODAL: HISTORIAL DE MOVIMIENTOS ========== -->
 <div class="modal fade" id="modalHistorialMovimientos" tabindex="-1" aria-labelledby="modalHistorialMovimientosLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title" id="modalHistorialMovimientosLabel">
-                    <i class="bi bi-clock-history"></i> Historial de Movimientos
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:16px; overflow:hidden;">
+            <div class="modal-header border-0" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                <h5 class="modal-title text-white fw-bold" id="modalHistorialMovimientosLabel">
+                    <i class="bi bi-clock-history me-2"></i>Historial de Movimientos
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                
-                <div class="mb-3">
-                    <strong>Talla:</strong> <span id="historial_talla_nombre" class="badge badge-primary"></span>
+                <div class="mb-3 d-flex align-items-center gap-2">
+                    <span class="text-muted small">Talla:</span>
+                    <span id="historial_talla_nombre" class="badge bg-primary"></span>
                 </div>
-                
                 <div class="table-responsive">
-                    <table class="table table-bordered table-hover table-sm" id="tablaHistorialMovimientos">
-                        <thead class="thead-dark">
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Concepto</th>
-                                <th>Cantidad</th>
-                                <th>Responsable</th>
-                                <th>Observaciones</th>
+                    <table class="table table-hover table-sm align-middle" id="tablaHistorialMovimientos" style="font-size:.85rem;">
+                        <thead>
+                            <tr style="background:#405189;">
+                                <th class="text-white">Fecha</th>
+                                <th class="text-white">Concepto</th>
+                                <th class="text-white text-center">Cantidad</th>
+                                <th class="text-white">Responsable</th>
+                                <th class="text-white">Observaciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="5" class="text-center text-muted">
-                                    <i class="fas fa-spinner fa-spin"></i> Cargando historial...
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    <i class="bi bi-hourglass-split"></i> Cargando historial...
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-                
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle"></i> Cerrar
-                </button>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
 </div>
 
 <style>
-/* Estilos adicionales para los modales */
-.modal-xl .modal-dialog {
-    max-width: 1200px;
+/* Estilos para modales de edición */
+#modalEdicionProducto .nav-pills .nav-link {
+    color: #6c757d;
+    font-weight: 600;
+    transition: all .2s ease;
+}
+#modalEdicionProducto .nav-pills .nav-link.active {
+    background: #405189 !important;
+    color: #fff !important;
+}
+#modalEdicionProducto .nav-pills .nav-link:hover:not(.active) {
+    background: rgba(64,81,137,0.08);
+    color: #405189;
 }
 
-.badge-lg {
-    font-size: 1.5rem;
-    padding: 0.5rem 1rem;
-}
-
-#campos_entrada {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 5px;
-    margin-bottom: 15px;
-}
-
-.custom-radio {
-    padding: 10px;
-    margin-bottom: 5px;
-}
-
-.custom-radio:hover {
-    background-color: #f8f9fa;
-    border-radius: 5px;
-}
-
-#tablaVariacionesEdicion tbody tr:hover {
-    background-color: #f8f9fa;
-    cursor: pointer;
-}
-
-/* ===== ESTILOS PARA SELECT2 EN MODAL DE EDICIÓN ===== */
-#modalEdicionProducto .select2-container {
-    width: 100% !important;
-}
-
+/* Select2 en modal edición */
+#modalEdicionProducto .select2-container { width: 100% !important; }
 #modalEdicionProducto .select2-container--default .select2-selection--single {
-    height: 38px;
-    padding: 4px 8px;
+    height: 36px;
+    padding: 3px 8px;
     border: 1px solid #ced4da;
-    border-radius: 0.375rem;
+    border-radius: 8px;
 }
-
 #modalEdicionProducto .select2-container--default .select2-selection--single .select2-selection__rendered {
     line-height: 28px;
     color: #495057;
 }
+#modalEdicionProducto .select2-container--default .select2-selection--single .select2-selection__arrow { height: 34px; }
+#modalEdicionProducto .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #6c757d; }
+#modalEdicionProducto .select2-container--open .select2-dropdown { z-index: 1060; }
+.select2-container--default .select2-search--dropdown .select2-search__field { border: 1px solid #ced4da; border-radius: 6px; padding: 6px 10px; }
+.select2-container--default .select2-results__option--highlighted[aria-selected] { background-color: #405189; color: #fff; }
 
-#modalEdicionProducto .select2-container--default .select2-selection--single .select2-selection__arrow {
-    height: 36px;
-}
+/* Variaciones table */
+#tablaVariacionesEdicion tbody tr:hover { background-color: rgba(64,81,137,0.05); }
 
-#modalEdicionProducto .select2-container--default .select2-selection--single .select2-selection__placeholder {
-    color: #6c757d;
-}
+/* Historial table */
+#tablaHistorialMovimientos tbody tr:hover { background-color: rgba(64,81,137,0.05); }
 
-/* Asegurar que el dropdown de Select2 aparezca sobre el modal */
-#modalEdicionProducto .select2-container--open .select2-dropdown {
-    z-index: 1060;
-}
+/* Radio buttons ajuste stock */
+.btn-check:checked + .btn-outline-success { background: linear-gradient(135deg,#0ab39c,#099885); color:#fff; border-color:#0ab39c; }
+.btn-check:checked + .btn-outline-danger { background: linear-gradient(135deg,#f06548,#d9534f); color:#fff; border-color:#f06548; }
 
-/* Estilos para el campo de búsqueda en el dropdown */
-.select2-container--default .select2-search--dropdown .select2-search__field {
-    border: 1px solid #ced4da;
-    border-radius: 0.375rem;
-    padding: 6px 10px;
-}
-
-.select2-container--default .select2-results__option--highlighted[aria-selected] {
-    background-color: #0d6efd;
-    color: white;
-}
-
-#tablaHistorialMovimientos tbody tr {
-    transition: background-color 0.2s;
-}
-
-#tablaHistorialMovimientos tbody tr:hover {
-    background-color: #e9ecef;
-}
-
-/* Estilos para el switch de sincronizacion */
-#edit_propagar_sucursales:checked + label {
-    color: #198754;
-}
-
-#edit_propagar_sucursales:not(:checked) + label {
-    color: #6c757d;
-}
+/* Sync switch */
+#edit_propagar_sucursales:checked + label span { color: #198754 !important; }
+#edit_propagar_sucursales:not(:checked) + label span { color: #6c757d !important; }
 </style>
 
 <script>
-// Script para el switch de sincronizacion global
 document.addEventListener('DOMContentLoaded', function() {
     const switchSincronizar = document.getElementById('edit_propagar_sucursales');
     if (switchSincronizar) {
@@ -562,7 +527,6 @@ document.addEventListener('DOMContentLoaded', function() {
         switchSincronizar.addEventListener('change', function() {
             actualizarEstado(this.checked);
         });
-        // Estado inicial
         actualizarEstado(switchSincronizar.checked);
     }
     
@@ -573,12 +537,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const alertDiv = document.getElementById('alertExcluirAnalitica');
             if (this.checked) {
                 label.textContent = 'Excluido';
-                alertDiv.classList.remove('alert-light');
-                alertDiv.classList.add('alert-warning');
+                alertDiv.style.background = '#fff3cd';
+                alertDiv.style.borderColor = '#ffc107';
             } else {
                 label.textContent = 'Incluido';
-                alertDiv.classList.remove('alert-warning');
-                alertDiv.classList.add('alert-light');
+                alertDiv.style.background = '';
+                alertDiv.style.borderColor = '';
             }
         });
     }

@@ -1,311 +1,224 @@
 {% load static %}
-
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
 {% csrf_token %}
 
+<style>
+.dt-label{font-size:.75rem;color:#878a99;margin-bottom:2px}
+.dt-value{font-weight:600;font-size:.85rem;margin-bottom:0}
+.dt-card{border:0;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:.5rem}
+.dt-card .card-header{padding:.4rem .75rem;background:#fff;border-bottom:1px solid #f0f0f0}
+.dt-card .card-body{padding:.5rem .75rem}
+.dt-card .card-title{font-size:.8rem;margin-bottom:0}
+.hist-item{padding:.35rem 0;border-bottom:1px solid #f5f5f5;font-size:.8rem}
+.hist-item:last-child{border:0}
+.foto-grid img{border-radius:6px;cursor:pointer;transition:transform .2s}
+.foto-grid img:hover{transform:scale(1.02)}
+</style>
+
 <div class="page-content">
     <div class="container-fluid">
-        
-        <!-- Título -->
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0">Detalle del Requerimiento</h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
-                            <li class="breadcrumb-item"><a href="{% url 'modulo_requerimientos' %}">Requerimientos</a></li>
-                            <li class="breadcrumb-item active">Detalle</li>
-                        </ol>
-                    </div>
-                </div>
+        <!-- Header compacto -->
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-2">
+                <a href="{% url 'modulo_requerimientos' %}" class="btn btn-soft-secondary btn-sm"><i class="ri-arrow-left-line"></i></a>
+                <h5 class="mb-0" id="numero-requerimiento" style="font-size:1rem">Cargando...</h5>
+                <span class="badge" id="badge-tipo"></span>
+                <span class="badge" id="badge-estado"></span>
+                <span class="badge" id="badge-prioridad"></span>
             </div>
+            <span class="badge fs-6" id="dias-transcurridos">0</span>
         </div>
 
-        <div class="row">
-            <!-- Información principal -->
+        <div class="row g-2">
+            <!-- COL IZQUIERDA -->
             <div class="col-lg-8">
-                
-                <!-- Encabezado del requerimiento -->
-                <div class="card">
+                <!-- Info principal: Producto + Cliente + Documento (una sola card) -->
+                <div class="card dt-card">
                     <div class="card-body">
-                        <div class="d-flex align-items-center justify-content-between mb-3">
-                            <div>
-                                <h5 class="mb-1" id="numero-requerimiento">Cargando...</h5>
-                                <div class="hstack gap-2">
-                                    <span class="badge" id="badge-tipo"></span>
-                                    <span class="badge" id="badge-estado"></span>
-                                    <span class="badge" id="badge-prioridad"></span>
-                                </div>
+                        <div class="row g-1">
+                            <div class="col-md-6">
+                                <div class="dt-label">Producto</div>
+                                <div class="dt-value"><span id="nombre-producto">-</span> <small class="text-muted" id="sku"></small></div>
                             </div>
-                            <div>
-                                <span class="text-muted">Días transcurridos:</span>
-                                <span class="badge badge-soft-warning fs-6" id="dias-transcurridos">0</span>
+                            <div class="col-md-3">
+                                <div class="dt-label">Sucursal</div>
+                                <div class="dt-value" id="sucursal">-</div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="dt-label">Creado por</div>
+                                <div class="dt-value" id="usuario-creador">-</div>
                             </div>
                         </div>
-                        <hr>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1">Sucursal</p>
-                                <p class="fw-semibold" id="sucursal">-</p>
+                        <hr class="my-1">
+                        <div class="row g-1">
+                            <div class="col-md-3">
+                                <div class="dt-label">Cliente</div>
+                                <div class="dt-value" id="cliente-nombre">-</div>
                             </div>
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1">Creado por</p>
-                                <p class="fw-semibold" id="usuario-creador">-</p>
+                            <div class="col-md-2">
+                                <div class="dt-label">RUT</div>
+                                <div class="dt-value" id="cliente-rut">-</div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Información del Producto -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="ri-product-hunt-line me-2"></i>Producto</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1">SKU</p>
-                                <p class="fw-semibold" id="sku">-</p>
+                            <div class="col-md-2">
+                                <div class="dt-label">Telefono</div>
+                                <div class="dt-value" id="cliente-telefono">-</div>
                             </div>
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1">Nombre</p>
-                                <p class="fw-semibold" id="nombre-producto">-</p>
+                            <div class="col-md-2">
+                                <div class="dt-label">Email</div>
+                                <div class="dt-value" id="cliente-email" style="word-break:break-all">-</div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="dt-label">Documento</div>
+                                <div class="dt-value"><span id="tipo-documento">-</span> <span id="numero-boleta"></span> <small class="text-muted" id="fecha-compra"></small></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Información del Cliente -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="ri-user-line me-2"></i>Cliente</h5>
-                    </div>
+                <!-- Clasificacion defecto (condicional) -->
+                <div class="card dt-card" id="card-clasificacion-defecto" style="display:none;">
+                    <div class="card-header" style="background:rgba(244,106,106,.08)"><h6 class="card-title"><i class="ri-error-warning-line me-1 text-danger"></i>Clasificacion</h6></div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1">Nombre</p>
-                                <p class="fw-semibold" id="cliente-nombre">-</p>
-                            </div>
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1">RUT</p>
-                                <p class="fw-semibold" id="cliente-rut">-</p>
-                            </div>
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1">Teléfono</p>
-                                <p class="fw-semibold" id="cliente-telefono">-</p>
-                            </div>
-                            <div class="col-md-6">
-                                <p class="text-muted mb-1">Email</p>
-                                <p class="fw-semibold" id="cliente-email">-</p>
-                            </div>
+                        <div class="row g-1">
+                            <div class="col-md-4" id="col-subtipo" style="display:none"><div class="dt-label">Subtipo</div><div class="dt-value" id="detalle-subtipo">-</div></div>
+                            <div class="col-md-4" id="col-severidad" style="display:none"><div class="dt-label">Severidad</div><div class="dt-value" id="detalle-severidad">-</div></div>
+                            <div class="col-md-4" id="col-condicion" style="display:none"><div class="dt-label">Condicion</div><div class="dt-value" id="detalle-condicion">-</div></div>
+                            <div class="col-md-6" id="col-producto-esperado" style="display:none"><div class="dt-label">Producto Esperado</div><div class="dt-value" id="detalle-producto-esperado">-</div></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Descripción -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="ri-file-text-line me-2"></i>Descripción</h5>
-                    </div>
+                <!-- Descripcion -->
+                <div class="card dt-card">
+                    <div class="card-header"><h6 class="card-title"><i class="ri-file-text-line me-1"></i>Descripcion</h6></div>
                     <div class="card-body">
-                        <h6 class="text-muted mb-2">Motivo</h6>
-                        <p id="motivo">-</p>
-                        
-                        <h6 class="text-muted mb-2 mt-3">Descripción Detallada</h6>
-                        <p id="descripcion-problema">-</p>
+                        <div class="dt-label">Motivo</div>
+                        <p class="small mb-1" id="motivo">-</p>
+                        <div class="dt-label mt-1">Detalle</div>
+                        <p class="small mb-0" id="descripcion-problema">-</p>
                     </div>
                 </div>
 
-                <!-- Resolución/Motivo (visible cuando está aprobado/rechazado) -->
-                <div class="card" id="card-resolucion" style="display: none;">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-checkbox-circle-line me-2"></i>Resolución
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="alert" id="alert-resolucion">
-                            <h6 class="alert-heading" id="titulo-resolucion"></h6>
-                            <p class="mb-0" id="motivo-resolucion-texto"></p>
+                <!-- Resolucion (condicional) -->
+                <div class="card dt-card" id="card-resolucion" style="display:none;">
+                    <div class="card-body p-0">
+                        <div class="alert mb-0 rounded-0" id="alert-resolucion" style="border-radius:6px !important">
+                            <strong id="titulo-resolucion"></strong>
+                            <p class="small mb-0 mt-1" id="motivo-resolucion-texto"></p>
+                            <small class="text-muted" id="fecha-resolucion-texto"></small>
                         </div>
-                        <small class="text-muted">Fecha: <span id="fecha-resolucion-texto"></span></small>
                     </div>
                 </div>
 
                 <!-- Fotos -->
-                <div class="card" id="card-fotos" style="display: none;">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="ri-image-line me-2"></i>Fotos Adjuntas</h5>
+                <div class="card dt-card" id="card-fotos" style="display:none;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="card-title"><i class="ri-image-line me-1"></i>Fotos <span class="badge ms-1" id="badge-fotos-completitud"></span></h6>
                     </div>
-                    <div class="card-body">
-                        <div class="row g-3" id="fotos-container">
-                        </div>
+                    <div class="card-body foto-grid">
+                        <div class="row g-2" id="fotos-container"></div>
                     </div>
                 </div>
 
                 <!-- Historial -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="ri-history-line me-2"></i>Historial</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="profile-timeline" id="historial-container">
-                            <div class="text-center text-muted py-4">
-                                <i class="ri-time-line fs-1"></i>
-                                <p class="mt-2">Cargando historial...</p>
-                            </div>
-                        </div>
+                <div class="card dt-card">
+                    <div class="card-header"><h6 class="card-title"><i class="ri-history-line me-1"></i>Historial</h6></div>
+                    <div class="card-body" id="historial-container">
+                        <div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm"></div></div>
                     </div>
                 </div>
-                
             </div>
 
-            <!-- Panel lateral -->
+            <!-- COL DERECHA -->
             <div class="col-lg-4">
-                
-                <!-- Acciones Dinámicas -->
-                <div class="card">
-                    <div class="card-header bg-soft-primary">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-settings-3-line me-2"></i>Acciones Disponibles
-                        </h5>
-                    </div>
+                <!-- Acciones -->
+                <div class="card dt-card">
+                    <div class="card-header" style="background:rgba(0,102,255,.06)"><h6 class="card-title"><i class="ri-settings-3-line me-1"></i>Acciones</h6></div>
                     <div class="card-body">
-                        <div id="acciones-container" class="d-grid gap-2">
-                            <div class="text-center text-muted py-3">
-                                <div class="spinner-border spinner-border-sm" role="status"></div>
-                                <p class="small mt-2">Cargando...</p>
-                            </div>
+                        <div id="acciones-container" class="d-grid gap-1">
+                            <div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm"></div></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Documento -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Documento de Venta</h5>
-                    </div>
+                <!-- Proveedor + Seguimiento (unificado) -->
+                <div class="card dt-card" id="card-proveedor" style="display:none;">
+                    <div class="card-header"><h6 class="card-title"><i class="ri-building-line me-1"></i>Proveedor</h6></div>
                     <div class="card-body">
-                        <p class="text-muted mb-1">Tipo</p>
-                        <p class="fw-semibold mb-3" id="tipo-documento">-</p>
-                        <p class="text-muted mb-1">Número</p>
-                        <p class="fw-semibold mb-3" id="numero-boleta">-</p>
-                        <p class="text-muted mb-1">Fecha</p>
-                        <p class="fw-semibold" id="fecha-compra">-</p>
-                    </div>
-                </div>
-
-                <!-- Información Proveedor -->
-                <div class="card" id="card-proveedor" style="display:none;">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Proveedor</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="fw-semibold mb-1" id="proveedor-nombre">-</p>
+                        <div class="dt-value mb-1" id="proveedor-nombre">-</div>
                         <small class="text-muted" id="proveedor-email">-</small>
+                        <div id="info-seguimiento-proveedor" class="mt-2"></div>
                     </div>
                 </div>
-
-                <!-- Seguimiento de Proveedor -->
-                <div class="card" id="card-seguimiento-proveedor" style="display:none;">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-mail-send-line me-2"></i>Seguimiento Proveedor
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="info-seguimiento-proveedor">
-                            <!-- Se llena dinámicamente -->
-                        </div>
-                    </div>
-                </div>
-
             </div>
         </div>
-
     </div>
 </div>
 
 <!-- Modal Cambiar Estado -->
 <div class="modal fade" id="modalCambiarEstado" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-sm">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Cambiar Estado del Requerimiento</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Nuevo Estado</label>
-                    <select class="form-select" id="nuevo-estado">
+            <div class="modal-header py-2"><h6 class="modal-title">Cambiar Estado</h6><button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body py-2">
+                <div class="mb-2">
+                    <label class="form-label small">Nuevo Estado</label>
+                    <select class="form-select form-select-sm" id="nuevo-estado">
                         <option value="PENDIENTE">Pendiente</option>
-                        <option value="ESPERANDO_RESPUESTA">Esperando Respuesta Proveedor</option>
+                        <option value="EN_REVISION">En Revision</option>
+                        <option value="ESPERANDO_RESPUESTA">Esperando Proveedor</option>
                         <option value="APROBADO">Aprobado</option>
                         <option value="RECHAZADO">Rechazado</option>
+                        <option value="EN_PROCESO">En Proceso</option>
+                        <option value="COMPLETADO">Completado</option>
                         <option value="CANCELADO">Cancelado</option>
                     </select>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Comentario</label>
-                    <textarea class="form-control" id="comentario-estado" rows="3" placeholder="Agregue un comentario sobre este cambio..."></textarea>
+                <div class="mb-0">
+                    <label class="form-label small">Comentario</label>
+                    <textarea class="form-control form-control-sm" id="comentario-estado" rows="2"></textarea>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="guardarEstado()">Guardar Cambio</button>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="guardarEstado()">Guardar</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Registrar Respuesta Proveedor -->
+<!-- Modal Respuesta Proveedor -->
 <div class="modal fade" id="modalRegistrarRespuesta" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-soft-success">
-                <h5 class="modal-title">
-                    <i class="ri-mail-check-line me-2"></i>Registrar Respuesta del Proveedor
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info">
-                    <i class="ri-information-line me-2"></i>
-                    Registre la respuesta que recibió del proveedor por correo, teléfono u otro medio.
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Decisión del Proveedor <span class="text-danger">*</span></label>
-                    <select class="form-select" id="decision-proveedor">
+            <div class="modal-header py-2 bg-soft-success"><h6 class="modal-title"><i class="ri-mail-check-line me-1"></i>Respuesta Proveedor</h6><button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body py-2">
+                <div class="mb-2">
+                    <label class="form-label small">Decision <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm" id="decision-proveedor">
                         <option value="">Seleccione...</option>
-                        <option value="APROBADO">✅ Aprobado - Procede Garantía/Cambio</option>
-                        <option value="RECHAZADO">❌ Rechazado - No Procede</option>
-                        <option value="PARCIAL">⚠️ Aprobado Parcialmente</option>
+                        <option value="APROBADO">Aprobado</option>
+                        <option value="RECHAZADO">Rechazado</option>
+                        <option value="PARCIAL">Parcial</option>
                     </select>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Respuesta del Proveedor (Interna) <span class="text-danger">*</span></label>
-                    <textarea class="form-control" id="respuesta-proveedor-text" rows="3" 
-                              placeholder="Respuesta completa del proveedor (solo para registro interno)..."></textarea>
-                    <small class="text-muted">Esta información es solo para registro interno</small>
+                <div class="mb-2">
+                    <label class="form-label small">Respuesta (interna) <span class="text-danger">*</span></label>
+                    <textarea class="form-control form-control-sm" id="respuesta-proveedor-text" rows="2" placeholder="Registro interno..."></textarea>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Motivo para el Cliente <span class="text-danger">*</span></label>
-                    <textarea class="form-control" id="motivo-usuario" rows="3" 
-                              placeholder="Explique al cliente/vendedor por qué se aprobó o rechazó..."></textarea>
-                    <small class="text-muted"><strong>Este mensaje lo verá el vendedor y cliente</strong></small>
+                <div class="mb-2">
+                    <label class="form-label small">Motivo para el cliente <span class="text-danger">*</span></label>
+                    <textarea class="form-control form-control-sm" id="motivo-usuario" rows="2" placeholder="Este mensaje lo vera el vendedor/cliente..."></textarea>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Fecha de Respuesta</label>
-                    <input type="datetime-local" class="form-control" id="fecha-respuesta-proveedor">
+                <div class="mb-0">
+                    <label class="form-label small">Fecha respuesta</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="fecha-respuesta-proveedor">
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" onclick="guardarRespuestaProveedor()">
-                    <i class="ri-save-line me-1"></i>Guardar Respuesta
-                </button>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="guardarRespuestaProveedor()">Guardar</button>
             </div>
         </div>
     </div>
@@ -315,700 +228,265 @@
 const requerimientoId = {{ requerimiento.id }};
 let datosRequerimiento = null;
 
-// Cargar datos al iniciar
-document.addEventListener('DOMContentLoaded', function() {
-    cargarRequerimiento();
-});
+document.addEventListener('DOMContentLoaded', cargarRequerimiento);
 
-// Cargar requerimiento
 function cargarRequerimiento() {
     fetch(`/app/api/requerimientos/${requerimientoId}/`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                datosRequerimiento = data.requerimiento;
-                mostrarRequerimiento(data.requerimiento);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire('Error', 'No se pudo cargar el requerimiento', 'error');
-        });
+        .then(r => r.json())
+        .then(data => { if (data.success) { datosRequerimiento = data.requerimiento; mostrarRequerimiento(data.requerimiento); } })
+        .catch(() => Swal.fire('Error', 'No se pudo cargar', 'error'));
 }
 
-// Mostrar requerimiento
-function mostrarRequerimiento(req) {
-    // Encabezado
-    document.getElementById('numero-requerimiento').textContent = req.numero_requerimiento;
-    document.getElementById('badge-tipo').textContent = req.tipo;
-    document.getElementById('badge-tipo').className = 'badge badge-soft-info';
-    document.getElementById('badge-estado').textContent = req.estado;
-    document.getElementById('badge-estado').className = `badge badge-soft-${obtenerColorEstado(req.estado_codigo)}`;
-    document.getElementById('badge-prioridad').textContent = req.prioridad;
-    document.getElementById('badge-prioridad').className = `badge badge-soft-${obtenerColorPrioridad(req.prioridad_codigo)}`;
-    
-    // Badge de urgencia según días
-    const badgeUrgencia = document.getElementById('dias-transcurridos');
-    badgeUrgencia.textContent = `${req.dias_transcurridos} días`;
-    badgeUrgencia.className = `badge badge-soft-${obtenerColorUrgencia(req.nivel_urgencia)} fs-6`;
-    
-    document.getElementById('sucursal').textContent = req.sucursal.nombre;
-    document.getElementById('usuario-creador').textContent = req.usuario_creador || '-';
+function cE(c) { return { 'PENDIENTE':'warning','EN_REVISION':'info','ESPERANDO_RESPUESTA':'primary','APROBADO':'success','RECHAZADO':'danger','EN_PROCESO':'info','COMPLETADO':'success','CANCELADO':'secondary' }[c]||'secondary'; }
+function cP(c) { return { 'BAJA':'success','MEDIA':'info','ALTA':'warning','URGENTE':'danger' }[c]||'secondary'; }
+function cU(c) { return { 'NORMAL':'success','MEDIA':'info','ALTA':'warning','CRITICA':'danger','CERRADO':'secondary' }[c]||'secondary'; }
 
-    // Producto
-    document.getElementById('sku').textContent = req.sku;
-    document.getElementById('nombre-producto').textContent = req.nombre_producto;
+const tipoCfg = {
+    'PRODUCTO_FALLADO':{ color:'danger', icon:'ri-error-warning-line' },
+    'ERROR_DESPACHO':{ color:'warning', icon:'ri-exchange-line' },
+    'GARANTIA':{ color:'info', icon:'ri-shield-check-line' },
+    'DEVOLUCION':{ color:'primary', icon:'ri-arrow-go-back-line' },
+    'RECLAMO':{ color:'secondary', icon:'ri-chat-delete-line' },
+    'CONSULTA':{ color:'success', icon:'ri-questionnaire-line' },
+    'OTROS':{ color:'dark', icon:'ri-more-line' },
+};
 
-    // Cliente
-    document.getElementById('cliente-nombre').textContent = req.cliente_nombre;
-    document.getElementById('cliente-rut').textContent = req.cliente_rut || '-';
-    document.getElementById('cliente-telefono').textContent = req.cliente_telefono || '-';
-    document.getElementById('cliente-email').textContent = req.cliente_email || '-';
+function mostrarRequerimiento(r) {
+    const $ = id => document.getElementById(id);
+    $('numero-requerimiento').textContent = r.numero_requerimiento;
 
-    // Descripción
-    document.getElementById('motivo').textContent = req.motivo;
-    document.getElementById('descripcion-problema').textContent = req.descripcion_problema || '-';
+    const tc = tipoCfg[r.tipo_codigo] || {color:'secondary',icon:'ri-file-line'};
+    $('badge-tipo').className = `badge badge-soft-${tc.color}`;
+    $('badge-tipo').innerHTML = `<i class="${tc.icon} me-1"></i>${r.tipo}`;
+    $('badge-estado').className = `badge badge-soft-${cE(r.estado_codigo)}`;
+    $('badge-estado').textContent = r.estado;
+    $('badge-prioridad').className = `badge badge-soft-${cP(r.prioridad_codigo)}`;
+    $('badge-prioridad').textContent = r.prioridad;
+    $('dias-transcurridos').textContent = `${r.dias_transcurridos}d`;
+    $('dias-transcurridos').className = `badge badge-soft-${cU(r.nivel_urgencia)} fs-6`;
 
-    // Documento
-    document.getElementById('tipo-documento').textContent = req.tipo_documento || '-';
-    document.getElementById('numero-boleta').textContent = req.numero_boleta || '-';
-    document.getElementById('fecha-compra').textContent = req.fecha_compra || '-';
+    $('nombre-producto').textContent = r.nombre_producto;
+    $('sku').textContent = `(${r.sku})`;
+    $('sucursal').textContent = r.sucursal.nombre;
+    $('usuario-creador').textContent = r.usuario_creador || '-';
 
-    // Proveedor
-    if (req.proveedor.id) {
-        document.getElementById('card-proveedor').style.display = 'block';
-        document.getElementById('proveedor-nombre').textContent = req.proveedor.nombre;
-        document.getElementById('proveedor-email').textContent = req.correo_proveedor_destino || 'Email no registrado';
-    } else {
-        document.getElementById('card-proveedor').style.display = 'none';
-    }
-    
-    // Mostrar acciones dinámicas según rol y estado
-    mostrarAccionesDisponibles(req);
-    
-    // Mostrar seguimiento de proveedor si aplica
-    if (req.proveedor.id) {
-        mostrarSeguimientoProveedor(req);
+    $('cliente-nombre').textContent = r.cliente_nombre;
+    $('cliente-rut').textContent = r.cliente_rut || '-';
+    $('cliente-telefono').textContent = r.cliente_telefono || '-';
+    $('cliente-email').textContent = r.cliente_email || '-';
+
+    $('tipo-documento').textContent = r.tipo_documento || '-';
+    $('numero-boleta').textContent = r.numero_boleta ? `N°${r.numero_boleta}` : '';
+    $('fecha-compra').textContent = r.fecha_compra || '';
+
+    $('motivo').textContent = r.motivo;
+    $('descripcion-problema').textContent = r.descripcion_problema || '-';
+
+    // Proveedor (unificado)
+    if (r.proveedor.id) {
+        $('card-proveedor').style.display = 'block';
+        $('proveedor-nombre').textContent = r.proveedor.nombre;
+        $('proveedor-email').textContent = r.correo_proveedor_destino || '';
+        mostrarSeguimientoProveedor(r);
     }
 
-    // Motivo de Resolución (visible al usuario)
-    if (req.motivo_resolucion && (req.estado_codigo === 'APROBADO' || req.estado_codigo === 'RECHAZADO')) {
-        document.getElementById('card-resolucion').style.display = 'block';
-        const alertClass = req.estado_codigo === 'APROBADO' ? 'alert-success' : 'alert-warning';
-        document.getElementById('alert-resolucion').className = `alert ${alertClass}`;
-        document.getElementById('titulo-resolucion').innerHTML = 
-            req.estado_codigo === 'APROBADO' ? 
-            '<i class="ri-checkbox-circle-line me-2"></i>Requerimiento Aprobado' : 
-            '<i class="ri-close-circle-line me-2"></i>Requerimiento Rechazado';
-        document.getElementById('motivo-resolucion-texto').textContent = req.motivo_resolucion;
-        document.getElementById('fecha-resolucion-texto').textContent = req.fecha_resolucion;
+    mostrarAccionesDisponibles(r);
+
+    // Resolucion
+    if (r.motivo_resolucion && ['APROBADO','RECHAZADO','COMPLETADO'].includes(r.estado_codigo)) {
+        $('card-resolucion').style.display = 'block';
+        $('alert-resolucion').className = `alert ${r.estado_codigo==='RECHAZADO'?'alert-warning':'alert-success'} mb-0`;
+        $('titulo-resolucion').innerHTML = r.estado_codigo==='RECHAZADO'?'<i class="ri-close-circle-line me-1"></i>Rechazado':'<i class="ri-checkbox-circle-line me-1"></i>Aprobado';
+        $('motivo-resolucion-texto').textContent = r.motivo_resolucion;
+        $('fecha-resolucion-texto').textContent = r.fecha_resolucion;
     }
-    
+
+    // Clasificacion defecto
+    if (['PRODUCTO_FALLADO','ERROR_DESPACHO','GARANTIA'].includes(r.tipo_codigo)) {
+        let show = false;
+        if (r.subtipo) { $('col-subtipo').style.display='block'; $('detalle-subtipo').textContent=r.subtipo.replace(/_/g,' '); show=true; }
+        if (r.severidad_defecto) { $('col-severidad').style.display='block'; $('detalle-severidad').textContent=r.severidad_defecto; show=true; }
+        if (r.condicion_producto) { $('col-condicion').style.display='block'; $('detalle-condicion').textContent=r.condicion_producto; show=true; }
+        if (r.producto_esperado) { $('col-producto-esperado').style.display='block'; $('detalle-producto-esperado').textContent=r.producto_esperado; show=true; }
+        if (show) $('card-clasificacion-defecto').style.display='block';
+    }
+
     // Fotos
-    console.log('Fotos recibidas:', req.fotos);
-    if (req.fotos && req.fotos.length > 0) {
-        document.getElementById('card-fotos').style.display = 'block';
-        const container = document.getElementById('fotos-container');
-        container.innerHTML = req.fotos.map(foto => {
-            console.log(`Intentando cargar foto: ${foto.url}`);
-            return `
-            <div class="col-md-6 mb-3">
-                <a href="${foto.url}" data-lightbox="requerimiento-${req.id}" data-title="${foto.descripcion || 'Foto del requerimiento'}">
-                    <img src="${foto.url}" class="img-fluid rounded shadow-sm" alt="${foto.descripcion || 'Foto'}" 
-                         style="max-height: 300px; object-fit: cover; width: 100%;"
-                         onload="console.log('✅ Foto cargada:', '${foto.url}')"
-                         onerror="console.error('❌ Error al cargar foto:', '${foto.url}'); this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'200\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'200\\' height=\\'200\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' fill=\\'%23999\\'%3EImagen no disponible%3C/text%3E%3C/svg%3E'">
-                </a>
-                ${foto.descripcion ? `<p class="text-muted mt-2 small mb-0"><i class="ri-image-line me-1"></i>${foto.descripcion}</p>` : ''}
-                <small class="text-muted">Subida: ${foto.fecha}</small>
-                <p class="small text-info mb-0">URL: ${foto.url}</p>
-            </div>
-        `;
-        }).join('');
-    } else {
-        console.log('❌ No hay fotos para mostrar. Total fotos:', req.fotos ? req.fotos.length : 0);
-        document.getElementById('card-fotos').style.display = 'none';
+    if (r.fotos && r.fotos.length > 0) {
+        $('card-fotos').style.display = 'block';
+        const bc = $('badge-fotos-completitud');
+        if (r.fotos_completas) { bc.className='badge bg-success ms-1'; bc.textContent='Completas'; }
+        else if (['PRODUCTO_FALLADO','GARANTIA','ERROR_DESPACHO'].includes(r.tipo_codigo)) { bc.className='badge bg-warning ms-1'; bc.textContent='Incompletas'; }
+        else bc.textContent='';
+
+        const tipos = r.tipos_foto_requeridos||[];
+        const byTipo = {};
+        r.fotos.forEach(f => { const k=f.tipo_foto_codigo||'SIN'; if(!byTipo[k])byTipo[k]=[]; byTipo[k].push(f); });
+        let h = '';
+        tipos.forEach(tf => {
+            if (tf.codigo==='FOTO_ADICIONAL') return;
+            const fs = byTipo[tf.codigo]||[];
+            h += `<div class="col-6 col-md-4">
+                <div class="dt-label"><i class="${tf.icono} me-1"></i>${tf.nombre} ${tf.es_obligatorio?'<span class="badge bg-danger" style="font-size:.5rem">Req</span>':''}</div>`;
+            if (fs.length) {
+                h += `<a href="${fs[0].url}" data-lightbox="req-${r.id}" data-title="${tf.nombre}"><img src="${fs[0].url}" class="img-fluid" style="max-height:140px;object-fit:cover;width:100%" onerror="this.parentElement.innerHTML='<div class=\\'bg-light rounded p-3 text-center text-muted\\'>Error</div>'"></a>`;
+            } else {
+                h += `<div class="bg-light rounded p-3 text-center text-muted" style="min-height:80px;display:flex;align-items:center;justify-content:center"><i class="${tf.icono} fs-4"></i></div>`;
+            }
+            h += '</div>';
+            delete byTipo[tf.codigo];
+        });
+        Object.values(byTipo).flat().forEach(f => {
+            h += `<div class="col-6 col-md-4"><div class="dt-label"><i class="${f.tipo_foto_icono||'ri-image-line'} me-1"></i>${f.tipo_foto_nombre||'Foto'}</div>
+            <a href="${f.url}" data-lightbox="req-${r.id}"><img src="${f.url}" class="img-fluid" style="max-height:140px;object-fit:cover;width:100%"></a></div>`;
+        });
+        $('fotos-container').innerHTML = h;
     }
 
     // Historial
-    const histContainer = document.getElementById('historial-container');
-    if (req.historial.length > 0) {
-        histContainer.innerHTML = req.historial.map(hist => `
-            <div class="accordion-item border-0">
-                <div class="accordion-header">
-                    <a class="accordion-button p-2 shadow-none" data-bs-toggle="collapse" href="#hist-${hist.id}">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0 avatar-xs">
-                                <div class="avatar-title bg-light text-success rounded-circle">
-                                    <i class="ri-checkbox-circle-line"></i>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <h6 class="fs-14 mb-0">${hist.accion}</h6>
-                                <small class="text-muted">${hist.fecha} - ${hist.usuario}</small>
-                            </div>
-                        </div>
-                    </a>
+    if (r.historial.length) {
+        $('historial-container').innerHTML = r.historial.map(h => `
+            <div class="hist-item">
+                <div class="d-flex justify-content-between">
+                    <span class="fw-semibold">${h.accion}</span>
+                    <small class="text-muted">${h.fecha}</small>
                 </div>
-                <div id="hist-${hist.id}" class="accordion-collapse collapse show">
-                    <div class="accordion-body ms-2 ps-5 pt-0">
-                        ${hist.comentario ? `<p class="text-muted mb-0">${hist.comentario}</p>` : ''}
-                        ${hist.estado_anterior ? `<p class="text-muted mb-0"><small>Estado: ${hist.estado_anterior} → ${hist.estado_nuevo}</small></p>` : ''}
-                    </div>
-                </div>
+                ${h.estado_anterior ? `<small class="text-muted">${h.estado_anterior} → ${h.estado_nuevo}</small>` : ''}
+                ${h.comentario ? `<div class="small text-muted">${h.comentario}</div>` : ''}
+                <small class="text-muted">${h.usuario}</small>
             </div>
         `).join('');
     }
 }
 
-// Mostrar acciones disponibles según rol y estado
-function mostrarAccionesDisponibles(req) {
-    const container = document.getElementById('acciones-container');
-    let html = '';
-    const permisos = req.permisos;
-    const rol = req.rol_usuario;
-    
-    // Badge de rol del usuario
-    const rolBadges = {
-        'administrador': '<span class="badge bg-danger mb-3"><i class="ri-shield-star-line me-1"></i>Administrador</span>',
-        'jefe_local': '<span class="badge bg-primary mb-3"><i class="ri-user-star-line me-1"></i>Supervisor</span>',
-        'cajero': '<span class="badge bg-info mb-3"><i class="ri-user-line me-1"></i>Cajero</span>',
-        'vendedor': '<span class="badge bg-secondary mb-3"><i class="ri-user-line me-1"></i>Vendedor</span>',
-    };
-    
-    html += (rolBadges[rol] || '') + '<br>';
-    
-    // PENDIENTE o EN_REVISION - Acciones de revisión
-    // NOTA: Botones de Revisar, Aprobar y Rechazar eliminados - se usa "Cambiar Estado" en su lugar
-    if (req.estado_codigo === 'PENDIENTE' || req.estado_codigo === 'EN_REVISION') {
-        // Solo mantener botón de enviar a proveedor si tiene permisos y hay proveedor
-        if (permisos.puede_enviar_proveedor && req.proveedor.id) {
-            html += `
-                <button class="btn btn-primary w-100 mb-2" onclick="enviarAProveedorMejorado()">
-                    <i class="ri-mail-send-line me-1"></i> Enviar a Proveedor
-                </button>`;
-        }
+function mostrarAccionesDisponibles(r) {
+    const c = document.getElementById('acciones-container');
+    let h = '';
+    const p = r.permisos;
+
+    if (['PENDIENTE','EN_REVISION'].includes(r.estado_codigo) && p.puede_enviar_proveedor && r.proveedor.id)
+        h += `<button class="btn btn-primary btn-sm w-100" onclick="enviarAProveedorMejorado()"><i class="ri-mail-send-line me-1"></i>Enviar a Proveedor</button>`;
+
+    if (r.estado_codigo==='ESPERANDO_RESPUESTA' && p.puede_registrar_respuesta) {
+        h += `<button class="btn btn-success btn-sm w-100" onclick="abrirModalRespuestaProveedor()"><i class="ri-file-edit-line me-1"></i>Registrar Respuesta</button>`;
+        h += `<button class="btn btn-soft-warning btn-sm w-100" onclick="reenviarCorreoProveedor()"><i class="ri-mail-send-line me-1"></i>Re-enviar</button>`;
     }
-    
-    // ESPERANDO_RESPUESTA - Acciones de seguimiento
-    if (req.estado_codigo === 'ESPERANDO_RESPUESTA') {
-        if (permisos.puede_registrar_respuesta) {
-            html += `
-                <button class="btn btn-success w-100 mb-2" onclick="abrirModalRespuestaProveedor()">
-                    <i class="ri-file-edit-line me-1"></i> Registrar Respuesta
-                </button>
-                <button class="btn btn-warning w-100 mb-2" onclick="reenviarCorreoProveedor()">
-                    <i class="ri-mail-send-line me-1"></i> Re-enviar Correo
-                </button>`;
-        }
-    }
-    
-    // APROBADO o EN_PROCESO - Acciones de ejecución
-    if (req.estado_codigo === 'APROBADO' || req.estado_codigo === 'EN_PROCESO') {
-        if (req.estado_codigo === 'APROBADO') {
-            html += `
-                <button class="btn btn-primary w-100 mb-2" onclick="marcarEnProceso()">
-                    <i class="ri-play-line me-1"></i> Iniciar Proceso
-                </button>`;
-        }
-        
-        if (permisos.puede_completar) {
-            html += `
-                <button class="btn btn-success w-100 mb-2" onclick="completarRequerimiento()">
-                    <i class="ri-check-double-line me-1"></i> Completar
-                </button>`;
-        }
-    }
-    
-    // Botón cambiar estado (para admin y supervisor)
-    if (rol === 'administrador' || rol === 'jefe_local') {
-        html += `<hr>
-            <button class="btn btn-soft-primary w-100 mb-2" onclick="cambiarEstado()">
-                <i class="ri-refresh-line me-1"></i> Cambiar Estado
-            </button>`;
-    }
-    
-    // Botón volver (siempre visible)
-    html += `<hr>
-        <a href="/app/requerimientos/" class="btn btn-secondary w-100">
-            <i class="ri-arrow-left-line me-1"></i> Volver a Lista
-        </a>`;
-    
-    container.innerHTML = html;
+
+    if (r.estado_codigo==='APROBADO')
+        h += `<button class="btn btn-primary btn-sm w-100" onclick="marcarEnProceso()"><i class="ri-play-line me-1"></i>Iniciar Proceso</button>`;
+    if (['APROBADO','EN_PROCESO'].includes(r.estado_codigo) && p.puede_completar)
+        h += `<button class="btn btn-success btn-sm w-100" onclick="completarRequerimiento()"><i class="ri-check-double-line me-1"></i>Completar</button>`;
+
+    if (['administrador','jefe_local'].includes(r.rol_usuario))
+        h += `<button class="btn btn-soft-primary btn-sm w-100" onclick="cambiarEstado()"><i class="ri-refresh-line me-1"></i>Cambiar Estado</button>`;
+
+    h += `<a href="/app/requerimientos/" class="btn btn-soft-secondary btn-sm w-100"><i class="ri-arrow-left-line me-1"></i>Volver</a>`;
+    c.innerHTML = h;
 }
 
-// Mostrar información de seguimiento del proveedor
-function mostrarSeguimientoProveedor(req) {
-    if (!req.correo_enviado_proveedor) {
-        document.getElementById('card-seguimiento-proveedor').style.display = 'none';
-        return;
-    }
-    
-    document.getElementById('card-seguimiento-proveedor').style.display = 'block';
-    const container = document.getElementById('info-seguimiento-proveedor');
-    
-    let html = `
-        <div class="mb-3">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="text-muted">Estado:</span>
-                <span class="badge ${req.fecha_respuesta_proveedor ? 'bg-success' : 'bg-warning'}">
-                    ${req.fecha_respuesta_proveedor ? 'Respondido' : 'Esperando Respuesta'}
-                </span>
-            </div>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="text-muted">Enviado a:</span>
-                <span class="fw-semibold">${req.correo_proveedor_destino || 'N/A'}</span>
-            </div>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="text-muted">Fecha envío:</span>
-                <span>${req.fecha_envio_proveedor}</span>
-            </div>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="text-muted">Intentos:</span>
-                <span class="badge bg-info">${req.intentos_envio || 0}</span>
-            </div>
-        </div>`;
-    
-    // Si está esperando respuesta
-    if (!req.fecha_respuesta_proveedor) {
-        const diasSinRespuesta = req.dias_sin_respuesta || 0;
-        let colorAlerta = 'success';
-        if (diasSinRespuesta > 14) colorAlerta = 'danger';
-        else if (diasSinRespuesta > 7) colorAlerta = 'warning';
-        
-        html += `
-            <div class="alert alert-${colorAlerta} mb-3">
-                <i class="ri-time-line me-1"></i>
-                <strong>${diasSinRespuesta} días sin respuesta</strong>
-                ${req.requiere_recordatorio ? '<br><small>Se recomienda enviar recordatorio</small>' : ''}
-            </div>`;
+function mostrarSeguimientoProveedor(r) {
+    if (!r.correo_enviado_proveedor) return;
+    const c = document.getElementById('info-seguimiento-proveedor');
+    let h = `<hr class="my-1"><div class="small">
+        <div class="d-flex justify-content-between"><span class="text-muted">Enviado:</span><span>${r.fecha_envio_proveedor}</span></div>
+        <div class="d-flex justify-content-between"><span class="text-muted">Intentos:</span><span class="badge bg-info">${r.intentos_envio||0}</span></div>`;
+
+    if (!r.fecha_respuesta_proveedor) {
+        const d = r.dias_sin_respuesta||0;
+        const col = d>14?'danger':d>7?'warning':'success';
+        h += `<div class="alert alert-${col} py-1 px-2 mt-1 mb-0 small"><i class="ri-time-line me-1"></i>${d}d sin respuesta</div>`;
     } else {
-        // Ya respondió
-        html += `
-            <div class="alert alert-success mb-3">
-                <i class="ri-checkbox-circle-line me-1"></i>
-                <strong>Proveedor respondió</strong>
-                <br><small>${req.fecha_respuesta_proveedor}</small>
-            </div>
-            <div class="mb-3">
-                <label class="text-muted small">Decisión:</label>
-                <p class="fw-semibold">${req.decision_proveedor || 'No registrada'}</p>
-            </div>
-            <div class="mb-3">
-                <label class="text-muted small">Respuesta:</label>
-                <p class="small">${req.respuesta_proveedor || '-'}</p>
-            </div>`;
+        h += `<div class="alert alert-success py-1 px-2 mt-1 mb-0 small"><i class="ri-checkbox-circle-fill me-1"></i>Respondio ${r.fecha_respuesta_proveedor}</div>`;
+        if (r.decision_proveedor) h += `<div class="mt-1"><span class="dt-label">Decision:</span> <span class="fw-semibold">${r.decision_proveedor}</span></div>`;
+        if (r.respuesta_proveedor) h += `<div class="mt-1"><span class="dt-label">Respuesta:</span><div class="small">${r.respuesta_proveedor}</div></div>`;
     }
-    
-    container.innerHTML = html;
+    h += '</div>';
+    c.innerHTML = h;
 }
 
-// Obtener color estado
-function obtenerColorEstado(estado) {
-    const colores = {
-        'PENDIENTE': 'warning',
-        'ESPERANDO_RESPUESTA': 'primary',
-        'APROBADO': 'success',
-        'RECHAZADO': 'danger',
-        'CANCELADO': 'secondary'
-    };
-    return colores[estado] || 'secondary';
-}
+// === ACCIONES ===
+function cambiarEstado() { new bootstrap.Modal(document.getElementById('modalCambiarEstado')).show(); }
 
-// Obtener color prioridad
-function obtenerColorPrioridad(prioridad) {
-    const colores = {
-        'BAJA': 'success',
-        'MEDIA': 'info',
-        'ALTA': 'warning',
-        'URGENTE': 'danger'
-    };
-    return colores[prioridad] || 'secondary';
-}
-
-// Obtener color urgencia
-function obtenerColorUrgencia(nivel) {
-    const colores = {
-        'NORMAL': 'success',
-        'MEDIA': 'info',
-        'ALTA': 'warning',
-        'CRITICA': 'danger',
-        'CERRADO': 'secondary'
-    };
-    return colores[nivel] || 'secondary';
-}
-
-// Cambiar estado
-function cambiarEstado() {
-    new bootstrap.Modal(document.getElementById('modalCambiarEstado')).show();
-}
-
-// Guardar estado
 function guardarEstado() {
-    const nuevoEstado = document.getElementById('nuevo-estado').value;
-    const comentario = document.getElementById('comentario-estado').value;
-
     fetch(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({
-            estado: nuevoEstado,
-            comentario: comentario
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            Swal.fire('Éxito', 'Estado actualizado', 'success');
-            bootstrap.Modal.getInstance(document.getElementById('modalCambiarEstado')).hide();
-            cargarRequerimiento();
-        } else {
-            Swal.fire('Error', data.error, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        Swal.fire('Error', 'Error al actualizar estado', 'error');
-    });
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+        body: JSON.stringify({ estado: document.getElementById('nuevo-estado').value, comentario: document.getElementById('comentario-estado').value })
+    }).then(r=>r.json()).then(d => {
+        if (d.success) { Swal.fire('OK','Estado actualizado','success'); bootstrap.Modal.getInstance(document.getElementById('modalCambiarEstado')).hide(); cargarRequerimiento(); }
+        else Swal.fire('Error',d.error,'error');
+    }).catch(()=>Swal.fire('Error','Error al actualizar','error'));
 }
 
-// ========== ACCIONES DE REVISIÓN ==========
-
-// Marcar en revisión
-function marcarEnRevision() {
-    cambiarEstadoRapido('EN_REVISION', 'Requerimiento marcado para revisión');
-}
-
-// Aprobar requerimiento
-function aprobarRequerimiento() {
-    Swal.fire({
-        title: 'Aprobar Requerimiento',
-        text: '¿Está seguro de aprobar este requerimiento?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, aprobar',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#0ab39c'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            cambiarEstadoRapido('APROBADO', 'Requerimiento aprobado');
-        }
-    });
-}
-
-// Rechazar requerimiento
-function rechazarRequerimiento() {
-    Swal.fire({
-        title: 'Rechazar Requerimiento',
-        input: 'textarea',
-        inputLabel: 'Motivo del rechazo',
-        inputPlaceholder: 'Explique por qué no procede este requerimiento...',
-        showCancelButton: true,
-        confirmButtonText: 'Rechazar',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#f06548',
-        inputValidator: (value) => {
-            if (!value) {
-                return 'Debe indicar el motivo del rechazo';
-            }
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            cambiarEstadoRapido('RECHAZADO', result.value);
-        }
-    });
-}
-
-// Marcar en proceso
-function marcarEnProceso() {
-    cambiarEstadoRapido('EN_PROCESO', 'Iniciando proceso de resolución');
-}
-
-// Función auxiliar para cambio rápido de estado
-function cambiarEstadoRapido(nuevoEstado, comentario) {
+function cambiarEstadoRapido(estado, comentario) {
     fetch(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({
-            estado: nuevoEstado,
-            comentario: comentario
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            Swal.fire('Éxito', data.message || 'Estado actualizado', 'success');
-            cargarRequerimiento();
-        } else {
-            Swal.fire('Error', data.error, 'error');
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+        body: JSON.stringify({ estado, comentario })
+    }).then(r=>r.json()).then(d => { if(d.success){Swal.fire('OK',d.message||'Actualizado','success');cargarRequerimiento();}else Swal.fire('Error',d.error,'error'); })
+    .catch(()=>Swal.fire('Error','Error','error'));
+}
+
+function marcarEnProceso() { cambiarEstadoRapido('EN_PROCESO','Iniciando proceso de resolucion'); }
+
+function completarRequerimiento() {
+    Swal.fire({ title:'Completar', input:'textarea', inputLabel:'Resolucion final', inputPlaceholder:'Describa...', showCancelButton:true, confirmButtonText:'Completar',
+        inputValidator: v => { if(!v) return 'Ingrese resolucion'; }
+    }).then(r => {
+        if (r.isConfirmed) {
+            fetch(`/app/api/requerimientos/${requerimientoId}/completar/`, {
+                method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+                body: JSON.stringify({ resolucion: r.value })
+            }).then(r=>r.json()).then(d => { if(d.success){Swal.fire('OK',d.message,'success');cargarRequerimiento();}else Swal.fire('Error',d.error,'error'); });
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        Swal.fire('Error', 'Error al actualizar estado', 'error');
     });
 }
 
-// ========== ACCIONES CON PROVEEDOR ==========
-
-// Enviar a proveedor (versión original - mantener por compatibilidad)
-function enviarAProveedor() {
-    enviarAProveedorMejorado();
-}
-
-// Enviar a proveedor mejorado con preview del correo
 function enviarAProveedorMejorado() {
-    // Generar preview del correo
-    const previewHTML = `
-        <div style="text-align: left; max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 5px; background: #f8f9fa;">
-            <div style="background: #405189; color: white; padding: 15px; text-align: center; margin: -15px -15px 15px -15px;">
-                <h3 style="margin: 0;">Requerimiento de ${datosRequerimiento.tipo}</h3>
-                <p style="font-size: 20px; margin: 10px 0 0 0;">${datosRequerimiento.numero_requerimiento}</p>
-            </div>
-            
-            <div style="background: white; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
-                <h4 style="color: #405189; margin-top: 0;">Estimado proveedor ${datosRequerimiento.proveedor.nombre},</h4>
-                <p>Se ha generado un requerimiento que requiere su atención:</p>
-            </div>
-            
-            <div style="background: white; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
-                <h4 style="color: #405189; margin-top: 0;">Información del Producto</h4>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>SKU:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">${datosRequerimiento.sku}</td></tr>
-                    <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Producto:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">${datosRequerimiento.nombre_producto}</td></tr>
-                    <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Documento:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">${datosRequerimiento.tipo_documento || 'N/A'} ${datosRequerimiento.numero_boleta || ''}</td></tr>
-                    <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Fecha Compra:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">${datosRequerimiento.fecha_compra || 'N/A'}</td></tr>
-                </table>
-                
-                <h4 style="color: #405189; margin-top: 20px;">Descripción del Problema</h4>
-                <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107;">
-                    <p><strong>Motivo:</strong> ${datosRequerimiento.motivo}</p>
-                    <p><strong>Descripción:</strong> ${datosRequerimiento.descripcion_problema || 'N/A'}</p>
-                </div>
-                
-                <h4 style="color: #405189; margin-top: 20px;">Información del Cliente</h4>
-                <p><strong>Nombre:</strong> ${datosRequerimiento.cliente_nombre}</p>
-                <p><strong>RUT:</strong> ${datosRequerimiento.cliente_rut || 'N/A'}</p>
-                <p><strong>Contacto:</strong> ${datosRequerimiento.cliente_telefono || 'N/A'}</p>
-                
-                <div style="margin-top: 20px; padding: 15px; background: #d1ecf1; border-left: 4px solid #0dcaf0;">
-                    <p style="margin: 0;"><strong>📎 Se adjuntan ${datosRequerimiento.fotos.length} foto(s) del producto/problema</strong></p>
-                </div>
-                
-                <p style="margin-top: 20px;">Por favor, revise este requerimiento y responda indicando si procede o no.</p>
-            </div>
-        </div>
-    `;
-    
+    const d = datosRequerimiento;
     Swal.fire({
-        title: 'Vista Previa del Correo a Enviar',
-        html: `
-            <div class="text-start mb-3">
-                <p><strong>Para:</strong> ${datosRequerimiento.proveedor.nombre}</p>
-                <p><strong>Correo:</strong> ${datosRequerimiento.correo_proveedor_destino || datosRequerimiento.proveedor.correoVendedor || 'No configurado'}</p>
-                <p><strong>Asunto:</strong> Requerimiento de ${datosRequerimiento.tipo} - ${datosRequerimiento.numero_requerimiento}</p>
-                <p><strong>Adjuntos:</strong> ${datosRequerimiento.fotos.length} foto(s)</p>
-            </div>
-            <hr>
-            ${previewHTML}
-        `,
-        icon: 'info',
-        width: '800px',
-        showCancelButton: true,
-        confirmButtonText: '<i class="ri-mail-send-line me-1"></i> Enviar Correo',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#405189',
-        showLoaderOnConfirm: true,
-        preConfirm: () => {
-            return fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({})
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    throw new Error(data.error);
-                }
-                return data;
-            })
-            .catch(error => {
-                Swal.showValidationMessage(`Error: ${error.message || error}`);
-            });
-        },
+        title:'Enviar a Proveedor', width:'600px',
+        html:`<div class="text-start small"><p><strong>Para:</strong> ${d.proveedor.nombre}</p><p><strong>Correo:</strong> ${d.correo_proveedor_destino||'No configurado'}</p><p><strong>Adjuntos:</strong> ${d.fotos.length} foto(s)</p><hr><p><strong>Producto:</strong> ${d.sku} — ${d.nombre_producto}</p><p><strong>Motivo:</strong> ${d.motivo}</p></div>`,
+        showCancelButton:true, confirmButtonText:'Enviar', confirmButtonColor:'#0066FF',
+        showLoaderOnConfirm:true,
+        preConfirm: () => fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
+            method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'}, body:'{}'
+        }).then(r=>r.json()).then(d => { if(!d.success) throw new Error(d.error); return d; }).catch(e => Swal.showValidationMessage(e.message)),
         allowOutsideClick: () => !Swal.isLoading()
-    }).then((result) => {
-        if (result.isConfirmed && result.value) {
-            Swal.fire({
-                icon: 'success',
-                title: '✅ Correo Enviado Exitosamente',
-                html: `
-                    <div class="alert alert-success">
-                        <p><strong>${result.value.message}</strong></p>
-                        <p class="mb-1"><i class="ri-mail-line me-1"></i> <strong>Correo:</strong> ${result.value.correo_destino}</p>
-                        <p class="mb-1"><i class="ri-calendar-line me-1"></i> <strong>Fecha:</strong> ${result.value.fecha_envio}</p>
-                        <hr>
-                        <p class="mb-0 small text-muted"><i class="ri-information-line me-1"></i> El envío ha sido registrado en el historial del requerimiento. Todos los usuarios podrán ver que se envió el correo al proveedor.</p>
-                    </div>
-                `,
-            });
-            cargarRequerimiento();
-        }
-    });
+    }).then(r => { if(r.isConfirmed&&r.value) { Swal.fire('Enviado',r.value.message,'success'); cargarRequerimiento(); } });
 }
 
-// Re-enviar correo a proveedor
 function reenviarCorreoProveedor() {
-    Swal.fire({
-        title: 'Re-enviar Recordatorio',
-        text: `¿Enviar recordatorio a ${datosRequerimiento.proveedor.nombre}?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, enviar recordatorio',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
+    Swal.fire({ title:'Re-enviar?', text:`Enviar recordatorio a ${datosRequerimiento.proveedor.nombre}`, icon:'warning', showCancelButton:true, confirmButtonText:'Enviar' })
+    .then(r => {
+        if (r.isConfirmed) {
             fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({})
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire('Enviado', 'Recordatorio enviado al proveedor', 'success');
-                    cargarRequerimiento();
-                } else {
-                    Swal.fire('Error', data.error, 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                Swal.fire('Error', 'Error al enviar', 'error');
-            });
+                method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'}, body:'{}'
+            }).then(r=>r.json()).then(d => { if(d.success){Swal.fire('Enviado','Recordatorio enviado','success');cargarRequerimiento();}else Swal.fire('Error',d.error,'error'); });
         }
     });
 }
 
-// Abrir modal para registrar respuesta del proveedor
 function abrirModalRespuestaProveedor() {
-    // Establecer fecha actual
-    const now = new Date();
-    const datetime = now.toISOString().slice(0, 16);
-    document.getElementById('fecha-respuesta-proveedor').value = datetime;
-    
-    // Limpiar campos
+    document.getElementById('fecha-respuesta-proveedor').value = new Date().toISOString().slice(0,16);
     document.getElementById('decision-proveedor').value = '';
     document.getElementById('respuesta-proveedor-text').value = '';
-    
+    document.getElementById('motivo-usuario').value = '';
     new bootstrap.Modal(document.getElementById('modalRegistrarRespuesta')).show();
 }
 
-// Guardar respuesta del proveedor
 function guardarRespuestaProveedor() {
-    const decision = document.getElementById('decision-proveedor').value;
-    const respuesta = document.getElementById('respuesta-proveedor-text').value;
-    const motivo = document.getElementById('motivo-usuario').value;
-    
-    if (!decision || !respuesta || !motivo) {
-        Swal.fire('Atención', 'Complete todos los campos requeridos', 'warning');
-        return;
-    }
-    
-    fetch(`/app/api/requerimientos/${requerimientoId}/respuesta-proveedor/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({
-            decision: decision,
-            respuesta: respuesta,
-            motivo: motivo  // Nuevo: motivo visible al usuario
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            bootstrap.Modal.getInstance(document.getElementById('modalRegistrarRespuesta')).hide();
-            Swal.fire({
-                icon: decision === 'APROBADO' ? 'success' : 'info',
-                title: `Requerimiento ${decision === 'APROBADO' ? 'Aprobado' : 'Rechazado'}`,
-                text: `El vendedor y cliente verán: "${motivo}"`,
-                confirmButtonText: 'Entendido'
-            });
-            cargarRequerimiento();
-        } else {
-            Swal.fire('Error', data.error, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        Swal.fire('Error', 'Error al registrar respuesta', 'error');
-    });
-}
+    const dec = document.getElementById('decision-proveedor').value;
+    const resp = document.getElementById('respuesta-proveedor-text').value;
+    const mot = document.getElementById('motivo-usuario').value;
+    if (!dec||!resp||!mot) { Swal.fire('','Complete todos los campos','warning'); return; }
 
-// Completar requerimiento
-function completarRequerimiento() {
-    Swal.fire({
-        title: 'Completar Requerimiento',
-        input: 'textarea',
-        inputLabel: 'Resolución final',
-        inputPlaceholder: 'Describa la resolución del requerimiento...',
-        showCancelButton: true,
-        confirmButtonText: 'Completar',
-        cancelButtonText: 'Cancelar',
-        inputValidator: (value) => {
-            if (!value) {
-                return 'Debe ingresar una resolución';
-            }
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(`/app/api/requerimientos/${requerimientoId}/completar/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    resolucion: result.value
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire('Éxito', data.message, 'success');
-                    cargarRequerimiento();
-                } else {
-                    Swal.fire('Error', data.error, 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                Swal.fire('Error', 'Error al completar', 'error');
-            });
-        }
-    });
+    fetch(`/app/api/requerimientos/${requerimientoId}/respuesta-proveedor/`, {
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+        body: JSON.stringify({ decision:dec, respuesta:resp, motivo:mot })
+    }).then(r=>r.json()).then(d => {
+        if (d.success) { bootstrap.Modal.getInstance(document.getElementById('modalRegistrarRespuesta')).hide(); Swal.fire(dec==='APROBADO'?'Aprobado':'Procesado',`El cliente vera: "${mot}"`,'success'); cargarRequerimiento(); }
+        else Swal.fire('Error',d.error,'error');
+    }).catch(()=>Swal.fire('Error','Error al registrar','error'));
 }
 </script>
 
-    </div>
-    <!-- container-fluid -->
-</div>
-<!-- page-content -->
-
 {% include '../../layout/footer.html' %}
-

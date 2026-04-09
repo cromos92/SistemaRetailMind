@@ -291,39 +291,42 @@ window.cargarVariacionesEnTabla = function(variaciones) {
     console.log(`Procesando ${variaciones.length} variaciones...`);
     variaciones.forEach((variacion, index) => {
         console.log(`Variación ${index + 1}:`, variacion);
-        const stockClass = variacion.stock_total === 0 ? 'text-danger' : 
-                          variacion.stock_total < 5 ? 'text-warning' : 
-                          'text-success';
+        const stockColor = variacion.stock_total === 0 ? '#dc3545' : 
+                          variacion.stock_total < 5 ? '#f0a500' : '#0ab39c';
+        const stockBg = variacion.stock_total === 0 ? '#ffeaea' : 
+                       variacion.stock_total < 5 ? '#fff8e1' : '#e9f7ef';
         
         const row = `
             <tr data-variacion-id="${variacion.id}">
-                <td>${variacion.talla}</td>
-                <td>
-                    <span class="sku-display">${variacion.sku}</span>
-                </td>
-                <td class="${stockClass}">
-                    <strong>${variacion.stock_total}</strong> unid.
+                <td><strong>${variacion.talla}</strong></td>
+                <td><code style="font-size:.82rem;">${variacion.sku}</code></td>
+                <td class="text-center">
+                    <span style="display:inline-block;padding:3px 12px;border-radius:8px;font-weight:700;font-size:.9rem;background:${stockBg};color:${stockColor};">
+                        ${variacion.stock_total}
+                    </span>
                     ${variacion.lotes && variacion.lotes.length > 0 ? 
-                        `<br><small class="text-muted">${variacion.lotes.length} lote(s)</small>` : ''}
+                        `<div class="text-muted" style="font-size:.68rem;">${variacion.lotes.length} lote(s)</div>` : ''}
                 </td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-primary" 
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" 
                             onclick="abrirModalAjustarStock(${variacion.id}, '${variacion.talla}', ${variacion.stock_total})"
-                            title="Ajustar stock">
-                        <i class="bi bi-box-seam"></i> Ajustar
+                            title="Ajustar stock" style="font-size:.8rem;">
+                        <i class="bi bi-box-seam me-1"></i>Ajustar
                     </button>
                 </td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-info" 
-                            onclick="verHistorialMovimientos(${variacion.id}, '${variacion.talla}')"
-                            title="Ver historial">
-                        <i class="bi bi-clock-history"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-secondary" 
-                            onclick="verLotesVariacion(${variacion.id}, '${variacion.talla}')"
-                            title="Ver lotes">
-                        <i class="bi bi-layers"></i>
-                    </button>
+                <td class="text-center">
+                    <div class="d-flex gap-1 justify-content-center">
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" 
+                                onclick="verHistorialMovimientos(${variacion.id}, '${variacion.talla}')"
+                                title="Ver historial" style="font-size:.75rem;">
+                            <i class="bi bi-clock-history"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info rounded-pill" 
+                                onclick="verLotesVariacion(${variacion.id}, '${variacion.talla}')"
+                                title="Ver lotes FIFO" style="font-size:.75rem;">
+                            <i class="bi bi-layers"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -838,6 +841,34 @@ function ocultarLoading() {
     }
 }
 
+// ========== FUNCIONES DE RECATEGORIZACIÓN ==========
+
+/**
+ * Cargar datos de impacto de recategorización
+ */
+function cargarImpactoRecategorizacion(productoId) {
+    if (!productoId) return;
+    
+    $('#recat_total_sucursales, #recat_total_movimientos, #recat_total_tickets, #recat_total_dtes').text('...');
+    
+    fetch(`/app/productos/impacto-recategorizacion/${productoId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const imp = data.impacto;
+                $('#recat_total_sucursales').text(imp.total_sucursales.toLocaleString());
+                $('#recat_total_movimientos').text(imp.total_movimientos.toLocaleString());
+                $('#recat_total_tickets').text(imp.total_tickets.toLocaleString());
+                $('#recat_total_dtes').text(imp.total_dtes.toLocaleString());
+            } else {
+                $('#recat_total_sucursales, #recat_total_movimientos, #recat_total_tickets, #recat_total_dtes').text('—');
+            }
+        })
+        .catch(() => {
+            $('#recat_total_sucursales, #recat_total_movimientos, #recat_total_tickets, #recat_total_dtes').text('—');
+        });
+}
+
 // ========== INICIALIZACIÓN ==========
 
 $(document).ready(function() {
@@ -853,11 +884,18 @@ $(document).ready(function() {
         $('#edit_precioventa').val(precioCalculado);
     });
     
+    // Cargar impacto cuando se abre la pestaña Recategorizar
+    $(document).on('shown.bs.tab', '#tab-recategorizacion', function() {
+        const productoId = $('#edit_producto_id').val();
+        if (productoId) {
+            cargarImpactoRecategorizacion(productoId);
+        }
+    });
+    
     // Limpiar Select2 cuando se cierra el modal de edición
     $('#modalEdicionProducto').on('hidden.bs.modal', function() {
         const $modal = $(this);
         
-        // Destruir TODAS las instancias de Select2 en el modal
         $modal.find('select').each(function() {
             if ($(this).hasClass('select2-hidden-accessible')) {
                 try {
@@ -868,10 +906,8 @@ $(document).ready(function() {
             }
         });
         
-        // Limpiar dropdowns huérfanos de Select2
         $('.select2-container--open').remove();
         
-        // Limpiar formulario
         $('#edit_producto_id').val('');
         $('#edit_articulo').val('');
         $('#edit_descripcion').val('');
@@ -881,12 +917,15 @@ $(document).ready(function() {
         $('#edit_precioSugerido').val('');
         $('#tablaVariacionesEdicion tbody').html('<tr><td colspan="5" class="text-center text-muted">Selecciona un producto para editar</td></tr>');
         
-        console.log('🧹 Modal de edición limpiado');
+        // Reset recategorization stats
+        $('#recat_total_sucursales, #recat_total_movimientos, #recat_total_tickets, #recat_total_dtes').text('—');
+        
+        // Reset to first tab
+        $('#tab-datos-generales').tab('show');
     });
     
     // Reinicializar Select2 cuando el modal de edición está completamente visible
     $('#modalEdicionProducto').on('shown.bs.modal', function() {
-        // Si hay producto cargado, reinicializar Select2 después de un pequeño delay
         if (window.productoActualEdicion) {
             setTimeout(() => {
                 cargarOpcionesConSelect2(window.productoActualEdicion);

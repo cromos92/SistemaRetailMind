@@ -573,6 +573,56 @@
         font-weight: 600;
     }
 
+    /* ========== SPIN / DISABLED ========== */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { display: inline-block; animation: spin .8s linear infinite; }
+    .nexo-btn:disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
+
+    /* ========== SELECT2 NEXO OVERRIDE ========== */
+    .select2-container--default .select2-selection--single {
+        height: 38px !important;
+        border: 1px solid var(--nexo-gray-300) !important;
+        border-radius: var(--nexo-radius-md) !important;
+        background: var(--nexo-white) !important;
+        font-size: 0.82rem !important;
+        padding: 4px 0 !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 30px !important;
+        padding-left: 12px !important;
+        color: var(--nexo-gray-700) !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__placeholder {
+        color: var(--nexo-gray-500) !important;
+    }
+    .select2-dropdown {
+        border: 1px solid var(--nexo-gray-300) !important;
+        border-radius: var(--nexo-radius-md) !important;
+        box-shadow: var(--nexo-shadow-md) !important;
+    }
+    .select2-search--dropdown .select2-search__field {
+        border: 1px solid var(--nexo-gray-300) !important;
+        border-radius: var(--nexo-radius-sm) !important;
+        padding: 6px 10px !important;
+        font-size: 0.82rem !important;
+    }
+    .select2-results__option--highlighted[aria-selected] {
+        background-color: var(--nexo-primary) !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__clear {
+        font-size: 1.1rem !important;
+        margin-right: 4px !important;
+    }
+
+    /* ========== DATE INPUTS ========== */
+    input[type="date"].nexo-input {
+        font-size: 0.82rem;
+        color: var(--nexo-gray-700);
+    }
+
     /* ========== RESPONSIVE ========== */
     @media (max-width: 1200px) {
         .nexo-header, .nexo-kpi-row, .nexo-controls, .nexo-content {
@@ -635,40 +685,44 @@
     <!-- ========== CONTROLES ========== -->
     <div class="nexo-controls">
         <div class="nexo-control-group control-search">
-            <label class="nexo-control-label">🔍 Buscar Artículo</label>
-            <input type="text" id="busqueda-articulo" class="nexo-input" 
-                   placeholder="Nombre, código, SKU..." onkeyup="if(event.key === 'Enter') cargarReporte()">
+            <label class="nexo-control-label"><i class="ri-search-line"></i> Buscar Articulo</label>
+            <input type="text" id="busqueda-articulo" class="nexo-input"
+                   placeholder="Nombre, codigo, SKU..." onkeyup="if(event.key === 'Enter') cargarReporte()">
         </div>
 
-        <div class="nexo-control-group">
-            <label class="nexo-control-label">Buscar Marca</label>
-            <input type="text" id="search-marca" class="nexo-input" 
-                   placeholder="Filtrar marcas..." oninput="filtrarMarcas()">
-        </div>
-
-        <div class="nexo-control-group">
-            <label class="nexo-control-label">Marca</label>
-            <select id="filtro-marca" class="nexo-select">
-                <option value="">-- Todas --</option>
+        <div class="nexo-control-group" style="min-width: 200px;">
+            <label class="nexo-control-label"><i class="ri-price-tag-3-line"></i> Marca</label>
+            <select id="filtro-marca" class="nexo-select select2-marca" style="width: 100%;">
+                <option value="">-- Todas las marcas --</option>
             </select>
         </div>
 
-        <div class="nexo-control-group">
-            <label class="nexo-control-label">Departamento</label>
-            <select id="filtro-departamento" class="nexo-select">
-                <option value="">Todos</option>
+        <div class="nexo-control-group" style="min-width: 180px;">
+            <label class="nexo-control-label"><i class="ri-folders-line"></i> Departamento</label>
+            <select id="filtro-departamento" class="nexo-select select2-depto" style="width: 100%;">
+                <option value="">-- Todos --</option>
             </select>
+        </div>
+
+        <div class="nexo-control-group" style="min-width: 130px;">
+            <label class="nexo-control-label"><i class="ri-calendar-line"></i> Desde</label>
+            <input type="date" id="filtro-fecha-desde" class="nexo-input">
+        </div>
+
+        <div class="nexo-control-group" style="min-width: 130px;">
+            <label class="nexo-control-label"><i class="ri-calendar-check-line"></i> Hasta</label>
+            <input type="date" id="filtro-fecha-hasta" class="nexo-input">
         </div>
 
         <div class="nexo-control-group" style="min-width: 100px; max-width: 120px;">
-            <label class="nexo-control-label">Límite</label>
+            <label class="nexo-control-label"><i class="ri-list-ordered"></i> Limite</label>
             <select id="filtro-limite" class="nexo-select">
                 <option value="100">100</option>
                 <option value="250">250</option>
                 <option value="500" selected>500</option>
                 <option value="1000">1000</option>
                 <option value="2000">2000</option>
-                <option value="">Sin límite</option>
+                <option value="">Sin limite</option>
             </select>
         </div>
 
@@ -676,7 +730,7 @@
             <button class="nexo-btn nexo-btn-secondary" onclick="limpiarFiltros()">
                 <i class="ri-delete-bin-line"></i> Limpiar
             </button>
-            <button class="nexo-btn nexo-btn-primary" onclick="cargarReporte()">
+            <button class="nexo-btn nexo-btn-primary" id="btn-buscar" onclick="cargarReporte()">
                 <i class="ri-search-line"></i> Buscar
             </button>
             <button class="nexo-btn nexo-btn-success" onclick="exportarExcel()" id="btn-exportar" disabled>
@@ -688,11 +742,11 @@
     <!-- ========== CONTENIDO PRINCIPAL ========== -->
     <div class="nexo-content" id="contenido-reporte">
         <div class="nexo-empty-state">
-            <div class="nexo-empty-icon">📊</div>
+            <div class="nexo-empty-icon"><i class="ri-bar-chart-box-line" style="font-size: 2.5rem; color: var(--nexo-primary);"></i></div>
             <div class="nexo-empty-title">Reporte Inicial vs Restante</div>
             <div class="nexo-empty-text">
-                Selecciona filtros y haz clic en <strong>"Buscar"</strong> para ver cuánto recibió cada sucursal y cuánto queda.
-                <br><small>Ejemplo: PAO4 → Recibido: 12 | Restante: 3</small>
+                Selecciona filtros y haz clic en <strong>"Buscar"</strong> para ver cuanto recibio cada sucursal y cuanto queda.
+                <br><small>Puedes filtrar por rango de fechas para ver solo los movimientos de un periodo.</small>
             </div>
             <button class="nexo-btn nexo-btn-primary" onclick="cargarReporte()" style="margin-top: 16px;">
                 <i class="ri-search-line"></i> Cargar Datos
@@ -704,17 +758,16 @@
 <script>
 let datosCompletos = [];
 let datosFiltrados = [];
-let todasLasMarcas = [];
 let sucursalesDisponibles = [];
 
-// Paginación
+// Paginacion
 let paginaActual = 1;
 let registrosPorPagina = 50;
 
-// ========== INICIALIZACIÓN ==========
+// ========== INICIALIZACION ==========
 document.addEventListener('DOMContentLoaded', function() {
-    cargarMarcas();
-    cargarDepartamentos();
+    cargarMarcasSelect2();
+    cargarDepartamentosSelect2();
 });
 
 // ========== LOADING ==========
@@ -727,37 +780,32 @@ function mostrarLoading(mostrar, texto = 'Calculando movimientos...') {
     }
 }
 
-// ========== CARGAR MARCAS ==========
-async function cargarMarcas() {
+// ========== CARGAR MARCAS CON SELECT2 ==========
+async function cargarMarcasSelect2() {
     try {
         const response = await fetch('/app/obtener_marcas/');
         const data = await response.json();
-        todasLasMarcas = data;
+        const select = document.getElementById('filtro-marca');
+        data.forEach(marca => {
+            const option = document.createElement('option');
+            option.value = marca.id;
+            option.textContent = marca.valor;
+            select.appendChild(option);
+        });
+        // Inicializar Select2
+        $('.select2-marca').select2({
+            placeholder: 'Buscar marca...',
+            allowClear: true,
+            width: '100%',
+            language: { noResults: function() { return 'Sin resultados'; } }
+        });
     } catch (error) {
         console.error('Error cargando marcas:', error);
     }
 }
 
-function filtrarMarcas() {
-    const searchInput = document.getElementById('search-marca');
-    const select = document.getElementById('filtro-marca');
-    const searchText = searchInput.value.toLowerCase().trim();
-    
-    select.innerHTML = '<option value="">-- Todas --</option>';
-    
-    if (searchText.length < 2) return;
-    
-    const filtradas = todasLasMarcas.filter(m => m.valor.toLowerCase().includes(searchText));
-    filtradas.forEach(marca => {
-        const option = document.createElement('option');
-        option.value = marca.id;
-        option.textContent = marca.valor;
-        select.appendChild(option);
-    });
-}
-
-// ========== CARGAR DEPARTAMENTOS ==========
-async function cargarDepartamentos() {
+// ========== CARGAR DEPARTAMENTOS CON SELECT2 ==========
+async function cargarDepartamentosSelect2() {
     try {
         const response = await fetch('/app/obtener_categorias/');
         const data = await response.json();
@@ -767,6 +815,13 @@ async function cargarDepartamentos() {
             option.value = cat.id;
             option.textContent = cat.nombre;
             select.appendChild(option);
+        });
+        // Inicializar Select2
+        $('.select2-depto').select2({
+            placeholder: 'Buscar departamento...',
+            allowClear: true,
+            width: '100%',
+            language: { noResults: function() { return 'Sin resultados'; } }
         });
     } catch (error) {
         console.error('Error cargando departamentos:', error);
@@ -778,25 +833,34 @@ let tiempoInicio = null;
 let intervaloTiempo = null;
 
 async function cargarReporte() {
-    const marcaId = document.getElementById('filtro-marca').value;
-    const deptId = document.getElementById('filtro-departamento').value;
+    const btnBuscar = document.getElementById('btn-buscar');
+    if (btnBuscar.disabled) return;
+
+    const marcaId = $('#filtro-marca').val();
+    const deptId = $('#filtro-departamento').val();
     const busqueda = document.getElementById('busqueda-articulo').value.trim();
     const limite = document.getElementById('filtro-limite').value;
-    
-    const tieneFiltro = marcaId || deptId || busqueda.length >= 3;
-    
+    const fechaDesde = document.getElementById('filtro-fecha-desde').value;
+    const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+
+    const tieneFiltro = marcaId || deptId || busqueda.length >= 3 || fechaDesde || fechaHasta;
+
     if (!tieneFiltro && !limite) {
         const confirmar = confirm(
-            '⚠️ Sin filtros ni límite, puede cargar MUCHOS productos.\n\n' +
-            'Esto puede tomar tiempo. ¿Deseas continuar?'
+            'Sin filtros ni limite, puede cargar MUCHOS productos.\n\n' +
+            'Esto puede tomar tiempo. Deseas continuar?'
         );
         if (!confirmar) return;
     }
-    
+
+    // Bloquear boton y mostrar estado de carga
+    btnBuscar.disabled = true;
+    btnBuscar.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';
+
     // Iniciar contador de tiempo
     tiempoInicio = Date.now();
     mostrarLoading(true, limite ? `Cargando hasta ${limite} productos...` : 'Cargando todos los productos...');
-    
+
     // Actualizar tiempo transcurrido cada segundo
     intervaloTiempo = setInterval(() => {
         const segundos = Math.floor((Date.now() - tiempoInicio) / 1000);
@@ -805,53 +869,50 @@ async function cargarReporte() {
             loadingText.textContent = `Procesando... ${segundos}s`;
         }
     }, 1000);
-    
+
     // Crear AbortController para timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutos timeout
-    
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+
     try {
         let url = '/app/api/reporte-movimientos-sucursal/';
         const params = new URLSearchParams();
-        
+
         if (marcaId) params.append('marca_id', marcaId);
         if (deptId) params.append('departamento_id', deptId);
         if (busqueda.length >= 3) params.append('busqueda', busqueda);
         if (limite) params.append('limite', limite);
+        if (fechaDesde) params.append('fecha_desde', fechaDesde);
+        if (fechaHasta) params.append('fecha_hasta', fechaHasta);
         params.append('sin_filtro', 'true');
-        
+
         if (params.toString()) url += '?' + params.toString();
-        
+
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
         clearInterval(intervaloTiempo);
-        
+
         const data = await response.json();
-        
+
         const tiempoTotal = ((Date.now() - tiempoInicio) / 1000).toFixed(1);
-        console.log(`✅ Reporte cargado en ${tiempoTotal}s - ${data.datos?.length || 0} productos`);
-        
+        console.log(`Reporte cargado en ${tiempoTotal}s - ${data.datos?.length || 0} productos`);
+
         mostrarLoading(false);
-        
+
         if (data.success) {
             datosCompletos = data.datos;
             datosFiltrados = [...datosCompletos];
             sucursalesDisponibles = data.sucursales || [];
             paginaActual = 1;
-            
+
             actualizarKPIs(datosCompletos);
             renderizarTabla();
-            
+
             document.getElementById('btn-exportar').disabled = datosCompletos.length === 0;
-            
-            // Mostrar tiempo de carga si fue mayor a 3 segundos
-            if (parseFloat(tiempoTotal) > 3) {
-                console.log(`ℹ️ Consulta optimizada completada en ${tiempoTotal}s`);
-            }
         } else {
             document.getElementById('contenido-reporte').innerHTML = `
                 <div class="nexo-empty-state">
-                    <div class="nexo-empty-icon">⚠️</div>
+                    <div class="nexo-empty-icon"><i class="ri-error-warning-line" style="font-size:2rem;color:var(--nexo-warning);"></i></div>
                     <div class="nexo-empty-title">Error</div>
                     <div class="nexo-empty-text">${data.error || 'Error desconocido'}</div>
                 </div>
@@ -861,14 +922,14 @@ async function cargarReporte() {
         clearTimeout(timeoutId);
         clearInterval(intervaloTiempo);
         mostrarLoading(false);
-        
+
         if (error.name === 'AbortError') {
             document.getElementById('contenido-reporte').innerHTML = `
                 <div class="nexo-empty-state">
-                    <div class="nexo-empty-icon">⏱️</div>
+                    <div class="nexo-empty-icon"><i class="ri-time-line" style="font-size:2rem;color:var(--nexo-warning);"></i></div>
                     <div class="nexo-empty-title">Tiempo Excedido</div>
                     <div class="nexo-empty-text">
-                        La consulta tomó demasiado tiempo.<br>
+                        La consulta tomo demasiado tiempo.<br>
                         <strong>Sugerencia:</strong> Usa filtros de Marca o Departamento para reducir los datos.
                     </div>
                 </div>
@@ -877,12 +938,15 @@ async function cargarReporte() {
             console.error('Error:', error);
             document.getElementById('contenido-reporte').innerHTML = `
                 <div class="nexo-empty-state">
-                    <div class="nexo-empty-icon">❌</div>
-                    <div class="nexo-empty-title">Error de Conexión</div>
+                    <div class="nexo-empty-icon"><i class="ri-close-circle-line" style="font-size:2rem;color:var(--nexo-error);"></i></div>
+                    <div class="nexo-empty-title">Error de Conexion</div>
                     <div class="nexo-empty-text">No se pudo conectar con el servidor. Intenta de nuevo.</div>
                 </div>
             `;
         }
+    } finally {
+        btnBuscar.disabled = false;
+        btnBuscar.innerHTML = '<i class="ri-search-line"></i> Buscar';
     }
 }
 
@@ -1059,29 +1123,30 @@ function exportarExcel() {
         alert('No hay datos para exportar');
         return;
     }
-    
-    mostrarLoading(true, 'Preparando exportación...');
-    
-    // Construir URL con los mismos parámetros
-    const marcaId = document.getElementById('filtro-marca').value;
-    const deptId = document.getElementById('filtro-departamento').value;
+
+    mostrarLoading(true, 'Preparando exportacion...');
+
+    const marcaId = $('#filtro-marca').val();
+    const deptId = $('#filtro-departamento').val();
     const busqueda = document.getElementById('busqueda-articulo').value.trim();
     const limite = document.getElementById('filtro-limite').value;
-    
+    const fechaDesde = document.getElementById('filtro-fecha-desde').value;
+    const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+
     let url = '/app/api/exportar-movimientos-sucursal-excel/';
     const params = new URLSearchParams();
-    
+
     if (marcaId) params.append('marca_id', marcaId);
     if (deptId) params.append('departamento_id', deptId);
     if (busqueda.length >= 3) params.append('busqueda', busqueda);
     if (limite) params.append('limite', limite);
+    if (fechaDesde) params.append('fecha_desde', fechaDesde);
+    if (fechaHasta) params.append('fecha_hasta', fechaHasta);
     params.append('sin_filtro', 'true');
-    
+
     if (params.toString()) url += '?' + params.toString();
-    
-    // Descargar
+
     window.location.href = url;
-    
     setTimeout(() => mostrarLoading(false), 1500);
 }
 
@@ -1095,24 +1160,26 @@ function formatearNumero(num) {
 }
 
 function limpiarFiltros() {
-    document.getElementById('filtro-marca').value = '';
-    document.getElementById('filtro-departamento').value = '';
+    // Resetear Select2
+    $('.select2-marca').val('').trigger('change');
+    $('.select2-depto').val('').trigger('change');
     document.getElementById('busqueda-articulo').value = '';
-    document.getElementById('search-marca').value = '';
     document.getElementById('filtro-limite').value = '500';
+    document.getElementById('filtro-fecha-desde').value = '';
+    document.getElementById('filtro-fecha-hasta').value = '';
     datosCompletos = [];
     datosFiltrados = [];
     paginaActual = 1;
-    
+
     document.getElementById('kpi-articulos').textContent = '-';
     document.getElementById('kpi-inicial').textContent = '-';
     document.getElementById('kpi-restante').textContent = '-';
     document.getElementById('kpi-vendido').textContent = '-';
     document.getElementById('btn-exportar').disabled = true;
-    
+
     document.getElementById('contenido-reporte').innerHTML = `
         <div class="nexo-empty-state">
-            <div class="nexo-empty-icon">🔍</div>
+            <div class="nexo-empty-icon"><i class="ri-search-line" style="font-size:2rem;color:var(--nexo-primary);"></i></div>
             <div class="nexo-empty-title">Listo para Analizar</div>
             <div class="nexo-empty-text">Selecciona filtros y haz clic en "Buscar".</div>
         </div>

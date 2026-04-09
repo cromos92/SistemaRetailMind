@@ -13,7 +13,7 @@ from datetime import datetime, date
 from django.db.models import Sum, Q
 import json
 
-from .models import Sucursal, Producto, Producto_Talla, Movimientos_Producto, Categoria
+from .models import Sucursal, Producto, Producto_Talla, Movimientos_Producto, Categoria, EmpresaUser
 
 
 @login_required
@@ -101,10 +101,16 @@ def obtener_resumen_existencias(request):
         
         # Si es agrupación por categoría
         if agrupar_por == 'categoria':
-            return _resumen_por_categoria(request, marca_id, fecha_corte, es_historico)
+            return _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresas_usuario)
         
+        # Filtrar por sucursales del usuario (seguridad multi-tenant)
+        empresas_usuario = EmpresaUser.objects.filter(
+            user=request.user,
+            status=True
+        ).values_list('empresa_id', flat=True)
+
         # Agrupación por sucursal (default)
-        sucursales = Sucursal.objects.all().order_by('alias')
+        sucursales = Sucursal.objects.filter(empresa_id__in=empresas_usuario).order_by('alias')
         resumen_sucursales = []
         
         for sucursal in sucursales:
@@ -192,14 +198,19 @@ def obtener_resumen_existencias(request):
         })
 
 
-def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico):
+def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresas_usuario):
     """Genera resumen agrupado por categoría/departamento"""
     try:
+        # Sucursales del usuario
+        sucursales_ids = list(Sucursal.objects.filter(
+            empresa_id__in=empresas_usuario
+        ).values_list('id', flat=True))
+
         # Obtener todas las categorías raíz (departamentos)
         categorias = Categoria.objects.filter(padre__isnull=True).order_by('nombre')
-        
+
         resumen_categorias = []
-        
+
         for categoria in categorias:
             # IDs de esta categoría y sus subcategorías
             categoria_ids = [categoria.id]
@@ -208,11 +219,12 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico):
                 # Subcategorías de segundo nivel
                 for subsub in sub.subcategorias.all():
                     categoria_ids.append(subsub.id)
-            
-            # Filtrar productos de estas categorías (excluye productos marcados como "excluir de analítica")
+
+            # Filtrar productos de estas categorías (solo sucursales del usuario)
             queryset_productos = Producto.objects.filter(
                 categoria_id__in=categoria_ids,
                 excluir_de_analitica=False,
+                sucursal_id__in=sucursales_ids,
             ).select_related('atributo1', 'categoria', 'sucursal').prefetch_related('producto_talla')
             
             # Aplicar filtro de marca si existe

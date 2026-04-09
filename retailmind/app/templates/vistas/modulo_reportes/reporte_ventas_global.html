@@ -1,0 +1,251 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+.emp-card{border:0;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.06);margin-bottom:.5rem;overflow:hidden}
+.emp-header{padding:.6rem 1rem;cursor:pointer;transition:background .15s}
+.emp-header:hover{background:rgba(0,0,0,.02)}
+.emp-body{padding:0 1rem .5rem}
+.kpi-sm{text-align:center;padding:.4rem}
+.kpi-sm .kpi-val{font-size:1.1rem;font-weight:700;line-height:1.2}
+.kpi-sm .kpi-label{font-size:.65rem;color:#878a99;text-transform:uppercase}
+.var-badge{font-size:.7rem;font-weight:600;padding:2px 6px;border-radius:4px}
+.var-up{background:#d4edda;color:#155724}
+.var-down{background:#f8d7da;color:#721c24}
+.var-neutral{background:#e2e3e5;color:#383d41}
+.suc-row td{font-size:.8rem;padding:.3rem .5rem !important}
+</style>
+
+<div class="page-content">
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">Ventas Globales por Empresa</h5>
+        <ol class="breadcrumb mb-0 small">
+            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'ver_reporte_ventas_sucursal' %}">Reportes</a></li>
+            <li class="breadcrumb-item active">Global</li>
+        </ol>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-2" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">Mes</label>
+                    <input type="month" class="form-control form-control-sm" id="filtroMes">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">Desde</label>
+                    <input type="date" class="form-control form-control-sm" id="filtroDesde">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">Hasta</label>
+                    <input type="date" class="form-control form-control-sm" id="filtroHasta">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-sm w-100" onclick="cargarDatos()"><i class="ri-search-line me-1"></i>Consultar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPIs globales -->
+    <div class="row g-2 mb-2">
+        <div class="col-6 col-md-2">
+            <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+                <div class="kpi-sm"><div class="kpi-val text-primary" id="kpiVentas">$0</div><div class="kpi-label">Ventas Netas</div></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+                <div class="kpi-sm"><div class="kpi-val text-danger" id="kpiDcto">$0</div><div class="kpi-label">Descuentos</div></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+                <div class="kpi-sm"><div class="kpi-val text-warning" id="kpiDev">$0</div><div class="kpi-label">Devoluciones</div></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+                <div class="kpi-sm"><div class="kpi-val" id="kpiDocs">0</div><div class="kpi-label">Documentos</div></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+                <div class="kpi-sm"><div class="kpi-val text-info" id="kpiEmpresas">0</div><div class="kpi-label">Empresas</div></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+                <div class="kpi-sm"><div class="kpi-val text-success" id="kpiSucursales">0</div><div class="kpi-label">Sucursales</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Periodo comparativo -->
+    <div class="small text-muted mb-2" id="infoPeriodo"></div>
+
+    <!-- Contenido: empresas expandibles -->
+    <div id="contenedor-empresas">
+        <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Cargando...</div>
+    </div>
+
+    <!-- Grafico comparativo -->
+    <div class="card mt-2" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+        <div class="card-header py-2 bg-white"><h6 class="card-title mb-0 small"><i class="ri-bar-chart-2-line me-1"></i>Comparativo por Empresa</h6></div>
+        <div class="card-body py-2">
+            <div id="chartEmpresas" style="min-height:280px"></div>
+        </div>
+    </div>
+</div>
+</div>
+
+<script>
+const fmt = n => Math.abs(n).toLocaleString('es-CL');
+
+document.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    document.getElementById('filtroMes').value = now.toISOString().slice(0,7);
+    cargarDatos();
+});
+
+function cargarDatos() {
+    const mes = document.getElementById('filtroMes').value;
+    const desde = document.getElementById('filtroDesde').value;
+    const hasta = document.getElementById('filtroHasta').value;
+
+    let params = '';
+    if (desde && hasta) {
+        params = `fecha_inicio=${desde}&fecha_fin=${hasta}`;
+    } else {
+        params = `mes=${mes}`;
+    }
+
+    document.getElementById('contenedor-empresas').innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>';
+
+    fetch(`/app/api/reportes/ventas-global-empresa/?${params}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+            renderKPIs(data.kpis);
+            renderEmpresas(data.empresas);
+            renderChart(data.empresas);
+            renderPeriodo(data.periodo);
+        })
+        .catch(() => Swal.fire('Error', 'Error al cargar datos', 'error'));
+}
+
+function renderKPIs(k) {
+    document.getElementById('kpiVentas').textContent = '$' + fmt(k.total_ventas);
+    document.getElementById('kpiDcto').textContent = k.total_descuentos > 0 ? '-$' + fmt(k.total_descuentos) : '$0';
+    document.getElementById('kpiDev').textContent = k.total_devoluciones > 0 ? '-$' + fmt(k.total_devoluciones) : '$0';
+    document.getElementById('kpiDocs').textContent = fmt(k.total_documentos);
+    document.getElementById('kpiEmpresas').textContent = k.total_empresas;
+    document.getElementById('kpiSucursales').textContent = k.total_sucursales;
+}
+
+function renderPeriodo(p) {
+    document.getElementById('infoPeriodo').innerHTML =
+        `<i class="ri-calendar-line me-1"></i>Periodo: ${p.inicio} al ${p.fin} — Comparando con: ${p.inicio_anterior} al ${p.fin_anterior}`;
+}
+
+function varBadge(v) {
+    if (v > 0) return `<span class="var-badge var-up"><i class="ri-arrow-up-s-line"></i>${v}%</span>`;
+    if (v < 0) return `<span class="var-badge var-down"><i class="ri-arrow-down-s-line"></i>${v}%</span>`;
+    return `<span class="var-badge var-neutral">0%</span>`;
+}
+
+function renderEmpresas(empresas) {
+    const c = document.getElementById('contenedor-empresas');
+    if (!empresas.length) { c.innerHTML = '<div class="text-center text-muted py-4">Sin datos para este periodo</div>'; return; }
+
+    c.innerHTML = empresas.map((e, i) => `
+        <div class="emp-card">
+            <div class="emp-header d-flex align-items-center justify-content-between" onclick="toggleEmpresa(${i})">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="ri-building-2-line text-primary"></i>
+                    <div>
+                        <strong style="font-size:.9rem">${e.nombre}</strong>
+                        <span class="text-muted ms-2" style="font-size:.75rem">${e.sucursales.length} sucursal(es)</span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="text-end">
+                        <div class="fw-bold" style="font-size:.95rem">$${fmt(e.ventas)}</div>
+                        <div style="font-size:.7rem" class="text-muted">
+                            ${e.descuentos > 0 ? '<span class="text-danger">Dcto -$'+fmt(e.descuentos)+'</span> | ' : ''}
+                            ${e.documentos} docs | ${e.participacion}%
+                        </div>
+                    </div>
+                    ${varBadge(e.variacion)}
+                    <small class="text-muted" style="font-size:.7rem">Ant: $${fmt(e.ventas_anterior)}</small>
+                    <i class="ri-arrow-down-s-line" id="arrow-${i}"></i>
+                </div>
+            </div>
+            <div class="emp-body" id="body-${i}" style="display:none">
+                <table class="table table-sm table-hover mb-0">
+                    <thead><tr class="table-light" style="font-size:.7rem;text-transform:uppercase">
+                        <th>Sucursal</th><th class="text-end">Ventas</th><th class="text-end">Dcto</th>
+                        <th class="text-end">Dev.</th><th class="text-center">Docs</th>
+                        <th class="text-end">Ticket Prom</th><th class="text-end">Anterior</th><th class="text-center">Var.</th>
+                    </tr></thead>
+                    <tbody>
+                        ${e.sucursales.map(s => `
+                            <tr class="suc-row">
+                                <td><strong>${s.nombre}</strong></td>
+                                <td class="text-end fw-semibold">$${fmt(s.ventas)}</td>
+                                <td class="text-end ${s.descuentos>0?'text-danger':''}">${s.descuentos>0?'-$'+fmt(s.descuentos):'-'}</td>
+                                <td class="text-end ${s.devoluciones>0?'text-warning':''}">${s.devoluciones>0?'-$'+fmt(s.devoluciones):'-'}</td>
+                                <td class="text-center">${s.documentos}</td>
+                                <td class="text-end">$${fmt(s.ticket_promedio)}</td>
+                                <td class="text-end text-muted">$${fmt(s.ventas_anterior)}</td>
+                                <td class="text-center">${varBadge(s.variacion)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `).join('');
+}
+
+function toggleEmpresa(i) {
+    const body = document.getElementById('body-' + i);
+    const arrow = document.getElementById('arrow-' + i);
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        arrow.className = 'ri-arrow-up-s-line';
+    } else {
+        body.style.display = 'none';
+        arrow.className = 'ri-arrow-down-s-line';
+    }
+}
+
+function renderChart(empresas) {
+    const el = document.getElementById('chartEmpresas');
+    if (typeof ApexCharts === 'undefined') { el.innerHTML = '<div class="text-muted text-center py-4">Graficos no disponibles</div>'; return; }
+
+    const opts = {
+        series: [
+            { name: 'Periodo Actual', data: empresas.map(e => e.ventas) },
+            { name: 'Periodo Anterior', data: empresas.map(e => e.ventas_anterior) }
+        ],
+        chart: { type: 'bar', height: 280, toolbar: { show: false } },
+        plotOptions: { bar: { horizontal: false, columnWidth: '55%', borderRadius: 4 } },
+        dataLabels: { enabled: false },
+        xaxis: { categories: empresas.map(e => e.nombre) },
+        yaxis: { labels: { formatter: v => '$' + fmt(v) } },
+        tooltip: { y: { formatter: v => '$' + fmt(v) } },
+        colors: ['#0066FF', '#cbd5e1'],
+        legend: { position: 'top' }
+    };
+
+    el.innerHTML = '';
+    new ApexCharts(el, opts).render();
+}
+</script>
+
+{% include '../../layout/footer.html' %}

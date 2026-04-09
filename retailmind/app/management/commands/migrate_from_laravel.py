@@ -10,6 +10,10 @@ Uso:
     python manage.py migrate_from_laravel --dry-run
     python manage.py migrate_from_laravel --tables productos movimientos
     python manage.py migrate_from_laravel --batch-size 2000
+    python manage.py migrate_from_laravel --cleanup        # Elimina datos de prueba que no existen en MySQL
+    python manage.py migrate_from_laravel --cleanup --dry-run  # Ver qué se eliminaría sin ejecutar
+
+Sobreprecio: sobreprecio = max(0, precioventa - costo), consistente con la UI.
 """
 
 import os
@@ -197,6 +201,7 @@ class Command(BaseCommand):
         self.limit = None
         self.stats = defaultdict(int)
         self.errors = []
+        self.error_counts = defaultdict(int)  # Conteo por tipo de error
         self.start_time = None
         self.error_file = None
         
@@ -246,13 +251,25 @@ class Command(BaseCommand):
             action='store_true',
             help='Saltar confirmacion interactiva'
         )
+        parser.add_argument(
+            '--cleanup',
+            action='store_true',
+            help='Eliminar datos de prueba en Django que no existen en MySQL (MySQL manda)'
+        )
+        parser.add_argument(
+            '--resume-from',
+            type=str,
+            help='Reanudar desde un paso específico (ej: ventas_pagos, dtes, productos)'
+        )
 
     def handle(self, *args, **options):
         self.dry_run = options.get('dry_run', False)
         self.batch_size = options.get('batch_size', 2000)
         self.limit = options.get('limit', None)
         self.fast_mode = options.get('fast_mode', False)
+        self.cleanup_mode = options.get('cleanup', False)
         specific_tables = options.get('tables', None)
+        resume_from = options.get('resume_from', None)
         
         self.start_time = datetime.now()
         
@@ -421,29 +438,62 @@ class Command(BaseCommand):
             ('correlativos', self.migrate_correlativos),
             ('nc_vinculacion', self.migrate_nc_vinculacion),
             ('enriquecer_prediccion', self.enriquecer_datos_prediccion),
+            ('cleanup_test_data', self.cleanup_test_data),
         ]
 
         if specific_tables:
             migration_order = [
-                (name, func) for name, func in migration_order 
+                (name, func) for name, func in migration_order
                 if name in specific_tables
             ]
 
-        # Ejecutar migraciones
+        # --resume-from: saltar pasos anteriores
+        if resume_from:
+            table_names = [name for name, _ in migration_order]
+            if resume_from not in table_names:
+                self.stdout.write(self.style.ERROR(
+                    f'[ERROR] Paso "{resume_from}" no encontrado. '
+                    f'Opciones: {", ".join(table_names)}'
+                ))
+                return
+            idx = table_names.index(resume_from)
+            skipped = table_names[:idx]
+            migration_order = migration_order[idx:]
+            self.stdout.write(self.style.WARNING(
+                f'  ⏩ Reanudando desde "{resume_from}" (saltando {len(skipped)} pasos: {", ".join(skipped)})'
+            ))
+
+        # Ejecutar migraciones (transaccion por paso)
         try:
-            if not self.dry_run:
-                with transaction.atomic():
-                    for table_name, migrate_func in migration_order:
-                        self.current_table = table_name
-                        self.table_start_time = datetime.now()
-                        self.stdout.write(f'\n{"="*70}')
+            pasos_fallidos = []
+            for table_name, migrate_func in migration_order:
+                self.current_table = table_name
+                self.table_start_time = datetime.now()
+                self.stdout.write(f'\n{"="*70}')
+                try:
+                    if not self.dry_run:
+                        with transaction.atomic():
+                            migrate_func()
+                    else:
                         migrate_func()
-            else:
-                for table_name, migrate_func in migration_order:
-                    self.current_table = table_name
-                    self.table_start_time = datetime.now()
-                    self.stdout.write(f'\n{"="*70}')
-                    migrate_func()
+                except Exception as e:
+                    pasos_fallidos.append((table_name, str(e)))
+                    self.stdout.write(self.style.ERROR(
+                        f'  [ROLLBACK] {table_name}: {e}'
+                    ))
+                    self.log_error(f'Paso {table_name} falló: {e}')
+                    logger.exception(f'Error en paso {table_name}')
+
+            if pasos_fallidos:
+                self.stdout.write(f'\n{"="*70}')
+                self.stdout.write(self.style.WARNING(
+                    f'  ⚠️  {len(pasos_fallidos)} paso(s) fallaron:'
+                ))
+                for nombre, error in pasos_fallidos:
+                    self.stdout.write(self.style.ERROR(f'    - {nombre}: {error}'))
+                self.stdout.write(self.style.WARNING(
+                    f'  💡 Usa --resume-from={pasos_fallidos[0][0]} para reintentar'
+                ))
 
             self.stdout.write(f'\n{"="*70}')
             self.show_statistics()
@@ -761,15 +811,19 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('  ✓ Triggers re-habilitados'))
 
     def log_error(self, message, log_every=100):
-        """Registra error (throttled)"""
+        """Registra error con agrupacion por tipo"""
         self.errors.append(message)
-        
-        # Solo escribir cada N errores
-        if len(self.errors) % log_every == 0:
-            if self.error_file:
-                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                self.error_file.write(f'[{timestamp}] {message}\n')
-                self.error_file.flush()
+
+        # Extraer tipo de error para agrupar
+        error_key = message.split(':')[0] if ':' in message else message[:60]
+        self.error_counts[error_key] = self.error_counts.get(error_key, 0) + 1
+        count = self.error_counts[error_key]
+
+        # Loguear los primeros 10 de cada tipo + luego cada N
+        if self.error_file and (count <= 10 or count % log_every == 0):
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.error_file.write(f'[{timestamp}] {message}\n')
+            self.error_file.flush()
 
     # ========================================================================
     # MIGRACIONES
@@ -1161,15 +1215,15 @@ class Command(BaseCommand):
         self.stdout.write(f'  ✓ {len(cache_opciones):,} opciones de atributo')
 
         # =====================================================================
-        # PASO 2: Pre-cargar productos existentes de PostgreSQL
+        # PASO 2: Pre-cargar productos existentes de PostgreSQL (dict para update)
         # =====================================================================
         self.stdout.write('  ⏳ Cargando productos existentes...')
         
-        productos_existentes = set(
-            Producto.objects.select_related('sucursal', 'atributo1', 'atributo2').values_list(
-                'articulo', 'sucursal__alias', 'atributo1__valor', 'atributo2__valor'
-            )
-        )
+        productos_existentes = {}
+        for p in Producto.objects.select_related('sucursal', 'atributo1', 'atributo2').values_list(
+            'id', 'articulo', 'sucursal__alias', 'atributo1__valor', 'atributo2__valor'
+        ):
+            productos_existentes[(p[1], p[2], p[3], p[4])] = p[0]
         self.stdout.write(f'  ✓ {len(productos_existentes):,} productos existentes')
 
         # =====================================================================
@@ -1211,9 +1265,11 @@ class Command(BaseCommand):
         # PASO 6: Procesar en memoria
         # =====================================================================
         count = 0
+        actualizados = 0
         ya_existe = 0
         sin_sucursal = 0
-        batch = []
+        batch_create = []
+        batch_update = []
 
         # Función auxiliar para obtener o crear opción (minimiza queries)
         def get_opcion_id(atributo_nombre, valor):
@@ -1221,7 +1277,6 @@ class Command(BaseCommand):
                 valor = 'SIN ESPECIFICAR'
             key = (atributo_nombre, valor)
             if key not in cache_opciones:
-                # Solo crear si no existe
                 opcion = self.get_or_create_atributo_opcion(atributo_nombre, valor)
                 cache_opciones[key] = opcion.id
             return cache_opciones[key]
@@ -1230,38 +1285,47 @@ class Command(BaseCommand):
             articulo = row['articulo']
             alias = row['alias']
             
-            # Buscar sucursal
             sucursal_id = cache_sucursales_id.get(alias)
             if not sucursal_id:
                 sin_sucursal += 1
                 continue
 
-            # Normalizar valores
             marca = row['marca'] or 'SIN ESPECIFICAR'
             color = row['color'] or 'SIN ESPECIFICAR'
 
-            # Verificar existencia (sin query!)
+            # Calcular sobreprecio = precioventa - costo (misma formula que la UI)
+            costo = self.safe_int(row['costo'])
+            precioventa = self.safe_int(row['precioventa'])
+            sobreprecio = max(0, precioventa - costo)
+
             prod_key = (articulo, alias, marca, color)
-            if prod_key in productos_existentes:
+            existing_id = productos_existentes.get(prod_key)
+            if existing_id:
+                # UPDATE: actualizar precios del producto existente desde MySQL
                 ya_existe += 1
+                if not self.dry_run:
+                    batch_update.append(Producto(
+                        id=existing_id,
+                        costo=costo,
+                        sobreprecio=sobreprecio,
+                        precioventa=precioventa,
+                    ))
+                    if len(batch_update) >= self.batch_size:
+                        Producto.objects.bulk_update(batch_update, ['costo', 'sobreprecio', 'precioventa'])
+                        actualizados += len(batch_update)
+                        batch_update = []
                 continue
 
             if not self.dry_run:
-                # Obtener IDs de opciones
                 marca_opcion_id = get_opcion_id('Marca', marca)
                 color_opcion_id = get_opcion_id('Color', color)
                 sexo_opcion_id = get_opcion_id('Sexo', row['sexo'])
                 categoria_id = cache_categorias_id.get(row['familia'])
 
-                # Calcular sobreprecio
-                costo = self.safe_int(row['costo'])
-                preciointerno = self.safe_int(row['preciointerno'])
-                sobreprecio = max(0, preciointerno - costo)
-                
                 producto = Producto(
                     articulo=articulo,
                     descripcion=row['descripcion'] or articulo,
-                    precioventa=self.safe_int(row['precioventa']),
+                    precioventa=precioventa,
                     costo=costo,
                     sobreprecio=sobreprecio,
                     sucursal_id=sucursal_id,
@@ -1270,30 +1334,35 @@ class Command(BaseCommand):
                     atributo2_id=color_opcion_id,
                     atributo3_id=sexo_opcion_id,
                 )
-                batch.append(producto)
-                productos_existentes.add(prod_key)
+                batch_create.append(producto)
+                productos_existentes[prod_key] = None
                 
-                if len(batch) >= self.batch_size:
-                    Producto.objects.bulk_create(batch, ignore_conflicts=True)
-                    count += len(batch)
-                    batch = []
+                if len(batch_create) >= self.batch_size:
+                    Producto.objects.bulk_create(batch_create, ignore_conflicts=True)
+                    count += len(batch_create)
+                    batch_create = []
             else:
                 count += 1
 
             if idx % 1000 == 0:
-                self.show_progress(idx, total, f'│ {count} nuevos, {ya_existe} exist')
+                self.show_progress(idx, total, f'│ {count} nuevos, {ya_existe} exist, {actualizados} upd')
 
-        if batch and not self.dry_run:
-            Producto.objects.bulk_create(batch, ignore_conflicts=True)
-            count += len(batch)
+        if batch_create and not self.dry_run:
+            Producto.objects.bulk_create(batch_create, ignore_conflicts=True)
+            count += len(batch_create)
+
+        if batch_update and not self.dry_run:
+            Producto.objects.bulk_update(batch_update, ['costo', 'sobreprecio', 'precioventa'])
+            actualizados += len(batch_update)
 
         cursor.close()
         self.stats['productos'] = count
+        self.stats['productos_actualizados'] = actualizados
         self.stats['productos_ya_existe'] = ya_existe
         self.stats['productos_sin_sucursal'] = sin_sucursal
         self.stdout.write('\n' + self.style.SUCCESS(
             f'  ✓ {count:,} productos nuevos migrados\n'
-            f'    - Ya existían: {ya_existe:,}\n'
+            f'    - Actualizados (precios): {actualizados:,}\n'
             f'    - Sin sucursal: {sin_sucursal:,}'
         ))
 
@@ -1944,12 +2013,12 @@ class Command(BaseCommand):
                 skipped += 1
                 continue
 
-            # Calcular sobreprecio
+            # Calcular sobreprecio = precio - costo (misma formula que la UI)
             costo = self.safe_int(row['costo']) or 0
+            precio_publico = self.safe_int(row['precio_publico']) or 0
             precio_interno = self.safe_int(row['precio_interno']) or 0
-            sobreprecio = max(0, precio_interno - costo)
-            
-            precio = self.safe_int(row['precio_publico']) or precio_interno
+            precio = precio_publico or precio_interno
+            sobreprecio = max(0, precio - costo)
             stock = self.safe_int(row['cantidad']) or 0
 
             # ✅ Verificar si ya existe esta combinación
@@ -2249,15 +2318,22 @@ class Command(BaseCommand):
                             dte_no_encontrado += 1
                             continue
 
+                        sub_total_otf = self.safe_int(row.get('sub_total')) or 0
                         nuevo_dte = Dte.objects.create(
                             numero_documento=n_doc,
                             tipo_documento=tipo_pg,
                             tipo_transaccion=tipo_transaccion,
-                            monto_total=self.safe_int(row.get('sub_total')) or 0,
+                            monto_con_iva=sub_total_otf,
+                            monto_neto=int(sub_total_otf / 1.19),
                             sucursal=suc_obj,
                             emisor=emisor_otf,
                             fecha_emision=row.get('fecha'),
+                            fecha_vencimiento=row.get('fecha'),
                             estado_dte='EMITIDO',
+                            estado_pago='PAGADO',
+                            bultos=0,
+                            unidades_productos=0,
+                            diasCredito=0,
                         )
                         dte_id = nuevo_dte.id
                         # Actualizar caches para filas futuras de esta misma venta
@@ -2771,21 +2847,26 @@ class Command(BaseCommand):
             self.stats['descuentos_corregidos'] = len(updates)
             return
 
-        # Bulk update via raw SQL
+        # Bulk update via parameterized SQL
         batch_size = 5000
         corregidos = 0
         for i in range(0, len(updates), batch_size):
             batch = updates[i:i + batch_size]
             with connection.cursor() as cur:
                 # Only update DTEs where descuento IS NULL or 0
-                cases = ' '.join([f'WHEN {dte_id} THEN {desc}' for desc, dte_id in batch])
-                ids = ', '.join([str(dte_id) for _, dte_id in batch])
+                placeholders = ', '.join(['%s'] * len(batch))
+                cases = ' '.join([f'WHEN %s THEN %s' for _ in batch])
+                params = []
+                for desc, dte_id in batch:
+                    params.extend([dte_id, desc])
+                id_params = [dte_id for _, dte_id in batch]
+                params.extend(id_params)
                 cur.execute(f'''
                     UPDATE app_dte
                     SET descuento = CASE id {cases} END
-                    WHERE id IN ({ids})
+                    WHERE id IN ({placeholders})
                     AND (descuento IS NULL OR descuento = 0)
-                ''')
+                ''', params)
             corregidos += len(batch)
             self.show_progress(corregidos, len(updates), f'│ {corregidos:,} actualizados')
 
@@ -2804,9 +2885,10 @@ class Command(BaseCommand):
         from django.db import connection
 
         cursor = self.mysql_conn.cursor(dictionary=True)
+        placeholders = ', '.join(['%s'] * len(RUTS_EMPRESAS_PROPIAS))
         cursor.execute(
-            'SELECT n_documento, rut_emisor, fecha_emision FROM dte '
-            'WHERE fecha_emision IS NOT NULL AND rut_emisor IN (%s, %s, %s)',
+            f'SELECT n_documento, rut_emisor, fecha_emision FROM dte '
+            f'WHERE fecha_emision IS NOT NULL AND rut_emisor IN ({placeholders})',
             tuple(RUTS_EMPRESAS_PROPIAS)
         )
         fechas_mysql = {}
@@ -2838,15 +2920,24 @@ class Command(BaseCommand):
         with connection.cursor() as pg_cursor:
             for i in range(0, len(actualizaciones), self.batch_size):
                 batch = actualizaciones[i:i + self.batch_size]
-                cases = [f"WHEN {dte_id} THEN '{fecha}'::date" for dte_id, fecha in batch]
-                ids = [str(dte_id) for dte_id, _ in batch]
+                placeholders = ', '.join(['%s'] * len(batch))
+                cases = ' '.join(['WHEN %s THEN %s::date' for _ in batch])
+                params = []
+                for dte_id, fecha in batch:
+                    params.extend([dte_id, fecha])
+                # Duplicate params for fecha_vencimiento CASE
+                params_venc = []
+                for dte_id, fecha in batch:
+                    params_venc.extend([dte_id, fecha])
+                id_params = [dte_id for dte_id, _ in batch]
+                all_params = params + params_venc + id_params
                 sql = f'''
                     UPDATE app_dte
-                    SET fecha_emision = CASE id {' '.join(cases)} END,
-                        fecha_vencimiento = CASE id {' '.join(cases)} END
-                    WHERE id IN ({','.join(ids)})
+                    SET fecha_emision = CASE id {cases} END,
+                        fecha_vencimiento = CASE id {cases} END
+                    WHERE id IN ({placeholders})
                 '''
-                pg_cursor.execute(sql)
+                pg_cursor.execute(sql, all_params)
 
         self.stats['fechas_corregidas'] = len(actualizaciones)
         self.stdout.write(self.style.SUCCESS(f'  ✓ {len(actualizaciones):,} fechas corregidas'))
@@ -2923,15 +3014,19 @@ class Command(BaseCommand):
         with connection.cursor() as pg_cursor:
             for i in range(0, len(actualizaciones), self.batch_size):
                 batch = actualizaciones[i:i + self.batch_size]
-                cases = [f"WHEN {dte_id} THEN {suc_id}" for dte_id, suc_id in batch]
-                ids = [str(dte_id) for dte_id, _ in batch]
-                
+                placeholders = ', '.join(['%s'] * len(batch))
+                cases = ' '.join(['WHEN %s THEN %s' for _ in batch])
+                params = []
+                for dte_id, suc_id in batch:
+                    params.extend([dte_id, suc_id])
+                id_params = [dte_id for dte_id, _ in batch]
+                params.extend(id_params)
                 sql = f'''
-                    UPDATE app_dte 
-                    SET sucursal_id = CASE id {' '.join(cases)} END
-                    WHERE id IN ({','.join(ids)})
+                    UPDATE app_dte
+                    SET sucursal_id = CASE id {cases} END
+                    WHERE id IN ({placeholders})
                 '''
-                pg_cursor.execute(sql)
+                pg_cursor.execute(sql, params)
         
         self.stats['sucursales_corregidas'] = len(actualizaciones)
         self.stdout.write(self.style.SUCCESS(f'  ✓ {len(actualizaciones):,} sucursales corregidas'))
@@ -3195,16 +3290,20 @@ class Command(BaseCommand):
         with connection.cursor() as pg_cursor:
             for i in range(0, len(actualizaciones), self.batch_size):
                 batch = actualizaciones[i:i + self.batch_size]
-                cases = [f"WHEN {nc_id} THEN {padre_id}" for nc_id, padre_id in batch]
-                ids = [str(nc_id) for nc_id, _ in batch]
-
+                placeholders = ', '.join(['%s'] * len(batch))
+                cases = ' '.join(['WHEN %s THEN %s' for _ in batch])
+                params = []
+                for nc_id, padre_id in batch:
+                    params.extend([nc_id, padre_id])
+                id_params = [nc_id for nc_id, _ in batch]
+                params.extend(id_params)
                 sql = f'''
                     UPDATE app_dte
-                    SET documento_afectado_id = CASE id {' '.join(cases)} END,
+                    SET documento_afectado_id = CASE id {cases} END,
                         es_nota_credito = TRUE
-                    WHERE id IN ({','.join(ids)})
+                    WHERE id IN ({placeholders})
                 '''
-                pg_cursor.execute(sql)
+                pg_cursor.execute(sql, params)
                 updated += pg_cursor.rowcount
 
         self.stats['nc_vinculadas'] = updated
@@ -3430,6 +3529,92 @@ class Command(BaseCommand):
         return created
 
     # ========================================================================
+    # LIMPIEZA DE DATOS DE PRUEBA
+    # ========================================================================
+
+    def cleanup_test_data(self):
+        """Elimina registros en Django que NO existen en MySQL (datos de prueba).
+        MySQL es la fuente de verdad. Solo se ejecuta con --cleanup."""
+        if not self.cleanup_mode:
+            self.stdout.write(self.style.HTTP_INFO(
+                '  ⏩ Limpieza omitida (usa --cleanup para activar)'
+            ))
+            return
+
+        self.stdout.write(self.style.WARNING('🧹 Limpiando datos de prueba (MySQL manda)...'))
+
+        cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
+
+        # ─── 1) Productos: eliminar los que no existen en MySQL ───
+        self.stdout.write('  ⏳ Comparando productos...')
+        cursor.execute('''
+            SELECT DISTINCT articulo, alias
+            FROM talla
+            WHERE articulo IS NOT NULL
+        ''')
+        mysql_articulos = set()
+        for row in cursor:
+            mysql_articulos.add((row['articulo'], row['alias']))
+
+        productos_django = Producto.objects.select_related('sucursal').values_list(
+            'id', 'articulo', 'sucursal__alias'
+        )
+        ids_to_delete = []
+        for pid, articulo, alias in productos_django:
+            if (articulo, alias) not in mysql_articulos:
+                ids_to_delete.append(pid)
+
+        productos_eliminados = 0
+        if ids_to_delete and not self.dry_run:
+            productos_eliminados, _ = Producto.objects.filter(id__in=ids_to_delete).delete()
+            self.stdout.write(self.style.WARNING(
+                f'    🗑️ {productos_eliminados:,} productos eliminados (cascada incluye tallas, lotes, movimientos)'
+            ))
+        elif ids_to_delete:
+            productos_eliminados = len(ids_to_delete)
+            self.stdout.write(f'    [DRY-RUN] Se eliminarían {productos_eliminados:,} productos')
+        else:
+            self.stdout.write('    ✓ Sin productos de prueba para eliminar')
+
+        # ─── 2) DTEs: eliminar los que no existen en MySQL ───
+        self.stdout.write('  ⏳ Comparando DTEs...')
+        cursor.execute('''
+            SELECT n_documento, tipo_documento, bodega_inicio
+            FROM dte
+        ''')
+        mysql_dtes = set()
+        for row in cursor:
+            tipo = self._mapear_tipo_documento(row['tipo_documento'] or '')
+            mysql_dtes.add((str(row['n_documento']), tipo, row['bodega_inicio']))
+
+        dtes_django = Dte.objects.select_related('sucursal').values_list(
+            'id', 'numero_documento', 'tipo_documento', 'sucursal__alias'
+        )
+        dte_ids_to_delete = []
+        for did, numero, tipo, alias in dtes_django:
+            if (str(numero), tipo, alias) not in mysql_dtes:
+                dte_ids_to_delete.append(did)
+
+        dtes_eliminados = 0
+        if dte_ids_to_delete and not self.dry_run:
+            dtes_eliminados, _ = Dte.objects.filter(id__in=dte_ids_to_delete).delete()
+            self.stdout.write(self.style.WARNING(
+                f'    🗑️ {dtes_eliminados:,} DTEs eliminados (cascada incluye productos_dte, pagos)'
+            ))
+        elif dte_ids_to_delete:
+            dtes_eliminados = len(dte_ids_to_delete)
+            self.stdout.write(f'    [DRY-RUN] Se eliminarían {dtes_eliminados:,} DTEs')
+        else:
+            self.stdout.write('    ✓ Sin DTEs de prueba para eliminar')
+
+        cursor.close()
+        self.stats['cleanup_productos'] = productos_eliminados
+        self.stats['cleanup_dtes'] = dtes_eliminados
+        self.stdout.write(self.style.SUCCESS(
+            f'  ✓ Limpieza completada: {productos_eliminados:,} productos, {dtes_eliminados:,} DTEs eliminados'
+        ))
+
+    # ========================================================================
     # ESTADÍSTICAS FINALES
     # ========================================================================
 
@@ -3466,6 +3651,9 @@ class Command(BaseCommand):
             ('Predicción: temporadas', self.stats.get('pred_temporadas', 0)),
             ('Predicción: rango_precio', self.stats.get('pred_rango_precio', 0)),
             ('Predicción: stock_inicial', self.stats.get('pred_stock_inicial', 0)),
+            ('Productos actualizados', self.stats.get('productos_actualizados', 0)),
+            ('Cleanup: productos eliminados', self.stats.get('cleanup_productos', 0)),
+            ('Cleanup: DTEs eliminados', self.stats.get('cleanup_dtes', 0)),
         ]
         
         total_migrado = sum(count for _, count in tabla_stats)
@@ -3480,7 +3668,17 @@ class Command(BaseCommand):
         
         if self.errors:
             self.stdout.write(f'\n⚠️  Total errores: {len(self.errors):,}')
+            if self.error_counts:
+                self.stdout.write('  Desglose por tipo:')
+                for key, cnt in sorted(self.error_counts.items(), key=lambda x: -x[1]):
+                    self.stdout.write(f'    {cnt:>8,}x  {key}')
             self.stdout.write(f'📄 Ver detalles en: {ERROR_LOG_FILE}')
+            # Escribir resumen al final del log
+            if self.error_file:
+                self.error_file.write(f'\n{"="*70}\n')
+                self.error_file.write(f'RESUMEN DE ERRORES ({len(self.errors):,} total):\n')
+                for key, cnt in sorted(self.error_counts.items(), key=lambda x: -x[1]):
+                    self.error_file.write(f'  {cnt:>8,}x  {key}\n')
         
         # Velocidad promedio
         avg_speed = total_migrado / elapsed.total_seconds() if elapsed.total_seconds() > 0 else 0
@@ -3501,4 +3699,4 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('  ✓ Permisos del menú inicializados correctamente'))
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'  ⚠️ Error al inicializar permisos: {e}'))
-            self.log_error('inicializar_permisos', 0, str(e))
+            self.log_error(f'inicializar_permisos: {e}')

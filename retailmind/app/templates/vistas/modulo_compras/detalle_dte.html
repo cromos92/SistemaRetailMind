@@ -4,119 +4,227 @@
 
 <style>
     .page-content {
-        background: #f8f9fa !important;
+        background: #f0f2f7 !important;
         min-height: calc(100vh - 70px);
+        padding-top: 24px;
     }
-    
-    .card.shadow {
+
+    .card.shadow-dte {
         border: none;
-        border-radius: 16px;
+        border-radius: 14px;
         overflow: hidden;
-        box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+        box-shadow: 0 4px 24px rgba(26, 26, 46, 0.08);
         animation: fadeInCard 0.4s ease;
     }
-    
+
     @keyframes fadeInCard {
-        from { opacity: 0; transform: translateY(20px); }
+        from { opacity: 0; transform: translateY(16px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    
+
+    /* === HEADER DTE === */
     .dte-detail-header {
-        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-        color: white;
-        padding: 20px 24px;
+        background: linear-gradient(135deg, #1A1A2E 0%, #2D2D50 100%);
+        padding: 24px 28px;
+        position: relative;
+        overflow: hidden;
     }
-    
+    .dte-detail-header::before {
+        content: '';
+        position: absolute;
+        top: -40%;
+        right: -10%;
+        width: 260px;
+        height: 260px;
+        background: rgba(0, 212, 170, 0.08);
+        border-radius: 50%;
+    }
+    .dte-detail-header h4,
+    .dte-detail-header span,
+    .dte-detail-header small,
+    .dte-detail-header i {
+        color: #ffffff !important;
+    }
     .dte-detail-header h4 {
         margin: 0;
-        font-weight: 600;
+        font-weight: 700;
+        font-size: 1.25rem;
+        letter-spacing: 0.3px;
     }
-    
-    .badge-tipo-dte {
+    .dte-detail-header small {
+        opacity: 0.8;
         font-size: 0.85rem;
-        padding: 6px 12px;
-        border-radius: 20px;
     }
-    
+    .badge-estado-header {
+        background: rgba(255, 255, 255, 0.15) !important;
+        backdrop-filter: blur(4px);
+        color: #fff !important;
+        font-size: 0.82rem;
+        padding: 7px 14px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        font-weight: 500;
+    }
+
+    /* === PAGE TITLE === */
+    .page-title-dte h4 {
+        color: #1A1A2E;
+        font-weight: 700;
+        font-size: 1.3rem;
+    }
+    .page-title-dte .breadcrumb-item a {
+        color: #0066FF;
+        text-decoration: none;
+    }
+    .page-title-dte .breadcrumb-item.active {
+        color: #6c757d;
+    }
+
+    /* === INFO CARDS === */
     .info-card {
         background: #fff;
         border-radius: 12px;
-        padding: 20px;
+        padding: 22px;
         margin-bottom: 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 12px rgba(26, 26, 46, 0.05);
+        border: 1px solid #e8eaf0;
+        transition: box-shadow 0.2s;
     }
-    
+    .info-card:hover {
+        box-shadow: 0 4px 18px rgba(26, 26, 46, 0.09);
+    }
     .info-card h6 {
-        color: #405189;
-        font-weight: 600;
-        margin-bottom: 15px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid #e9ecef;
+        color: #1A1A2E;
+        font-weight: 700;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #e8eaf0;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
-    
+    .info-card h6 i {
+        color: #0066FF;
+    }
     .info-row {
         display: flex;
         justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid #f1f1f1;
+        align-items: center;
+        padding: 9px 0;
+        border-bottom: 1px solid #f4f5f8;
     }
-    
     .info-row:last-child {
         border-bottom: none;
     }
-    
     .info-label {
-        color: #6c757d;
+        color: #8A8A9A;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    .info-value {
+        font-weight: 600;
+        color: #1A1A2E;
         font-size: 0.9rem;
     }
-    
-    .info-value {
-        font-weight: 500;
-        color: #333;
+
+    /* === MONTO CARDS === */
+    .monto-box {
+        text-align: center;
+        padding: 18px 12px;
+        border-radius: 10px;
+        border: 1px solid #e8eaf0;
+        transition: transform 0.2s;
     }
-    
-    .productos-table {
-        border-radius: 12px;
-        overflow: hidden;
-    }
-    
-    .productos-table thead {
-        background: linear-gradient(135deg, #405189 0%, #364574 100%);
-    }
-    
-    .productos-table thead th {
-        color: white;
-        font-weight: 500;
-        padding: 12px 15px;
-        border: none;
-    }
-    
-    .productos-table tbody td {
-        padding: 12px 15px;
-        vertical-align: middle;
-    }
-    
-    .badge-estado {
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-    }
-    
-    .btn-volver {
-        background: linear-gradient(135deg, #405189 0%, #364574 100%);
-        color: white;
-        border: none;
-        padding: 10px 24px;
-        border-radius: 8px;
-        transition: all 0.3s;
-    }
-    
-    .btn-volver:hover {
+    .monto-box:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(64, 81, 137, 0.3);
-        color: white;
     }
-    
+    .monto-box small {
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .monto-box h4 {
+        margin: 6px 0 0;
+        font-weight: 700;
+        font-size: 1.15rem;
+    }
+    .monto-neto { background: #f0f4ff; }
+    .monto-neto small { color: #0066FF; }
+    .monto-neto h4 { color: #0052CC; }
+    .monto-iva { background: #fff8f0; }
+    .monto-iva small { color: #e68a00; }
+    .monto-iva h4 { color: #cc7a00; }
+    .monto-total { background: #f0faf6; }
+    .monto-total small { color: #00B090; }
+    .monto-total h4 { color: #008C73; }
+    .monto-saldo { background: #fff0f0; }
+    .monto-saldo small { color: #e55353; }
+    .monto-saldo h4 { color: #cc3333; }
+
+    /* === TABLA PRODUCTOS === */
+    .productos-table {
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 0;
+    }
+    .productos-table thead {
+        background: #1A1A2E;
+    }
+    .productos-table thead th {
+        color: #ffffff !important;
+        font-weight: 600;
+        padding: 13px 16px;
+        border: none;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .productos-table tbody tr {
+        transition: background 0.15s;
+    }
+    .productos-table tbody tr:hover {
+        background: #f8f9fc;
+    }
+    .productos-table tbody td {
+        padding: 12px 16px;
+        vertical-align: middle;
+        color: #333;
+        font-size: 0.88rem;
+        border-bottom: 1px solid #f0f1f5;
+    }
+    .productos-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* === BADGES === */
+    .badge-dte-estado {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+
+    /* === BOTONES === */
+    .btn-volver {
+        background: #1A1A2E;
+        color: #fff;
+        border: none;
+        padding: 9px 22px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        transition: all 0.25s;
+    }
+    .btn-volver:hover {
+        background: #2D2D50;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(26, 26, 46, 0.25);
+        color: #fff;
+    }
+
+    /* === LOADING === */
     .loading-container {
         display: flex;
         flex-direction: column;
@@ -124,40 +232,56 @@
         justify-content: center;
         padding: 60px 20px;
     }
-    
     .loading-spinner {
-        width: 50px;
-        height: 50px;
-        border: 4px solid #e9ecef;
-        border-top: 4px solid #405189;
+        width: 44px;
+        height: 44px;
+        border: 3px solid #e8eaf0;
+        border-top: 3px solid #0066FF;
         border-radius: 50%;
-        animation: spin 1s linear infinite;
+        animation: spin 0.8s linear infinite;
     }
-    
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
+
+    /* === SKU CODE === */
+    .sku-code {
+        background: #f0f2f7;
+        color: #1A1A2E;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.82rem;
+        font-family: 'SFMono-Regular', Consolas, monospace;
+        font-weight: 600;
+    }
+    .talla-badge {
+        background: #e8eaf0;
+        color: #4A4A5A;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
 </style>
 
-<div class="main-content">
-    <div class="page-content">
-        <div class="container-fluid">
+<div class="page-content">
+    <div class="container-fluid">
             <!-- Header -->
-            <div class="row mb-4">
+            <div class="row mb-3">
                 <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center page-title-dte">
                         <div>
-                            <h4 class="mb-1"><i class="bi bi-receipt me-2"></i>Detalle de DTE</h4>
+                            <h4 class="mb-1"><i class="ri-file-text-line me-2" style="color:#0066FF"></i>Detalle de DTE</h4>
                             <nav aria-label="breadcrumb">
                                 <ol class="breadcrumb mb-0">
                                     <li class="breadcrumb-item"><a href="/app/">Inicio</a></li>
-                                    <li class="breadcrumb-item active">Detalle DTE #{{ dte_id }}</li>
+                                    <li class="breadcrumb-item active">DTE #{{ dte_id }}</li>
                                 </ol>
                             </nav>
                         </div>
                         <button class="btn btn-volver" onclick="history.back()">
-                            <i class="bi bi-arrow-left me-2"></i>Volver
+                            <i class="ri-arrow-left-line me-1"></i>Volver
                         </button>
                     </div>
                 </div>
@@ -166,16 +290,16 @@
             <!-- Contenido Principal -->
             <div class="row">
                 <div class="col-12">
-                    <div class="card shadow">
+                    <div class="card shadow-dte">
                         <div class="dte-detail-header">
-                            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                                 <div>
-                                    <h4><i class="bi bi-file-earmark-text me-2"></i>DTE #<span id="numeroDocumento">{{ dte_id }}</span></h4>
+                                    <h4><i class="ri-file-text-line me-2"></i>DTE #<span id="numeroDocumento">{{ dte_id }}</span></h4>
                                     <small id="tipoDocumentoHeader">Cargando...</small>
                                 </div>
                                 <div>
-                                    <span class="badge badge-tipo-dte bg-light text-dark" id="estadoDteHeader">
-                                        <i class="bi bi-clock me-1"></i>Cargando...
+                                    <span class="badge-estado-header" id="estadoDteHeader">
+                                        <i class="ri-time-line me-1"></i>Cargando...
                                     </span>
                                 </div>
                             </div>
@@ -194,7 +318,7 @@
                                     <!-- Información General -->
                                     <div class="col-md-6">
                                         <div class="info-card">
-                                            <h6><i class="bi bi-info-circle me-2"></i>Información General</h6>
+                                            <h6><i class="ri-information-line me-2"></i>Información General</h6>
                                             <div class="info-row">
                                                 <span class="info-label">Tipo Documento:</span>
                                                 <span class="info-value" id="tipoDocumento">-</span>
@@ -221,7 +345,7 @@
                                     <!-- Receptor/Emisor -->
                                     <div class="col-md-6">
                                         <div class="info-card">
-                                            <h6><i class="bi bi-building me-2"></i>Receptor / Emisor</h6>
+                                            <h6><i class="ri-building-2-line me-2"></i>Emisor / Receptor</h6>
                                             <div class="info-row">
                                                 <span class="info-label">Receptor:</span>
                                                 <span class="info-value" id="receptor">-</span>
@@ -250,30 +374,30 @@
                                 <div class="row">
                                     <div class="col-12">
                                         <div class="info-card">
-                                            <h6><i class="bi bi-currency-dollar me-2"></i>Montos</h6>
-                                            <div class="row">
-                                                <div class="col-md-3">
-                                                    <div class="text-center p-3 bg-light rounded">
-                                                        <small class="text-muted">Monto Neto</small>
-                                                        <h4 class="mb-0 text-primary" id="montoNeto">$0</h4>
+                                            <h6><i class="ri-money-dollar-circle-line me-2"></i>Montos</h6>
+                                            <div class="row g-3">
+                                                <div class="col-6 col-md-3">
+                                                    <div class="monto-box monto-neto">
+                                                        <small>Monto Neto</small>
+                                                        <h4 id="montoNeto">$0</h4>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-3">
-                                                    <div class="text-center p-3 bg-light rounded">
-                                                        <small class="text-muted">IVA</small>
-                                                        <h4 class="mb-0 text-info" id="montoIva">$0</h4>
+                                                <div class="col-6 col-md-3">
+                                                    <div class="monto-box monto-iva">
+                                                        <small>IVA (19%)</small>
+                                                        <h4 id="montoIva">$0</h4>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-3">
-                                                    <div class="text-center p-3 bg-light rounded">
-                                                        <small class="text-muted">Total</small>
-                                                        <h4 class="mb-0 text-success" id="montoTotal">$0</h4>
+                                                <div class="col-6 col-md-3">
+                                                    <div class="monto-box monto-total">
+                                                        <small>Total</small>
+                                                        <h4 id="montoTotal">$0</h4>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-3">
-                                                    <div class="text-center p-3 bg-light rounded">
-                                                        <small class="text-muted">Saldo</small>
-                                                        <h4 class="mb-0 text-danger" id="saldoPendiente">$0</h4>
+                                                <div class="col-6 col-md-3">
+                                                    <div class="monto-box monto-saldo">
+                                                        <small>Saldo</small>
+                                                        <h4 id="saldoPendiente">$0</h4>
                                                     </div>
                                                 </div>
                                             </div>
@@ -285,7 +409,7 @@
                                 <div class="row">
                                     <div class="col-12">
                                         <div class="info-card">
-                                            <h6><i class="bi bi-box-seam me-2"></i>Productos</h6>
+                                            <h6><i class="ri-shopping-bag-line me-2"></i>Productos</h6>
                                             <div class="table-responsive">
                                                 <table class="table productos-table" id="tablaProductos">
                                                     <thead>
@@ -315,7 +439,7 @@
                                 <div class="row" id="seccionPagos" style="display: none;">
                                     <div class="col-12">
                                         <div class="info-card">
-                                            <h6><i class="bi bi-credit-card me-2"></i>Pagos Registrados</h6>
+                                            <h6><i class="ri-bank-card-line me-2"></i>Pagos Registrados</h6>
                                             <div class="table-responsive">
                                                 <table class="table productos-table" id="tablaPagos">
                                                     <thead>
@@ -337,11 +461,11 @@
                             
                             <!-- Error -->
                             <div id="errorDte" style="display: none;" class="text-center py-5">
-                                <i class="bi bi-exclamation-triangle text-warning" style="font-size: 4rem;"></i>
-                                <h5 class="mt-3 text-muted">No se pudo cargar el DTE</h5>
-                                <p class="text-muted" id="errorMensaje">Error desconocido</p>
+                                <i class="ri-error-warning-line" style="font-size: 3.5rem; color: #e68a00;"></i>
+                                <h5 class="mt-3" style="color: #1A1A2E; font-weight: 600;">No se pudo cargar el DTE</h5>
+                                <p style="color: #8A8A9A;" id="errorMensaje">Error desconocido</p>
                                 <button class="btn btn-volver mt-3" onclick="history.back()">
-                                    <i class="bi bi-arrow-left me-2"></i>Volver
+                                    <i class="ri-arrow-left-line me-1"></i>Volver
                                 </button>
                             </div>
                         </div>
@@ -350,7 +474,6 @@
             </div>
         </div>
     </div>
-</div>
 
 {% include '../../layout/footer.html' %}
 
@@ -389,61 +512,71 @@ function cargarDetalleDte(dteId) {
 
 function mostrarDetalleDte(response) {
     const dte = response.dte;
-    
+
     // Header
     $('#numeroDocumento').text(dte.numero_documento || dteId);
     $('#tipoDocumentoHeader').text(dte.tipo_documento || '-');
-    $('#estadoDteHeader').html(`<i class="bi bi-check-circle me-1"></i>${dte.estado_dte || '-'}`);
-    
+    $('#estadoDteHeader').html(`<i class="ri-checkbox-circle-line me-1"></i>${formatEstado(dte.estado_dte)}`);
+
     // Información General
     $('#tipoDocumento').text(dte.tipo_documento || '-');
     $('#numDocumento').text(dte.numero_documento || '-');
     $('#fechaEmision').text(dte.fecha_emision || '-');
     $('#estadoDte').html(getBadgeEstado(dte.estado_dte));
     $('#estadoPago').html(getBadgeEstadoPago(dte.estado_pago));
-    
-    // Receptor/Emisor
+
+    // Emisor / Receptor
     $('#receptor').text(dte.receptor_nombre || '-');
     $('#rutReceptor').text(dte.receptor_rut || '-');
     $('#emisor').text(dte.emisor_nombre || '-');
     $('#sucursal').text(dte.sucursal_nombre || '-');
     $('#vendedor').text(dte.vendedor_nombre || '-');
-    
+
     // Montos
     $('#montoNeto').text(formatMonto(dte.monto_neto));
     const iva = (dte.monto_con_iva || 0) - (dte.monto_neto || 0);
     $('#montoIva').text(formatMonto(iva));
     $('#montoTotal').text(formatMonto(dte.monto_con_iva));
     $('#saldoPendiente').text(formatMonto(dte.saldo || 0));
-    
+
     // Productos
     if (response.productos && response.productos.length > 0) {
+        const tieneEstado = response.productos.some(p => p.estado_recepcion);
+        if (tieneEstado) {
+            $('#tablaProductos thead tr').html(`
+                <th>Producto</th><th>SKU</th><th>Talla</th>
+                <th class="text-center">Cant.</th><th class="text-end">Costo Unit.</th>
+                <th class="text-end">Subtotal</th><th class="text-center">Estado</th>
+            `);
+        }
         let html = '';
         response.productos.forEach(p => {
+            const estadoCol = tieneEstado ? `<td class="text-center">${getBadgeEstadoRecepcion(p.estado_recepcion)}</td>` : '';
             html += `
                 <tr>
-                    <td>${p.producto || p.descripcion || '-'}</td>
-                    <td><code>${p.sku || '-'}</code></td>
-                    <td><span class="badge bg-secondary">${p.talla || '-'}</span></td>
-                    <td class="text-center">${p.cantidad || 0}</td>
+                    <td style="font-weight:500">${p.producto || p.descripcion || '-'}</td>
+                    <td><span class="sku-code">${p.sku || '-'}</span></td>
+                    <td><span class="talla-badge">${p.talla || '-'}</span></td>
+                    <td class="text-center" style="font-weight:600">${p.cantidad || 0}</td>
                     <td class="text-end">${formatMonto(p.precio_unitario)}</td>
-                    <td class="text-end"><strong>${formatMonto(p.subtotal)}</strong></td>
+                    <td class="text-end" style="font-weight:700; color:#1A1A2E">${formatMonto(p.subtotal)}</td>
+                    ${estadoCol}
                 </tr>
             `;
         });
         $('#tbodyProductos').html(html);
     }
-    
+
     // Pagos
     if (response.pagos && response.pagos.length > 0) {
         let htmlPagos = '';
         response.pagos.forEach(p => {
             htmlPagos += `
                 <tr>
-                    <td>${p.metodo_pago || '-'}</td>
-                    <td>${p.voucher || '-'}</td>
+                    <td style="font-weight:500">${p.metodo_pago || '-'}</td>
+                    <td><span class="sku-code">${p.voucher || '-'}</span></td>
                     <td>${p.tipo_tarjeta || '-'}</td>
-                    <td class="text-end"><strong>${formatMonto(p.monto)}</strong></td>
+                    <td class="text-end" style="font-weight:700; color:#1A1A2E">${formatMonto(p.monto)}</td>
                 </tr>
             `;
         });
@@ -452,26 +585,58 @@ function mostrarDetalleDte(response) {
     }
 }
 
-function getBadgeEstado(estado) {
-    const estados = {
-        'EMITIDO': 'success',
-        'ANULADO': 'danger',
-        'PENDIENTE': 'warning',
-        'RECIBIDO': 'info'
+function formatEstado(estado) {
+    const map = {
+        'EMITIDO': 'Emitido',
+        'ACEPTADO': 'Aceptado',
+        'RECEPCIONADO_COMPLETO': 'Recepcionado',
+        'RECEPCIONADO_PARCIAL': 'Parcial',
+        'EN_REGULARIZACION': 'En Regularizacion',
+        'RECHAZADO': 'Rechazado',
+        'ANULADO': 'Anulado',
+        'CANCELADO': 'Cancelado',
     };
-    const color = estados[estado] || 'secondary';
-    return `<span class="badge bg-${color}">${estado || '-'}</span>`;
+    return map[estado] || estado || '-';
+}
+
+function getBadgeEstado(estado) {
+    const estilos = {
+        'EMITIDO':                { bg: '#e8f5e9', color: '#2e7d32', icon: 'ri-send-plane-line' },
+        'ACEPTADO':               { bg: '#e0f2f1', color: '#00796b', icon: 'ri-checkbox-circle-line' },
+        'RECEPCIONADO_COMPLETO':  { bg: '#e3f2fd', color: '#1565c0', icon: 'ri-checkbox-circle-fill' },
+        'RECEPCIONADO_PARCIAL':   { bg: '#fff3e0', color: '#e65100', icon: 'ri-indeterminate-circle-line' },
+        'EN_REGULARIZACION':      { bg: '#fce4ec', color: '#c62828', icon: 'ri-tools-line' },
+        'RECHAZADO':              { bg: '#ffebee', color: '#b71c1c', icon: 'ri-close-circle-line' },
+        'ANULADO':                { bg: '#f3e5f5', color: '#6a1b9a', icon: 'ri-forbid-line' },
+        'CANCELADO':              { bg: '#eceff1', color: '#546e7a', icon: 'ri-close-line' },
+    };
+    const s = estilos[estado] || { bg: '#eceff1', color: '#546e7a', icon: 'ri-question-line' };
+    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}"><i class="${s.icon} me-1"></i>${formatEstado(estado)}</span>`;
 }
 
 function getBadgeEstadoPago(estado) {
-    const estados = {
-        'PAGADO': 'success',
-        'PENDIENTE': 'warning',
-        'PARCIAL': 'info',
-        'ANULADO': 'danger'
+    const estilos = {
+        'PAGADO':     { bg: '#e8f5e9', color: '#2e7d32', icon: 'ri-checkbox-circle-line' },
+        'PENDIENTE':  { bg: '#fff8e1', color: '#f57f17', icon: 'ri-time-line' },
+        'VENCIDO':    { bg: '#ffebee', color: '#c62828', icon: 'ri-error-warning-line' },
     };
-    const color = estados[estado] || 'secondary';
-    return `<span class="badge bg-${color}">${estado || '-'}</span>`;
+    const s = estilos[estado] || { bg: '#eceff1', color: '#546e7a', icon: 'ri-question-line' };
+    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}"><i class="${s.icon} me-1"></i>${estado || '-'}</span>`;
+}
+
+function getBadgeEstadoRecepcion(estado) {
+    const estilos = {
+        'RECEPCIONADO_OK':              { bg: '#e8f5e9', color: '#2e7d32', label: 'OK' },
+        'PENDIENTE':                    { bg: '#fff8e1', color: '#f57f17', label: 'Pendiente' },
+        'RECEPCIONADO_PARCIAL':         { bg: '#fff3e0', color: '#e65100', label: 'Parcial' },
+        'RECEPCIONADO_DANADO':          { bg: '#ffebee', color: '#c62828', label: 'Dañado' },
+        'FALTANTE':                     { bg: '#ffebee', color: '#b71c1c', label: 'Faltante' },
+        'EN_REGULARIZACION':            { bg: '#fce4ec', color: '#c62828', label: 'Regularización' },
+        'EN_SOLICITUD_REGULARIZACION':  { bg: '#f3e5f5', color: '#6a1b9a', label: 'Solicitud Reg.' },
+        'REGULARIZADO':                 { bg: '#e0f2f1', color: '#00796b', label: 'Regularizado' },
+    };
+    const s = estilos[estado] || { bg: '#eceff1', color: '#546e7a', label: estado || '-' };
+    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}">${s.label}</span>`;
 }
 
 function formatMonto(monto) {

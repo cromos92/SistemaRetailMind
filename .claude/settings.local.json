@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/models//**)",
+      "Bash(xargs grep:*)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/static/js/pages/**)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/retailmind/**)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/models/**)",
+      "Bash(grep -i \"imagefield\\\\|filefield\\\\|upload\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/models/*.py)",
+      "Bash(grep -r \"ImageField\\\\|FileField\\\\|upload_to\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/models/*.py)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/layout/**)",
+      "Bash(python manage.py makemigrations app --name requerimientos_v2_tipos_fotos)",
+      "Bash(python manage.py migrate)",
+      "Bash(python -c ':*)",
+      "Bash(python manage.py check)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('app/views_modulo_requerimientos.py', doraise=True\\); print\\('OK'\\)\")",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/static/js/**)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/**)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/**)",
+      "Bash(find /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app -name \"__init__.py\" -exec dirname {} \\\\;)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('retailmind/app/management/commands/migrate_from_laravel.py', doraise=True\\); print\\('OK - compila sin errores'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('retailmind/app/views.py', doraise=True\\); print\\('OK views.py'\\)\")",
+      "Bash(ls -la \"c:/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/static/fonts/hkgrotesk-bold.\"*)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('app/views_modulo_reportes.py', doraise=True\\); print\\('OK'\\)\")",
+      "Bash(python retailmind/manage.py makemigrations app --name add_permiso_usuario)",
+      "Bash(python retailmind/manage.py migrate app 0120)",
+      "Bash(python retailmind/manage.py check)"
+    ]
+  }
+}

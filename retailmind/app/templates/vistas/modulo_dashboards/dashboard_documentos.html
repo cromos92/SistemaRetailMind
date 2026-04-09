@@ -4,271 +4,971 @@
 {% include 'layout/menu.html' %}
 
 <style>
+/* ========== NEXO DESIGN SYSTEM - Dashboard Documentos/DTE ========== */
 :root {
-    --rm-primary: #405189;
-    --rm-success: #0ab39c;
-    --rm-warning: #f7b84b;
-    --rm-danger: #f06548;
-    --rm-info: #299cdb;
-    --rm-purple: #6559cc;
-    --rm-teal: #02a8b5;
+    --doc-primary: #4361ee;
+    --doc-primary-light: #eef1ff;
+    --doc-secondary: #1A1A2E;
+    --doc-accent: #7209b7;
+    --doc-accent-light: #f3e8ff;
+    --doc-success: #06d6a0;
+    --doc-success-light: #e6faf4;
+    --doc-warning: #f4a236;
+    --doc-warning-light: #fff6e8;
+    --doc-danger: #ef476f;
+    --doc-danger-light: #fde8ed;
+    --doc-info: #118ab2;
+    --doc-info-light: #e6f4fa;
+    --doc-teal: #0cb8b6;
+    --doc-teal-light: #e6f9f9;
+    --doc-orange: #e76f51;
+    --doc-orange-light: #fdf0ec;
+    --doc-gray-900: #1A1A2E;
+    --doc-gray-700: #4A4A5A;
+    --doc-gray-500: #8A8A9A;
+    --doc-gray-300: #D1D1D9;
+    --doc-gray-100: #F5F5F7;
+    --doc-white: #FFFFFF;
+    --doc-shadow-sm: 0 1px 3px rgba(26, 26, 46, 0.06);
+    --doc-shadow-md: 0 4px 12px rgba(26, 26, 46, 0.08);
+    --doc-shadow-lg: 0 8px 24px rgba(26, 26, 46, 0.12);
+    --doc-radius: 12px;
+    --doc-radius-lg: 16px;
 }
-.page-content { min-height: 100vh; padding: 70px 0 60px; background: #f3f3f9; }
-.dashboard-header {
-    background: linear-gradient(135deg, var(--rm-primary) 0%, var(--rm-info) 100%);
-    color: #fff; border-radius: 12px; padding: 24px 30px; margin-bottom: 24px;
+
+.page-content { min-height: 100vh; padding: 70px 0 60px; background: var(--doc-gray-100); }
+
+/* ===== Header ===== */
+.doc-header {
+    background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
+    color: #fff; border-radius: var(--doc-radius-lg); padding: 28px 32px; margin-bottom: 28px;
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+    box-shadow: 0 8px 32px rgba(67, 97, 238, 0.3);
+    position: relative; overflow: hidden;
 }
-.dashboard-header h4 { margin: 0; font-weight: 600; font-size: 1.4rem; }
-.filter-section {
-    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+.doc-header::before {
+    content: ''; position: absolute; top: -50%; right: -20%; width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(255,255,255,.08) 0%, transparent 70%);
+    border-radius: 50%;
 }
-.filter-section input, .filter-section select {
-    padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3);
-    background: rgba(255,255,255,.15); color: #fff; font-size: .875rem;
+.doc-header::after {
+    content: ''; position: absolute; bottom: -40%; left: 30%; width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(255,255,255,.05) 0%, transparent 70%);
+    border-radius: 50%;
 }
-.filter-section input::placeholder { color: rgba(255,255,255,.6); }
-.filter-section option { color: #333; }
-.btn-filter {
-    padding: 8px 20px; border-radius: 8px; border: none;
-    background: rgba(255,255,255,.25); color: #fff; cursor: pointer; font-weight: 500;
-    transition: background .2s;
+.doc-header h4 { margin: 0; font-weight: 700; font-size: 1.5rem; position: relative; z-index: 1; color: #fff !important; }
+.doc-header small { opacity: .8; font-size: .875rem; position: relative; z-index: 1; color: #fff !important; }
+.doc-header h4 i { color: #fff !important; }
+.doc-filters {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap; position: relative; z-index: 1;
 }
-.btn-filter:hover { background: rgba(255,255,255,.4); }
-.kpi-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px; margin-bottom: 24px;
+.doc-filters input[type="date"] {
+    padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.12); color: #fff; font-size: .85rem;
+    backdrop-filter: blur(4px); transition: all .2s; color-scheme: dark;
 }
-.kpi-card {
-    background: #fff; border-radius: 12px; padding: 20px; position: relative;
-    overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); transition: transform .2s;
+.doc-filters input[type="date"]:focus { background: rgba(255,255,255,.22); outline: none; border-color: rgba(255,255,255,.5); }
+.doc-filters input::-webkit-calendar-picker-indicator { filter: invert(1); }
+.doc-btn-refresh {
+    padding: 10px 22px; border-radius: 10px; border: none;
+    background: rgba(255,255,255,.2); color: #fff; cursor: pointer; font-weight: 600;
+    font-size: .85rem; backdrop-filter: blur(4px); transition: all .25s;
 }
-.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12); }
-.kpi-card::before {
-    content:''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+.doc-btn-refresh:hover { background: rgba(255,255,255,.35); transform: translateY(-1px); }
+
+/* ===== Section Titles ===== */
+.doc-section-title {
+    font-size: .85rem; font-weight: 700; color: var(--doc-gray-700);
+    margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    text-transform: uppercase; letter-spacing: .5px;
 }
-.kpi-primary::before { background: var(--rm-primary); }
-.kpi-success::before { background: var(--rm-success); }
-.kpi-warning::before { background: var(--rm-warning); }
-.kpi-danger::before { background: var(--rm-danger); }
-.kpi-info::before { background: var(--rm-info); }
-.kpi-purple::before { background: var(--rm-purple); }
-.kpi-teal::before { background: var(--rm-teal); }
-.kpi-icon { font-size: 2rem; opacity: .15; position: absolute; top: 14px; right: 14px; }
-.kpi-value { font-size: 1.6rem; font-weight: 700; color: #495057; margin-bottom: 4px; }
-.kpi-label { font-size: .8rem; color: #878a99; text-transform: uppercase; letter-spacing: .5px; }
-.kpi-trend { font-size: .75rem; margin-top: 6px; }
-.kpi-trend.up { color: var(--rm-success); }
-.kpi-trend.down { color: var(--rm-danger); }
-.chart-card {
-    background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
-    margin-bottom: 24px; overflow: hidden;
+.doc-section-title i { color: var(--doc-primary); font-size: 1rem; }
+
+/* ===== KPI Cards ===== */
+.doc-kpi-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 18px; margin-bottom: 28px;
 }
-.chart-header {
-    padding: 16px 20px; border-bottom: 1px solid #e9ebec;
+.doc-kpi-card {
+    background: var(--doc-white); border-radius: var(--doc-radius-lg); padding: 22px 20px;
+    box-shadow: var(--doc-shadow-sm); transition: all .25s ease;
+    position: relative; overflow: hidden; border: 1px solid rgba(0,0,0,.04);
+}
+.doc-kpi-card:hover { transform: translateY(-3px); box-shadow: var(--doc-shadow-lg); }
+.doc-kpi-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.doc-kpi-icon-box {
+    width: 46px; height: 46px; border-radius: var(--doc-radius);
+    display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
+}
+.doc-kpi-trend {
+    display: inline-flex; align-items: center; gap: 3px; font-size: .72rem; font-weight: 700;
+    padding: 4px 8px; border-radius: 8px;
+}
+.doc-kpi-trend.up { background: var(--doc-success-light); color: #059669; }
+.doc-kpi-trend.down { background: var(--doc-danger-light); color: var(--doc-danger); }
+.doc-kpi-value { font-size: 1.75rem; font-weight: 800; color: var(--doc-gray-900); line-height: 1; margin-bottom: 4px; }
+.doc-kpi-label { font-size: .78rem; color: var(--doc-gray-500); font-weight: 500; text-transform: uppercase; letter-spacing: .4px; }
+.doc-kpi-footer {
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--doc-gray-100);
+    font-size: .75rem; color: var(--doc-gray-500);
+}
+
+/* KPI colors */
+.doc-kpi-card.dte { border-left: 4px solid var(--doc-primary); }
+.doc-kpi-card.dte .doc-kpi-icon-box { background: var(--doc-primary-light); color: var(--doc-primary); }
+.doc-kpi-card.monto { border-left: 4px solid var(--doc-accent); }
+.doc-kpi-card.monto .doc-kpi-icon-box { background: var(--doc-accent-light); color: var(--doc-accent); }
+.doc-kpi-card.pendientes { border-left: 4px solid var(--doc-warning); }
+.doc-kpi-card.pendientes .doc-kpi-icon-box { background: var(--doc-warning-light); color: var(--doc-warning); }
+.doc-kpi-card.deuda { border-left: 4px solid var(--doc-danger); }
+.doc-kpi-card.deuda .doc-kpi-icon-box { background: var(--doc-danger-light); color: var(--doc-danger); }
+
+/* ===== Secondary KPI strip ===== */
+.doc-kpi-strip {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+    gap: 12px; margin-bottom: 28px;
+}
+.doc-kpi-mini {
+    background: var(--doc-white); border-radius: var(--doc-radius); padding: 16px;
+    box-shadow: var(--doc-shadow-sm); display: flex; align-items: center; gap: 12px;
+    transition: all .2s ease; border: 1px solid rgba(0,0,0,.03);
+}
+.doc-kpi-mini:hover { box-shadow: var(--doc-shadow-md); transform: translateY(-2px); }
+.doc-kpi-mini-icon {
+    width: 38px; height: 38px; min-width: 38px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
+}
+.doc-kpi-mini-text { overflow: hidden; }
+.doc-kpi-mini-value { font-size: 1.15rem; font-weight: 700; color: var(--doc-gray-900); line-height: 1.2; }
+.doc-kpi-mini-label { font-size: .68rem; color: var(--doc-gray-500); text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Mini icon colors */
+.mini-facturas .doc-kpi-mini-icon { background: var(--doc-success-light); color: var(--doc-success); }
+.mini-boletas .doc-kpi-mini-icon { background: var(--doc-info-light); color: var(--doc-info); }
+.mini-nc .doc-kpi-mini-icon { background: var(--doc-orange-light); color: var(--doc-orange); }
+.mini-guias .doc-kpi-mini-icon { background: var(--doc-teal-light); color: var(--doc-teal); }
+.mini-vencidos .doc-kpi-mini-icon { background: var(--doc-danger-light); color: var(--doc-danger); }
+.mini-sii .doc-kpi-mini-icon { background: var(--doc-primary-light); color: var(--doc-primary); }
+.mini-ticket .doc-kpi-mini-icon { background: var(--doc-accent-light); color: var(--doc-accent); }
+.mini-incidencias .doc-kpi-mini-icon { background: var(--doc-warning-light); color: var(--doc-warning); }
+.mini-credito .doc-kpi-mini-icon { background: var(--doc-info-light); color: var(--doc-info); }
+.mini-tasanc .doc-kpi-mini-icon { background: var(--doc-orange-light); color: var(--doc-orange); }
+
+/* ===== Chart Cards ===== */
+.doc-chart-card {
+    background: var(--doc-white); border-radius: var(--doc-radius-lg);
+    box-shadow: var(--doc-shadow-sm); margin-bottom: 24px; overflow: hidden;
+    border: 1px solid rgba(0,0,0,.04);
+}
+.doc-chart-header {
+    padding: 18px 22px; border-bottom: 1px solid var(--doc-gray-100);
     display: flex; justify-content: space-between; align-items: center;
 }
-.chart-header h6 { margin: 0; font-weight: 600; color: #495057; }
-.chart-body { padding: 20px; }
-.chart-container { position: relative; height: 320px; }
-.chart-container-sm { position: relative; height: 260px; }
-.loading-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
-    background: rgba(255,255,255,.8); display: flex; align-items: center; justify-content: center;
+.doc-chart-header h6 { margin: 0; font-weight: 700; color: var(--doc-gray-900); font-size: .95rem; display: flex; align-items: center; gap: 8px; }
+.doc-chart-header h6 i { color: var(--doc-primary); }
+.doc-chart-badge { font-size: .7rem; padding: 3px 10px; border-radius: 6px; font-weight: 600; }
+.doc-chart-body { padding: 20px 22px; }
+.doc-chart-container { position: relative; height: 340px; }
+.doc-chart-container-sm { position: relative; height: 280px; }
+
+/* ===== Table ===== */
+.doc-table-card {
+    background: var(--doc-white); border-radius: var(--doc-radius-lg);
+    box-shadow: var(--doc-shadow-sm); margin-bottom: 24px; overflow: hidden;
+    border: 1px solid rgba(0,0,0,.04);
 }
-.spinner { width: 48px; height: 48px; border: 4px solid #e9ecef; border-top-color: var(--rm-primary);
-    border-radius: 50%; animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.doc-table-header { padding: 18px 22px; border-bottom: 1px solid var(--doc-gray-100); }
+.doc-table-header h6 { margin: 0; font-weight: 700; color: var(--doc-gray-900); font-size: .95rem; display: flex; align-items: center; gap: 8px; }
+.doc-table-header h6 i { color: var(--doc-primary); }
+.doc-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.doc-table-wrap table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.doc-table-wrap thead th {
+    background: var(--doc-gray-100); padding: 12px 18px; text-align: left;
+    font-weight: 700; color: var(--doc-gray-700); font-size: .75rem;
+    text-transform: uppercase; letter-spacing: .5px; border-bottom: 2px solid var(--doc-gray-300);
+}
+.doc-table-wrap tbody td { padding: 12px 18px; border-bottom: 1px solid var(--doc-gray-100); color: var(--doc-gray-700); }
+.doc-table-wrap tbody tr:hover { background: var(--doc-primary-light); }
+.doc-table-wrap tbody tr:last-child td { border-bottom: none; }
+.doc-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: .7rem; font-weight: 700; }
+.doc-badge-ok { background: var(--doc-success-light); color: #059669; }
+.doc-badge-warn { background: var(--doc-warning-light); color: #b45309; }
+.doc-badge-alert { background: var(--doc-danger-light); color: var(--doc-danger); }
+.doc-progress-bar { height: 6px; border-radius: 3px; background: var(--doc-gray-100); overflow: hidden; min-width: 60px; }
+.doc-progress-fill { height: 100%; border-radius: 3px; transition: width .4s ease; }
+
+/* ===== Pipeline Flow ===== */
+.doc-flow-card {
+    background: var(--doc-white); border-radius: var(--doc-radius-lg);
+    box-shadow: var(--doc-shadow-sm); padding: 24px; margin-bottom: 28px;
+    border: 1px solid rgba(0,0,0,.04);
+}
+.doc-flow-title { font-size: 1rem; font-weight: 700; color: var(--doc-gray-900); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+.doc-flow-title i { color: var(--doc-primary); }
+.doc-pipeline {
+    display: flex; align-items: stretch; gap: 0; position: relative;
+    overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 8px;
+}
+.doc-pipe-step {
+    flex: 1; min-width: 120px; text-align: center; padding: 16px 12px;
+    position: relative; background: var(--doc-gray-100); border-radius: 10px;
+    margin-right: 28px; transition: all .2s;
+}
+.doc-pipe-step:last-child { margin-right: 0; }
+.doc-pipe-step::after {
+    content: ''; position: absolute; top: 50%; right: -20px; transform: translateY(-50%);
+    width: 0; height: 0; border-top: 10px solid transparent; border-bottom: 10px solid transparent;
+    border-left: 12px solid var(--doc-gray-300);
+}
+.doc-pipe-step:last-child::after { display: none; }
+.doc-pipe-step:hover { transform: translateY(-2px); box-shadow: var(--doc-shadow-md); }
+.doc-pipe-icon { font-size: 1.5rem; margin-bottom: 6px; }
+.doc-pipe-count { font-size: 1.5rem; font-weight: 800; color: var(--doc-gray-900); line-height: 1; }
+.doc-pipe-label { font-size: .68rem; color: var(--doc-gray-500); text-transform: uppercase; letter-spacing: .3px; margin-top: 4px; }
+.doc-pipe-pct { font-size: .65rem; font-weight: 700; margin-top: 4px; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+
+.doc-pipe-step.step-emitido { background: #eef1ff; }
+.doc-pipe-step.step-emitido .doc-pipe-icon { color: var(--doc-primary); }
+.doc-pipe-step.step-emitido .doc-pipe-pct { background: var(--doc-primary-light); color: var(--doc-primary); }
+.doc-pipe-step.step-emitido::after { border-left-color: #c8d1f7; }
+
+.doc-pipe-step.step-completo { background: #e6faf4; }
+.doc-pipe-step.step-completo .doc-pipe-icon { color: var(--doc-success); }
+.doc-pipe-step.step-completo .doc-pipe-pct { background: var(--doc-success-light); color: #059669; }
+.doc-pipe-step.step-completo::after { border-left-color: #a3e8d5; }
+
+.doc-pipe-step.step-parcial { background: #fff6e8; }
+.doc-pipe-step.step-parcial .doc-pipe-icon { color: var(--doc-warning); }
+.doc-pipe-step.step-parcial .doc-pipe-pct { background: var(--doc-warning-light); color: #b45309; }
+.doc-pipe-step.step-parcial::after { border-left-color: #f5d9a8; }
+
+.doc-pipe-step.step-regularizacion { background: #f3e8ff; }
+.doc-pipe-step.step-regularizacion .doc-pipe-icon { color: var(--doc-accent); }
+.doc-pipe-step.step-regularizacion .doc-pipe-pct { background: var(--doc-accent-light); color: var(--doc-accent); }
+.doc-pipe-step.step-regularizacion::after { border-left-color: #d8b4fe; }
+
+.doc-pipe-step.step-rechazado { background: #fde8ed; }
+.doc-pipe-step.step-rechazado .doc-pipe-icon { color: var(--doc-danger); }
+.doc-pipe-step.step-rechazado .doc-pipe-pct { background: var(--doc-danger-light); color: var(--doc-danger); }
+
+.doc-flow-summary { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.doc-flow-stat { font-size: .8rem; color: var(--doc-gray-500); display: flex; align-items: center; gap: 4px; }
+.doc-flow-stat b { color: var(--doc-gray-900); }
+
+/* Origenes / CD table */
+.doc-cd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
+.doc-cd-card {
+    background: var(--doc-gray-100); border-radius: 10px; padding: 14px 16px;
+    border-left: 3px solid var(--doc-primary);
+}
+.doc-cd-name { font-size: .85rem; font-weight: 700; color: var(--doc-gray-900); margin-bottom: 8px; }
+.doc-cd-stats { display: flex; flex-wrap: wrap; gap: 6px; }
+.doc-cd-stat { font-size: .7rem; padding: 3px 8px; border-radius: 5px; font-weight: 600; }
+.doc-cd-stat.pendiente { background: var(--doc-primary-light); color: var(--doc-primary); }
+.doc-cd-stat.ok { background: var(--doc-success-light); color: #059669; }
+.doc-cd-stat.problema { background: var(--doc-warning-light); color: #b45309; }
+.doc-cd-stat.rechazado { background: var(--doc-danger-light); color: var(--doc-danger); }
+
+@media (max-width: 768px) {
+    .doc-pipeline { flex-wrap: wrap; gap: 8px; }
+    .doc-pipe-step { min-width: calc(50% - 20px); margin-right: 0; }
+    .doc-pipe-step::after { display: none; }
+}
+@media (max-width: 576px) {
+    .doc-pipe-step { min-width: 100%; }
+    .doc-cd-grid { grid-template-columns: 1fr; }
+}
+
+/* ===== Loading ===== */
+.doc-loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; background: rgba(255,255,255,.85); display: none; align-items: center; justify-content: center; }
+.doc-loading.active { display: flex; }
+.doc-spinner { width: 44px; height: 44px; border: 3px solid var(--doc-gray-300); border-top-color: var(--doc-primary); border-radius: 50%; animation: docSpin .7s linear infinite; }
+@keyframes docSpin { to { transform: rotate(360deg); } }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1200px) {
+    .doc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+    .doc-header { flex-direction: column; align-items: flex-start; padding: 20px 22px; }
+    .doc-filters { width: 100%; }
+    .doc-filters input[type="date"] { flex: 1; min-width: 0; }
+    .doc-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .doc-kpi-strip { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .doc-kpi-value { font-size: 1.35rem; }
+    .doc-chart-container { height: 280px; }
+    .doc-chart-container-sm { height: 240px; }
+    .doc-chart-body { padding: 14px; }
+}
+@media (max-width: 576px) {
+    .page-content { padding: 60px 0 50px; }
+    .doc-header { padding: 16px 18px; border-radius: var(--doc-radius); }
+    .doc-header h4 { font-size: 1.15rem; }
+    .doc-filters { flex-direction: column; gap: 8px; }
+    .doc-filters input[type="date"], .doc-btn-refresh { width: 100%; text-align: center; }
+    .doc-kpi-grid { gap: 8px; }
+    .doc-kpi-card { padding: 14px; }
+    .doc-kpi-value { font-size: 1.15rem; }
+    .doc-kpi-icon-box { width: 36px; height: 36px; font-size: 1rem; }
+    .doc-kpi-strip { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .doc-kpi-mini { padding: 12px 10px; gap: 8px; }
+    .doc-kpi-mini-icon { width: 32px; height: 32px; min-width: 32px; font-size: .9rem; }
+    .doc-kpi-mini-value { font-size: 1rem; }
+    .doc-chart-container { height: 230px; }
+    .doc-chart-container-sm { height: 210px; }
+}
 </style>
 
-<div class="main-content">
-    <div class="page-content">
-        <div class="container-fluid">
+<div class="page-content">
+    <div class="container-fluid">
 
-            <div class="dashboard-header">
-                <div>
-                    <h4><i class="ri-file-list-line me-2"></i>Dashboard Documentos / DTE</h4>
-                    <small>Indicadores de facturación electrónica y documentos tributarios</small>
-                </div>
-                <div class="filter-section">
-                    <input type="date" id="fechaInicio">
-                    <input type="date" id="fechaFin">
-                    <button class="btn-filter" onclick="cargarDatos()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
-                </div>
+        <!-- LOADING -->
+        <div class="doc-loading" id="docLoading"><div class="doc-spinner"></div></div>
+
+        <!-- HEADER -->
+        <div class="doc-header">
+            <div>
+                <h4><i class="ri-file-shield-2-line me-2"></i>Dashboard Documentos / DTE</h4>
+                <small>Control de facturación electrónica, recepción y pagos</small>
             </div>
-
-            <div class="kpi-grid" id="kpiGrid">
-                <div class="kpi-card kpi-primary">
-                    <i class="ri-file-list-3-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiTotal">--</div>
-                    <div class="kpi-label">Total DTEs</div>
-                    <div class="kpi-trend" id="kpiVariacion"></div>
-                </div>
-                <div class="kpi-card kpi-success">
-                    <i class="ri-file-text-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiFacturas">--</div>
-                    <div class="kpi-label">Facturas Electrónicas</div>
-                </div>
-                <div class="kpi-card kpi-warning">
-                    <i class="ri-file-damage-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiNC">--</div>
-                    <div class="kpi-label">Notas de Crédito</div>
-                </div>
-                <div class="kpi-card kpi-info">
-                    <i class="ri-truck-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiGuias">--</div>
-                    <div class="kpi-label">Guías de Despacho</div>
-                </div>
-                <div class="kpi-card kpi-teal">
-                    <i class="ri-checkbox-circle-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiAceptados">--</div>
-                    <div class="kpi-label">% Aceptados SII</div>
-                </div>
-                <div class="kpi-card kpi-purple">
-                    <i class="ri-money-dollar-circle-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiMonto">--</div>
-                    <div class="kpi-label">Monto Total</div>
-                </div>
-                <div class="kpi-card kpi-danger">
-                    <i class="ri-receipt-line kpi-icon"></i>
-                    <div class="kpi-value" id="kpiBoletas">--</div>
-                    <div class="kpi-label">Boletas Electrónicas</div>
-                </div>
+            <div class="doc-filters">
+                <input type="date" id="fechaInicio">
+                <input type="date" id="fechaFin">
+                <button class="doc-btn-refresh" onclick="cargarDatos()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
             </div>
-
-            <div class="row">
-                <div class="col-lg-8">
-                    <div class="chart-card">
-                        <div class="chart-header"><h6>Evolución Mensual de Documentos</h6></div>
-                        <div class="chart-body"><div class="chart-container"><canvas id="chartEvolucion"></canvas></div></div>
-                    </div>
-                </div>
-                <div class="col-lg-4">
-                    <div class="chart-card">
-                        <div class="chart-header"><h6>Distribución por Tipo</h6></div>
-                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartTipo"></canvas></div></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-lg-6">
-                    <div class="chart-card">
-                        <div class="chart-header"><h6>Estado de Documentos</h6></div>
-                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartEstado"></canvas></div></div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="chart-card">
-                        <div class="chart-header"><h6>Top 10 Emisores por Monto</h6></div>
-                        <div class="chart-body"><div class="chart-container-sm"><canvas id="chartEmisores"></canvas></div></div>
-                    </div>
-                </div>
-            </div>
-
         </div>
+
+        <!-- KPIs PRINCIPALES -->
+        <div class="doc-section-title"><i class="ri-dashboard-line"></i>Indicadores Clave</div>
+        <div class="doc-kpi-grid">
+            <div class="doc-kpi-card dte">
+                <div class="doc-kpi-top">
+                    <div class="doc-kpi-icon-box"><i class="ri-file-list-3-line"></i></div>
+                    <div class="doc-kpi-trend" id="kpiVariacion"></div>
+                </div>
+                <div class="doc-kpi-value" id="kpiTotal">--</div>
+                <div class="doc-kpi-label">Total Documentos</div>
+                <div class="doc-kpi-footer" id="kpiTotalFooter">--</div>
+            </div>
+            <div class="doc-kpi-card monto">
+                <div class="doc-kpi-top">
+                    <div class="doc-kpi-icon-box"><i class="ri-money-dollar-circle-line"></i></div>
+                </div>
+                <div class="doc-kpi-value" id="kpiMonto">--</div>
+                <div class="doc-kpi-label">Monto Facturado</div>
+                <div class="doc-kpi-footer" id="kpiMontoFooter">--</div>
+            </div>
+            <div class="doc-kpi-card pendientes">
+                <div class="doc-kpi-top">
+                    <div class="doc-kpi-icon-box"><i class="ri-inbox-unarchive-line"></i></div>
+                </div>
+                <div class="doc-kpi-value" id="kpiPendientesRecepcion">--</div>
+                <div class="doc-kpi-label">Pendientes Recepción</div>
+                <div class="doc-kpi-footer">DTEs emitidos sin recepcionar</div>
+            </div>
+            <div class="doc-kpi-card deuda">
+                <div class="doc-kpi-top">
+                    <div class="doc-kpi-icon-box"><i class="ri-bank-line"></i></div>
+                </div>
+                <div class="doc-kpi-value" id="kpiMontoPendiente">--</div>
+                <div class="doc-kpi-label">Deuda Pendiente</div>
+                <div class="doc-kpi-footer" id="kpiDeudaFooter">--</div>
+            </div>
+        </div>
+
+        <!-- KPIs SECUNDARIOS -->
+        <div class="doc-section-title"><i class="ri-bar-chart-grouped-line"></i>Detalle Operativo</div>
+        <div class="doc-kpi-strip">
+            <div class="doc-kpi-mini mini-facturas">
+                <div class="doc-kpi-mini-icon"><i class="ri-file-text-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiFacturas">--</div>
+                    <div class="doc-kpi-mini-label">Facturas</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-boletas">
+                <div class="doc-kpi-mini-icon"><i class="ri-receipt-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiBoletas">--</div>
+                    <div class="doc-kpi-mini-label">Boletas</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-nc">
+                <div class="doc-kpi-mini-icon"><i class="ri-file-damage-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiNC">--</div>
+                    <div class="doc-kpi-mini-label">Notas de Crédito</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-guias">
+                <div class="doc-kpi-mini-icon"><i class="ri-truck-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiGuias">--</div>
+                    <div class="doc-kpi-mini-label">Guías Despacho</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-vencidos">
+                <div class="doc-kpi-mini-icon"><i class="ri-alarm-warning-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiVencidos">--</div>
+                    <div class="doc-kpi-mini-label">Pagos Vencidos</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-sii">
+                <div class="doc-kpi-mini-icon"><i class="ri-shield-check-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiAceptados">--</div>
+                    <div class="doc-kpi-mini-label">% Aceptados SII</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-ticket">
+                <div class="doc-kpi-mini-icon"><i class="ri-shopping-basket-2-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiTicketProm">--</div>
+                    <div class="doc-kpi-mini-label">Ticket Promedio</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-incidencias">
+                <div class="doc-kpi-mini-icon"><i class="ri-error-warning-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiIncidencias">--</div>
+                    <div class="doc-kpi-mini-label">Incidencias</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-credito">
+                <div class="doc-kpi-mini-icon"><i class="ri-time-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiDiasCredito">--</div>
+                    <div class="doc-kpi-mini-label">Días Crédito Prom.</div>
+                </div>
+            </div>
+            <div class="doc-kpi-mini mini-tasanc">
+                <div class="doc-kpi-mini-icon"><i class="ri-percent-line"></i></div>
+                <div class="doc-kpi-mini-text">
+                    <div class="doc-kpi-mini-value" id="kpiTasaNC">--</div>
+                    <div class="doc-kpi-mini-label">Tasa NC / Fact.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FLUJO DESPACHO / RECEPCIÓN -->
+        <div class="doc-section-title"><i class="ri-route-line"></i>Flujo Despacho / Recepción (Traspasos)</div>
+        <div class="doc-flow-card">
+            <div class="doc-flow-title"><i class="ri-git-branch-line"></i>Pipeline de Traspasos Internos</div>
+            <div class="doc-pipeline" id="pipelineFlow">
+                <div class="doc-pipe-step step-emitido">
+                    <div class="doc-pipe-icon"><i class="ri-send-plane-line"></i></div>
+                    <div class="doc-pipe-count" id="pipeEmitidos">--</div>
+                    <div class="doc-pipe-label">En Tránsito</div>
+                    <div class="doc-pipe-pct" id="pipePctEmitidos">--</div>
+                </div>
+                <div class="doc-pipe-step step-completo">
+                    <div class="doc-pipe-icon"><i class="ri-checkbox-circle-line"></i></div>
+                    <div class="doc-pipe-count" id="pipeCompleto">--</div>
+                    <div class="doc-pipe-label">Recepcionado OK</div>
+                    <div class="doc-pipe-pct" id="pipePctCompleto">--</div>
+                </div>
+                <div class="doc-pipe-step step-parcial">
+                    <div class="doc-pipe-icon"><i class="ri-error-warning-line"></i></div>
+                    <div class="doc-pipe-count" id="pipeParcial">--</div>
+                    <div class="doc-pipe-label">Parcial</div>
+                    <div class="doc-pipe-pct" id="pipePctParcial">--</div>
+                </div>
+                <div class="doc-pipe-step step-regularizacion">
+                    <div class="doc-pipe-icon"><i class="ri-tools-line"></i></div>
+                    <div class="doc-pipe-count" id="pipeRegularizacion">--</div>
+                    <div class="doc-pipe-label">Regularización</div>
+                    <div class="doc-pipe-pct" id="pipePctRegularizacion">--</div>
+                </div>
+                <div class="doc-pipe-step step-rechazado">
+                    <div class="doc-pipe-icon"><i class="ri-close-circle-line"></i></div>
+                    <div class="doc-pipe-count" id="pipeRechazados">--</div>
+                    <div class="doc-pipe-label">Rechazados</div>
+                    <div class="doc-pipe-pct" id="pipePctRechazados">--</div>
+                </div>
+            </div>
+            <div class="doc-flow-summary" id="flujoSummary"></div>
+            <div class="doc-cd-grid" id="flujoOrigenes"></div>
+        </div>
+
+        <!-- GRÁFICOS ROW 1: Evolución + Tipo doc -->
+        <div class="doc-section-title"><i class="ri-line-chart-line"></i>Análisis de Documentos</div>
+        <div class="row">
+            <div class="col-xl-8">
+                <div class="doc-chart-card">
+                    <div class="doc-chart-header">
+                        <h6><i class="ri-line-chart-line"></i>Evolución Mensual</h6>
+                        <span class="doc-chart-badge" style="background:var(--doc-primary-light);color:var(--doc-primary);">Cantidad + Monto</span>
+                    </div>
+                    <div class="doc-chart-body"><div class="doc-chart-container"><canvas id="chartEvolucion"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-xl-4">
+                <div class="doc-chart-card">
+                    <div class="doc-chart-header">
+                        <h6><i class="ri-donut-chart-line"></i>Por Tipo Documento</h6>
+                    </div>
+                    <div class="doc-chart-body"><div class="doc-chart-container"><canvas id="chartTipo"></canvas></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRÁFICOS ROW 2: Transacciones + Pagos -->
+        <div class="row">
+            <div class="col-lg-7">
+                <div class="doc-chart-card">
+                    <div class="doc-chart-header">
+                        <h6><i class="ri-exchange-funds-line"></i>Compras vs Ventas vs Traspasos</h6>
+                        <span class="doc-chart-badge" style="background:var(--doc-accent-light);color:var(--doc-accent);">Por Monto</span>
+                    </div>
+                    <div class="doc-chart-body"><div class="doc-chart-container"><canvas id="chartTransacciones"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="doc-chart-card">
+                    <div class="doc-chart-header">
+                        <h6><i class="ri-wallet-3-line"></i>Estado de Pagos</h6>
+                    </div>
+                    <div class="doc-chart-body"><div class="doc-chart-container"><canvas id="chartEstadoPago"></canvas></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRÁFICOS ROW 3: Estado DTE + Emisores -->
+        <div class="row">
+            <div class="col-lg-5">
+                <div class="doc-chart-card">
+                    <div class="doc-chart-header">
+                        <h6><i class="ri-shield-star-line"></i>Estado Documentos DTE</h6>
+                    </div>
+                    <div class="doc-chart-body"><div class="doc-chart-container"><canvas id="chartEstado"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="doc-chart-card">
+                    <div class="doc-chart-header">
+                        <h6><i class="ri-building-line"></i>Top 10 Emisores por Monto</h6>
+                    </div>
+                    <div class="doc-chart-body"><div class="doc-chart-container"><canvas id="chartEmisores"></canvas></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRÁFICOS ROW 4: Sucursal + Proveedores -->
+        <div class="row">
+            <div class="col-lg-5">
+                <div class="doc-chart-card">
+                    <div class="doc-chart-header">
+                        <h6><i class="ri-store-2-line"></i>Documentos por Sucursal</h6>
+                    </div>
+                    <div class="doc-chart-body"><div class="doc-chart-container-sm"><canvas id="chartSucursal"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="doc-table-card">
+                    <div class="doc-table-header">
+                        <h6><i class="ri-group-line"></i>Top 10 Proveedores (Compras)</h6>
+                    </div>
+                    <div class="doc-table-wrap">
+                        <table>
+                            <thead><tr><th>Proveedor</th><th>Docs</th><th>Monto</th><th>Pendiente</th><th></th></tr></thead>
+                            <tbody id="tablaProveedores">
+                                <tr><td colspan="5" style="text-align:center;color:var(--doc-gray-500);padding:24px;">Cargando datos...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
 {% include 'layout/footer.html' %}
 
 <script>
-let charts = {};
-const colores = ['#405189','#0ab39c','#f7b84b','#f06548','#299cdb','#6559cc','#02a8b5','#e83e8c','#2b8a3e','#adb5bd'];
+var charts = {};
+
+var PALETTE = {
+    primary:  '#4361ee', primarySoft: 'rgba(67,97,238,.15)',
+    accent:   '#7209b7', accentSoft: 'rgba(114,9,183,.15)',
+    success:  '#06d6a0', successSoft: 'rgba(6,214,160,.15)',
+    warning:  '#f4a236', warningSoft: 'rgba(244,162,54,.15)',
+    danger:   '#ef476f', dangerSoft: 'rgba(239,71,111,.15)',
+    info:     '#118ab2', infoSoft: 'rgba(17,138,178,.15)',
+    teal:     '#0cb8b6',
+    orange:   '#e76f51',
+    gray:     '#adb5bd',
+};
+
+var CHART_COLORS = [
+    PALETTE.primary, PALETTE.success, PALETTE.warning, PALETTE.danger,
+    PALETTE.info, PALETTE.accent, PALETTE.teal, PALETTE.orange,
+    '#2b8a3e', PALETTE.gray
+];
+
+var ESTADO_DTE_COLORS = {
+    'EMITIDO':                PALETTE.primary,
+    'ACEPTADO':               PALETTE.success,
+    'RECEPCIONADO_COMPLETO':  '#2b8a3e',
+    'RECEPCIONADO_PARCIAL':   PALETTE.warning,
+    'EN_REGULARIZACION':      PALETTE.accent,
+    'RECHAZADO':              PALETTE.danger,
+    'ANULADO':                PALETTE.gray,
+    'CANCELADO':              '#6c757d',
+};
+
+var PAGO_COLORS = {
+    'PENDIENTE': PALETTE.warning,
+    'PAGADO':    PALETTE.success,
+    'VENCIDO':   PALETTE.danger,
+};
+
+var TX_COLORS = {
+    'COMPRA':         PALETTE.danger,
+    'VENTA':          PALETTE.success,
+    'VENTA_PUBLICO':  PALETTE.info,
+    'TRASPASO':       PALETTE.warning,
+};
+
+var TX_LABELS = {
+    'COMPRA': 'Compras',
+    'VENTA': 'Ventas',
+    'VENTA_PUBLICO': 'Ventas Público',
+    'TRASPASO': 'Traspasos',
+};
 
 function initDates() {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    var hoy = new Date();
+    var inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     document.getElementById('fechaInicio').value = inicio.toISOString().split('T')[0];
     document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
 }
 
-function formatMoney(n) {
+function fmt(n) { return '$' + Math.round(n).toLocaleString('es-CL'); }
+function fmtShort(n) {
+    if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return '$' + (n / 1000).toFixed(0) + 'K';
     return '$' + Math.round(n).toLocaleString('es-CL');
 }
 
+function showLoading(v) { document.getElementById('docLoading').classList[v ? 'add' : 'remove']('active'); }
+
 function cargarDatos() {
-    const params = new URLSearchParams({
+    showLoading(true);
+    var params = new URLSearchParams({
         fecha_inicio: document.getElementById('fechaInicio').value,
         fecha_fin: document.getElementById('fechaFin').value,
     });
     $.get('/app/api/dashboard-documentos/datos/?' + params, function(r) {
+        showLoading(false);
         if (!r.success) return;
-        const k = r.kpis;
+        var k = r.kpis;
+
         $('#kpiTotal').text(k.total_dtes.toLocaleString());
+        $('#kpiMonto').text(fmt(k.monto_total));
+        $('#kpiPendientesRecepcion').text(k.pendientes_recepcion.toLocaleString());
+        $('#kpiMontoPendiente').text(fmt(k.monto_pendiente_pago));
+
+        $('#kpiTotalFooter').html('Facturas: <b>' + k.facturas + '</b> &middot; Boletas: <b>' + k.boletas + '</b>');
+        $('#kpiMontoFooter').html('Ticket promedio: <b>' + fmt(k.ticket_promedio) + '</b>');
+        $('#kpiDeudaFooter').html('Vencidos: <b style="color:var(--doc-danger)">' + k.dtes_vencidos + '</b> documentos');
+
         $('#kpiFacturas').text(k.facturas.toLocaleString());
+        $('#kpiBoletas').text(k.boletas.toLocaleString());
         $('#kpiNC').text(k.notas_credito.toLocaleString());
         $('#kpiGuias').text(k.guias.toLocaleString());
-        $('#kpiBoletas').text(k.boletas.toLocaleString());
+        $('#kpiVencidos').text(k.dtes_vencidos.toLocaleString());
         $('#kpiAceptados').text(k.pct_aceptados + '%');
-        $('#kpiMonto').text(formatMoney(k.monto_total));
+        $('#kpiTicketProm').text(fmtShort(k.ticket_promedio));
+        $('#kpiIncidencias').text(k.incidencias_abiertas.toLocaleString());
+        $('#kpiDiasCredito').text(k.dias_credito_promedio + 'd');
+        $('#kpiTasaNC').text(k.tasa_nc + '%');
+
+        var $v = $('#kpiVariacion');
         if (k.variacion_mes !== 0) {
-            const cls = k.variacion_mes > 0 ? 'up' : 'down';
-            const icon = k.variacion_mes > 0 ? 'ri-arrow-up-line' : 'ri-arrow-down-line';
-            $('#kpiVariacion').html('<i class="' + icon + '"></i> ' + Math.abs(k.variacion_mes) + '% vs mes anterior').attr('class','kpi-trend ' + cls);
+            var cls = k.variacion_mes > 0 ? 'up' : 'down';
+            var ico = k.variacion_mes > 0 ? 'ri-arrow-up-s-fill' : 'ri-arrow-down-s-fill';
+            $v.html('<i class="' + ico + '"></i>' + Math.abs(k.variacion_mes) + '%').attr('class', 'doc-kpi-trend ' + cls);
+        } else {
+            $v.html('').attr('class', 'doc-kpi-trend');
         }
+
         renderCharts(r);
+        renderTabla(r.top_proveedores || []);
+        renderFlujo(r.flujo || {}, r.flujo_por_origen || []);
+    }).fail(function() { showLoading(false); });
+}
+
+function renderFlujo(f, origenes) {
+    var total = f.total || 0;
+    function pct(n) { return total ? Math.round(n / total * 100) : 0; }
+
+    $('#pipeEmitidos').text(f.emitidos || 0);
+    $('#pipeCompleto').text(f.recepcionado_completo || 0);
+    $('#pipeParcial').text(f.recepcionado_parcial || 0);
+    $('#pipeRegularizacion').text(f.en_regularizacion || 0);
+    $('#pipeRechazados').text(f.rechazados || 0);
+
+    $('#pipePctEmitidos').text(pct(f.emitidos || 0) + '%');
+    $('#pipePctCompleto').text(pct(f.recepcionado_completo || 0) + '%');
+    $('#pipePctParcial').text(pct(f.recepcionado_parcial || 0) + '%');
+    $('#pipePctRegularizacion').text(pct(f.en_regularizacion || 0) + '%');
+    $('#pipePctRechazados').text(pct(f.rechazados || 0) + '%');
+
+    var sumHtml = '<div class="doc-flow-stat"><i class="ri-file-list-3-line"></i>Total traspasos: <b>' + total + '</b></div>' +
+        '<div class="doc-flow-stat"><i class="ri-archive-line"></i>Unidades despachadas: <b>' + ((f.unidades_despachadas || 0).toLocaleString()) + '</b></div>' +
+        '<div class="doc-flow-stat"><i class="ri-close-circle-line"></i>Anulados/Cancelados: <b>' + (f.anulados || 0) + '</b></div>';
+    $('#flujoSummary').html(sumHtml);
+
+    if (!origenes.length) {
+        $('#flujoOrigenes').html('');
+        return;
+    }
+    var cdHtml = '';
+    origenes.forEach(function(o) {
+        var alias = o.sucursal__alias || 'Sin asignar';
+        cdHtml += '<div class="doc-cd-card">' +
+            '<div class="doc-cd-name"><i class="ri-store-2-line me-1"></i>' + alias + ' <span style="font-weight:400;color:var(--doc-gray-500);font-size:.75rem;">(' + o.total + ' docs)</span></div>' +
+            '<div class="doc-cd-stats">' +
+                '<span class="doc-cd-stat pendiente">' + o.pendientes + ' pend.</span>' +
+                '<span class="doc-cd-stat ok">' + o.completados + ' OK</span>' +
+                (o.parciales ? '<span class="doc-cd-stat problema">' + o.parciales + ' parcial</span>' : '') +
+                (o.rechazados ? '<span class="doc-cd-stat rechazado">' + o.rechazados + ' rech.</span>' : '') +
+            '</div>' +
+            '</div>';
     });
+    $('#flujoOrigenes').html(cdHtml);
+}
+
+function renderTabla(data) {
+    var tbody = document.getElementById('tablaProveedores');
+    if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--doc-gray-500);padding:24px;">Sin datos para el período</td></tr>';
+        return;
+    }
+    var maxMonto = Math.max.apply(null, data.map(function(p) { return p.monto; })) || 1;
+    var html = '';
+    data.forEach(function(p) {
+        var pct = p.pct_pendientes;
+        var badgeCls = pct > 60 ? 'doc-badge-alert' : pct > 30 ? 'doc-badge-warn' : 'doc-badge-ok';
+        var barW = Math.round(p.monto / maxMonto * 100);
+        var barColor = pct > 60 ? 'var(--doc-danger)' : pct > 30 ? 'var(--doc-warning)' : 'var(--doc-success)';
+        html += '<tr>' +
+            '<td><b>' + (p.emisor__nombre || '').substring(0, 28) + '</b></td>' +
+            '<td>' + p.cantidad + '</td>' +
+            '<td>' + fmt(p.monto) + '</td>' +
+            '<td><span class="doc-badge ' + badgeCls + '">' + pct + '% pend.</span></td>' +
+            '<td><div class="doc-progress-bar"><div class="doc-progress-fill" style="width:' + barW + '%;background:' + barColor + '"></div></div></td>' +
+            '</tr>';
+    });
+    tbody.innerHTML = html;
 }
 
 function renderCharts(data) {
-    Object.values(charts).forEach(c => c.destroy());
+    Object.values(charts).forEach(function(c) { c.destroy(); });
 
-    charts.evolucion = new Chart(document.getElementById('chartEvolucion'), {
-        type: 'bar',
+    var defaultFont = { family: "'Inter', -apple-system, sans-serif", size: 11 };
+
+    // 1. Evolución Mensual — Área + Barras combo
+    var ctxEvo = document.getElementById('chartEvolucion');
+    charts.evolucion = new Chart(ctxEvo, {
         data: {
-            labels: data.evolucion.map(e => e.mes),
+            labels: data.evolucion.map(function(e) { return e.mes; }),
             datasets: [{
-                label: 'Cantidad',
-                data: data.evolucion.map(e => e.cantidad),
-                backgroundColor: 'rgba(64,81,137,.7)',
-                borderRadius: 6,
+                type: 'bar',
+                label: 'Cantidad DTEs',
+                data: data.evolucion.map(function(e) { return e.cantidad; }),
+                backgroundColor: PALETTE.primarySoft,
+                borderColor: PALETTE.primary,
+                borderWidth: 1.5,
+                borderRadius: 8,
                 yAxisID: 'y',
+                order: 2,
             }, {
-                label: 'Monto ($)',
-                data: data.evolucion.map(e => e.monto),
                 type: 'line',
-                borderColor: '#0ab39c',
-                backgroundColor: 'rgba(10,179,156,.1)',
+                label: 'Monto Facturado',
+                data: data.evolucion.map(function(e) { return e.monto; }),
+                borderColor: PALETTE.accent,
+                backgroundColor: PALETTE.accentSoft,
                 fill: true,
                 tension: .4,
+                pointRadius: 4,
+                pointBackgroundColor: PALETTE.accent,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
                 yAxisID: 'y1',
+                order: 1,
             }]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
             scales: {
-                y: { beginAtZero: true, position: 'left' },
-                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
+                y:  { beginAtZero: true, position: 'left', grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: defaultFont } },
+                y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { font: defaultFont, callback: function(v) { return fmtShort(v); } } },
+                x:  { grid: { display: false }, ticks: { font: defaultFont } }
+            },
+            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: defaultFont, usePointStyle: true, pointStyle: 'circle' } } }
+        }
+    });
+
+    // 2. Distribución por Tipo — Polar Area
+    charts.tipo = new Chart(document.getElementById('chartTipo'), {
+        type: 'polarArea',
+        data: {
+            labels: data.por_tipo.map(function(t) { return t.tipo_documento; }),
+            datasets: [{
+                data: data.por_tipo.map(function(t) { return t.cantidad; }),
+                backgroundColor: CHART_COLORS.map(function(c) { return c + '99'; }),
+                borderColor: CHART_COLORS,
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { r: { display: false } },
+            plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: defaultFont, padding: 8, usePointStyle: true, pointStyle: 'rectRounded' } } }
+        }
+    });
+
+    // 3. Compras vs Ventas — Barras apiladas
+    var mesesTx = [];
+    var txMap = {};
+    (data.evolucion_transaccion || []).forEach(function(e) {
+        if (mesesTx.indexOf(e.mes) === -1) mesesTx.push(e.mes);
+        if (!txMap[e.tipo_transaccion]) txMap[e.tipo_transaccion] = {};
+        txMap[e.tipo_transaccion][e.mes] = e.monto;
+    });
+    var txDatasets = Object.keys(txMap).map(function(tipo) {
+        return {
+            label: TX_LABELS[tipo] || tipo,
+            data: mesesTx.map(function(m) { return txMap[tipo][m] || 0; }),
+            backgroundColor: (TX_COLORS[tipo] || PALETTE.gray) + 'CC',
+            borderColor: TX_COLORS[tipo] || PALETTE.gray,
+            borderWidth: 1,
+            borderRadius: 4,
+        };
+    });
+    charts.transacciones = new Chart(document.getElementById('chartTransacciones'), {
+        type: 'bar',
+        data: { labels: mesesTx, datasets: txDatasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { stacked: true, grid: { display: false }, ticks: { font: defaultFont } },
+                y: { stacked: true, beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: defaultFont, callback: function(v) { return fmtShort(v); } } }
+            },
+            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: defaultFont, usePointStyle: true, pointStyle: 'circle' } },
+                tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + fmt(ctx.raw); } } }
             }
         }
     });
 
-    charts.tipo = new Chart(document.getElementById('chartTipo'), {
+    // 4. Estado de Pagos — Doughnut con centro
+    var estadosPago = data.por_estado_pago || [];
+    var totalPagoMonto = estadosPago.reduce(function(s, e) { return s + e.monto; }, 0);
+    charts.estadoPago = new Chart(document.getElementById('chartEstadoPago'), {
         type: 'doughnut',
         data: {
-            labels: data.por_tipo.map(t => t.tipo_documento),
-            datasets: [{ data: data.por_tipo.map(t => t.cantidad), backgroundColor: colores }]
+            labels: estadosPago.map(function(e) { return e.estado_pago; }),
+            datasets: [{
+                data: estadosPago.map(function(e) { return e.monto; }),
+                backgroundColor: estadosPago.map(function(e) { return PAGO_COLORS[e.estado_pago] || PALETTE.gray; }),
+                borderWidth: 3,
+                borderColor: '#fff',
+                hoverOffset: 8,
+            }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+        plugins: [{
+            id: 'centerText',
+            beforeDraw: function(chart) {
+                var ctx = chart.ctx;
+                var w = chart.width, h = chart.height;
+                ctx.save();
+                ctx.font = '700 1.1rem Inter, sans-serif';
+                ctx.fillStyle = '#1A1A2E';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(fmtShort(totalPagoMonto), w / 2, h / 2 - 8);
+                ctx.font = '500 .7rem Inter, sans-serif';
+                ctx.fillStyle = '#8A8A9A';
+                ctx.fillText('MONTO TOTAL', w / 2, h / 2 + 12);
+                ctx.restore();
+            }
+        }],
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 10, font: defaultFont, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+                tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + fmt(ctx.raw) + ' (' + ctx.dataset.data.length + ')'; } } }
+            }
+        }
     });
 
+    // 5. Estado DTE — Polar Area
     charts.estado = new Chart(document.getElementById('chartEstado'), {
-        type: 'doughnut',
+        type: 'polarArea',
         data: {
-            labels: data.por_estado.map(e => e.estado_dte),
-            datasets: [{ data: data.por_estado.map(e => e.cantidad), backgroundColor: colores }]
+            labels: data.por_estado.map(function(e) { return e.estado_dte.replace(/_/g, ' '); }),
+            datasets: [{
+                data: data.por_estado.map(function(e) { return e.cantidad; }),
+                backgroundColor: data.por_estado.map(function(e) { return (ESTADO_DTE_COLORS[e.estado_dte] || PALETTE.gray) + '99'; }),
+                borderColor: data.por_estado.map(function(e) { return ESTADO_DTE_COLORS[e.estado_dte] || PALETTE.gray; }),
+                borderWidth: 2,
+            }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { r: { display: false } },
+            plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: defaultFont, padding: 8, usePointStyle: true, pointStyle: 'rectRounded' } } }
+        }
     });
 
+    // 6. Top 10 Emisores — Barras horizontales con gradiente
+    var emisoresLabels = data.top_emisores.map(function(e) { return (e.emisor__nombre || '').substring(0, 25); });
+    var emisoresData = data.top_emisores.map(function(e) { return e.monto; });
+    var emisoresBg = data.top_emisores.map(function(_, i) {
+        var opacity = 1 - (i * 0.07);
+        return 'rgba(67,97,238,' + Math.max(opacity, 0.3).toFixed(2) + ')';
+    });
     charts.emisores = new Chart(document.getElementById('chartEmisores'), {
         type: 'bar',
         data: {
-            labels: data.top_emisores.map(e => (e.emisor__nombre || '').substring(0, 20)),
-            datasets: [{ label: 'Monto', data: data.top_emisores.map(e => e.monto), backgroundColor: 'rgba(41,156,219,.7)', borderRadius: 6 }]
+            labels: emisoresLabels,
+            datasets: [{ label: 'Monto', data: emisoresData, backgroundColor: emisoresBg, borderRadius: 6, barThickness: 22 }]
         },
-        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+        options: {
+            responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+            scales: {
+                x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: defaultFont, callback: function(v) { return fmtShort(v); } } },
+                y: { grid: { display: false }, ticks: { font: defaultFont } }
+            },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { return fmt(ctx.raw); } } } }
+        }
+    });
+
+    // 7. Por Sucursal — Barras horizontales
+    var sucursales = data.por_sucursal || [];
+    var sucBg = sucursales.map(function(_, i) {
+        var opacity = 1 - (i * 0.08);
+        return 'rgba(114,9,183,' + Math.max(opacity, 0.25).toFixed(2) + ')';
+    });
+    charts.sucursal = new Chart(document.getElementById('chartSucursal'), {
+        type: 'bar',
+        data: {
+            labels: sucursales.map(function(s) { return (s.sucursal__alias || 'Sin asignar').substring(0, 22); }),
+            datasets: [{ label: 'Documentos', data: sucursales.map(function(s) { return s.cantidad; }), backgroundColor: sucBg, borderRadius: 6, barThickness: 20 }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+            scales: {
+                x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: defaultFont } },
+                y: { grid: { display: false }, ticks: { font: defaultFont } }
+            },
+            plugins: { legend: { display: false } }
+        }
     });
 }
 

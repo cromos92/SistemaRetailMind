@@ -1117,6 +1117,96 @@ def obtener_detalle_impresion(request, historial_id):
 
 @login_required
 @require_GET
+def obtener_skus_articulo(request):
+    """
+    Dado un código de artículo, devuelve TODOS los SKUs (Producto_Talla)
+    asociados, para poder imprimir etiquetas del artículo completo.
+    """
+    try:
+        articulo = request.GET.get('articulo', '').strip()
+        fuente = request.GET.get('fuente', 'postgres').strip().lower()
+        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
+
+        if not articulo:
+            return JsonResponse({'success': False, 'error': 'Artículo requerido'})
+
+        if fuente == 'mysql':
+            alias_sucursal = _obtener_alias_sucursal(sucursal_id)
+            filtros = ['t.articulo = %s']
+            params = [articulo]
+            if alias_sucursal:
+                filtros.append('t.alias = %s')
+                params.append(alias_sucursal)
+
+            sql = f"""
+                SELECT t.codigo_asociado, t.articulo, t.descripcion, t.marca,
+                       t.color, t.size, t.precioventapublico, t.alias
+                FROM talla t
+                WHERE {' AND '.join(filtros)}
+                ORDER BY t.size ASC
+            """
+            with _get_mysql_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(sql, params)
+                rows = cursor.fetchall()
+                cursor.close()
+
+            productos_data = []
+            for row in rows:
+                precio = _safe_int(row.get('precioventapublico'))
+                art = (row.get('articulo') or '').strip()
+                desc = (row.get('descripcion') or art).strip()
+                productos_data.append({
+                    'id': row.get('codigo_asociado'),
+                    'producto_talla_id': None,
+                    'sku': str(row.get('codigo_asociado') or ''),
+                    'articulo': art[:50],
+                    'descripcion': desc,
+                    'marca': (row.get('marca') or '')[:10],
+                    'talla': str(row.get('size') or '')[:4],
+                    'color': (row.get('color') or '')[:10],
+                    'precio': float(precio),
+                    'sucursal': row.get('alias') or '',
+                    'cantidad': 1,
+                    'seleccionado': True
+                })
+            return JsonResponse({'success': True, 'productos': productos_data, 'total': len(productos_data)})
+
+        producto_tallas = Producto_Talla.objects.filter(
+            producto__articulo=articulo
+        ).select_related('producto', 'producto__atributo1', 'producto__atributo2').order_by('talla')
+
+        sucursal = Sucursal.objects.filter(id=sucursal_id).first()
+
+        productos_data = []
+        for pt in producto_tallas:
+            producto = pt.producto
+            marca = producto.atributo1.valor if producto.atributo1 else ''
+            color = producto.atributo2.valor if producto.atributo2 else ''
+
+            productos_data.append({
+                'id': pt.id,
+                'producto_talla_id': pt.id,
+                'sku': str(pt.sku),
+                'articulo': producto.articulo,
+                'descripcion': producto.descripcion or producto.articulo,
+                'marca': marca[:10] if marca else '',
+                'talla': str(pt.talla) if pt.talla else '',
+                'color': color[:10] if color else '',
+                'precio': float(producto.precioventa),
+                'sucursal': sucursal.alias if sucursal else '',
+                'cantidad': 1,
+                'seleccionado': True
+            })
+
+        return JsonResponse({'success': True, 'productos': productos_data, 'total': len(productos_data)})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al obtener SKUs del artículo: {str(e)}'})
+
+
+@login_required
+@require_GET
 def obtener_sucursales_usuario(request):
     """Obtener sucursales disponibles para el usuario actual"""
     try:

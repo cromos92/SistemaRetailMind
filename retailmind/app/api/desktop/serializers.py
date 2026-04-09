@@ -92,7 +92,7 @@ class DesktopLoginSerializer(serializers.Serializer):
             if empresa_user and empresa_user.sucursal:
                 if empresa_user.sucursal_id != sucursal_id:
                     # Verificar si es superuser o admin
-                    if not user.is_superuser and getattr(user, 'rol', '') != 'administrador':
+                    if getattr(user, 'rol', '') != 'administrador':
                         raise serializers.ValidationError({
                             'sucursal_id': f'No tienes acceso a esta sucursal. Tu sucursal es: {empresa_user.sucursal.alias}'
                         })

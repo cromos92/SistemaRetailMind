@@ -219,7 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Sucursal activa de la sesión (pasada desde Django)
     const sucursalActivaId = '{{ sucursal_activa_id|default:"" }}';
     const sucursalActivaNombre = '{{ sucursal_activa_nombre|default:"" }}';
-    const esSuperuser = {{ es_superuser|yesno:"true,false" }};
+    const esSuperuser = {{ puede_ver_todas_sucursales|yesno:"true,false" }};
 
     const hoy = new Date().toISOString().split('T')[0];
     document.getElementById('filtroFechaDesde').value = hoy;
@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r => { if (!r.ok) throw new Error('Error servidor'); return r.json(); })
             .then(data => {
                 if (data.success) {
-                    llenarTablaDocumentos(data.documentos);
+                    llenarTablaDocumentos(data.documentos, data.total_real || data.total_registros);
                     actualizarResumenes(data.resumen);
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error', text: data.error || 'Error desconocido' });
@@ -391,10 +391,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }).join('');
     }
 
-    function llenarTablaDocumentos(documentos) {
+    function llenarTablaDocumentos(documentos, totalReal) {
         const tbody = document.getElementById('tbodyDocumentos');
         tbody.innerHTML = '';
         const badge = document.getElementById('badgeCantidad');
+
+        // Limpiar aviso anterior
+        document.getElementById('avisoLimite')?.remove();
 
         if (!documentos || documentos.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4"><i class="ri-inbox-line fs-3 d-block mb-1"></i>No hay documentos para mostrar</td></tr>';
@@ -402,7 +405,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        badge.textContent = documentos.length;
+        badge.textContent = totalReal || documentos.length;
+
+        // Mostrar aviso si hay mas registros que los mostrados
+        if (totalReal && totalReal > documentos.length) {
+            const aviso = document.createElement('div');
+            aviso.id = 'avisoLimite';
+            aviso.className = 'alert alert-info py-2 px-3 mb-2 d-flex align-items-center gap-2';
+            aviso.style.fontSize = '.8rem';
+            aviso.innerHTML = `<i class="bi bi-info-circle"></i>Mostrando <strong>${documentos.length}</strong> de <strong>${totalReal}</strong> documentos. Usa filtros para acotar o exporta a Excel para ver todos.`;
+            tbody.closest('.table-responsive')?.parentElement?.insertBefore(aviso, tbody.closest('.table-responsive'));
+        }
 
         let html = '';
         documentos.forEach(doc => {

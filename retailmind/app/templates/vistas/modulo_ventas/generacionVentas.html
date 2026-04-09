@@ -646,7 +646,7 @@
                                                 <button class="btn btn-sm btn-outline-warning" onclick="mostrarModalDescuentoGlobal()" title="Aplicar descuento distribuido a toda la venta (F12)">
                                                     <i class="ri-price-tag-3-line me-1"></i> Dcto. Global <kbd style="font-size:0.55rem;opacity:0.7">F12</kbd>
                                                 </button>
-                                                <button class="btn btn-sm btn-outline-light" onclick="mostrarModalAgregarProducto()" title="Búsqueda avanzada con filtros (F3)">
+                                                <button class="btn btn-sm btn-avanzado-pos" onclick="mostrarModalAgregarProducto()" title="Búsqueda avanzada con filtros (F3)">
                                                     <i class="ri-search-2-line me-1"></i> Avanzado
                                                 </button>
                                             </div>
@@ -2954,6 +2954,311 @@
     font-size: 0.6rem;
     padding: 1px 5px;
 }
+
+/* ============================================================
+   MODAL AGREGAR PRODUCTO — Estilos completos
+   ============================================================ */
+.modal-producto-content {
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+}
+
+.modal-producto-header {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-secondary) 100%) !important;
+    padding: 12px 20px !important;
+    border-bottom: none !important;
+}
+
+.modal-producto-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    background: rgba(255,255,255,0.15);
+    border-radius: var(--nexo-radius-md);
+    color: #fff;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.modal-producto-search-group {
+    background: rgba(255,255,255,0.1);
+    border-radius: var(--nexo-radius-md) !important;
+    overflow: hidden;
+}
+
+.modal-search-input {
+    background: rgba(255,255,255,0.1) !important;
+    border: none !important;
+    color: #fff !important;
+    font-size: 0.95rem !important;
+    font-weight: 500;
+    padding: 8px 12px !important;
+}
+
+.modal-search-input::placeholder {
+    color: rgba(255,255,255,0.5) !important;
+}
+
+.modal-search-input:focus {
+    background: rgba(255,255,255,0.18) !important;
+    box-shadow: none !important;
+}
+
+.modal-search-hints {
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.55);
+}
+
+.modal-search-hints kbd {
+    background: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.8);
+    border: none;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 0.68rem;
+}
+
+.modal-producto-body {
+    min-height: 420px;
+    max-height: 65vh;
+}
+
+/* Panel izquierdo: resultados */
+.modal-results-panel {
+    border-right: 1px solid var(--nexo-gray-300);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.modal-results-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--nexo-gray-100);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    font-size: 0.88rem;
+    color: var(--nexo-secondary);
+    flex-shrink: 0;
+}
+
+.modal-results-list {
+    overflow-y: auto;
+    flex: 1;
+    padding: 4px 0;
+}
+
+/* Cada fila de resultado */
+.modal-result-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.12s ease;
+}
+
+.modal-result-item:last-child {
+    border-bottom: none;
+}
+
+.modal-result-item:hover {
+    background: var(--nexo-primary-light);
+}
+
+.modal-result-item.selected {
+    background: linear-gradient(135deg, rgba(0,102,255,0.08), rgba(0,102,255,0.04));
+    border-left: 3px solid var(--nexo-primary);
+    padding-left: 13px;
+}
+
+.mri-sku {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-family: 'Consolas', 'Courier New', monospace;
+    color: var(--nexo-primary-dark);
+    background: var(--nexo-primary-light);
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 64px;
+    text-align: center;
+}
+
+.mri-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.mri-nombre {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--nexo-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.mri-sub {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+    margin-top: 1px;
+}
+
+.mri-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex-shrink: 0;
+    gap: 2px;
+}
+
+.mri-precio {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #059669;
+    white-space: nowrap;
+}
+
+.mri-stock {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.mri-stock.stock-ok {
+    color: #065f46;
+    background: rgba(0,212,170,0.12);
+}
+
+.mri-stock.stock-low {
+    color: #92400e;
+    background: rgba(255,176,32,0.12);
+}
+
+.mri-stock.stock-none {
+    color: #991b1b;
+    background: rgba(255,77,77,0.12);
+}
+
+/* Panel derecho: detalle */
+.modal-detail-panel {
+    background: var(--nexo-gray-100);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+/* Placeholder estados (inicial, cargando, sin resultados) */
+.modal-estado-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    flex: 1;
+}
+
+.modal-estado-placeholder > i {
+    font-size: 3rem;
+    color: var(--nexo-gray-300);
+    margin-bottom: 12px;
+}
+
+.modal-estado-placeholder > p {
+    font-size: 0.9rem;
+    color: var(--nexo-gray-500);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Tarjeta de producto seleccionado */
+.modal-product-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-md);
+    padding: 16px;
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.modal-product-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    line-height: 1.3;
+}
+
+.modal-product-price {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #059669;
+}
+
+.modal-stock-badge {
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(0,212,170,0.12);
+    color: #065f46;
+}
+
+.modal-subtotal-display {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--nexo-primary);
+    background: var(--nexo-white);
+    border: 2px solid var(--nexo-primary-light);
+    border-radius: var(--nexo-radius-md);
+    padding: 8px 12px;
+    text-align: center;
+}
+
+.modal-btn-agregar {
+    border-radius: var(--nexo-radius-md) !important;
+    font-size: 1rem !important;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(0,180,100,0.3);
+    transition: all 0.2s ease !important;
+}
+
+.modal-btn-agregar:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0,180,100,0.4);
+}
+
+/* Botón Avanzado en header de productos */
+.btn-avanzado-pos {
+    background: #0d6efd !important;
+    border: 1.5px solid #3d8bfd !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+}
+
+.btn-avanzado-pos:hover,
+.btn-avanzado-pos:focus {
+    background: #0b5ed7 !important;
+    border-color: #0a58ca !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(13,110,253,0.45);
+}
 </style>
 
 {% include '../../layout/footer.html' %}
@@ -2968,6 +3273,18 @@ document.addEventListener('DOMContentLoaded', function() {
     let estadisticasDashboard = {};
     let cotizacionActual = null;  // Variable para cotización cargada
     let cotizacionesVigentes = []; // Lista de cotizaciones vigentes
+    let lineIdCounter = 0;
+
+    function nextLineId() {
+        return ++lineIdCounter;
+    }
+
+    function cantidadTotalSku(sku) {
+        if (!ticketActual || !ticketActual.productos) return 0;
+        return ticketActual.productos
+            .filter(p => p.sku == sku)
+            .reduce((sum, p) => sum + (p.cantidad || 0), 0);
+    }
 
     // === PERSISTENCIA LOCAL — Auto-guardar estado del POS ===
     const POS_STORAGE_PREFIX = 'pos_draft_';
@@ -2980,6 +3297,7 @@ document.addEventListener('DOMContentLoaded', function() {
             ticket_id: ticketActual.ticket_id,
             pasoActual: pasoActual,
             productos: ticketActual.productos.map(p => ({
+                line_id: p.line_id,
                 sku: p.sku,
                 producto_talla_id: p.producto_talla_id,
                 articulo: p.articulo,
@@ -3609,14 +3927,20 @@ document.addEventListener('DOMContentLoaded', function() {
             let botonesAccion = '';
             
             if (ticket.estado === 'PENDIENTE') {
-                // Tickets pendientes: pueden pagarse y anularse
+                const esCambio = ticket.modulo_origen === 'CAMBIO_DEVOLUCION';
                 botonesAccion = `
                     <button class="btn btn-success btn-lg" onclick="event.stopPropagation(); pagarTicket(${ticket.correlativo})" title="Pagar Ticket">
                         <i class="ri-wallet-line fs-4"></i>
                     </button>
-                    <button class="btn btn-danger btn-lg ms-2" onclick="event.stopPropagation(); anularTicketPendiente(${ticket.correlativo})" title="Anular Ticket">
-                        <i class="ri-close-circle-line fs-4"></i>
-                    </button>
+                    ${esCambio ? `
+                        <span class="badge bg-warning text-dark ms-2 align-middle" title="Ticket de cambio: no se puede anular desde aquí">
+                            <i class="ri-lock-line"></i> Cambio
+                        </span>
+                    ` : `
+                        <button class="btn btn-danger btn-lg ms-2" onclick="event.stopPropagation(); anularTicketPendiente(${ticket.correlativo})" title="Anular Ticket">
+                            <i class="ri-close-circle-line fs-4"></i>
+                        </button>
+                    `}
                 `;
             } else if (ticket.estado === 'PAGADO') {
                 // Tickets pagados: solo reimprimir
@@ -4256,6 +4580,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function cargarTicket(ticket) {
         ticketActual = ticket;
         
+        // Preserve global discount so recalcularTotalesTicket can account for
+        // tickets that store a global discount (ticket.descuento) without
+        // per-product descuento_unitario values.
+        if (ticket.totales && ticket.totales.descuento > 0) {
+            const tieneDescuentosProducto = (ticket.productos || []).some(p => (p.descuento_unitario || 0) > 0);
+            if (!tieneDescuentosProducto) {
+                ticket.totales.descuento_global = ticket.totales.descuento;
+            }
+        }
+        
         // =========================================================================
         // NUEVO: Detectar si es una cotización y configurar apropiadamente
         // =========================================================================
@@ -4377,8 +4711,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 reverseButtons: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // Aplicar estado guardado
-                    ticketActual.productos = estadoGuardado.productos;
+                    ticketActual.productos = estadoGuardado.productos.map(p => {
+                        if (!p.line_id) p.line_id = nextLineId();
+                        return p;
+                    });
                     pagosActuales = estadoGuardado.pagos || [];
                     recalcularTotalesTicket();
                     cargarProductosTicket(ticketActual.productos);
@@ -4458,6 +4794,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // ✅ Detectar si es un ticket de CAMBIO/DEVOLUCIÓN
         const esCambioDevolucion = ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION';
+
+        // ─── Bloquear/habilitar controles de edición según tipo de ticket ─────
+        const quickAddInput = document.getElementById('quickAddInput');
+        const quickAddQty   = document.getElementById('quickAddQty');
+        const quickAddBtn   = document.getElementById('quickAddBtn');
+        const btnAvanzado   = document.querySelector('[onclick="mostrarModalAgregarProducto()"]');
+        const btnDctoGlobal = document.querySelector('[onclick="mostrarModalDescuentoGlobal()"]');
+
+        if (esCambioDevolucion) {
+            if (quickAddInput) { quickAddInput.disabled = true; quickAddInput.placeholder = 'Ticket de cambio — productos bloqueados'; }
+            if (quickAddQty)   { quickAddQty.disabled = true; }
+            if (quickAddBtn)   { quickAddBtn.disabled = true; }
+            if (btnAvanzado)   { btnAvanzado.disabled = true; btnAvanzado.title = 'No se pueden agregar productos a un ticket de cambio'; }
+            if (btnDctoGlobal) { btnDctoGlobal.disabled = true; btnDctoGlobal.title = 'No se pueden aplicar descuentos a un ticket de cambio'; }
+        } else {
+            if (quickAddInput) { quickAddInput.disabled = false; quickAddInput.placeholder = 'Escanea código de barras o escribe SKU / nombre…'; }
+            if (quickAddQty)   { quickAddQty.disabled = false; }
+            if (quickAddBtn)   { quickAddBtn.disabled = false; }
+            if (btnAvanzado)   { btnAvanzado.disabled = false; btnAvanzado.title = 'Búsqueda avanzada con filtros (F3)'; }
+            if (btnDctoGlobal) { btnDctoGlobal.disabled = false; btnDctoGlobal.title = 'Aplicar descuento distribuido a toda la venta (F12)'; }
+        }
+        // ──────────────────────────────────────────────────────────────────────
 
         // ─── Banner de alerta por stock insuficiente ──────────────────────────
         let htmlStockAlert = '';
@@ -4606,16 +4964,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${(esCambioDevolucion || esPendienteDespacho) ? `
                         <span class="fw-bold">${producto.cantidad}</span>
                         <small class="text-muted d-block">${esPendienteDespacho ? 'Diferido' : 'Fijo'}</small>
-                    ` : `
+                    ` : (() => {
+                        const otrasLineas = productos.filter((p, i) => i !== index && p.sku == producto.sku)
+                            .reduce((s, p) => s + (p.cantidad || 0), 0);
+                        const maxParaLinea = Math.max(1, (producto.stock || 999) - otrasLineas);
+                        return `
                         <input type="number" class="form-control form-control-sm text-center" 
                                value="${producto.cantidad}" 
                                min="1" 
-                               max="${producto.stock || 999}" 
+                               max="${maxParaLinea}" 
                                onchange="cambiarCantidadProducto(${index}, this.value)"
-                               title="Stock disponible: ${producto.stock || 0}"
+                               title="Stock disponible para esta línea: ${maxParaLinea}"
                                style="width: 70px;">
-                        <small class="text-muted d-block">Máx: ${producto.stock || 0}</small>
-                    `}
+                        <small class="text-muted d-block">Máx: ${maxParaLinea}</small>
+                    `;})()}
                 </td>
                 <td class="text-end">
                     ${esProductoDevuelto ? `
@@ -4644,6 +5006,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="badge bg-secondary">Cambio</span>
                     ` : `
                         <div class="btn-group btn-group-sm" role="group">
+                            ${producto.cantidad > 1 ? `
+                            <button class="btn btn-outline-info" onclick="separarLineaProducto(${index})" title="Separar 1 unidad en línea aparte (para descuento individual)">
+                                <i class="ri-scissors-line"></i>
+                            </button>
+                            ` : ''}
                             <button class="btn btn-outline-warning" onclick="mostrarModalDescuento(${index})" title="Aplicar Descuento">
                                 <i class="ri-price-tag-3-line"></i>
                             </button>
@@ -4659,7 +5026,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // ─── Bloquear/habilitar botón Finalizar según stock ───────────────────
         if (!esCambioDevolucion) {
-            const hayStockInsuficiente = productos.some(p => (parseInt(p.stock) || 0) < (parseInt(p.cantidad) || 1));
+            const cantTotalPorSku = {};
+            productos.forEach(p => {
+                const s = p.sku || '';
+                if (!cantTotalPorSku[s]) cantTotalPorSku[s] = { total: 0, stock: parseInt(p.stock) || 0 };
+                cantTotalPorSku[s].total += parseInt(p.cantidad) || 1;
+            });
+            const hayStockInsuficiente = Object.values(cantTotalPorSku).some(v => v.stock < v.total);
             const btnFinalizar = document.querySelector('.btn-success.btn-lg.w-100.py-4');
             if (btnFinalizar) {
                 if (hayStockInsuficiente) {
@@ -5794,6 +6167,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // === FUNCIONES DE EDICIÓN DE PRODUCTOS ===
 
     function mostrarModalAgregarProducto() {
+        if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+            mostrarNotificacion('No se pueden agregar productos a un ticket de cambio/devolución', 'warning');
+            return;
+        }
         // Limpiar estado
         document.getElementById('formProducto').reset();
         limpiarFormularioProductoModal();
@@ -6034,6 +6411,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function confirmarAgregarProducto() {
+        if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+            mostrarNotificacion('No se pueden agregar productos a un ticket de cambio/devolución', 'warning');
+            return;
+        }
         const sku = document.getElementById('productoSku').value.trim();
         const articulo = document.getElementById('productoArticulo').value.trim();
         const cantidad = parseInt(document.getElementById('productoCantidad').value) || 0;
@@ -6064,66 +6445,40 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Verificar si el producto ya existe en el ticket
-        const productoExistente = ticketActual.productos.find(p => p.sku == sku);
+        const totalEnCarrito = cantidadTotalSku(sku);
+        const productoSinDcto = ticketActual.productos.find(p => p.sku == sku && !(p.descuento_unitario > 0));
         
-        if (productoExistente) {
-            // Producto YA existe en el carrito - Validar stock total
-            const cantidadEnCarrito = productoExistente.cantidad;
-            const nuevaCantidadTotal = cantidadEnCarrito + cantidad;
+        if (totalEnCarrito + cantidad > stock) {
+            const disponibleParaAgregar = stock - totalEnCarrito;
+            mostrarNotificacion(
+                `❌ STOCK INSUFICIENTE\n\n` +
+                `🛒 Ya tienes: ${totalEnCarrito} unidades en el ticket\n` +
+                `📦 Stock total: ${stock} unidades\n` +
+                `➕ Intentas agregar: ${cantidad} unidades\n\n` +
+                `✅ Máximo que puedes agregar: ${disponibleParaAgregar} unidades`,
+                'error',
+                6000
+            );
+            return;
+        }
+
+        if (productoSinDcto) {
+            const cantAnterior = productoSinDcto.cantidad;
+            productoSinDcto.cantidad += cantidad;
+            productoSinDcto.subtotal = productoSinDcto.precio_unitario * productoSinDcto.cantidad;
             
-            console.log(`⚠️ Producto YA en carrito: EnCarrito=${cantidadEnCarrito}, Agregar=${cantidad}, Total=${nuevaCantidadTotal}, Stock=${stock}`);
-            
-            if (nuevaCantidadTotal > stock) {
-                const exceso = nuevaCantidadTotal - stock;
-                const disponibleParaAgregar = stock - cantidadEnCarrito;
-                
-                mostrarNotificacion(
-                    `❌ STOCK INSUFICIENTE\n\n` +
-                    `🛒 Ya tienes: ${cantidadEnCarrito} unidades en el ticket\n` +
-                    `📦 Stock total: ${stock} unidades\n` +
-                    `➕ Intentas agregar: ${cantidad} unidades\n` +
-                    `🔴 Exceso: ${exceso} unidades\n\n` +
-                    `✅ Máximo que puedes agregar: ${disponibleParaAgregar} unidades`,
-                    'error',
-                    6000
-                );
-                return;
-            }
-            
-            // Actualizar cantidad del producto existente
-            productoExistente.cantidad = nuevaCantidadTotal;
-            productoExistente.subtotal = productoExistente.precio_unitario * nuevaCantidadTotal;
-            
-            console.log(`✅ Cantidad actualizada correctamente`);
             mostrarNotificacion(
                 `✅ Cantidad actualizada\n` +
-                `${cantidadEnCarrito} + ${cantidad} = ${nuevaCantidadTotal} unidades\n` +
-                `📦 Stock restante: ${stock - nuevaCantidadTotal}`,
+                `${cantAnterior} + ${cantidad} = ${productoSinDcto.cantidad} unidades\n` +
+                `📦 Stock restante: ${stock - (totalEnCarrito + cantidad)}`,
                 'success'
             );
         } else {
-            // Producto NUEVO - Validar stock disponible
-            console.log(`🆕 Producto nuevo, validando stock: ${cantidad} <= ${stock}`);
-            
-            if (cantidad > stock) {
-                const exceso = cantidad - stock;
-                mostrarNotificacion(
-                    `❌ STOCK INSUFICIENTE\n\n` +
-                    `📦 Stock disponible: ${stock} unidades\n` +
-                    `🛒 Intentas agregar: ${cantidad} unidades\n` +
-                    `🔴 Exceso: ${exceso} unidades`,
-                    'error',
-                    5000
-                );
-                return;
-            }
-            
-            // Crear objeto producto con ID para el backend
             const productoTallaId = document.getElementById('productoTallaId').value;
             const nuevoProducto = {
+                line_id: nextLineId(),
                 sku: sku,
-                producto_talla_id: productoTallaId ? parseInt(productoTallaId) : null,  // ✅ ID para el backend
+                producto_talla_id: productoTallaId ? parseInt(productoTallaId) : null,
                 articulo: articulo,
                 descripcion: document.getElementById('productoDescripcion').value.trim(),
                 marca: document.getElementById('productoMarca').value.trim(),
@@ -6135,14 +6490,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 stock: stock
             };
             
-            // Agregar nuevo producto
             ticketActual.productos.push(nuevoProducto);
             
-            console.log(`✅ Producto agregado correctamente`);
             mostrarNotificacion(
                 `✅ Producto agregado al ticket\n` +
                 `Cantidad: ${cantidad} unidades\n` +
-                `📦 Stock restante: ${stock - cantidad}`,
+                `📦 Stock restante: ${stock - (totalEnCarrito + cantidad)}`,
                 'success'
             );
         }
@@ -6162,6 +6515,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function cambiarCantidadProducto(index, nuevaCantidad) {
+        if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+            mostrarNotificacion('No se puede modificar la cantidad en un ticket de cambio/devolución', 'warning');
+            return;
+        }
         const cantidadInput = parseInt(nuevaCantidad);
         
         // Validar que sea un número válido
@@ -6198,14 +6555,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (cantidadInput > stock) {
+        const otrasLineasMismoSku = ticketActual.productos
+            .filter((p, i) => i !== index && p.sku == producto.sku)
+            .reduce((sum, p) => sum + (p.cantidad || 0), 0);
+        const stockDisponibleParaLinea = stock - otrasLineasMismoSku;
+
+        if (cantidadInput > stockDisponibleParaLinea) {
             mostrarNotificacion(
                 `❌ Stock insuficiente para ${producto.articulo || 'producto'}.\n` +
-                `📦 Disponible: ${stock} unidades\n` +
-                `🛒 Solicitado: ${cantidadInput} unidades\n` +
-                `⚠️ Exceso: ${cantidadInput - stock} unidades`, 
+                `📦 Disponible: ${stockDisponibleParaLinea} unidades (${otrasLineasMismoSku} en otras líneas)\n` +
+                `🛒 Solicitado: ${cantidadInput} unidades`, 
                 'error',
-                5000  // Mostrar por 5 segundos
+                5000
             );
             cargarProductosTicket(ticketActual.productos);
             return;
@@ -6233,7 +6594,64 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function separarLineaProducto(index) {
+        if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+            mostrarNotificacion('No se pueden separar líneas en un ticket de cambio/devolución', 'warning');
+            return;
+        }
+        if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
+            mostrarNotificacion('Error al separar línea', 'error');
+            return;
+        }
+        const producto = ticketActual.productos[index];
+        if (producto.cantidad <= 1) {
+            mostrarNotificacion('La línea ya tiene solo 1 unidad', 'warning');
+            return;
+        }
+
+        const precioUnit = producto.precio_unitario || producto.precio;
+        const descuentoActual = producto.descuento_unitario || 0;
+
+        producto.cantidad -= 1;
+        producto.subtotal = (precioUnit - descuentoActual) * producto.cantidad;
+
+        const nuevaLinea = {
+            line_id: nextLineId(),
+            sku: producto.sku,
+            producto_talla_id: producto.producto_talla_id,
+            articulo: producto.articulo,
+            descripcion: producto.descripcion || '',
+            marca: producto.marca || '',
+            talla: producto.talla || '',
+            cantidad: 1,
+            precio_unitario: precioUnit,
+            precio: precioUnit,
+            subtotal: precioUnit,
+            stock: producto.stock,
+            color: producto.color || '',
+            es_pendiente_despacho: producto.es_pendiente_despacho || false,
+            cotizacion_item_id: producto.cotizacion_item_id || null,
+        };
+
+        ticketActual.productos.splice(index + 1, 0, nuevaLinea);
+
+        recalcularTotalesTicket();
+        cargarProductosTicket(ticketActual.productos);
+        actualizarResumenVenta();
+        guardarEstadoPOS();
+
+        mostrarNotificacion(
+            `✂️ Línea separada: 1 unidad de ${producto.articulo} en línea aparte\nAhora puedes aplicar descuento individual`,
+            'success',
+            4000
+        );
+    }
+
     function eliminarProductoTicket(index) {
+        if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+            mostrarNotificacion('No se pueden eliminar productos de un ticket de cambio/devolución', 'warning');
+            return;
+        }
         if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
             mostrarNotificacion('Error al eliminar producto', 'error');
             return;
@@ -6277,10 +6695,19 @@ document.addEventListener('DOMContentLoaded', function() {
             subtotalConDescuento += (precioOriginal - descuento) * cantidad;
         });
 
+        // If no per-product discounts exist but the ticket had a global
+        // discount (e.g. from crear_ticket), preserve it so the total stays correct.
+        const descuentoGlobalPrevio = (ticketActual.totales && ticketActual.totales.descuento_global) || 0;
+        if (totalDescuentos === 0 && descuentoGlobalPrevio > 0) {
+            totalDescuentos = descuentoGlobalPrevio;
+            subtotalConDescuento = subtotalSinDescuento - descuentoGlobalPrevio;
+        }
+
         ticketActual.totales = {
             items: totalItems,
             subtotal: subtotalSinDescuento,
             descuento: totalDescuentos,
+            descuento_global: descuentoGlobalPrevio,
             total: subtotalConDescuento
         };
     }
@@ -6291,6 +6718,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const LIMITE_DESCUENTO_ROL = parseFloat('{{ limite_descuento_rol|default:"0" }}') || 0; // Límite de descuento por rol
 
     function mostrarModalDescuento(index) {
+        if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+            mostrarNotificacion('No se pueden aplicar descuentos en un ticket de cambio/devolución', 'warning');
+            return;
+        }
         if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
             mostrarNotificacion('Producto no encontrado', 'error');
             return;
@@ -6633,6 +7064,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // === FUNCIONES DE DESCUENTO GLOBAL ===
 
     function mostrarModalDescuentoGlobal() {
+        if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+            mostrarNotificacion('No se pueden aplicar descuentos en un ticket de cambio/devolución', 'warning');
+            return;
+        }
         if (!ticketActual || !ticketActual.productos || ticketActual.productos.length === 0) {
             mostrarNotificacion('No hay productos en el ticket', 'warning');
             return;
@@ -6930,19 +7365,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // ✅ Preparar productos actualizados (incluye productos agregados como bolsas)
-        const productosActualizados = ticketActual.productos.map(p => ({
-            producto_talla_id: p.producto_talla_id || null,
-            sku: p.sku || null,
-            articulo: p.articulo || p.descripcion,
-            descripcion: p.descripcion || p.articulo,
-            talla: p.talla || '',
-            cantidad: p.cantidad || p.stock || 1,
-            precio_unitario: p.precio_unitario || p.precio,
-            descuento_unitario: p.descuento_unitario || 0,
-            subtotal: p.subtotal || (p.cantidad * p.precio_unitario),
-            es_pendiente_despacho: p.es_pendiente_despacho || false,
-            cotizacion_item_id: p.cotizacion_item_id || null,
-        }));
+        const productosActualizados = ticketActual.productos.map(p => {
+            const qty = p.cantidad || p.stock || 1;
+            const precio = p.precio_unitario || p.precio;
+            const dcto = p.descuento_unitario || 0;
+            return {
+                line_id: p.line_id || null,
+                producto_talla_id: p.producto_talla_id || null,
+                sku: p.sku || null,
+                articulo: p.articulo || p.descripcion,
+                descripcion: p.descripcion || p.articulo,
+                talla: p.talla || '',
+                cantidad: qty,
+                precio_unitario: precio,
+                descuento_unitario: dcto,
+                subtotal: (p.subtotal != null && p.subtotal !== undefined) ? p.subtotal : ((precio - dcto) * qty),
+                es_pendiente_despacho: p.es_pendiente_despacho || false,
+                cotizacion_item_id: p.cotizacion_item_id || null,
+            };
+        });
         
         const payload = {
             correlativo: ticketActual.ticket_id || ticketActual.correlativo,
@@ -9101,6 +9542,7 @@ body {
     window.actualizarSubtotalModal = actualizarSubtotalModal;
     window.confirmarAgregarProducto = confirmarAgregarProducto;
     window.cambiarCantidadProducto = cambiarCantidadProducto;
+    window.separarLineaProducto = separarLineaProducto;
     window.eliminarProductoTicket = eliminarProductoTicket;
     
     // Funciones de descuentos por producto
@@ -10171,6 +10613,10 @@ body {
         /* ---- Agregar producto al carrito directamente ---- */
         function qaAddProduct(producto) {
             if (!producto) return;
+            if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+                mostrarNotificacion('No se pueden agregar productos a un ticket de cambio/devolución', 'warning');
+                return;
+            }
             const qty = parseInt(qaQty.value) || 1;
 
             // Reutilizar lógica de confirmarAgregarProducto()
@@ -10185,26 +10631,22 @@ body {
                 return;
             }
 
-            const existente = ticketActual && ticketActual.productos.find(p => p.sku == sku);
-            if (existente) {
-                const nuevaQty = existente.cantidad + qty;
-                if (nuevaQty > stock) {
-                    mostrarNotificacion(`Stock insuficiente · En carrito: ${existente.cantidad} · Disponible: ${stock - existente.cantidad}`, 'warning');
-                    qaCloseDropdown();
-                    qaInput.focus();
-                    return;
-                }
-                existente.cantidad = nuevaQty;
-                existente.subtotal = existente.precio_unitario * nuevaQty;
-                mostrarNotificacion(`✅ ${producto.articulo} → ${nuevaQty} un.`, 'success');
+            const totalSkuEnCarrito = cantidadTotalSku(sku);
+            if (totalSkuEnCarrito + qty > stock) {
+                mostrarNotificacion(`Stock insuficiente · En carrito: ${totalSkuEnCarrito} · Disponible: ${stock - totalSkuEnCarrito}`, 'warning');
+                qaCloseDropdown();
+                qaInput.focus();
+                return;
+            }
+
+            const existenteSinDcto = ticketActual && ticketActual.productos.find(p => p.sku == sku && !(p.descuento_unitario > 0));
+            if (existenteSinDcto) {
+                existenteSinDcto.cantidad += qty;
+                existenteSinDcto.subtotal = existenteSinDcto.precio_unitario * existenteSinDcto.cantidad;
+                mostrarNotificacion(`✅ ${producto.articulo} → ${existenteSinDcto.cantidad} un.`, 'success');
             } else {
-                if (qty > stock) {
-                    mostrarNotificacion(`Stock insuficiente · Disponible: ${stock}`, 'warning');
-                    qaCloseDropdown();
-                    qaInput.focus();
-                    return;
-                }
                 ticketActual.productos.push({
+                    line_id: nextLineId(),
                     sku: sku,
                     producto_talla_id: producto.id || producto.producto_talla_id || null,
                     articulo: producto.articulo,
@@ -10462,6 +10904,10 @@ body {
 
         /* ---- Función pública para uso desde botón ---- */
         window.quickAddProducto = function() {
+            if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
+                mostrarNotificacion('No se pueden agregar productos a un ticket de cambio/devolución', 'warning');
+                return;
+            }
             const val = qaInput.value.trim();
             if (!val) {
                 qaInput.focus();

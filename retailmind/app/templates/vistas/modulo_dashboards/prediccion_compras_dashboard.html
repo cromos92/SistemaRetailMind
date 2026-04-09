@@ -395,6 +395,12 @@
                     <div>
                         <h4><i class="ri-bar-chart-box-line me-2"></i>Prediccion de Compras</h4>
                         <p>Clasificacion ABC-XYZ &bull; Alertas de velocidad &bull; Quiebres de talle &bull; Sugerencias de reposicion</p>
+                        <div style="margin-top:6px;">
+                            <span style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);padding:3px 12px;border-radius:20px;font-size:.78rem;font-weight:600;">
+                                <i class="ri-store-2-line me-1"></i>
+                                {% if es_centro_distribucion %}Vista agregada (Centro de Distribucion){% else %}{{ sucursal_nombre }}{% endif %}
+                            </span>
+                        </div>
                         <div class="d-flex align-items-center gap-3 mt-2">
                             <span class="text-white-50 small" id="lastUpdate">
                                 <i class="ri-time-line me-1"></i>Cargando datos...
@@ -450,6 +456,12 @@
                     <div class="kpi-value" id="kpiClaseA"><span class="shimmer"></span></div>
                     <div class="kpi-label">Productos Clase A</div>
                 </div>
+            </div>
+
+            <!-- ========== INDICADOR DATOS HISTORICOS ========== -->
+            <div id="datosHistoricosBar" style="display:none;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:12px;padding:12px 20px;margin-bottom:20px;font-size:.82rem;color:#0369a1;display:flex;align-items:center;gap:12px;">
+                <i class="ri-database-2-line" style="font-size:1.3rem;flex-shrink:0;"></i>
+                <span id="datosHistoricosTexto"></span>
             </div>
 
             <!-- ========== TABS ========== -->
@@ -637,6 +649,24 @@
                     <div class="panel-body">
                         <div class="chart-grid">
                             <div class="nexo-card" style="padding:20px;margin:0;">
+                                <div class="section-title"><i class="ri-line-chart-line"></i> Tendencia de Ventas (ultimas 12 semanas)</div>
+                                <div class="chart-box"><canvas id="chartTendencia"></canvas></div>
+                            </div>
+                            <div class="nexo-card" style="padding:20px;margin:0;">
+                                <div class="section-title"><i class="ri-bar-chart-horizontal-line"></i> Precision del Modelo por Metodo</div>
+                                <div class="chart-box"><canvas id="chartPrecision"></canvas></div>
+                            </div>
+                            <div class="nexo-card" style="padding:20px;margin:0;">
+                                <div class="section-title"><i class="ri-bar-chart-grouped-line"></i> Comparativa vs Temporada Anterior</div>
+                                <div class="chart-box" style="height:320px;"><canvas id="chartComparativa"></canvas></div>
+                            </div>
+                            <div class="nexo-card" style="padding:20px;margin:0;">
+                                <div class="section-title"><i class="ri-fire-line"></i> Heatmap de Alertas por Categoria</div>
+                                <div class="chart-box" style="height:320px;"><canvas id="chartHeatmap"></canvas></div>
+                            </div>
+                        </div>
+                        <div class="chart-grid" style="margin-top:24px;">
+                            <div class="nexo-card" style="padding:20px;margin:0;">
                                 <div class="section-title"><i class="ri-donut-chart-line"></i> Distribucion ABC</div>
                                 <div class="chart-box"><canvas id="chartABC"></canvas></div>
                             </div>
@@ -681,6 +711,7 @@
 <script>
 const CSRF = '{{ csrf_token }}';
 let chartABC = null, chartXYZ = null, chartMarcaScatter = null;
+let chartTendencia = null, chartPrecision = null, chartComparativa = null, chartHeatmap = null;
 
 function esc(str) {
     if (str === null || str === undefined) return '';
@@ -701,12 +732,26 @@ function toast(msg, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     cargarTodo();
     cargarCategoriasSelectores();
+    const _tabLoaded = {};
     document.querySelectorAll('.pred-tab').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.pred-tab').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-panel').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(btn.dataset.tab).classList.add('active');
+            const tab = btn.dataset.tab;
+            if (tab === 'tabMarca' && !_tabLoaded.marca) {
+                _tabLoaded.marca = true;
+                cargarRankingMarca();
+            }
+            if (tab === 'tabProveedor' && !_tabLoaded.proveedor) {
+                _tabLoaded.proveedor = true;
+                cargarRankingProveedor();
+            }
+            if (tab === 'tabGraficos' && !_tabLoaded.graficos) {
+                _tabLoaded.graficos = true;
+                cargarGraficosAvanzados();
+            }
         });
     });
     document.querySelectorAll('.modal-overlay').forEach(m => {
@@ -1080,6 +1125,19 @@ async function cargarResumen() {
     document.getElementById('countSugerencias').textContent= d.sugerencias.total||0;
     document.getElementById('countABC').textContent        = (d.clasificacion_abc.A||0)+(d.clasificacion_abc.B||0)+(d.clasificacion_abc.C||0);
     renderCharts(d.clasificacion_abc, d.clasificacion_xyz);
+
+    if (d.datos_historicos && d.datos_historicos.ventas_totales > 0) {
+        const h = d.datos_historicos;
+        const bar = document.getElementById('datosHistoricosBar');
+        const anios = Object.keys(h.por_anio||{}).sort();
+        const aniosActivos = anios.filter(a => h.por_anio[a] > 50);
+        let txt = `<strong>${h.ventas_totales.toLocaleString()}</strong> movimientos de venta disponibles`;
+        if (h.fecha_min) txt += ` (desde ${h.fecha_min.substring(0,4)})`;
+        if (h.ventas_migradas > 0) txt += ` — <strong>${h.ventas_migradas.toLocaleString()}</strong> historicos migrados + <strong>${h.ventas_nuevas.toLocaleString()}</strong> del nuevo sistema`;
+        if (aniosActivos.length) txt += ` — Años con datos: ${aniosActivos.join(', ')}`;
+        document.getElementById('datosHistoricosTexto').innerHTML = txt;
+        bar.style.display = 'flex';
+    }
 }
 
 function renderCharts(abc, xyz) {
@@ -1095,6 +1153,109 @@ function renderCharts(abc, xyz) {
         data:{ labels:[`X — ${xyz.X||0} (estable CV<0.5)`,`Y — ${xyz.Y||0} (variable CV 0.5-1.0)`,`Z — ${xyz.Z||0} (irregular CV>1.0)`], datasets:[{data:[xyz.X||0,xyz.Y||0,xyz.Z||0],backgroundColor:['#059669','#EA580C','#7C3AED'],borderWidth:0}] },
         options:{ responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{padding:16,font:{size:12}}}} }
     });
+}
+
+// ── GRAFICOS AVANZADOS ───────────────────────────────────────
+async function cargarGraficosAvanzados() {
+    try {
+        const d = await fetchJSON('/app/api/prediccion/graficos/');
+
+        // 1) Tendencia semanal
+        if (d.tendencia_semanal && d.tendencia_semanal.length > 1) {
+            if (chartTendencia) chartTendencia.destroy();
+            chartTendencia = new Chart(document.getElementById('chartTendencia').getContext('2d'), {
+                type:'line',
+                data:{
+                    labels: d.tendencia_semanal.map(s => `S${s.semana}/${s.anio}`),
+                    datasets:[{
+                        label:'Unidades vendidas',
+                        data: d.tendencia_semanal.map(s => s.unidades),
+                        borderColor:'#0066FF', backgroundColor:'rgba(0,102,255,.08)',
+                        fill:true, tension:.35, pointRadius:3, borderWidth:2,
+                    }]
+                },
+                options:{ responsive:true, maintainAspectRatio:false,
+                    plugins:{legend:{display:false}},
+                    scales:{y:{beginAtZero:true,grid:{color:'#f0f0f0'}},x:{grid:{display:false}}}
+                }
+            });
+        }
+
+        // 2) Precision del modelo
+        if (d.precision_modelo && d.precision_modelo.length) {
+            if (chartPrecision) chartPrecision.destroy();
+            const metodoLabels = {
+                holt_winters:'Holt-Winters', promedio_movil_ponderado:'Prom. Movil Pond.',
+                regresion_lineal:'Regresion Lineal', demanda_observada:'Demanda Observada',
+                similitud:'Similitud'
+            };
+            const colores = {
+                holt_winters:'#059669', promedio_movil_ponderado:'#0066FF',
+                regresion_lineal:'#7C3AED', demanda_observada:'#F59E0B', similitud:'#DC2626'
+            };
+            chartPrecision = new Chart(document.getElementById('chartPrecision').getContext('2d'), {
+                type:'bar',
+                data:{
+                    labels: d.precision_modelo.map(m => metodoLabels[m.metodo]||m.metodo),
+                    datasets:[
+                        { label:'Confianza promedio %', data: d.precision_modelo.map(m => m.confianza_promedio),
+                          backgroundColor: d.precision_modelo.map(m => colores[m.metodo]||'#8A8A9A'), borderWidth:0, borderRadius:6 },
+                    ]
+                },
+                options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
+                    plugins:{ legend:{display:false},
+                        tooltip:{ callbacks:{ afterBody(ctx) { const m=d.precision_modelo[ctx[0].dataIndex]; return `${m.cantidad.toLocaleString()} predicciones`; } } }
+                    },
+                    scales:{ x:{min:0,max:100,grid:{color:'#f0f0f0'},title:{display:true,text:'Confianza promedio (%)'}}, y:{grid:{display:false}} }
+                }
+            });
+        }
+
+        // 3) Comparativa temporal
+        const comp = d.comparativa_temporal;
+        if (comp && comp.categorias && comp.categorias.length) {
+            if (chartComparativa) chartComparativa.destroy();
+            chartComparativa = new Chart(document.getElementById('chartComparativa').getContext('2d'), {
+                type:'bar',
+                data:{
+                    labels: comp.categorias.map(c => c.categoria),
+                    datasets:[
+                        { label:`${comp.anio_anterior}`, data: comp.categorias.map(c => c.anterior),
+                          backgroundColor:'rgba(156,163,175,.5)', borderWidth:0, borderRadius:4 },
+                        { label:`${comp.anio_actual}`, data: comp.categorias.map(c => c.actual),
+                          backgroundColor:'rgba(0,102,255,.7)', borderWidth:0, borderRadius:4 },
+                    ]
+                },
+                options:{ responsive:true, maintainAspectRatio:false,
+                    plugins:{ legend:{position:'top',labels:{font:{size:11}}} },
+                    scales:{ y:{beginAtZero:true,grid:{color:'#f0f0f0'}}, x:{grid:{display:false}} }
+                }
+            });
+        }
+
+        // 4) Heatmap alertas
+        if (d.heatmap_alertas && d.heatmap_alertas.length) {
+            if (chartHeatmap) chartHeatmap.destroy();
+            chartHeatmap = new Chart(document.getElementById('chartHeatmap').getContext('2d'), {
+                type:'bar',
+                data:{
+                    labels: d.heatmap_alertas.map(h => h.categoria),
+                    datasets:[
+                        { label:'CRITICA', data: d.heatmap_alertas.map(h => h.CRITICA||0),
+                          backgroundColor:'#DC2626', borderWidth:0, borderRadius:4 },
+                        { label:'ALTA', data: d.heatmap_alertas.map(h => h.ALTA||0),
+                          backgroundColor:'#F59E0B', borderWidth:0, borderRadius:4 },
+                        { label:'MEDIA', data: d.heatmap_alertas.map(h => h.MEDIA||0),
+                          backgroundColor:'#3B82F6', borderWidth:0, borderRadius:4 },
+                    ]
+                },
+                options:{ responsive:true, maintainAspectRatio:false,
+                    plugins:{ legend:{position:'top',labels:{font:{size:11}}} },
+                    scales:{ x:{stacked:true,grid:{display:false}}, y:{stacked:true,beginAtZero:true,grid:{color:'#f0f0f0'}} }
+                }
+            });
+        }
+    } catch(e) { console.error('Error cargando graficos avanzados:', e); }
 }
 
 // ── DESGLOSE ARTÍCULOS POR MARCA ─────────────────────────────

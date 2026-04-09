@@ -115,7 +115,7 @@ class PermisoRol(models.Model):
     Define qué roles tienen acceso a qué opciones del menú
     """
     # Roles del sistema - todos los usuarios usan estos roles para permisos
-    # (is_superuser de Django ya no da acceso automático)
+    # is_superuser de Django NO otorga privilegios. Solo importa el rol asignado.
     ROLES_CHOICES = [
         ('administrador', 'Administrador'),
         ('administracion', 'Administración'),
@@ -177,53 +177,75 @@ class PermisoRol(models.Model):
     def tiene_permiso(cls, usuario, codigo_opcion, tipo_permiso='puede_ver', sucursal_id=None):
         """
         Verifica si un usuario tiene un permiso específico para una opción.
-        También verifica los permisos de la sucursal si se proporciona sucursal_id.
-        
+        Orden de prioridad:
+        1. PermisoUsuario (override por usuario) - si no es None, prevalece
+        2. PermisoRol (permiso por rol)
+        3. PermisoSucursal (restricción por sucursal)
+
         Args:
             usuario: Instancia del usuario
             codigo_opcion: Código de la opción del menú
             tipo_permiso: puede_ver, puede_crear, puede_editar, puede_eliminar, puede_exportar, puede_aprobar
             sucursal_id: ID de la sucursal actual del usuario (opcional)
-        
+
         Returns:
-            bool: True si tiene permiso (por rol Y por sucursal), False en caso contrario
+            bool: True si tiene permiso, False en caso contrario
         """
-        # ✅ Superusuarios tienen TODOS los permisos
-        if usuario.is_superuser:
-            return True
-        
         try:
             opcion = OpcionMenu.objects.get(codigo=codigo_opcion, activo=True)
+
+            # 1. Verificar override por usuario (PermisoUsuario)
+            permiso_usuario = PermisoUsuario.objects.filter(
+                usuario=usuario,
+                opcion_menu=opcion
+            ).first()
+
+            if permiso_usuario:
+                override_valor = getattr(permiso_usuario, tipo_permiso, None)
+                if override_valor is not None:
+                    # Si hay override explícito, usarlo directamente
+                    # (pero aún verificar sucursal si es True)
+                    if not override_valor:
+                        return False
+                    # Override es True, verificar sucursal y retornar
+                    if sucursal_id:
+                        tipo_permiso_sucursal = 'habilitado' if tipo_permiso == 'puede_ver' else tipo_permiso
+                        permiso_sucursal = PermisoSucursal.objects.filter(
+                            sucursal_id=sucursal_id,
+                            opcion_menu=opcion
+                        ).first()
+                        if permiso_sucursal:
+                            if not getattr(permiso_sucursal, tipo_permiso_sucursal, True):
+                                return False
+                    return True
+
+            # 2. Verificar permiso por rol
             permiso = cls.objects.filter(
                 rol=usuario.rol,
                 opcion_menu=opcion
             ).first()
-            
-            # Verificar permiso por rol
+
             tiene_permiso_rol = False
             if permiso:
                 tiene_permiso_rol = getattr(permiso, tipo_permiso, False)
-            
+
             if not tiene_permiso_rol:
                 return False
-            
-            # Verificar permiso por sucursal (si se proporcionó sucursal_id)
+
+            # 3. Verificar permiso por sucursal (si se proporcionó sucursal_id)
             if sucursal_id:
-                # Mapear tipo_permiso de rol a tipo_permiso de sucursal
-                # Para 'puede_ver', verificamos 'habilitado' en sucursal
                 tipo_permiso_sucursal = 'habilitado' if tipo_permiso == 'puede_ver' else tipo_permiso
-                
+
                 permiso_sucursal = PermisoSucursal.objects.filter(
                     sucursal_id=sucursal_id,
                     opcion_menu=opcion
                 ).first()
-                
+
                 if permiso_sucursal:
-                    # Si hay configuración de sucursal, verificar el permiso específico
                     tiene_permiso_sucursal = getattr(permiso_sucursal, tipo_permiso_sucursal, True)
                     if not tiene_permiso_sucursal:
                         return False
-            
+
             return True
         except OpcionMenu.DoesNotExist:
             return False
@@ -415,6 +437,102 @@ class PermisoSucursal(models.Model):
         
         # Retornar todas las opciones activas excepto las deshabilitadas
         return OpcionMenu.objects.filter(activo=True).exclude(id__in=opciones_deshabilitadas)
+
+
+class PermisoUsuario(models.Model):
+    """
+    Permisos específicos por usuario que sobreescriben los permisos del rol.
+    Permite dar o quitar acceso a opciones específicas para un usuario individual.
+
+    Lógica de override:
+    - True = otorgar permiso (aunque el rol no lo tenga)
+    - False = denegar permiso (aunque el rol lo tenga)
+    - None = usar permiso del rol (por defecto)
+    """
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='permisos_usuario'
+    )
+    opcion_menu = models.ForeignKey(
+        OpcionMenu,
+        on_delete=models.CASCADE,
+        related_name='permisos_usuario'
+    )
+    puede_ver = models.BooleanField(
+        null=True, blank=True, default=None,
+        help_text="True=otorgar, False=denegar, None=usar rol"
+    )
+    puede_crear = models.BooleanField(
+        null=True, blank=True, default=None,
+        help_text="True=otorgar, False=denegar, None=usar rol"
+    )
+    puede_editar = models.BooleanField(
+        null=True, blank=True, default=None,
+        help_text="True=otorgar, False=denegar, None=usar rol"
+    )
+    puede_eliminar = models.BooleanField(
+        null=True, blank=True, default=None,
+        help_text="True=otorgar, False=denegar, None=usar rol"
+    )
+    puede_exportar = models.BooleanField(
+        null=True, blank=True, default=None,
+        help_text="True=otorgar, False=denegar, None=usar rol"
+    )
+    puede_aprobar = models.BooleanField(
+        null=True, blank=True, default=None,
+        help_text="True=otorgar, False=denegar, None=usar rol"
+    )
+    limite_descuento_override = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Override del límite de descuento. None=usar límite del rol"
+    )
+    puede_ver_todas_sucursales = models.BooleanField(
+        default=False,
+        help_text="Si True, el usuario puede ver datos de todas las sucursales en reportes y listados"
+    )
+    notas = models.TextField(
+        blank=True, null=True,
+        help_text="Razón del override o notas administrativas"
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('usuario', 'opcion_menu')
+        verbose_name = 'Permiso por Usuario'
+        verbose_name_plural = 'Permisos por Usuario'
+        ordering = ['usuario', 'opcion_menu']
+
+    def __str__(self):
+        return f"{self.usuario.username} - {self.opcion_menu.nombre}"
+
+    @classmethod
+    def obtener_override(cls, usuario, codigo_opcion, tipo_permiso='puede_ver'):
+        """
+        Obtiene el override de permiso para un usuario y opción específicos.
+        Returns: True/False si hay override, None si debe usar rol.
+        """
+        try:
+            opcion = OpcionMenu.objects.get(codigo=codigo_opcion, activo=True)
+            permiso = cls.objects.filter(
+                usuario=usuario,
+                opcion_menu=opcion
+            ).first()
+
+            if permiso:
+                return getattr(permiso, tipo_permiso, None)
+            return None
+        except OpcionMenu.DoesNotExist:
+            return None
+
+    @classmethod
+    def usuario_ve_todas_sucursales(cls, usuario):
+        """Verifica si el usuario tiene flag de ver todas las sucursales en algún permiso."""
+        return cls.objects.filter(
+            usuario=usuario,
+            puede_ver_todas_sucursales=True
+        ).exists()
 
 
 # ========== SISTEMA DE CÓDIGOS DE AUTORIZACIÓN DINÁMICOS ==========

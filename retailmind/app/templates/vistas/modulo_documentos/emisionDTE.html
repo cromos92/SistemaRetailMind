@@ -1160,7 +1160,7 @@
                         <div class="col-md-3">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="bi bi-file-text"></i></span>
-                                <input type="text" id="searchReference" class="form-control" placeholder="Factura, DTE, código...">
+                                <input type="text" id="searchReference" class="form-control" placeholder="N° DTE, factura, emisor, SKU...">
                                 <button class="btn btn-outline-secondary" type="button" id="btnSearchReference">Buscar</button>
                             </div>
                         </div>
@@ -1340,30 +1340,17 @@
                         </div>
 
                         <!-- Carrito: lista resumida de productos seleccionados -->
-                        <div class="card mb-2">
-                            <div class="card-header py-1 px-3 d-flex justify-content-between align-items-center" style="background: var(--nexo-gray-100); border-bottom: 1px solid var(--nexo-gray-300);">
-                                <h6 class="mb-0 small fw-semibold"><i class="bi bi-cart3 me-1 text-primary"></i>Carrito</h6>
+                        <div class="card mb-2" id="carritoCard">
+                            <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1A1A2E 0%, #2D2D50 100%); border: none;">
+                                <h6 class="mb-0 small fw-semibold" style="color:#fff;"><i class="ri-shopping-cart-2-line me-1" style="color:#00D4AA;"></i>Carrito</h6>
+                                <span class="badge rounded-pill" id="carritoCount" style="background:#00D4AA; color:#1A1A2E; font-weight:700;">0</span>
                             </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive pos-cart-table">
-                                    <table class="table table-sm table-hover mb-0" id="resumenProductosTable">
-                                        <thead class="table-light" style="position: sticky; top: 0;">
-                                            <tr>
-                                                <th class="py-1">SKU</th>
-                                                <th class="py-1">Producto</th>
-                                                <th class="py-1">Tallas</th>
-                                                <th class="py-1 text-center">Cant.</th>
-                                                <th class="py-1 text-end">Subtotal</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="resumenProductosBody">
-                                            <tr>
-                                                <td colspan="5" class="text-center text-muted py-3 small">
-                                                    <i class="bi bi-inbox"></i> No hay productos
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                            <div class="card-body p-0" style="max-height: 320px; overflow-y: auto;">
+                                <div id="resumenProductosBody" style="padding: 0;">
+                                    <div class="text-center text-muted py-4 small carrito-empty">
+                                        <i class="ri-shopping-cart-line" style="font-size:2rem; color:#ccc;"></i>
+                                        <p class="mt-2 mb-0">Agrega productos al despacho</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2252,67 +2239,8 @@ function updateStep3Summary() {
 }
 
 function updateProductsTable() {
-    const tbody = $('#resumenProductosBody');
-    tbody.empty();
-    
-    const productos = $('#detalleBody tr:not(#emptyRow)');
-    
-    if (productos.length === 0) {
-        tbody.append(`
-            <tr>
-                <td colspan="5" class="text-center text-muted py-3">
-                    <i class="bi bi-inbox"></i> No hay productos para mostrar
-                </td>
-            </tr>
-        `);
-        return;
-    }
-    
-    productos.each(function() {
-        const row = $(this);
-        let sku = row.find('td:eq(0)').text();
-        const producto = row.find('td:eq(1)').text();
-        const tallas = safeParseTallas(row.data('tallas'));
-        
-        // Limpiar SKU: extraer solo el código sin precios
-        sku = sku.replace('SKU:', '').trim();
-        if (sku.includes('$')) {
-            sku = sku.split('$')[0];
-        }
-        
-        let tallasTexto = '';
-        let cantidadTotal = 0;
-        let subtotalProducto = 0;
-        
-        if (tallas.length > 0) {
-            const tallasArray = [];
-            tallas.forEach(talla => {
-                tallasArray.push(`${talla.talla}(${talla.cantidad})`);
-                cantidadTotal += talla.cantidad;
-                subtotalProducto += talla.cantidad * talla.precio;
-            });
-            tallasTexto = tallasArray.join(', ');
-        } else {
-            // Fallback: tomar datos desde la fila directamente
-            const cantidadInput = row.find('.cantidad-detalle-input');
-            const cantidad = parseInt(cantidadInput.val()) || 0;
-            const precio = parseInt(cantidadInput.data('precio')) || 0;
-            cantidadTotal = cantidad;
-            subtotalProducto = cantidad * precio;
-            const tallaTexto = row.find('td:eq(2) .badge').text();
-            tallasTexto = `${tallaTexto}(${cantidad})`;
-        }
-        
-        tbody.append(`
-            <tr>
-                <td><small class="text-muted">${sku}</small></td>
-                <td>${producto}</td>
-                <td><small>${tallasTexto}</small></td>
-                <td class="text-center"><span class="badge bg-primary">${cantidadTotal}</span></td>
-                <td class="text-end fw-bold">$${Math.round(subtotalProducto).toLocaleString()}</td>
-            </tr>
-        `);
-    });
+    // Reusar la misma función visual del carrito
+    updateResumenProductosTable();
 }
 
 function updateFinalTotals() {
@@ -3259,40 +3187,23 @@ function toggleDiasCredito() {
 
 function getPrecioSegunMetodo(product) {
     console.log('💰 getPrecioSegunMetodo - selectedMethod:', selectedMethod);
-    console.log('💰 Product prices:', {
-        precio_venta: product.precio_venta,
-        sobreprecio: product.sobreprecio,
-        costo: product.costo
-    });
     
     if (selectedMethod === 'interno') {
-        // ═══════════════════════════════════════════════════════════════
-        // DESPACHO INTERNO: Para venta entre sucursales propias
-        // Usar costo + sobreprecio (precio interno para traspasos)
-        // ═══════════════════════════════════════════════════════════════
+        // DESPACHO INTERNO: precio interno = costo + sobreprecio
+        // sobreprecio = preciointerno - costo (margen interno, NO incluye costo)
         const costo = parseInt(product.costo || 0);
         const sobreprecio = parseInt(product.sobreprecio || 0);
         const precioInterno = costo + sobreprecio;
-        
         console.log(`💰 Despacho INTERNO: Costo=${costo}, Sobreprecio=${sobreprecio}, PrecioInterno=${precioInterno}`);
-        
-        // Retornar costo + sobreprecio (precio interno)
         return precioInterno;
         
     } else if (selectedMethod === 'externo') {
-        // ═══════════════════════════════════════════════════════════════
-        // DESPACHO EXTERNO: Para proveedores
-        // Usar solo el costo (sin sobreprecio)
-        // ═══════════════════════════════════════════════════════════════
+        // DESPACHO EXTERNO: usar solo el costo
         const costo = parseInt(product.costo || 0);
-        
         console.log(`💰 Despacho EXTERNO: solo costo = ${costo}`);
-        
         return costo;
     }
     
-    // Por defecto (no debería llegar aquí)
-    console.warn('⚠️ Método de despacho no reconocido, usando precio_venta');
     return parseInt(product.precio_venta || 0);
 }
 
@@ -3681,7 +3592,7 @@ function addTallasToDetalle(tallas, productOverride = null) {
             return; // No crear fila
         }
         
-        // Obtener costo y sobreprecio desde talla o producto
+        // Costo y sobreprecio desde los datos del producto
         const costo = parseInt(talla.costo || currentProduct.costo || 0);
         const sobreprecio = parseInt(talla.sobreprecio || currentProduct.sobreprecio || 0);
         
@@ -3938,12 +3849,12 @@ function agregarTallaIndividual(tallaId) {
         return;
     }
     
-    // Obtener costo y sobreprecio desde el input o desde currentProduct
+    // Costo y sobreprecio desde los datos del producto
     const inputCantidad = row.find('.cantidad-input');
     const costoProducto = parseInt(inputCantidad.data('costo')) || parseInt(window.currentProduct.costo) || 0;
     const sobrepreioProducto = parseInt(inputCantidad.data('sobreprecio')) || parseInt(window.currentProduct.sobreprecio) || 0;
     
-    console.log('💰 Costo y Sobreprecio:', {costo: costoProducto, sobreprecio: sobrepreioProducto});
+    console.log('💰 Costo y Sobreprecio:', {costo: costoProducto, sobreprecio: sobrepreioProducto, precio: precio});
     
     const tallaData = [{
         id: tallaId,
@@ -3952,8 +3863,8 @@ function agregarTallaIndividual(tallaId) {
         cantidad: cantidad,
         stock: stock,
         precio: precio,
-        costo: costoProducto,  // ← AGREGADO
-        sobreprecio: sobrepreioProducto,  // ← AGREGADO
+        costo: costoProducto,
+        sobreprecio: sobrepreioProducto,
         subtotal: cantidad * precio
     }];
     
@@ -4276,19 +4187,19 @@ function updateTotales() {
 }
 
 function updateResumenProductosTable() {
-    const tbody = $('#resumenProductosBody');
-    tbody.empty();
+    const container = $('#resumenProductosBody');
+    container.empty();
     
     const detalleRows = $('#detalleBody tr:not(#emptyRow)');
     
     if (detalleRows.length === 0) {
-        tbody.append(`
-            <tr>
-                <td colspan="5" class="text-center text-muted py-3">
-                    <i class="bi bi-inbox"></i> No hay productos para mostrar
-                </td>
-            </tr>
+        container.html(`
+            <div class="text-center text-muted py-4 small carrito-empty">
+                <i class="ri-shopping-cart-line" style="font-size:2rem; color:#ccc;"></i>
+                <p class="mt-2 mb-0">Agrega productos al despacho</p>
+            </div>
         `);
+        $('#carritoCount').text('0');
         return;
     }
     
@@ -4304,6 +4215,8 @@ function updateResumenProductosTable() {
         const sku = row.find('small').text().trim();
         const cantidad = parseInt(row.find('.cantidad-detalle-input').val()) || 0;
         const precio = parseInt(row.find('.cantidad-detalle-input').data('precio')) || 0;
+        const costo = parseInt(row.find('.cantidad-detalle-input').data('costo')) || 0;
+        const sobreprecio = parseInt(row.find('.cantidad-detalle-input').data('sobreprecio')) || 0;
         const subtotal = cantidad * precio;
         
         if (!productosAgrupados[productoId]) {
@@ -4312,13 +4225,16 @@ function updateResumenProductosTable() {
                 descripcion: descripcion,
                 tallas: [],
                 totalCantidad: 0,
-                totalMonto: 0
+                totalMonto: 0,
+                costo: costo,
+                sobreprecio: sobreprecio,
+                precio: precio
             };
         }
         
         productosAgrupados[productoId].tallas.push({
             talla: talla,
-            sku: sku,
+            sku: sku.replace('SKU:', '').trim().split('$')[0],
             cantidad: cantidad,
             precio: precio,
             subtotal: subtotal
@@ -4328,70 +4244,58 @@ function updateResumenProductosTable() {
         productosAgrupados[productoId].totalMonto += subtotal;
     });
     
-    // Renderizar productos agrupados en la tabla
-    Object.keys(productosAgrupados).forEach(productoId => {
-        const producto = productosAgrupados[productoId];
-        
-        const tallasTexto = producto.tallas.map(t => `${t.talla}(${t.cantidad})`).join(', ');
-        
-        // Limpiar SKUs: extraer solo el código sin precios
-        const skusLimpios = producto.tallas.map(t => {
-            // El SKU puede venir como "SKU: 123456$precio$otroValor" - extraer solo el código
-            let sku = t.sku.replace('SKU:', '').trim();
-            // Si tiene formato con $, tomar solo la primera parte (el código)
-            if (sku.includes('$')) {
-                sku = sku.split('$')[0];
-            }
-            return sku;
-        });
-        
-        // Mostrar SKUs de forma resumida si hay muchos
-        let skusDisplay = '';
-        const maxSkusToShow = 2;
-        
-        if (skusLimpios.length <= maxSkusToShow) {
-            skusDisplay = skusLimpios.join(', ');
-        } else {
-            // Mostrar solo los primeros y cuántos más hay
-            const skusMostrados = skusLimpios.slice(0, maxSkusToShow).join(', ');
-            const skusRestantes = skusLimpios.length - maxSkusToShow;
-            skusDisplay = `
-                <span class="skus-preview" title="${skusLimpios.join(', ')}">${skusMostrados}</span>
-                <span class="badge bg-secondary ms-1 skus-more" 
-                      data-bs-toggle="tooltip" 
-                      data-bs-placement="top" 
-                      title="SKUs: ${skusLimpios.join(', ')}"
-                      style="cursor: pointer; font-size: 0.7rem;">
-                    +${skusRestantes} más
-                </span>
-            `;
-        }
-        
-        const rowHtml = `
-            <tr>
-                <td class="small">${skusDisplay}</td>
-                <td>
-                    <strong>${producto.articulo}</strong>
-                    <br><small class="text-muted">${producto.descripcion}</small>
-                </td>
-                <td>
-                    <span class="badge bg-primary">${producto.tallas.length}</span>
-                    <br><small class="text-muted">${tallasTexto}</small>
-                </td>
-                <td class="text-center">
-                    <span class="badge bg-success">${producto.totalCantidad}</span>
-                </td>
-                <td class="text-end fw-bold">
-                    $${producto.totalMonto.toLocaleString()}
-                </td>
-            </tr>
-        `;
-        
-        tbody.append(rowHtml);
-    });
+    const keys = Object.keys(productosAgrupados);
+    $('#carritoCount').text(keys.length);
     
-    // Inicializar tooltips para los SKUs adicionales
-    $('[data-bs-toggle="tooltip"]').tooltip();
+    keys.forEach((productoId, idx) => {
+        const p = productosAgrupados[productoId];
+        const sobreprecio = p.sobreprecio || 0;
+        
+        const tallasHtml = p.tallas.map(t => 
+            `<span style="display:inline-flex; align-items:center; gap:2px; background:#f0f2f7; border-radius:10px; padding:1px 7px; margin:1px; font-size:0.72rem;">
+                <span style="color:#8A8A9A;">${t.talla}</span>
+                <strong style="color:#1A1A2E;">×${t.cantidad}</strong>
+            </span>`
+        ).join('');
+        
+        const cardHtml = `
+            <div class="carrito-item" style="padding:10px 12px; border-bottom:1px solid #f0f1f5; transition:background 0.15s;"
+                 onmouseover="this.style.background='#f8f9fc'" onmouseout="this.style.background='transparent'">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:700; font-size:0.82rem; color:#1A1A2E; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${p.articulo}
+                        </div>
+                        <div style="font-size:0.75rem; color:#8A8A9A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${p.descripcion}
+                        </div>
+                    </div>
+                    <div class="text-end ms-2" style="flex-shrink:0;">
+                        <div style="font-weight:700; font-size:0.9rem; color:#1A1A2E;">$${p.totalMonto.toLocaleString('es-CL')}</div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div style="flex:1; overflow:hidden;">
+                        ${tallasHtml}
+                    </div>
+                    <div class="d-flex align-items-center gap-1 ms-2" style="flex-shrink:0;">
+                        <span style="background:#e8f5e9; color:#2e7d32; font-weight:700; font-size:0.75rem; padding:2px 8px; border-radius:10px;">
+                            ${p.totalCantidad} u.
+                        </span>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-1 mt-1" style="font-size:0.7rem; color:#8A8A9A;">
+                    <span>Costo: $${p.costo.toLocaleString('es-CL')}</span>
+                    <span style="color:#ccc;">+</span>
+                    <span style="color:#0066FF;">Sobre: $${sobreprecio.toLocaleString('es-CL')}</span>
+                    <span style="color:#ccc;">=</span>
+                    <span style="color:#1A1A2E;"><strong>P.Int: $${p.precio.toLocaleString('es-CL')}</strong></span>
+                    <span>· × ${p.totalCantidad}</span>
+                </div>
+            </div>
+        `;
+        container.append(cardHtml);
+    });
 }
 
 function updateResumenDocumento() {
@@ -5058,34 +4962,54 @@ $('#searchReference').on('keypress', function(e) {
     }
 });
 
-// Función para buscar por referencia
+// Función para buscar por referencia (DTEs recepcionados / facturas de compra)
 function buscarPorReferencia(referencia) {
-    console.log('🔍 Buscando por referencia:', referencia);
+    console.log('🔍 Buscando productos de DTE por referencia:', referencia);
     
-    // Mostrar loading
     $('#datos_tabla_productos').html(`
         <tr>
-            <td colspan="9" class="text-center py-4">
+            <td colspan="6" class="text-center py-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Buscando...</span>
                 </div>
-                <p class="mt-2 mb-0">Buscando productos por referencia...</p>
+                <p class="mt-2 mb-0">Buscando productos en DTEs recepcionados...</p>
             </td>
         </tr>
     `);
     
-    // Por ahora, simular búsqueda (puedes implementar endpoint específico)
-    setTimeout(() => {
-        $('#datos_tabla_productos').html(`
-            <tr>
-                <td colspan="9" class="text-center text-muted py-4">
-                    <i class="bi bi-info-circle me-2"></i>
-                    Función de búsqueda por referencia en desarrollo
-                    <br><small>Use la búsqueda por artículo mientras tanto</small>
-                </td>
-            </tr>
-        `);
-    }, 1000);
+    $.ajax({
+        url: '/app/buscar_dte_referencia/',
+        method: 'GET',
+        data: { search: referencia },
+        success: function(response) {
+            if (response.success && response.productos && response.productos.length > 0) {
+                displayProducts(response.productos);
+                updatePagination(response.pagination);
+                updateProductInfo(response.pagination.total_count);
+            } else {
+                $('#datos_tabla_productos').html(`
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-search me-2"></i>
+                            No se encontraron productos en DTEs para "<strong>${$('<span>').text(referencia).html()}</strong>"
+                            <br><small>Intente con número de documento, emisor, SKU o artículo</small>
+                        </td>
+                    </tr>
+                `);
+            }
+        },
+        error: function(xhr) {
+            let msg = 'Error de conexión al buscar en DTEs';
+            if (xhr.responseJSON && xhr.responseJSON.error) msg = xhr.responseJSON.error;
+            $('#datos_tabla_productos').html(`
+                <tr>
+                    <td colspan="6" class="text-center text-danger py-4">
+                        <i class="bi bi-exclamation-triangle me-2"></i>${msg}
+                    </td>
+                </tr>
+            `);
+        }
+    });
 }
 
 // ✅ Función para descargar TXT de Acepta automáticamente

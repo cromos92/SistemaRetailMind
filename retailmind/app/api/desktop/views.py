@@ -468,7 +468,7 @@ class SucursalesDisponiblesView(APIView):
                     })
         
         # 3. Si es superuser/admin, mostrar todas las sucursales
-        if user.is_superuser or getattr(user, 'rol', '') == 'administrador':
+        if getattr(user, 'rol', '') == 'administrador':
             from app.models import Sucursal
             todas = Sucursal.objects.all().select_related('empresa')
             for suc in todas:
