@@ -840,8 +840,8 @@ class HistorialCambioDevolucion(models.Model):
             ('DEVOLUCION_PROCESADA', 'Devolución Procesada'),
         ]
     )
-    estado_anterior = models.CharField(max_length=20, blank=True, null=True)
-    estado_nuevo = models.CharField(max_length=20, blank=True, null=True)
+    estado_anterior = models.CharField(max_length=30, blank=True, null=True)
+    estado_nuevo = models.CharField(max_length=30, blank=True, null=True)
     
     # === RESPONSABLES ===
     usuario = models.ForeignKey(

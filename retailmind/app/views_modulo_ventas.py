@@ -660,21 +660,43 @@ def buscar_productos_pos_avanzado(request):
             'producto__atributo3',
             'producto__atributo4'
         )
-        
-        # Aplicar filtros de búsqueda (SKU, artículo, marca, color, etc.)
-        productos_query = productos_query.filter(
-            Q(sku__icontains=search_term) |
-            Q(producto__articulo__icontains=search_term) |
-            Q(producto__atributo1__valor__icontains=search_term) |  # Marca
-            Q(producto__atributo2__valor__icontains=search_term) |  # Color/Modelo
-            Q(producto__atributo3__valor__icontains=search_term) |  # Material/Tipo
-            Q(producto__atributo4__valor__icontains=search_term) |  # Otro atributo
-            Q(producto__categoria__nombre__icontains=search_term)
-        )
-        
+
+        # Separar el término en palabras para búsqueda multi-palabra
+        palabras = search_term.split()
+
+        if len(palabras) > 1:
+            # Búsqueda multi-palabra: cada palabra debe coincidir en algún campo
+            for palabra in palabras:
+                palabra = palabra.strip()
+                if not palabra:
+                    continue
+                productos_query = productos_query.filter(
+                    Q(sku__icontains=palabra) |
+                    Q(producto__articulo__icontains=palabra) |
+                    Q(producto__atributo1__valor__icontains=palabra) |
+                    Q(producto__atributo2__valor__icontains=palabra) |
+                    Q(producto__atributo3__valor__icontains=palabra) |
+                    Q(producto__atributo4__valor__icontains=palabra) |
+                    Q(producto__categoria__nombre__icontains=palabra) |
+                    Q(talla__icontains=palabra)
+                )
+        else:
+            # Búsqueda de un solo término
+            productos_query = productos_query.filter(
+                Q(sku__icontains=search_term) |
+                Q(producto__articulo__icontains=search_term) |
+                Q(producto__atributo1__valor__icontains=search_term) |
+                Q(producto__atributo2__valor__icontains=search_term) |
+                Q(producto__atributo3__valor__icontains=search_term) |
+                Q(producto__atributo4__valor__icontains=search_term) |
+                Q(producto__categoria__nombre__icontains=search_term) |
+                Q(talla__icontains=search_term)
+            )
+
         # Filtrar solo productos con stock > 0
+        # Iterar hasta conseguir 30 con stock, revisando hasta 200 candidatos
         productos_con_stock = []
-        for pt in productos_query[:50]:  # Limitar a 50 resultados
+        for pt in productos_query[:200]:
             stock_actual = pt.stock_sucursal(sucursal_id)
             if stock_actual > 0:
                 productos_con_stock.append({
@@ -690,7 +712,9 @@ def buscar_productos_pos_avanzado(request):
                     'precio_venta': float(pt.producto.precioventa),
                     'categoria': pt.producto.categoria.nombre if pt.producto.categoria else ''
                 })
-        
+                if len(productos_con_stock) >= 30:
+                    break
+
         return JsonResponse({
             'success': True,
             'productos': productos_con_stock,
@@ -2951,6 +2975,7 @@ def registrar_pagos_ticket(request, correlativo):
 
             cantidad = int(prod_data.get('cantidad', 1))
             precio_unitario = int(prod_data.get('precio_unitario', 0))
+            precio_original_payload = int(prod_data.get('precio_original', precio_unitario))
             descuento_unitario = int(prod_data.get('descuento_unitario', 0))
             subtotal = int(prod_data.get('subtotal', cantidad * precio_unitario))
             porcentaje_descuento = round((descuento_unitario / precio_unitario) * 100, 2) if precio_unitario > 0 and descuento_unitario > 0 else 0
@@ -2970,11 +2995,16 @@ def registrar_pagos_ticket(request, correlativo):
                     or tp_match.precio != precio_unitario
                     or tp_match.descuento_unitario != descuento_unitario
                     or tp_match.subtotal != subtotal
+                    or tp_match.precio_original != precio_original_payload
                 )
                 if algo_cambio:
-                    print(f"  📝 Actualizando línea #{tp_match.id} SKU {sku}: cant={tp_match.stock}→{cantidad}, dcto={tp_match.descuento_unitario}→{descuento_unitario}")
+                    if precio_unitario != precio_original_payload:
+                        print(f"  📝 Actualizando línea #{tp_match.id} SKU {sku}: cant={tp_match.stock}→{cantidad}, precio={tp_match.precio}→{precio_unitario} (original: {precio_original_payload})")
+                    else:
+                        print(f"  📝 Actualizando línea #{tp_match.id} SKU {sku}: cant={tp_match.stock}→{cantidad}, dcto={tp_match.descuento_unitario}→{descuento_unitario}")
                     tp_match.stock = cantidad
                     tp_match.precio = precio_unitario
+                    tp_match.precio_original = precio_original_payload
                     tp_match.descuento_unitario = descuento_unitario
                     tp_match.porcentaje_descuento = porcentaje_descuento
                     tp_match.subtotal = subtotal
@@ -2988,13 +3018,13 @@ def registrar_pagos_ticket(request, correlativo):
                     producto_talla = Producto_Talla.objects.filter(sku=sku).first()
 
                 if producto_talla:
-                    print(f"  ➕ Creando nueva línea SKU {sku}: cantidad={cantidad}, dcto={descuento_unitario}")
+                    print(f"  ➕ Creando nueva línea SKU {sku}: cantidad={cantidad}, precio={precio_unitario}, precio_original={precio_original_payload}")
                     tp_nuevo = Ticket_Productos.objects.create(
                         idTicket=ticket,
                         ProductoTalla=producto_talla,
                         stock=cantidad,
                         precio=precio_unitario,
-                        precio_original=precio_unitario,
+                        precio_original=precio_original_payload,
                         descuento_unitario=descuento_unitario,
                         subtotal=subtotal,
                         porcentaje_descuento=porcentaje_descuento
@@ -4434,18 +4464,22 @@ def cuadratura_caja(request):
     
     # Verificar si el usuario es administrador (para permisos de reabrir arqueos)
     es_administrador = rol_usuario == 'administrador'
-    
+
     # Verificar si tiene permisos de supervisión (administrador o administración)
     es_supervisor = rol_usuario in ['administrador', 'administracion']
 
     # Cajero/vendedor/jefe_local: puede declarar depósitos pero no confirmarlos
     es_cajero = not es_supervisor and rol_usuario in ['cajero', 'vendedor', 'jefe_local']
 
+    # Permiso de reabrir: administrador (siempre) o jefe_local/administracion (con tolerancia)
+    puede_reabrir = rol_usuario in ['administrador', 'jefe_local', 'administracion']
+
     context = {
         'sucursal_actual': sucursal_actual,
         'es_administrador': es_administrador,
         'es_supervisor': es_supervisor,
         'es_cajero': es_cajero,
+        'puede_reabrir': puede_reabrir,
         'rol_usuario': rol_usuario or 'sin_rol',
         'qz_config': _get_qz_config(sucursal_actual_id),
     }
@@ -5683,41 +5717,73 @@ def eliminar_deposito_bancario(request):
 @require_POST
 @csrf_exempt
 def declarar_deposito(request):
-    """El cajero declara el monto de efectivo que enviará a depositar al banco."""
+    """
+    El cajero declara un depósito con comprobante bancario.
+    Soporta FormData (multipart) para subir imagen del comprobante.
+    Permite múltiples depósitos por arqueo (ej: efectivo + cheque).
+    """
     try:
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        data = json.loads(request.body)
 
-        arqueo_id = data.get('arqueo_id')
-        monto_declarado = int(data.get('monto_declarado', 0))
-        observaciones = data.get('observaciones', '')
+        # Soportar tanto JSON como FormData
+        if request.content_type and 'multipart' in request.content_type:
+            arqueo_id = request.POST.get('arqueo_id')
+            monto_declarado = int(request.POST.get('monto_declarado', 0))
+            tipo_medio = request.POST.get('tipo_medio', 'EFECTIVO')
+            banco = request.POST.get('banco', 'ESTADO')
+            numero_comprobante = request.POST.get('numero_comprobante', '')
+            observaciones = request.POST.get('observaciones', '')
+            imagen_comprobante = request.FILES.get('imagen_comprobante')
+        else:
+            data = json.loads(request.body)
+            arqueo_id = data.get('arqueo_id')
+            monto_declarado = int(data.get('monto_declarado', 0))
+            tipo_medio = data.get('tipo_medio', 'EFECTIVO')
+            banco = data.get('banco', 'ESTADO')
+            numero_comprobante = data.get('numero_comprobante', '')
+            observaciones = data.get('observaciones', '')
+            imagen_comprobante = None
 
         if not arqueo_id or monto_declarado <= 0:
             return JsonResponse({'success': False, 'error': 'Se requiere arqueo_id y monto_declarado > 0'})
 
+        if tipo_medio not in ('EFECTIVO', 'CHEQUE'):
+            return JsonResponse({'success': False, 'error': 'tipo_medio debe ser EFECTIVO o CHEQUE'})
+
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id, sucursal_id=sucursal_id)
 
         from django.utils import timezone as tz
-        deposito = DepositoBancario.objects.create(
+        deposito = DepositoBancario(
             arqueo=arqueo,
             fecha_deposito=arqueo.fecha_arqueo,
             monto=0,
             monto_declarado=monto_declarado,
             monto_confirmado=0,
-            banco='ESTADO',
+            tipo_medio=tipo_medio,
+            banco=banco,
+            numero_comprobante=numero_comprobante,
             observaciones=observaciones,
             declarado_por=request.user,
             fecha_declaracion=tz.now(),
             verificado=False,
             registrado_por=request.user,
         )
+        if imagen_comprobante:
+            deposito.imagen_comprobante = imagen_comprobante
+        deposito.save()
 
         return JsonResponse({
             'success': True,
-            'message': 'Declaración de depósito registrada. El supervisor deberá confirmarla.',
+            'message': 'Depósito declarado exitosamente. El supervisor deberá confirmarlo.',
             'deposito': {
                 'id': deposito.id,
                 'monto_declarado': deposito.monto_declarado,
+                'tipo_medio': deposito.tipo_medio,
+                'tipo_medio_display': deposito.get_tipo_medio_display(),
+                'banco': deposito.banco,
+                'banco_display': deposito.get_banco_display(),
+                'numero_comprobante': deposito.numero_comprobante,
+                'tiene_imagen': bool(deposito.imagen_comprobante),
                 'declarado_por': request.user.get_full_name() or request.user.username,
                 'fecha_declaracion': deposito.fecha_declaracion.strftime('%d/%m/%Y %H:%M'),
                 'verificado': False,
@@ -5731,8 +5797,74 @@ def declarar_deposito(request):
 
 
 @login_required
+@require_POST
+@csrf_exempt
+def finalizar_declaracion(request):
+    """
+    El cajero señala que terminó de declarar todos sus depósitos (efectivo, cheque, etc.)
+    Transiciona el arqueo de CERRADO/CON_DIFERENCIAS → DEPOSITO_DECLARADO.
+    """
+    try:
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        data = json.loads(request.body)
+        arqueo_id = data.get('arqueo_id')
+
+        if not arqueo_id:
+            return JsonResponse({'success': False, 'error': 'Se requiere arqueo_id'})
+
+        arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id, sucursal_id=sucursal_id)
+
+        # Verificar que el arqueo está en estado válido para finalizar declaración
+        if arqueo.estado not in ('CERRADO', 'CON_DIFERENCIAS'):
+            return JsonResponse({
+                'success': False,
+                'error': f'El arqueo debe estar Cerrado o Con Diferencias para finalizar declaración. Estado actual: {arqueo.get_estado_display()}'
+            })
+
+        # Verificar que exista al menos un depósito declarado
+        depositos_declarados = arqueo.depositos.filter(monto_declarado__gt=0)
+        if not depositos_declarados.exists():
+            return JsonResponse({'success': False, 'error': 'Debe declarar al menos un depósito antes de finalizar'})
+
+        # Transicionar estado
+        ArqueoCaja.objects.filter(id=arqueo.id).update(estado='DEPOSITO_DECLARADO')
+        arqueo.refresh_from_db()
+
+        # Resumen de depósitos
+        resumen = []
+        for dep in depositos_declarados:
+            resumen.append({
+                'id': dep.id,
+                'tipo_medio': dep.get_tipo_medio_display(),
+                'monto_declarado': dep.monto_declarado,
+                'banco': dep.get_banco_display(),
+                'numero_comprobante': dep.numero_comprobante,
+                'tiene_imagen': bool(dep.imagen_comprobante),
+            })
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Declaración finalizada. Los depósitos serán revisados por el supervisor.',
+            'estado': arqueo.estado,
+            'estado_display': arqueo.get_estado_display(),
+            'depositos': resumen,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+    except Exception as e:
+        import traceback
+        print(f"Error finalizar_declaracion: {e}\n{traceback.format_exc()}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
 def confirmar_deposito(request, deposito_id):
-    """El supervisor confirma un depósito declarado por el cajero, cargando datos bancarios reales."""
+    """
+    El supervisor confirma un depósito declarado por el cajero.
+    Los datos bancarios (banco, comprobante, imagen) ya vienen del cajero.
+    El supervisor solo verifica visualmente, confirma monto y agrega observaciones si hay discrepancia.
+    """
     try:
         if request.method not in ('POST', 'PATCH'):
             return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
@@ -5748,27 +5880,36 @@ def confirmar_deposito(request, deposito_id):
         if deposito.arqueo.sucursal_id != int(sucursal_id):
             return JsonResponse({'success': False, 'error': 'Depósito no pertenece a su sucursal'}, status=403)
 
-        fecha_deposito = request.POST.get('fecha_deposito') or request.POST.get('fecha')
+        # El supervisor confirma o ajusta el monto
         monto_confirmado = int(request.POST.get('monto_confirmado', request.POST.get('monto', 0)))
-        banco = request.POST.get('banco', deposito.banco)
-        numero_comprobante = request.POST.get('numero_comprobante', '')
-        observaciones = request.POST.get('observaciones', '')
+        observaciones_supervisor = request.POST.get('observaciones_supervisor', request.POST.get('observaciones', ''))
 
-        if not fecha_deposito or monto_confirmado <= 0 or not banco:
-            return JsonResponse({'success': False, 'error': 'Se requieren fecha_deposito, monto_confirmado y banco'})
+        # Fecha de depósito: usar la existente o una nueva si el supervisor la proporciona
+        fecha_deposito = request.POST.get('fecha_deposito') or request.POST.get('fecha')
+
+        if monto_confirmado <= 0:
+            return JsonResponse({'success': False, 'error': 'Se requiere monto_confirmado > 0'})
 
         from datetime import datetime
         from django.utils import timezone as tz
 
-        fecha_obj = datetime.strptime(fecha_deposito, '%Y-%m-%d').date()
+        if fecha_deposito:
+            fecha_obj = datetime.strptime(fecha_deposito, '%Y-%m-%d').date()
+            deposito.fecha_deposito = fecha_obj
 
-        deposito.fecha_deposito = fecha_obj
         deposito.monto = monto_confirmado
         deposito.monto_confirmado = monto_confirmado
-        deposito.banco = banco
-        deposito.numero_comprobante = numero_comprobante
-        if observaciones:
-            deposito.observaciones = observaciones
+
+        # Supervisor puede sobreescribir banco/comprobante si es necesario
+        banco_override = request.POST.get('banco')
+        if banco_override:
+            deposito.banco = banco_override
+        numero_comprobante_override = request.POST.get('numero_comprobante')
+        if numero_comprobante_override:
+            deposito.numero_comprobante = numero_comprobante_override
+
+        if observaciones_supervisor:
+            deposito.observaciones_supervisor = observaciones_supervisor
 
         if 'imagen_comprobante' in request.FILES:
             deposito.imagen_comprobante = request.FILES['imagen_comprobante']
@@ -5776,7 +5917,6 @@ def confirmar_deposito(request, deposito_id):
         deposito.verificado = True
         deposito.verificado_por = request.user
         deposito.fecha_verificacion = tz.now()
-        deposito.registrado_por = request.user
         deposito.save()
 
         arqueo = deposito.arqueo
@@ -5784,11 +5924,20 @@ def confirmar_deposito(request, deposito_id):
         efectivo_en_caja = arqueo.efectivo_en_caja
         diferencia_efectivo_real = arqueo.diferencia_efectivo_real
 
-        if abs(diferencia_efectivo_real) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
-            arqueo.estado = 'CERRADO'
-        else:
-            arqueo.estado = 'CON_DIFERENCIAS'
-        arqueo.save()
+        # Verificar si todos los depósitos del arqueo están confirmados
+        todos_confirmados = not arqueo.depositos.filter(verificado=False, monto_declarado__gt=0).exists()
+
+        if todos_confirmados and arqueo.estado == 'DEPOSITO_DECLARADO':
+            # Todos los depósitos confirmados → transicionar a DEPOSITO_CONFIRMADO
+            ArqueoCaja.objects.filter(id=arqueo.id).update(estado='DEPOSITO_CONFIRMADO')
+            arqueo.refresh_from_db()
+        elif todos_confirmados:
+            # Flujo legacy: si no pasó por DEPOSITO_DECLARADO, usar lógica original
+            if abs(diferencia_efectivo_real) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
+                ArqueoCaja.objects.filter(id=arqueo.id).update(estado='CERRADO')
+            else:
+                ArqueoCaja.objects.filter(id=arqueo.id).update(estado='CON_DIFERENCIAS')
+            arqueo.refresh_from_db()
 
         return JsonResponse({
             'success': True,
@@ -5841,6 +5990,13 @@ def obtener_depositos_pendientes(request):
                 'arqueo_id': d.arqueo_id,
                 'fecha_arqueo': d.arqueo.fecha_arqueo.strftime('%d/%m/%Y'),
                 'monto_declarado': d.monto_declarado,
+                'tipo_medio': d.tipo_medio,
+                'tipo_medio_display': d.get_tipo_medio_display(),
+                'banco': d.banco,
+                'banco_display': d.get_banco_display(),
+                'numero_comprobante': d.numero_comprobante,
+                'tiene_imagen': bool(d.imagen_comprobante),
+                'imagen_url': d.imagen_comprobante.url if d.imagen_comprobante else '',
                 'declarado_por': d.declarado_por.get_full_name() if d.declarado_por else '—',
                 'fecha_declaracion': d.fecha_declaracion.strftime('%d/%m/%Y %H:%M') if d.fecha_declaracion else '—',
                 'observaciones': d.observaciones,
@@ -6525,6 +6681,12 @@ def listar_arqueos(request):
                 'fecha_cierre': arqueo.fecha_cierre.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_cierre else '',
                 'tiene_comprobante': arqueo.depositos.filter(verificado=True, numero_comprobante__gt='').exists(),
                 'total_depositado_verificado': sum(d.monto for d in arqueo.depositos.filter(verificado=True)),
+                # Resumen de depósitos para workflow visual
+                'depositos_declarados': arqueo.depositos.filter(monto_declarado__gt=0).count(),
+                'depositos_confirmados': arqueo.depositos.filter(verificado=True).count(),
+                'depositos_pendientes': arqueo.depositos.filter(verificado=False, monto_declarado__gt=0).count(),
+                'tiene_depositos': arqueo.depositos.filter(monto_declarado__gt=0).exists(),
+                'reaperturas': arqueo.historial_reaperturas.count(),
             })
         
         return JsonResponse({
@@ -7385,54 +7547,93 @@ def reabrir_arqueo(request):
     """
     Reabrir un arqueo cerrado para incluir ventas post-cierre.
     Recalcula automáticamente los totales teóricos.
-    SOLO ADMINISTRADORES pueden reabrir arqueos cerrados.
+    Permisos con tolerancia de días:
+    - administrador: sin límite (configurable via ParametroGlobal)
+    - jefe_local / administracion: dentro de N días (default 2)
+    Requiere justificación obligatoria. Crea registro de auditoría.
     """
     try:
-        # Verificar que el usuario sea administrador o superusuario
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
-        
-        if not es_admin:
-            return JsonResponse({
-                'success': False,
-                'error': 'Solo los administradores pueden reabrir arqueos cerrados'
-            })
-        
+        from datetime import date as dt_date
+        from app.models.caja import HistorialReaperturaArqueo
+        from app.models.precios import ParametroGlobal
+
+        rol_usuario = getattr(request.user, 'rol', None)
+
         data = json.loads(request.body)
         fecha_str = data.get('fecha')
+        justificacion = (data.get('justificacion') or '').strip()
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        
+
         if not fecha_str or not sucursal_id:
             return JsonResponse({
                 'success': False,
                 'error': 'Fecha y sucursal requeridas'
             })
-        
+
+        if not justificacion or len(justificacion) < 10:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe ingresar una justificación de al menos 10 caracteres'
+            })
+
         from datetime import datetime
         fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        
+
+        # Verificar permisos y tolerancia de días
+        dias_desde_arqueo = (dt_date.today() - fecha_obj).days
+
+        if rol_usuario == 'administrador':
+            param = ParametroGlobal.objects.filter(nombre='DIAS_TOLERANCIA_REAPERTURA_ADMIN').first()
+            max_dias = param.valor_entero if param else 0  # 0 = ilimitado
+            if max_dias > 0 and dias_desde_arqueo > max_dias:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Solo puede reabrir arqueos de los últimos {max_dias} días'
+                })
+        elif rol_usuario in ['jefe_local', 'administracion']:
+            param = ParametroGlobal.objects.filter(nombre='DIAS_TOLERANCIA_REAPERTURA_JEFE_LOCAL').first()
+            max_dias = param.valor_entero if param else 2
+            if dias_desde_arqueo > max_dias:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Solo puede reabrir arqueos de los últimos {max_dias} días. Han pasado {dias_desde_arqueo} días.'
+                })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para reabrir arqueos'
+            })
+
         # Buscar arqueo cerrado para la fecha
         arqueo = ArqueoCaja.objects.filter(
             sucursal=sucursal,
             fecha_arqueo=fecha_obj,
-            estado__in=['CERRADO', 'CON_DIFERENCIAS', 'REVISADO']
+            estado__in=['CERRADO', 'CON_DIFERENCIAS', 'DEPOSITO_DECLARADO', 'DEPOSITO_CONFIRMADO', 'REVISADO']
         ).first()
-        
+
         if not arqueo:
             return JsonResponse({
                 'success': False,
                 'error': 'No se encontró un arqueo cerrado para reabrir'
             })
-        
+
         # Guardar el estado anterior para el log
         estado_anterior = arqueo.estado
-        fecha_cierre_anterior = arqueo.fecha_cierre
-        
-        # Reabrir el arqueo (solo administradores pueden hacer esto)
+
+        # Crear registro de auditoría
+        HistorialReaperturaArqueo.objects.create(
+            arqueo=arqueo,
+            usuario=request.user,
+            estado_anterior=estado_anterior,
+            justificacion=justificacion,
+        )
+
+        # Reabrir el arqueo
         arqueo.estado = 'ABIERTO'
         arqueo.fecha_cierre = None
-        nombre_admin = request.user.get_full_name() or request.user.username
-        arqueo.observaciones = (arqueo.observaciones or '') + f'\n[REABIERTO {timezone.now().strftime("%d/%m/%Y %H:%M")} por {nombre_admin}] Arqueo reabierto por administrador. Estado anterior: {estado_anterior}'
+        nombre_usuario = request.user.get_full_name() or request.user.username
+        arqueo.observaciones = (arqueo.observaciones or '') + f'\n[REABIERTO {timezone.now().strftime("%d/%m/%Y %H:%M")} por {nombre_usuario}] {justificacion}. Estado anterior: {estado_anterior}'
         
         # Recalcular totales teóricos incluyendo las nuevas ventas
         # Esto reutiliza la lógica de generar_cuadratura_caja

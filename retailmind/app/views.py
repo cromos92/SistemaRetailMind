@@ -19672,15 +19672,22 @@ def qz_firmar(request):
         data = json.loads(request.body)
         mensaje = data.get('request', '')
 
+        # Intentar leer la clave privada desde archivo local o variable de entorno
         key_path = Path(django_settings.QZ_PRIVATE_KEY_PATH)
-        if not key_path.exists():
-            return JsonResponse(
-                {'error': 'Clave privada no encontrada. Configure QZ Tray primero.'},
-                status=500
-            )
+        if key_path.exists():
+            key_data = key_path.read_bytes()
+        else:
+            import os
+            key_env = os.environ.get('QZ_PRIVATE_KEY', '')
+            if not key_env:
+                return JsonResponse(
+                    {'error': 'Clave privada no encontrada. Configure QZ_PRIVATE_KEY en variables de entorno.'},
+                    status=500
+                )
+            key_data = key_env.replace('\\n', '\n').encode('utf-8')
 
         clave_privada = serialization.load_pem_private_key(
-            key_path.read_bytes(),
+            key_data,
             password=None,
             backend=default_backend()
         )

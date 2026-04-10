@@ -176,38 +176,66 @@
 
         /**
          * Conectar manualmente (solicita al usuario seleccionar puerto)
+         * Prueba múltiples baudrates si el primero falla
          */
         async connect(baudRate = TBKPOS_DEFAULT_BAUD) {
             try {
                 console.log('🔌 Solicitando puerto serial...');
-                
-                // Solicitar puerto al usuario
-                this.port = await navigator.serial.requestPort();
-                
-                console.log('📡 Abriendo puerto...');
-                await this.port.open({ baudRate });
-                
-                this.reader = this.port.readable.getReader();
-                this.writer = this.port.writable.getWriter();
-                this.isConnected = true;
-                
-                // Verificar con POLL
-                const pollResult = await this.poll();
-                if (!pollResult) {
-                    throw new Error('POS no responde a POLL');
+
+                // Solicitar puerto al usuario (abre diálogo del navegador)
+                const selectedPort = await navigator.serial.requestPort();
+
+                // Probar baudrates: primero el default, luego otros
+                const baudratesToTry = [baudRate, ...BAUDRATES.filter(b => b !== baudRate)];
+
+                for (const baud of baudratesToTry) {
+                    try {
+                        console.log(`📡 Abriendo puerto a ${baud} bps...`);
+
+                        // Cerrar si estaba abierto de un intento previo
+                        if (selectedPort.readable || selectedPort.writable) {
+                            try { await selectedPort.close(); } catch(e) {}
+                            await new Promise(r => setTimeout(r, 300));
+                        }
+
+                        await selectedPort.open({ baudRate: baud });
+
+                        this.port = selectedPort;
+                        this.reader = selectedPort.readable.getReader();
+                        this.writer = selectedPort.writable.getWriter();
+                        this.isConnected = true;
+                        this.currentBaudrate = baud;
+
+                        // Verificar con POLL
+                        const pollResult = await this.poll();
+                        if (pollResult) {
+                            const info = selectedPort.getInfo();
+                            const deviceType = this.detectDeviceType(info);
+
+                            console.log(`✅ POS conectado exitosamente a ${baud} bps`);
+                            console.log(`📱 Dispositivo: ${deviceType}`);
+
+                            return {
+                                success: true,
+                                connected: true,
+                                port: `VID:${info.usbVendorId} PID:${info.usbProductId}`,
+                                baudrate: baud,
+                                deviceType: deviceType,
+                                info: info
+                            };
+                        }
+
+                        // POLL falló, limpiar y probar siguiente baudrate
+                        await this.disconnect();
+
+                    } catch (err) {
+                        console.log(`❌ Fallo con ${baud} bps: ${err.message}`);
+                        try { await this.disconnect(); } catch(e) {}
+                    }
                 }
-                
-                console.log('✅ POS conectado exitosamente');
-                
-                const info = this.port.getInfo();
-                return {
-                    success: true,
-                    connected: true,
-                    port: `VID:${info.usbVendorId} PID:${info.usbProductId}`,
-                    baudrate: baudRate,
-                    info: info
-                };
-                
+
+                throw new Error('POS no responde en ninguna velocidad. Verifique que esté encendido.');
+
             } catch (error) {
                 console.error('❌ Error conectando:', error);
                 this.isConnected = false;

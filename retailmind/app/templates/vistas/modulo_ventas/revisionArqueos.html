@@ -37,7 +37,14 @@
     .arqueo-row.estado-cerrado { border-left-color: var(--nexo-success); }
     .arqueo-row.estado-diferencias { border-left-color: var(--nexo-error); }
     .arqueo-row.estado-abierto { border-left-color: var(--nexo-warning); }
+    .arqueo-row.estado-deposito-declarado { border-left-color: #6C63FF; }
+    .arqueo-row.estado-deposito-confirmado { border-left-color: #00B894; }
     .arqueo-row.estado-revisado { border-left-color: var(--nexo-primary); }
+    .mini-step { width:12px; height:12px; border-radius:50%; display:inline-block; margin:0 2px; border:2px solid var(--nexo-gray-300); background:var(--nexo-gray-100); }
+    .mini-step.done { background:var(--nexo-success); border-color:var(--nexo-success); }
+    .mini-step.active { background:var(--nexo-primary); border-color:var(--nexo-primary); animation:pulse-step 2s infinite; }
+    .mini-step.warn { background:var(--nexo-warning); border-color:var(--nexo-warning); }
+    @keyframes pulse-step { 0%,100%{box-shadow:0 0 0 2px rgba(0,102,255,.2);} 50%{box-shadow:0 0 0 5px rgba(0,102,255,.1);} }
     .filtro-tab { cursor: pointer; padding: .35rem .8rem; border-radius: 2rem; font-size: .8rem; font-weight: 600; border: 1px solid var(--nexo-gray-300); background: #fff; color: var(--nexo-gray-700); transition: all .15s; }
     .filtro-tab:hover { border-color: var(--nexo-primary); color: var(--nexo-primary); }
     .filtro-tab.active { background: var(--nexo-primary); color: #fff; border-color: var(--nexo-primary); }
@@ -121,6 +128,8 @@
             <span class="filtro-tab active" data-estado="" onclick="filtrarEstado(this)">Todos</span>
             <span class="filtro-tab" data-estado="CON_DIFERENCIAS" onclick="filtrarEstado(this)">Con Diferencias</span>
             <span class="filtro-tab" data-estado="CERRADO" onclick="filtrarEstado(this)">Cerrados</span>
+            <span class="filtro-tab" data-estado="DEPOSITO_DECLARADO" onclick="filtrarEstado(this)">Dep. Declarados</span>
+            <span class="filtro-tab" data-estado="DEPOSITO_CONFIRMADO" onclick="filtrarEstado(this)">Dep. Confirmados</span>
             <span class="filtro-tab" data-estado="ABIERTO" onclick="filtrarEstado(this)">Abiertos</span>
             <span class="filtro-tab" data-estado="REVISADO" onclick="filtrarEstado(this)">Revisados</span>
         </div>
@@ -147,7 +156,7 @@
             <div class="card-body py-2">
                 <div class="table-responsive">
                     <table class="table table-sm mb-0">
-                        <thead><tr><th>Fecha</th><th>Declarado por</th><th class="text-end">Monto</th><th>Hora</th><th>Acción</th></tr></thead>
+                        <thead><tr><th>Fecha</th><th>Declarado por</th><th>Tipo</th><th class="text-end">Monto</th><th>Banco</th><th>Hora</th><th>Accion</th></tr></thead>
                         <tbody id="bodyDepPendientes"></tbody>
                     </table>
                 </div>
@@ -292,30 +301,53 @@
         </div>
     </div>
 
-    <!-- ===== MODAL CONFIRMAR DEPÓSITO DECLARADO ===== -->
+    <!-- ===== MODAL CONFIRMAR DEPÓSITO DECLARADO (Simplificado) ===== -->
     <div class="modal fade" id="modalConfirmarDep" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header bg-success" style="padding:.75rem 1.25rem;">
-                    <h6 class="modal-title text-white mb-0"><i class="ri-bank-line me-2"></i>Confirmar Depósito</h6>
+                    <h6 class="modal-title text-white mb-0"><i class="ri-bank-line me-2"></i>Confirmar Deposito</h6>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert mb-3" style="background:rgba(255,176,32,.1);border:1px solid var(--nexo-warning);border-radius:var(--nexo-radius-md);font-size:.85rem;">
-                        <div><i class="ri-user-line me-1" style="color:var(--nexo-warning);"></i><strong>Declarado por:</strong> <span id="confDeclaradoPor">—</span></div>
-                        <div><i class="ri-money-dollar-circle-line me-1"></i><strong>Monto declarado:</strong> <span id="confMonto" style="font-family:monospace;font-weight:700;">$0</span></div>
-                        <div><i class="ri-time-line me-1"></i><strong>Fecha declaración:</strong> <span id="confFechaDecl">—</span></div>
-                    </div>
-                    <input type="hidden" id="confDepositoId">
-                    <div class="row g-3">
-                        <div class="col-md-6"><label class="form-label fw-bold">Fecha Depósito *</label><input type="date" class="form-control" id="confFecha"></div>
-                        <div class="col-md-6"><label class="form-label fw-bold">Monto Confirmado *</label><div class="input-group"><span class="input-group-text">$</span><input type="number" class="form-control" id="confMontoReal" min="1"></div></div>
-                        <div class="col-md-6"><label class="form-label fw-bold">Banco *</label>
-                            <select class="form-select" id="confBanco"><option value="ESTADO">BancoEstado</option><option value="SANTANDER">Santander</option><option value="CHILE">Banco de Chile</option><option value="BCI">BCI</option><option value="SCOTIABANK">Scotiabank</option><option value="OTRO">Otro</option></select>
+                    <!-- Datos del cajero (solo lectura) -->
+                    <div class="mb-3 p-3 rounded" style="background:rgba(255,176,32,.08);border:1px solid var(--nexo-warning);border-radius:var(--nexo-radius-md);">
+                        <h6 style="font-size:.82rem;font-weight:700;color:var(--nexo-warning);margin-bottom:.5rem;"><i class="ri-user-line me-1"></i>Declarado por el Cajero</h6>
+                        <div class="row g-2" style="font-size:.85rem;">
+                            <div class="col-md-6"><strong>Cajero:</strong> <span id="confDeclaradoPor">-</span></div>
+                            <div class="col-md-6"><strong>Fecha:</strong> <span id="confFechaDecl">-</span></div>
+                            <div class="col-md-4"><strong>Tipo:</strong> <span id="confTipoMedio" style="font-weight:700;">-</span></div>
+                            <div class="col-md-4"><strong>Monto:</strong> <span id="confMonto" style="font-family:monospace;font-weight:700;color:var(--nexo-primary);">$0</span></div>
+                            <div class="col-md-4"><strong>Banco:</strong> <span id="confBancoDeclarado">-</span></div>
+                            <div class="col-md-6"><strong>N Comprobante:</strong> <span id="confNumDeclarado">-</span></div>
+                            <div class="col-md-6"><strong>Obs:</strong> <span id="confObsDeclarado" style="font-size:.8rem;">-</span></div>
                         </div>
-                        <div class="col-md-6"><label class="form-label">N° Comprobante</label><input type="text" class="form-control" id="confNumero"></div>
-                        <div class="col-md-6"><label class="form-label">Imagen</label><input type="file" class="form-control" id="confImagen" accept="image/*"></div>
-                        <div class="col-md-6"><label class="form-label">Observaciones</label><input type="text" class="form-control" id="confObs"></div>
+                        <!-- Preview de imagen del comprobante -->
+                        <div id="confImagenPreview" class="mt-2" style="display:none;">
+                            <strong style="font-size:.8rem;">Comprobante adjunto:</strong>
+                            <a id="confImagenLink" href="#" target="_blank"><img id="confImagenImg" src="" alt="Comprobante" style="max-height:150px;border-radius:8px;border:1px solid var(--nexo-gray-300);cursor:pointer;margin-top:4px;"></a>
+                        </div>
+                    </div>
+
+                    <!-- Datos del supervisor (editable) -->
+                    <div class="p-3 rounded" style="background:rgba(0,212,170,.05);border:1px solid var(--nexo-success);border-radius:var(--nexo-radius-md);">
+                        <h6 style="font-size:.82rem;font-weight:700;color:var(--nexo-success);margin-bottom:.5rem;"><i class="ri-shield-check-line me-1"></i>Confirmacion del Supervisor</h6>
+                        <input type="hidden" id="confDepositoId">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Monto Confirmado *</label>
+                                <div class="input-group"><span class="input-group-text">$</span><input type="number" class="form-control" id="confMontoReal" min="1"></div>
+                                <small class="text-muted" style="font-size:.75rem;">Pre-llenado con monto declarado. Ajuste si el comprobante muestra otro valor.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Fecha Deposito</label>
+                                <input type="date" class="form-control" id="confFecha">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Observaciones del Supervisor</label>
+                                <textarea class="form-control" id="confObsSupervisor" rows="2" placeholder="Solo si hay discrepancia o algo que notar..."></textarea>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer py-2">
@@ -409,33 +441,73 @@ function renderKpis(ind) {
     document.getElementById('kpiCumplimiento').textContent = (ind.porcentaje_cumplimiento || 0).toFixed(0) + '%';
 }
 
+function miniStepperHtml(estado) {
+    // 5 pasos: Conteo, Cierre, Deposito, Confirmacion, Revision
+    const map = {
+        'ABIERTO':              [1,0,0,0,0],
+        'CERRADO':              [2,2,0,0,0],
+        'CON_DIFERENCIAS':      [2,3,0,0,0],
+        'DEPOSITO_DECLARADO':   [2,2,1,0,0],
+        'DEPOSITO_CONFIRMADO':  [2,2,2,0,0],
+        'REVISADO':             [2,2,2,2,2],
+    };
+    const steps = map[estado] || [0,0,0,0,0];
+    const labels = ['Conteo','Cierre','Dep.','Conf.','Rev.'];
+    return '<div class="d-flex align-items-center gap-0" title="' + labels.join(' > ') + '">' +
+        steps.map((s,i) => {
+            const cls = s===2?'done':s===1?'active':s===3?'warn':'';
+            return `<span class="mini-step ${cls}" title="${labels[i]}"></span>`;
+        }).join('') + '</div>';
+}
+
+function estadoBadgeColor(estado) {
+    const colors = {
+        'CERRADO':['rgba(0,212,170,.15)','var(--nexo-success)'],
+        'CON_DIFERENCIAS':['rgba(255,71,87,.15)','var(--nexo-error)'],
+        'DEPOSITO_DECLARADO':['rgba(108,99,255,.15)','#6C63FF'],
+        'DEPOSITO_CONFIRMADO':['rgba(0,184,148,.15)','#00B894'],
+        'REVISADO':['rgba(0,102,255,.15)','var(--nexo-primary)'],
+        'ABIERTO':['rgba(255,176,32,.15)','var(--nexo-warning)'],
+    };
+    return colors[estado] || ['rgba(128,128,128,.15)','#888'];
+}
+
 function renderArqueos(arqueos) {
     const container = document.getElementById('listaArqueos');
     if (arqueos.length === 0) {
-        container.innerHTML = '<div class="text-center py-5"><i class="ri-folder-open-line" style="font-size:3rem;color:var(--nexo-gray-300);"></i><p class="text-muted mt-2">No hay arqueos en el período seleccionado</p></div>';
+        container.innerHTML = '<div class="text-center py-5"><i class="ri-folder-open-line" style="font-size:3rem;color:var(--nexo-gray-300);"></i><p class="text-muted mt-2">No hay arqueos en el periodo seleccionado</p></div>';
         return;
     }
     let html = '';
     arqueos.forEach(a => {
-        const estadoClass = a.estado === 'CERRADO' ? 'estado-cerrado' : a.estado === 'CON_DIFERENCIAS' ? 'estado-diferencias' : a.estado === 'ABIERTO' ? 'estado-abierto' : 'estado-revisado';
+        const estadoClassMap = {
+            'CERRADO':'estado-cerrado','CON_DIFERENCIAS':'estado-diferencias','ABIERTO':'estado-abierto',
+            'DEPOSITO_DECLARADO':'estado-deposito-declarado','DEPOSITO_CONFIRMADO':'estado-deposito-confirmado','REVISADO':'estado-revisado'
+        };
+        const estadoClass = estadoClassMap[a.estado] || 'estado-abierto';
         const diffEf = a.diferencia_efectivo || 0;
         const diffTbk = a.diferencia_transbank || 0;
         const diffColor = diffEf === 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
         const diffSign = diffEf > 0 ? '+' : '';
         const fechaDisplay = new Date(a.fecha_arqueo + 'T12:00:00').toLocaleDateString('es-CL', {weekday:'short', day:'numeric', month:'short'});
+        const [bgBadge, colorBadge] = estadoBadgeColor(a.estado);
+        const stepper = miniStepperHtml(a.estado);
 
         html += `<div class="arqueo-row ${estadoClass}">
             <div class="row align-items-center g-2">
                 <div class="col-md-2">
                     <strong style="font-size:.92rem;">${fechaDisplay}</strong>
-                    <div><span class="badge" style="font-size:.68rem;background:${a.estado==='CERRADO'?'rgba(0,212,170,.15)':a.estado==='CON_DIFERENCIAS'?'rgba(255,71,87,.15)':a.estado==='REVISADO'?'rgba(0,102,255,.15)':'rgba(255,176,32,.15)'};color:${a.estado==='CERRADO'?'var(--nexo-success)':a.estado==='CON_DIFERENCIAS'?'var(--nexo-error)':a.estado==='REVISADO'?'var(--nexo-primary)':'var(--nexo-warning)'};">${a.estado_display}</span></div>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <span class="badge" style="font-size:.68rem;background:${bgBadge};color:${colorBadge};">${a.estado_display}</span>
+                        ${stepper}
+                    </div>
                 </div>
                 <div class="col-md-2 text-center">
-                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">Efectivo Teórico</div>
+                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">Efectivo Teorico</div>
                     <strong style="font-family:monospace;">${fmt(a.efectivo_teorico)}</strong>
                 </div>
                 <div class="col-md-2 text-center">
-                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">Efectivo Físico</div>
+                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">Efectivo Fisico</div>
                     <strong style="font-family:monospace;">${fmt(a.efectivo_fisico)}</strong>
                 </div>
                 <div class="col-md-2 text-center">
@@ -449,7 +521,7 @@ function renderArqueos(arqueos) {
                 </div>
                 <div class="col-md-2 text-end">
                     <button class="btn btn-sm btn-outline-primary me-1" onclick="verDetalle(${a.id})" title="Ver detalle"><i class="ri-eye-line"></i></button>
-                    ${a.estado==='CON_DIFERENCIAS'?`<button class="btn btn-sm btn-success" onclick="aprobarArqueo(${a.id})" title="Aprobar"><i class="ri-check-line me-1"></i>Aprobar</button>`:''}
+                    ${['CON_DIFERENCIAS','DEPOSITO_CONFIRMADO','CERRADO'].includes(a.estado)?`<button class="btn btn-sm btn-success" onclick="aprobarArqueo(${a.id})" title="Aprobar"><i class="ri-check-line me-1"></i>Aprobar</button>`:''}
                 </div>
             </div>
         </div>`;
@@ -675,37 +747,59 @@ function cargarDepositosPend() {
             document.getElementById('panelDepPendientes').style.display = '';
             let html = '';
             deps.forEach(d => {
+                const tipoIcono = d.tipo_medio === 'CHEQUE' ? '<i class="ri-file-text-line" style="color:var(--nexo-primary);"></i>' : '<i class="ri-money-dollar-circle-line" style="color:var(--nexo-success);"></i>';
+                const imgIcon = d.tiene_imagen ? ' <i class="ri-image-line text-success" title="Tiene comprobante"></i>' : '';
                 html += `<tr>
                     <td>${d.fecha_arqueo}</td>
                     <td><strong>${d.declarado_por}</strong></td>
+                    <td>${tipoIcono} ${d.tipo_medio_display || 'Efectivo'}</td>
                     <td class="text-end" style="font-family:monospace;color:var(--nexo-warning);font-weight:700;">${fmt(d.monto_declarado)}</td>
+                    <td style="font-size:.8rem;">${d.banco_display || '-'}${imgIcon}</td>
                     <td style="font-size:.8rem;">${d.fecha_declaracion}</td>
-                    <td><button class="btn btn-sm btn-success" onclick="abrirConfirmarDep(${d.id},${d.monto_declarado},'${d.declarado_por}','${d.fecha_declaracion}')"><i class="ri-bank-line me-1"></i>Confirmar</button></td>
+                    <td><button class="btn btn-sm btn-success" onclick="abrirConfirmarDep(${JSON.stringify(d).replace(/"/g,'&quot;')})"><i class="ri-bank-line me-1"></i>Confirmar</button></td>
                 </tr>`;
             });
             document.getElementById('bodyDepPendientes').innerHTML = html;
         });
 }
 
-function abrirConfirmarDep(id, monto, nombre, fecha) {
-    document.getElementById('confDepositoId').value = id;
-    document.getElementById('confDeclaradoPor').textContent = nombre;
-    document.getElementById('confMonto').textContent = fmt(monto);
-    document.getElementById('confFechaDecl').textContent = fecha;
-    document.getElementById('confMontoReal').value = monto;
+function abrirConfirmarDep(dep) {
+    // dep es el objeto completo del deposito
+    if (typeof dep === 'string') dep = JSON.parse(dep);
+    document.getElementById('confDepositoId').value = dep.id;
+    document.getElementById('confDeclaradoPor').textContent = dep.declarado_por || '-';
+    document.getElementById('confMonto').textContent = fmt(dep.monto_declarado);
+    document.getElementById('confFechaDecl').textContent = dep.fecha_declaracion || '-';
+    document.getElementById('confTipoMedio').textContent = dep.tipo_medio_display || dep.tipo_medio || 'Efectivo';
+    document.getElementById('confBancoDeclarado').textContent = dep.banco_display || dep.banco || '-';
+    document.getElementById('confNumDeclarado').textContent = dep.numero_comprobante || '-';
+    document.getElementById('confObsDeclarado').textContent = dep.observaciones || '-';
+
+    // Imagen del comprobante
+    if (dep.tiene_imagen && dep.imagen_url) {
+        document.getElementById('confImagenImg').src = dep.imagen_url;
+        document.getElementById('confImagenLink').href = dep.imagen_url;
+        document.getElementById('confImagenPreview').style.display = '';
+    } else {
+        document.getElementById('confImagenPreview').style.display = 'none';
+    }
+
+    // Pre-llenar datos del supervisor
+    document.getElementById('confMontoReal').value = dep.monto_declarado;
     document.getElementById('confFecha').value = new Date().toISOString().split('T')[0];
+    document.getElementById('confObsSupervisor').value = '';
+
     new bootstrap.Modal(document.getElementById('modalConfirmarDep')).show();
 }
 
 function enviarConfirmacion() {
     const depId = document.getElementById('confDepositoId').value;
     const fd = new FormData();
-    fd.append('fecha_deposito', document.getElementById('confFecha').value);
     fd.append('monto_confirmado', document.getElementById('confMontoReal').value);
-    fd.append('banco', document.getElementById('confBanco').value);
-    fd.append('numero_comprobante', document.getElementById('confNumero').value);
-    fd.append('observaciones', document.getElementById('confObs').value);
-    const img = document.getElementById('confImagen').files[0]; if (img) fd.append('imagen_comprobante', img);
+    const fecha = document.getElementById('confFecha').value;
+    if (fecha) fd.append('fecha_deposito', fecha);
+    const obsSupervisor = document.getElementById('confObsSupervisor').value;
+    if (obsSupervisor) fd.append('observaciones_supervisor', obsSupervisor);
     fetch('/app/api/cuadratura/deposito/' + depId + '/confirmar/', { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd })
         .then(r => r.json()).then(res => {
             if (res.success) { Swal.fire('Confirmado', res.message, 'success'); bootstrap.Modal.getInstance(document.getElementById('modalConfirmarDep')).hide(); cargarDatos(); }

@@ -387,19 +387,19 @@
                                             <form id="formCliente">
                                                 <div class="row g-2">
                                                     <div class="col-md-6">
-                                                        <label class="form-label fw-medium small" id="labelNombre">Nombre/Razón Social</label>
-                                                        <input type="text" class="form-control form-control-sm" id="clienteNombre" placeholder="Nombre completo" oninput="actualizarPreviewFactura()">
+                                                        <label class="form-label fw-medium small" id="labelNombre">Nombre/Razón Social <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px; vertical-align:middle;">OBLIGATORIO</span></label>
+                                                        <input type="text" class="form-control form-control-sm border-danger border-opacity-50" id="clienteNombre" placeholder="Nombre completo" oninput="actualizarPreviewFactura()">
                                                     </div>
                                                     <div class="col-md-6">
-                                                        <label class="form-label fw-medium small" id="labelRut">RUT</label>
-                                                        <input type="text" class="form-control form-control-sm" id="clienteRut" placeholder="12345678-9" oninput="actualizarPreviewFactura()">
+                                                        <label class="form-label fw-medium small" id="labelRut">RUT <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px; vertical-align:middle;">OBLIGATORIO</span></label>
+                                                        <input type="text" class="form-control form-control-sm border-danger border-opacity-50" id="clienteRut" placeholder="12345678-9" oninput="actualizarPreviewFactura()">
                                                     </div>
                                                     <div class="col-md-6">
-                                                        <label class="form-label small">Email</label>
-                                                        <input type="email" class="form-control form-control-sm" id="clienteEmail" placeholder="correo@ejemplo.com">
+                                                        <label class="form-label small" id="labelEmail">Email <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px; vertical-align:middle;">OBLIGATORIO</span></label>
+                                                        <input type="email" class="form-control form-control-sm border-danger border-opacity-50" id="clienteEmail" placeholder="correo@ejemplo.com">
                                                     </div>
                                                     <div class="col-md-6">
-                                                        <label class="form-label small">Teléfono <span class="text-muted">(Opcional)</span></label>
+                                                        <label class="form-label small text-muted" id="labelTelefono">Teléfono <span class="badge bg-secondary bg-opacity-50 ms-1" style="font-size:9px; vertical-align:middle;">OPCIONAL</span></label>
                                                         <input type="tel" class="form-control form-control-sm" id="clienteTelefono" placeholder="+56 9 1234 5678">
                                                     </div>
                                                 </div>
@@ -1187,6 +1187,7 @@
                                     <div class="col-12">
                                         <label class="form-label fw-bold mb-1 small text-uppercase text-muted">
                                             <i class="ri-price-tag-3-line me-1"></i>Precio de Venta
+                                            <span class="text-info fw-normal text-lowercase ms-1" id="precioOriginalRef" style="display:none;">(mín: $<span id="precioOriginalValor">0</span>)</span>
                                         </label>
                                         <div class="input-group input-group-lg">
                                             <span class="input-group-text fw-bold">$</span>
@@ -1197,6 +1198,7 @@
                                                    onchange="actualizarSubtotalModal()"
                                                    oninput="actualizarSubtotalModal()">
                                         </div>
+                                        <small class="text-muted" id="precioEditHint"><i class="ri-arrow-up-line"></i> Puede subir el precio, no bajarlo</small>
                                     </div>
 
                                     <!-- Cantidad -->
@@ -4890,6 +4892,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const precioOriginal = producto.precio_unitario || producto.precio;
             const precioConDescuento = precioOriginal - descuento;
             const subtotalConDescuento = precioConDescuento * producto.cantidad;
+            // Detectar si el precio fue modificado al alza respecto al precio base del producto
+            const precioBaseProducto = producto.precio_original || 0;
+            const precioFueModificado = precioBaseProducto > 0 && precioOriginal > precioBaseProducto;
             
             // ✅ Ítem pendiente de despacho (sin SKU asignado)
             const esPendienteDespacho = producto.es_pendiente_despacho === true;
@@ -4986,7 +4991,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="text-decoration-line-through text-muted small">${formatearMoneda(precioOriginal)}</span><br>
                         <span class="text-success fw-bold">${formatearMoneda(precioConDescuento)}</span>
                         <span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem">-${(precioOriginal > 0 ? (descuento/precioOriginal*100).toFixed(0) : 0)}%</span>
-                    ` : formatearMoneda(precioMostrar))}
+                    ` : (precioFueModificado ? `
+                        <span class="text-decoration-line-through text-muted small">${formatearMoneda(precioBaseProducto)}</span><br>
+                        <span class="text-primary fw-bold">${formatearMoneda(precioMostrar)}</span>
+                        <span class="badge bg-primary bg-opacity-75 ms-1" style="font-size:0.6rem" title="Precio modificado al alza">+${((precioOriginal - precioBaseProducto) / precioBaseProducto * 100).toFixed(0)}%</span>
+                    ` : formatearMoneda(precioMostrar)))}
                 </td>
                 <td class="text-end">
                     ${esProductoDevuelto ? `
@@ -5014,9 +5023,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             <button class="btn btn-outline-warning" onclick="mostrarModalDescuento(${index})" title="Aplicar Descuento">
                                 <i class="ri-price-tag-3-line"></i>
                             </button>
-                            <button class="btn btn-outline-secondary" disabled title="Eliminar producto no permitido">
+                            ${producto.es_nuevo_agregado ? `
+                            <button class="btn btn-outline-danger" onclick="eliminarProductoNuevo(${index})" title="Eliminar producto agregado">
                                 <i class="ri-delete-bin-line"></i>
                             </button>
+                            ` : `
+                            <button class="btn btn-outline-secondary" disabled title="Solo se pueden eliminar productos agregados nuevos">
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                            `}
                         </div>
                     `}
                 </td>
@@ -5400,6 +5415,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Detectar si es RUT de empresa
         const esEmpresa = esRutEmpresa(rut);
 
+        // Guardar el tipo de documento actualmente seleccionado ANTES de la búsqueda
+        const tipoDocAntesBusqueda = document.querySelector('input[name="tipoDocumento"]:checked')?.value;
+
         // Buscar cliente en la base de datos
         fetch(`${apiUrls.buscarCliente}?rut=${encodeURIComponent(rut)}`)
             .then(response => response.json())
@@ -5408,12 +5426,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     llenarFormularioCliente(data.cliente);
                     document.getElementById('clienteEncontrado').classList.remove('d-none');
                     mostrarNotificacion('Cliente encontrado en el sistema', 'success');
-                    
-                    // Si es empresa o tiene datos de facturación, sugerir factura electrónica
+
+                    // Solo sugerir factura si NO hay tipo de documento ya seleccionado por el usuario
+                    // (es decir, solo sugerir si el usuario NO eligió explícitamente boleta)
                     if (esEmpresa || data.cliente.giro) {
-                        sugerirTipoDocumento('FACTURA_ELECTRONICA', 'El RUT corresponde a una empresa. Se recomienda Factura Electrónica.');
+                        if (!tipoDocAntesBusqueda || tipoDocAntesBusqueda === 'FACTURA_ELECTRONICA') {
+                            sugerirTipoDocumento('FACTURA_ELECTRONICA', 'El RUT corresponde a una empresa. Se recomienda Factura Electrónica.');
+                        } else {
+                            mostrarNotificacion('Este RUT corresponde a empresa. Puede cambiar a Factura Electrónica si lo necesita.', 'info');
+                        }
                     }
-                    
+
                     // Si el cliente tiene datos de facturación y está seleccionada factura electrónica, mostrar la sección
                     const tipoDoc = document.querySelector('input[name="tipoDocumento"]:checked')?.value;
                     if (tipoDoc === 'FACTURA_ELECTRONICA' && (data.cliente.giro || data.cliente.direccion)) {
@@ -5427,14 +5450,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Llenar solo el RUT formateado (sin puntos)
                     const rutFormateado = data.rut_formateado || formatearRut(rut);
                     document.getElementById('clienteRut').value = rutFormateado;
-                    
-                    // Si es empresa, sugerir factura electrónica
+
+                    // Solo sugerir factura si el usuario NO eligió explícitamente boleta
                     if (esEmpresa) {
-                        sugerirTipoDocumento('FACTURA_ELECTRONICA', 'El RUT ingresado corresponde a una empresa. Se ha seleccionado Factura Electrónica automáticamente.');
+                        if (!tipoDocAntesBusqueda || tipoDocAntesBusqueda === 'FACTURA_ELECTRONICA') {
+                            sugerirTipoDocumento('FACTURA_ELECTRONICA', 'El RUT ingresado corresponde a una empresa. Se ha seleccionado Factura Electrónica automáticamente.');
+                        } else {
+                            mostrarNotificacion('Este RUT corresponde a empresa. Puede cambiar a Factura Electrónica si lo necesita.', 'info');
+                        }
                     }
-                    
+
                     mostrarNotificacion('Cliente nuevo. Complete los datos requeridos.', 'info');
-                    
+
                     // Enfocar en el campo de nombre
                     setTimeout(() => {
                         document.getElementById('clienteNombre').focus();
@@ -6267,8 +6294,26 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('productoColor').value = producto.color || '';
 
         // Controles
-        document.getElementById('productoPrecio').value = producto.precio_venta || 0;
+        const precioBase = producto.precio_venta || 0;
+        document.getElementById('productoPrecio').value = precioBase;
+        document.getElementById('productoPrecio').min = precioBase;
+        document.getElementById('productoPrecio').dataset.precioOriginal = precioBase;
         document.getElementById('productoCantidad').value = 1;
+
+        // Mostrar referencia de precio original
+        const refEl = document.getElementById('precioOriginalRef');
+        const refValEl = document.getElementById('precioOriginalValor');
+        if (refEl && refValEl && precioBase > 0) {
+            refValEl.textContent = precioBase.toLocaleString('es-CL');
+            refEl.style.display = 'inline';
+        } else if (refEl) {
+            refEl.style.display = 'none';
+        }
+        // Limpiar warnings previos
+        const prevWarning = document.getElementById('precio-warning-modal');
+        if (prevWarning) prevWarning.remove();
+        document.getElementById('productoPrecio').classList.remove('is-invalid');
+        document.getElementById('productoPrecio').style.borderColor = '';
 
         // ---- Panel derecho: nueva UI ----
         const stock = producto.stock || 0;
@@ -6396,17 +6441,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function actualizarSubtotalModal() {
-        const precio = parseInt(document.getElementById('productoPrecio').value) || 0;
+        const precioInput = document.getElementById('productoPrecio');
+        let precio = parseInt(precioInput.value) || 0;
+        const precioOriginal = parseInt(precioInput.dataset.precioOriginal) || 0;
         const cantidad = parseInt(document.getElementById('productoCantidad').value) || 0;
+
+        // Validar que el precio no sea menor al original
+        if (precioOriginal > 0 && precio < precioOriginal) {
+            precioInput.classList.add('is-invalid');
+            precioInput.style.borderColor = '#dc3545';
+            // Mostrar indicador visual debajo del precio
+            let warningEl = document.getElementById('precio-warning-modal');
+            if (!warningEl) {
+                warningEl = document.createElement('small');
+                warningEl.id = 'precio-warning-modal';
+                warningEl.className = 'text-danger d-block mt-1';
+                precioInput.closest('.input-group').after(warningEl);
+            }
+            warningEl.innerHTML = `<i class="ri-error-warning-line"></i> Mínimo: $${precioOriginal.toLocaleString('es-CL')} (no se puede bajar el precio)`;
+        } else {
+            precioInput.classList.remove('is-invalid');
+            precioInput.style.borderColor = '';
+            const warningEl = document.getElementById('precio-warning-modal');
+            if (warningEl) warningEl.remove();
+        }
+
         const subtotal = precio * cantidad;
-        
         document.getElementById('subtotalProductoModal').textContent = subtotal.toLocaleString('es-CL');
-        
+
         // Validar si puede agregar (verificar stock disponible)
         const maxDisponible = parseInt(document.getElementById('productoCantidad').max) || 0;
         if (cantidad > maxDisponible) {
             document.getElementById('productoCantidad').value = maxDisponible;
-            mostrarNotificacion(`⚠️ Cantidad ajustada al máximo disponible: ${maxDisponible}`, 'warning');
+            mostrarNotificacion(`Cantidad ajustada al máximo disponible: ${maxDisponible}`, 'warning');
         }
     }
 
@@ -6419,58 +6486,69 @@ document.addEventListener('DOMContentLoaded', function() {
         const articulo = document.getElementById('productoArticulo').value.trim();
         const cantidad = parseInt(document.getElementById('productoCantidad').value) || 0;
         const precio = parseInt(document.getElementById('productoPrecio').value) || 0;
+        const precioOriginal = parseInt(document.getElementById('productoPrecio').dataset.precioOriginal) || 0;
         const stock = parseInt(document.getElementById('productoStock').value) || 0;
 
-        console.log(`🔍 Validando agregar producto: SKU=${sku}, Cantidad=${cantidad}, Stock=${stock}`);
+        console.log(`Validando agregar producto: SKU=${sku}, Cantidad=${cantidad}, Stock=${stock}, Precio=${precio}, PrecioOriginal=${precioOriginal}`);
 
         // Validaciones básicas
         if (!sku || !articulo) {
-            mostrarNotificacion('❌ Debe buscar un producto válido', 'warning');
+            mostrarNotificacion('Debe buscar un producto válido', 'warning');
             return;
         }
 
         if (cantidad <= 0) {
-            mostrarNotificacion('❌ La cantidad debe ser mayor a 0', 'warning');
+            mostrarNotificacion('La cantidad debe ser mayor a 0', 'warning');
             return;
         }
 
         if (precio <= 0) {
-            mostrarNotificacion('❌ El precio debe ser mayor a 0', 'warning');
+            mostrarNotificacion('El precio debe ser mayor a 0', 'warning');
+            return;
+        }
+
+        // Validar que el precio no sea menor al original
+        if (precioOriginal > 0 && precio < precioOriginal) {
+            mostrarNotificacion(`El precio no puede ser menor al precio de venta ($${precioOriginal.toLocaleString('es-CL')}). Solo se permite subir el precio.`, 'error');
+            document.getElementById('productoPrecio').focus();
             return;
         }
 
         // Validar stock disponible total
         if (stock <= 0) {
-            mostrarNotificacion('❌ Este producto no tiene stock disponible', 'error');
+            mostrarNotificacion('Este producto no tiene stock disponible', 'error');
             return;
         }
 
         const totalEnCarrito = cantidadTotalSku(sku);
         const productoSinDcto = ticketActual.productos.find(p => p.sku == sku && !(p.descuento_unitario > 0));
-        
+
         if (totalEnCarrito + cantidad > stock) {
             const disponibleParaAgregar = stock - totalEnCarrito;
             mostrarNotificacion(
-                `❌ STOCK INSUFICIENTE\n\n` +
-                `🛒 Ya tienes: ${totalEnCarrito} unidades en el ticket\n` +
-                `📦 Stock total: ${stock} unidades\n` +
-                `➕ Intentas agregar: ${cantidad} unidades\n\n` +
-                `✅ Máximo que puedes agregar: ${disponibleParaAgregar} unidades`,
+                `STOCK INSUFICIENTE\n\n` +
+                `Ya tienes: ${totalEnCarrito} unidades en el ticket\n` +
+                `Stock total: ${stock} unidades\n` +
+                `Intentas agregar: ${cantidad} unidades\n\n` +
+                `Máximo que puedes agregar: ${disponibleParaAgregar} unidades`,
                 'error',
                 6000
             );
             return;
         }
 
-        if (productoSinDcto) {
+        // Detectar si hubo cambio de precio
+        const precioModificado = (precioOriginal > 0 && precio !== precioOriginal);
+
+        if (productoSinDcto && !precioModificado) {
+            // Solo incrementar cantidad si el precio no fue modificado
             const cantAnterior = productoSinDcto.cantidad;
             productoSinDcto.cantidad += cantidad;
             productoSinDcto.subtotal = productoSinDcto.precio_unitario * productoSinDcto.cantidad;
-            
+
             mostrarNotificacion(
-                `✅ Cantidad actualizada\n` +
-                `${cantAnterior} + ${cantidad} = ${productoSinDcto.cantidad} unidades\n` +
-                `📦 Stock restante: ${stock - (totalEnCarrito + cantidad)}`,
+                `Cantidad actualizada: ${cantAnterior} + ${cantidad} = ${productoSinDcto.cantidad} unidades\n` +
+                `Stock restante: ${stock - (totalEnCarrito + cantidad)}`,
                 'success'
             );
         } else {
@@ -6486,18 +6564,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 cantidad: cantidad,
                 precio_unitario: precio,
                 precio: precio,
+                precio_original: precioOriginal,
                 subtotal: precio * cantidad,
-                stock: stock
+                stock: stock,
+                es_nuevo_agregado: true
             };
-            
+
             ticketActual.productos.push(nuevoProducto);
-            
-            mostrarNotificacion(
-                `✅ Producto agregado al ticket\n` +
-                `Cantidad: ${cantidad} unidades\n` +
-                `📦 Stock restante: ${stock - (totalEnCarrito + cantidad)}`,
-                'success'
-            );
+
+            if (precioModificado) {
+                mostrarNotificacion(
+                    `Producto agregado con precio modificado\n` +
+                    `Precio original: $${precioOriginal.toLocaleString('es-CL')} → Nuevo: $${precio.toLocaleString('es-CL')}\n` +
+                    `Cantidad: ${cantidad} unidades`,
+                    'success'
+                );
+            } else {
+                mostrarNotificacion(
+                    `Producto agregado al ticket\n` +
+                    `Cantidad: ${cantidad} unidades\n` +
+                    `Stock restante: ${stock - (totalEnCarrito + cantidad)}`,
+                    'success'
+                );
+            }
         }
 
         // Actualizar totales del ticket
@@ -6593,6 +6682,37 @@ document.addEventListener('DOMContentLoaded', function() {
             guardarEstadoPOS();
         }
     }
+
+    window.eliminarProductoNuevo = function(index) {
+        if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
+            mostrarNotificacion('Producto no encontrado', 'error');
+            return;
+        }
+        const producto = ticketActual.productos[index];
+        if (!producto.es_nuevo_agregado) {
+            mostrarNotificacion('Solo se pueden eliminar productos agregados nuevos', 'warning');
+            return;
+        }
+
+        Swal.fire({
+            icon: 'warning',
+            title: 'Eliminar producto',
+            html: `<p>¿Eliminar <strong>${producto.articulo}</strong> (${producto.cantidad} un.) del ticket?</p>`,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545'
+        }).then(result => {
+            if (result.isConfirmed) {
+                ticketActual.productos.splice(index, 1);
+                recalcularTotalesTicket();
+                cargarProductosTicket(ticketActual.productos);
+                actualizarResumenVenta();
+                guardarEstadoPOS();
+                mostrarNotificacion(`Producto "${producto.articulo}" eliminado del ticket`, 'success');
+            }
+        });
+    };
 
     function separarLineaProducto(index) {
         if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
@@ -7364,11 +7484,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // ✅ Preparar productos actualizados (incluye productos agregados como bolsas)
+        // Preparar productos actualizados (incluye productos agregados y precios modificados)
         const productosActualizados = ticketActual.productos.map(p => {
             const qty = p.cantidad || p.stock || 1;
             const precio = p.precio_unitario || p.precio;
             const dcto = p.descuento_unitario || 0;
+            // precio_original: el precio base del producto antes de modificación manual
+            const precioOrig = p.precio_original || precio;
             return {
                 line_id: p.line_id || null,
                 producto_talla_id: p.producto_talla_id || null,
@@ -7378,6 +7500,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 talla: p.talla || '',
                 cantidad: qty,
                 precio_unitario: precio,
+                precio_original: precioOrig,
                 descuento_unitario: dcto,
                 subtotal: (p.subtotal != null && p.subtotal !== undefined) ? p.subtotal : ((precio - dcto) * qty),
                 es_pendiente_despacho: p.es_pendiente_despacho || false,
@@ -9467,10 +9590,10 @@ body {
     }
 
     function actualizarRequerimientosCliente(tipo) {
-        // En el nuevo layout los labelNombre/labelRut son divs ocultos;
-        // la validación real ocurre por los campos canónicos en formCliente
         const labelNombre = document.getElementById('labelNombre');
         const labelRut    = document.getElementById('labelRut');
+        const labelEmail  = document.getElementById('labelEmail');
+        const labelTelefono = document.getElementById('labelTelefono');
 
         const campos = {
             nombre: document.getElementById('clienteNombre'),
@@ -9479,25 +9602,34 @@ body {
             telefono: document.getElementById('clienteTelefono')
         };
 
+        // Reset todos los campos
         Object.values(campos).forEach(c => {
-            if (c) { c.required = false; c.classList.remove('is-valid', 'is-invalid'); }
+            if (c) { c.required = false; c.classList.remove('is-valid', 'is-invalid', 'border-danger', 'border-opacity-50'); }
         });
 
-        if (labelNombre) { labelNombre.classList.remove('text-danger', 'text-success', 'text-dark'); labelNombre.classList.add('text-dark'); }
-        if (labelRut)    { labelRut.classList.remove('text-danger', 'text-success', 'text-dark'); labelRut.classList.add('text-dark'); }
+        const badgeOblig = '<span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px; vertical-align:middle;">OBLIGATORIO</span>';
+        const badgeOpcional = '<span class="badge bg-secondary bg-opacity-50 ms-1" style="font-size:9px; vertical-align:middle;">OPCIONAL</span>';
+
+        function marcarObligatorio(campo) {
+            if (campo) { campo.required = true; campo.classList.add('border-danger', 'border-opacity-50'); }
+        }
 
         if (tipo === 'BOLETA_ELECTRONICA' || tipo === 'BOLETA_PAPEL') {
-            if (campos.nombre) campos.nombre.required = true;
-            if (campos.rut)    campos.rut.required    = true;
-            if (campos.email)  campos.email.required  = true;
-            if (labelNombre)   labelNombre.innerHTML  = 'Nombre/Razón Social <span class="text-muted">*</span>';
-            if (labelRut)      labelRut.innerHTML     = 'RUT <span class="text-muted">*</span>';
+            marcarObligatorio(campos.nombre);
+            marcarObligatorio(campos.rut);
+            marcarObligatorio(campos.email);
+            if (labelNombre)   labelNombre.innerHTML  = 'Nombre/Razón Social ' + badgeOblig;
+            if (labelRut)      labelRut.innerHTML     = 'RUT ' + badgeOblig;
+            if (labelEmail)    labelEmail.innerHTML    = 'Email ' + badgeOblig;
+            if (labelTelefono) labelTelefono.innerHTML = 'Teléfono ' + badgeOpcional;
         } else if (tipo === 'FACTURA_ELECTRONICA') {
-            if (campos.nombre) campos.nombre.required = true;
-            if (campos.rut)    campos.rut.required    = true;
-            if (campos.email)  campos.email.required  = true;
-            if (labelNombre)   labelNombre.innerHTML  = 'Razón Social <span class="text-muted">*</span>';
-            if (labelRut)      labelRut.innerHTML     = 'RUT Empresa <span class="text-muted">*</span>';
+            marcarObligatorio(campos.nombre);
+            marcarObligatorio(campos.rut);
+            marcarObligatorio(campos.email);
+            if (labelNombre)   labelNombre.innerHTML  = 'Razón Social ' + badgeOblig;
+            if (labelRut)      labelRut.innerHTML     = 'RUT Empresa ' + badgeOblig;
+            if (labelEmail)    labelEmail.innerHTML    = 'Email ' + badgeOblig;
+            if (labelTelefono) labelTelefono.innerHTML = 'Teléfono ' + badgeOpcional;
         }
     }
 
@@ -9963,114 +10095,207 @@ body {
             Swal.fire({ icon: 'warning', title: 'Sin Ticket', text: 'Debe buscar o crear un ticket primero' });
             return;
         }
-        
+
         const saldoPendiente = calcularSaldoPendiente();
         if (saldoPendiente <= 0) {
             Swal.fire({ icon: 'info', title: 'Ticket Pagado', text: 'El ticket ya está completamente pagado' });
             return;
         }
-        
-        const { value: codigo } = await Swal.fire({
-            title: 'Crédito Externo',
+
+        // Variable para trackear si el cliente ya existe en DB
+        let credextClienteExiste = false;
+
+        const { value: datosCreditoExt } = await Swal.fire({
+            title: '<i class="ri-bank-card-line text-info"></i> Crédito Externo',
             html: `
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Ingrese el código del crédito externo:</label>
-                    <input type="text" id="codigo-credito-ext-input" 
-                           class="form-control form-control-lg text-center text-uppercase" 
-                           placeholder="CP-EXT-12345" 
-                           style="font-family: monospace; font-size: 20px; letter-spacing: 2px;">
-                    <small class="text-muted d-block mt-2">
-                        <i class="ri-barcode-line"></i> Escanee el código de barras o escríbalo manualmente
-                    </small>
+                <div class="text-start">
+                    <p class="text-muted small mb-3">Ingrese los datos del crédito externo. Si la persona no existe, se creará automáticamente como cliente.</p>
+
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label fw-bold small mb-1">
+                                <i class="ri-user-search-line"></i> RUT persona
+                                <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px;">OBLIGATORIO</span>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" id="credext-rut" class="form-control" placeholder="12345678-9">
+                                <button class="btn btn-outline-info" type="button" id="credext-buscar-rut">
+                                    <i class="ri-search-line"></i> Buscar
+                                </button>
+                            </div>
+                            <div id="credext-rut-info" class="small mt-1" style="display:none;"></div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small mb-1">
+                                <i class="ri-user-line"></i> Nombre persona
+                                <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px;">OBLIGATORIO</span>
+                            </label>
+                            <input type="text" id="credext-nombre" class="form-control form-control-sm" placeholder="Nombre completo">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small mb-1">
+                                <i class="ri-mail-line"></i> Email
+                                <span class="badge bg-secondary bg-opacity-50 ms-1" style="font-size:9px;">OPCIONAL</span>
+                            </label>
+                            <input type="email" id="credext-email" class="form-control form-control-sm" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small mb-1">
+                                <i class="ri-file-list-line"></i> N° Folio
+                                <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px;">OBLIGATORIO</span>
+                            </label>
+                            <input type="text" id="credext-folio" class="form-control form-control-sm" placeholder="Ej: 12345">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small mb-1">
+                                <i class="ri-money-dollar-circle-line"></i> Monto crédito
+                                <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px;">OBLIGATORIO</span>
+                            </label>
+                            <input type="number" id="credext-monto" class="form-control form-control-sm"
+                                   placeholder="${formatearMoneda(saldoPendiente)}" value="${saldoPendiente}" min="1">
+                        </div>
+                    </div>
+
+                    <div class="alert alert-light border mt-3 py-2 small" id="credext-resumen" style="display:none;">
+                        <div class="d-flex justify-content-between">
+                            <span>Saldo pendiente:</span>
+                            <strong id="credext-saldo">${formatearMoneda(saldoPendiente)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Monto a aplicar:</span>
+                            <strong class="text-info" id="credext-aplicar">${formatearMoneda(saldoPendiente)}</strong>
+                        </div>
+                    </div>
                 </div>
             `,
+            width: '500px',
             showCancelButton: true,
-            confirmButtonText: '<i class="ri-check-line"></i> Validar',
+            confirmButtonText: '<i class="ri-check-line"></i> Aplicar Crédito',
             cancelButtonText: 'Cancelar',
             confirmButtonColor: '#17a2b8',
             didOpen: () => {
-                const input = document.getElementById('codigo-credito-ext-input');
-                input.focus();
-                input.addEventListener('keypress', function(e) { if (e.key === 'Enter') Swal.clickConfirm(); });
+                const rutInput = document.getElementById('credext-rut');
+                const nombreInput = document.getElementById('credext-nombre');
+                const emailInput = document.getElementById('credext-email');
+                const montoInput = document.getElementById('credext-monto');
+                const resumen = document.getElementById('credext-resumen');
+
+                rutInput.focus();
+                resumen.style.display = 'block';
+
+                // Buscar persona por RUT
+                document.getElementById('credext-buscar-rut').addEventListener('click', function() {
+                    const rut = rutInput.value.trim();
+                    if (!rut) return;
+                    const infoDiv = document.getElementById('credext-rut-info');
+                    infoDiv.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Buscando...';
+                    infoDiv.style.display = 'block';
+
+                    fetch(`${apiUrls.buscarCliente}?rut=${encodeURIComponent(rut)}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success && data.cliente) {
+                                credextClienteExiste = true;
+                                nombreInput.value = data.cliente.nombre || data.cliente.razon_social || '';
+                                if (data.cliente.email) emailInput.value = data.cliente.email;
+                                infoDiv.innerHTML = '<span class="text-success"><i class="ri-check-circle-line"></i> Cliente encontrado: ' + (data.cliente.nombre || '') + '</span>';
+                            } else {
+                                credextClienteExiste = false;
+                                infoDiv.innerHTML = '<span class="text-warning"><i class="ri-user-add-line"></i> Persona no encontrada. Se creará como cliente nuevo al aplicar.</span>';
+                                nombreInput.focus();
+                            }
+                        })
+                        .catch(() => {
+                            infoDiv.innerHTML = '<span class="text-danger"><i class="ri-error-warning-line"></i> Error al buscar</span>';
+                        });
+                });
+
+                // Búsqueda con Enter en el campo RUT
+                rutInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        document.getElementById('credext-buscar-rut').click();
+                    }
+                });
+
+                // Actualizar resumen al cambiar monto
+                montoInput.addEventListener('input', function() {
+                    const monto = parseInt(this.value) || 0;
+                    const aplicar = Math.min(monto, saldoPendiente);
+                    document.getElementById('credext-aplicar').textContent = formatearMoneda(aplicar);
+                });
             },
             preConfirm: () => {
-                const cod = document.getElementById('codigo-credito-ext-input').value.trim();
-                if (!cod) { Swal.showValidationMessage('Ingrese el código del crédito'); return false; }
-                return cod.toUpperCase();
+                const rut = document.getElementById('credext-rut').value.trim();
+                const nombre = document.getElementById('credext-nombre').value.trim();
+                const email = document.getElementById('credext-email').value.trim();
+                const folio = document.getElementById('credext-folio').value.trim();
+                const monto = parseInt(document.getElementById('credext-monto').value) || 0;
+
+                if (!rut) { Swal.showValidationMessage('Ingrese el RUT de la persona'); return false; }
+                if (!nombre) { Swal.showValidationMessage('Ingrese el nombre de la persona'); return false; }
+                if (!folio) { Swal.showValidationMessage('Ingrese el número de folio'); return false; }
+                if (monto <= 0) { Swal.showValidationMessage('Ingrese un monto válido'); return false; }
+
+                return { rut, nombre, email, folio, monto: Math.min(monto, saldoPendiente), clienteExiste: credextClienteExiste };
             }
         });
-        
-        if (!codigo) return;
-        
-        Swal.fire({ title: 'Validando...', html: '<i class="ri-loader-4-line ri-spin" style="font-size:48px;"></i>', allowOutsideClick: false, showConfirmButton: false });
-        
-        try {
-            const resp = await fetch('/app/api/creditos/validar-codigo/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
-                body: JSON.stringify({ codigo_credito: codigo })
-            });
-            const data = await resp.json();
-            
-            if (!data.success) {
-                Swal.fire({ icon: 'error', title: 'Crédito Inválido', html: `<p>${data.error}</p>`, confirmButtonText: 'Intentar de nuevo' })
-                    .then(r => { if (r.isConfirmed) pagarConCreditoExterno(); });
-                return;
+
+        if (!datosCreditoExt) return;
+
+        const montoAplicar = datosCreditoExt.monto;
+
+        // Si el cliente no existe en la DB, crearlo automáticamente
+        if (!datosCreditoExt.clienteExiste) {
+            try {
+                // Separar nombre en nombre y apellido (primer espacio)
+                const partes = datosCreditoExt.nombre.trim().split(/\s+/);
+                const nombre = partes[0] || datosCreditoExt.nombre;
+                const apellido = partes.slice(1).join(' ') || '';
+
+                const respCliente = await fetch('/app/api/requerimientos/crear-cliente/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({
+                        nombre: nombre,
+                        apellido: apellido,
+                        rut: datosCreditoExt.rut,
+                        email: datosCreditoExt.email || '',
+                        tipo_cliente: 'CREDITO_EXTERNO'
+                    })
+                });
+                const dataCliente = await respCliente.json();
+                if (dataCliente.success) {
+                    mostrarNotificacion(`Cliente "${datosCreditoExt.nombre}" creado en el sistema`, 'success');
+                } else {
+                    // Si ya existe por RUT, no es error grave
+                    console.log('Cliente no creado (puede que ya exista):', dataCliente.error);
+                }
+            } catch (err) {
+                console.error('Error creando cliente:', err);
             }
-            
-            creditoExternoActivo = data.credito;
-            const credito = data.credito;
-            const montoAplicar = Math.min(saldoPendiente, credito.saldo_disponible);
-            
-            const { isConfirmed } = await Swal.fire({
-                icon: 'success',
-                title: 'Crédito Externo Válido',
-                html: `
-                    <div class="text-start">
-                        <div class="card border-info mb-3"><div class="card-body">
-                            <h5 class="text-center mb-3"><i class="ri-user-line"></i> ${credito.trabajador.nombre}</h5>
-                            <table class="table table-sm table-borderless">
-                                <tr><td class="fw-bold">RUT:</td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
-                                <tr><td class="fw-bold">Crédito:</td><td><span class="badge bg-info">${credito.numero_credito}</span></td></tr>
-                                <tr><td class="fw-bold">Tipo:</td><td>${credito.tipo_credito}</td></tr>
-                            </table>
-                        </div></div>
-                        <div class="alert alert-info text-center">
-                            <p class="mb-1"><strong>Saldo Disponible:</strong></p>
-                            <h2 class="mb-0 text-info">${formatearMoneda(credito.saldo_disponible)}</h2>
-                        </div>
-                        ${credito.saldo_disponible < saldoPendiente ? `
-                        <div class="alert alert-warning small">
-                            <i class="ri-alert-line"></i> El saldo del crédito no cubre el total. Se aplicarán ${formatearMoneda(montoAplicar)} y el resto se debe pagar con otro método.
-                        </div>` : ''}
-                    </div>
-                `,
-                confirmButtonText: `Aplicar ${formatearMoneda(montoAplicar)}`,
-                showCancelButton: true, cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#17a2b8', width: '650px'
-            });
-            
-            if (!isConfirmed) return;
-            
-            pagosActuales.push({
-                metodo_pago: 'CREDITO_EXTERNO',
-                monto: montoAplicar,
-                credito_id: credito.id,
-                trabajador_nombre: credito.trabajador.nombre,
-                notas: `Crédito ${credito.numero_credito}`
-            });
-            actualizarListaPagos();
-            actualizarResumenVenta();
-            
-            const nuevoSaldo = calcularSaldoPendiente();
-            mostrarNotificacion(
-                nuevoSaldo <= 0 ? 'Crédito externo aplicado - Ticket completamente pagado' :
-                `Crédito externo aplicado - Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`, 'success'
-            );
-        } catch(err) {
-            console.error('Error:', err);
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Error al validar el crédito. Intente nuevamente.' });
         }
+
+        // Registrar pago con los datos ingresados
+        pagosActuales.push({
+            metodo_pago: 'CREDITO_EXTERNO',
+            monto: montoAplicar,
+            voucher: datosCreditoExt.folio,
+            notas: JSON.stringify({ nombre: datosCreditoExt.nombre, rut: datosCreditoExt.rut, email: datosCreditoExt.email, folio: datosCreditoExt.folio }),
+            trabajador_nombre: datosCreditoExt.nombre,
+            tipo_tarjeta: `Crédito Ext. - ${datosCreditoExt.nombre}`
+        });
+        actualizarListaPagos();
+        actualizarResumenVenta();
+
+        const nuevoSaldo = calcularSaldoPendiente();
+        mostrarNotificacion(
+            nuevoSaldo <= 0 ? `Crédito externo aplicado (Folio: ${datosCreditoExt.folio}) - Ticket completamente pagado` :
+            `Crédito externo aplicado (Folio: ${datosCreditoExt.folio}) - Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`, 'success'
+        );
     };
     
     // ========== INTEGRACIÓN POS TRANSBANK (WEB SERIAL API) ==========
@@ -10192,10 +10417,27 @@ body {
                     }
                 });
                 
-                // Intentar auto-conectar
-                const resultadoConexion = await Transbank.POS.autoConnect();
-                
-                if (!resultadoConexion.success) {
+                // Intentar auto-conectar, si no hay puertos autorizados abrir selector
+                let resultadoConexion;
+                const puertosAuth = await navigator.serial.getPorts();
+                if (puertosAuth.length > 0) {
+                    try {
+                        resultadoConexion = await Transbank.POS.autoConnect();
+                    } catch (e) {
+                        console.log('Auto-connect falló, abriendo selector manual...');
+                    }
+                }
+                if (!resultadoConexion || !resultadoConexion.success) {
+                    Swal.fire({
+                        title: 'Seleccione el POS',
+                        html: '<p>Seleccione el dispositivo POS en la ventana del navegador</p>',
+                        allowOutsideClick: false,
+                        showConfirmButton: false
+                    });
+                    resultadoConexion = await Transbank.POS.connect();
+                }
+
+                if (!resultadoConexion || !resultadoConexion.success) {
                     throw new Error('No se pudo conectar al POS');
                 }
                 
@@ -10511,7 +10753,9 @@ body {
             if (!val) { modalShowState('initial'); limpiarFormularioProductoModal(); return; }
 
             modalDebounce = setTimeout(async () => {
-                const pareceSku = /^[A-Za-z0-9\-_]{2,25}$/.test(val) && !val.includes(' ');
+                // SKU: solo si parece formato de SKU real (alfanumérico con guiones, sin espacios, máx 25 chars)
+                // y tiene al menos un dígito (los SKU típicamente contienen números)
+                const pareceSku = /^[A-Za-z0-9\-_]{3,25}$/.test(val) && !val.includes(' ') && /\d/.test(val);
                 if (pareceSku) {
                     await modalBuscarSku(val);
                 } else if (val.length >= 2) {
@@ -10619,10 +10863,9 @@ body {
             }
             const qty = parseInt(qaQty.value) || 1;
 
-            // Reutilizar lógica de confirmarAgregarProducto()
             const sku    = producto.sku;
             const stock  = producto.stock || 0;
-            const precio = producto.precio_venta || 0;
+            const precioBase = producto.precio_venta || 0;
 
             if (stock <= 0) {
                 mostrarNotificacion('Sin stock disponible para este producto', 'warning');
@@ -10640,11 +10883,67 @@ body {
             }
 
             const existenteSinDcto = ticketActual && ticketActual.productos.find(p => p.sku == sku && !(p.descuento_unitario > 0));
+
+            // Si ya existe en el carrito sin descuento, solo incrementar cantidad (sin prompt de precio)
             if (existenteSinDcto) {
                 existenteSinDcto.cantidad += qty;
                 existenteSinDcto.subtotal = existenteSinDcto.precio_unitario * existenteSinDcto.cantidad;
-                mostrarNotificacion(`✅ ${producto.articulo} → ${existenteSinDcto.cantidad} un.`, 'success');
-            } else {
+                mostrarNotificacion(`${producto.articulo} → ${existenteSinDcto.cantidad} un.`, 'success');
+                qaFinalize();
+                return;
+            }
+
+            // Producto nuevo → mostrar mini-prompt para confirmar/editar precio
+            qaCloseDropdown();
+            Swal.fire({
+                title: producto.articulo,
+                html: `
+                    <div class="text-start">
+                        <div class="d-flex gap-2 mb-2">
+                            <span class="badge bg-dark">${sku}</span>
+                            ${producto.talla ? `<span class="badge bg-info text-dark">${producto.talla}</span>` : ''}
+                            <span class="badge bg-success ms-auto">${stock} en stock</span>
+                        </div>
+                        <label class="form-label fw-bold small mb-1">Precio de venta</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text fw-bold">$</span>
+                            <input type="number" id="qa-precio-input" class="form-control fw-bold fs-5 text-center"
+                                   value="${precioBase}" min="${precioBase}">
+                        </div>
+                        <small class="text-muted"><i class="ri-arrow-up-line"></i> Mín: $${precioBase.toLocaleString('es-CL')} · Cantidad: ${qty}</small>
+                    </div>
+                `,
+                confirmButtonText: '<i class="ri-add-circle-line"></i> Agregar',
+                showCancelButton: true,
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#198754',
+                width: '400px',
+                didOpen: () => {
+                    const inp = document.getElementById('qa-precio-input');
+                    inp.focus();
+                    inp.select();
+                    inp.addEventListener('keypress', e => { if (e.key === 'Enter') Swal.clickConfirm(); });
+                },
+                preConfirm: () => {
+                    const val = parseInt(document.getElementById('qa-precio-input').value) || 0;
+                    if (val < precioBase) {
+                        Swal.showValidationMessage(`El precio no puede ser menor a $${precioBase.toLocaleString('es-CL')}`);
+                        return false;
+                    }
+                    if (val <= 0) {
+                        Swal.showValidationMessage('Ingrese un precio válido');
+                        return false;
+                    }
+                    return val;
+                }
+            }).then(result => {
+                if (!result.isConfirmed) {
+                    qaInput.focus();
+                    return;
+                }
+                const precioFinal = result.value;
+                const precioModificado = precioFinal !== precioBase;
+
                 ticketActual.productos.push({
                     line_id: nextLineId(),
                     sku: sku,
@@ -10654,28 +10953,34 @@ body {
                     marca: producto.marca || '',
                     talla: producto.talla || '',
                     cantidad: qty,
-                    precio_unitario: precio,
-                    precio: precio,
-                    subtotal: precio * qty,
+                    precio_unitario: precioFinal,
+                    precio: precioFinal,
+                    precio_original: precioBase,
+                    subtotal: precioFinal * qty,
                     stock: stock,
-                    color: producto.color || ''
+                    color: producto.color || '',
+                    es_nuevo_agregado: true
                 });
-                mostrarNotificacion(`✅ ${producto.articulo} agregado (${qty} un.)`, 'success');
+
+                const msg = precioModificado
+                    ? `${producto.articulo} agregado · Precio: $${precioBase.toLocaleString('es-CL')} → $${precioFinal.toLocaleString('es-CL')}`
+                    : `${producto.articulo} agregado (${qty} un.)`;
+                mostrarNotificacion(msg, 'success');
+                qaFinalize();
+            });
+
+            function qaFinalize() {
+                recalcularTotalesTicket();
+                cargarProductosTicket(ticketActual.productos);
+                actualizarResumenVenta();
+                guardarEstadoPOS();
+                const rows = document.querySelectorAll('#tablaProductos tr');
+                if (rows.length) rows[rows.length - 1].classList.add('row-added-flash');
+                qaCloseDropdown();
+                qaInput.value = '';
+                qaQty.value   = 1;
+                qaInput.focus();
             }
-
-            recalcularTotalesTicket();
-            cargarProductosTicket(ticketActual.productos);
-            actualizarResumenVenta();
-            guardarEstadoPOS();
-
-            // Flash verde en la última fila
-            const rows = document.querySelectorAll('#tablaProductos tr');
-            if (rows.length) rows[rows.length - 1].classList.add('row-added-flash');
-
-            qaCloseDropdown();
-            qaInput.value = '';
-            qaQty.value   = 1;
-            qaInput.focus();
         }
 
         /* ---- Búsqueda directa por SKU exacto ---- */

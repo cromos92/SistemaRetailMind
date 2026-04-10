@@ -43,6 +43,7 @@ from .views_modulo_ventas import (
     agregar_deposito_arqueo,
     eliminar_deposito_bancario,
     declarar_deposito,
+    finalizar_declaracion,
     confirmar_deposito,
     obtener_depositos_pendientes,
     listar_arqueos_para_deposito,
@@ -639,6 +640,7 @@ urlpatterns = [
     path('api/cuadratura/agregar-deposito/', agregar_deposito_arqueo, name='agregar_deposito_arqueo'),
     path('api/cuadratura/eliminar-deposito/', eliminar_deposito_bancario, name='eliminar_deposito_bancario'),
     path('api/cuadratura/deposito/declarar/', declarar_deposito, name='declarar_deposito'),
+    path('api/cuadratura/deposito/finalizar/', finalizar_declaracion, name='finalizar_declaracion'),
     path('api/cuadratura/deposito/<int:deposito_id>/confirmar/', confirmar_deposito, name='confirmar_deposito'),
     path('api/cuadratura/deposito/pendientes/', obtener_depositos_pendientes, name='obtener_depositos_pendientes'),
     # Depósito multi-día

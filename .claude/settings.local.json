@@ -25,7 +25,23 @@
       "Bash(python retailmind/manage.py makemigrations app --name add_permiso_usuario)",
       "Bash(python retailmind/manage.py migrate app 0120)",
       "Bash(python retailmind/manage.py check)",
-      "Bash(grep -l \"_qz_tray_module\\\\|imprimirConQZ\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas/*.html)"
+      "Bash(grep -l \"_qz_tray_module\\\\|imprimirConQZ\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas/*.html)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas/**)",
+      "Bash(grep -n \"class.*Credit\\\\|class.*Pago\\\\|class.*Credito\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/models/*.py)",
+      "Bash(grep -l \"Vue\\\\|React\\\\|angular\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/static/js/*.js)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/api/sync/**)",
+      "Bash(find /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind -name \"*.py\" -path \"*/models/*\" -exec grep -l \"Deposito\\\\|Banco\\\\|Comprobante\\\\|Cuadratura\" {} \\\\;)",
+      "Bash(grep -l \"cuadratura\\\\|arqueo\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/api/*.py)",
+      "Bash(grep -n \"class.*Arqueo\\\\|class.*Cuadratura\\\\|class.*Deposito\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/models/*.py)",
+      "Bash(python manage.py makemigrations app --name=\"mejora_cuadratura_caja\")",
+      "Bash(python3)",
+      "Bash(python manage.py makemigrations app --empty --name=\"seed_parametros_reapertura\")",
+      "Bash(find /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind -name \"*.py\" -type f ! -path \"*staticfiles*\" ! -path \"*migrations*\" ! -path \"*cache*\" -exec grep -l \"vendedor_codigo\\\\|codigo_vendedor\" {} \\\\;)",
+      "Bash(python -c \"from app.views_modulo_ventas import finalizar_declaracion; print\\('Import OK'\\)\")",
+      "Bash(python manage.py migrate app)",
+      "Bash(grep -l \"_qz_tray_module\\\\|imprimirConQZ\" \"/c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas\"/*.html)",
+      "Bash(grep -l \"qz_config\\\\|QZ_CONFIG\" \"/c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas\"/*.html)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/**)"
     ]
   }
 }

@@ -7,8 +7,10 @@ from .ventas import METODO_PAGO_TICKET_CHOICES
 
 ESTADO_ARQUEO_CHOICES = [
     ('ABIERTO', 'En Proceso'),
-    ('CERRADO', 'Finalizado'),
+    ('CERRADO', 'Cerrado'),
     ('CON_DIFERENCIAS', 'Con Diferencias'),
+    ('DEPOSITO_DECLARADO', 'Depósito Declarado'),
+    ('DEPOSITO_CONFIRMADO', 'Depósito Confirmado'),
     ('REVISADO', 'Revisado por Supervisor'),
 ]
 
@@ -224,6 +226,11 @@ BANCO_CHOICES = [
     ('OTRO', 'Otro'),
 ]
 
+TIPO_MEDIO_DEPOSITO_CHOICES = [
+    ('EFECTIVO', 'Efectivo'),
+    ('CHEQUE', 'Cheque'),
+]
+
 
 class GrupoDeposito(models.Model):
     """
@@ -335,7 +342,15 @@ class DepositoBancario(models.Model):
         blank=True,
         help_text="Observaciones adicionales sobre el depósito"
     )
-    
+
+    # === TIPO DE MEDIO DEPOSITADO ===
+    tipo_medio = models.CharField(
+        max_length=20,
+        choices=TIPO_MEDIO_DEPOSITO_CHOICES,
+        default='EFECTIVO',
+        help_text="Tipo de medio depositado (efectivo o cheque)"
+    )
+
     # === DECLARACIÓN POR CAJERO ===
     monto_declarado = models.IntegerField(
         default=0,
@@ -367,7 +382,11 @@ class DepositoBancario(models.Model):
         help_text="Supervisor que verificó el depósito"
     )
     fecha_verificacion = models.DateTimeField(null=True, blank=True)
-    
+    observaciones_supervisor = models.TextField(
+        blank=True,
+        help_text="Observaciones del supervisor al confirmar o rechazar el depósito"
+    )
+
     # === METADATOS ===
     registrado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
@@ -396,6 +415,29 @@ class DepositoBancario(models.Model):
     
     def __str__(self):
         return f"Depósito {self.fecha_deposito} - {self.get_banco_display()} - ${self.monto:,}"
+
+
+# ========== HISTORIAL DE REAPERTURAS DE ARQUEO ==========
+
+class HistorialReaperturaArqueo(models.Model):
+    """Registro de auditoría para reaperturas de arqueos cerrados."""
+    arqueo = models.ForeignKey(
+        ArqueoCaja, on_delete=models.CASCADE, related_name='historial_reaperturas'
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reaperturas_realizadas'
+    )
+    fecha_reapertura = models.DateTimeField(auto_now_add=True)
+    estado_anterior = models.CharField(max_length=20)
+    justificacion = models.TextField(help_text="Motivo de la reapertura")
+
+    class Meta:
+        ordering = ['-fecha_reapertura']
+        verbose_name = 'Historial de Reapertura'
+        verbose_name_plural = 'Historial de Reaperturas'
+
+    def __str__(self):
+        return f"Reapertura {self.arqueo} por {self.usuario} - {self.fecha_reapertura:%d/%m/%Y %H:%M}"
 
 
 # ========== MÓDULO DE CRÉDITOS A TRABAJADORES ==========

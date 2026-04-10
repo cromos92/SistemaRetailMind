@@ -44,6 +44,8 @@
     .estado-cerrado   { background: rgba(0,212,170,.15); color: var(--nexo-success); }
     .estado-abierto   { background: rgba(255,176,32,.15); color: #996B00; }
     .estado-con-diferencias { background: rgba(255,77,77,.15); color: var(--nexo-error); }
+    .estado-deposito-declarado  { background: rgba(108,99,255,.15); color: #6C63FF; }
+    .estado-deposito-confirmado { background: rgba(0,184,148,.15); color: #00B894; }
     .estado-revisado  { background: rgba(0,102,255,.15); color: var(--nexo-primary); }
 
     /* ========== DIFERENCIAS ========== */
@@ -1274,54 +1276,121 @@
 </div>
 
 <!-- =====================================================================
-     MODAL: DECLARAR DEPÓSITO (CAJERO)
+     MODAL: DECLARAR DEPÓSITO (CAJERO) - Mejorado con tipo medio y comprobante
      ===================================================================== -->
 <div class="modal fade" id="modalDeclararDeposito" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-md">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header" style="background:var(--nexo-warning);padding:1rem 1.5rem;">
                 <h5 class="modal-title" style="color:var(--nexo-gray-900);font-weight:700;">
-                    <i class="ri-send-plane-line me-2"></i>Declarar Envío a Depósito
+                    <i class="ri-send-plane-line me-2"></i>Declarar Depósitos Bancarios
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-warning mb-3" style="font-size:.85rem;">
+                <div class="alert alert-info mb-3" style="font-size:.85rem;">
                     <i class="ri-information-line me-2"></i>
-                    Indique el monto de efectivo que está enviando al banco. El supervisor confirmará el depósito con el comprobante bancario.
+                    Declare cada depósito por separado (ej: efectivo y cheque van en comprobantes distintos). Adjunte el comprobante bancario de cada uno. Al terminar, presione <strong>"Finalizar Declaración"</strong>.
                 </div>
-                <div class="row g-3">
-                    <div class="col-12">
-                        <label class="form-label fw-bold">Arqueo del Día *</label>
-                        <input type="text" class="form-control" id="infoArqueoDeclaracion" readonly style="background:var(--nexo-gray-100);">
+
+                <!-- Info del arqueo -->
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold" style="font-size:.8rem;">Arqueo del Día</label>
+                        <input type="text" class="form-control form-control-sm" id="infoArqueoDeclaracion" readonly style="background:var(--nexo-gray-100);">
                         <input type="hidden" id="arqueoIdDeclaracion">
                     </div>
-                    <div class="col-12">
-                        <label class="form-label fw-bold">Monto Efectivo Contado (referencia)</label>
-                        <div class="input-group">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold" style="font-size:.8rem;">Efectivo Contado (ref.)</label>
+                        <div class="input-group input-group-sm">
                             <span class="input-group-text">$</span>
                             <input type="text" class="form-control" id="referenciaEfectivoDeclaracion" readonly style="background:var(--nexo-gray-100);font-family:monospace;">
                         </div>
                     </div>
-                    <div class="col-12">
-                        <label class="form-label fw-bold">Monto que Enviará a Depositar *</label>
-                        <div class="input-group input-group-lg">
-                            <span class="input-group-text">$</span>
-                            <input type="number" class="form-control" id="montoDeclaracion" placeholder="0" min="1" required>
-                        </div>
-                        <small class="text-muted" style="font-size:.75rem;">Puede diferir del contado si dejó fondo de caja.</small>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Observaciones</label>
-                        <textarea class="form-control" id="obsDeclaracion" rows="2" placeholder="Ej: Dejé $50.000 como fondo de apertura..."></textarea>
-                    </div>
                 </div>
+
+                <!-- Depósitos ya declarados -->
+                <div id="listaDepositosDeclarados" class="mb-3" style="display:none;">
+                    <h6 style="font-size:.85rem;font-weight:700;color:var(--nexo-gray-700);"><i class="ri-list-check me-1"></i>Depósitos Declarados</h6>
+                    <div id="tablaDepositosDeclarados"></div>
+                </div>
+
+                <hr style="border-color:var(--nexo-gray-200);">
+                <h6 style="font-size:.85rem;font-weight:700;color:var(--nexo-primary);"><i class="ri-add-circle-line me-1"></i>Nuevo Depósito</h6>
+
+                <!-- Formulario nuevo depósito -->
+                <form id="formNuevoDeposito" enctype="multipart/form-data">
+                    <div class="row g-3">
+                        <!-- Tipo de medio -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Tipo de Medio *</label>
+                            <div class="d-flex gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="tipoMedioDeclaracion" id="tipoMedioEfectivo" value="EFECTIVO" checked>
+                                    <label class="form-check-label fw-bold" for="tipoMedioEfectivo"><i class="ri-money-dollar-circle-line me-1" style="color:var(--nexo-success);"></i>Efectivo</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="tipoMedioDeclaracion" id="tipoMedioCheque" value="CHEQUE">
+                                    <label class="form-check-label fw-bold" for="tipoMedioCheque"><i class="ri-file-text-line me-1" style="color:var(--nexo-primary);"></i>Cheque</label>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Monto -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Monto a Depositar *</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="montoDeclaracion" placeholder="0" min="1" required>
+                            </div>
+                        </div>
+                        <!-- Banco -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Banco *</label>
+                            <select class="form-select" id="bancoDeclaracion" required>
+                                <option value="ESTADO">BancoEstado</option>
+                                <option value="CHILE">Banco de Chile</option>
+                                <option value="SANTANDER">Santander</option>
+                                <option value="BCI">BCI</option>
+                                <option value="SCOTIABANK">Scotiabank</option>
+                                <option value="ITAU">Itau</option>
+                                <option value="SECURITY">Banco Security</option>
+                                <option value="FALABELLA">Banco Falabella</option>
+                                <option value="RIPLEY">Banco Ripley</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+                        </div>
+                        <!-- N Comprobante -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">N° Comprobante</label>
+                            <input type="text" class="form-control" id="nComprobanteDeclaracion" placeholder="N° del voucher bancario">
+                        </div>
+                        <!-- Imagen comprobante -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Imagen del Comprobante</label>
+                            <input type="file" class="form-control" id="imagenComprobanteDeclaracion" accept="image/*">
+                            <small class="text-muted" style="font-size:.75rem;">Foto o escaneo del comprobante bancario.</small>
+                            <div id="previewImagenDeclaracion" class="mt-2" style="display:none;">
+                                <img id="imgPreviewDeclaracion" src="" alt="Preview" style="max-height:120px;border-radius:8px;border:1px solid var(--nexo-gray-300);">
+                            </div>
+                        </div>
+                        <!-- Observaciones -->
+                        <div class="col-12">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="obsDeclaracion" rows="2" placeholder="Ej: Dejé $50.000 como fondo de apertura..."></textarea>
+                        </div>
+                    </div>
+                </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-warning" onclick="guardarDeclaracionDeposito()">
-                    <i class="ri-send-plane-line me-1"></i>Declarar Envío
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-success" id="btnFinalizarDeclaracion" onclick="finalizarDeclaracionDepositos()" style="display:none;">
+                    <i class="ri-check-double-line me-1"></i>Finalizar Declaración
                 </button>
+                <div>
+                    <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-warning" onclick="guardarDeclaracionDeposito()">
+                        <i class="ri-add-line me-1"></i>Agregar Depósito
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1536,6 +1605,7 @@ let pasoArqueoActual = 1;
 const esAdministrador = {{ es_administrador|yesno:"true,false" }};
 const esSupervisor    = {{ es_supervisor|yesno:"true,false" }};
 const esCajero        = {{ es_cajero|yesno:"true,false" }};
+const puedeReabrir    = {{ puede_reabrir|yesno:"true,false" }};
 
 // Esperar jQuery
 function waitForJQuery(callback) {
@@ -1623,51 +1693,77 @@ function toggleModoDetallado() {
 
 // ========== WORKFLOW VISUAL ==========
 function actualizarWorkflow(estado) {
-    $('.step-indicator').not('[id^="wizardIndicator"]').removeClass('completed active warning');
-    $('.workflow-connector').not('[id^="wizardConn"]').removeClass('completed active');
+    const stepIds = ['stepIndicator2','stepIndicator3','stepIndicator4','stepIndicator5'];
+    const conns = $('.workflow-connector').not('[id^="wizardConn"]');
+    // Reset
+    stepIds.forEach((id,i) => $('#'+id).removeClass('completed active warning').html('<span>'+(i+2)+'</span>'));
+    conns.removeClass('completed active');
     switch(estado) {
         case 'inicial':
-            ['stepIndicator2','stepIndicator3','stepIndicator4'].forEach((id,i) => $('#'+id).html('<span>'+(i+2)+'</span>'));
             break;
         case 'cuadratura_generada':
-            $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
-            $('#stepIndicator3').addClass('active').html('<span>3</span>');
-            $('.workflow-connector:not([id^="wizardConn"]):eq(0)').addClass('completed');
-            $('.workflow-connector:not([id^="wizardConn"]):eq(1)').addClass('active');
-            break;
         case 'arqueo_en_proceso':
             $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
             $('#stepIndicator3').addClass('active').html('<span>3</span>');
-            $('.workflow-connector:not([id^="wizardConn"]):eq(0)').addClass('completed');
-            $('.workflow-connector:not([id^="wizardConn"]):eq(1)').addClass('active');
+            conns.eq(0).addClass('completed');
+            conns.eq(1).addClass('active');
             break;
         case 'cerrado':
             ['stepIndicator2','stepIndicator3','stepIndicator4'].forEach(id => $('#'+id).addClass('completed').html('<i class="ri-check-line"></i>'));
-            $('.workflow-connector:not([id^="wizardConn"])').addClass('completed');
+            conns.eq(0).addClass('completed'); conns.eq(1).addClass('completed'); conns.eq(2).addClass('completed');
+            $('#stepIndicator5').addClass('active').html('<span>5</span>');
+            conns.eq(3).addClass('active');
             break;
         case 'con_diferencias':
             $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
             $('#stepIndicator3').addClass('completed').html('<i class="ri-check-line"></i>');
             $('#stepIndicator4').addClass('warning').html('<i class="ri-alert-line"></i>');
-            $('.workflow-connector:not([id^="wizardConn"]):lt(2)').addClass('completed');
+            conns.eq(0).addClass('completed'); conns.eq(1).addClass('completed');
+            $('#stepIndicator5').addClass('active').html('<span>5</span>');
+            conns.eq(3).addClass('active');
+            break;
+        case 'deposito_declarado':
+            ['stepIndicator2','stepIndicator3','stepIndicator4'].forEach(id => $('#'+id).addClass('completed').html('<i class="ri-check-line"></i>'));
+            conns.eq(0).addClass('completed'); conns.eq(1).addClass('completed'); conns.eq(2).addClass('completed');
+            $('#stepIndicator5').addClass('active').html('<i class="ri-time-line" style="animation:spin 2s linear infinite;"></i>');
+            conns.eq(3).addClass('active');
+            break;
+        case 'deposito_confirmado':
+            ['stepIndicator2','stepIndicator3','stepIndicator4','stepIndicator5'].forEach(id => $('#'+id).addClass('completed').html('<i class="ri-check-line"></i>'));
+            conns.addClass('completed');
+            break;
+        case 'revisado':
+            ['stepIndicator2','stepIndicator3','stepIndicator4','stepIndicator5'].forEach(id => $('#'+id).addClass('completed').html('<i class="ri-check-double-line"></i>'));
+            conns.addClass('completed');
             break;
         case 'ventas_post_cierre':
             $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
             $('#stepIndicator3').addClass('completed').html('<i class="ri-check-line"></i>');
             $('#stepIndicator4').addClass('warning').html('<i class="ri-alarm-warning-line"></i>');
-            $('.workflow-connector:not([id^="wizardConn"])').addClass('completed');
+            conns.eq(0).addClass('completed'); conns.eq(1).addClass('completed'); conns.eq(2).addClass('completed');
             break;
     }
 }
 
 // ========== BANNER DEPÓSITO ==========
 function mostrarBannerDeposito(arqueo) {
-    if (!arqueo || !['CERRADO','CON_DIFERENCIAS'].includes(arqueo.estado)) {
+    if (!arqueo || !['CERRADO','CON_DIFERENCIAS','DEPOSITO_DECLARADO','DEPOSITO_CONFIRMADO'].includes(arqueo.estado)) {
         $('#bannerDepositoCierre').hide();
         return;
     }
     const efectivo = arqueo.efectivo_fisico || 0;
     $('#bannerDepositoMonto').text('$' + formatearNumero(efectivo));
+    if (arqueo.estado === 'DEPOSITO_DECLARADO') {
+        const n = arqueo.depositos_declarados || 0;
+        $('#bannerDepositoInfo').html('<i class="ri-time-line me-1"></i>' + n + ' deposito(s) declarado(s) — <strong style="color:var(--nexo-primary);">Esperando confirmacion del supervisor</strong>');
+        $('#bannerDepositoCierre').show();
+        return;
+    }
+    if (arqueo.estado === 'DEPOSITO_CONFIRMADO') {
+        $('#bannerDepositoInfo').html('<i class="ri-check-double-line me-1" style="color:var(--nexo-success);"></i><strong style="color:var(--nexo-success);">Depositos confirmados</strong> — Pendiente revision final del supervisor');
+        $('#bannerDepositoCierre').show();
+        return;
+    }
     if (arqueo.estado === 'CON_DIFERENCIAS') {
         const dif = Math.abs(arqueo.diferencia_efectivo || 0);
         $('#bannerDepositoInfo').html('Arqueo con diferencia de <strong style="color:var(--nexo-error);">$' + formatearNumero(dif) + '</strong> — lleve a depositar el efectivo contado');
@@ -1708,20 +1804,36 @@ function reabrirArqueo() {
 }
 
 function reabrirArqueoFecha(fecha) {
-    if (!esAdministrador) { mostrarError('Solo los administradores pueden reabrir arqueos cerrados'); return; }
-    if (!confirm(`¿Reabrir el arqueo del ${fecha}?`)) return;
-    mostrarLoading(true);
-    $.ajax({
-        url: '/app/api/arqueo/reabrir/',
-        method: 'POST',
-        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
-        data: JSON.stringify({ fecha: fecha }),
-        success: function(r) {
-            mostrarLoading(false);
-            if (r.success) { mostrarExito('Arqueo reabierto.'); $('#alertaVentasPostCierre').hide(); verificarEstadoHoy(); cargarArqueos(); actualizarWorkflow('arqueo_en_proceso'); $('#bannerDepositoCierre').hide(); }
-            else mostrarError('Error al reabrir: ' + r.error);
+    Swal.fire({
+        title: 'Reabrir Arqueo',
+        html: `<p style="font-size:.9rem;color:var(--nexo-gray-700);">Se reabrira el arqueo del <strong>${fecha}</strong>.</p>`,
+        input: 'textarea',
+        inputLabel: 'Justificacion (obligatoria)',
+        inputPlaceholder: 'Explique por que necesita reabrir este arqueo...',
+        inputAttributes: { 'aria-label': 'Justificacion' },
+        inputValidator: (value) => {
+            if (!value || value.trim().length < 10) return 'Debe ingresar una justificacion de al menos 10 caracteres';
         },
-        error: function(xhr) { mostrarLoading(false); mostrarError('Error: ' + xhr.responseText); }
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-lock-unlock-line me-1"></i>Reabrir',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FFB020',
+        icon: 'warning',
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+        mostrarLoading(true);
+        $.ajax({
+            url: '/app/api/arqueo/reabrir/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            data: JSON.stringify({ fecha: fecha, justificacion: result.value }),
+            success: function(r) {
+                mostrarLoading(false);
+                if (r.success) { mostrarExito('Arqueo reabierto.'); $('#alertaVentasPostCierre').hide(); verificarEstadoHoy(); cargarArqueos(); actualizarWorkflow('arqueo_en_proceso'); $('#bannerDepositoCierre').hide(); }
+                else mostrarError('Error al reabrir: ' + r.error);
+            },
+            error: function(xhr) { mostrarLoading(false); mostrarError('Error: ' + xhr.responseText); }
+        });
     });
 }
 
@@ -1762,6 +1874,8 @@ function verificarEstadoHoy() {
 function mostrarEstadoHoy(arqueo) {
     let html = '';
     let acciones = '';
+    const puedeReabrir = {{ puede_reabrir|yesno:"true,false" }};
+    const btnReabrir = puedeReabrir ? `<button class="btn btn-sm btn-warning" onclick="reabrirArqueoFecha('${arqueo.fecha_arqueo}')"><i class="ri-lock-unlock-line me-1"></i>Reabrir</button>` : '';
     switch(arqueo.estado) {
         case 'CERRADO':
             html = `<div class="d-flex align-items-center">
@@ -1770,14 +1884,15 @@ function mostrarEstadoHoy(arqueo) {
                 </div>
                 <div class="text-start">
                     <div class="d-flex align-items-center mb-1">
-                        <h6 class="mb-0 me-2" style="color:var(--nexo-success);font-weight:700;">Arqueo Completado</h6>
+                        <h6 class="mb-0 me-2" style="color:var(--nexo-success);font-weight:700;">Arqueo Cerrado</h6>
                         <span class="estado-badge estado-cerrado">CERRADO</span>
                     </div>
-                    <p class="mb-1" style="color:var(--nexo-gray-700);font-size:.875rem;">Sin diferencias de efectivo</p>
-                    <small class="text-muted"><i class="ri-user-line me-1"></i>${arqueo.usuario_responsable} <span class="mx-1">•</span><i class="ri-time-line me-1"></i>${arqueo.fecha_cierre||'-'}</small>
+                    <p class="mb-1" style="color:var(--nexo-gray-700);font-size:.875rem;">Pendiente de declarar depositos bancarios</p>
+                    <small class="text-muted"><i class="ri-user-line me-1"></i>${arqueo.usuario_responsable} <span class="mx-1">|</span><i class="ri-time-line me-1"></i>${arqueo.fecha_cierre||'-'}</small>
                 </div></div>`;
-            acciones = `<button class="btn btn-sm btn-outline-primary" onclick="continuarArqueo(${arqueo.id})"><i class="ri-eye-line me-1"></i>Ver Detalle</button>
-                ${esAdministrador ? `<button class="btn btn-sm btn-warning" onclick="reabrirArqueoFecha('${arqueo.fecha_arqueo}')"><i class="ri-lock-unlock-line me-1"></i>Reabrir</button>` : ''}`;
+            acciones = `<button class="btn btn-sm btn-warning" onclick="abrirModalDeclararDeposito()"><i class="ri-send-plane-line me-1"></i>Declarar Depositos</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="continuarArqueo(${arqueo.id})"><i class="ri-eye-line me-1"></i>Ver Detalle</button>
+                ${btnReabrir}`;
             actualizarWorkflow('cerrado');
             break;
         case 'CON_DIFERENCIAS':
@@ -1792,12 +1907,47 @@ function mostrarEstadoHoy(arqueo) {
                         <h6 class="mb-0 me-2" style="color:var(--nexo-warning);font-weight:700;">Cerrado con Diferencias</h6>
                         <span class="badge" style="background:var(--nexo-warning);color:var(--nexo-gray-900);font-size:.65rem;">${tt.toUpperCase()}</span>
                     </div>
-                    <p class="mb-1" style="font-size:.875rem;">Diferencia: <strong style="color:${tc};">$${formatearNumero(arqueo.diferencia_absoluta)}</strong> (${tt})</p>
+                    <p class="mb-1" style="font-size:.875rem;">Diferencia: <strong style="color:${tc};">$${formatearNumero(arqueo.diferencia_absoluta)}</strong> (${tt}) — Pendiente de declarar depositos</p>
+                    <small class="text-muted"><i class="ri-user-line me-1"></i>${arqueo.usuario_responsable}</small>
+                </div></div>`;
+            acciones = `<button class="btn btn-sm btn-warning" onclick="abrirModalDeclararDeposito()"><i class="ri-send-plane-line me-1"></i>Declarar Depositos</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="continuarArqueo(${arqueo.id})"><i class="ri-eye-line me-1"></i>Ver Detalle</button>
+                ${btnReabrir}`;
+            actualizarWorkflow('con_diferencias');
+            break;
+        case 'DEPOSITO_DECLARADO':
+            html = `<div class="d-flex align-items-center">
+                <div class="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0" style="width:52px;height:52px;background:linear-gradient(135deg,#6C63FF,#4834D4);box-shadow:0 4px 15px rgba(108,99,255,.3);animation:pulse-step 2s infinite;">
+                    <i class="ri-time-line" style="font-size:1.75rem;color:#fff;"></i>
+                </div>
+                <div class="text-start">
+                    <div class="d-flex align-items-center mb-1">
+                        <h6 class="mb-0 me-2" style="color:#6C63FF;font-weight:700;">Depositos Declarados</h6>
+                        <span class="badge" style="background:#6C63FF;color:#fff;font-size:.65rem;">ESPERANDO CONFIRMACION</span>
+                    </div>
+                    <p class="mb-1" style="color:var(--nexo-gray-700);font-size:.875rem;">${arqueo.depositos_declarados||0} deposito(s) enviado(s) — esperando confirmacion del supervisor</p>
                     <small class="text-muted"><i class="ri-user-line me-1"></i>${arqueo.usuario_responsable}</small>
                 </div></div>`;
             acciones = `<button class="btn btn-sm btn-outline-primary" onclick="continuarArqueo(${arqueo.id})"><i class="ri-eye-line me-1"></i>Ver Detalle</button>
-                ${esAdministrador ? `<button class="btn btn-sm btn-warning" onclick="reabrirArqueoFecha('${arqueo.fecha_arqueo}')"><i class="ri-lock-unlock-line me-1"></i>Reabrir</button>` : ''}`;
-            actualizarWorkflow('con_diferencias');
+                ${btnReabrir}`;
+            actualizarWorkflow('deposito_declarado');
+            break;
+        case 'DEPOSITO_CONFIRMADO':
+            html = `<div class="d-flex align-items-center">
+                <div class="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0" style="width:52px;height:52px;background:linear-gradient(135deg,#00B894,#00A884);box-shadow:0 4px 15px rgba(0,184,148,.3);">
+                    <i class="ri-check-double-line" style="font-size:1.75rem;color:#fff;"></i>
+                </div>
+                <div class="text-start">
+                    <div class="d-flex align-items-center mb-1">
+                        <h6 class="mb-0 me-2" style="color:#00B894;font-weight:700;">Depositos Confirmados</h6>
+                        <span class="badge" style="background:#00B894;color:#fff;font-size:.65rem;">CONFIRMADO</span>
+                    </div>
+                    <p class="mb-1" style="color:var(--nexo-gray-700);font-size:.875rem;">Depositos verificados por supervisor — pendiente revision final</p>
+                    <small class="text-muted"><i class="ri-user-line me-1"></i>${arqueo.usuario_responsable}</small>
+                </div></div>`;
+            acciones = `<button class="btn btn-sm btn-outline-primary" onclick="continuarArqueo(${arqueo.id})"><i class="ri-eye-line me-1"></i>Ver Detalle</button>
+                ${btnReabrir}`;
+            actualizarWorkflow('deposito_confirmado');
             break;
         case 'ABIERTO':
             html = `<div class="d-flex align-items-center">
@@ -1831,7 +1981,7 @@ function mostrarEstadoHoy(arqueo) {
                     <small class="text-muted"><i class="ri-user-line me-1"></i>${arqueo.usuario_responsable}</small>
                 </div></div>`;
             acciones = `<button class="btn btn-sm btn-outline-primary" onclick="continuarArqueo(${arqueo.id})"><i class="ri-eye-line me-1"></i>Ver Detalle</button>`;
-            actualizarWorkflow('cerrado');
+            actualizarWorkflow('revisado');
             break;
     }
     $('#estadoHoy').html(html);
@@ -2298,7 +2448,7 @@ function mostrarArqueos(arqueos) {
                     <div class="d-flex gap-1">
                         <button class="btn btn-sm" onclick="verDetalleArqueo(${a.id})" title="Ver/editar" style="background:var(--nexo-primary-light);color:var(--nexo-primary);"><i class="ri-eye-line"></i></button>
                         <button class="btn btn-sm" onclick="imprimirArqueoId(${a.id})" title="Imprimir" style="background:var(--nexo-gray-100);color:var(--nexo-gray-700);"><i class="ri-printer-line"></i></button>
-                        ${esAdministrador && (a.estado==='CERRADO'||a.estado==='CON_DIFERENCIAS') ? `<button class="btn btn-sm btn-warning" onclick="reabrirArqueoFecha('${a.fecha_arqueo}')" title="Reabrir"><i class="ri-lock-unlock-line"></i></button>` : ''}
+                        ${puedeReabrir && ['CERRADO','CON_DIFERENCIAS','DEPOSITO_DECLARADO','DEPOSITO_CONFIRMADO','REVISADO'].includes(a.estado) ? `<button class="btn btn-sm btn-warning" onclick="reabrirArqueoFecha('${a.fecha_arqueo}')" title="Reabrir"><i class="ri-lock-unlock-line"></i></button>` : ''}
                     </div>
                 </td>
             </tr>`;
@@ -2855,8 +3005,15 @@ function enviarConfirmarDeposito() {
 // ===== FUNCIONES DECLARACIÓN DEPÓSITO (CAJERO) =====
 
 function abrirModalDeclararDeposito() {
-    // Obtain today's arqueo from the arqueos already loaded
     const hoyStr = new Date().toISOString().split('T')[0];
+    // Reset form
+    $('#formNuevoDeposito')[0].reset();
+    $('#tipoMedioEfectivo').prop('checked', true);
+    $('#previewImagenDeclaracion').hide();
+    $('#btnFinalizarDeclaracion').hide();
+    $('#tablaDepositosDeclarados').html('');
+    $('#listaDepositosDeclarados').hide();
+
     $.ajax({
         url: '/app/api/cuadratura/listar/',
         method: 'GET',
@@ -2867,40 +3024,139 @@ function abrirModalDeclararDeposito() {
                 $('#arqueoIdDeclaracion').val(a.id);
                 $('#infoArqueoDeclaracion').val('Arqueo ' + new Date(a.fecha_arqueo + 'T12:00:00').toLocaleDateString('es-CL') + ' — ' + (a.estado_display || a.estado));
                 $('#referenciaEfectivoDeclaracion').val(formatearNumero(a.efectivo_fisico || 0));
-                $('#montoDeclaracion').val(a.efectivo_fisico || '');
+                // Cargar depositos ya declarados
+                cargarDepositosDeclaradosModal(a.id);
             } else {
                 $('#arqueoIdDeclaracion').val('');
                 $('#infoArqueoDeclaracion').val('Sin arqueo registrado para hoy');
                 $('#referenciaEfectivoDeclaracion').val('0');
-                $('#montoDeclaracion').val('');
             }
         },
-        error: function() {
-            $('#infoArqueoDeclaracion').val('Error al cargar arqueo');
+        error: function() { $('#infoArqueoDeclaracion').val('Error al cargar arqueo'); }
+    });
+    $('#modalDeclararDeposito').modal('show');
+}
+
+// Preview de imagen al seleccionar archivo
+$('#imagenComprobanteDeclaracion').on('change', function() {
+    const file = this.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            $('#imgPreviewDeclaracion').attr('src', e.target.result);
+            $('#previewImagenDeclaracion').show();
+        };
+        reader.readAsDataURL(file);
+    } else {
+        $('#previewImagenDeclaracion').hide();
+    }
+});
+
+function cargarDepositosDeclaradosModal(arqueoId) {
+    $.ajax({
+        url: '/app/api/cuadratura/deposito/pendientes/',
+        method: 'GET',
+        data: { fecha: new Date().toISOString().split('T')[0] },
+        success: function(r) {
+            if (!r.success || !r.depositos || r.depositos.length === 0) {
+                $('#listaDepositosDeclarados').hide();
+                $('#btnFinalizarDeclaracion').hide();
+                return;
+            }
+            let html = '<table class="table table-sm table-bordered mb-0" style="font-size:.8rem;">';
+            html += '<thead><tr><th>Tipo</th><th>Monto</th><th>Banco</th><th>Comprobante</th><th>Estado</th></tr></thead><tbody>';
+            r.depositos.forEach(d => {
+                const icono = d.tipo_medio === 'CHEQUE' ? '<i class="ri-file-text-line" style="color:var(--nexo-primary);"></i>' : '<i class="ri-money-dollar-circle-line" style="color:var(--nexo-success);"></i>';
+                html += `<tr>
+                    <td>${icono} ${d.tipo_medio_display || d.tipo_medio || 'Efectivo'}</td>
+                    <td class="fw-bold">$${formatearNumero(d.monto_declarado)}</td>
+                    <td>${d.banco_display || d.banco || '-'}</td>
+                    <td>${d.numero_comprobante || '-'} ${d.tiene_imagen ? '<i class="ri-image-line text-success"></i>' : ''}</td>
+                    <td><span class="badge bg-warning text-dark" style="font-size:.7rem;">Pendiente</span></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            $('#tablaDepositosDeclarados').html(html);
+            $('#listaDepositosDeclarados').show();
+            $('#btnFinalizarDeclaracion').show();
         }
     });
-    $('#obsDeclaracion').val('');
-    $('#modalDeclararDeposito').modal('show');
 }
 
 function guardarDeclaracionDeposito() {
     const arqueoId = $('#arqueoIdDeclaracion').val();
     const monto = parseInt($('#montoDeclaracion').val()) || 0;
+    const tipoMedio = $('input[name="tipoMedioDeclaracion"]:checked').val() || 'EFECTIVO';
+    const banco = $('#bancoDeclaracion').val();
+    const nComprobante = $('#nComprobanteDeclaracion').val();
     const obs = $('#obsDeclaracion').val();
-    if (!arqueoId) { mostrarError('No hay arqueo del día para asociar la declaración. Realice primero el arqueo.'); return; }
-    if (monto <= 0) { mostrarError('Ingrese un monto válido mayor a $0'); return; }
+    const imagenFile = $('#imagenComprobanteDeclaracion')[0].files[0];
+
+    if (!arqueoId) { mostrarError('No hay arqueo del dia para asociar la declaracion.'); return; }
+    if (monto <= 0) { mostrarError('Ingrese un monto valido mayor a $0'); return; }
+
+    const fd = new FormData();
+    fd.append('arqueo_id', arqueoId);
+    fd.append('monto_declarado', monto);
+    fd.append('tipo_medio', tipoMedio);
+    fd.append('banco', banco);
+    fd.append('numero_comprobante', nComprobante);
+    fd.append('observaciones', obs);
+    if (imagenFile) fd.append('imagen_comprobante', imagenFile);
+
     $.ajax({
         url: '/app/api/cuadratura/deposito/declarar/',
         method: 'POST',
-        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
-        data: JSON.stringify({ arqueo_id: arqueoId, monto_declarado: monto, observaciones: obs }),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        data: fd,
+        processData: false,
+        contentType: false,
         success: function(r) {
             if (r.success) {
-                mostrarExito('Declaración registrada: $' + formatearNumero(monto) + '. El supervisor deberá confirmar el depósito.');
-                $('#modalDeclararDeposito').modal('hide');
+                mostrarExito('Deposito declarado: $' + formatearNumero(monto) + ' (' + (r.deposito.tipo_medio_display || tipoMedio) + ')');
+                // Reset form para agregar otro deposito
+                $('#montoDeclaracion').val('');
+                $('#nComprobanteDeclaracion').val('');
+                $('#obsDeclaracion').val('');
+                $('#imagenComprobanteDeclaracion').val('');
+                $('#previewImagenDeclaracion').hide();
+                // Recargar lista de depositos declarados
+                cargarDepositosDeclaradosModal(arqueoId);
             } else { mostrarError(r.error); }
         },
         error: function(xhr) { mostrarError('Error: ' + xhr.responseText); }
+    });
+}
+
+function finalizarDeclaracionDepositos() {
+    const arqueoId = $('#arqueoIdDeclaracion').val();
+    if (!arqueoId) { mostrarError('No hay arqueo asociado'); return; }
+
+    Swal.fire({
+        title: 'Finalizar Declaracion',
+        text: 'Se notificara al supervisor para confirmar sus depositos. No podra agregar mas depositos despues.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Finalizar',
+        cancelButtonText: 'Seguir agregando',
+        confirmButtonColor: 'var(--nexo-success)',
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: '/app/api/cuadratura/deposito/finalizar/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            data: JSON.stringify({ arqueo_id: arqueoId }),
+            success: function(r) {
+                if (r.success) {
+                    mostrarExito(r.message);
+                    $('#modalDeclararDeposito').modal('hide');
+                    verificarEstadoHoy();
+                    cargarArqueos();
+                } else { mostrarError(r.error); }
+            },
+            error: function(xhr) { mostrarError('Error: ' + xhr.responseText); }
+        });
     });
 }
 </script>

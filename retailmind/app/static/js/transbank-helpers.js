@@ -7,29 +7,49 @@
 /**
  * Auto-conectar al POS (solicita permisos si es necesario)
  * Prueba múltiples baudrates automáticamente
+ * Si no hay puertos autorizados, abre el selector del navegador
  */
 async function autoconectarPOS() {
     try {
         showLoading('Conectando al POS...');
-        
-        // Intentar primero con baudrate por defecto
-        let resultado = await Transbank.POS.autoConnect(false);
-        
-        // Si falla, probar todos los baudrates
-        if (!resultado.success) {
-            showLoading('Probando otras velocidades...');
-            resultado = await Transbank.POS.autoConnect(true);
+
+        let resultado;
+
+        // Verificar si hay puertos previamente autorizados
+        const puertosDisponibles = await navigator.serial.getPorts();
+
+        if (puertosDisponibles.length > 0) {
+            // Hay puertos autorizados, intentar auto-conectar
+            try {
+                resultado = await Transbank.POS.autoConnect(false);
+            } catch (e) {
+                // Si falla con baudrate por defecto, probar todos
+                showLoading('Probando otras velocidades...');
+                try {
+                    resultado = await Transbank.POS.autoConnect(true);
+                } catch (e2) {
+                    // Si falla con todos los baudrates, usar conexión manual
+                    console.log('Auto-connect falló, abriendo selector manual...');
+                    resultado = null;
+                }
+            }
         }
-        
-        if (resultado.success) {
+
+        // Si no hay puertos autorizados o auto-connect falló, abrir selector del navegador
+        if (!resultado || !resultado.success) {
+            showLoading('Seleccione el POS en la ventana del navegador...');
+            resultado = await Transbank.POS.connect();
+        }
+
+        if (resultado && resultado.success) {
             // Guardar configuración en el backend
             await guardarConfiguracionPOS(resultado);
-            
+
             hideLoading();
-            
+
             const deviceInfo = resultado.deviceType || 'POS Transbank';
             const baudInfo = resultado.baudrate ? ` (${resultado.baudrate} bps)` : '';
-            
+
             showSuccess(`${deviceInfo} conectado${baudInfo}`);
             actualizarEstadoPOS(true, resultado.port, resultado.deviceType);
             return resultado;
@@ -38,7 +58,12 @@ async function autoconectarPOS() {
         }
     } catch (error) {
         hideLoading();
-        showError('Error conectando al POS: ' + error.message);
+        // Diferenciar cancelación del usuario vs error real
+        if (error.message && error.message.includes('No port selected')) {
+            showInfo('Conexión cancelada por el usuario');
+        } else {
+            showError('Error conectando al POS: ' + error.message);
+        }
         actualizarEstadoPOS(false);
         throw error;
     }
@@ -46,16 +71,25 @@ async function autoconectarPOS() {
 
 /**
  * Auto-conectar silencioso (sin solicitar permisos)
+ * Solo intenta con puertos ya autorizados, nunca abre diálogo
  */
 async function autoconectarPOSPre() {
     try {
+        // Solo intentar si hay puertos previamente autorizados
+        const puertos = await navigator.serial.getPorts();
+        if (puertos.length === 0) {
+            console.log('ℹ️ Sin puertos autorizados, esperando conexión manual');
+            return { success: false, error: 'Sin puertos autorizados' };
+        }
+
         const resultado = await Transbank.POS.autoConnect(false);
         if (resultado.success) {
             actualizarEstadoPOS(true, resultado.port, resultado.deviceType);
+            console.log('✅ POS auto-conectado silenciosamente');
         }
         return resultado;
     } catch (error) {
-        console.log('No se pudo auto-conectar:', error.message);
+        console.log('ℹ️ Auto-conexión silenciosa no disponible:', error.message);
         return { success: false, error: error.message };
     }
 }

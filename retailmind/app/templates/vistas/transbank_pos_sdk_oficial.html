@@ -293,6 +293,19 @@ function toggleTechInfo(el) {
 
 async function conectarPOS() {
     try {
+        // Si ya está conectado, verificar con POLL
+        if (Transbank.POS.isConnected) {
+            showLoading('Verificando conexión existente...');
+            const ok = await Transbank.POS.poll();
+            hideLoading();
+            if (ok) {
+                showSuccess('POS ya está conectado y responde correctamente');
+                return;
+            }
+            // Si POLL falla, desconectar y reconectar
+            try { await Transbank.POS.disconnect(); } catch(e) {}
+            actualizarEstadoPOS(false);
+        }
         await autoconectarPOS();
     } catch (error) {
         console.error('Error conectando:', error);
