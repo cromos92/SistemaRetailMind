@@ -19628,7 +19628,6 @@ def descartar_todas_notificaciones_dte(request):
 # QZ TRAY — IMPRESIÓN TÉRMICA SILENCIOSA
 # ================================================================
 
-@login_required
 def qz_certificado(request):
     """
     Sirve el certificado digital público para que QZ Tray verifique
