@@ -19639,15 +19639,22 @@ def qz_certificado(request):
     from django.conf import settings as django_settings
 
     cert_path = Path(django_settings.QZ_CERTIFICATE_PATH)
-    if not cert_path.exists():
-        return HttpResponse(
-            '# Certificado QZ Tray no configurado.\n'
-            '# Ejecute: openssl req -newkey rsa:2048 -nodes -keyout private-key.pem '
-            '-x509 -days 3650 -out digital-certificate.txt',
-            content_type='text/plain',
-            status=404
-        )
-    return HttpResponse(cert_path.read_text(encoding='utf-8'), content_type='text/plain')
+    if cert_path.exists():
+        cert_data = cert_path.read_text(encoding='utf-8')
+    else:
+        import os
+        cert_data = os.environ.get('QZ_CERTIFICATE', '')
+        if cert_data:
+            if '\\n' in cert_data:
+                cert_data = cert_data.replace('\\n', '\n')
+        else:
+            return HttpResponse(
+                '# Certificado QZ Tray no configurado.\n'
+                '# Configure QZ_CERTIFICATE en variables de entorno.',
+                content_type='text/plain',
+                status=404
+            )
+    return HttpResponse(cert_data, content_type='text/plain')
 
 
 @login_required
@@ -19684,7 +19691,10 @@ def qz_firmar(request):
                     {'error': 'Clave privada no encontrada. Configure QZ_PRIVATE_KEY en variables de entorno.'},
                     status=500
                 )
-            key_data = key_env.replace('\\n', '\n').encode('utf-8')
+            # Soportar tanto \n literal como saltos reales
+            if '\\n' in key_env:
+                key_env = key_env.replace('\\n', '\n')
+            key_data = key_env.encode('utf-8')
 
         clave_privada = serialization.load_pem_private_key(
             key_data,
