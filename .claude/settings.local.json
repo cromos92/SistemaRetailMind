@@ -41,7 +41,8 @@
       "Bash(python manage.py migrate app)",
       "Bash(grep -l \"_qz_tray_module\\\\|imprimirConQZ\" \"/c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas\"/*.html)",
       "Bash(grep -l \"qz_config\\\\|QZ_CONFIG\" \"/c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas\"/*.html)",
-      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/**)"
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/**)",
+      "Bash(iconv -f UTF-8 -t UTF-16LE /tmp/req_fixed.txt)"
     ]
   }
 }
