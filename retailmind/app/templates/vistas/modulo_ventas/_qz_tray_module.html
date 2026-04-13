@@ -321,10 +321,105 @@ function _generarEscPosVenta(td) {
     return c;
 }
 
+/* ── Generar comandos ESC/POS — modo PEDIDO ECOMMERCE ─────── */
+function _generarEscPosEcommerce(td) {
+    const suc  = td.sucursal  || {};
+    const prod = td.productos || [];
+
+    const empNombre = String(suc.empresa    || 'MI EMPRESA');
+    const empRut    = String(suc.rut_empresa|| '');
+    const numRM     = String(td.numero_ticket_rm || '');
+    const canal     = String(td.canal_origen || '').toUpperCase();
+    const numCanal  = String(td.numero_pedido_canal || '');
+
+    let fechaStr = td.fecha || new Date().toLocaleString('es-CL');
+
+    const c = [];
+
+    // Inicialización
+    c.push(_EP.INIT, _EP.CP1252);
+
+    // Cabecera empresa
+    c.push(_EP.CENTER, _EP.BOLD_ON);
+    c.push(empNombre.toUpperCase().substring(0, _COLS) + _N);
+    c.push(_EP.BOLD_OFF);
+    if (suc.alias)     c.push(suc.alias.toUpperCase().substring(0, _COLS) + _N);
+    if (suc.direccion) c.push(suc.direccion.substring(0, _COLS) + _N);
+    if (empRut)        c.push('RUT: ' + empRut + _N);
+    c.push(_sep('='));
+
+    // Banner PEDIDO ECOMMERCE
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push('PEDIDO ECOMMERCE' + _N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    // Canal y N pedido
+    c.push(_EP.CENTER, _EP.BOLD_ON);
+    c.push(canal + _N);
+    c.push(_EP.BOLD_OFF);
+    c.push('Pedido: ' + numCanal + _N);
+    c.push(_sep('-'));
+
+    // Ticket RM (doble tamaño)
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push(numRM + _N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('='));
+
+    // Info
+    c.push(_EP.LEFT);
+    c.push(_row('Fecha:', fechaStr));
+    if (td.cliente_nombre)    c.push(_row('Cliente:', String(td.cliente_nombre)));
+    if (td.cliente_documento) c.push(_row('RUT:', String(td.cliente_documento)));
+    if (td.direccion_envio)   c.push(_row('Envio:', String(td.direccion_envio).substring(0,38)));
+    if (td.ticket_correlativo) c.push(_row('Ticket:', '#' + td.ticket_correlativo));
+    if (td.dte_numero)        c.push(_row('DTE:', '#' + td.dte_numero + ' (' + (td.dte_tipo||'') + ')'));
+    c.push(_sep('='));
+
+    // Cabecera columnas
+    c.push(_EP.BOLD_ON);
+    c.push(_pL('CANT',5) + _pL('DESCRIPCION',29) + _pR('TOTAL',10) + _N);
+    c.push(_EP.BOLD_OFF);
+    c.push(_sep('-'));
+
+    // Productos
+    prod.forEach(function(p) {
+        const cant = String(p.cantidad || 1);
+        const nom  = String(p.nombre||p.articulo||'').toUpperCase().substring(0,29);
+        const st   = (p.cantidad||1) * (p.precio_unitario||0);
+        const sku  = p.sku ? 'SKU:'+p.sku : '';
+        c.push(_pR(cant,4)+' '+_pL(nom,29)+_pR(_clp(st),10)+_N);
+        if (sku) c.push('     '+_pL(sku,43)+_N);
+    });
+    c.push(_sep('='));
+
+    // Total
+    const total = td.total || 0;
+    c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
+    c.push('TOTAL: '+_clp(total)+_N);
+    c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
+    c.push(_sep('='));
+
+    // Barcode
+    if (numRM) c.push(..._escBarcode128(numRM.replace('RM-','')));
+    c.push(_sep('-'));
+
+    // Pie
+    c.push(_EP.CENTER);
+    c.push('*** PEDIDO ECOMMERCE ***' + _N);
+    c.push(_EP.FEED3, _EP.CUT);
+
+    return c;
+}
+
 /* ── Generar comandos ESC/POS a partir de ticketData ────────── */
 function _generarEscPos(td) {
     if (td.modulo_origen === 'CAMBIO_DEVOLUCION') {
         return _generarEscPosCambio(td);
+    }
+    if (td.modulo_origen === 'ECOMMERCE') {
+        return _generarEscPosEcommerce(td);
     }
     return _generarEscPosVenta(td);
 }

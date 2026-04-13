@@ -31,19 +31,19 @@
 /* ── checkbox ── */
 .cb-pedido{width:15px;height:15px;cursor:pointer;accent-color:#3b82f6;}
 
-/* ── barra de acción masiva ── */
+/* ── barra de acción masiva (inline, entre filtros y tabla) ── */
 #bulk-bar{
-  position:fixed;bottom:0;left:0;right:0;
   background:linear-gradient(135deg,#1e3a5f,#1d4ed8);
-  color:#fff;padding:12px 24px;z-index:9999;
+  color:#fff;padding:10px 18px;
   display:none;
-  box-shadow:0 -4px 20px rgba(0,0,0,.25);
-  align-items:center;gap:12px;flex-wrap:wrap;
+  border-radius:10px;margin-bottom:12px;
+  align-items:center;gap:10px;flex-wrap:wrap;
+  box-shadow:0 2px 8px rgba(30,78,216,.25);
 }
 #bulk-bar.visible{display:flex;}
-#bulk-bar .bb-label{font-weight:700;font-size:.95rem;white-space:nowrap;}
-#bulk-bar select,#bulk-bar .btn{height:34px;font-size:.8rem;}
-#bulk-bar select{background:#fff;color:#1e293b;border:none;border-radius:6px;padding:0 10px;min-width:160px;}
+#bulk-bar .bb-label{font-weight:700;font-size:.88rem;white-space:nowrap;}
+#bulk-bar select,#bulk-bar .btn{height:32px;font-size:.78rem;}
+#bulk-bar select{background:#fff;color:#1e293b;border:none;border-radius:6px;padding:0 10px;min-width:140px;}
 
 /* ── modal de resultados ── */
 #modal-resultados .r-ok{color:#16a34a;}
@@ -57,16 +57,54 @@
 .row-sin-stock{background:#fffbeb !important;}
 .row-sin-stock:hover{background:#fef3c7 !important;}
 .btn-sin-stock{font-size:.72rem;padding:2px 8px;cursor:not-allowed;opacity:.6;border-color:#fdba74;color:#c2410c;background:#fff7ed;}
+
+/* ── sub-estados ── */
+.sub-recibido{background:#f1f5f9;color:#475569;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+.sub-asignado{background:#dbeafe;color:#1e40af;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+.sub-en_preparacion{background:#fef3c7;color:#92400e;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+.sub-listo_despacho{background:#dcfce7;color:#166534;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+.sub-facturado_ok{background:#dcfce7;color:#166534;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+.sub-cancelado_cliente,.sub-cancelado_sin_stock{background:#fee2e2;color:#991b1b;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+.sub-error_stock,.sub-error_dte{background:#fee2e2;color:#991b1b;font-size:.67rem;padding:2px 7px;border-radius:12px;font-weight:600;}
+
+/* ── antigüedad ── */
+.age-warn{background:#fef3c7;border-left:3px solid #f59e0b;}
+.age-crit{background:#fee2e2;border-left:3px solid #ef4444;}
+
+/* ── tipo doc radio buttons ── */
+.bb-tipo-doc-group .btn-check+.btn{border-color:rgba(255,255,255,.3);color:rgba(255,255,255,.8);font-size:.78rem;padding:3px 12px;}
+.bb-tipo-doc-group .btn-check:checked+.btn{background:rgba(255,255,255,.2);color:#fff;border-color:rgba(255,255,255,.6);font-weight:700;}
+
+/* ── botones distribución ── */
+.btn-distribuir{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:.78rem;padding:4px 12px;border-radius:6px;}
+.btn-distribuir:hover{background:rgba(255,255,255,.2);color:#fff;}
+
+/* ── monto total selección ── */
+.bb-total-monto{background:rgba(255,255,255,.12);border-radius:8px;padding:2px 10px;font-size:.82rem;font-weight:600;}
+
+/* ── indicador sucursal mia/otra ── */
+.suc-mia{font-weight:700;color:#15803d;}
+.suc-otra{font-weight:600;color:#94a3b8;font-style:italic;}
+.badge-otra-suc{background:#f1f5f9;color:#64748b;font-size:.6rem;padding:1px 5px;border-radius:8px;font-weight:600;white-space:nowrap;}
+.badge-mi-suc{background:#dcfce7;color:#166534;font-size:.6rem;padding:1px 5px;border-radius:8px;font-weight:600;white-space:nowrap;}
+
+/* ── toggle ver todas ── */
+.toggle-todas{font-size:.78rem;display:inline-flex;align-items:center;gap:4px;cursor:pointer;}
+.toggle-todas input{width:14px;height:14px;accent-color:#3b82f6;cursor:pointer;}
 </style>
 
-<div class="page-content" style="padding-bottom:80px;">
+<div class="page-content">
 <div class="container-fluid">
 
   <!-- encabezado -->
   <div style="background:linear-gradient(135deg,#1e293b,#334155);border-radius:10px;padding:14px 22px;margin-bottom:18px;color:white;" class="d-flex justify-content-between align-items-center flex-wrap gap-2">
     <div>
       <h4 style="margin:0;font-weight:700;font-size:1.15rem;"><i class="bi bi-cart-check me-2"></i>Pedidos Ecommerce</h4>
-      <p style="margin:3px 0 0;opacity:.7;font-size:.78rem;">Pedidos recibidos desde marketplaces · Selecciona con checkbox y factura masivamente.</p>
+      <p style="margin:3px 0 0;opacity:.7;font-size:.78rem;">Pedidos recibidos desde marketplaces · Selecciona con checkbox y factura masivamente.
+        <a href="{% url 'ecommerce_dashboard_asignacion' %}" style="color:#6ffce0;text-decoration:none;font-weight:600;margin-left:8px;">
+          <i class="bi bi-graph-up me-1"></i>Dashboard
+        </a>
+      </p>
     </div>
     <div class="d-flex gap-2 align-items-center flex-wrap">
       <!-- Sucursal activa de sesión -->
@@ -108,24 +146,69 @@
           </select>
         </div>
         <div class="col-md-2">
+          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Sub-estado</label>
+          <select name="sub_estado" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for val, lbl in sub_estados_choices %}
+              <option value="{{ val }}" {% if sub_estado_filtro == val %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
           <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Sucursal</label>
-          <select name="sucursal_id" class="form-select form-select-sm">
-            <option value="" {% if sucursal_filtro == '' %}selected{% endif %}>Todas</option>
+          <select name="sucursal_id" class="form-select form-select-sm" id="filtro-sucursal">
+            <option value="" {% if sucursal_filtro == '' and not ver_todas %}selected{% endif %}>Mi sucursal</option>
             {% for s in sucursales %}
               <option value="{{ s.id }}" {% if sucursal_filtro == s.id|stringformat:"s" %}selected{% endif %}>{{ s.nombre|default:s.alias }}</option>
             {% endfor %}
           </select>
+          <label class="toggle-todas mt-1">
+            <input type="checkbox" name="ver_todas" value="1" {% if ver_todas %}checked{% endif %} onchange="this.form.submit()">
+            Ver todas las sucursales
+          </label>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Buscar</label>
           <input type="text" name="q" class="form-control form-control-sm" placeholder="N RM, pedido, cliente..." value="{{ q }}">
         </div>
-        <div class="col-md-3 d-flex gap-1 align-self-end">
+        <div class="col-md-2 d-flex gap-1 align-self-end flex-wrap">
           <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
           <a href="{% url 'pedidos_ecommerce_list' %}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+          <a href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}"
+             class="btn btn-outline-success btn-sm" title="Exportar CSV">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+          </a>
         </div>
       </form>
     </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       BARRA DE ACCIÓN MASIVA (entre filtros y tabla)
+       ═══════════════════════════════════════════════════════ -->
+  <div id="bulk-bar">
+    <span class="bb-label"><i class="bi bi-check2-square me-2"></i><span id="bb-count">0</span> seleccionado(s)</span>
+
+    <span class="bb-total-monto" id="bb-total-monto" style="display:none;">
+      <i class="bi bi-cash-stack me-1"></i><span id="bb-monto-val">$0</span>
+    </span>
+
+    <div class="bb-tipo-doc-group btn-group" role="group" style="margin:0 4px;">
+      <input type="radio" class="btn-check" name="bb-tipo-doc" id="bb-boleta-e" value="BOLETA_ELECTRONICA" checked>
+      <label class="btn btn-outline-light btn-sm" for="bb-boleta-e"><i class="bi bi-receipt me-1"></i>Boleta Electr.</label>
+      <input type="radio" class="btn-check" name="bb-tipo-doc" id="bb-boleta-p" value="BOLETA_PAPEL">
+      <label class="btn btn-outline-light btn-sm" for="bb-boleta-p"><i class="bi bi-file-text me-1"></i>Boleta Papel</label>
+    </div>
+
+    <button class="btn btn-light btn-sm fw-bold" id="btn-facturar-masivo" onclick="confirmarFacturacionMasiva()">
+      <i class="bi bi-receipt me-1"></i>Facturar
+    </button>
+    <button class="btn-distribuir" onclick="abrirDistribucion()">
+      <i class="bi bi-diagram-3 me-1"></i>Distribuir
+    </button>
+    <button class="btn btn-outline-light btn-sm" onclick="deseleccionarTodo()" title="Deseleccionar">
+      <i class="bi bi-x-lg"></i>
+    </button>
   </div>
 
   {% if pedidos %}
@@ -146,6 +229,7 @@
               <th class="text-end">Total</th>
               <th>Fecha</th>
               <th>Estado</th>
+              <th>Sub-estado</th>
               <th></th>
             </tr>
           </thead>
@@ -173,15 +257,15 @@
                 {% if p.cliente_documento %}<div class="col-cliente-doc">{{ p.cliente_documento }}</div>{% endif %}
               </td>
               <td class="col-sucursal">
-                {% if p.estado == 'FACTURADO' and p.ticket %}
-                  {{ p.ticket.sucursal.nombre|default:p.ticket.sucursal.alias }}
-                {% elif sucursal_sesion_obj %}
-                  {{ sucursal_sesion_obj.nombre|default:sucursal_sesion_obj.alias }}
+                {% if sucursal_sesion_obj and p.sucursal_id == sucursal_sesion_obj.id %}
+                  <span class="suc-mia">{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
+                  <span class="badge-mi-suc"><i class="bi bi-check-circle-fill me-1"></i>Mi suc.</span>
                 {% else %}
-                  <span style="color:#94a3b8;font-style:italic;">Sin sesión</span>
+                  <span class="suc-otra">{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
+                  <span class="badge-otra-suc"><i class="bi bi-building me-1"></i>Otra</span>
                 {% endif %}
                 {% if p.id in pedidos_sin_stock_ids %}
-                  <br><span class="badge-sin-stock"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock insuficiente</span>
+                  <br><span class="badge-sin-stock"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock insuf.</span>
                 {% endif %}
               </td>
               <td class="text-end col-total"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
@@ -196,14 +280,34 @@
                 {% else %}<span>{{ p.estado }}</span>{% endif %}
               </td>
               <td>
+                <span class="sub-{{ p.sub_estado|lower }}">{{ p.get_sub_estado_display }}</span>
+              </td>
+              <td>
                 {% if p.id in pedidos_sin_stock_ids %}
-                  <span class="btn btn-sm btn-sin-stock disabled" title="No se puede facturar: stock insuficiente en sucursal activa">
-                    <i class="bi bi-exclamation-circle me-1"></i>Stock insuficiente
-                  </span>
+                  <div class="d-flex gap-1">
+                    <span class="btn btn-sm btn-sin-stock disabled" title="Stock insuficiente en sucursal activa">
+                      <i class="bi bi-exclamation-circle"></i>
+                    </span>
+                    {% if p.estado == 'PENDIENTE' %}
+                    <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar a otra sucursal">
+                      <i class="bi bi-arrow-left-right"></i>
+                    </button>
+                    {% endif %}
+                    <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.68rem;padding:1px 6px;" title="Ver detalle">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                  </div>
                 {% else %}
-                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.72rem;padding:2px 8px;">
-                    {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
-                  </a>
+                  <div class="d-flex gap-1">
+                    <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.72rem;padding:2px 8px;">
+                      {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
+                    </a>
+                    {% if p.estado == 'PENDIENTE' %}
+                    <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar">
+                      <i class="bi bi-arrow-left-right"></i>
+                    </button>
+                    {% endif %}
+                  </div>
                 {% endif %}
               </td>
             </tr>
@@ -218,7 +322,7 @@
           <ul class="pagination pagination-sm mb-0">
             {% if page_obj.has_previous %}
               <li class="page-item">
-                <a class="page-link" href="?estado={{ estado_filtro }}&canal={{ canal_filtro }}&q={{ q }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+                <a class="page-link" href="?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}&page={{ page_obj.previous_page_number }}">Anterior</a>
               </li>
             {% endif %}
             <li class="page-item disabled">
@@ -226,7 +330,7 @@
             </li>
             {% if page_obj.has_next %}
               <li class="page-item">
-                <a class="page-link" href="?estado={{ estado_filtro }}&canal={{ canal_filtro }}&q={{ q }}&page={{ page_obj.next_page_number }}">Siguiente</a>
+                <a class="page-link" href="?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}&page={{ page_obj.next_page_number }}">Siguiente</a>
               </li>
             {% endif %}
           </ul>
@@ -244,33 +348,6 @@
 
 </div><!-- /container -->
 </div><!-- /page-content -->
-
-<!-- ═══════════════════════════════════════════════════════
-     BARRA DE ACCIÓN MASIVA (aparece cuando hay selección)
-     ═══════════════════════════════════════════════════════ -->
-<div id="bulk-bar">
-  <span class="bb-label"><i class="bi bi-check2-square me-2"></i><span id="bb-count">0</span> pedido(s) seleccionado(s)</span>
-
-  <select id="bb-tipo-doc" title="Tipo de documento">
-    <option value="BOLETA_ELECTRONICA">Boleta Electrónica</option>
-  </select>
-  <span style="font-size:.72rem;opacity:.7;font-style:italic;padding:0 2px;">
-    <i class="bi bi-info-circle me-1"></i>Factura Electrónica solo disponible en acción individual
-  </span>
-
-  <span style="font-size:.78rem;opacity:.85;padding:0 4px;">
-    <i class="bi bi-person-badge me-1"></i>{{ vendedor_ecommerce.nombre|default:"Venta Internet" }}
-    &nbsp;|&nbsp;
-    <i class="bi bi-credit-card me-1"></i>Método según canal
-  </span>
-
-  <button class="btn btn-light btn-sm fw-bold" id="btn-facturar-masivo" onclick="confirmarFacturacionMasiva()">
-    <i class="bi bi-receipt me-1"></i>Facturar seleccionados
-  </button>
-  <button class="btn btn-outline-light btn-sm" onclick="deseleccionarTodo()">
-    <i class="bi bi-x-lg me-1"></i>Cancelar
-  </button>
-</div>
 
 <!-- ═══════════════════════════════════════════════════════
      MODAL DE CONFIRMACIÓN
@@ -319,9 +396,102 @@
         <div id="res-summary" class="row g-2 mb-3"></div>
         <div id="res-lista"></div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" id="btn-imprimir-todos" style="display:none;" onclick="imprimirTodosResultados()">
+          <i class="bi bi-printer me-1"></i>Imprimir todos
+        </button>
         <button class="btn btn-primary btn-sm" data-bs-dismiss="modal" onclick="location.reload()">
           <i class="bi bi-arrow-clockwise me-1"></i>Recargar lista
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL DE DISTRIBUCIÓN MASIVA
+     ═══════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modal-distribuir" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header" style="background:#0f766e;color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-diagram-3 me-2"></i>Distribuir Pedidos</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3" style="font-size:.85rem;">Distribuir <strong id="dist-n">0</strong> pedido(s) seleccionados a sucursales.</p>
+        <div class="mb-3">
+          <label class="form-label fw-bold" style="font-size:.8rem;">Estrategia</label>
+          <select id="dist-estrategia" class="form-select form-select-sm" onchange="toggleDistManual()">
+            <option value="stock">Por stock disponible (automático)</option>
+            <option value="carga">Por carga de trabajo (round-robin)</option>
+            <option value="manual">Manual (elegir sucursal)</option>
+          </select>
+        </div>
+        <div id="dist-manual-box" style="display:none;" class="mb-3">
+          <label class="form-label fw-bold" style="font-size:.8rem;">Sucursal destino</label>
+          <select id="dist-sucursal" class="form-select form-select-sm">
+            {% for s in sucursales %}
+              <option value="{{ s.id }}">{{ s.nombre|default:s.alias }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-sm fw-bold" style="background:#0f766e;color:#fff;" id="btn-dist-ok" onclick="ejecutarDistribucion()">
+          <span id="dist-spinner" class="spinner-border spinner-sm me-1" style="display:none;"></span>
+          <i class="bi bi-check-lg me-1"></i>Distribuir
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL DE REASIGNACIÓN INDIVIDUAL
+     ═══════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modal-reasignar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header" style="background:#7c3aed;color:#fff;">
+        <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Reasignar Pedido</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="reasignar-pedido-id">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold" style="font-size:.8rem;">Sucursal destino</label>
+            <select id="reasignar-sucursal" class="form-select form-select-sm">
+              {% for s in sucursales %}
+                <option value="{{ s.id }}">{{ s.nombre|default:s.alias }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold" style="font-size:.8rem;">Motivo</label>
+            <input type="text" id="reasignar-motivo" class="form-control form-control-sm" placeholder="Motivo de reasignación...">
+          </div>
+        </div>
+        <div class="mt-3">
+          <button class="btn btn-outline-primary btn-sm" onclick="sugerirSucursal()">
+            <i class="bi bi-lightbulb me-1"></i>Sugerir mejor sucursal
+          </button>
+          <div id="ranking-sucursales" class="mt-2" style="display:none;">
+            <table class="table table-sm table-bordered" style="font-size:.78rem;">
+              <thead style="background:#f8fafc;">
+                <tr><th>Sucursal</th><th class="text-center">Items OK</th><th class="text-center">Cobertura</th><th class="text-center">Pendientes</th><th class="text-center">Score</th><th></th></tr>
+              </thead>
+              <tbody id="ranking-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-sm fw-bold" style="background:#7c3aed;color:#fff;" onclick="ejecutarReasignacion()">
+          <i class="bi bi-check-lg me-1"></i>Reasignar
         </button>
       </div>
     </div>
@@ -387,9 +557,10 @@ function confirmarFacturacionMasiva(){
   const ids = getSeleccionados();
   if(!ids.length){ alert('Selecciona al menos un pedido.'); return; }
 
-  const tipoDoc = document.getElementById('bb-tipo-doc');
+  const tipoDocEl = document.querySelector('input[name="bb-tipo-doc"]:checked');
+  const tipoDocLabel = tipoDocEl ? tipoDocEl.parentElement.querySelector('label[for="'+tipoDocEl.id+'"]')?.textContent.trim() : 'Boleta Electr.';
   document.getElementById('conf-n').textContent = ids.length;
-  document.getElementById('conf-tipo').textContent = tipoDoc.options[tipoDoc.selectedIndex].text;
+  document.getElementById('conf-tipo').textContent = tipoDocLabel;
 
   const modal = new bootstrap.Modal(document.getElementById('modal-confirmar'));
   modal.show();
@@ -397,7 +568,8 @@ function confirmarFacturacionMasiva(){
 
 function ejecutarFacturacionMasiva(){
   const ids = getSeleccionados();
-  const tipoDoc = document.getElementById('bb-tipo-doc').value;
+  const tipoDocEl = document.querySelector('input[name="bb-tipo-doc"]:checked');
+  const tipoDoc = tipoDocEl ? tipoDocEl.value : 'BOLETA_ELECTRONICA';
 
   // UI: loading
   document.getElementById('btn-conf-ok').disabled = true;
@@ -433,7 +605,10 @@ function ejecutarFacturacionMasiva(){
   });
 }
 
+let _resultadosExitosos = [];
+
 function mostrarResultados(data){
+  _resultadosExitosos = data.resultados?.filter(r => r.ok) || [];
   const header = document.getElementById('res-header');
   const title  = document.getElementById('res-title');
   const summary = document.getElementById('res-summary');
@@ -522,8 +697,221 @@ function mostrarResultados(data){
   }
 
   lista.innerHTML = html;
+
+  // Mostrar botón de impresión masiva si hay exitosos y QZ Tray habilitado
+  const btnImprimir = document.getElementById('btn-imprimir-todos');
+  if (_resultadosExitosos.length > 0 && typeof imprimirConQZ !== 'undefined' && QZ_CONFIG.habilitado) {
+    btnImprimir.style.display = '';
+  }
+
   new bootstrap.Modal(document.getElementById('modal-resultados')).show();
 }
+
+async function imprimirTodosResultados() {
+  if (!_resultadosExitosos.length) return;
+  const btn = document.getElementById('btn-imprimir-todos');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Imprimiendo...';
+
+  let impresos = 0;
+  for (const r of _resultadosExitosos) {
+    const ticketData = {
+      modulo_origen: 'ECOMMERCE',
+      numero_ticket_rm: r.numero_ticket_rm,
+      canal_origen: '',
+      numero_pedido_canal: '',
+      cliente_nombre: r.cliente || '',
+      total: 0,
+      fecha: new Date().toLocaleString('es-CL'),
+      ticket_correlativo: r.ticket_correlativo,
+      dte_numero: r.dte_numero,
+      dte_tipo: r.dte_tipo,
+      sucursal: {},
+      productos: [],
+    };
+    const ok = await imprimirConQZ(ticketData);
+    if (ok) impresos++;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = `<i class="bi bi-printer me-1"></i>${impresos}/${_resultadosExitosos.length} impresos`;
+}
+
+/* ─────────────────────────────────────────────────────
+   Monto total seleccionado
+   ───────────────────────────────────────────────────── */
+function actualizarMontoTotal(){
+  let total = 0;
+  document.querySelectorAll('.cb-pedido-row:not(:disabled):checked').forEach(cb => {
+    const tr = cb.closest('tr');
+    const el = tr.querySelector('.fmt-miles');
+    if(el) total += parseInt(el.dataset.val, 10) || 0;
+  });
+  const montoEl = document.getElementById('bb-total-monto');
+  const valEl = document.getElementById('bb-monto-val');
+  if(total > 0){
+    montoEl.style.display = '';
+    valEl.textContent = '$' + total.toLocaleString('es-CL');
+  } else {
+    montoEl.style.display = 'none';
+  }
+}
+
+// Hook into checkbox changes
+const origActualizar = actualizarContador;
+actualizarContador = function(){
+  origActualizar();
+  actualizarMontoTotal();
+};
+
+/* ─────────────────────────────────────────────────────
+   Distribución masiva
+   ───────────────────────────────────────────────────── */
+function toggleDistManual(){
+  const v = document.getElementById('dist-estrategia').value;
+  document.getElementById('dist-manual-box').style.display = v === 'manual' ? '' : 'none';
+}
+
+function abrirDistribucion(){
+  const ids = getSeleccionados();
+  if(!ids.length){ alert('Selecciona al menos un pedido.'); return; }
+  document.getElementById('dist-n').textContent = ids.length;
+  new bootstrap.Modal(document.getElementById('modal-distribuir')).show();
+}
+
+function ejecutarDistribucion(){
+  const ids = getSeleccionados();
+  const estrategia = document.getElementById('dist-estrategia').value;
+  const sucursalId = estrategia === 'manual' ? parseInt(document.getElementById('dist-sucursal').value) : null;
+
+  document.getElementById('btn-dist-ok').disabled = true;
+  document.getElementById('dist-spinner').style.display = '';
+
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const body = { pedido_ids: ids, estrategia: estrategia };
+  if(sucursalId) body.sucursal_id = sucursalId;
+
+  fetch("{% url 'api_distribuir_pedidos' %}", {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify(body)
+  })
+  .then(r => r.json())
+  .then(data => {
+    bootstrap.Modal.getInstance(document.getElementById('modal-distribuir'))?.hide();
+    if(data.ok || data.exitosos > 0){
+      let msg = `Distribución completada: ${data.exitosos} exitoso(s)`;
+      if(data.fallidos > 0) msg += `, ${data.fallidos} fallido(s)`;
+      alert(msg);
+      location.reload();
+    } else {
+      const errores = data.resultados?.filter(r => !r.ok).map(r => r.error).join('\n') || 'Error desconocido';
+      alert('Error en distribución:\n' + errores);
+    }
+  })
+  .catch(err => alert('Error de conexión: ' + err))
+  .finally(() => {
+    document.getElementById('btn-dist-ok').disabled = false;
+    document.getElementById('dist-spinner').style.display = 'none';
+  });
+}
+
+/* ─────────────────────────────────────────────────────
+   Reasignación individual
+   ───────────────────────────────────────────────────── */
+function abrirReasignar(pedidoId){
+  document.getElementById('reasignar-pedido-id').value = pedidoId;
+  document.getElementById('ranking-sucursales').style.display = 'none';
+  document.getElementById('reasignar-motivo').value = '';
+  new bootstrap.Modal(document.getElementById('modal-reasignar')).show();
+}
+
+function sugerirSucursal(){
+  const pedidoId = document.getElementById('reasignar-pedido-id').value;
+  const rankingDiv = document.getElementById('ranking-sucursales');
+  const tbody = document.getElementById('ranking-body');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center"><span class="spinner-border spinner-border-sm"></span> Calculando...</td></tr>';
+  rankingDiv.style.display = '';
+
+  fetch(`/app/ecommerce/pedidos/${pedidoId}/sugerir-sucursal/`)
+  .then(r => r.json())
+  .then(data => {
+    if(!data.ok){ tbody.innerHTML = '<tr><td colspan="6" class="text-danger">Error</td></tr>'; return; }
+    let html = '';
+    for(const s of data.ranking){
+      const esActual = s.es_actual ? ' <span class="badge bg-secondary" style="font-size:.6rem;">actual</span>' : '';
+      const color = s.cobertura_pct >= 100 ? '#16a34a' : (s.cobertura_pct >= 50 ? '#d97706' : '#dc2626');
+      html += `<tr>
+        <td>${s.nombre}${esActual}</td>
+        <td class="text-center">${s.items_con_stock}/${s.total_items}</td>
+        <td class="text-center" style="color:${color};font-weight:700;">${s.cobertura_pct}%</td>
+        <td class="text-center">${s.carga_pendientes}</td>
+        <td class="text-center" style="font-weight:700;">${s.score}</td>
+        <td><button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.7rem;" onclick="seleccionarSucursalReasignar(${s.sucursal_id})">Elegir</button></td>
+      </tr>`;
+    }
+    tbody.innerHTML = html || '<tr><td colspan="6" class="text-muted">Sin sucursales disponibles</td></tr>';
+  })
+  .catch(() => { tbody.innerHTML = '<tr><td colspan="6" class="text-danger">Error de conexión</td></tr>'; });
+}
+
+function seleccionarSucursalReasignar(sucId){
+  document.getElementById('reasignar-sucursal').value = sucId;
+}
+
+function ejecutarReasignacion(){
+  const pedidoId = document.getElementById('reasignar-pedido-id').value;
+  const sucursalId = document.getElementById('reasignar-sucursal').value;
+  const motivo = document.getElementById('reasignar-motivo').value;
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+  fetch(`/app/ecommerce/pedidos/${pedidoId}/reasignar/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ sucursal_id: parseInt(sucursalId), motivo: motivo })
+  })
+  .then(r => r.json())
+  .then(data => {
+    bootstrap.Modal.getInstance(document.getElementById('modal-reasignar'))?.hide();
+    if(data.ok){
+      alert(`Pedido reasignado a ${data.sucursal_nueva.nombre}` + (data.todos_items_con_stock ? ' (con stock completo)' : ` (${data.items_sin_stock} items sin stock)`));
+      location.reload();
+    } else {
+      alert('Error: ' + data.error);
+    }
+  })
+  .catch(err => alert('Error de conexión: ' + err));
+}
+
+/* ─────────────────────────────────────────────────────
+   Auto-refresh cada 60s (solo si no hay selección activa)
+   ───────────────────────────────────────────────────── */
+setInterval(function() {
+  const seleccionados = document.querySelectorAll('.cb-pedido-row:not(:disabled):checked').length;
+  if (seleccionados === 0) {
+    location.reload();
+  }
+}, 60000);
+
+/* ─────────────────────────────────────────────────────
+   Atajos de teclado
+   ───────────────────────────────────────────────────── */
+document.addEventListener('keydown', function(e){
+  // Ctrl+A: seleccionar todos
+  if(e.ctrlKey && e.key === 'a' && !e.target.closest('input,select,textarea')){
+    e.preventDefault();
+    cbAll.checked = true;
+    getCbs().forEach(cb => cb.checked = true);
+    actualizarContador();
+  }
+  // Escape: deseleccionar
+  if(e.key === 'Escape'){
+    deseleccionarTodo();
+  }
+});
 </script>
+
+{% csrf_token %}
+{% include 'vistas/modulo_ventas/_qz_tray_module.html' %}
 
 {% include 'layout/footer.html' %}

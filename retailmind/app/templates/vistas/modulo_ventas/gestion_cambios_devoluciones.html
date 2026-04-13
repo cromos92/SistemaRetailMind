@@ -1728,8 +1728,8 @@
     </div>
 
     <!-- Estadísticas NEXO -->
-    <div class="row mb-2 g-2 flex-nowrap" id="estadisticas-cards">
-        <div class="col">
+    <div class="row mb-2 g-2" id="estadisticas-cards">
+        <div class="col-6 col-md-3">
             <div class="card-stats-nexo">
                 <div class="card-body">
                     <div class="d-flex align-items-center gap-2">
@@ -1744,7 +1744,7 @@
                 </div>
             </div>
         </div>
-        <div class="col">
+        <div class="col-6 col-md-3">
             <div class="card-stats-nexo">
                 <div class="card-body">
                     <div class="d-flex align-items-center gap-2">
@@ -1759,7 +1759,7 @@
                 </div>
             </div>
         </div>
-        <div class="col">
+        <div class="col-6 col-md-3">
             <div class="card-stats-nexo">
                 <div class="card-body">
                     <div class="d-flex align-items-center gap-2">
@@ -1774,7 +1774,7 @@
                 </div>
             </div>
         </div>
-        <div class="col">
+        <div class="col-6 col-md-3">
             <div class="card-stats-nexo {% if total_tickets_pendientes > 0 %}border border-danger border-2{% endif %}">
                 <div class="card-body">
                     <div class="d-flex align-items-center gap-2">
@@ -1795,6 +1795,29 @@
             </div>
         </div>
     </div>
+
+    {% if user_rol == 'administrador' or user_rol == 'jefe_local' or user_rol == 'administracion' %}
+    <!-- Barra de acciones rápidas para administradores -->
+    <div class="row mb-2 g-2" id="acciones-admin">
+        <div class="col-12">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-success" onclick="exportarCambios()" title="Exportar a Excel">
+                    <i class="ri-file-excel-2-line me-1"></i> Exportar Excel
+                </button>
+                {% if revision_pendiente_count > 0 %}
+                <button class="btn btn-sm btn-outline-warning" onclick="cargarColaRevision()" title="Revisiones pendientes">
+                    <i class="ri-eye-line me-1"></i> Revisión Gerencial
+                    <span class="badge bg-danger ms-1">{{ revision_pendiente_count }}</span>
+                </button>
+                {% endif %}
+                <span class="text-muted small ms-2">
+                    <i class="ri-information-line"></i> Análisis avanzado y detección de fugas en
+                    <a href="{% url 'dashboard_ventas' %}" class="text-primary fw-bold">Dashboard de Ventas</a>
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- ✅ SECCIÓN: Tickets de Cambio Pendientes de Cobro/Devolución -->
     {% if tickets_cambio_pendientes %}
@@ -2592,6 +2615,9 @@
                     </div>
                 </div>
 
+                <!-- ALERTAS DE TRAZABILIDAD -->
+                <div id="detalle-alertas-trazabilidad" class="px-2 pt-2" style="background:#161b27;"></div>
+
                 <!-- FILA INFO COMPACTA -->
                 <div class="d-flex flex-wrap gap-0" style="background:#161b27; border-bottom:1px solid #2a3045; font-size:0.78rem;">
                     <div class="px-3 py-2 border-end" style="border-color:#2a3045!important; min-width:150px;">
@@ -2829,14 +2855,15 @@
                                 </div>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text py-0 px-2" style="font-size:.75rem;"><i class="ri-user-line"></i></span>
-                                    <input type="text" class="form-control form-control-sm" id="input-codigo-vendedor-aprobacion" placeholder="Código vendedor" autocomplete="off" required style="font-size:.8rem;">
+                                    <input type="text" class="form-control form-control-sm" id="input-codigo-vendedor-aprobacion" placeholder="Código vendedor" autocomplete="off" required style="font-size:.8rem;"
+                                        onkeypress="if(event.key==='Enter'){event.preventDefault();validarCodigoVendedorAprobacion();}">
                                     <button class="btn btn-primary btn-sm px-2" onclick="validarCodigoVendedorAprobacion()" style="font-size:.75rem;">
                                         <i class="ri-checkbox-line"></i> Validar
                                     </button>
                                 </div>
                                 <div id="info-vendedor-validado" style="display:none;" class="d-flex align-items-center gap-1 px-2 py-1 rounded bg-success bg-opacity-10 border border-success border-opacity-25">
                                     <i class="ri-checkbox-circle-line text-success" style="font-size:.8rem;"></i>
-                                    <small class="text-success"><strong>Validado:</strong> <span id="nombre-vendedor-validado">-</span></small>
+                                    <small class="text-success"><strong>Vendedor OK:</strong> <span id="nombre-vendedor-validado">-</span></small>
                                 </div>
                             </div>
                         </div>
@@ -2845,7 +2872,8 @@
                             <div class="d-flex flex-column gap-1">
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text py-0 px-2 bg-danger bg-opacity-10 text-danger border-danger border-opacity-25" style="font-size:.75rem;"><i class="ri-shield-keyhole-line"></i></span>
-                                    <input type="text" class="form-control form-control-sm fw-bold text-center" id="input-codigo-autorizacion-aprobacion" placeholder="Código autorización" autocomplete="off" maxlength="6" style="letter-spacing:2px; font-size:.8rem;" required>
+                                    <input type="text" class="form-control form-control-sm fw-bold text-center" id="input-codigo-autorizacion-aprobacion" placeholder="Código autorización" autocomplete="off" maxlength="6" style="letter-spacing:2px; font-size:.8rem;" required
+                                        onkeypress="if(event.key==='Enter'){event.preventDefault();validarCodigoAutorizacionAprobacion();}">
                                     <button class="btn btn-danger btn-sm px-2" onclick="validarCodigoAutorizacionAprobacion()" style="font-size:.75rem;">
                                         <i class="ri-checkbox-line"></i> Validar
                                     </button>
@@ -2896,8 +2924,8 @@
 <div class="modal fade" id="modalDetalleDocumento" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title"><i class="ri-file-list-3-line"></i> Detalle del Documento</h5>
+            <div class="modal-header bg-info">
+                <h5 class="modal-title text-white"><i class="ri-file-list-3-line me-1"></i> Detalle del Documento</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -2923,7 +2951,7 @@
                 </div>
 
                 <!-- Lista de productos -->
-                <div class="card border-primary">
+                <div class="card border-primary mb-3">
                     <div class="card-header bg-light">
                         <strong>Productos del Documento</strong>
                     </div>
@@ -2941,7 +2969,31 @@
                                     </tr>
                                 </thead>
                                 <tbody id="tbody-detalle-productos">
-                                    <!-- Productos dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historial de cambios realizados -->
+                <div class="card border-warning" id="card-historial-cambios-doc" style="display:none;">
+                    <div class="card-header bg-warning bg-opacity-10">
+                        <strong><i class="ri-history-line me-1"></i> Historial de Cambios Realizados</strong>
+                        <span class="badge bg-warning text-dark ms-2" id="badge-historial-cambios-count">0</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>N° Operación</th>
+                                        <th>Tipo</th>
+                                        <th>Estado</th>
+                                        <th>Fecha</th>
+                                        <th class="text-end">Diferencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-historial-cambios-doc">
                                 </tbody>
                             </table>
                         </div>
@@ -3451,7 +3503,45 @@ function verDetalleDocumento() {
             `);
         });
     }
-    
+
+    // Historial de cambios realizados
+    const cambiosAnt = ticketActual.cambios_anteriores || [];
+    const cardHistorial = $('#card-historial-cambios-doc');
+    const tbodyHistorial = $('#tbody-historial-cambios-doc');
+    tbodyHistorial.empty();
+
+    if (cambiosAnt.length > 0) {
+        cardHistorial.show();
+        $('#badge-historial-cambios-count').text(cambiosAnt.length);
+
+        cambiosAnt.forEach(function(c) {
+            const estadoClase = {
+                'Solicitado': 'bg-warning text-dark',
+                'Aprobado': 'bg-info',
+                'Completado': 'bg-success',
+                'Cancelado': 'bg-danger',
+                'Rechazado': 'bg-danger',
+                'Revertido': 'bg-secondary',
+            }[c.estado] || 'bg-secondary';
+
+            const diff = c.diferencia_monto || 0;
+            const diffClass = diff > 0 ? 'text-danger' : (diff < 0 ? 'text-success' : '');
+            const diffSign = diff > 0 ? '+' : '';
+
+            tbodyHistorial.append(`
+                <tr>
+                    <td><code>${c.numero_operacion || '-'}</code></td>
+                    <td>${c.tipo_operacion || '-'}</td>
+                    <td><span class="badge ${estadoClase}">${c.estado}</span></td>
+                    <td>${c.fecha_solicitud || '-'}</td>
+                    <td class="text-end ${diffClass} fw-bold">${diffSign}$${formatearNumero(Math.abs(diff))}</td>
+                </tr>
+            `);
+        });
+    } else {
+        cardHistorial.hide();
+    }
+
     // Mostrar modal
     const modal = new bootstrap.Modal(document.getElementById('modalDetalleDocumento'));
     modal.show();
@@ -3506,7 +3596,7 @@ function aplicarProductosEscaneados() {
     let productosAplicados = 0;
     Object.entries(productosEscaneados).forEach(([sku, data]) => {
         const index = ticketActual.productos.findIndex(p => 
-            p.sku && p.sku.toUpperCase() === sku
+            p.sku && String(p.sku).toUpperCase() === sku
         );
         
         if (index !== -1) {
@@ -3563,6 +3653,7 @@ function cargarCambiosDevoluciones(page = 1) {
         .done(function(response) {
             if (response.success) {
                 cambiosData = response.cambios;
+                actualizarBadgesTabs(response.conteos_tab);
                 actualizarTablaCambios(response.cambios);
                 actualizarPaginacion(response.pagination);
                 actualizarEstadisticas(response.estadisticas);
@@ -3590,22 +3681,19 @@ function tiempoTranscurrido(isoDate) {
     return `${Math.floor(dias / 30)}mes`;
 }
 
+function actualizarBadgesTabs(conteos) {
+    if (!conteos) return;
+    $('#badge-tab-todos').text(conteos.todos || 0);
+    $('#badge-tab-pendientes').text(conteos.solicitados || 0);
+    $('#badge-tab-aprobados').text(conteos.aprobados || 0);
+    $('#badge-tab-por-cobrar').text(conteos.por_cobrar || 0);
+    $('#badge-tab-completados').text(conteos.completados || 0);
+    $('#badge-tab-cancelados').text(conteos.cancelados || 0);
+}
+
 function actualizarTablaCambios(cambios) {
     const tbody = $('#tbody-cambios');
     tbody.empty();
-
-    const todos = cambios.length;
-    const pendientes = cambios.filter(c => c.estado === 'SOLICITADO').length;
-    const aprobados = cambios.filter(c => c.estado === 'APROBADO').length;
-    const porCobrar = cambios.filter(c => ['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'].includes(c.estado)).length;
-    const completados = cambios.filter(c => c.estado === 'COMPLETADO').length;
-    const cancelados = cambios.filter(c => ['CANCELADO', 'RECHAZADO', 'REVERTIDO'].includes(c.estado)).length;
-    $('#badge-tab-todos').text(todos);
-    $('#badge-tab-pendientes').text(pendientes);
-    $('#badge-tab-aprobados').text(aprobados);
-    $('#badge-tab-por-cobrar').text(porCobrar);
-    $('#badge-tab-completados').text(completados);
-    $('#badge-tab-cancelados').text(cancelados);
 
     if (cambios.length === 0) {
         tbody.append(`
@@ -3681,6 +3769,24 @@ function actualizarTablaCambios(cambios) {
         const hrsAgo = (new Date() - new Date(cambio.fecha_solicitud_iso)) / 3600000;
         const urgenteClass = (cambio.estado === 'SOLICITADO' && hrsAgo > 24) ? ' urgente' : '';
 
+        // Badges de alertas especiales
+        let alertBadges = '';
+        if (cambio.es_fuera_de_plazo) {
+            alertBadges += `<span class="badge bg-warning text-dark" style="font-size:0.6rem;" title="Fuera de plazo"><i class="ri-timer-flash-line"></i> ${cambio.dias_fuera_de_plazo}d fuera</span> `;
+        }
+        if (cambio.es_autorizacion_cross_branch) {
+            alertBadges += `<span class="badge bg-purple text-white" style="font-size:0.6rem; background:#9c27b0!important;" title="Autorización cross-branch"><i class="ri-git-branch-line"></i> Cross</span> `;
+        }
+        if (cambio.es_cambio_concepto) {
+            alertBadges += `<span class="badge bg-info text-white" style="font-size:0.6rem;" title="Cambio por concepto"><i class="ri-file-text-line"></i> Concepto</span> `;
+        }
+        if (cambio.score_riesgo >= 50) {
+            alertBadges += `<span class="badge bg-danger" style="font-size:0.6rem;" title="Score riesgo: ${cambio.score_riesgo}"><i class="ri-alarm-warning-line"></i> Riesgo ${cambio.score_riesgo}</span> `;
+        }
+        if (cambio.requiere_revision_gerencial && !cambio.revisado_por_gerencia) {
+            alertBadges += `<span class="badge bg-dark" style="font-size:0.6rem;" title="Pendiente revisión gerencial"><i class="ri-eye-line"></i> Rev. pend.</span> `;
+        }
+
         tbody.append(`
             <tr class="${rowClasses.join(' ')}">
                 <td>
@@ -3688,11 +3794,13 @@ function actualizarTablaCambios(cambios) {
                     <div><small class="text-muted">${cambio.fecha_solicitud}</small></div>
                     <div><small class="text-muted"><i class="ri-user-line"></i> ${cambio.solicitado_por_nombre || cambio.solicitado_por}</small></div>
                     <div><span class="badge bg-secondary" style="font-size:0.68rem;">#${cambio.ticket_original}</span></div>
+                    ${alertBadges ? `<div class="mt-1">${alertBadges}</div>` : ''}
                 </td>
                 <td>
                     <div class="fw-semibold" style="font-size:0.88rem;">${cambio.cliente_nombre}</div>
                     <small class="text-muted">${cambio.cliente_rut}</small>
                     ${cambio.motivo_principal ? `<div><small class="text-muted fst-italic">${cambio.motivo_principal}</small></div>` : ''}
+                    ${cambio.autorizado_por_usuario ? `<div><small class="text-info"><i class="ri-shield-check-line"></i> Autoriz: ${cambio.autorizado_por_usuario}</small></div>` : ''}
                 </td>
                 <td>
                     <div class="d-flex flex-column gap-1">${tipoBadge}${estadoBadge}</div>
@@ -3718,13 +3826,8 @@ function generarBotonesAccion(cambio) {
 
     if (cambio.estado === 'SOLICITADO') {
         botones.push(`
-            <button class="btn btn-success btn-sm px-2" onclick='aprobarCambioConDatos(${cambio.id}, "${cambio.tipo_operacion}", ${cambio.monto_original}, ${cambio.monto_nuevo})' title='Aprobar y ejecutar en un solo paso'>
+            <button class="btn btn-success btn-sm px-2" onclick='aprobarCambioConDatos(${cambio.id}, "${cambio.tipo_operacion}", ${cambio.monto_original}, ${cambio.monto_nuevo})' title='Aprobar y ejecutar'>
                 <i class="ri-check-double-line me-1"></i>Aprobar y Ejecutar
-            </button>
-        `);
-        botones.push(`
-            <button class="btn btn-outline-success btn-sm px-2" onclick='soloAprobarCambio(${cambio.id})' title='Solo aprobar (sin ejecutar)'>
-                <i class="ri-check-line me-1"></i>Aprobar
             </button>
         `);
         botones.push(`
@@ -3889,7 +3992,7 @@ function actualizarEstadisticas(stats) {
     $('#stat-total').text(formatearNumero(stats.total_cambios));
     $('#stat-pendientes').text(formatearNumero(stats.cambios_pendientes));
     $('#stat-completados').text(formatearNumero(stats.cambios_completados));
-    
+
     const totalPorCobrar = stats.cambios_por_cobrar || 0;
     $('#stat-pendientes-cobro').text(formatearNumero(totalPorCobrar));
     if (totalPorCobrar > 0) {
@@ -3897,6 +4000,7 @@ function actualizarEstadisticas(stats) {
     } else {
         $('#stat-pendientes-cobro').removeClass('text-danger').closest('.card-stats-nexo').removeClass('border border-danger border-2');
     }
+
 }
 
 // ========== FILTROS ==========
@@ -4621,7 +4725,6 @@ function pasoAnterior(event) {
     } else if (pasoActual === 3) {
         console.log('  → Volver al paso 2');
         
-        // Volver al paso 2
         pasoActual = 2;
         $('#paso-resumen').hide();
         $('#btn-siguiente').show().prop('disabled', false)
@@ -4631,7 +4734,11 @@ function pasoAnterior(event) {
         $('#footer-hint').hide();
         $('#footer-resumen').hide();
         
-        // Actualizar vista previa de totales
+        // Re-sync checkboxes from productosEscaneados (source of truth)
+        if (Object.keys(productosEscaneados).length > 0) {
+            aplicarProductosEscaneados();
+        }
+        
         actualizarVistaPreviaTotales();
         actualizarStepper();
         actualizarFooterPaso();
@@ -5305,33 +5412,22 @@ function validarSeleccionProductos() {
     console.log('  Total de productos en ticketActual:', ticketActual.productos.length);
     
     // Validar que al menos un producto esté seleccionado
-    let productosSeleccionados = 0;
+    let productosSeleccionados = $('.check-producto:checked').length;
+    const tieneEscaneados = Object.keys(productosEscaneados).length > 0;
     
-    // Método alternativo usando la clase CSS
-    $('.check-producto:checked').each(function() {
-        productosSeleccionados++;
-        console.log(`  ✓ Checkbox ${$(this).attr('id')} está marcado`);
-    });
+    console.log('  Productos seleccionados (checkboxes):', productosSeleccionados);
+    console.log('  Productos escaneados (dict):', Object.keys(productosEscaneados).length);
     
-    console.log('  Productos seleccionados (método clase):', productosSeleccionados);
-    
-    // Verificar también con el método original
-    let productosSeleccionadosOriginal = 0;
-    for (let index = 0; index < ticketActual.productos.length; index++) {
-        const checkbox = $(`#check-producto-${index}`);
-        const existe = checkbox.length > 0;
-        const marcado = checkbox.is(':checked');
-        
-        console.log(`  Checkbox ${index}: existe=${existe}, marcado=${marcado}`);
-        
-        if (marcado) {
-            productosSeleccionadosOriginal++;
-        }
+    // Si hay productos escaneados pero los checkboxes no reflejan el estado, re-sincronizar
+    if (productosSeleccionados === 0 && tieneEscaneados) {
+        console.log('  ⚠️ Checkboxes desincronizados, re-aplicando escaneos...');
+        aplicarProductosEscaneados();
+        actualizarVistaPreviaTotales();
+        productosSeleccionados = $('.check-producto:checked').length;
+        console.log('  Productos seleccionados después de re-sync:', productosSeleccionados);
     }
     
-    console.log('  Productos seleccionados (método original):', productosSeleccionadosOriginal);
-    
-    if (productosSeleccionados === 0 && productosSeleccionadosOriginal === 0) {
+    if (productosSeleccionados === 0 && !tieneEscaneados) {
         mostrarError('Debe escanear al menos un producto a devolver/cambiar');
         setTimeout(() => $('#input-escanear-sku').focus(), 300);
         return false;
@@ -5756,6 +5852,7 @@ function enviarSolicitudCambio(datos) {
 }
 
 function solicitarAutorizacionSupervisor(datos, responseOriginal) {
+    const diasFuera = responseOriginal.dias_fuera_de_plazo || responseOriginal.dias_transcurridos || '';
     Swal.fire({
         title: 'Autorización de Supervisor',
         html: `
@@ -5766,15 +5863,22 @@ function solicitarAutorizacionSupervisor(datos, responseOriginal) {
                     <div class="small mt-1">
                         ${responseOriginal.fecha_compra ? `Compra: ${responseOriginal.fecha_compra} · ` : ''}
                         ${responseOriginal.fecha_limite ? `Venció: ${responseOriginal.fecha_limite}` : ''}
-                        ${responseOriginal.dias_transcurridos ? ` · ${responseOriginal.dias_transcurridos} días` : ''}
+                        ${diasFuera ? ` · <span class="text-danger fw-bold">${diasFuera} días fuera</span>` : ''}
                     </div>
                 </div>
-                <label class="form-label fw-bold small">Código del supervisor / encargado:</label>
-                <input type="password" id="swal-codigo-supervisor" class="form-control form-control-lg text-center"
-                       placeholder="Ingrese contraseña del encargado" autocomplete="off"
-                       style="letter-spacing: 4px; font-size: 1.3rem;">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Usuario del supervisor:</label>
+                    <input type="text" id="swal-supervisor-username" class="form-control"
+                           placeholder="Nombre de usuario del supervisor" autocomplete="off">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">Contraseña del supervisor:</label>
+                    <input type="password" id="swal-supervisor-password" class="form-control"
+                           placeholder="Contraseña" autocomplete="off">
+                </div>
                 <div class="small text-muted mt-2">
-                    <i class="ri-information-line"></i> El supervisor debe ingresar su contraseña para autorizar esta operación.
+                    <i class="ri-information-line"></i> El supervisor debe ingresar sus credenciales para autorizar.
+                    <br><i class="ri-git-branch-line"></i> Se permite autorización desde otra sucursal (quedará registrada para revisión).
                 </div>
             </div>
         `,
@@ -5785,25 +5889,27 @@ function solicitarAutorizacionSupervisor(datos, responseOriginal) {
         confirmButtonColor: '#e67e22',
         focusConfirm: false,
         didOpen: () => {
-            const input = document.getElementById('swal-codigo-supervisor');
-            if (input) {
-                input.focus();
-                input.addEventListener('keypress', (e) => {
+            const usernameInput = document.getElementById('swal-supervisor-username');
+            if (usernameInput) {
+                usernameInput.focus();
+                document.getElementById('swal-supervisor-password').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') Swal.clickConfirm();
                 });
             }
         },
         preConfirm: () => {
-            const codigo = document.getElementById('swal-codigo-supervisor').value.trim();
-            if (!codigo) {
-                Swal.showValidationMessage('Ingrese el código del supervisor');
+            const username = document.getElementById('swal-supervisor-username').value.trim();
+            const password = document.getElementById('swal-supervisor-password').value;
+            if (!username || !password) {
+                Swal.showValidationMessage('Ingrese usuario y contraseña del supervisor');
                 return false;
             }
-            return codigo;
+            return { username, password };
         }
     }).then((result) => {
         if (result.isConfirmed && result.value) {
-            datos.codigo_autorizacion_supervisor = result.value;
+            datos.supervisor_username = result.value.username;
+            datos.supervisor_password = result.value.password;
             enviarSolicitudCambio(datos);
         }
     });
@@ -5903,6 +6009,46 @@ function mostrarDetalleCambio(data) {
     $('#detalle-header-cliente').text(clienteNombre);
     $('#detalle-motivo').text(cambio.motivo_principal_display);
     
+    // ===== ALERTAS DE TRAZABILIDAD =====
+    let alertasHtml = '';
+    if (cambio.es_fuera_de_plazo) {
+        alertasHtml += `<div class="alert alert-warning py-1 px-2 mb-1" style="font-size:0.78rem;">
+            <i class="ri-timer-flash-line me-1"></i> <strong>Fuera de plazo</strong> (${cambio.dias_fuera_de_plazo} días después del límite)
+            ${cambio.autorizado_por_usuario ? ` · Autorizado por: <strong>${cambio.autorizado_por_usuario}</strong>` : ''}
+        </div>`;
+    }
+    if (cambio.es_autorizacion_cross_branch) {
+        alertasHtml += `<div class="alert py-1 px-2 mb-1" style="font-size:0.78rem; background:#f3e5f5; border-color:#9c27b0; color:#6a1b9a;">
+            <i class="ri-git-branch-line me-1"></i> <strong>Autorización cross-branch</strong>
+            ${cambio.sucursal_autorizador ? ` · Desde sucursal: <strong>${cambio.sucursal_autorizador}</strong>` : ''}
+        </div>`;
+    }
+    if (cambio.es_cambio_concepto) {
+        alertasHtml += `<div class="alert alert-info py-1 px-2 mb-1" style="font-size:0.78rem;">
+            <i class="ri-file-text-line me-1"></i> <strong>Cambio por concepto</strong> (datos migrados)
+            ${cambio.concepto_descripcion ? ` · ${cambio.concepto_descripcion}` : ''}
+        </div>`;
+    }
+    if (cambio.score_riesgo >= 50) {
+        alertasHtml += `<div class="alert alert-danger py-1 px-2 mb-1" style="font-size:0.78rem;">
+            <i class="ri-alarm-warning-line me-1"></i> <strong>Score de riesgo: ${cambio.score_riesgo}/100</strong>
+        </div>`;
+    }
+    if (cambio.requiere_revision_gerencial) {
+        if (cambio.revisado_por_gerencia) {
+            alertasHtml += `<div class="alert alert-success py-1 px-2 mb-1" style="font-size:0.78rem;">
+                <i class="ri-check-double-line me-1"></i> Revisado por gerencia: <strong>${cambio.revisado_por_gerencia}</strong> (${cambio.fecha_revision_gerencia || ''})
+                ${cambio.notas_revision_gerencia ? `<br><em>${cambio.notas_revision_gerencia}</em>` : ''}
+            </div>`;
+        } else {
+            alertasHtml += `<div class="alert alert-dark py-1 px-2 mb-1" style="font-size:0.78rem;">
+                <i class="ri-eye-line me-1"></i> <strong>Pendiente de revisión gerencial</strong>
+                <button class="btn btn-sm btn-outline-light ms-2" style="font-size:0.7rem;" onclick="marcarRevisado(${cambio.id})">Revisar</button>
+            </div>`;
+        }
+    }
+    $('#detalle-alertas-trazabilidad').html(alertasHtml);
+
     // ===== DOCUMENTO ORIGINAL =====
     if (cambio.ticket_original) {
         $('#detalle-doc-original').text(cambio.ticket_original.correlativo || '-');
@@ -6088,9 +6234,6 @@ function mostrarDetalleCambio(data) {
         accionesEl.append(`
             <button class="btn btn-sm btn-success me-2" onclick='aprobarCambioConDatos(${cambio.id}, "${tipoOp}", ${montoDevuelto}, ${montoNuevo})'>
                 <i class="ri-check-double-line"></i> Aprobar y Ejecutar
-            </button>
-            <button class="btn btn-sm btn-outline-success me-2" onclick='soloAprobarCambio(${cambio.id})'>
-                <i class="ri-check-line"></i> Solo Aprobar
             </button>
             <button class="btn btn-sm btn-danger" onclick='cancelarCambio(${cambio.id})'>
                 <i class="ri-delete-bin-line"></i> Eliminar
@@ -7639,6 +7782,339 @@ function mostrarInfo(mensaje) {
             });
         }
     });
+
+// ========== FUNCIONES DE EXPORTACIÓN ==========
+
+// Nota: El análisis de fraude y control de fugas se encuentra en el Dashboard de Ventas
+
+function cargarAnalisisFraude() {
+    // Redirigido al Dashboard de Ventas
+    const panel = $('#panel-alertas-control');
+    if (!panel.hasClass('show')) {
+        panel.collapse('show');
+    }
+    $('#alertas-control-content').html(`
+        <div class="text-center text-muted py-3">
+            <i class="ri-loader-4-line ri-spin" style="font-size:1.5rem;"></i>
+            <p class="mb-0 small mt-1">Analizando datos...</p>
+        </div>
+    `);
+
+    $.get('/app/ventas/api/analisis-fraude-cambios/')
+        .done(function(r) {
+            if (!r.success) { $('#alertas-control-content').html(`<div class="alert alert-danger">${r.error}</div>`); return; }
+            renderizarAlertasFraude(r);
+        })
+        .fail(function() {
+            $('#alertas-control-content').html('<div class="alert alert-danger">Error de conexión</div>');
+        });
+
+    // También cargar dashboard avanzado
+    cargarDashboardAvanzado();
+}
+
+function renderizarAlertasFraude(data) {
+    let html = '<div class="row g-2">';
+
+    // Vendedores con alta tasa
+    const vendAlerta = (data.vendedores_alto_retorno || []).filter(v => v.alerta);
+    html += `<div class="col-md-6 col-lg-3">
+        <div class="card h-100 ${vendAlerta.length > 0 ? 'border-danger' : 'border-success'}">
+            <div class="card-header py-1 ${vendAlerta.length > 0 ? 'bg-danger text-white' : 'bg-success text-white'}" style="font-size:0.75rem;">
+                <i class="ri-user-warning-line me-1"></i> Vendedores Alto Retorno
+                <span class="badge bg-white text-dark float-end">${vendAlerta.length}</span>
+            </div>
+            <div class="card-body p-2" style="font-size:0.75rem; max-height:200px; overflow-y:auto;">`;
+    if (vendAlerta.length === 0) {
+        html += '<div class="text-success text-center py-2"><i class="ri-check-line"></i> Sin alertas</div>';
+    } else {
+        vendAlerta.forEach(v => {
+            html += `<div class="d-flex justify-content-between border-bottom py-1">
+                <span>${v.vendedor_nombre}</span>
+                <span class="text-danger fw-bold">${v.tasa_cambios}%</span>
+            </div>`;
+        });
+    }
+    html += '</div></div></div>';
+
+    // Productos repetidos
+    const prods = data.productos_multiples_cambios || [];
+    html += `<div class="col-md-6 col-lg-3">
+        <div class="card h-100 ${prods.length > 0 ? 'border-warning' : 'border-success'}">
+            <div class="card-header py-1 ${prods.length > 0 ? 'bg-warning text-dark' : 'bg-success text-white'}" style="font-size:0.75rem;">
+                <i class="ri-repeat-line me-1"></i> Productos Multi-Cambio
+                <span class="badge ${prods.length > 0 ? 'bg-dark' : 'bg-white text-dark'} float-end">${prods.length}</span>
+            </div>
+            <div class="card-body p-2" style="font-size:0.75rem; max-height:200px; overflow-y:auto;">`;
+    if (prods.length === 0) {
+        html += '<div class="text-success text-center py-2"><i class="ri-check-line"></i> Sin alertas</div>';
+    } else {
+        prods.forEach(p => {
+            html += `<div class="d-flex justify-content-between border-bottom py-1">
+                <span>${p.articulo} (${p.talla})</span>
+                <span class="text-warning fw-bold">${p.veces_devuelto}x</span>
+            </div>`;
+        });
+    }
+    html += '</div></div></div>';
+
+    // Pérdidas NO_APTO
+    const perdidas = data.perdidas_no_apto || {};
+    const hayPerdidas = (perdidas.total_items || 0) > 0;
+    html += `<div class="col-md-6 col-lg-3">
+        <div class="card h-100 ${hayPerdidas ? 'border-danger' : 'border-success'}">
+            <div class="card-header py-1 ${hayPerdidas ? 'bg-danger text-white' : 'bg-success text-white'}" style="font-size:0.75rem;">
+                <i class="ri-close-circle-line me-1"></i> Pérdidas No Apto
+            </div>
+            <div class="card-body p-2 text-center" style="font-size:0.75rem;">`;
+    if (!hayPerdidas) {
+        html += '<div class="text-success py-2"><i class="ri-check-line"></i> Sin pérdidas</div>';
+    } else {
+        html += `<div class="display-6 text-danger fw-bold">$${formatearNumero(perdidas.perdida_financiera)}</div>
+                  <div class="text-muted">${perdidas.total_unidades} unidades en ${perdidas.total_items} items</div>`;
+        (perdidas.por_condicion || []).forEach(c => {
+            html += `<div class="small">${c.condicion}: ${c.unidades} uds · $${formatearNumero(c.monto)}</div>`;
+        });
+    }
+    html += '</div></div></div>';
+
+    // Cross-branch y fuera de plazo
+    const crossB = data.patrones_cross_branch || {};
+    const fueraP = data.cambios_fuera_plazo || {};
+    html += `<div class="col-md-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-header py-1 bg-dark text-white" style="font-size:0.75rem;">
+                <i class="ri-shield-keyhole-line me-1"></i> Autorizaciones Especiales
+            </div>
+            <div class="card-body p-2" style="font-size:0.75rem;">
+                <div class="d-flex justify-content-between border-bottom py-1">
+                    <span><i class="ri-timer-flash-line text-warning"></i> Fuera de plazo</span>
+                    <span class="fw-bold">${fueraP.total || 0}</span>
+                </div>
+                <div class="d-flex justify-content-between border-bottom py-1">
+                    <span><i class="ri-git-branch-line" style="color:#9c27b0;"></i> Cross-branch</span>
+                    <span class="fw-bold">${crossB.total || 0}</span>
+                </div>
+                <div class="d-flex justify-content-between border-bottom py-1">
+                    <span><i class="ri-eye-line text-danger"></i> Pend. revisión</span>
+                    <span class="fw-bold text-danger">${crossB.pendientes_revision || 0}</span>
+                </div>
+                ${fueraP.promedio_dias_fuera ? `<div class="text-muted mt-1">Prom. ${fueraP.promedio_dias_fuera} días fuera</div>` : ''}
+            </div>
+        </div>
+    </div>`;
+
+    html += '</div>';
+
+    // Total de alertas
+    if (data.alertas_total > 0) {
+        html = `<div class="alert alert-danger py-1 mb-2 small"><i class="ri-alarm-warning-line me-1"></i> <strong>${data.alertas_total} alertas activas</strong> en el período ${data.periodo.fecha_inicio} a ${data.periodo.fecha_fin}</div>` + html;
+    } else {
+        html = `<div class="alert alert-success py-1 mb-2 small"><i class="ri-check-double-line me-1"></i> Sin alertas en el período</div>` + html;
+    }
+
+    $('#alertas-control-content').html(html);
+}
+
+function cargarDashboardAvanzado() {
+    const panel = $('#panel-dashboard-avanzado');
+    if (!panel.hasClass('show')) {
+        panel.collapse('show');
+    }
+
+    $.get('/app/ventas/api/analisis-cambios-avanzado/')
+        .done(function(r) {
+            if (!r.success) { $('#dashboard-avanzado-content').html(`<div class="alert alert-danger">${r.error}</div>`); return; }
+            renderizarDashboardAvanzado(r);
+        })
+        .fail(function() {
+            $('#dashboard-avanzado-content').html('<div class="alert alert-danger">Error de conexión</div>');
+        });
+}
+
+function renderizarDashboardAvanzado(data) {
+    let html = '';
+
+    // Fila 1: KPIs principales
+    const variacionIcon = data.periodo_anterior.variacion_cantidad > 0 ? 'ri-arrow-up-line text-danger' : (data.periodo_anterior.variacion_cantidad < 0 ? 'ri-arrow-down-line text-success' : 'ri-subtract-line');
+    html += `<div class="row g-2 mb-3">
+        <div class="col-md-3">
+            <div class="card text-center h-100"><div class="card-body py-2">
+                <div class="text-muted small">Tasa Cambios/Ventas</div>
+                <div class="h4 mb-0 ${data.ratio > 5 ? 'text-danger' : 'text-primary'}">${data.ratio}%</div>
+                <div class="small text-muted">${data.total_cambios} de ${data.cantidad_ventas} ventas</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center h-100"><div class="card-body py-2">
+                <div class="text-muted small">Tiempo Prom. Resolución</div>
+                <div class="h4 mb-0">${data.tiempo_promedio_horas ? data.tiempo_promedio_horas + 'h' : 'N/A'}</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center h-100"><div class="card-body py-2">
+                <div class="text-muted small">Devoluciones (salida $)</div>
+                <div class="h4 mb-0 text-danger">$${formatearNumero(Math.abs(data.devoluciones_total))}</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center h-100"><div class="card-body py-2">
+                <div class="text-muted small">vs Periodo Anterior</div>
+                <div class="h4 mb-0"><i class="${variacionIcon}"></i> ${Math.abs(data.periodo_anterior.variacion_cantidad)}%</div>
+                <div class="small text-muted">${data.periodo_anterior.total} anterior</div>
+            </div></div>
+        </div>
+    </div>`;
+
+    // Fila 2: Tablas
+    html += '<div class="row g-2">';
+
+    // Top productos devueltos
+    html += `<div class="col-md-4">
+        <div class="card h-100"><div class="card-header py-1" style="font-size:0.8rem;"><i class="ri-bar-chart-line me-1"></i> Top Productos Devueltos</div>
+        <div class="card-body p-0" style="max-height:250px; overflow-y:auto;">
+        <table class="table table-sm table-striped mb-0" style="font-size:0.75rem;">
+            <thead><tr><th>Producto</th><th class="text-center">Veces</th><th class="text-center">Cant.</th></tr></thead>
+            <tbody>`;
+    (data.top_productos || []).forEach(p => {
+        html += `<tr><td>${p.articulo || p.sku}</td><td class="text-center">${p.veces}</td><td class="text-center">${p.cantidad}</td></tr>`;
+    });
+    if ((data.top_productos || []).length === 0) html += '<tr><td colspan="3" class="text-center text-muted">Sin datos</td></tr>';
+    html += '</tbody></table></div></div></div>';
+
+    // Por vendedor
+    html += `<div class="col-md-4">
+        <div class="card h-100"><div class="card-header py-1" style="font-size:0.8rem;"><i class="ri-user-line me-1"></i> Cambios por Vendedor</div>
+        <div class="card-body p-0" style="max-height:250px; overflow-y:auto;">
+        <table class="table table-sm table-striped mb-0" style="font-size:0.75rem;">
+            <thead><tr><th>Vendedor</th><th class="text-center">Cant.</th><th class="text-end">Monto</th></tr></thead>
+            <tbody>`;
+    (data.por_vendedor || []).forEach(v => {
+        html += `<tr><td>${v.nombre}</td><td class="text-center">${v.cantidad}</td><td class="text-end">$${formatearNumero(v.monto)}</td></tr>`;
+    });
+    if ((data.por_vendedor || []).length === 0) html += '<tr><td colspan="3" class="text-center text-muted">Sin datos</td></tr>';
+    html += '</tbody></table></div></div></div>';
+
+    // Por motivo
+    html += `<div class="col-md-4">
+        <div class="card h-100"><div class="card-header py-1" style="font-size:0.8rem;"><i class="ri-pie-chart-line me-1"></i> Por Motivo</div>
+        <div class="card-body p-0" style="max-height:250px; overflow-y:auto;">
+        <table class="table table-sm table-striped mb-0" style="font-size:0.75rem;">
+            <thead><tr><th>Motivo</th><th class="text-center">Cant.</th></tr></thead>
+            <tbody>`;
+    (data.por_motivo || []).forEach(m => {
+        html += `<tr><td>${m.motivo}</td><td class="text-center">${m.cantidad}</td></tr>`;
+    });
+    if ((data.por_motivo || []).length === 0) html += '<tr><td colspan="2" class="text-center text-muted">Sin datos</td></tr>';
+    html += '</tbody></table></div></div></div>';
+
+    html += '</div>';
+
+    // Tendencia semanal (texto)
+    if ((data.tendencia_semanal || []).length > 1) {
+        html += `<div class="mt-2"><div class="card"><div class="card-header py-1" style="font-size:0.8rem;"><i class="ri-line-chart-line me-1"></i> Tendencia Semanal</div>
+            <div class="card-body p-2 d-flex flex-wrap gap-2" style="font-size:0.75rem;">`;
+        data.tendencia_semanal.forEach(t => {
+            html += `<div class="border rounded px-2 py-1 text-center">
+                <div class="text-muted">${t.semana}</div>
+                <div class="fw-bold">${t.cantidad}</div>
+                <div class="small text-muted">$${formatearNumero(t.monto)}</div>
+            </div>`;
+        });
+        html += '</div></div></div>';
+    }
+
+    // Por sucursal
+    if ((data.por_sucursal || []).length > 1) {
+        html += `<div class="mt-2"><div class="card"><div class="card-header py-1" style="font-size:0.8rem;"><i class="ri-store-2-line me-1"></i> Por Sucursal</div>
+            <div class="card-body p-2 d-flex flex-wrap gap-2" style="font-size:0.75rem;">`;
+        data.por_sucursal.forEach(s => {
+            html += `<div class="border rounded px-2 py-1 text-center">
+                <div class="fw-bold">${s.sucursal}</div>
+                <div>${s.cantidad} cambios</div>
+                <div class="small text-muted">$${formatearNumero(s.monto)}</div>
+            </div>`;
+        });
+        html += '</div></div></div>';
+    }
+
+    $('#dashboard-avanzado-content').html(html);
+}
+
+function exportarCambios() {
+    const fechaDesde = $('#filtro-fecha-desde').val();
+    const fechaHasta = $('#filtro-fecha-hasta').val();
+    let url = '/app/ventas/api/exportar-cambios/?formato=excel';
+    if (fechaDesde) url += `&fecha_desde=${fechaDesde}`;
+    if (fechaHasta) url += `&fecha_hasta=${fechaHasta}`;
+    window.open(url, '_blank');
+}
+
+// ========== COLA DE REVISIÓN GERENCIAL ==========
+
+function cargarColaRevision() {
+    $.get('/app/ventas/api/cola-revision-gerencial/')
+        .done(function(r) {
+            if (r.success && r.items.length > 0) {
+                Swal.fire({
+                    title: `Revisión Gerencial (${r.total_pendientes} pendientes)`,
+                    html: generarHtmlColaRevision(r.items),
+                    width: '800px',
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                });
+            } else {
+                Swal.fire('Sin Pendientes', 'No hay cambios pendientes de revisión gerencial', 'success');
+            }
+        });
+}
+
+function generarHtmlColaRevision(items) {
+    let html = '<div style="max-height:400px; overflow-y:auto; font-size:0.85rem;">';
+    html += '<table class="table table-sm table-striped"><thead><tr><th>Operación</th><th>Tipo</th><th>Monto</th><th>Motivo</th><th>Acción</th></tr></thead><tbody>';
+    items.forEach(item => {
+        let badges = '';
+        if (item.es_fuera_de_plazo) badges += `<span class="badge bg-warning text-dark" style="font-size:0.6rem;">${item.dias_fuera_de_plazo}d fuera</span> `;
+        if (item.es_cross_branch) badges += `<span class="badge" style="font-size:0.6rem; background:#9c27b0; color:white;">Cross</span> `;
+        html += `<tr>
+            <td>${item.numero_operacion}<br>${badges}</td>
+            <td>${item.tipo_operacion}</td>
+            <td>$${formatearNumero(item.monto_original)}</td>
+            <td>${item.motivo}</td>
+            <td><button class="btn btn-sm btn-outline-success" onclick="marcarRevisado(${item.id})"><i class="ri-check-line"></i></button></td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    return html;
+}
+
+function marcarRevisado(cambioId) {
+    Swal.fire({
+        title: 'Notas de Revisión',
+        input: 'textarea',
+        inputPlaceholder: 'Observaciones de la revisión (opcional)...',
+        showCancelButton: true,
+        confirmButtonText: 'Marcar Revisado',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: '/app/ventas/api/revisar-cambio-gerencial/',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ cambio_id: cambioId, notas: result.value || '' }),
+                success: function(r) {
+                    if (r.success) {
+                        Swal.fire('Revisado', r.mensaje, 'success');
+                        cargarCambiosDevoluciones();
+                    } else {
+                        mostrarError(r.error);
+                    }
+                }
+            });
+        }
+    });
+}
+
 </script>
 
 <!-- QZ TRAY — módulo ESC/POS compartido -->

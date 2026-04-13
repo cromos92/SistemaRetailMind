@@ -265,6 +265,53 @@
 }
 .meta-row span { display: flex; align-items: center; gap: 5px; }
 .meta-row strong { color: #1e293b; }
+
+/* ─── Stepper sub-estados ──────────────────────────────── */
+.stepper-bar {
+  display: flex; align-items: center; gap: 0;
+  background: #fff; border: 1px solid var(--rm-border);
+  border-radius: 12px; padding: 10px 16px; margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.step-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: .72rem; font-weight: 600; color: #94a3b8;
+  white-space: nowrap;
+}
+.step-item.active { color: #1e40af; }
+.step-item.done { color: #16a34a; }
+.step-dot {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; font-weight: 800; border: 2px solid #e2e8f0;
+  background: #fff; color: #94a3b8; flex-shrink: 0;
+}
+.step-item.active .step-dot { border-color: #1e40af; background: #1e40af; color: #fff; }
+.step-item.done .step-dot { border-color: #16a34a; background: #16a34a; color: #fff; }
+.step-line { flex: 1; height: 2px; background: #e2e8f0; margin: 0 4px; min-width: 12px; }
+.step-line.done { background: #16a34a; }
+
+/* ─── Timeline historial ────────────────────────────────── */
+.timeline-item {
+  display: flex; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9; font-size: .78rem;
+}
+.timeline-item:last-child { border-bottom: none; }
+.timeline-icon {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: .7rem;
+}
+.timeline-icon.cambio { background: #dbeafe; color: #1e40af; }
+.timeline-icon.reasig { background: #f3e8ff; color: #7c3aed; }
+.timeline-icon.factur { background: #dcfce7; color: #16a34a; }
+.timeline-icon.error  { background: #fee2e2; color: #dc2626; }
+.timeline-date { font-size: .68rem; color: #94a3b8; }
+.timeline-user { font-size: .68rem; color: #64748b; font-weight: 600; }
+
+/* ─── Reasignación card ─────────────────────────────────── */
+.reasign-card { border: 1.5px solid #c4b5fd; }
+.reasign-card .rm-card-header { background: #f5f3ff; border-color: #c4b5fd; }
 </style>
 
 <div class="page-content">
@@ -308,6 +355,68 @@
     {% endfor %}
   {% endif %}
 
+  <!-- ── STEPPER DE SUB-ESTADOS ──────────────────────────────── -->
+  {% if pedido.estado == 'PENDIENTE' %}
+  <div class="stepper-bar">
+    {% with steps="RECIBIDO,ASIGNADO,EN_PREPARACION,LISTO_DESPACHO" %}
+    {% for step in steps|make_list %}{% endfor %}
+    {% endwith %}
+    {% with sub=pedido.sub_estado %}
+    <div class="step-item {% if sub == 'RECIBIDO' %}active{% elif sub == 'ASIGNADO' or sub == 'EN_PREPARACION' or sub == 'LISTO_DESPACHO' %}done{% endif %}">
+      <span class="step-dot">{% if sub == 'ASIGNADO' or sub == 'EN_PREPARACION' or sub == 'LISTO_DESPACHO' %}<i class="bi bi-check"></i>{% else %}1{% endif %}</span>
+      Recibido
+    </div>
+    <div class="step-line {% if sub == 'ASIGNADO' or sub == 'EN_PREPARACION' or sub == 'LISTO_DESPACHO' %}done{% endif %}"></div>
+    <div class="step-item {% if sub == 'ASIGNADO' %}active{% elif sub == 'EN_PREPARACION' or sub == 'LISTO_DESPACHO' %}done{% endif %}">
+      <span class="step-dot">{% if sub == 'EN_PREPARACION' or sub == 'LISTO_DESPACHO' %}<i class="bi bi-check"></i>{% else %}2{% endif %}</span>
+      Asignado
+    </div>
+    <div class="step-line {% if sub == 'EN_PREPARACION' or sub == 'LISTO_DESPACHO' %}done{% endif %}"></div>
+    <div class="step-item {% if sub == 'EN_PREPARACION' %}active{% elif sub == 'LISTO_DESPACHO' %}done{% endif %}">
+      <span class="step-dot">{% if sub == 'LISTO_DESPACHO' %}<i class="bi bi-check"></i>{% else %}3{% endif %}</span>
+      En Preparación
+    </div>
+    <div class="step-line {% if sub == 'LISTO_DESPACHO' %}done{% endif %}"></div>
+    <div class="step-item {% if sub == 'LISTO_DESPACHO' %}active{% endif %}">
+      <span class="step-dot">4</span>
+      Listo Despacho
+    </div>
+    <div class="step-line"></div>
+    <div class="step-item">
+      <span class="step-dot"><i class="bi bi-receipt"></i></span>
+      Facturado
+    </div>
+    {% endwith %}
+
+    <!-- Botón avanzar -->
+    {% if pedido.sub_estado == 'RECIBIDO' %}
+      <button class="btn btn-sm btn-primary ms-3" style="font-size:.72rem;white-space:nowrap;" onclick="avanzarSubEstado('ASIGNADO')">
+        <i class="bi bi-arrow-right me-1"></i>Asignar
+      </button>
+    {% elif pedido.sub_estado == 'ASIGNADO' %}
+      <button class="btn btn-sm btn-primary ms-3" style="font-size:.72rem;white-space:nowrap;" onclick="avanzarSubEstado('EN_PREPARACION')">
+        <i class="bi bi-arrow-right me-1"></i>Preparar
+      </button>
+    {% elif pedido.sub_estado == 'EN_PREPARACION' %}
+      <button class="btn btn-sm btn-primary ms-3" style="font-size:.72rem;white-space:nowrap;" onclick="avanzarSubEstado('LISTO_DESPACHO')">
+        <i class="bi bi-arrow-right me-1"></i>Listo
+      </button>
+    {% endif %}
+  </div>
+  {% elif pedido.estado == 'FACTURADO' %}
+  <div class="stepper-bar">
+    <div class="step-item done"><span class="step-dot"><i class="bi bi-check"></i></span>Recibido</div>
+    <div class="step-line done"></div>
+    <div class="step-item done"><span class="step-dot"><i class="bi bi-check"></i></span>Asignado</div>
+    <div class="step-line done"></div>
+    <div class="step-item done"><span class="step-dot"><i class="bi bi-check"></i></span>En Preparación</div>
+    <div class="step-line done"></div>
+    <div class="step-item done"><span class="step-dot"><i class="bi bi-check"></i></span>Listo Despacho</div>
+    <div class="step-line done"></div>
+    <div class="step-item done"><span class="step-dot"><i class="bi bi-check"></i></span>Facturado</div>
+  </div>
+  {% endif %}
+
   <div class="row g-3">
 
     <!-- ── COLUMNA IZQUIERDA ──────────────────────────────────── -->
@@ -318,7 +427,19 @@
         <div>
           <div class="ticket-hero-label"><i class="bi bi-ticket-perforated me-1"></i>Ticket RetailMind</div>
           <div class="ticket-hero-number">{{ pedido.numero_ticket_rm }}</div>
-          <div class="ticket-hero-hint"><i class="bi bi-info-circle me-1"></i>Muestra este número en caja para facturar directamente</div>
+          <div class="ticket-hero-hint">
+            <i class="bi bi-info-circle me-1"></i>Muestra este numero en caja para facturar
+            <div class="d-inline-flex gap-1 ms-2">
+              <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#93c5fd;font-size:.68rem;padding:2px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);" onclick="imprimirGuiaPreparacion()" title="Imprimir por impresora termica (QZ Tray)">
+                <i class="bi bi-printer me-1"></i>Termica
+              </button>
+              {% if pedido.dte %}
+              <a href="{% url 'descargar_txt_dte_ecommerce' dte_id=pedido.dte_id %}" class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#93c5fd;font-size:.68rem;padding:2px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);" title="Descargar TXT para Acepta">
+                <i class="bi bi-file-text me-1"></i>TXT
+              </a>
+              {% endif %}
+            </div>
+          </div>
         </div>
         <div class="text-end" style="flex-shrink:0;">
           <div style="font-size:.7rem;font-weight:700;letter-spacing:.5px;color:#93c5fd;text-transform:uppercase;margin-bottom:6px;">Canal</div>
@@ -631,6 +752,59 @@
         </div>
       </div>
 
+      <!-- ── REASIGNACIÓN ────────────────────────────────────── -->
+      {% if pedido.estado == 'PENDIENTE' %}
+      <div class="rm-card reasign-card">
+        <div class="rm-card-header">
+          <div class="rm-card-header-title" style="color:#7c3aed;"><i class="bi bi-arrow-left-right" style="color:#8b5cf6;"></i>Reasignar Sucursal</div>
+        </div>
+        <div class="rm-card-body">
+          <div class="row g-2 mb-2">
+            <div class="col-6 info-cell">
+              <div class="info-label">Sucursal actual</div>
+              <div class="info-val" style="font-weight:700;">{{ pedido.sucursal.nombre|default:pedido.sucursal.alias }}</div>
+            </div>
+            {% if pedido.sucursal_original and pedido.sucursal_original_id != pedido.sucursal_id %}
+            <div class="col-6 info-cell">
+              <div class="info-label">Sucursal original</div>
+              <div class="info-val" style="color:#94a3b8;">{{ pedido.sucursal_original.nombre|default:pedido.sucursal_original.alias }}</div>
+            </div>
+            {% endif %}
+          </div>
+          <div class="mb-2">
+            <select id="det-reasignar-suc" class="form-select form-select-sm">
+              {% for s in sucursales %}
+                <option value="{{ s.id }}" {% if s.id == pedido.sucursal_id %}selected{% endif %}>{{ s.nombre|default:s.alias }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <input type="text" id="det-reasignar-motivo" class="form-control form-control-sm" placeholder="Motivo (opcional)">
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary flex-grow-1" onclick="detSugerirSucursal()">
+              <i class="bi bi-lightbulb me-1"></i>Sugerir
+            </button>
+            <button class="btn btn-sm fw-bold flex-grow-1" style="background:#7c3aed;color:#fff;" onclick="detReasignar()">
+              <i class="bi bi-check-lg me-1"></i>Reasignar
+            </button>
+          </div>
+          <div id="det-ranking" class="mt-2" style="display:none;font-size:.75rem;"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- ── HISTORIAL ────────────────────────────────────────── -->
+      <div class="rm-card">
+        <div class="rm-card-header" style="cursor:pointer;" onclick="toggleHistorial()">
+          <div class="rm-card-header-title"><i class="bi bi-clock-history"></i>Historial</div>
+          <i class="bi bi-chevron-down" id="hist-chevron" style="font-size:.8rem;color:#94a3b8;"></i>
+        </div>
+        <div class="rm-card-body" id="historial-body" style="display:none;padding:10px 16px;">
+          <div id="historial-content"><span class="text-muted" style="font-size:.78rem;">Cargando...</span></div>
+        </div>
+      </div>
+
       <!-- ── FACTURAR ─────────────────────────────────────────── -->
       {% if pedido.estado == 'PENDIENTE' %}
 
@@ -894,6 +1068,7 @@ function facturarDesdeDetalle() {
           <strong>¡Facturado exitosamente!</strong><br>
           <small>Ticket #${data.ticket_correlativo} · ${data.dte_tipo} #${data.dte_numero}</small>
         </div>`;
+      // Auto-descargar TXT
       if (data.archivo_txt && data.archivo_txt.contenido) {
         try {
           const blob = new Blob([data.archivo_txt.contenido], { type: 'text/plain;charset=utf-8' });
@@ -904,13 +1079,35 @@ function facturarDesdeDetalle() {
           window.URL.revokeObjectURL(link.href);
         } catch(e) { console.error('Error descargando TXT:', e); }
       }
+
+      // Botones de impresión dual
+      const qzDisponible = typeof imprimirConQZ !== 'undefined' && typeof QZ_CONFIG !== 'undefined' && QZ_CONFIG.habilitado;
+      let botonesHtml = '<div class="d-flex gap-2 mb-2">';
+
+      if (qzDisponible) {
+        botonesHtml += `
+          <button class="btn btn-sm btn-outline-success flex-grow-1" style="border-radius:8px;" onclick="imprimirPedidoEcommerce(window._lastFacturaData)">
+            <i class="bi bi-printer me-1"></i>Imprimir Termica (QZ Tray)
+          </button>`;
+      }
+      botonesHtml += `
+          <a href="/app/ecommerce/dte/${data.dte_id}/txt/" class="btn btn-outline-secondary btn-sm flex-grow-1" style="border-radius:8px;">
+            <i class="bi bi-file-earmark-arrow-down me-1"></i>Descargar TXT Acepta
+          </a>
+        </div>`;
+
+      window._lastFacturaData = data;
+      resultado.innerHTML += botonesHtml;
+
       resultado.innerHTML += `
-        <a href="/app/ecommerce/dte/${data.dte_id}/txt/" class="btn btn-outline-secondary btn-sm w-100 mb-2" style="border-radius:8px;">
-          <i class="bi bi-file-earmark-arrow-down me-1"></i>Re-descargar TXT Acepta
-        </a>
         <button class="btn btn-primary btn-sm w-100" style="border-radius:8px;" onclick="location.reload()">
-          <i class="bi bi-arrow-clockwise me-1"></i>Recargar página
+          <i class="bi bi-arrow-clockwise me-1"></i>Recargar pagina
         </button>`;
+
+      // Imprimir automáticamente por térmica si QZ disponible
+      if (qzDisponible) {
+        imprimirPedidoEcommerce(data);
+      }
       document.querySelector('#card-facturar').style.borderColor = '#86efac';
     } else {
       resultado.innerHTML = `
@@ -926,6 +1123,205 @@ function facturarDesdeDetalle() {
     resultado.style.display = 'block';
     resultado.innerHTML = `<div class="alert alert-danger py-2" style="border-radius:10px;">Error de conexión: ${err}</div>`;
   });
+}
+
+/* ── Avanzar sub-estado ──────────────────────────────── */
+function avanzarSubEstado(nuevoSubEstado) {
+  if (!confirm(`¿Cambiar sub-estado a "${nuevoSubEstado}"?`)) return;
+
+  fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/sub-estado/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+    body: JSON.stringify({ sub_estado: nuevoSubEstado })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      location.reload();
+    } else {
+      alert('Error: ' + data.error);
+    }
+  })
+  .catch(err => alert('Error de conexión: ' + err));
+}
+
+/* ── Reasignar desde detalle ─────────────────────────── */
+function detReasignar() {
+  const sucId = document.getElementById('det-reasignar-suc').value;
+  const motivo = document.getElementById('det-reasignar-motivo').value;
+
+  fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/reasignar/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+    body: JSON.stringify({ sucursal_id: parseInt(sucId), motivo: motivo })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      alert(`Reasignado a ${data.sucursal_nueva.nombre}` +
+        (data.todos_items_con_stock ? ' (stock completo)' : ` (${data.items_sin_stock} items sin stock)`));
+      location.reload();
+    } else {
+      alert('Error: ' + data.error);
+    }
+  })
+  .catch(err => alert('Error: ' + err));
+}
+
+function detSugerirSucursal() {
+  const div = document.getElementById('det-ranking');
+  div.style.display = '';
+  div.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Calculando...</span>';
+
+  fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/sugerir-sucursal/`)
+  .then(r => r.json())
+  .then(data => {
+    if (!data.ok) { div.innerHTML = '<span class="text-danger">Error</span>'; return; }
+    let html = '<table class="table table-sm mb-0" style="font-size:.72rem;"><thead><tr><th>Sucursal</th><th class="text-center">Stock</th><th class="text-center">Score</th><th></th></tr></thead><tbody>';
+    for (const s of data.ranking.slice(0, 5)) {
+      const color = s.cobertura_pct >= 100 ? '#16a34a' : (s.cobertura_pct >= 50 ? '#d97706' : '#dc2626');
+      const actual = s.es_actual ? ' <small class="text-muted">(actual)</small>' : '';
+      html += `<tr>
+        <td>${s.nombre}${actual}</td>
+        <td class="text-center" style="color:${color};font-weight:700;">${s.items_con_stock}/${s.total_items}</td>
+        <td class="text-center fw-bold">${s.score}</td>
+        <td><button class="btn btn-outline-primary py-0 px-1" style="font-size:.65rem;" onclick="document.getElementById('det-reasignar-suc').value=${s.sucursal_id}">Elegir</button></td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    div.innerHTML = html;
+  })
+  .catch(() => { div.innerHTML = '<span class="text-danger">Error de conexión</span>'; });
+}
+
+/* ── Historial ───────────────────────────────────────── */
+let historialCargado = false;
+function toggleHistorial() {
+  const body = document.getElementById('historial-body');
+  const chevron = document.getElementById('hist-chevron');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    chevron.className = 'bi bi-chevron-up';
+    if (!historialCargado) cargarHistorial();
+  } else {
+    body.style.display = 'none';
+    chevron.className = 'bi bi-chevron-down';
+  }
+}
+
+function cargarHistorial() {
+  historialCargado = true;
+  const content = document.getElementById('historial-content');
+
+  fetch(`/app/ecommerce/pedidos/${PEDIDO_ID}/historial/`)
+  .then(r => r.json())
+  .then(data => {
+    if (!data.ok || !data.historial.length) {
+      content.innerHTML = '<span class="text-muted" style="font-size:.78rem;">Sin historial registrado.</span>';
+      return;
+    }
+    const iconMap = { 'CAMBIO_ESTADO': 'cambio', 'REASIGNACION': 'reasig', 'FACTURACION': 'factur', 'ERROR': 'error' };
+    const iconBi = { 'CAMBIO_ESTADO': 'bi-arrow-repeat', 'REASIGNACION': 'bi-arrow-left-right', 'FACTURACION': 'bi-receipt', 'ERROR': 'bi-exclamation-triangle' };
+
+    let html = '';
+    for (const h of data.historial) {
+      const cls = iconMap[h.tipo_evento] || 'cambio';
+      const icon = iconBi[h.tipo_evento] || 'bi-circle';
+      let desc = h.motivo || '';
+      if (h.sucursal_anterior && h.sucursal_nueva && h.sucursal_anterior !== h.sucursal_nueva) {
+        desc += (desc ? ' | ' : '') + `${h.sucursal_anterior} → ${h.sucursal_nueva}`;
+      }
+      if (h.sub_estado_anterior && h.sub_estado_nuevo && h.sub_estado_anterior !== h.sub_estado_nuevo) {
+        desc += (desc ? ' | ' : '') + `${h.sub_estado_anterior} → ${h.sub_estado_nuevo}`;
+      }
+      html += `<div class="timeline-item">
+        <div class="timeline-icon ${cls}"><i class="bi ${icon}"></i></div>
+        <div class="flex-grow-1">
+          <div>${desc || h.tipo_evento}</div>
+          <div class="d-flex gap-2">
+            <span class="timeline-date">${h.fecha}</span>
+            ${h.usuario ? `<span class="timeline-user">${h.usuario}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }
+    content.innerHTML = html;
+  })
+  .catch(() => { content.innerHTML = '<span class="text-danger">Error cargando historial</span>'; });
+}
+</script>
+
+{% csrf_token %}
+{% include 'vistas/modulo_ventas/_qz_tray_module.html' %}
+
+<script>
+/* ── Impresión térmica post-facturación ──────────────── */
+async function imprimirPedidoEcommerce(data) {
+    if (typeof imprimirConQZ === 'undefined' || !QZ_CONFIG.habilitado) return;
+
+    const ticketData = {
+        modulo_origen: 'ECOMMERCE',
+        numero_ticket_rm: '{{ pedido.numero_ticket_rm }}',
+        canal_origen: '{{ pedido.canal_origen }}',
+        numero_pedido_canal: '{{ pedido.numero_pedido_canal }}',
+        cliente_nombre: '{{ pedido.cliente_nombre|escapejs }}',
+        cliente_documento: '{{ pedido.cliente_documento|escapejs }}',
+        direccion_envio: '{{ pedido.direccion_envio|escapejs|truncatechars:80 }}',
+        total: {{ pedido.total|floatformat:0 }},
+        fecha: '{{ pedido.fecha_recepcion|date:"d/m/Y H:i" }}',
+        ticket_correlativo: data.ticket_correlativo,
+        dte_numero: data.dte_numero,
+        dte_tipo: data.dte_tipo,
+        sucursal: {
+            empresa: '{{ pedido.sucursal.empresa.razon_social|default:pedido.sucursal.empresa.nombre|default:""|escapejs }}',
+            rut_empresa: '{{ pedido.sucursal.empresa.rut|default:""|escapejs }}',
+            alias: '{{ pedido.sucursal.nombre|default:pedido.sucursal.alias|escapejs }}',
+            direccion: '{{ pedido.sucursal.direccion|default:""|escapejs }}',
+        },
+        productos: [
+            {% for item in items %}
+            { sku: '{{ item.sku|escapejs }}', nombre: '{{ item.nombre|escapejs }}', cantidad: {{ item.cantidad|default:1 }}, precio_unitario: {{ item.precio_unitario|default:0 }} },
+            {% endfor %}
+        ],
+    };
+
+    const ok = await imprimirConQZ(ticketData);
+    if (ok) console.log('[ECOMMERCE] Ticket impreso via QZ Tray');
+}
+
+/* ── Botón de impresión manual (guía de preparación) ── */
+async function imprimirGuiaPreparacion() {
+    if (typeof imprimirConQZ === 'undefined' || !QZ_CONFIG.habilitado) {
+        alert('QZ Tray no está habilitado para esta sucursal.');
+        return;
+    }
+
+    const ticketData = {
+        modulo_origen: 'ECOMMERCE',
+        numero_ticket_rm: '{{ pedido.numero_ticket_rm }}',
+        canal_origen: '{{ pedido.canal_origen }}',
+        numero_pedido_canal: '{{ pedido.numero_pedido_canal }}',
+        cliente_nombre: '{{ pedido.cliente_nombre|escapejs }}',
+        cliente_documento: '{{ pedido.cliente_documento|escapejs }}',
+        direccion_envio: '{{ pedido.direccion_envio|escapejs|truncatechars:80 }}',
+        total: {{ pedido.total|floatformat:0 }},
+        fecha: '{{ pedido.fecha_recepcion|date:"d/m/Y H:i" }}',
+        sucursal: {
+            empresa: '{{ pedido.sucursal.empresa.razon_social|default:pedido.sucursal.empresa.nombre|default:""|escapejs }}',
+            rut_empresa: '{{ pedido.sucursal.empresa.rut|default:""|escapejs }}',
+            alias: '{{ pedido.sucursal.nombre|default:pedido.sucursal.alias|escapejs }}',
+            direccion: '{{ pedido.sucursal.direccion|default:""|escapejs }}',
+        },
+        productos: [
+            {% for item in items %}
+            { sku: '{{ item.sku|escapejs }}', nombre: '{{ item.nombre|escapejs }}', cantidad: {{ item.cantidad|default:1 }}, precio_unitario: {{ item.precio_unitario|default:0 }} },
+            {% endfor %}
+        ],
+    };
+
+    const ok = await imprimirConQZ(ticketData);
+    if (ok) alert('Guía de preparación impresa.');
+    else alert('Error al imprimir. Verifica que QZ Tray esté activo.');
 }
 </script>
 

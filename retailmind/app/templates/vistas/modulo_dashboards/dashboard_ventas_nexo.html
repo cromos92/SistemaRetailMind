@@ -701,6 +701,124 @@
             </div>
         </div>
 
+        <!-- CONTROL DE FUGAS Y ANÁLISIS AVANZADO - Solo para perfiles gerenciales -->
+        <div id="seccion-control-fugas" style="display:none;">
+            <div class="nexo-section-header mt-4 nexo-animate-fadein">
+                <div class="nexo-section-icon" style="background: linear-gradient(135deg, #E91E63 0%, #9C27B0 100%);">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <h3 class="nexo-section-title">Control de Fugas y Análisis Avanzado</h3>
+            </div>
+
+            <!-- KPIs de control -->
+            <div class="row nexo-animate-fadein">
+                <div class="col-lg-2 col-md-4 col-6">
+                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                        <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Fuera de Plazo</div>
+                        <h3 class="mb-0 mt-1" style="color: #ff9800;" id="ctrl-fuera-plazo">0</h3>
+                        <small class="text-muted" id="ctrl-tasa-fuera-plazo">0%</small>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 col-6">
+                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                        <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Cross-Branch</div>
+                        <h3 class="mb-0 mt-1" style="color: #9c27b0;" id="ctrl-cross-branch">0</h3>
+                        <small class="text-muted" id="ctrl-tasa-cross-branch">0%</small>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 col-6">
+                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                        <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Pérdida No Apto</div>
+                        <h3 class="mb-0 mt-1" style="color: var(--nexo-error);" id="ctrl-perdida-no-apto">$0</h3>
+                        <small class="text-muted" id="ctrl-items-no-apto">0 items</small>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 col-6">
+                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                        <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Rev. Gerencial Pend.</div>
+                        <h3 class="mb-0 mt-1" style="color: var(--nexo-warning);" id="ctrl-revision-pend">0</h3>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 col-6">
+                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                        <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Tiempo Prom. Resolución</div>
+                        <h3 class="mb-0 mt-1" style="color: var(--nexo-primary);" id="ctrl-tiempo-prom">-</h3>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 col-6">
+                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                        <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">vs Periodo Anterior</div>
+                        <h3 class="mb-0 mt-1" id="ctrl-variacion">-</h3>
+                        <small class="text-muted" id="ctrl-anterior-total">-</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tablas de detalle -->
+            <div class="row nexo-animate-fadein mt-3">
+                <!-- Vendedores con alta tasa -->
+                <div class="col-lg-4">
+                    <div class="nexo-chart-card">
+                        <div class="nexo-chart-header">
+                            <h5 class="nexo-chart-title"><i class="bi bi-person-exclamation"></i> Vendedores Alto Retorno</h5>
+                        </div>
+                        <div class="nexo-chart-body" style="max-height:280px; overflow-y:auto;" id="ctrl-vendedores-container">
+                            <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Cargando...</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Top productos devueltos -->
+                <div class="col-lg-4">
+                    <div class="nexo-chart-card">
+                        <div class="nexo-chart-header">
+                            <h5 class="nexo-chart-title"><i class="bi bi-box-seam"></i> Productos Más Devueltos</h5>
+                        </div>
+                        <div class="nexo-chart-body" style="max-height:280px; overflow-y:auto;" id="ctrl-productos-container">
+                            <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Cargando...</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Tendencia semanal -->
+                <div class="col-lg-4">
+                    <div class="nexo-chart-card">
+                        <div class="nexo-chart-header">
+                            <h5 class="nexo-chart-title"><i class="bi bi-graph-up"></i> Tendencia Semanal</h5>
+                        </div>
+                        <div class="nexo-chart-body">
+                            <div class="nexo-chart-container-sm">
+                                <canvas id="chartCambiosTendencia"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cambios por sucursal + por vendedor -->
+            <div class="row nexo-animate-fadein mt-3">
+                <div class="col-lg-6">
+                    <div class="nexo-chart-card">
+                        <div class="nexo-chart-header">
+                            <h5 class="nexo-chart-title"><i class="bi bi-shop"></i> Cambios por Sucursal</h5>
+                        </div>
+                        <div class="nexo-chart-body" style="max-height:250px; overflow-y:auto;" id="ctrl-sucursales-container">
+                            <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Cargando...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="nexo-chart-card">
+                        <div class="nexo-chart-header">
+                            <h5 class="nexo-chart-title"><i class="bi bi-person-badge"></i> Cambios por Vendedor</h5>
+                        </div>
+                        <div class="nexo-chart-body" style="max-height:250px; overflow-y:auto;" id="ctrl-por-vendedor-container">
+                            <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Cargando...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- FIN CONTROL DE FUGAS -->
+
         <!-- ═══════════════════════════════════════════════════════════════════════════════
              ESTADO POS Y DEPÓSITOS BANCARIOS
              ═══════════════════════════════════════════════════════════════════════════════ -->
@@ -1089,7 +1207,8 @@ function cargarDatosPeriodoActual(params) {
         cargarCuadraturas(params),
         cargarCambiosDevoluciones(params),
         cargarIndicadoresAvanzados(params),
-        cargarEstadoOperacional(params)
+        cargarEstadoOperacional(params),
+        cargarControlFugas(params)
     ]).then(() => {
         generarAlertas();
     }).catch(err => {
@@ -2132,4 +2251,155 @@ function exportarDashboard() {
     });
     window.open(`/app/api/ventas/exportar-dashboard/?${params}`, '_blank');
 }
+
+// ========== CONTROL DE FUGAS Y ANÁLISIS AVANZADO ==========
+
+function cargarControlFugas(params) {
+    // Intentar cargar - si el usuario no tiene permisos (403), simplemente no mostrar la sección
+    return $.get('/app/ventas/api/analisis-cambios-avanzado/', params)
+        .done(function(response) {
+            if (response.success) {
+                $('#seccion-control-fugas').show();
+                renderizarControlFugas(response);
+            }
+        })
+        .fail(function(xhr) {
+            // 403 = sin permisos, ocultar sección silenciosamente
+            if (xhr.status === 403) {
+                $('#seccion-control-fugas').hide();
+            }
+        });
+}
+
+function renderizarControlFugas(data) {
+    // KPIs
+    $('#ctrl-fuera-plazo').text(formatNumber(data.fuera_plazo_count || 0));
+    $('#ctrl-tasa-fuera-plazo').text((data.tasa_fuera_plazo || 0) + '% del total');
+    $('#ctrl-cross-branch').text(formatNumber(data.cross_branch_count || 0));
+    $('#ctrl-tasa-cross-branch').text((data.tasa_cross_branch || 0) + '% del total');
+    $('#ctrl-revision-pend').text(formatNumber(data.pendientes_revision || 0));
+    $('#ctrl-tiempo-prom').text(data.tiempo_promedio_horas ? data.tiempo_promedio_horas + 'h' : 'N/A');
+
+    // Pérdidas NO_APTO - calculamos desde tasa_no_apto
+    const noAptoCount = data.no_apto_count || 0;
+    $('#ctrl-items-no-apto').text(noAptoCount + ' items no aptos');
+
+    // Variación vs periodo anterior
+    const variacion = data.periodo_anterior || {};
+    const varCant = variacion.variacion_cantidad || 0;
+    const varIcon = varCant > 0 ? '↑' : (varCant < 0 ? '↓' : '→');
+    const varColor = varCant > 0 ? 'var(--nexo-error)' : (varCant < 0 ? 'var(--nexo-success)' : 'var(--nexo-primary)');
+    $('#ctrl-variacion').html(`<span style="color:${varColor}">${varIcon} ${Math.abs(varCant)}%</span>`);
+    $('#ctrl-anterior-total').text(variacion.total + ' anterior');
+
+    // Devoluciones como pérdida
+    $('#ctrl-perdida-no-apto').text(formatMoney(Math.abs(data.devoluciones_total || 0)));
+
+    // Tabla vendedores
+    renderTablaVendedores(data.por_vendedor || []);
+
+    // Tabla productos
+    renderTablaProductos(data.top_productos || []);
+
+    // Tendencia semanal (Chart.js)
+    renderChartTendencia(data.tendencia_semanal || []);
+
+    // Por sucursal
+    renderTablaSucursales(data.por_sucursal || []);
+
+    // Por vendedor detallado
+    renderTablaPorVendedor(data.por_vendedor || []);
+}
+
+function renderTablaVendedores(vendedores) {
+    const container = $('#ctrl-vendedores-container');
+    if (vendedores.length === 0) {
+        container.html('<div class="text-center text-muted py-3">Sin datos de vendedores</div>');
+        return;
+    }
+    let html = '<table class="table table-sm mb-0" style="font-size:0.78rem;"><thead><tr><th>Vendedor</th><th class="text-center">Cambios</th><th class="text-end">Monto</th></tr></thead><tbody>';
+    vendedores.forEach(v => {
+        html += `<tr><td>${v.nombre || 'Sin nombre'}</td><td class="text-center">${v.cantidad}</td><td class="text-end">${formatMoney(v.monto)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.html(html);
+}
+
+function renderTablaProductos(productos) {
+    const container = $('#ctrl-productos-container');
+    if (productos.length === 0) {
+        container.html('<div class="text-center text-muted py-3">Sin datos de productos</div>');
+        return;
+    }
+    let html = '<table class="table table-sm mb-0" style="font-size:0.78rem;"><thead><tr><th>Producto</th><th class="text-center">Veces</th><th class="text-center">Cant.</th></tr></thead><tbody>';
+    productos.forEach(p => {
+        html += `<tr><td>${p.articulo || p.sku}</td><td class="text-center">${p.veces}</td><td class="text-center">${p.cantidad}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.html(html);
+}
+
+function renderChartTendencia(tendencia) {
+    const ctx = document.getElementById('chartCambiosTendencia');
+    if (!ctx || tendencia.length === 0) return;
+    if (charts.cambiosTendencia) charts.cambiosTendencia.destroy();
+
+    charts.cambiosTendencia = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: tendencia.map(t => t.semana),
+            datasets: [{
+                label: 'Cambios',
+                data: tendencia.map(t => t.cantidad),
+                borderColor: NEXO_COLORS.error,
+                backgroundColor: NEXO_COLORS.error + '20',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: NEXO_COLORS.error,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { backgroundColor: '#1A1A2E', cornerRadius: 8 }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#8A8A9A', font: { size: 10 } } },
+                y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#8A8A9A' }, beginAtZero: true }
+            }
+        }
+    });
+}
+
+function renderTablaSucursales(sucursales) {
+    const container = $('#ctrl-sucursales-container');
+    if (sucursales.length === 0) {
+        container.html('<div class="text-center text-muted py-3">Sin datos</div>');
+        return;
+    }
+    let html = '<table class="table table-sm mb-0" style="font-size:0.78rem;"><thead><tr><th>Sucursal</th><th class="text-center">Cambios</th><th class="text-end">Monto</th></tr></thead><tbody>';
+    sucursales.forEach(s => {
+        html += `<tr><td>${s.sucursal}</td><td class="text-center">${s.cantidad}</td><td class="text-end">${formatMoney(s.monto)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.html(html);
+}
+
+function renderTablaPorVendedor(vendedores) {
+    const container = $('#ctrl-por-vendedor-container');
+    if (vendedores.length === 0) {
+        container.html('<div class="text-center text-muted py-3">Sin datos</div>');
+        return;
+    }
+    let html = '<table class="table table-sm mb-0" style="font-size:0.78rem;"><thead><tr><th>Vendedor</th><th class="text-center">Cambios</th><th class="text-end">Monto</th></tr></thead><tbody>';
+    vendedores.forEach(v => {
+        html += `<tr><td>${v.nombre || 'Sin nombre'}</td><td class="text-center">${v.cantidad}</td><td class="text-end">${formatMoney(v.monto)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.html(html);
+}
+
 </script>

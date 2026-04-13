@@ -1300,6 +1300,18 @@
                     </div>
                 </div>
 
+                <!-- Filtros rápidos por estado -->
+                <div class="mb-2" id="filtrosRapidos" style="display:none;">
+                    <small class="text-muted me-2">Filtrar:</small>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-secondary active filtro-rapido" data-filtro="todos">Todos</button>
+                        <button type="button" class="btn btn-outline-success filtro-rapido" data-filtro="ok">OK</button>
+                        <button type="button" class="btn btn-outline-warning filtro-rapido" data-filtro="problemas">Problemas</button>
+                        <button type="button" class="btn btn-outline-info filtro-rapido" data-filtro="sobrantes">Sobrantes</button>
+                        <button type="button" class="btn btn-outline-secondary filtro-rapido" data-filtro="sinrevisar">Sin revisar</button>
+                    </div>
+                </div>
+
                 <!-- Panel de Guía Rápida -->
                 <div class="alert alert-info mb-3 py-2" id="guiaVerificacion">
                     <div class="d-flex align-items-center">
@@ -1330,8 +1342,12 @@
                             </button>
                             <div class="vr mx-2"></div>
                             <button type="button" class="btn btn-outline-warning" id="btnObservacionMasiva" title="Agregar la misma observación a todos los productos desmarcados">
-                                <i class="bi bi-chat-left-text me-1"></i>📝 Observación Masiva
+                                <i class="bi bi-chat-left-text me-1"></i>Obs. Masiva
                                 <span class="badge bg-danger ms-1 d-none" id="badgeProductosSinObs">0</span>
+                            </button>
+                            <div class="vr mx-2"></div>
+                            <button type="button" class="btn btn-outline-info" id="btnProductoNoListado" title="Reportar un producto que llego pero no esta en el DTE">
+                                <i class="bi bi-plus-circle me-1"></i>Producto no listado
                             </button>
                         </div>
                     </div>
@@ -1390,21 +1406,25 @@
                     <div class="card border-success">
                         <div class="card-body py-2">
                             <div class="row text-center">
-                                <div class="col-3">
+                                <div class="col">
                                     <div class="fw-bold text-success" id="resumenOK">0</div>
-                                    <small class="text-muted">OK ✅</small>
+                                    <small class="text-muted">OK</small>
                                 </div>
-                                <div class="col-3">
+                                <div class="col">
                                     <div class="fw-bold text-warning" id="resumenParcial">0</div>
-                                    <small class="text-muted">Parcial ⚠️</small>
+                                    <small class="text-muted">Parcial</small>
                                 </div>
-                                <div class="col-3">
+                                <div class="col">
                                     <div class="fw-bold text-danger" id="resumenDanado">0</div>
-                                    <small class="text-muted">Dañados 🔴</small>
+                                    <small class="text-muted">Danados</small>
                                 </div>
-                                <div class="col-3">
+                                <div class="col">
                                     <div class="fw-bold text-secondary" id="resumenFaltante">0</div>
-                                    <small class="text-muted">Faltantes ❌</small>
+                                    <small class="text-muted">Faltantes</small>
+                                </div>
+                                <div class="col">
+                                    <div class="fw-bold text-info" id="resumenSobrante">0</div>
+                                    <small class="text-muted">Sobrantes</small>
                                 </div>
                             </div>
                         </div>
@@ -1468,51 +1488,63 @@
                     </div>
                 </div>
                 
-                <!-- Cantidad Recepcionada (Principal) -->
+                <!-- Cantidad Recepcionada (max = esperada) -->
                 <div class="mb-3">
                     <label class="form-label fw-bold">
-                        <i class="bi bi-check-circle text-success me-1"></i>¿Cuántas unidades recibiste?
+                        <i class="bi bi-check-circle text-success me-1"></i>¿Cuantas unidades del DTE recibiste?
                     </label>
-                    <input type="number" id="problemaCantidadRecepcionada" class="form-control form-control-lg" 
+                    <input type="number" id="problemaCantidadRecepcionada" class="form-control form-control-lg"
                            min="0" placeholder="Ej: 5">
-                    <small class="text-muted">Ingresa la cantidad que realmente llegó (buenas + dañadas)</small>
+                    <small class="text-muted">Maximo: lo documentado en el DTE. Solo se ingresa al stock esta cantidad o menos.</small>
                     <div id="errorCantidadRecepcionada" class="text-danger small mt-1" style="display:none;">
-                        <i class="bi bi-exclamation-circle me-1"></i>La cantidad no puede ser mayor a la esperada
+                        <i class="bi bi-exclamation-circle me-1"></i>No puede ser mayor a la cantidad esperada (<span id="maxEsperadaLabel">0</span>)
                     </div>
                 </div>
-                
+
                 <!-- Cantidad Dañada (Opcional) -->
                 <div class="mb-3">
                     <label class="form-label">
-                        <i class="bi bi-exclamation-triangle text-warning me-1"></i>¿Cuántas llegaron dañadas? (opcional)
+                        <i class="bi bi-exclamation-triangle text-warning me-1"></i>¿Cuantas llegaron danadas? (opcional)
                     </label>
-                    <input type="number" id="problemaCantidadDanada" class="form-control" 
+                    <input type="number" id="problemaCantidadDanada" class="form-control"
                            min="0" value="0" placeholder="0">
-                    <small class="text-muted">Si hay unidades con defectos o problemas</small>
+                    <small class="text-muted">Unidades con defectos o problemas</small>
                     <div id="errorCantidadDanada" class="text-danger small mt-1" style="display:none;">
-                        <i class="bi bi-exclamation-circle me-1"></i>La cantidad dañada no puede ser mayor a la recepcionada
+                        <i class="bi bi-exclamation-circle me-1"></i>La cantidad danada no puede ser mayor a la recepcionada
                     </div>
                 </div>
-                
-                <!-- Auto-cálculo (se muestra solo) -->
+
+                <!-- Sobrante (separado - NO entra al stock) -->
+                <div class="mb-3 p-3 border rounded" style="background: rgba(13,202,240,.05); border-color: #0dcaf0 !important;">
+                    <label class="form-label fw-bold text-info mb-1">
+                        <i class="bi bi-plus-circle me-1"></i>¿Llegaron unidades de mas? (sobrante)
+                    </label>
+                    <small class="text-muted d-block mb-2">Si llego mercaderia adicional no documentada en el DTE. Estas unidades NO ingresan al stock, van a regularizacion.</small>
+                    <input type="number" id="problemaCantidadSobranteInput" class="form-control"
+                           min="0" value="0" placeholder="0">
+                </div>
+
+                <!-- Auto-cálculo -->
                 <div class="alert alert-secondary mb-3" id="resumenAutocalculo">
                     <small>
-                        📦 <strong>Faltante:</strong> <span id="problemaCantidadFaltanteCalc">0</span> unidades (se calcula automáticamente)<br>
-                        🔄 <strong>Estado:</strong> <span id="problemaEstadoCalc">-</span>
+                        <span id="resumenFaltanteRow"><strong>Faltante:</strong> <span id="problemaCantidadFaltanteCalc">0</span></span>
+                        <span id="resumenSobranteRow" style="display:none;"> | <strong class="text-info">Sobrante:</strong> +<span id="problemaCantidadSobranteCalc">0</span></span>
+                        <br><strong>Estado:</strong> <span id="problemaEstadoCalc">-</span>
                     </small>
                 </div>
-                
+
                 <!-- Observaciones -->
                 <div class="mb-3">
                     <label class="form-label fw-bold">
                         <i class="bi bi-chat-left-text me-1"></i>Observaciones
                     </label>
-                    <textarea id="problemaObservaciones" class="form-control" rows="2" 
+                    <textarea id="problemaObservaciones" class="form-control" rows="2"
                               placeholder="Ej: Caja rota, faltan 3 unidades, etc."></textarea>
                 </div>
-                
-                <!-- Campos hidden para guardar -->
+
+                <!-- Campos hidden -->
                 <input type="hidden" id="problemaCantidadFaltante">
+                <input type="hidden" id="problemaCantidadSobrante">
                 <input type="hidden" id="problemaEstado">
             </div>
             <div class="modal-footer">
@@ -1772,13 +1804,22 @@ $(document).ready(function() {
     // Nuevos eventos para verificación
     $('#btnMarcarTodosOK, #btnMarcarTodosOKMobile').on('click', marcarTodosOK);
     $('#btnObservacionMasiva').on('click', abrirObservacionMasiva);
+    $('#btnProductoNoListado').on('click', reportarProductoNoListado);
     $('#buscarProductoModal').on('input', filtrarProductosModal);
     $('#btnLimpiarBusqueda').on('click', limpiarBusqueda);
+
+    // Filtros rápidos por estado
+    $(document).on('click', '.filtro-rapido', function() {
+        $('.filtro-rapido').removeClass('active');
+        $(this).addClass('active');
+        window.filtroRapidoActual = $(this).data('filtro');
+        renderizarProductosVerificacion();
+    });
     $('#btnGuardarProblema').on('click', guardarProblema);
     $('#btnVerDTEsProblemas').on('click', verDTEsConProblemas);
     
     // Auto-cálculo en modal de problemas
-    $('#problemaCantidadRecepcionada, #problemaCantidadDanada').on('input', calcularFaltanteAutomatico);
+    $('#problemaCantidadRecepcionada, #problemaCantidadDanada, #problemaCantidadSobranteInput').on('input', calcularFaltanteAutomatico);
     
     // Eventos para DTEs rechazados (que yo envié)
     $('#btnVerDTEsRechazados').on('click', verDTEsRechazados);
@@ -2099,20 +2140,34 @@ function renderizarProductosVerificacion() {
     tbody.empty();
     
     const busqueda = $('#buscarProductoModal').val().toLowerCase().trim();
-    
+    const filtroRapido = window.filtroRapidoActual || 'todos';
+
+    // Mostrar filtros rápidos si hay productos
+    if (productosVerificacion.length > 0) {
+        $('#filtrosRapidos').show();
+    }
+
     let productosVisibles = 0;
-    
+
     productosVerificacion.forEach((prod, index) => {
-        // Filtrar por búsqueda (incluye SKU, descripción, artículo, color, marca y talla)
-        const coincide = !busqueda || 
+        // Filtrar por búsqueda
+        const coincide = !busqueda ||
             (prod.sku && prod.sku.toLowerCase().includes(busqueda)) ||
             (prod.descripcion && prod.descripcion.toLowerCase().includes(busqueda)) ||
             (prod.articulo && prod.articulo.toLowerCase().includes(busqueda)) ||
             (prod.color && prod.color.toLowerCase().includes(busqueda)) ||
             (prod.marca && prod.marca.toLowerCase().includes(busqueda)) ||
             (prod.talla && prod.talla.toLowerCase().includes(busqueda));
-        
+
         if (!coincide) return;
+
+        // Filtro rápido por estado
+        if (filtroRapido !== 'todos') {
+            if (filtroRapido === 'ok' && !prod.marcado_ok) return;
+            if (filtroRapido === 'problemas' && (prod.marcado_ok || prod.estado === 'RECEPCIONADO_SOBRANTE')) return;
+            if (filtroRapido === 'sobrantes' && prod.estado !== 'RECEPCIONADO_SOBRANTE') return;
+            if (filtroRapido === 'sinrevisar' && prod.marcado_ok) return;
+        }
         
         productosVisibles++;
         
@@ -2123,6 +2178,8 @@ function renderizarProductosVerificacion() {
         let rowClass = '';
         if (prod.marcado_ok) {
             rowClass = 'table-success';  // Verde si está marcado OK
+        } else if (prod.estado === 'RECEPCIONADO_SOBRANTE') {
+            rowClass = 'table-info';     // Azul/info si tiene sobrante
         } else if (sinObservaciones) {
             rowClass = 'table-danger';   // Rojo si está desmarcado SIN observaciones
         } else {
@@ -2157,8 +2214,8 @@ function renderizarProductosVerificacion() {
                 <td class="text-center"><span class="badge bg-secondary">${tallaMostrar}</span></td>
                 <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
                 <td class="text-center">
-                    <input type="number" class="form-control form-control-sm text-center cantidad-recepcionada" 
-                           data-index="${index}" value="${prod.cantidad_recepcionada}" 
+                    <input type="number" class="form-control form-control-sm text-center cantidad-recepcionada"
+                           data-index="${index}" value="${prod.cantidad_recepcionada}"
                            min="0" max="${prod.cantidad_esperada}" style="width: 80px;"
                            ${prod.marcado_ok ? 'disabled' : ''}>
                 </td>
@@ -2202,7 +2259,9 @@ function getEstadoBadge(estado) {
         'RECEPCIONADO_PARCIAL': '<span class="badge bg-warning">Parcial</span>',
         'RECEPCIONADO_DANADO': '<span class="badge bg-danger">Dañado</span>',
         'FALTANTE': '<span class="badge bg-secondary">Faltante</span>',
-        'EN_REGULARIZACION': '<span class="badge bg-info">En Reg.</span>'
+        'EN_REGULARIZACION': '<span class="badge bg-info">En Reg.</span>',
+        'RECEPCIONADO_SOBRANTE': '<span class="badge bg-info">Sobrante</span>',
+        'SOBRANTE_PENDIENTE': '<span class="badge bg-info">Sobrante Pend.</span>'
     };
     return badges[estado] || '<span class="badge bg-secondary">-</span>';
 }
@@ -2346,148 +2405,182 @@ function abrirObservacionMasiva() {
     const parciales = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_PARCIAL');
     const danados = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_DANADO');
     const faltantes = productosDesmarcados.filter(p => p.estado === 'FALTANTE');
+    const sobrantesObs = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_SOBRANTE');
     const sinEstado = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_OK');
-    
+
     // Crear lista resumen por tipo
-    let resumenHtml = '<div class="row text-center mb-3">';
-    if (faltantes.length > 0) resumenHtml += `<div class="col"><span class="badge bg-secondary fs-6">${faltantes.length} faltantes</span></div>`;
-    if (parciales.length > 0) resumenHtml += `<div class="col"><span class="badge bg-warning text-dark fs-6">${parciales.length} parciales</span></div>`;
-    if (danados.length > 0) resumenHtml += `<div class="col"><span class="badge bg-danger fs-6">${danados.length} dañados</span></div>`;
-    if (sinEstado.length > 0) resumenHtml += `<div class="col"><span class="badge bg-info fs-6">${sinEstado.length} sin revisar</span></div>`;
+    let resumenHtml = '<div class="d-flex flex-wrap gap-2 justify-content-center mb-3">';
+    if (faltantes.length > 0) resumenHtml += `<span class="badge bg-secondary">${faltantes.length} faltantes</span>`;
+    if (parciales.length > 0) resumenHtml += `<span class="badge bg-warning text-dark">${parciales.length} parciales</span>`;
+    if (danados.length > 0) resumenHtml += `<span class="badge bg-danger">${danados.length} dañados</span>`;
+    if (sobrantesObs.length > 0) resumenHtml += `<span class="badge bg-info">${sobrantesObs.length} sobrantes</span>`;
+    if (sinEstado.length > 0) resumenHtml += `<span class="badge bg-light text-dark">${sinEstado.length} sin revisar</span>`;
     resumenHtml += '</div>';
-    
-    // Observaciones sugeridas comunes
+
+    // Sugerencias rápidas agrupadas
     const sugerencias = [
-        'Pedido incompleto - productos no llegaron',
-        'Caja dañada durante el transporte',
-        'Producto con defecto de fábrica',
-        'Diferencia entre lo enviado y facturado',
-        'Mercadería en mal estado'
+        { texto: 'Pedido incompleto - productos no enviados', icono: 'ri-close-circle-line', color: 'secondary' },
+        { texto: 'Cantidad no coincide con guia de despacho', icono: 'ri-file-list-line', color: 'secondary' },
+        { texto: 'Caja golpeada durante transporte', icono: 'ri-truck-line', color: 'danger' },
+        { texto: 'Producto con defecto visible', icono: 'ri-error-warning-line', color: 'danger' },
+        { texto: 'Embalaje roto, producto expuesto', icono: 'ri-box-1-line', color: 'danger' },
+        { texto: 'Llegaron unidades adicionales no documentadas', icono: 'ri-add-circle-line', color: 'info' },
+        { texto: 'Posible error de picking en bodega origen', icono: 'ri-focus-3-line', color: 'info' },
+        { texto: 'Diferencia entre lo enviado y documentado', icono: 'ri-exchange-line', color: 'warning' },
+        { texto: 'Mercaderia en mal estado general', icono: 'ri-spam-2-line', color: 'warning' },
+        { texto: 'Requiere revision detallada', icono: 'ri-search-eye-line', color: 'primary' },
     ];
-    
-    const sugerenciasHtml = sugerencias.map((s, i) => 
-        `<button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1 sugerencia-obs" data-texto="${s}">${s}</button>`
+
+    const sugerenciasHtml = sugerencias.map(s =>
+        `<button type="button" class="btn btn-outline-${s.color} text-start w-100 mb-2 py-2 px-3 btn-sugerencia-rapida" data-texto="${s.texto}" style="font-size:.85rem;">
+            <i class="${s.icono} me-2"></i>${s.texto}
+        </button>`
     ).join('');
-    
+
     Swal.fire({
-        title: '📝 Observación Masiva',
+        title: 'Observacion Masiva',
         html: `
             <div class="text-start">
                 ${resumenHtml}
-                
-                <div class="alert alert-info py-2 mb-3">
-                    <i class="bi bi-lightbulb me-2"></i>
-                    Se aplicará a <strong>${productosDesmarcados.length} productos desmarcados</strong>.
-                    ${productosSinObs.length > 0 ? `<br><small class="text-muted">${productosSinObs.length} aún no tienen observación.</small>` : ''}
-                </div>
-                
-                <label class="form-label fw-bold">Escribe o selecciona una observación:</label>
-                <textarea 
-                    id="observacionMasivaTexto" 
-                    class="swal2-input swal2-textarea" 
-                    rows="4" 
-                    placeholder="Describe el problema común de estos productos..."
-                    style="width: 100%; display: block; box-sizing: border-box; resize: vertical; margin-bottom: 8px;"
-                ></textarea>
-                
-                <div class="mb-2">
-                    <small class="text-muted">💡 Sugerencias rápidas:</small>
-                    <div class="mt-1">
-                        ${sugerenciasHtml}
-                    </div>
-                </div>
-                
-                <div class="border rounded p-2 bg-light" style="max-height: 120px; overflow-y: auto;">
-                    <small class="text-muted d-block mb-1"><strong>Productos afectados (desmarcados):</strong></small>
-                    <small>
-                        ${productosDesmarcados.map(p => {
-                            const tieneObs = p.observaciones && p.observaciones.trim() !== '';
-                            const icon = tieneObs ? '✅' : '⚠️';
-                            return `${icon} ${p.descripcion} (${p.sku}) - Talla ${p.talla}`;
-                        }).join('<br>')}
-                    </small>
+                <p class="text-muted mb-3" style="font-size:.85rem;">
+                    Se aplicara a <strong>${productosDesmarcados.length}</strong> productos desmarcados.
+                    Selecciona una observacion:
+                </p>
+                <div class="d-flex flex-column">
+                    ${sugerenciasHtml}
                 </div>
             </div>
         `,
-        icon: 'question',
         showCancelButton: true,
-        confirmButtonText: '<i class="bi bi-check-all me-1"></i>Aplicar a ' + productosDesmarcados.length + ' productos',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#ffc107',
-        width: '700px',
-        focusConfirm: false, // ✅ No enfocar el botón confirmar automáticamente
+        showConfirmButton: false,
+        cancelButtonText: 'Cerrar',
+        width: '550px',
         didOpen: () => {
-            // ✅ Enfocar el textarea cuando se abre
-            const textarea = document.getElementById('observacionMasivaTexto');
-            if (textarea) {
-                // Remover cualquier atributo disabled que pueda existir
-                textarea.removeAttribute('disabled');
-                textarea.removeAttribute('readonly');
-                setTimeout(() => {
-                    textarea.focus();
-                    textarea.click();
-                }, 150);
-            }
-            
-            // Agregar eventos a las sugerencias
-            document.querySelectorAll('.sugerencia-obs').forEach(btn => {
+            document.querySelectorAll('.btn-sugerencia-rapida').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const txtArea = document.getElementById('observacionMasivaTexto');
-                    txtArea.value = btn.dataset.texto;
-                    txtArea.focus(); // ✅ Mantener foco después de seleccionar sugerencia
+                    const observacion = btn.dataset.texto;
+
+                    let contador = 0;
+                    productosVerificacion.forEach(prod => {
+                        if (!prod.marcado_ok) {
+                            prod.observaciones = observacion;
+                            contador++;
+                        }
+                    });
+
+                    Swal.close();
+
+                    renderizarProductosVerificacion();
+                    actualizarResumenVerificacion();
+                    $('#alertaSinObservaciones').addClass('d-none');
+
+                    const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true });
+                    Toast.fire({ icon: 'success', title: `Observacion aplicada a ${contador} producto(s)` });
                 });
+            });
+        }
+    });
+
+    // Early return - no .then() needed since buttons handle everything
+    return;
+}
+
+// Array para productos no listados reportados
+let productosNoListados = [];
+
+function reportarProductoNoListado() {
+    Swal.fire({
+        title: 'Reportar producto no listado',
+        html: `
+            <div class="text-start">
+                <div class="alert alert-info py-2 mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Reporta un producto que llego en el despacho pero <strong>no esta documentado</strong> en el DTE.
+                    Este producto <strong>no ingresara al stock</strong> y quedara para regularizacion.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Descripcion del producto</label>
+                    <input type="text" id="noListadoDescripcion" class="form-control" placeholder="Ej: Polera negra talla M">
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label">SKU (si lo conoces)</label>
+                        <input type="text" id="noListadoSKU" class="form-control" placeholder="Opcional">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" id="noListadoCantidad" class="form-control" min="1" value="1">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="noListadoObservaciones" class="form-control" rows="2" placeholder="Detalle adicional..."></textarea>
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-plus-circle me-1"></i>Agregar Reporte',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0dcaf0',
+        width: '550px',
+        focusConfirm: false,
+        didOpen: () => {
+            const desc = document.getElementById('noListadoDescripcion');
+            if (desc) {
+                desc.removeAttribute('disabled');
+                desc.removeAttribute('readonly');
+                setTimeout(() => desc.focus(), 150);
+            }
+            // Asegurar que todos los inputs sean editables
+            document.querySelectorAll('#noListadoDescripcion, #noListadoSKU, #noListadoCantidad, #noListadoObservaciones').forEach(el => {
+                el.removeAttribute('disabled');
+                el.removeAttribute('readonly');
             });
         },
         preConfirm: () => {
-            const observacion = document.getElementById('observacionMasivaTexto').value.trim();
-            if (!observacion) {
-                Swal.showValidationMessage('⚠️ Debes ingresar una observación');
+            const descripcion = document.getElementById('noListadoDescripcion').value.trim();
+            if (!descripcion) {
+                Swal.showValidationMessage('Ingresa una descripcion del producto');
                 return false;
             }
-            return observacion;
+            return {
+                descripcion: descripcion,
+                sku: document.getElementById('noListadoSKU').value.trim() || 'NO-LISTADO',
+                cantidad: parseInt(document.getElementById('noListadoCantidad').value) || 1,
+                observaciones: document.getElementById('noListadoObservaciones').value.trim()
+            };
         }
     }).then(result => {
-        if (result.isConfirmed) {
-            const observacion = result.value;
-            
-            // ✅ Aplicar observación SOLO a productos DESMARCADOS
-            let contador = 0;
-            productosVerificacion.forEach(prod => {
-                if (!prod.marcado_ok) {
-                    prod.observaciones = observacion;
-                    contador++;
-                }
-            });
-            
-            // Actualizar vista
-            renderizarProductosVerificacion();
-            actualizarResumenVerificacion();
-            
-            // Ocultar alerta de productos sin observaciones
-            $('#alertaSinObservaciones').addClass('d-none');
-            
-            // Mensaje de confirmación
-            Swal.fire({
-                icon: 'success',
-                title: '✅ Observación Aplicada',
-                html: `
-                    <div class="text-center">
-                        <p>Se aplicó la observación a <strong>${contador}</strong> producto(s) desmarcados:</p>
-                        <div class="alert alert-success mb-3">
-                            <i class="bi bi-chat-left-text me-2"></i>
-                            <em>"${observacion}"</em>
-                        </div>
-                        <p class="text-muted mb-0">
-                            <i class="bi bi-bell me-1"></i>
-                            Esta información será enviada a la bodega emisora para su conocimiento y regularización.
-                        </p>
-                    </div>
-                `,
-                timer: 3000,
-                showConfirmButton: true,
-                confirmButtonText: 'Continuar'
-            });
-        }
+        if (!result.isConfirmed) return;
+        const data = result.value;
+
+        productosNoListados.push(data);
+
+        // Agregar como producto virtual en la lista de verificacion (desmarcado, sobrante)
+        productosVerificacion.push({
+            dte_producto_id: null,
+            sku: data.sku,
+            descripcion: data.descripcion + ' [NO LISTADO]',
+            articulo: '-',
+            color: '-',
+            marca: '-',
+            talla: '-',
+            cantidad_esperada: 0,
+            cantidad_recepcionada: 0,
+            cantidad_danada: 0,
+            cantidad_faltante: 0,
+            cantidad_sobrante: data.cantidad,
+            estado: 'RECEPCIONADO_SOBRANTE',
+            observaciones: `PRODUCTO NO LISTADO EN DTE: ${data.descripcion} x${data.cantidad}. ${data.observaciones}`,
+            marcado_ok: false,
+            es_no_listado: true
+        });
+
+        renderizarProductosVerificacion();
+        actualizarResumenVerificacion();
+
+        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true });
+        Toast.fire({ icon: 'success', title: `Producto no listado reportado: ${data.descripcion}` });
     });
 }
 
@@ -2501,7 +2594,7 @@ function limpiarBusqueda() {
 }
 
 function actualizarResumenVerificacion() {
-    let ok = 0, parcial = 0, danado = 0, faltante = 0;
+    let ok = 0, parcial = 0, danado = 0, faltante = 0, sobrante = 0;
     let verificados = 0;
     let productosSinObservaciones = 0;
     
@@ -2536,17 +2629,23 @@ function actualizarResumenVerificacion() {
                 if (cantidadBuena > 0) parcial += cantidadBuena;
                 if (cantidadFaltante > 0) faltante += cantidadFaltante;
                 break;
-            case 'FALTANTE': 
+            case 'FALTANTE':
                 // Faltante completo - todo a faltante
                 faltante += prod.cantidad_esperada;
                 break;
+            case 'RECEPCIONADO_SOBRANTE':
+                // Sobrante: cantidad documentada va a OK, sobrante se cuenta aparte
+                ok += Math.min(prod.cantidad_recepcionada, prod.cantidad_esperada);
+                sobrante += prod.cantidad_sobrante || 0;
+                break;
         }
     });
-    
+
     $('#resumenOK').text(ok);
     $('#resumenParcial').text(parcial);
     $('#resumenDanado').text(danado);
     $('#resumenFaltante').text(faltante);
+    if ($('#resumenSobrante').length) $('#resumenSobrante').text(sobrante);
     $('#contadorProductos').text(`${verificados} de ${productosVerificacion.length}`);
     
     // Actualizar barra de progreso
@@ -2609,13 +2708,14 @@ function abrirModalProblema(index) {
     $('#problemaProductoColor').text(prod.color || '-');
     $('#problemaProductoMarca').text(prod.marca || '-');
     $('#problemaCantidadEsperada').text(prod.cantidad_esperada);
-    $('#problemaCantidadRecepcionada').val(prod.cantidad_recepcionada);
+    $('#problemaCantidadRecepcionada').val(Math.min(prod.cantidad_recepcionada, prod.cantidad_esperada));
+    $('#problemaCantidadRecepcionada').attr('max', prod.cantidad_esperada);
     $('#problemaCantidadDanada').val(prod.cantidad_danada);
+    $('#problemaCantidadSobranteInput').val(prod.cantidad_sobrante || 0);
     $('#problemaObservaciones').val(prod.observaciones);
-    
-    // Calcular y mostrar estado inicial
+
     calcularFaltanteAutomatico();
-    
+
     modalProblema.show();
 }
 
@@ -2623,64 +2723,92 @@ function calcularFaltanteAutomatico() {
     const esperada = parseInt($('#problemaCantidadEsperada').text()) || 0;
     const recepcionada = parseInt($('#problemaCantidadRecepcionada').val()) || 0;
     const danada = parseInt($('#problemaCantidadDanada').val()) || 0;
-    
-    // ✅ VALIDACIÓN 1: Cantidad recepcionada no puede ser mayor a la esperada
+    const sobrante = parseInt($('#problemaCantidadSobranteInput').val()) || 0;
+
+    let hayError = false;
+
+    // Recepcionada no puede ser mayor a la esperada
+    $('#maxEsperadaLabel').text(esperada);
     if (recepcionada > esperada) {
         $('#errorCantidadRecepcionada').show();
         $('#problemaCantidadRecepcionada').addClass('is-invalid');
-        $('#btnGuardarProblema').prop('disabled', true);
+        hayError = true;
     } else {
         $('#errorCantidadRecepcionada').hide();
         $('#problemaCantidadRecepcionada').removeClass('is-invalid');
-        $('#btnGuardarProblema').prop('disabled', false);
     }
-    
-    // ✅ VALIDACIÓN 2: Cantidad dañada no puede ser mayor a la recepcionada
+
+    // Danada no puede ser mayor a la recepcionada
     if (danada > recepcionada) {
         $('#errorCantidadDanada').show();
         $('#problemaCantidadDanada').addClass('is-invalid');
-        $('#btnGuardarProblema').prop('disabled', true);
+        hayError = true;
     } else {
         $('#errorCantidadDanada').hide();
         $('#problemaCantidadDanada').removeClass('is-invalid');
     }
-    
-    // Auto-calcular faltante
+
+    $('#btnGuardarProblema').prop('disabled', hayError);
+
+    // Faltante = lo que no llego del DTE
     const faltante = Math.max(0, esperada - recepcionada);
-    const buenas = Math.max(0, recepcionada - danada);
-    
+
     $('#problemaCantidadFaltanteCalc').text(faltante);
     $('#problemaCantidadFaltante').val(faltante);
-    
-    // Auto-determinar estado
+    $('#problemaCantidadSobranteCalc').text(sobrante);
+    $('#problemaCantidadSobrante').val(sobrante);
+
+    // Mostrar/ocultar sobrante en resumen
+    if (sobrante > 0) {
+        $('#resumenSobranteRow').show();
+    } else {
+        $('#resumenSobranteRow').hide();
+    }
+    $('#resumenFaltanteRow').show();
+
+    // Determinar estado
     let estado = '';
     let estadoTexto = '';
-    
-    if (recepcionada === 0) {
+
+    if (recepcionada === 0 && sobrante === 0) {
         estado = 'FALTANTE';
-        estadoTexto = '<span class="badge bg-secondary">❌ FALTANTE</span>';
+        estadoTexto = '<span class="badge bg-secondary">FALTANTE</span>';
+    } else if (sobrante > 0 && faltante === 0 && danada === 0) {
+        estado = 'RECEPCIONADO_SOBRANTE';
+        estadoTexto = `<span class="badge bg-success">DTE OK</span> <span class="badge bg-info">+${sobrante} sobrante a regularizar</span>`;
+    } else if (sobrante > 0) {
+        // Tiene sobrante + algun otro problema
+        estado = faltante > 0 ? 'RECEPCIONADO_PARCIAL' : (danada > 0 ? 'RECEPCIONADO_DANADO' : 'RECEPCIONADO_SOBRANTE');
+        let badges = [];
+        if (faltante > 0) badges.push(`<span class="badge bg-warning">faltan ${faltante}</span>`);
+        if (danada > 0) badges.push(`<span class="badge bg-danger">${danada} danadas</span>`);
+        badges.push(`<span class="badge bg-info">+${sobrante} sobrante</span>`);
+        estadoTexto = badges.join(' ');
     } else if (recepcionada === esperada && danada === 0) {
         estado = 'RECEPCIONADO_OK';
-        estadoTexto = '<span class="badge bg-success">✅ RECEPCIONADO OK</span>';
-    } else if (danada > 0) {
+        estadoTexto = '<span class="badge bg-success">RECEPCIONADO OK</span>';
+    } else if (danada > 0 && faltante === 0) {
         estado = 'RECEPCIONADO_DANADO';
-        estadoTexto = `<span class="badge bg-danger">🔴 ${danada} DAÑADAS</span>`;
+        estadoTexto = `<span class="badge bg-danger">${danada} DANADAS</span>`;
+    } else if (danada > 0 && faltante > 0) {
+        estado = 'RECEPCIONADO_DANADO';
+        estadoTexto = `<span class="badge bg-danger">${danada} danadas</span> <span class="badge bg-warning">faltan ${faltante}</span>`;
     } else if (faltante > 0) {
         estado = 'RECEPCIONADO_PARCIAL';
-        estadoTexto = `<span class="badge bg-warning">⚠️ FALTAN ${faltante}</span>`;
+        estadoTexto = `<span class="badge bg-warning">FALTAN ${faltante}</span>`;
     } else {
         estado = 'RECEPCIONADO_OK';
-        estadoTexto = '<span class="badge bg-success">✅ OK</span>';
+        estadoTexto = '<span class="badge bg-success">OK</span>';
     }
-    
+
     $('#problemaEstado').val(estado);
     $('#problemaEstadoCalc').html(estadoTexto);
-    
-    // Mostrar resumen visual
-    $('#resumenAutocalculo').removeClass('alert-secondary alert-success alert-warning alert-danger')
+
+    $('#resumenAutocalculo').removeClass('alert-secondary alert-success alert-warning alert-danger alert-info')
                            .addClass(
                                estado === 'RECEPCIONADO_OK' ? 'alert-success' :
                                estado === 'FALTANTE' ? 'alert-secondary' :
+                               estado === 'RECEPCIONADO_SOBRANTE' ? 'alert-info' :
                                estado === 'RECEPCIONADO_DANADO' ? 'alert-danger' : 'alert-warning'
                            );
 }
@@ -2691,9 +2819,10 @@ function guardarProblema() {
     const prod = productosVerificacion[productoEditandoIndex];
     
     // Tomar valores del modal
-    prod.cantidad_recepcionada = parseInt($('#problemaCantidadRecepcionada').val()) || 0;
+    prod.cantidad_recepcionada = Math.min(parseInt($('#problemaCantidadRecepcionada').val()) || 0, prod.cantidad_esperada);
     prod.cantidad_danada = parseInt($('#problemaCantidadDanada').val()) || 0;
     prod.cantidad_faltante = parseInt($('#problemaCantidadFaltante').val()) || 0;
+    prod.cantidad_sobrante = parseInt($('#problemaCantidadSobranteInput').val()) || 0;
     prod.estado = $('#problemaEstado').val();
     prod.observaciones = $('#problemaObservaciones').val();
     prod.marcado_ok = (prod.estado === 'RECEPCIONADO_OK');
@@ -2754,11 +2883,13 @@ function confirmarRecepcion() {
         const parciales = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_PARCIAL').length;
         const danados = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_DANADO').length;
         const faltantes = productosDesmarcados.filter(p => p.estado === 'FALTANTE').length;
-        
+        const sobrantes = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_SOBRANTE' || (p.cantidad_sobrante && p.cantidad_sobrante > 0)).length;
+
         let detalleProblemas = '';
         if (faltantes > 0) detalleProblemas += `<li>${faltantes} faltante(s) completo(s)</li>`;
         if (parciales > 0) detalleProblemas += `<li>${parciales} parcial(es)</li>`;
         if (danados > 0) detalleProblemas += `<li>${danados} con productos dañados</li>`;
+        if (sobrantes > 0) detalleProblemas += `<li class="text-info">${sobrantes} con sobrantes (pendientes de decisión por bodega)</li>`;
         
         // Calcular totales de stock que se actualizará
         const totalOK = productosMarcadosOK.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
@@ -2863,106 +2994,98 @@ function rechazarRecepcion() {
         Swal.fire('Sin documento', 'Selecciona un documento.', 'warning');
         return;
     }
-    
-    // ✅ Sugerencias de motivos comunes
-    const sugerenciasRechazo = [
-        { texto: 'No llegó mercadería', icon: '📦' },
-        { texto: 'No corresponde a la tienda', icon: '🏪' },
-        { texto: 'Productos fallados', icon: '❌' },
-        { texto: 'Productos no corresponden', icon: '⚠️' },
-        { texto: 'Productos dañados en tránsito', icon: '📦' },
-        { texto: 'Cantidad incorrecta', icon: '🔢' }
+
+    const motivos = [
+        { texto: 'No llego mercaderia', icono: 'ri-inbox-unarchive-line', color: 'danger' },
+        { texto: 'No corresponde a esta tienda', icono: 'ri-store-line', color: 'danger' },
+        { texto: 'Productos completamente danados', icono: 'ri-error-warning-line', color: 'danger' },
+        { texto: 'Productos no corresponden a lo documentado', icono: 'ri-file-unknow-line', color: 'warning' },
+        { texto: 'Bultos abiertos o manipulados', icono: 'ri-lock-unlock-line', color: 'warning' },
+        { texto: 'Despacho duplicado', icono: 'ri-file-copy-line', color: 'secondary' },
     ];
-    
-    const sugerenciasHtml = sugerenciasRechazo.map(s => 
-        `<button type="button" class="btn btn-outline-danger btn-sm me-1 mb-1 sugerencia-rechazo" data-texto="${s.texto}">
-            ${s.icon} ${s.texto}
+
+    const motivosHtml = motivos.map(m =>
+        `<button type="button" class="btn btn-outline-${m.color} text-start w-100 mb-2 py-2 px-3 btn-motivo-rechazo" data-texto="${m.texto}" style="font-size:.85rem;">
+            <i class="${m.icono} me-2"></i>${m.texto}
         </button>`
     ).join('');
-    
+
     Swal.fire({
-        title: '❌ Rechazar Recepción',
+        title: 'Rechazar Recepcion',
         html: `
-            <div class="text-start mb-3">
-                <p><strong>¿Estás seguro que deseas rechazar esta recepción?</strong></p>
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    <strong>Atención:</strong> Esta acción implica:
+            <div class="text-start">
+                <div class="alert alert-danger py-2 mb-3" style="font-size:.85rem;">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>DTE #${documentoSeleccionado.numero_documento}</strong> sera rechazado.
+                    El stock no se modificara. Se notificara a la bodega emisora.
+                    <br><small class="text-muted">El emisor podra rehabilitar el DTE para reenviar.</small>
                 </div>
-                <ul class="text-muted small">
-                    <li>El DTE <strong>#${documentoSeleccionado.numero_documento}</strong> será marcado como rechazado</li>
-                    <li>El stock NO se incrementará en tu sucursal</li>
-                    <li>Debes ingresar un motivo del rechazo</li>
-                </ul>
-                
-                <label class="form-label fw-bold mb-2">
-                    <i class="bi bi-pencil-square me-1"></i>Motivo del rechazo (obligatorio)
-                </label>
-                <textarea 
-                    id="motivoRechazoTextarea" 
-                    class="swal2-input swal2-textarea mb-2" 
-                    rows="3" 
-                    placeholder="Describe el motivo del rechazo..."
-                    style="width: 100%; display: block; resize: vertical;"
-                ></textarea>
-                
-                <div class="mb-2">
-                    <small class="text-muted">💡 Sugerencias rápidas:</small>
-                    <div class="mt-1">
-                        ${sugerenciasHtml}
+                <p class="mb-2 fw-bold" style="font-size:.9rem;">Selecciona el motivo del rechazo:</p>
+                <div class="d-flex flex-column mb-3">
+                    ${motivosHtml}
+                </div>
+                <div class="border-top pt-2">
+                    <small class="text-muted d-block mb-1">O escribe uno personalizado:</small>
+                    <div class="input-group">
+                        <input type="text" id="motivoRechazoCustom" class="form-control form-control-sm" placeholder="Motivo personalizado...">
+                        <button class="btn btn-danger btn-sm" type="button" id="btnRechazoCustom">
+                            <i class="bi bi-x-circle me-1"></i>Rechazar
+                        </button>
                     </div>
                 </div>
             </div>
         `,
-        icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: '<i class="bi bi-x-circle me-1"></i>Sí, rechazar',
-        confirmButtonColor: '#dc3545',
+        showConfirmButton: false,
         cancelButtonText: 'Cancelar',
-        width: '650px',
+        width: '500px',
         focusConfirm: false,
         didOpen: () => {
-            const textarea = document.getElementById('motivoRechazoTextarea');
-            
-            if (textarea) {
-                // Enfocar el textarea
-                setTimeout(() => {
-                    textarea.focus();
-                }, 100);
-                
-                // Agregar eventos a las sugerencias
-                document.querySelectorAll('.sugerencia-rechazo').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const textoSugerido = this.dataset.texto;
-                        textarea.value = textoSugerido;
-                        textarea.focus(); // Mantener foco para que el usuario pueda editar
-                        
-                        // Feedback visual
-                        this.classList.remove('btn-outline-danger');
-                        this.classList.add('btn-danger');
-                        setTimeout(() => {
-                            this.classList.remove('btn-danger');
-                            this.classList.add('btn-outline-danger');
-                        }, 300);
-                    });
+            // Click en motivo rapido -> confirma rechazo directo
+            document.querySelectorAll('.btn-motivo-rechazo').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    Swal.close();
+                    confirmarRechazoFinal(btn.dataset.texto);
+                });
+            });
+
+            // Motivo personalizado
+            const inputCustom = document.getElementById('motivoRechazoCustom');
+            const btnCustom = document.getElementById('btnRechazoCustom');
+            if (inputCustom) {
+                inputCustom.removeAttribute('disabled');
+                inputCustom.removeAttribute('readonly');
+                setTimeout(() => inputCustom.focus(), 150);
+            }
+            if (btnCustom) {
+                btnCustom.addEventListener('click', () => {
+                    const motivo = inputCustom.value.trim();
+                    if (!motivo) { inputCustom.classList.add('is-invalid'); return; }
+                    Swal.close();
+                    confirmarRechazoFinal(motivo);
                 });
             }
-        },
-        preConfirm: () => {
-            const textarea = document.getElementById('motivoRechazoTextarea');
-            const motivo = textarea ? textarea.value.trim() : '';
-            
-            if (!motivo) {
-                Swal.showValidationMessage('⚠️ Debes ingresar un motivo del rechazo');
-                return false;
+            if (inputCustom) {
+                inputCustom.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { btnCustom.click(); }
+                });
             }
-            return motivo;
         }
+    });
+}
+
+function confirmarRechazoFinal(motivo) {
+    Swal.fire({
+        title: 'Confirmar rechazo',
+        html: `<p>Se rechazara el DTE <strong>#${documentoSeleccionado.numero_documento}</strong> con motivo:</p>
+               <div class="alert alert-danger py-2"><em>"${motivo}"</em></div>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Si, rechazar',
+        confirmButtonColor: '#dc3545',
+        cancelButtonText: 'Volver'
     }).then(result => {
-        if (!result.isConfirmed) return;
-        
-        const motivo = result.value;
-        procesarRechazo(motivo);
+        if (result.isConfirmed) procesarRechazo(motivo);
     });
 }
 
@@ -3015,22 +3138,36 @@ function procesarRechazo(motivo) {
 }
 
 function procesarRecepcion(incluirProblemas) {
-    const productosARecepcionar = incluirProblemas ? 
-        productosVerificacion : 
+    const productosARecepcionar = incluirProblemas ?
+        productosVerificacion :
         productosVerificacion.filter(p => p.estado === 'RECEPCIONADO_OK');
-    
+
+    // Separar productos del DTE vs no listados
+    const productosDTE = productosARecepcionar.filter(p => p.dte_producto_id);
+    const productosNoList = productosARecepcionar.filter(p => !p.dte_producto_id && p.es_no_listado);
+
+    // Construir observaciones generales incluyendo productos no listados
+    let obsGenerales = ($('#observacionesGenerales').val() || '').trim();
+    if (productosNoList.length > 0) {
+        const noListadoTexto = productosNoList.map(p =>
+            `PRODUCTO NO LISTADO: ${p.descripcion} x${p.cantidad_sobrante}. ${p.observaciones || ''}`
+        ).join(' | ');
+        obsGenerales = obsGenerales ? obsGenerales + ' | ' + noListadoTexto : noListadoTexto;
+    }
+
     const payload = {
         dte_id: documentoSeleccionado.id,
-        productos: productosARecepcionar.map(p => ({
+        productos: productosDTE.map(p => ({
             dte_producto_id: p.dte_producto_id,
             cantidad_esperada: p.cantidad_esperada,
-            cantidad_recepcionada: p.cantidad_recepcionada,
+            cantidad_recepcionada: Math.min(p.cantidad_recepcionada, p.cantidad_esperada),
             cantidad_danada: p.cantidad_danada,
-            cantidad_faltante: p.cantidad_faltante,
+            cantidad_faltante: p.cantidad_faltante || 0,
+            cantidad_sobrante: p.cantidad_sobrante || 0,
             estado: p.estado,
             observaciones: p.observaciones
         })),
-        observaciones_generales: $('#observacionesGenerales').val() || '',
+        observaciones_generales: obsGenerales,
         recepcion_completa: !incluirProblemas
     };
     
@@ -3057,11 +3194,13 @@ function procesarRecepcion(incluirProblemas) {
                 <div class="text-start">
                     <p>${response.message}</p>
                     <ul class="list-unstyled mt-3">
-                        <li class="text-success">✅ Productos OK: ${response.productos_ok}</li>
-                        ${response.productos_problemas > 0 ? 
-                            `<li class="text-warning">⚠️ Con problemas: ${response.productos_problemas}</li>` : ''}
-                        <li class="text-muted">📦 Total esperado: ${response.total_esperado}</li>
-                        <li class="text-muted">📥 Total recepcionado: ${response.total_recepcionado}</li>
+                        <li class="text-success">Productos OK: ${response.productos_ok}</li>
+                        ${response.productos_problemas > 0 ?
+                            `<li class="text-warning">Con problemas: ${response.productos_problemas}</li>` : ''}
+                        ${response.productos_sobrantes > 0 ?
+                            `<li class="text-info">Con sobrantes: ${response.productos_sobrantes} (pendientes de decisión por bodega)</li>` : ''}
+                        <li class="text-muted">Total esperado: ${response.total_esperado}</li>
+                        <li class="text-muted">Total recepcionado: ${response.total_recepcionado}</li>
                     </ul>
                     ${response.productos_problemas > 0 ? `
                         <div class="alert alert-info mt-3 mb-2">

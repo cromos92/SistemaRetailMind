@@ -33,7 +33,9 @@ from .models import (
     Ticket, Ticket_Productos, TicketDetallePago, TicketReferencia, Vendedor, Producto, Producto_Talla,
     Sucursal, EmpresaUser, Empresa, Movimientos_Producto, LoteProducto, Dte, Dte_Productos, Dte_Detalle_Pago,
     Correlativo, ESTADO_TICKET_CHOICES, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
-    ArqueoCaja, ESTADO_ARQUEO_CHOICES, GrupoDeposito, DepositoBancario, ConfiguracionPOS, TransaccionPOS, LogPOS,
+    ArqueoCaja, ESTADO_ARQUEO_CHOICES, RESULTADO_REVISION_CHOICES, GrupoDeposito, DepositoBancario,
+    ObservacionArqueo, LogAccionCaja, log_accion_caja,
+    ConfiguracionPOS, TransaccionPOS, LogPOS,
     TIPO_POS_CHOICES, ESTADO_TRANSACCION_POS_CHOICES, TIPO_TARJETA_CHOICES,
     # Modelos de Cambios y Devoluciones
     CambioDevolucion, CambioDevolucionDetalle, PagoCambioDevolucion, HistorialCambioDevolucion,
@@ -4474,6 +4476,14 @@ def cuadratura_caja(request):
     # Permiso de reabrir: administrador (siempre) o jefe_local/administracion (con tolerancia)
     puede_reabrir = rol_usuario in ['administrador', 'jefe_local', 'administracion']
 
+    # Tolerancia de días para crear arqueos hacia atrás
+    if rol_usuario in ('cajero', 'vendedor'):
+        dias_tolerancia_arqueo = 2
+    elif rol_usuario == 'jefe_local':
+        dias_tolerancia_arqueo = 3
+    else:
+        dias_tolerancia_arqueo = 30  # admin/administración: hasta 30 días
+
     context = {
         'sucursal_actual': sucursal_actual,
         'es_administrador': es_administrador,
@@ -4481,6 +4491,7 @@ def cuadratura_caja(request):
         'es_cajero': es_cajero,
         'puede_reabrir': puede_reabrir,
         'rol_usuario': rol_usuario or 'sin_rol',
+        'dias_tolerancia_arqueo': dias_tolerancia_arqueo,
         'qz_config': _get_qz_config(sucursal_actual_id),
     }
     return render(request, 'vistas/modulo_ventas/cuadraturaCaja.html', context)
@@ -4638,7 +4649,7 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     dtes_del_dia = Dte.objects.filter(
         sucursal=sucursal,
         fecha_emision=fecha_obj,
-        estado_dte='EMITIDO',
+        estado_dte__in=['EMITIDO', 'ACEPTADO'],
         tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION']
     ).prefetch_related('dte_asociado')
     
@@ -4777,7 +4788,6 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
 
 @login_required
 @require_POST
-@csrf_exempt
 def generar_cuadratura_caja(request):
     """Generar cuadratura de caja para una fecha específica"""
     try:
@@ -4800,7 +4810,15 @@ def generar_cuadratura_caja(request):
         
         # Usar la función helper para calcular los datos
         cuadratura_data = _calcular_cuadratura_data(sucursal, fecha_cuadratura)
-        
+
+        # Ocultar efectivo teórico para cajeros (anti-fraude: conteo ciego)
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario in ('cajero', 'vendedor'):
+            cuadratura_data['total_efectivo'] = None
+            cuadratura_data['modo_conteo_ciego'] = True
+        else:
+            cuadratura_data['modo_conteo_ciego'] = False
+
         return JsonResponse({
             'success': True,
             'cuadratura': cuadratura_data
@@ -4815,7 +4833,6 @@ def generar_cuadratura_caja(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def guardar_cuadratura_completa(request):
     """
     Guardar cuadratura de caja completa con depósitos bancarios
@@ -4894,7 +4911,8 @@ def guardar_cuadratura_completa(request):
             
             # Observaciones
             observaciones=observaciones,
-            
+
+            fondo_fijo_snapshot=sucursal.fondo_fijo_caja,
             fecha_cierre=timezone.now()
         )
         
@@ -4903,7 +4921,7 @@ def guardar_cuadratura_completa(request):
         
         # Ahora actualizar los campos que no deben ser recalculados usando update()
         # para evitar que el método save() recalcule el efectivo físico desde las denominaciones
-        diferencia_efectivo = efectivo_real - efectivo_teorico
+        diferencia_efectivo = efectivo_real - (efectivo_teorico + sucursal.fondo_fijo_caja)
         diferencia_transbank = cierre_pos - cuadratura_completa.get('total_transbank', 0)
         estado_final = 'CERRADO' if diferencia_efectivo == 0 and diferencia_transbank == 0 else 'CON_DIFERENCIAS'
         
@@ -4947,6 +4965,8 @@ def guardar_cuadratura_completa(request):
                 print(f"Error al crear depósito: {e}")
                 continue
         
+        log_accion_caja(request, 'GUARDAR_CONTEO', arqueo)
+
         return JsonResponse({
             'success': True,
             'message': '¡Cuadratura guardada exitosamente!',
@@ -5016,21 +5036,37 @@ def verificar_cuadratura_existente(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def eliminar_cuadratura(request, arqueo_id):
     """Eliminar una cuadratura existente"""
     try:
+        # Verificar permisos
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ('administrador', 'administracion'):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para eliminar cuadraturas. Se requiere rol de Administración o Administrador.'
+            }, status=403)
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        
+
         arqueo = get_object_or_404(
             ArqueoCaja,
             id=arqueo_id,
             sucursal_id=sucursal_id
         )
-        
+
+        if arqueo.estado not in ('ABIERTO',):
+            return JsonResponse({
+                'success': False,
+                'error': f'Solo se pueden eliminar arqueos en estado Abierto. Estado actual: {arqueo.get_estado_display()}'
+            })
+
         # Guardar info antes de eliminar
         fecha_arqueo = arqueo.fecha_arqueo.strftime('%d/%m/%Y')
-        
+
+        # Registrar auditoría antes de eliminar
+        log_accion_caja(request, 'ELIMINAR_ARQUEO', arqueo, fecha=fecha_arqueo)
+
         # Eliminar (los depósitos se eliminan automáticamente por CASCADE)
         arqueo.delete()
         
@@ -5191,11 +5227,14 @@ def listar_cuadraturas(request):
             # - La diferencia real es: (Físico + Depósitos) - Teórico
             total_efectivo_real = efectivo_fisico + total_depositos
             
-            # Diferencia de efectivo: Lo que realmente hay (físico + depósitos) vs lo teórico
-            diferencia_efectivo_actualizada = total_efectivo_real - efectivo_teorico_actualizado
-            
-            # Diferencia de cajero (solo informativa): Físico vs Teórico
-            diferencia_cajero = efectivo_fisico - efectivo_teorico_actualizado
+            # Considerar fondo fijo de caja chica
+            fondo_fijo = arqueo.fondo_fijo_snapshot
+
+            # Diferencia de efectivo: Lo que realmente hay (físico + depósitos) vs lo teórico + fondo fijo
+            diferencia_efectivo_actualizada = total_efectivo_real - (efectivo_teorico_actualizado + fondo_fijo)
+
+            # Diferencia de cajero (solo informativa): Físico vs (Teórico + Fondo Fijo)
+            diferencia_cajero = efectivo_fisico - (efectivo_teorico_actualizado + fondo_fijo)
             
             # Diferencia Transbank
             diferencia_transbank_actualizada = arqueo.cierre_pos_fisico - transbank_teorico_actualizado
@@ -5227,7 +5266,8 @@ def listar_cuadraturas(request):
                 'estado': arqueo.get_estado_display(),
                 'estado_codigo': arqueo.estado,
                 'observaciones': arqueo.observaciones,
-                'cantidad_depositos': arqueo.depositos.count()
+                'cantidad_depositos': arqueo.depositos.count(),
+                'fondo_fijo': fondo_fijo,
             }
             
             # Debug del primer arqueo
@@ -5359,10 +5399,10 @@ def obtener_detalle_arqueo(request, arqueo_id):
         dtes_del_dia = Dte.objects.filter(
             sucursal=sucursal,
             fecha_emision=fecha_obj,
-            estado_dte='EMITIDO',
+            estado_dte__in=['EMITIDO', 'ACEPTADO'],
             tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
         ).prefetch_related('dte_asociado')
-        
+
         for dte in dtes_del_dia:
             # Omitir pagos si el DTE ya fue contado por ticket asociado
             if dte.numero_documento in folios_tickets:
@@ -5513,7 +5553,22 @@ def obtener_detalle_arqueo(request, arqueo_id):
             'total_credito_externo_teorico': total_credito_externo_teorico,
             
             # Depósitos
-            'depositos': depositos_data
+            'depositos': depositos_data,
+            # Revisión
+            'resultado_revision': getattr(arqueo, 'resultado_revision', 'PENDIENTE'),
+            'observaciones_supervisor': arqueo.observaciones_supervisor or '',
+            'supervisor': arqueo.supervisor_revision.get_full_name() if arqueo.supervisor_revision else '',
+            'fecha_revision': arqueo.fecha_revision.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_revision else '',
+            # Bitácora
+            'bitacora': [{
+                'id': obs.id,
+                'tipo': obs.tipo,
+                'tipo_display': obs.get_tipo_display(),
+                'texto': obs.texto,
+                'usuario': obs.usuario.get_full_name() or obs.usuario.username,
+                'fecha': obs.fecha.strftime('%d/%m/%Y %H:%M'),
+                'visible_para_cajera': obs.visible_para_cajera,
+            } for obs in arqueo.bitacora.all()[:20]],
         }
         
         print(f"✅ Detalle de arqueo #{arqueo_id} - Valores RECALCULADOS en tiempo real")
@@ -5635,7 +5690,6 @@ def agregar_deposito_arqueo(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def eliminar_deposito_bancario(request):
     """Eliminar un depósito bancario específico"""
     try:
@@ -5715,7 +5769,6 @@ def eliminar_deposito_bancario(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def declarar_deposito(request):
     """
     El cajero declara un depósito con comprobante bancario.
@@ -5752,6 +5805,16 @@ def declarar_deposito(request):
 
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id, sucursal_id=sucursal_id)
 
+        # Validar que no se declare más de lo posible
+        from django.db.models import Sum
+        total_ya_declarado = arqueo.depositos.aggregate(total=Sum('monto_declarado'))['total'] or 0
+        max_depositable = arqueo.total_efectivo_fisico + arqueo.total_cheque_teorico
+        if max_depositable > 0 and (total_ya_declarado + monto_declarado) > max_depositable * 1.1:
+            return JsonResponse({
+                'success': False,
+                'error': f'El total declarado (${total_ya_declarado + monto_declarado:,}) excede el máximo depositable (${max_depositable:,})'
+            })
+
         from django.utils import timezone as tz
         deposito = DepositoBancario(
             arqueo=arqueo,
@@ -5771,6 +5834,8 @@ def declarar_deposito(request):
         if imagen_comprobante:
             deposito.imagen_comprobante = imagen_comprobante
         deposito.save()
+
+        log_accion_caja(request, 'DECLARAR_DEPOSITO', arqueo, monto=monto_declarado, tipo_medio=tipo_medio)
 
         return JsonResponse({
             'success': True,
@@ -5798,7 +5863,6 @@ def declarar_deposito(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def finalizar_declaracion(request):
     """
     El cajero señala que terminó de declarar todos sus depósitos (efectivo, cheque, etc.)
@@ -5918,6 +5982,8 @@ def confirmar_deposito(request, deposito_id):
         deposito.verificado_por = request.user
         deposito.fecha_verificacion = tz.now()
         deposito.save()
+
+        log_accion_caja(request, 'CONFIRMAR_DEPOSITO', deposito.arqueo, monto=monto_confirmado)
 
         arqueo = deposito.arqueo
         total_depositos = arqueo.total_depositos
@@ -6607,6 +6673,25 @@ def listar_arqueos(request):
         total_diferencia_efectivo = sum(a.diferencia_efectivo for a in arqueos_mes)
         total_diferencia_transbank = sum(a.diferencia_transbank for a in arqueos_mes)
         
+        # Indicadores adicionales para control de depósitos y revisión
+        arqueos_revisados = arqueos_mes.filter(estado='REVISADO').count()
+        arqueos_sin_revision = arqueos_mes.exclude(estado__in=['ABIERTO', 'REVISADO']).count()
+        depositos_pendientes_conf = DepositoBancario.objects.filter(
+            arqueo__sucursal_id=sucursal_id,
+            arqueo__fecha_arqueo__gte=primer_dia_mes,
+            verificado=False,
+            monto_declarado__gt=0
+        ).count()
+        # Total depositado vs teórico del mes (control real)
+        from django.db.models import Sum
+        total_depositado_mes = DepositoBancario.objects.filter(
+            arqueo__sucursal_id=sucursal_id,
+            arqueo__fecha_arqueo__gte=primer_dia_mes,
+            arqueo__fecha_arqueo__lte=hoy,
+            verificado=True,
+        ).aggregate(total=Sum('monto_confirmado'))['total'] or 0
+        total_teorico_efectivo_mes = sum(a.total_efectivo_teorico for a in arqueos_mes)
+
         indicadores_mensuales = {
             'mes_actual': hoy.strftime('%B %Y'),
             'dias_habiles': total_dias_habiles,
@@ -6616,9 +6701,17 @@ def listar_arqueos(request):
             'arqueos_con_diferencias': arqueos_con_diferencias,
             'arqueos_cerrados': arqueos_cerrados,
             'porcentaje_cumplimiento': round((arqueos_realizados / total_dias_habiles * 100) if total_dias_habiles > 0 else 0, 1),
-            'dias_faltantes': [d.strftime('%Y-%m-%d') for d in dias_faltantes[:10]],  # Solo últimos 10
+            'dias_faltantes': [d.strftime('%Y-%m-%d') for d in dias_faltantes[:10]],
             'total_diferencia_efectivo': total_diferencia_efectivo,
             'total_diferencia_transbank': total_diferencia_transbank,
+            # Nuevos indicadores
+            'arqueos_revisados': arqueos_revisados,
+            'arqueos_sin_revision': arqueos_sin_revision,
+            'porcentaje_revisados': round((arqueos_revisados / arqueos_realizados * 100) if arqueos_realizados > 0 else 0, 1),
+            'depositos_pendientes_confirmacion': depositos_pendientes_conf,
+            'total_depositado_mes': total_depositado_mes,
+            'total_teorico_efectivo_mes': total_teorico_efectivo_mes,
+            'diferencia_depositos_mes': total_depositado_mes - total_teorico_efectivo_mes,
         }
         
         print(f"📊 Indicadores mes: {indicadores_mensuales}")
@@ -6687,6 +6780,28 @@ def listar_arqueos(request):
                 'depositos_pendientes': arqueo.depositos.filter(verificado=False, monto_declarado__gt=0).count(),
                 'tiene_depositos': arqueo.depositos.filter(monto_declarado__gt=0).exists(),
                 'reaperturas': arqueo.historial_reaperturas.count(),
+                # === CONTROL POR DEPÓSITO BANCARIO (control real) ===
+                'total_deposito_efectivo': arqueo.total_depositado_efectivo_verificado,
+                'total_deposito_cheque': arqueo.total_depositado_cheque_verificado,
+                'diferencia_deposito_vs_teorico': arqueo.diferencia_deposito_vs_teorico,
+                'diferencia_cheques_vs_teorico': arqueo.diferencia_cheques_vs_teorico,
+                'estado_deposito': arqueo.estado_deposito,
+                # === REVISIÓN Y URGENCIA ===
+                'dias_sin_revision': arqueo.dias_sin_revision,
+                'requiere_revision_urgente': arqueo.requiere_revision_urgente,
+                # === METADATA CONTEO ===
+                'modo_conteo': arqueo.modo_conteo,
+                'requiere_revision_express': arqueo.requiere_revision_express,
+                'fondo_fijo': arqueo.fondo_fijo_snapshot,
+                # === OBSERVACIONES ===
+                'observaciones_diferencia': arqueo.observaciones_diferencia or '',
+                'categoria_diferencia': arqueo.categoria_diferencia or '',
+                'observaciones_supervisor': arqueo.observaciones_supervisor or '',
+                # === RESULTADO REVISIÓN ===
+                'resultado_revision': getattr(arqueo, 'resultado_revision', 'PENDIENTE'),
+                'resultado_revision_display': dict(RESULTADO_REVISION_CHOICES).get(getattr(arqueo, 'resultado_revision', 'PENDIENTE'), 'Pendiente'),
+                'cantidad_observaciones': arqueo.bitacora.count() if hasattr(arqueo, 'bitacora') else 0,
+                'ultima_obs_supervisor': '',
             })
         
         return JsonResponse({
@@ -6711,10 +6826,16 @@ def listar_arqueos(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def corregir_arqueos_express(request):
     """Corregir arqueos que fueron guardados incorrectamente en modo Express"""
     try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario != 'administrador':
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo el Administrador puede usar la corrección express.'
+            }, status=403)
+
         data = json.loads(request.body)
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         
@@ -6753,6 +6874,7 @@ def corregir_arqueos_express(request):
                     diferencia_efectivo=0
                 )
                 corregidos += 1
+                log_accion_caja(request, 'CORREGIR_EXPRESS', arqueo)
                 print(f"✅ Corregido arqueo ID {arqueo.id}: Físico {0} -> {arqueo.total_efectivo_teorico}")
         
         return JsonResponse({
@@ -6775,7 +6897,6 @@ def corregir_arqueos_express(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def crear_arqueo(request):
     """Crear nuevo arqueo basado en la cuadratura actual"""
     try:
@@ -6790,20 +6911,48 @@ def crear_arqueo(request):
             })
         
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        
+
+        # Validar que la fecha no sea futura y esté dentro del rango permitido por rol
+        from datetime import datetime, date as dt_date
+        fecha_obj = datetime.strptime(fecha_arqueo, '%Y-%m-%d').date()
+        hoy = dt_date.today()
+
+        if fecha_obj > hoy:
+            return JsonResponse({
+                'success': False,
+                'error': 'No puede crear arqueos para fechas futuras'
+            })
+
+        dias_atras = (hoy - fecha_obj).days
+        rol_usuario = getattr(request.user, 'rol', None)
+
+        # Tolerancia por rol: cajero/vendedor=2 días, jefe_local=3, admin/administración=sin límite
+        if rol_usuario in ('cajero', 'vendedor'):
+            max_dias = 2
+        elif rol_usuario == 'jefe_local':
+            max_dias = 3
+        else:  # administrador, administracion
+            max_dias = 0  # sin límite
+
+        if max_dias > 0 and dias_atras > max_dias:
+            return JsonResponse({
+                'success': False,
+                'error': f'Solo puede crear arqueos de los últimos {max_dias} días. Han pasado {dias_atras} días.'
+            })
+
         # Verificar si ya existe un arqueo para esta fecha
         arqueo_existente = ArqueoCaja.objects.filter(
             fecha_arqueo=fecha_arqueo,
             sucursal=sucursal
         ).first()
-        
+
         if arqueo_existente:
             return JsonResponse({
                 'success': False,
                 'error': f'Ya existe un arqueo para el {fecha_arqueo}',
                 'arqueo_id': arqueo_existente.id
             })
-        
+
         # Generar cuadratura en tiempo real para obtener los datos
         from django.test import RequestFactory
         factory = RequestFactory()
@@ -6872,10 +7021,13 @@ def crear_arqueo(request):
             cantidad_facturas_exentas=to_int(cuadratura_data.get('cantidad_facturas_exentas', 0)),
             
             venta_total_teorica=to_int(cuadratura_data.get('venta_total', 0)),
-            
+
+            fondo_fijo_snapshot=sucursal.fondo_fijo_caja,
             estado='ABIERTO'
         )
         
+        log_accion_caja(request, 'GENERAR_CUADRATURA', arqueo)
+
         return JsonResponse({
             'success': True,
             'message': 'Arqueo creado exitosamente',
@@ -6897,7 +7049,6 @@ def crear_arqueo(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def guardar_conteo_fisico(request):
     """Guardar conteo físico del arqueo"""
     try:
@@ -6975,7 +7126,12 @@ def guardar_conteo_fisico(request):
             arqueo.monedas_1 = int(data.get('monedas_1', 0))
             
             print(f"📊 Modo Detallado: Calculando desde denominaciones")
-        
+
+        arqueo.timestamp_conteo_fisico = timezone.now()
+        arqueo.modo_conteo = 'EXPRESS' if modo_express else 'DETALLADO'
+        if modo_express:
+            arqueo.requiere_revision_express = True
+
         # Observaciones
         arqueo.observaciones = data.get('observaciones', '')
         arqueo.observaciones_diferencia = data.get('observaciones_diferencia', '')
@@ -7040,7 +7196,9 @@ def guardar_conteo_fisico(request):
         
         # Recargar el objeto para obtener los valores actualizados
         arqueo.refresh_from_db()
-        
+
+        log_accion_caja(request, 'GUARDAR_CONTEO', arqueo)
+
         return JsonResponse({
             'success': True,
             'message': 'Conteo guardado exitosamente',
@@ -7072,7 +7230,6 @@ def guardar_conteo_fisico(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def cerrar_arqueo(request):
     """Cerrar arqueo definitivamente"""
     try:
@@ -7107,10 +7264,11 @@ def cerrar_arqueo(request):
         if diferencia_absoluta == 0:
             print("✅ Arqueo perfecto - Sin diferencias")
         elif diferencia_absoluta > 500:
-            if not arqueo.observaciones_diferencia or len(arqueo.observaciones_diferencia.strip()) < 10:
+            obs = (arqueo.observaciones_diferencia or '').strip()
+            if len(obs) < 20 or len(set(obs.split())) < 3:
                 return JsonResponse({
                     'success': False,
-                    'error': f'Debe agregar observaciones detalladas para diferencias mayores a $500 (actual: ${diferencia_absoluta:,})'
+                    'error': f'Debe agregar observaciones detalladas (mínimo 20 caracteres y 3 palabras distintas) para diferencias mayores a $500 (actual: ${diferencia_absoluta:,})'
                 })
         else:
             print(f"ℹ️ Diferencia menor - No requiere observaciones obligatorias: ${diferencia_absoluta}")
@@ -7135,7 +7293,9 @@ def cerrar_arqueo(request):
         arqueo.refresh_from_db()
         
         print(f"✅ Arqueo cerrado exitosamente - Estado final: {arqueo.estado}")
-        
+
+        log_accion_caja(request, 'CERRAR_ARQUEO', arqueo)
+
         return JsonResponse({
             'success': True,
             'message': 'Arqueo cerrado exitosamente',
@@ -7165,14 +7325,12 @@ def cerrar_arqueo(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def revisar_arqueo(request):
     """
     Revisar y aprobar un arqueo (solo supervisores: administración/administrador)
-    Cambia el estado a REVISADO y registra quién lo revisó
+    Soporta resultado_revision: OK, OK_CON_OBS, REQUIERE_ACCION
     """
     try:
-        # Verificar permisos de supervisor
         rol_usuario = getattr(request.user, 'rol', None)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         
@@ -7185,7 +7343,8 @@ def revisar_arqueo(request):
         data = json.loads(request.body)
         arqueo_id = data.get('arqueo_id')
         observaciones_supervisor = data.get('observaciones', '')
-        aprobar = data.get('aprobar', True)  # True = aprobar, False = marcar como pendiente
+        aprobar = data.get('aprobar', True)
+        resultado = data.get('resultado_revision', '')
         
         if not arqueo_id:
             return JsonResponse({
@@ -7195,28 +7354,62 @@ def revisar_arqueo(request):
         
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
         
-        # Actualizar arqueo con revisión
-        nuevo_estado = 'REVISADO' if aprobar else 'PENDIENTE_REVISION'
+        if resultado == 'REQUIERE_ACCION':
+            if not observaciones_supervisor or len(observaciones_supervisor.strip()) < 10:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Debe explicar qué acción se requiere (mínimo 10 caracteres).'
+                })
+            nuevo_estado = arqueo.estado
+            resultado_rev = 'REQUIERE_ACCION'
+            accion_texto = 'marcado como requiere acción'
+        elif resultado == 'OK_CON_OBS':
+            if not observaciones_supervisor:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Debe incluir observaciones al aprobar con notas.'
+                })
+            nuevo_estado = 'REVISADO'
+            resultado_rev = 'OK_CON_OBS'
+            accion_texto = 'aprobado con observaciones'
+        elif resultado == 'OK' or aprobar:
+            nuevo_estado = 'REVISADO'
+            resultado_rev = 'OK'
+            accion_texto = 'aprobado'
+        else:
+            nuevo_estado = arqueo.estado
+            resultado_rev = 'PENDIENTE'
+            accion_texto = 'marcado como pendiente de revisión'
         
         ArqueoCaja.objects.filter(id=arqueo.id).update(
             estado=nuevo_estado,
             supervisor_revision=request.user,
             fecha_revision=timezone.now(),
-            observaciones_supervisor=observaciones_supervisor
+            observaciones_supervisor=observaciones_supervisor,
+            resultado_revision=resultado_rev
         )
+        
+        if observaciones_supervisor:
+            ObservacionArqueo.objects.create(
+                arqueo=arqueo,
+                usuario=request.user,
+                tipo='SUPERVISOR',
+                texto=observaciones_supervisor,
+                visible_para_cajera=True
+            )
         
         arqueo.refresh_from_db()
         
-        accion = 'aprobado' if aprobar else 'marcado como pendiente de revisión'
-        print(f"✅ Arqueo ID {arqueo_id} {accion} por {request.user.username}")
-        
+        log_accion_caja(request, 'REVISAR_ARQUEO', arqueo)
+
         return JsonResponse({
             'success': True,
-            'message': f'Arqueo {accion} exitosamente',
+            'message': f'Arqueo {accion_texto} exitosamente',
             'arqueo': {
                 'id': arqueo.id,
                 'estado': arqueo.estado,
                 'estado_display': arqueo.get_estado_display(),
+                'resultado_revision': arqueo.resultado_revision,
                 'supervisor': request.user.username,
                 'fecha_revision': arqueo.fecha_revision.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_revision else ''
             }
@@ -7236,7 +7429,208 @@ def revisar_arqueo(request):
 
 @login_required
 @require_POST
-@csrf_exempt
+def crear_observacion_arqueo(request):
+    """Agregar observación a la bitácora de un arqueo (cajera o supervisor)."""
+    try:
+        data = json.loads(request.body)
+        arqueo_id = data.get('arqueo_id')
+        texto = (data.get('texto') or '').strip()
+
+        if not arqueo_id or not texto:
+            return JsonResponse({'success': False, 'error': 'Arqueo y texto son requeridos.'})
+        if len(texto) < 5:
+            return JsonResponse({'success': False, 'error': 'La observación debe tener al menos 5 caracteres.'})
+
+        arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
+
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
+        tipo = 'SUPERVISOR' if es_supervisor else 'CAJERA'
+        visible = data.get('visible_para_cajera', True)
+
+        obs = ObservacionArqueo.objects.create(
+            arqueo=arqueo,
+            usuario=request.user,
+            tipo=tipo,
+            texto=texto,
+            visible_para_cajera=visible,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Observación registrada.',
+            'observacion': {
+                'id': obs.id,
+                'tipo': obs.tipo,
+                'tipo_display': obs.get_tipo_display(),
+                'texto': obs.texto,
+                'usuario': request.user.get_full_name() or request.user.username,
+                'fecha': obs.fecha.strftime('%d/%m/%Y %H:%M'),
+                'visible_para_cajera': obs.visible_para_cajera,
+            }
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def obtener_bitacora_arqueo(request, arqueo_id):
+    """Obtener la bitácora completa de observaciones de un arqueo."""
+    try:
+        arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
+
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
+
+        qs = arqueo.bitacora.select_related('usuario').all()
+        if not es_supervisor:
+            qs = qs.filter(visible_para_cajera=True)
+
+        observaciones = [{
+            'id': obs.id,
+            'tipo': obs.tipo,
+            'tipo_display': obs.get_tipo_display(),
+            'texto': obs.texto,
+            'usuario': obs.usuario.get_full_name() or obs.usuario.username,
+            'fecha': obs.fecha.strftime('%d/%m/%Y %H:%M'),
+            'visible_para_cajera': obs.visible_para_cajera,
+        } for obs in qs[:50]]
+
+        return JsonResponse({
+            'success': True,
+            'observaciones': observaciones,
+            'resultado_revision': getattr(arqueo, 'resultado_revision', 'PENDIENTE'),
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def obtener_bloqueos_arqueo(request, fecha):
+    """Retornar lista de bloqueos activos para cerrar un día."""
+    try:
+        from datetime import date as dt_date
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'Sin sucursal.'})
+
+        fecha_obj = dt_date.fromisoformat(fecha)
+        bloqueos = []
+        completados = []
+
+        try:
+            arqueo = ArqueoCaja.objects.get(fecha_arqueo=fecha_obj, sucursal_id=sucursal_id)
+        except ArqueoCaja.DoesNotExist:
+            bloqueos.append({
+                'codigo': 'SIN_ARQUEO',
+                'titulo': 'Arqueo no iniciado',
+                'descripcion': 'No se ha creado el arqueo para este día.',
+                'bloqueante': True,
+                'icono': 'ri-calendar-close-line',
+            })
+            return JsonResponse({'success': True, 'bloqueos': bloqueos, 'completados': completados})
+
+        tiene_conteo = arqueo.total_efectivo_fisico > 0 or arqueo.modo_conteo == 'EXPRESS'
+        if arqueo.estado == 'ABIERTO' and not tiene_conteo:
+            bloqueos.append({
+                'codigo': 'SIN_CONTEO',
+                'titulo': 'Falta conteo de efectivo',
+                'descripcion': 'Debe contar el efectivo físico en caja.',
+                'bloqueante': True,
+                'icono': 'ri-money-dollar-circle-line',
+            })
+        else:
+            completados.append({
+                'codigo': 'CONTEO_OK',
+                'titulo': 'Conteo de efectivo realizado',
+                'icono': 'ri-check-line',
+            })
+
+        if abs(arqueo.diferencia_efectivo) > 500 and not arqueo.observaciones_diferencia:
+            bloqueos.append({
+                'codigo': 'SIN_EXPLICACION',
+                'titulo': 'Diferencia > $500 sin explicar',
+                'descripcion': f'Diferencia de ${abs(arqueo.diferencia_efectivo):,}. Debe agregar observaciones (min 20 chars, 3 palabras).',
+                'bloqueante': True,
+                'icono': 'ri-error-warning-line',
+            })
+        elif abs(arqueo.diferencia_efectivo) > 500:
+            completados.append({
+                'codigo': 'EXPLICACION_OK',
+                'titulo': 'Diferencia explicada',
+                'icono': 'ri-check-line',
+            })
+
+        if arqueo.estado in ['CERRADO', 'CON_DIFERENCIAS', 'DEPOSITO_DECLARADO', 'DEPOSITO_CONFIRMADO', 'REVISADO']:
+            completados.append({
+                'codigo': 'CIERRE_OK',
+                'titulo': 'Arqueo cerrado',
+                'icono': 'ri-check-double-line',
+            })
+        elif arqueo.estado == 'ABIERTO':
+            bloqueos.append({
+                'codigo': 'SIN_CIERRE',
+                'titulo': 'Arqueo aún abierto',
+                'descripcion': 'Complete el conteo y cierre el arqueo.',
+                'bloqueante': False,
+                'icono': 'ri-lock-line',
+            })
+
+        tiene_deposito = arqueo.depositos.filter(monto_declarado__gt=0).exists() or arqueo.depositos.filter(verificado=True).exists()
+        deposito_confirmado = arqueo.depositos.filter(verificado=True).exists()
+        if deposito_confirmado:
+            completados.append({
+                'codigo': 'DEPOSITO_OK',
+                'titulo': 'Depósito confirmado',
+                'icono': 'ri-bank-line',
+            })
+        elif tiene_deposito:
+            completados.append({
+                'codigo': 'DEPOSITO_DECLARADO',
+                'titulo': 'Depósito declarado (pendiente confirmación)',
+                'icono': 'ri-time-line',
+            })
+        elif arqueo.estado not in ['ABIERTO']:
+            bloqueos.append({
+                'codigo': 'SIN_DEPOSITO',
+                'titulo': 'Depósito pendiente',
+                'descripcion': 'Declare el depósito bancario del efectivo.',
+                'bloqueante': False,
+                'icono': 'ri-bank-line',
+            })
+
+        resultado_rev = getattr(arqueo, 'resultado_revision', 'PENDIENTE')
+        if resultado_rev == 'REQUIERE_ACCION':
+            ultima_obs = arqueo.bitacora.filter(tipo='SUPERVISOR').first()
+            bloqueos.append({
+                'codigo': 'REQUIERE_ACCION',
+                'titulo': 'El supervisor requiere acción',
+                'descripcion': ultima_obs.texto[:120] if ultima_obs else 'Revise las observaciones del supervisor.',
+                'bloqueante': False,
+                'icono': 'ri-alarm-warning-line',
+            })
+        elif resultado_rev in ['OK', 'OK_CON_OBS']:
+            completados.append({
+                'codigo': 'REVISION_OK',
+                'titulo': 'Revisado por supervisor',
+                'icono': 'ri-shield-check-line',
+            })
+
+        return JsonResponse({
+            'success': True,
+            'bloqueos': bloqueos,
+            'completados': completados,
+            'estado': arqueo.estado,
+            'resultado_revision': resultado_rev,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
 def registrar_comprobante_supervisor(request):
     """
     Registrar comprobante de pago bancario (solo supervisores)
@@ -7333,7 +7727,6 @@ def registrar_comprobante_supervisor(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def verificar_deposito(request):
     """
     Verificar un depósito bancario (solo supervisores)
@@ -7542,7 +7935,6 @@ def verificar_ventas_post_cierre(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def reabrir_arqueo(request):
     """
     Reabrir un arqueo cerrado para incluir ventas post-cierre.
@@ -7628,6 +8020,8 @@ def reabrir_arqueo(request):
             estado_anterior=estado_anterior,
             justificacion=justificacion,
         )
+
+        log_accion_caja(request, 'REABRIR_ARQUEO', arqueo, justificacion=justificacion)
 
         # Reabrir el arqueo
         arqueo.estado = 'ABIERTO'
@@ -7760,7 +8154,6 @@ def reabrir_arqueo(request):
 
 @login_required
 @require_POST
-@csrf_exempt
 def cancelar_arqueo(request):
     """Cancelar un arqueo abierto (eliminar)"""
     try:
@@ -7809,6 +8202,41 @@ def cancelar_arqueo(request):
             'success': False,
             'error': f'Error al cancelar arqueo: {str(e)}'
         })
+
+
+@login_required
+@require_GET
+def analisis_fraude_caja(request):
+    """
+    Análisis de patrones sospechosos en arqueos de caja.
+    Solo accesible para administrador/administración.
+    """
+    try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ('administrador', 'administracion'):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para ver el análisis de fraude.'
+            }, status=403)
+
+        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        usuario_id = request.GET.get('usuario_id')
+        meses = int(request.GET.get('meses', 3))
+
+        from app.services.analisis_caja import AnalisisFraudeCaja
+        servicio = AnalisisFraudeCaja()
+
+        if usuario_id:
+            resultado = servicio.analizar_cajero(int(usuario_id), sucursal_id, meses)
+            return JsonResponse({'success': True, 'tipo': 'cajero', 'analisis': resultado})
+        elif sucursal_id:
+            resultados = servicio.analizar_sucursal(int(sucursal_id), meses)
+            return JsonResponse({'success': True, 'tipo': 'sucursal', 'analisis': resultados})
+        else:
+            return JsonResponse({'success': False, 'error': 'Se requiere sucursal_id o usuario_id'})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error en análisis: {str(e)}'})
 
 
 @login_required
@@ -7921,9 +8349,20 @@ def obtener_arqueo_detalle(request, arqueo_id):
             'supervisor': arqueo.supervisor_revision.username if arqueo.supervisor_revision else '',
             'fecha_revision': arqueo.fecha_revision.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_revision else '',
             'observaciones_supervisor': arqueo.observaciones_supervisor or '',
+            'resultado_revision': getattr(arqueo, 'resultado_revision', 'PENDIENTE'),
             
             # Fechas
             'fecha_cierre': arqueo.fecha_cierre.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_cierre else '',
+            
+            # Bitácora visible para cajera
+            'bitacora': [{
+                'id': obs.id,
+                'tipo': obs.tipo,
+                'tipo_display': obs.get_tipo_display(),
+                'texto': obs.texto,
+                'usuario': obs.usuario.get_full_name() or obs.usuario.username,
+                'fecha': obs.fecha.strftime('%d/%m/%Y %H:%M'),
+            } for obs in arqueo.bitacora.filter(visible_para_cajera=True)[:20]],
         }
         
         return JsonResponse({
@@ -9065,6 +9504,13 @@ def gestion_cambios_devoluciones(request):
             'observaciones': ticket.observaciones or '',
         })
     
+    # Contar pendientes de revisión gerencial
+    revision_pendiente_count = CambioDevolucion.objects.filter(
+        sucursal=sucursal_actual,
+        requiere_revision_gerencial=True,
+        revisado_por_gerencia__isnull=True,
+    ).count()
+
     context = {
         'sucursal_actual': sucursal_actual,
         'tipo_operacion_choices': TIPO_OPERACION_CAMBIO_CHOICES,
@@ -9075,6 +9521,8 @@ def gestion_cambios_devoluciones(request):
         'tickets_cambio_pendientes': tickets_cambio_data,
         'total_tickets_pendientes': len(tickets_cambio_data),
         'qz_config': _get_qz_config(sucursal_actual_id),
+        'user_rol': getattr(request.user, 'rol', ''),
+        'revision_pendiente_count': revision_pendiente_count,
     }
     return render(request, 'vistas/modulo_ventas/gestion_cambios_devoluciones.html', context)
 
@@ -9102,27 +9550,21 @@ def listar_cambios_devoluciones(request):
 
         # Construir queryset base
         queryset = CambioDevolucion.objects.select_related(
-            'ticket_original', 'ticket_nuevo', 'sucursal', 'solicitado_por', 'aprobado_por'
+            'ticket_original', 'ticket_nuevo', 'sucursal', 'solicitado_por', 'aprobado_por',
+            'autorizado_por_usuario', 'revisado_por_gerencia',
         ).prefetch_related(
             'detalles__producto_original__ProductoTalla__producto',
             'detalles__producto_nuevo__producto',
             'pagos'
         ).filter(sucursal_id=sucursal_id)
 
-        # Aplicar filtros
+        # Aplicar filtros (fecha, tipo, búsqueda — sin estado todavía)
         if fecha_desde:
             queryset = queryset.filter(fecha_solicitud__date__gte=fecha_desde)
         if fecha_hasta:
             queryset = queryset.filter(fecha_solicitud__date__lte=fecha_hasta)
         if tipo_operacion:
             queryset = queryset.filter(tipo_operacion=tipo_operacion)
-        if estado:
-            if estado == 'CANCELADO':
-                queryset = queryset.filter(estado__in=['CANCELADO', 'RECHAZADO', 'REVERTIDO'])
-            elif estado == 'EJECUTADO_COBRO_PENDIENTE':
-                queryset = queryset.filter(estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'])
-            else:
-                queryset = queryset.filter(estado=estado)
         if buscar:
             queryset = queryset.filter(
                 Q(numero_operacion__icontains=buscar) |
@@ -9132,6 +9574,25 @@ def listar_cambios_devoluciones(request):
                 Q(observaciones_cliente__icontains=buscar) |
                 Q(observaciones_vendedor__icontains=buscar)
             )
+
+        # Conteos por estado (antes de aplicar filtro de estado del tab)
+        conteos_tab = {
+            'todos': queryset.count(),
+            'solicitados': queryset.filter(estado='SOLICITADO').count(),
+            'aprobados': queryset.filter(estado='APROBADO').count(),
+            'por_cobrar': queryset.filter(estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']).count(),
+            'completados': queryset.filter(estado='COMPLETADO').count(),
+            'cancelados': queryset.filter(estado__in=['CANCELADO', 'RECHAZADO', 'REVERTIDO']).count(),
+        }
+
+        # Ahora aplicar filtro de estado del tab activo
+        if estado:
+            if estado == 'CANCELADO':
+                queryset = queryset.filter(estado__in=['CANCELADO', 'RECHAZADO', 'REVERTIDO'])
+            elif estado == 'EJECUTADO_COBRO_PENDIENTE':
+                queryset = queryset.filter(estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'])
+            else:
+                queryset = queryset.filter(estado=estado)
 
         # Paginación
         paginator = Paginator(queryset, per_page)
@@ -9216,19 +9677,33 @@ def listar_cambios_devoluciones(request):
                 'cobro_pendiente': cambio.cobro_pendiente,
                 'devolucion_pendiente': cambio.devolucion_pendiente,
                 'tiene_obligacion_pendiente': cambio.tiene_obligacion_pendiente,
+                # Nuevos campos de trazabilidad
+                'es_fuera_de_plazo': cambio.es_fuera_de_plazo,
+                'dias_fuera_de_plazo': cambio.dias_fuera_de_plazo,
+                'tipo_cambio_especial': cambio.tipo_cambio_especial,
+                'es_autorizacion_cross_branch': cambio.es_autorizacion_cross_branch,
+                'es_cambio_concepto': cambio.es_cambio_concepto,
+                'autorizado_por_usuario': cambio.autorizado_por_usuario.get_full_name() if cambio.autorizado_por_usuario else None,
+                'score_riesgo': cambio.score_riesgo,
+                'requiere_revision_gerencial': cambio.requiere_revision_gerencial,
+                'revisado_por_gerencia': cambio.revisado_por_gerencia.get_full_name() if cambio.revisado_por_gerencia else None,
             })
 
-        # Estadísticas
-        total_cambios = queryset.count()
-        cambios_pendientes = queryset.filter(estado='SOLICITADO').count()
-        cambios_completados = queryset.filter(estado='COMPLETADO').count()
         total_diferencia = queryset.aggregate(
             total=Sum('diferencia_monto')
         )['total'] or 0
 
+        cambios_fuera_plazo = queryset.filter(es_fuera_de_plazo=True).count()
+        cambios_cross_branch = queryset.filter(es_autorizacion_cross_branch=True).count()
+        cambios_revision_pendiente = queryset.filter(
+            requiere_revision_gerencial=True,
+            revisado_por_gerencia__isnull=True,
+        ).count()
+
         return JsonResponse({
             'success': True,
             'cambios': cambios_data,
+            'conteos_tab': conteos_tab,
             'pagination': {
                 'current_page': cambios_page.number,
                 'total_pages': paginator.num_pages,
@@ -9237,12 +9712,15 @@ def listar_cambios_devoluciones(request):
                 'has_previous': cambios_page.has_previous(),
             },
             'estadisticas': {
-                'total_cambios': total_cambios,
-                'cambios_pendientes': cambios_pendientes,
-                'cambios_aprobados': queryset.filter(estado='APROBADO').count(),
-                'cambios_por_cobrar': queryset.filter(estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']).count(),
-                'cambios_completados': cambios_completados,
+                'total_cambios': conteos_tab['todos'],
+                'cambios_pendientes': conteos_tab['solicitados'],
+                'cambios_aprobados': conteos_tab['aprobados'],
+                'cambios_por_cobrar': conteos_tab['por_cobrar'],
+                'cambios_completados': conteos_tab['completados'],
                 'total_diferencia': float(total_diferencia),
+                'cambios_fuera_plazo': cambios_fuera_plazo,
+                'cambios_cross_branch': cambios_cross_branch,
+                'cambios_revision_pendiente': cambios_revision_pendiente,
             }
         })
 
@@ -9443,11 +9921,19 @@ def crear_cambio_devolucion(request):
         fuera_de_plazo = timezone.now().date() > fecha_limite
         
         # Permitir cambios fuera de plazo SOLO con autorización de supervisor
-        codigo_autorizacion = data.get('codigo_autorizacion_supervisor')
+        supervisor_username = data.get('supervisor_username', '').strip()
+        supervisor_password = data.get('supervisor_password', '')
+        # Retrocompatibilidad: si solo viene codigo_autorizacion_supervisor, usar como password
+        if not supervisor_password and data.get('codigo_autorizacion_supervisor'):
+            supervisor_password = data.get('codigo_autorizacion_supervisor')
         supervisor_autorizo = False
-        
+        supervisor = None
+        dias_fuera = 0
+
         if fuera_de_plazo:
-            if not codigo_autorizacion:
+            dias_fuera = (timezone.now().date() - fecha_limite).days
+
+            if not supervisor_password:
                 return JsonResponse({
                     'success': False,
                     'error': f'El plazo para cambios venció el {fecha_limite.strftime("%d/%m/%Y")}',
@@ -9455,29 +9941,47 @@ def crear_cambio_devolucion(request):
                     'fecha_limite': fecha_limite.strftime('%d/%m/%Y'),
                     'fecha_compra': fecha_base_plazo.strftime('%d/%m/%Y'),
                     'dias_transcurridos': (timezone.now().date() - fecha_base_plazo).days,
+                    'dias_fuera_de_plazo': dias_fuera,
                 })
-            
+
             from django.contrib.auth import authenticate
             from django.contrib.auth.models import User
-            
-            supervisor = None
-            try:
-                users = User.objects.filter(is_active=True)
-                for user in users:
-                    if user.check_password(codigo_autorizacion):
-                        if getattr(user, 'rol', '') in ['administrador', 'administracion', 'jefe_local'] or user.groups.filter(name__in=['Supervisor', 'Administrador', 'Encargado', 'Gerente']).exists():
-                            supervisor = user
+
+            # Autenticación segura con username directo (O(1) en vez de O(n))
+            if supervisor_username:
+                supervisor = authenticate(username=supervisor_username, password=supervisor_password)
+            else:
+                # Fallback: intentar con username más comunes (email, rut)
+                for field in ['username', 'email']:
+                    try:
+                        user_obj = User.objects.filter(
+                            is_active=True, **{field: supervisor_password}
+                        ).first()
+                        if user_obj:
                             break
-            except Exception:
-                pass
-            
+                    except Exception:
+                        pass
+                # Si no se proporcionó username, autenticar por password con intento limitado
+                if not supervisor:
+                    supervisor = authenticate(username=supervisor_username, password=supervisor_password) if supervisor_username else None
+
+            if supervisor:
+                # Verificar rol de supervisor
+                rol = getattr(supervisor, 'rol', '')
+                tiene_rol = rol in ['administrador', 'administracion', 'jefe_local']
+                tiene_grupo = supervisor.groups.filter(
+                    name__in=['Supervisor', 'Administrador', 'Encargado', 'Gerente']
+                ).exists()
+                if not tiene_rol and not tiene_grupo:
+                    supervisor = None
+
             if not supervisor:
                 return JsonResponse({
                     'success': False,
-                    'error': 'Código de autorización inválido o el usuario no tiene permisos de supervisor',
+                    'error': 'Credenciales inválidas o el usuario no tiene permisos de supervisor. Ingrese usuario y contraseña del supervisor.',
                     'requiere_autorizacion': True,
                 })
-            
+
             supervisor_autorizo = True
         
         # Validar que no existan cambios con obligaciones financieras pendientes para este ticket
@@ -9502,9 +10006,16 @@ def crear_cambio_devolucion(request):
             })
         
         with transaction.atomic():
-            # Calcular monto_original basado en el precio efectivo (con descuento aplicado)
-            monto_original_calculado = 0
+            # Cambios por concepto: monto viene directamente del frontend
+            es_concepto = tipo_operacion in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO')
+            if es_concepto:
+                monto_original_calculado = int(data.get('concepto_monto_original', 0))
+            else:
+                # Calcular monto_original basado en el precio efectivo (con descuento aplicado)
+                monto_original_calculado = 0
             for item in productos_cambio:
+                if es_concepto:
+                    break  # No iterar productos para cambios por concepto
                 try:
                     ticket_producto = Ticket_Productos.objects.get(
                         idTicket=ticket_original,
@@ -9520,7 +10031,62 @@ def crear_cambio_devolucion(request):
             obs_vendedor = data.get('observaciones_vendedor', '')
             if supervisor_autorizo:
                 obs_vendedor = f'[AUTORIZADO FUERA DE PLAZO por {supervisor.get_full_name() or supervisor.username}] {obs_vendedor}'.strip()
-            
+
+            # Determinar tipo especial y cross-branch
+            tipo_especial = 'NORMAL'
+            es_cross_branch = False
+            sucursal_supervisor = None
+
+            if fuera_de_plazo:
+                tipo_especial = 'FUERA_PLAZO'
+
+            if tipo_operacion in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO'):
+                tipo_especial = 'CONCEPTO'
+
+            if supervisor:
+                # Obtener sucursal del supervisor
+                try:
+                    from .models import PerfilUsuario
+                    perfil_sup = getattr(supervisor, 'perfil', None)
+                    if perfil_sup:
+                        sucursal_supervisor = perfil_sup.sucursal
+                    if not sucursal_supervisor:
+                        sucursal_supervisor = getattr(supervisor, 'sucursal', None)
+                except Exception:
+                    pass
+                es_cross_branch = sucursal_supervisor and sucursal_supervisor.id != sucursal.id
+
+            # Crear registro de autorización con trazabilidad completa
+            registro_auth = None
+            if supervisor_autorizo:
+                from .models import RegistroAutorizacion
+                registro_auth = RegistroAutorizacion.objects.create(
+                    usuario_solicitante=request.user,
+                    usuario_autorizador=supervisor,
+                    tipo_operacion='APROBACION_CAMBIO',
+                    descripcion=f'Autorización fuera de plazo ({dias_fuera} días) por {supervisor.get_full_name() or supervisor.username}',
+                    ip_origen=request.META.get('REMOTE_ADDR'),
+                    exitoso=True,
+                    sucursal_solicitante=sucursal,
+                    sucursal_autorizador=sucursal_supervisor,
+                    es_cross_branch=es_cross_branch,
+                    requiere_revision=es_cross_branch or dias_fuera > 15,
+                    datos_adicionales={
+                        'dias_fuera_de_plazo': dias_fuera,
+                        'fecha_limite': fecha_limite.strftime('%Y-%m-%d'),
+                        'fecha_compra': fecha_base_plazo.strftime('%Y-%m-%d'),
+                        'supervisor_username': supervisor.username,
+                        'supervisor_sucursal': str(sucursal_supervisor) if sucursal_supervisor else None,
+                    }
+                )
+
+            # Determinar si requiere revisión gerencial (auto-escalamiento)
+            requiere_revision = (
+                fuera_de_plazo or
+                es_cross_branch or
+                monto_original_calculado > 200000  # Umbral configurable
+            )
+
             cambio = CambioDevolucion.objects.create(
                 ticket_original=ticket_original,
                 sucursal=sucursal,
@@ -9531,8 +10097,26 @@ def crear_cambio_devolucion(request):
                 observaciones_vendedor=obs_vendedor,
                 solicitado_por=request.user,
                 requiere_autorizacion=True if supervisor_autorizo else data.get('requiere_autorizacion', False),
-                fecha_limite_cambio=fecha_limite
+                fecha_limite_cambio=fecha_limite,
+                # Nuevos campos de trazabilidad
+                autorizado_por_usuario=supervisor if supervisor_autorizo else None,
+                sucursal_autorizador=sucursal_supervisor if supervisor_autorizo else None,
+                es_autorizacion_cross_branch=es_cross_branch,
+                es_fuera_de_plazo=fuera_de_plazo,
+                dias_fuera_de_plazo=dias_fuera if fuera_de_plazo else 0,
+                tipo_cambio_especial=tipo_especial,
+                registro_autorizacion=registro_auth,
+                es_cambio_concepto=tipo_operacion in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO'),
+                concepto_descripcion=data.get('concepto_descripcion', ''),
+                concepto_monto_original=data.get('concepto_monto_original'),
+                documento_referencia_legacy=data.get('documento_referencia_legacy', ''),
+                requiere_revision_gerencial=requiere_revision,
             )
+
+            # Vincular registro de autorización al cambio
+            if registro_auth:
+                registro_auth.cambio_devolucion = cambio
+                registro_auth.save(update_fields=['cambio_devolucion'])
             
             # Procesar productos
             monto_nuevo_total = 0
@@ -9750,7 +10334,22 @@ def obtener_detalle_cambio(request, cambio_id):
             # Políticas
             'requiere_autorizacion': cambio.requiere_autorizacion,
             'autorizado_excepcion': cambio.autorizado_excepcion,
-            
+
+            # Trazabilidad y control
+            'es_fuera_de_plazo': cambio.es_fuera_de_plazo,
+            'dias_fuera_de_plazo': cambio.dias_fuera_de_plazo,
+            'tipo_cambio_especial': cambio.tipo_cambio_especial,
+            'es_autorizacion_cross_branch': cambio.es_autorizacion_cross_branch,
+            'es_cambio_concepto': cambio.es_cambio_concepto,
+            'concepto_descripcion': cambio.concepto_descripcion or '',
+            'autorizado_por_usuario': cambio.autorizado_por_usuario.get_full_name() if cambio.autorizado_por_usuario else None,
+            'sucursal_autorizador': cambio.sucursal_autorizador.alias if cambio.sucursal_autorizador else None,
+            'score_riesgo': cambio.score_riesgo,
+            'requiere_revision_gerencial': cambio.requiere_revision_gerencial,
+            'revisado_por_gerencia': cambio.revisado_por_gerencia.get_full_name() if cambio.revisado_por_gerencia else None,
+            'fecha_revision_gerencia': cambio.fecha_revision_gerencia.strftime('%d/%m/%Y %H:%M') if cambio.fecha_revision_gerencia else None,
+            'notas_revision_gerencia': cambio.notas_revision_gerencia or '',
+
             # Tickets
             'ticket_original': {
                 'correlativo': cambio.ticket_original.correlativo,
@@ -11545,24 +12144,25 @@ def buscar_documento_cambio(request):
                     )
                 
             # 🔄 SEGUIR LA CADENA DE CAMBIOS HASTA EL TICKET MÁS RECIENTE
+            # Incluye COMPLETADO y estados ejecutados con ticket_nuevo existente
             ticket_actual = ticket_referencia
             tickets_visitados = set()
             ticket_original_correlativo = ticket_referencia.correlativo
-            
+
             while ticket_actual.id not in tickets_visitados:
                 tickets_visitados.add(ticket_actual.id)
-                
-                cambio_completado = CambioDevolucion.objects.filter(
+
+                cambio_siguiente = CambioDevolucion.objects.filter(
                     ticket_original=ticket_actual,
-                    estado='COMPLETADO',
+                    estado__in=['COMPLETADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'],
                     ticket_nuevo__isnull=False
-                ).order_by('-fecha_completado').first()
-                
-                if cambio_completado and cambio_completado.ticket_nuevo:
-                    ticket_actual = cambio_completado.ticket_nuevo
+                ).order_by('-fecha_ejecucion', '-fecha_completado').first()
+
+                if cambio_siguiente and cambio_siguiente.ticket_nuevo:
+                    ticket_actual = cambio_siguiente.ticket_nuevo
                 else:
                     break
-            
+
             ticket_referencia = ticket_actual  # Usar el ticket más reciente
             fue_redirigido_dte = (ticket_referencia.correlativo != ticket_original_correlativo)
             
@@ -11726,65 +12326,82 @@ def buscar_documento_cambio(request):
                 })
             
             # Seguir la cadena de cambios hasta el ticket más reciente
+            # Incluye COMPLETADO y estados ejecutados con ticket_nuevo existente
             ticket_actual = ticket
             tickets_visitados = set()
             ticket_original_correlativo = ticket.correlativo
-            
+
             while ticket_actual.id not in tickets_visitados:
                 tickets_visitados.add(ticket_actual.id)
-                
-                cambio_completado = CambioDevolucion.objects.filter(
+
+                cambio_siguiente = CambioDevolucion.objects.filter(
                     ticket_original=ticket_actual,
-                    estado='COMPLETADO',
+                    estado__in=['COMPLETADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'],
                     ticket_nuevo__isnull=False
-                ).order_by('-fecha_completado').first()
-                
-                if cambio_completado and cambio_completado.ticket_nuevo:
-                    print(f"🔄 Ticket Cambio #{ticket_actual.correlativo} → Siguiente: #{cambio_completado.ticket_nuevo.correlativo}")
-                    ticket_actual = cambio_completado.ticket_nuevo
+                ).order_by('-fecha_ejecucion', '-fecha_completado').first()
+
+                if cambio_siguiente and cambio_siguiente.ticket_nuevo:
+                    print(f"🔄 Ticket #{ticket_actual.correlativo} → Siguiente: #{cambio_siguiente.ticket_nuevo.correlativo} (estado: {cambio_siguiente.estado})")
+                    ticket_actual = cambio_siguiente.ticket_nuevo
                 else:
                     break
-            
+
             fue_redirigido = (ticket_actual.correlativo != ticket_original_correlativo)
             ticket = ticket_actual
-            
-            # Verificar estado y plazo
-            if ticket.estado != 'PAGADO':
+
+            # Verificar estado y plazo - permitir PAGADO y PENDIENTE (tickets de cambio pueden estar pendientes)
+            if ticket.estado not in ('PAGADO', 'PENDIENTE'):
                 return JsonResponse({
                     'success': False,
-                    'error': 'El ticket referenciado no está pagado. No se puede procesar.'
+                    'error': f'El ticket referenciado está en estado "{ticket.get_estado_display()}". No se puede procesar.'
                 })
-            
+
             from datetime import timedelta
-            fecha_limite = ticket.fecha + timedelta(days=30)
+            fecha_limite = ticket.fecha + timedelta(days=30) if ticket.fecha else timezone.now().date() + timedelta(days=30)
             dentro_del_plazo = timezone.now().date() <= fecha_limite
-            
+
             # Obtener productos disponibles
+            # Filtrar precio > 0 para excluir ítems de devolución (precio negativo) de cambios anteriores
             productos_data = []
-            for tp in ticket.ticket_productos.all():
+            productos_disponibles_count = 0
+
+            for tp in ticket.ticket_productos.filter(precio__gt=0, stock__gt=0):
+                if tp.ProductoTalla is None:
+                    continue
+
                 cantidad_ya_cambiada = CambioDevolucionDetalle.objects.filter(
                     producto_original=tp,
                     cambio_devolucion__estado__in=['SOLICITADO', 'APROBADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'COMPLETADO']
                 ).aggregate(
                     total=Sum('cantidad_original')
                 )['total'] or 0
-                
-                cantidad_disponible = tp.stock - cantidad_ya_cambiada
-                
-                if cantidad_disponible > 0 and tp.ProductoTalla is not None:
-                    productos_data.append({
-                        'id': tp.id,
-                        'sku': tp.ProductoTalla.sku,
-                        'articulo': tp.ProductoTalla.producto.articulo if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
-                        'descripcion': tp.ProductoTalla.producto.descripcion if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
-                        'talla': tp.ProductoTalla.talla,
-                        'cantidad_original': tp.stock,
-                        'cantidad_ya_cambiada': cantidad_ya_cambiada,
-                        'cantidad_disponible': cantidad_disponible,
-                        'precio_unitario': float(tp.precio),
-                        'subtotal': float(tp.subtotal),
-                    })
-            
+
+                cantidad_disponible = max(0, tp.stock - cantidad_ya_cambiada)
+
+                if cantidad_disponible > 0:
+                    productos_disponibles_count += 1
+
+                # Incluir TODOS los productos (disponibles y ya cambiados) para visibilidad
+                descuento = tp.descuento_unitario or 0
+                precio_pagado = tp.precio - descuento
+
+                productos_data.append({
+                    'id': tp.id,
+                    'sku': tp.ProductoTalla.sku,
+                    'articulo': tp.ProductoTalla.producto.articulo if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
+                    'descripcion': tp.ProductoTalla.producto.descripcion if tp.ProductoTalla.producto else (tp.descripcion_linea or ''),
+                    'talla': tp.ProductoTalla.talla,
+                    'cantidad_original': tp.stock,
+                    'cantidad_ya_cambiada': cantidad_ya_cambiada,
+                    'cantidad_disponible': cantidad_disponible,
+                    'precio_unitario': float(precio_pagado),
+                    'precio_lista': float(tp.precio),
+                    'descuento_unitario': float(descuento),
+                    'tiene_descuento': descuento > 0,
+                    'subtotal': float(precio_pagado * tp.stock),
+                    'ya_cambiado': cantidad_disponible == 0,
+                })
+
             # Obtener cambios anteriores
             cambios_anteriores = []
             for cambio in ticket.cambios_devoluciones.all():
@@ -11815,9 +12432,9 @@ def buscar_documento_cambio(request):
                     'dentro_del_plazo': dentro_del_plazo,
                     'dias_transcurridos': (timezone.now().date() - ticket.fecha).days,
                     'productos': productos_data,
-                    'productos_disponibles': len(productos_data),
+                    'productos_disponibles': productos_disponibles_count,
                     'cambios_anteriores': cambios_anteriores,
-                    'puede_cambiar': len(productos_data) > 0,
+                    'puede_cambiar': productos_disponibles_count > 0,
                 }
             })
         
@@ -12888,6 +13505,418 @@ def obtener_analisis_cambios_devoluciones(request):
             'success': False,
             'error': f'Error al obtener análisis de cambios: {str(e)}'
         }, status=500)
+
+
+@require_GET
+@login_required
+def obtener_analisis_fraude_cambios(request):
+    """
+    API para obtener análisis de detección de fraude en cambios y devoluciones.
+    Solo accesible para administradores, jefes locales y administración.
+    """
+    try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
+            return JsonResponse({'success': False, 'error': 'No tiene permisos para acceder a esta información'}, status=403)
+
+        from .services.fraud_detection import (
+            detectar_vendedores_alto_retorno,
+            detectar_productos_multiples_cambios,
+            detectar_perdidas_no_apto,
+            detectar_cambios_fuera_plazo,
+            detectar_patrones_cross_branch,
+        )
+
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
+
+        if fecha_inicio and fecha_fin:
+            from datetime import datetime
+            fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+        else:
+            fecha_fin = timezone.now().date()
+            fecha_inicio = fecha_fin - timedelta(days=30)
+
+        vendedores = detectar_vendedores_alto_retorno(sucursal_id, fecha_inicio, fecha_fin)
+        productos = detectar_productos_multiples_cambios(sucursal_id, fecha_inicio, fecha_fin)
+        perdidas = detectar_perdidas_no_apto(sucursal_id, fecha_inicio, fecha_fin)
+        fuera_plazo = detectar_cambios_fuera_plazo(sucursal_id, fecha_inicio, fecha_fin)
+        cross_branch = detectar_patrones_cross_branch(fecha_inicio, fecha_fin)
+
+        alertas_vendedores = len([v for v in vendedores if v['alerta']])
+        alertas_productos = len(productos)
+        alertas_total = alertas_vendedores + alertas_productos + (1 if perdidas['total_items'] > 0 else 0) + (1 if fuera_plazo['total'] > 0 else 0) + (1 if cross_branch['pendientes_revision'] > 0 else 0)
+
+        return JsonResponse({
+            'success': True,
+            'alertas_total': alertas_total,
+            'vendedores_alto_retorno': vendedores[:10],
+            'productos_multiples_cambios': productos[:10],
+            'perdidas_no_apto': perdidas,
+            'cambios_fuera_plazo': fuera_plazo,
+            'patrones_cross_branch': cross_branch,
+            'periodo': {
+                'fecha_inicio': fecha_inicio.strftime('%Y-%m-%d'),
+                'fecha_fin': fecha_fin.strftime('%Y-%m-%d'),
+            },
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': f'Error al obtener análisis de fraude: {str(e)}'}, status=500)
+
+
+@require_GET
+@login_required
+def obtener_analisis_cambios_avanzado(request):
+    """
+    API para obtener análisis avanzado completo de cambios y devoluciones.
+    Solo accesible para administradores, jefes locales y administración.
+    """
+    try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
+            return JsonResponse({'success': False, 'error': 'No tiene permisos para acceder a esta información'}, status=403)
+
+        from .services.fraud_detection import obtener_analisis_avanzado
+
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
+
+        if fecha_inicio and fecha_fin:
+            from datetime import datetime
+            fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+        else:
+            fecha_fin = timezone.now().date()
+            fecha_inicio = fecha_fin - timedelta(days=30)
+
+        analisis = obtener_analisis_avanzado(sucursal_id, fecha_inicio, fecha_fin)
+        analisis['success'] = True
+        return JsonResponse(analisis)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': f'Error: {str(e)}'}, status=500)
+
+
+@require_GET
+@login_required
+def listar_autorizaciones_cross_branch(request):
+    """
+    Lista autorizaciones cross-branch para revisión gerencial.
+    """
+    try:
+        from .models import RegistroAutorizacion
+
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
+            return JsonResponse({'success': False, 'error': 'No tiene permisos'}, status=403)
+
+        estado = request.GET.get('estado', 'todos')
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+
+        qs = RegistroAutorizacion.objects.filter(
+            es_cross_branch=True, exitoso=True,
+        ).select_related(
+            'usuario_solicitante', 'usuario_autorizador',
+            'sucursal_solicitante', 'sucursal_autorizador',
+            'cambio_devolucion', 'revisado_por',
+        ).order_by('-fecha_hora')
+
+        if estado == 'pendientes':
+            qs = qs.filter(requiere_revision=True, revisado_por__isnull=True)
+        elif estado == 'revisados':
+            qs = qs.filter(revisado_por__isnull=False)
+
+        if fecha_desde:
+            qs = qs.filter(fecha_hora__date__gte=fecha_desde)
+        if fecha_hasta:
+            qs = qs.filter(fecha_hora__date__lte=fecha_hasta)
+
+        registros = []
+        for r in qs[:50]:
+            registros.append({
+                'id': r.id,
+                'fecha': r.fecha_hora.strftime('%d/%m/%Y %H:%M'),
+                'usuario_solicitante': r.usuario_solicitante.get_full_name() or r.usuario_solicitante.username if r.usuario_solicitante else 'N/A',
+                'usuario_autorizador': r.usuario_autorizador.get_full_name() or r.usuario_autorizador.username if r.usuario_autorizador else 'N/A',
+                'sucursal_solicitante': r.sucursal_solicitante.alias if r.sucursal_solicitante else 'N/A',
+                'sucursal_autorizador': r.sucursal_autorizador.alias if r.sucursal_autorizador else 'N/A',
+                'tipo_operacion': r.get_tipo_operacion_display(),
+                'descripcion': r.descripcion,
+                'cambio_id': r.cambio_devolucion_id,
+                'cambio_numero': r.cambio_devolucion.numero_operacion if r.cambio_devolucion else None,
+                'requiere_revision': r.requiere_revision,
+                'revisado': r.revisado_por is not None,
+                'revisado_por': r.revisado_por.get_full_name() if r.revisado_por else None,
+                'fecha_revision': r.fecha_revision.strftime('%d/%m/%Y %H:%M') if r.fecha_revision else None,
+                'notas_revision': r.notas_revision,
+            })
+
+        pendientes = RegistroAutorizacion.objects.filter(
+            es_cross_branch=True, exitoso=True,
+            requiere_revision=True, revisado_por__isnull=True,
+        ).count()
+
+        return JsonResponse({
+            'success': True,
+            'registros': registros,
+            'pendientes_revision': pendientes,
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def revisar_autorizacion(request, registro_id):
+    """Marca una autorización cross-branch como revisada."""
+    try:
+        from .models import RegistroAutorizacion
+
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
+            return JsonResponse({'success': False, 'error': 'No tiene permisos'}, status=403)
+
+        registro = RegistroAutorizacion.objects.get(id=registro_id)
+        data = json.loads(request.body)
+
+        registro.revisado_por = request.user
+        registro.fecha_revision = timezone.now()
+        registro.notas_revision = data.get('notas', '')
+        registro.save(update_fields=['revisado_por', 'fecha_revision', 'notas_revision'])
+
+        return JsonResponse({'success': True, 'mensaje': 'Autorización marcada como revisada'})
+    except RegistroAutorizacion.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Registro no encontrado'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_GET
+@login_required
+def obtener_cola_revision_gerencial(request):
+    """Obtiene la cola de cambios que requieren revisión gerencial."""
+    try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
+            return JsonResponse({'success': False, 'error': 'No tiene permisos'}, status=403)
+
+        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
+
+        qs = CambioDevolucion.objects.filter(
+            requiere_revision_gerencial=True,
+            revisado_por_gerencia__isnull=True,
+        ).select_related(
+            'ticket_original', 'sucursal', 'solicitado_por', 'autorizado_por_usuario',
+        ).order_by('-fecha_solicitud')
+
+        if sucursal_id:
+            qs = qs.filter(sucursal_id=sucursal_id)
+
+        items = []
+        for c in qs[:50]:
+            items.append({
+                'id': c.id,
+                'numero_operacion': c.numero_operacion,
+                'tipo_operacion': c.get_tipo_operacion_display(),
+                'estado': c.get_estado_display(),
+                'monto_original': float(c.monto_original),
+                'diferencia_monto': float(c.diferencia_monto),
+                'es_fuera_de_plazo': c.es_fuera_de_plazo,
+                'dias_fuera_de_plazo': c.dias_fuera_de_plazo,
+                'es_cross_branch': c.es_autorizacion_cross_branch,
+                'tipo_especial': c.tipo_cambio_especial,
+                'score_riesgo': c.score_riesgo,
+                'solicitado_por': c.solicitado_por.get_full_name() or c.solicitado_por.username,
+                'autorizado_por': c.autorizado_por_usuario.get_full_name() if c.autorizado_por_usuario else None,
+                'sucursal': c.sucursal.alias if c.sucursal else '',
+                'fecha': c.fecha_solicitud.strftime('%d/%m/%Y %H:%M'),
+                'ticket_original': c.ticket_original.correlativo if c.ticket_original else '',
+                'motivo': c.get_motivo_principal_display(),
+            })
+
+        return JsonResponse({'success': True, 'items': items, 'total_pendientes': qs.count()})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def revisar_cambio_gerencial(request):
+    """Marca un cambio como revisado por gerencia."""
+    try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
+            return JsonResponse({'success': False, 'error': 'No tiene permisos'}, status=403)
+
+        data = json.loads(request.body)
+        cambio_id = data.get('cambio_id')
+        notas = data.get('notas', '')
+
+        cambio = CambioDevolucion.objects.get(id=cambio_id)
+        cambio.revisado_por_gerencia = request.user
+        cambio.fecha_revision_gerencia = timezone.now()
+        cambio.notas_revision_gerencia = notas
+        cambio.save(update_fields=['revisado_por_gerencia', 'fecha_revision_gerencia', 'notas_revision_gerencia'])
+
+        HistorialCambioDevolucion.objects.create(
+            cambio_devolucion=cambio,
+            usuario=request.user,
+            accion='MODIFICADO',
+            estado_anterior=cambio.estado,
+            estado_nuevo=cambio.estado,
+            descripcion=f'Revisión gerencial completada. Notas: {notas[:200]}',
+        )
+
+        return JsonResponse({'success': True, 'mensaje': 'Cambio marcado como revisado por gerencia'})
+    except CambioDevolucion.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Cambio no encontrado'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_GET
+@login_required
+def exportar_cambios_devoluciones(request):
+    """Exporta listado de cambios y devoluciones a Excel."""
+    try:
+        import io
+        from django.http import HttpResponse
+
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
+
+        qs = CambioDevolucion.objects.select_related(
+            'ticket_original', 'sucursal', 'solicitado_por',
+            'aprobado_por', 'autorizado_por_usuario',
+        ).order_by('-fecha_solicitud')
+
+        if fecha_desde:
+            qs = qs.filter(fecha_solicitud__date__gte=fecha_desde)
+        if fecha_hasta:
+            qs = qs.filter(fecha_solicitud__date__lte=fecha_hasta)
+        if sucursal_id:
+            qs = qs.filter(sucursal_id=sucursal_id)
+
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Cambios y Devoluciones"
+
+            header_font = Font(bold=True, color="FFFFFF", size=11)
+            header_fill = PatternFill(start_color="0066FF", end_color="0066FF", fill_type="solid")
+            header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            thin_border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin'),
+            )
+
+            headers = [
+                'N Operacion', 'Fecha', 'Tipo', 'Estado', 'Tipo Especial',
+                'Sucursal', 'Cliente', 'RUT', 'Ticket Original',
+                'Monto Original', 'Monto Nuevo', 'Diferencia',
+                'Motivo', 'Solicitado Por', 'Aprobado Por',
+                'Fuera Plazo', 'Dias Fuera', 'Cross-Branch',
+                'Autorizado Por', 'Score Riesgo', 'Observaciones',
+            ]
+            for col_num, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_num, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_align
+                cell.border = thin_border
+
+            alert_fill = PatternFill(start_color="FFE0E0", end_color="FFE0E0", fill_type="solid")
+            for row_num, cambio in enumerate(qs[:5000], 2):
+                row_data = [
+                    cambio.numero_operacion,
+                    cambio.fecha_solicitud.strftime('%d/%m/%Y %H:%M') if cambio.fecha_solicitud else '',
+                    cambio.get_tipo_operacion_display(),
+                    cambio.get_estado_display(),
+                    cambio.tipo_cambio_especial,
+                    cambio.sucursal.alias if cambio.sucursal else '',
+                    cambio.ticket_original.cliente_nombre if cambio.ticket_original else '',
+                    cambio.ticket_original.cliente_rut if cambio.ticket_original else '',
+                    cambio.ticket_original.correlativo if cambio.ticket_original else '',
+                    float(cambio.monto_original),
+                    float(cambio.monto_nuevo),
+                    float(cambio.diferencia_monto),
+                    cambio.get_motivo_principal_display(),
+                    cambio.solicitado_por.get_full_name() if cambio.solicitado_por else '',
+                    cambio.aprobado_por.get_full_name() if cambio.aprobado_por else '',
+                    'Si' if cambio.es_fuera_de_plazo else 'No',
+                    cambio.dias_fuera_de_plazo,
+                    'Si' if cambio.es_autorizacion_cross_branch else 'No',
+                    cambio.autorizado_por_usuario.get_full_name() if cambio.autorizado_por_usuario else '',
+                    cambio.score_riesgo,
+                    cambio.observaciones_vendedor or '',
+                ]
+                for col_num, value in enumerate(row_data, 1):
+                    cell = ws.cell(row=row_num, column=col_num, value=value)
+                    cell.border = thin_border
+                    if cambio.es_fuera_de_plazo or cambio.score_riesgo >= 50:
+                        cell.fill = alert_fill
+
+            for col in ws.columns:
+                max_length = 0
+                for cell in col:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                ws.column_dimensions[col[0].column_letter].width = min(max_length + 2, 40)
+
+            buffer = io.BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+
+            response = HttpResponse(
+                buffer.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="cambios_devoluciones_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx"'
+            return response
+
+        except ImportError:
+            import csv
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="cambios_devoluciones_{timezone.now().strftime("%Y%m%d_%H%M")}.csv"'
+            response.write('\ufeff')
+            writer = csv.writer(response)
+            writer.writerow(['N Operacion', 'Fecha', 'Tipo', 'Estado', 'Sucursal', 'Monto Original', 'Diferencia', 'Motivo', 'Fuera Plazo', 'Score Riesgo'])
+            for cambio in qs[:5000]:
+                writer.writerow([
+                    cambio.numero_operacion,
+                    cambio.fecha_solicitud.strftime('%d/%m/%Y %H:%M') if cambio.fecha_solicitud else '',
+                    cambio.get_tipo_operacion_display(),
+                    cambio.get_estado_display(),
+                    cambio.sucursal.alias if cambio.sucursal else '',
+                    float(cambio.monto_original),
+                    float(cambio.diferencia_monto),
+                    cambio.get_motivo_principal_display(),
+                    'Si' if cambio.es_fuera_de_plazo else 'No',
+                    cambio.score_riesgo,
+                ])
+            return response
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @require_GET

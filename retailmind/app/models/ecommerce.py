@@ -24,6 +24,49 @@ ESTADO_PEDIDO_ECOMMERCE_CHOICES = [
     ('ERROR', 'Error'),
 ]
 
+SUB_ESTADO_PEDIDO_CHOICES = [
+    # Sub-estados de PENDIENTE
+    ('RECIBIDO', 'Recibido'),
+    ('ASIGNADO', 'Asignado a Sucursal'),
+    ('EN_PREPARACION', 'En Preparación'),
+    ('LISTO_DESPACHO', 'Listo para Despacho'),
+    # Sub-estados de FACTURADO
+    ('FACTURADO_OK', 'Facturado OK'),
+    # Sub-estados de CANCELADO
+    ('CANCELADO_CLIENTE', 'Cancelado por Cliente'),
+    ('CANCELADO_SIN_STOCK', 'Cancelado por Sin Stock'),
+    # Sub-estados de ERROR
+    ('ERROR_STOCK', 'Error de Stock'),
+    ('ERROR_DTE', 'Error al Generar DTE'),
+]
+
+PRIORIDAD_PEDIDO_CHOICES = [
+    (0, 'Normal'),
+    (1, 'Alta'),
+    (2, 'Urgente'),
+]
+
+TIPO_EVENTO_HISTORIAL_CHOICES = [
+    ('CAMBIO_ESTADO', 'Cambio de estado'),
+    ('REASIGNACION', 'Reasignación de sucursal'),
+    ('FACTURACION', 'Facturación'),
+    ('ERROR', 'Error'),
+]
+
+MOTIVO_REASIGNACION_CHOICES = [
+    ('SIN_STOCK', 'Sin stock en sucursal'),
+    ('MANUAL', 'Reasignación manual'),
+    ('DISTRIBUCION_AUTO', 'Distribución automática'),
+]
+
+# Transiciones válidas de sub-estado
+TRANSICIONES_SUB_ESTADO = {
+    'RECIBIDO': ['ASIGNADO'],
+    'ASIGNADO': ['EN_PREPARACION', 'RECIBIDO'],
+    'EN_PREPARACION': ['LISTO_DESPACHO', 'ASIGNADO'],
+    'LISTO_DESPACHO': ['EN_PREPARACION'],
+}
+
 
 class PedidoEcommerce(models.Model):
     """
@@ -105,6 +148,41 @@ class PedidoEcommerce(models.Model):
         db_index=True,
         verbose_name='Estado',
     )
+    sub_estado = models.CharField(
+        max_length=30,
+        choices=SUB_ESTADO_PEDIDO_CHOICES,
+        default='RECIBIDO',
+        db_index=True,
+        verbose_name='Sub-estado',
+    )
+    prioridad = models.IntegerField(
+        choices=PRIORIDAD_PEDIDO_CHOICES,
+        default=0,
+        verbose_name='Prioridad',
+    )
+
+    # Trazabilidad de asignación
+    sucursal_original = models.ForeignKey(
+        'app.Sucursal',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedidos_ecommerce_originales',
+        verbose_name='Sucursal original',
+        help_text='Primera sucursal asignada al recibir el pedido',
+    )
+    fecha_asignacion = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Fecha asignación',
+    )
+    asignado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedidos_ecommerce_asignados',
+        verbose_name='Asignado por',
+    )
 
     # Vínculo con documentos generados (se completa al facturar)
     ticket = models.ForeignKey(
@@ -158,6 +236,7 @@ class PedidoEcommerce(models.Model):
             models.Index(fields=['estado', 'fecha_recepcion']),
             models.Index(fields=['canal_origen', 'estado']),
             models.Index(fields=['sucursal', 'estado']),
+            models.Index(fields=['sub_estado', 'fecha_recepcion']),
         ]
 
     def __str__(self):
@@ -166,3 +245,92 @@ class PedidoEcommerce(models.Model):
     @property
     def esta_pendiente(self):
         return self.estado == 'PENDIENTE'
+
+    def puede_transicionar_sub_estado(self, nuevo_sub_estado):
+        """Verifica si la transición de sub-estado es válida."""
+        permitidos = TRANSICIONES_SUB_ESTADO.get(self.sub_estado, [])
+        return nuevo_sub_estado in permitidos
+
+
+class HistorialPedidoEcommerce(models.Model):
+    """Registro append-only de cambios de estado, sub-estado y sucursal."""
+
+    pedido = models.ForeignKey(
+        PedidoEcommerce,
+        on_delete=models.CASCADE,
+        related_name='historial',
+    )
+    estado_anterior = models.CharField(max_length=20, blank=True)
+    estado_nuevo = models.CharField(max_length=20, blank=True)
+    sub_estado_anterior = models.CharField(max_length=30, blank=True)
+    sub_estado_nuevo = models.CharField(max_length=30, blank=True)
+    sucursal_anterior = models.ForeignKey(
+        'app.Sucursal', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
+    sucursal_nueva = models.ForeignKey(
+        'app.Sucursal', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL,
+    )
+    motivo = models.TextField(blank=True)
+    tipo_evento = models.CharField(
+        max_length=30,
+        choices=TIPO_EVENTO_HISTORIAL_CHOICES,
+        default='CAMBIO_ESTADO',
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'app'
+        db_table = 'app_historial_pedido_ecommerce'
+        ordering = ['-fecha']
+        verbose_name = 'Historial Pedido Ecommerce'
+        verbose_name_plural = 'Historial Pedidos Ecommerce'
+
+    def __str__(self):
+        return f"{self.pedido.numero_ticket_rm} | {self.tipo_evento} | {self.fecha:%d/%m %H:%M}"
+
+
+class MetricaAsignacionPedido(models.Model):
+    """Métricas de calidad de asignación para tracking y alertas."""
+
+    pedido = models.ForeignKey(
+        PedidoEcommerce,
+        on_delete=models.CASCADE,
+        related_name='metricas_asignacion',
+    )
+    sucursal_asignada = models.ForeignKey(
+        'app.Sucursal',
+        on_delete=models.CASCADE,
+        related_name='metricas_asignacion_pedidos',
+    )
+    fue_reasignado = models.BooleanField(default=False)
+    motivo_reasignacion = models.CharField(
+        max_length=50, blank=True,
+        choices=MOTIVO_REASIGNACION_CHOICES,
+    )
+    todos_items_con_stock = models.BooleanField(default=True)
+    items_sin_stock = models.IntegerField(default=0)
+    tiempo_procesamiento_min = models.IntegerField(
+        null=True, blank=True,
+        verbose_name='Tiempo procesamiento (min)',
+        help_text='Minutos desde recepción hasta facturación',
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'app'
+        db_table = 'app_metrica_asignacion_pedido'
+        ordering = ['-fecha']
+        verbose_name = 'Métrica Asignación Pedido'
+        verbose_name_plural = 'Métricas Asignación Pedidos'
+        indexes = [
+            models.Index(fields=['sucursal_asignada', 'fecha']),
+        ]
+
+    def __str__(self):
+        return f"{self.pedido.numero_ticket_rm} → {self.sucursal_asignada} | {'Reasignado' if self.fue_reasignado else 'Original'}"

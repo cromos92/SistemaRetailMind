@@ -63,6 +63,10 @@ from .views_modulo_ventas import (
     registrar_comprobante_supervisor,
     obtener_depositos_arqueo,
     verificar_deposito,
+    analisis_fraude_caja,
+    crear_observacion_arqueo,
+    obtener_bitacora_arqueo,
+    obtener_bloqueos_arqueo,
     obtener_sucursales,
     # Funciones POS Transbank
     gestion_pos_transbank,
@@ -96,6 +100,14 @@ from .views_modulo_ventas import (
     # Funciones Códigos de Autorización Dinámicos
     obtener_codigo_autorizacion_actual,
     validar_codigo_autorizacion,
+    # Funciones Análisis Avanzado y Control de Fraude
+    obtener_analisis_fraude_cambios,
+    obtener_analisis_cambios_avanzado,
+    listar_autorizaciones_cross_branch,
+    revisar_autorizacion,
+    obtener_cola_revision_gerencial,
+    revisar_cambio_gerencial,
+    exportar_cambios_devoluciones,
     # Funciones Clientes POS
     guardar_cliente_pos,
     enviar_ticket_email,
@@ -303,6 +315,8 @@ from .views_dashboards_kpi import (
     api_dashboard_documentos,
     dashboard_requerimientos,
     api_dashboard_requerimientos,
+    dashboard_despachos,
+    api_dashboard_despachos,
 )
 from .views_prediccion_compras import (
     dashboard_prediccion,
@@ -539,6 +553,7 @@ urlpatterns = [
     path('dte/historial_recepciones/', views.historial_recepciones_api, name='historial_recepciones_api'),
     path('dte/confirmar_recepcion/', views.confirmar_recepcion_api, name='confirmar_recepcion_api'),
     path('dte/rechazar_recepcion/', views.rechazar_recepcion_api, name='rechazar_recepcion_api'),
+    path('dte/decidir_sobrante/', views.decidir_sobrante_api, name='decidir_sobrante_api'),
     path('dte/rehabilitar_rechazado/', views.rehabilitar_dte_rechazado_api, name='rehabilitar_dte_rechazado_api'),
     path('dte/obtener_rechazados/', views.obtener_dtes_rechazados_api, name='obtener_dtes_rechazados_api'),
     path('dte/cancelar_traspaso/', views.cancelar_dte_traspaso_api, name='cancelar_dte_traspaso_api'),
@@ -557,6 +572,7 @@ urlpatterns = [
     path('dte/anular_regularizacion_dte/', views.anular_regularizacion_dte, name='anular_regularizacion_dte'),
     path('dte/obtener_dtes_con_problemas/', views.obtener_dtes_con_problemas, name='obtener_dtes_con_problemas'),
     path('dte/obtener_detalle_dte_recepcionado/', views.obtener_detalle_dte_recepcionado, name='obtener_detalle_dte_recepcionado'),
+    path('dte/<int:dte_id>/audit/', views.dte_audit_api, name='dte_audit_api'),
     path('debug_session/', views.debug_session, name='debug_session'),
     path('debug_user_empresas/', views.debug_user_empresas, name='debug_user_empresas'),  # Temporal para debug
     path('empresas_clientes/', views.empresas_clientes, name='empresas_clientes'),
@@ -664,6 +680,12 @@ urlpatterns = [
     path('api/arqueo/comprobante/', registrar_comprobante_supervisor, name='registrar_comprobante_supervisor'),
     path('api/arqueo/depositos/<int:arqueo_id>/', obtener_depositos_arqueo, name='obtener_depositos_arqueo'),
     path('api/deposito/verificar/', verificar_deposito, name='verificar_deposito'),
+    path('api/arqueo/analisis-fraude/', analisis_fraude_caja, name='analisis_fraude_caja'),
+    
+    # Bitácora y bloqueos
+    path('api/arqueo/observacion/crear/', crear_observacion_arqueo, name='crear_observacion_arqueo'),
+    path('api/arqueo/<int:arqueo_id>/bitacora/', obtener_bitacora_arqueo, name='obtener_bitacora_arqueo'),
+    path('api/arqueo/bloqueos/<str:fecha>/', obtener_bloqueos_arqueo, name='obtener_bloqueos_arqueo'),
 
     # ========== MÓDULO DOCUMENTOS ==========
     # === Gestión de DTEs ===
@@ -781,6 +803,15 @@ urlpatterns = [
     path('ventas/api/buscar-ticket-cambio/', buscar_ticket_para_cambio, name='buscar_ticket_para_cambio'),
     path('ventas/api/buscar-documento-cambio/', buscar_documento_cambio, name='buscar_documento_cambio'),
     path('ventas/api/buscar-productos-cambio/', buscar_productos_para_cambio, name='buscar_productos_para_cambio'),
+
+    # APIs de análisis avanzado y detección de fraude
+    path('ventas/api/analisis-fraude-cambios/', obtener_analisis_fraude_cambios, name='obtener_analisis_fraude_cambios'),
+    path('ventas/api/analisis-cambios-avanzado/', obtener_analisis_cambios_avanzado, name='obtener_analisis_cambios_avanzado'),
+    path('ventas/api/autorizaciones-cross-branch/', listar_autorizaciones_cross_branch, name='listar_autorizaciones_cross_branch'),
+    path('ventas/api/revisar-autorizacion/<int:registro_id>/', revisar_autorizacion, name='revisar_autorizacion'),
+    path('ventas/api/cola-revision-gerencial/', obtener_cola_revision_gerencial, name='obtener_cola_revision_gerencial'),
+    path('ventas/api/revisar-cambio-gerencial/', revisar_cambio_gerencial, name='revisar_cambio_gerencial'),
+    path('ventas/api/exportar-cambios/', exportar_cambios_devoluciones, name='exportar_cambios_devoluciones'),
 
     # ========== MÓDULO DE COTIZACIONES ==========
     # Vista principal
@@ -1081,6 +1112,9 @@ urlpatterns = [
     path('api/dashboard-documentos/datos/', api_dashboard_documentos, name='api_dashboard_documentos'),
 
 
+    path('dashboard-despachos/', dashboard_despachos, name='dashboard_despachos'),
+    path('api/dashboard-despachos/datos/', api_dashboard_despachos, name='api_dashboard_despachos'),
+
     path('dashboard-requerimientos/', dashboard_requerimientos, name='dashboard_requerimientos'),
     path('api/dashboard-requerimientos/datos/', api_dashboard_requerimientos, name='api_dashboard_requerimientos'),
 
@@ -1114,6 +1148,13 @@ urlpatterns = [
     path('ecommerce/pedidos/<int:pedido_id>/buscar-producto/', views_ecommerce.api_buscar_producto_match, name='api_buscar_producto_match'),
     path('ecommerce/pedidos/<int:pedido_id>/guardar-match/', views_ecommerce.api_guardar_match_sku, name='api_guardar_match_sku'),
     path('ecommerce/pedidos/<int:pedido_id>/facturar/', views_ecommerce.api_facturar_pedido_individual, name='api_facturar_pedido_individual'),
+    path('ecommerce/pedidos/<int:pedido_id>/sub-estado/', views_ecommerce.api_cambiar_sub_estado, name='api_cambiar_sub_estado_pedido'),
+    path('ecommerce/pedidos/<int:pedido_id>/reasignar/', views_ecommerce.api_reasignar_pedido, name='api_reasignar_pedido'),
+    path('ecommerce/pedidos/<int:pedido_id>/sugerir-sucursal/', views_ecommerce.api_sugerir_sucursal, name='api_sugerir_sucursal'),
+    path('ecommerce/pedidos/<int:pedido_id>/historial/', views_ecommerce.api_historial_pedido, name='api_historial_pedido'),
+    path('ecommerce/pedidos/distribuir/', views_ecommerce.api_distribuir_pedidos, name='api_distribuir_pedidos'),
+    path('ecommerce/pedidos/exportar-csv/', views_ecommerce.exportar_pedidos_csv, name='exportar_pedidos_csv'),
+    path('ecommerce/dashboard-asignacion/', views_ecommerce.ecommerce_dashboard_asignacion, name='ecommerce_dashboard_asignacion'),
     path('ecommerce/dte/<int:dte_id>/txt/', views_ecommerce.descargar_txt_dte_ecommerce, name='descargar_txt_dte_ecommerce'),
 
 ]

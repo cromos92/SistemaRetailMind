@@ -1033,6 +1033,57 @@
                 </div>
             </div>
 
+            <!-- Selector de Modo de Precio (solo visible para Despacho Externo) -->
+            <div id="precioExternoContainer" style="display: none;" class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label fw-bold mb-0">
+                        <i class="bi bi-tag-fill text-warning me-1"></i>Modo de Precio (Externo)
+                    </label>
+                    <span class="badge bg-danger small" id="badgePrecioExterno">Requerido</span>
+                </div>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="costo">
+                            <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
+                                <i class="bi bi-cash-stack"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Al Costo</h6>
+                            <p class="text-muted mb-0" style="font-size: 0.65rem;">Solo costo proveedor</p>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="sobreprecio">
+                            <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
+                                <i class="bi bi-graph-up-arrow"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Sobreprecio</h6>
+                            <p class="text-muted mb-0" style="font-size: 0.65rem;">Costo + sobreprecio</p>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="custom_pct">
+                            <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
+                                <i class="bi bi-percent"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">% Custom</h6>
+                            <p class="text-muted mb-0" style="font-size: 0.65rem;">Margen sobre costo</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Input de porcentaje custom (solo visible con % Custom) -->
+                <div id="customPctInputContainer" style="display: none;" class="mt-2">
+                    <div class="input-group input-group-sm" style="max-width: 280px;">
+                        <span class="input-group-text"><i class="bi bi-percent"></i></span>
+                        <input type="number" id="customPctValue" class="form-control" 
+                               min="0" max="999" step="0.5" value="30" placeholder="Ej: 30">
+                        <span class="input-group-text">% sobre costo</span>
+                    </div>
+                    <small class="text-muted mt-1 d-block" id="customPctPreview">
+                        Ejemplo: Costo $10.000 + 30% = <strong>$13.000</strong>
+                    </small>
+                </div>
+            </div>
+
             <!-- Resumen de Selección - compacto -->
             <div id="resumenSeleccion" style="display: none; background: rgba(0, 212, 170, 0.08); border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-accent); padding: 10px 14px; margin-bottom: 12px;">
                 <div class="d-flex align-items-center gap-3 flex-wrap">
@@ -1045,6 +1096,9 @@
                     </span>
                     <span class="badge" style="background: var(--nexo-primary-light); color: var(--nexo-primary); border: 1px solid rgba(0,102,255,0.2);">
                         <i class="bi bi-file-earmark-text-fill me-1"></i><span id="resumenDocumento">-</span>
+                    </span>
+                    <span class="badge" style="background: var(--nexo-primary-light); color: var(--nexo-primary); border: 1px solid rgba(0,102,255,0.2);">
+                        <i class="bi bi-tag-fill me-1"></i><span id="resumenPrecio" style="display:none;">-</span>
                     </span>
                     <span class="text-muted small ms-auto"><i class="bi bi-box-seam me-1"></i><span id="resumenStock">-</span></span>
                 </div>
@@ -1079,15 +1133,15 @@
                 <div class="col-md-2">
                     <label for="formaPago" class="form-label fw-bold mb-1 small">Forma de Pago</label>
                     <select id="formaPago" class="form-select form-select-sm" onchange="toggleDiasCredito()">
-                        <option value="Contado" selected>Contado</option>
-                        <option value="Credito">Crédito</option>
+                        <option value="Contado">Contado</option>
+                        <option value="Credito" selected>Crédito</option>
                     </select>
                 </div>
                 <div class="col-md-1">
                     <label for="vendedor" class="form-label fw-bold mb-1 small">Vendedor</label>
                     <input type="text" id="vendedor" class="form-control form-control-sm" value="9999" readonly>
                 </div>
-                <div class="col-md-1" id="diasCreditoContainer" style="display:none;">
+                <div class="col-md-1" id="diasCreditoContainer">
                     <label for="diasCredito" class="form-label fw-bold mb-1 small">Días Créd.</label>
                     <input type="number" id="diasCredito" class="form-control form-control-sm" value="30" min="1" max="365">
                 </div>
@@ -1203,7 +1257,7 @@
                                             <th class="py-1" style="white-space:nowrap;">Artículo</th>
                                             <th class="py-1">Descripción / Atributos</th>
                                             <th class="text-end py-1">Costo</th>
-                                            <th class="text-end py-1">Precio</th>
+                                            <th class="text-end py-1" id="thPrecioResultados">Precio</th>
                                             <th class="text-center py-1">Stock</th>
                                             <th class="text-center py-1">Agregar</th>
                                         </tr>
@@ -1766,6 +1820,8 @@ function detectarMejorPatron(tallasConStock) {
 // Variables globales
 let selectedMethod = '';
 let selectedConcept = '';
+let selectedPrecioExterno = 'costo';
+let customPctValue = 30;
 let selectedProducts = [];
 let currentPage = 1;
 let totalPages = 1;
@@ -1862,10 +1918,20 @@ function initializeEventListeners() {
             if (type === 'interno') {
                 $('#receptorSelect').val('');
                 loadSucursalesDestino();
+                $('#precioExternoContainer').slideUp(300);
+                $('#thPrecioResultados').text('P. Interno');
+                $('#resumenPrecio').closest('.badge').hide();
             } else {
                 $('#sucursalDestinoSelect').val('');
                 loadReceptores();
+                $('#precioExternoContainer').slideDown(300);
+                const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
+                $('#thPrecioResultados').text(labels[selectedPrecioExterno] || 'Precio');
             }
+
+            // Refrescar precios en tabla de busqueda y detalle
+            actualizarPreciosTablaResultados();
+            recalcularPreciosExterno();
             
             // Mostrar feedback visual
             const metodoTexto = type === 'interno' ? 'Despacho Interno' : 
@@ -1901,6 +1967,39 @@ function initializeEventListeners() {
         validateStep1();
         
         // NO minimizar automáticamente aquí - esperar a que se complete todo
+    });
+
+    // Selector de modo de precio externo
+    $('.precio-externo-selector').on('click', function() {
+        const mode = $(this).data('precio-mode');
+        $('.precio-externo-selector').removeClass('active just-selected');
+        $(this).addClass('active just-selected');
+        selectedPrecioExterno = mode;
+
+        $('#badgePrecioExterno').removeClass('bg-danger').addClass('bg-success').text('✓ Seleccionado');
+
+        if (mode === 'custom_pct') {
+            $('#customPctInputContainer').slideDown(200);
+        } else {
+            $('#customPctInputContainer').slideUp(200);
+        }
+
+        // Actualizar resumen
+        const modeLabels = { costo: 'Al Costo', sobreprecio: 'Sobreprecio', custom_pct: `% Custom (${customPctValue}%)` };
+        $('#resumenPrecio').text(modeLabels[mode] || mode).closest('.badge').show();
+
+        recalcularPreciosExterno();
+
+        setTimeout(() => $(this).removeClass('just-selected'), 600);
+    });
+
+    // Input de porcentaje custom
+    $('#customPctValue').on('input', function() {
+        customPctValue = parseFloat($(this).val()) || 0;
+        const ejemplo = Math.round(10000 * (1 + customPctValue / 100));
+        $('#customPctPreview').html(`Ejemplo: Costo $10.000 + ${customPctValue}% = <strong>$${ejemplo.toLocaleString()}</strong>`);
+        $('#resumenPrecio').text(`% Custom (${customPctValue}%)`);
+        recalcularPreciosExterno();
     });
 
     // Búsqueda de productos
@@ -3035,13 +3134,22 @@ function displayProductsInTable(products) {
         return;
     }
     
+    // Actualizar header de columna de precio segun metodo de despacho
+    if (selectedMethod === 'interno') {
+        $('#thPrecioResultados').text('P. Interno');
+    } else if (selectedMethod === 'externo') {
+        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
+        $('#thPrecioResultados').text(labels[selectedPrecioExterno] || 'Precio');
+    } else {
+        $('#thPrecioResultados').text('P. Venta');
+    }
+
     products.forEach(product => {
-        // Usar la estructura correcta del backend
         const marca = product.marca || '-';
         const color = product.color || '-';
         const sexo = product.sexo || '-';
         const costo = product.costo || 0;
-        const precioVenta = product.precio_venta || 0;
+        const precioMostrar = getPrecioSegunMetodo(product);
         const stockTotal = product.stock_total || 0;
         const descripcion = product.descripcion || '-';
         
@@ -3084,7 +3192,7 @@ function displayProductsInTable(products) {
                     ${attrBadges ? `<div class="mt-1">${attrBadges}</div>` : ''}
                 </td>
                 <td class="text-end align-middle" style="white-space:nowrap;">$${parseInt(costo).toLocaleString()}</td>
-                <td class="text-end align-middle fw-bold text-success" style="white-space:nowrap;">$${parseInt(precioVenta).toLocaleString()}</td>
+                <td class="text-end align-middle fw-bold text-success" style="white-space:nowrap;">$${parseInt(precioMostrar).toLocaleString()}</td>
                 <td class="text-center align-middle">
                     <span class="badge rounded-pill ${stockTotal <= 0 ? 'bg-danger' : stockTotal <= 4 ? 'bg-warning text-dark' : 'bg-success'} px-2" style="font-size:0.8rem;min-width:2rem;">${stockTotal}</span>
                     ${stockEnDespacho > 0 ? `<div class="text-muted" style="font-size:0.65rem;">${stockEnDespacho} en doc.</div>` : ''}
@@ -3189,8 +3297,6 @@ function getPrecioSegunMetodo(product) {
     console.log('💰 getPrecioSegunMetodo - selectedMethod:', selectedMethod);
     
     if (selectedMethod === 'interno') {
-        // DESPACHO INTERNO: precio interno = costo + sobreprecio
-        // sobreprecio = preciointerno - costo (margen interno, NO incluye costo)
         const costo = parseInt(product.costo || 0);
         const sobreprecio = parseInt(product.sobreprecio || 0);
         const precioInterno = costo + sobreprecio;
@@ -3198,13 +3304,97 @@ function getPrecioSegunMetodo(product) {
         return precioInterno;
         
     } else if (selectedMethod === 'externo') {
-        // DESPACHO EXTERNO: usar solo el costo
         const costo = parseInt(product.costo || 0);
-        console.log(`💰 Despacho EXTERNO: solo costo = ${costo}`);
+        if (selectedPrecioExterno === 'costo') {
+            console.log(`💰 Despacho EXTERNO [Al Costo]: ${costo}`);
+            return costo;
+        } else if (selectedPrecioExterno === 'sobreprecio') {
+            const sobreprecio = parseInt(product.sobreprecio || 0);
+            const precio = costo + sobreprecio;
+            console.log(`💰 Despacho EXTERNO [Sobreprecio]: Costo=${costo} + SP=${sobreprecio} = ${precio}`);
+            return precio;
+        } else if (selectedPrecioExterno === 'custom_pct') {
+            const precio = Math.round(costo * (1 + customPctValue / 100));
+            console.log(`💰 Despacho EXTERNO [Custom ${customPctValue}%]: Costo=${costo} → ${precio}`);
+            return precio;
+        }
         return costo;
     }
     
     return parseInt(product.precio_venta || 0);
+}
+
+function actualizarPreciosTablaResultados() {
+    if (!productData || productData.length === 0) return;
+    $('#datos_tabla_productos tr[data-product-id]').each(function() {
+        const prodId = parseInt($(this).data('product-id'));
+        const prod = productData.find(p => p.id === prodId);
+        if (prod) {
+            const precio = getPrecioSegunMetodo(prod);
+            $(this).find('td:eq(3)').text(`$${parseInt(precio).toLocaleString()}`);
+        }
+    });
+}
+
+function recalcularPreciosExterno() {
+    // Recalcular filas del modal de tallas (si esta abierto)
+    $('#tabla_modal_ventas_interna tr[data-talla-id]').each(function() {
+        const $row = $(this);
+        const costo = parseInt($row.data('costo') || 0);
+        const sobreprecio = parseInt($row.data('sobreprecio') || 0);
+        const product = { costo: costo, sobreprecio: sobreprecio };
+        const nuevoPrecio = getPrecioSegunMetodo(product);
+
+        $row.find('.cantidad-input').data('precio', nuevoPrecio);
+        $row.find('td:eq(5)').text(`$${nuevoPrecio.toLocaleString()}`);
+
+        const cantidad = parseInt($row.find('.cantidad-input').val()) || 0;
+        const subtotal = cantidad * nuevoPrecio;
+        $row.find('.subtotal-cell').text(subtotal > 0 ? `$${subtotal.toLocaleString()}` : '$0');
+    });
+
+    // Recalcular filas del detalle de despacho principal
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        const $row = $(this);
+        const $input = $row.find('.cantidad-detalle-input');
+        const costo = parseInt($input.data('costo') || 0);
+        const sobreprecio = parseInt($input.data('sobreprecio') || 0);
+        const product = { costo: costo, sobreprecio: sobreprecio };
+        const nuevoPrecio = getPrecioSegunMetodo(product);
+
+        $input.data('precio', nuevoPrecio);
+        const cantidad = parseInt($input.val()) || 0;
+        const subtotal = cantidad * nuevoPrecio;
+
+        $row.find('.precio-unitario').text(`$${nuevoPrecio.toLocaleString()}`);
+        $row.find('.subtotal-detalle').text(`$${subtotal.toLocaleString()}`);
+
+        // Actualizar tallas data almacenado en la fila
+        const tallasData = safeParseTallas($row.data('tallas'));
+        tallasData.forEach(t => {
+            t.precio = nuevoPrecio;
+            t.subtotal = t.cantidad * nuevoPrecio;
+        });
+        $row.data('tallas', tallasData);
+    });
+
+    // Actualizar precios en la tabla de resultados de busqueda
+    if (productData && productData.length > 0) {
+        $('#datos_tabla_productos tr[data-product-id]').each(function() {
+            const prodId = parseInt($(this).data('product-id'));
+            const prod = productData.find(p => p.id === prodId);
+            if (prod) {
+                const nuevoPrecio = getPrecioSegunMetodo(prod);
+                $(this).find('td:eq(3)').text(`$${parseInt(nuevoPrecio).toLocaleString()}`);
+            }
+        });
+        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
+        $('#thPrecioResultados').text(labels[selectedPrecioExterno] || 'Precio');
+    }
+
+    // Actualizar resumen/totales
+    if (typeof updateModalSummary === 'function') updateModalSummary();
+    if (typeof actualizarResumenDespacho === 'function') actualizarResumenDespacho();
 }
 
 function loadTallasDisponibles(product) {
@@ -4829,8 +5019,14 @@ function generarResumenDespacho() {
             </div>
             ` : ''}
             
+            <!-- Impacto en Stock -->
+            <div class="alert alert-info mt-3 mb-2">
+                <i class="bi bi-graph-down me-2"></i>
+                <strong>Impacto en inventario:</strong> Se descontarán <strong>${totalCantidad} unidades</strong> del stock de <strong>${origenTexto}</strong>.
+            </div>
+
             <!-- Mensaje de advertencia -->
-            <div class="alert alert-warning mt-3 mb-0">
+            <div class="alert alert-warning mb-0">
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
                 <strong>Importante:</strong> Al confirmar se generará el documento tributario electrónico y se reducirá el stock correspondiente.
             </div>
@@ -4880,13 +5076,15 @@ function procesarEmision() {
     };
     
     if (selectedMethod === 'interno') {
-        // Despacho interno: enviar sucursal destino
         data.sucursal_destino_id = $('#sucursalDestinoSelect').val();
-        data.receptor_id = null; // No se usa para interno
+        data.receptor_id = null;
     } else {
-        // Despacho externo: enviar empresa cliente
         data.receptor_id = $('#receptorSelect').val();
-        data.sucursal_destino_id = null; // No se usa para externo
+        data.sucursal_destino_id = null;
+        data.tipo_precio_externo = selectedPrecioExterno;
+        if (selectedPrecioExterno === 'custom_pct') {
+            data.porcentaje_custom = customPctValue;
+        }
     }
     
     $.ajax({

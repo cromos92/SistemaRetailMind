@@ -3861,7 +3861,7 @@ function getCookie(name) {
 // Abrir modal de configuración SKU
 $(document).on('click', '#btnConfigSku', function() {
     cargarConfiguracionSku();
-    $('#modalConfigSku').modal('show');
+    mostrarModal('#modalConfigSku');
 });
 
 // Cargar datos de configuración SKU
@@ -3976,11 +3976,19 @@ function showError(msg) {
             let costos = [];
             let precios = [];
 
-            let params = { anio, ...extraParams };
+            let params = { anio, page: currentPage, page_size: pageSize, ...extraParams };
             
             $.get('/app/productos_para_crear/', params, response => {
                 console.log('Respuesta AJAX productos_para_crear:', response);
-                const data = response.data || response; // Compatibilidad con respuesta paginada y anterior
+                const data = response.data || response;
+                
+                // Actualizar datos de paginación desde la respuesta
+                if (response.pagination) {
+                    totalPages = response.pagination.total_pages || 1;
+                    totalRecords = response.pagination.total_records || 0;
+                    currentPage = response.pagination.current_page || 1;
+                    actualizarControlesPaginacion();
+                }
                 
                 // Ocultar estado de carga
                 $('#estadoCarga').hide();
@@ -4354,16 +4362,17 @@ function showError(msg) {
             const _precioSugerido = parseFloat(data.precioSugerido) || 0;
             form.find('[name="costo"]').val(data.costo);
             form.find('[name="precio_sugerido"]').val(data.precioSugerido);
-            // Calcular sobreprecio y precio venta con margenes predefinidos
+            // Calcular sobreprecio (delta) y precio venta con margenes predefinidos
             if (_costo > 0 && (margenSobreprecioGlobal > 0 || margenPrecioVentaGlobal > 0)) {
-                const sp = _costo + Math.round(_costo * (margenSobreprecioGlobal / 100));
-                const pvBruto = sp + Math.round(sp * (margenPrecioVentaGlobal / 100));
+                const sp = Math.round(_costo * (margenSobreprecioGlobal / 100));
+                const precioInterno = _costo + sp;
+                const pvBruto = precioInterno + Math.round(precioInterno * (margenPrecioVentaGlobal / 100));
                 const pv = redondearPrecio990(pvBruto);
                 form.find('[name="sobreprecio"]').val(sp);
                 form.find('[name="precioventa"]').val(pv);
             } else {
                 form.find('[name="precioventa"]').val(_precioSugerido);
-                form.find('[name="sobreprecio"]').val(_costo + Math.round(_costo * 0.1));
+                form.find('[name="sobreprecio"]').val(Math.round(_costo * 0.1));
             }
 
             // Mostrar banner de trazabilidad de compra
@@ -4442,7 +4451,7 @@ function showError(msg) {
 
             // Selects
             inicializarSelect2Atributos();
-            calcularPrecios();
+            actualizarIndicadoresMargen($('#formCrearProductoDesdeRecepcion'));
         });
     }
 
@@ -4470,7 +4479,7 @@ function showError(msg) {
         $('#nuevaOpcionValor').val('');
 
         cargarOpcionesExistentes(atributoIdActual);
-        $('#modalCrearOpcionAtributo').modal('show');
+        mostrarModal('#modalCrearOpcionAtributo');
     });
 
 
@@ -4551,7 +4560,7 @@ function showError(msg) {
         selectElement.val(opcionId).trigger('change');
         
         // Cerrar modal
-        $('#modalCrearOpcionAtributo').modal('hide');
+        cerrarModal('modalCrearOpcionAtributo');
         
         // Mostrar confirmación
         const Toast = Swal.mixin({
@@ -4632,7 +4641,7 @@ function showError(msg) {
                 });
                 
                 // Cerrar modal
-                $('#modalCrearOpcionAtributo').modal('hide');
+                cerrarModal('modalCrearOpcionAtributo');
             } else {
                 Swal.fire({
                     icon: 'error',
@@ -4750,7 +4759,7 @@ function showError(msg) {
                 GestionCompras.showSuccess('Categoría creada', '');
 
                 $('select[name="categoria"]').append(`<option value="${res.id}" selected>${res.nombre}</option>`).trigger('change');
-                $('#modalCrearCategoria').modal('hide');
+                cerrarModal('modalCrearCategoria');
             } else {
                 GestionCompras.showError('Error', res.error || 'No se pudo guardar.');
             }
@@ -5007,21 +5016,19 @@ function showError(msg) {
 
 
 
-    $('input[name="costo"]').on('input', function() {
-        const $scope = $(this).closest('form, .modal-body');
-        // Al cambiar costo, siempre recalcular con margenes predefinidos
-        calcularPrecios();
-        actualizarIndicadoresMargen($scope);
+    $('#formCrearProductoDesdeRecepcion input[name="costo"]').on('input', function() {
+        aplicarMargenes();
+        actualizarIndicadoresMargen($('#formCrearProductoDesdeRecepcion'));
     });
 
-    // ⚙️ Botones manuales
+    // ⚙️ Botones manuales (modal recepción)
     $('#btnConfigSobreprecio').on('click', function() {
         aplicarMargenes();
-        setTimeout(() => actualizarIndicadoresMargen($(this).closest('form, .modal-body')), 50);
+        setTimeout(() => actualizarIndicadoresMargen($('#formCrearProductoDesdeRecepcion')), 50);
     });
     $('#btnConfigPrecioVenta').on('click', function() {
         aplicarMargenes();
-        setTimeout(() => actualizarIndicadoresMargen($(this).closest('form, .modal-body')), 50);
+        setTimeout(() => actualizarIndicadoresMargen($('#formCrearProductoDesdeRecepcion')), 50);
     });
 
     // Actualizar indicadores al cambiar precio venta manualmente (NO tocar sobreprecio)
@@ -5124,16 +5131,16 @@ function showError(msg) {
 
 
     function aplicarMargenes() {
-        const costo = parseFloat($('input[name="costo"]').val()) || 0;
+        const $form = $('#formCrearProductoDesdeRecepcion');
+        const costo = parseFloat($form.find('input[name="costo"]').val()) || 0;
 
         if (!isNaN(costo) && costo > 0) {
-            // Paso 1: Sobreprecio = Costo + (Costo x %SP)
-            const sobreprecio = costo + Math.round(costo * (margenSobreprecioGlobal / 100));
-            // Paso 2: Precio Venta = Sobreprecio + (Sobreprecio x %PV)
-            const precioVentaBruto = sobreprecio + Math.round(sobreprecio * (margenPrecioVentaGlobal / 100));
+            const sobreprecio = Math.round(costo * (margenSobreprecioGlobal / 100));
+            const precioInterno = costo + sobreprecio;
+            const precioVentaBruto = precioInterno + Math.round(precioInterno * (margenPrecioVentaGlobal / 100));
             const precioVenta = redondearPrecio990(precioVentaBruto);
-            $('input[name="sobreprecio"]').val(sobreprecio);
-            $('input[name="precioventa"]').val(precioVenta);
+            $form.find('input[name="sobreprecio"]').val(sobreprecio);
+            $form.find('input[name="precioventa"]').val(precioVenta);
         }
     }
 
@@ -5171,13 +5178,14 @@ function showError(msg) {
         const pctPV = parseFloat($('#inputMargenPrecioVenta').val()) || 0;
         const costoEj = 10000;
 
-        // Paso 1: Sobreprecio = Costo + (Costo x %SP)
+        // Paso 1: Sobreprecio = delta sobre costo
         const margenSP = Math.round(costoEj * (pctSP / 100));
-        const sobreprecio = costoEj + margenSP;
+        // Paso 2: Precio Interno = Costo + Sobreprecio
+        const precioInterno = costoEj + margenSP;
 
-        // Paso 2: Precio Venta = Sobreprecio + (Sobreprecio x %PV)
-        const margenPV = Math.round(sobreprecio * (pctPV / 100));
-        const pvBruto = sobreprecio + margenPV;
+        // Paso 3: Precio Venta = Precio Interno + (Precio Interno x %PV)
+        const margenPV = Math.round(precioInterno * (pctPV / 100));
+        const pvBruto = precioInterno + margenPV;
         const pv = pvBruto >= 1000 ? (Math.floor(pvBruto / 1000) * 1000 + 990) : pvBruto;
 
         const margenBruto = pv > 0 ? ((pv - costoEj) / pv * 100) : 0;
@@ -5185,11 +5193,11 @@ function showError(msg) {
 
         $('#previewPctSP').text(pctSP);
         $('#previewMontoSP').text('+$' + margenSP.toLocaleString('es-CL'));
-        $('#previewBase').text('$' + sobreprecio.toLocaleString('es-CL'));
+        $('#previewBase').text('$' + precioInterno.toLocaleString('es-CL'));
         $('#previewPctPV').text(pctPV);
         $('#previewMontoPV').text('+$' + margenPV.toLocaleString('es-CL'));
         $('#previewPrecioVenta').text('$' + pv.toLocaleString('es-CL'));
-        $('#previewSobreprecioTotal').text('$' + sobreprecio.toLocaleString('es-CL'));
+        $('#previewSobreprecioTotal').text('$' + precioInterno.toLocaleString('es-CL'));
         $('#previewMargenBruto').text(margenBruto.toFixed(1) + '%');
         $('#previewMultiplicador').text('x' + mult.toFixed(2));
     };
@@ -5204,7 +5212,7 @@ function showError(msg) {
         $('#inputMargenPrecioVenta').val(margenPrecioVentaGlobal);
         $('#nombreSucursalMargenes').text(sucursalMargenesActual || 'Sucursal actual');
         previewMargen();
-        $('#modalAjusteMargenes').modal('show');
+        mostrarModal('#modalAjusteMargenes');
     });
 
     // Guardar cambios de márgenes desde modal
@@ -5238,7 +5246,7 @@ function showError(msg) {
                     sucursalMargenesActual = response.sucursal_nombre || sucursalMargenesActual;
                     
                     // Cerrar modal
-                    $('#modalAjusteMargenes').modal('hide');
+                    cerrarModal('modalAjusteMargenes');
                     
                     // Mostrar mensaje de éxito con nombre de sucursal
                     const mensajeExito = response.sucursal_nombre 
@@ -5289,7 +5297,7 @@ function showError(msg) {
     $(document).on('click', '.abrir-modal-categoria', function () {
         resetFormCategoria();
         cargarArbolCategorias();
-        $('#modalCrearCategoria').modal('show');
+        mostrarModal('#modalCrearCategoria');
     });
 
     function cargarCategoriasEnSelect() {
@@ -5375,7 +5383,7 @@ function showError(msg) {
         const marcaSeleccionada = $('#modalCrearProductoDesdeRecepcion select[name="atributo1"]').val();
         cargarMarcasEnGuiaTalla(marcaSeleccionada || null);
         
-        $('#modalGuiaTalla').modal('show');
+        mostrarModal('#modalGuiaTalla');
     });
 
 
@@ -5452,7 +5460,7 @@ function showError(msg) {
             data.tallas.forEach(t => agregarFilaTalla(t));
 
             $('#modalGuiaTallaLabel').text('Editar Guía de Talla');
-            $('#modalGuiaTalla').modal('show');
+            mostrarModal('#modalGuiaTalla');
 
             console.log(data)
             cargarMarcasEnGuiaTalla(data.marca);
@@ -5527,7 +5535,7 @@ function showError(msg) {
                 const marcaGuiaCreada = $('#selectMarcaGuiaTalla').val();
                 
                 // Cerrar el modal de guía de tallas primero
-                $('#modalGuiaTalla').modal('hide');
+                cerrarModal('modalGuiaTalla');
                 
                 // 🔄 Recargar guías en modal de Crear Producto desde Recepción
                 if ($('#modalCrearProductoDesdeRecepcion').hasClass('show')) {
@@ -6023,8 +6031,9 @@ function copiarDatosProductoRecepcion(producto) {
             if (!$s.find(`option[value="${producto.categoria_id}"]`).length) $s.append(`<option value="${producto.categoria_id}">${producto.categoria}</option>`);
             $s.val(producto.categoria_id).trigger('change');
         }
-        if (producto.precioventa) $modal.find('[name="precioventa"]').val(Math.round(producto.precioventa));
         if (producto.costo) $modal.find('[name="costo"]').val(Math.round(producto.costo));
+        if (producto.sobreprecio != null) $modal.find('[name="sobreprecio"]').val(Math.round(producto.sobreprecio));
+        if (producto.precioventa) $modal.find('[name="precioventa"]').val(Math.round(producto.precioventa));
         $('#advertenciaProductosSimilares').fadeOut(200, function() { $(this).remove(); });
         showToast('success', `Datos de ${producto.articulo} aplicados`);
         setTimeout(() => {
@@ -6112,11 +6121,14 @@ function copiarDatosProductoManual(producto) {
     }
     
     // Copiar precios si existen
-    if (producto.precioventa) {
-        $modal.find('[name="precioventa"]').val(Math.round(producto.precioventa));
-    }
     if (producto.costo) {
         $modal.find('[name="costo"]').val(Math.round(producto.costo));
+    }
+    if (producto.sobreprecio != null) {
+        $modal.find('[name="sobreprecio"]').val(Math.round(producto.sobreprecio));
+    }
+    if (producto.precioventa) {
+        $modal.find('[name="precioventa"]').val(Math.round(producto.precioventa));
     }
     
     // Cerrar el panel de productos coincidentes si existe
@@ -6691,6 +6703,7 @@ function cargarConteoTabs() {
 
 function cambiarTab(nuevoTab) {
     tabActivo = nuevoTab;
+    currentPage = 1;
     sessionStorage.setItem('tabGestionProductos', nuevoTab);
 
     // Actualizar UI de tabs
@@ -6705,7 +6718,6 @@ function cambiarTab(nuevoTab) {
     }
 
     // Recargar datos con el tab activo
-    const anioActual = new Date().getFullYear();
     aplicarFiltros();
 }
 
@@ -6719,6 +6731,7 @@ $(document).on('click', '#tabsGestionProductos .nav-link', function(e) {
 });
 
 function aplicarFiltros() {
+    currentPage = 1;
     const anioActual = new Date().getFullYear();
     const filtros = {
         articulo: $('#filtroArticulo').val().trim(),
@@ -6814,13 +6827,9 @@ function generarReporteProductos() {
             if (e.key === 'Escape' && $('.modal.show').length > 0) {
                 // Cerrar el modal activo (Bootstrap se encargará del backdrop)
                 const modalActivo = $('.modal.show').last();
-                if (typeof bootstrap !== 'undefined') {
-                    const bsModal = bootstrap.Modal.getInstance(modalActivo[0]);
-                    if (bsModal) {
-                        bsModal.hide();
-                    }
-                } else {
-                    modalActivo.modal('hide');
+                const bsModal = bootstrap.Modal.getInstance(modalActivo[0]);
+                if (bsModal) {
+                    bsModal.hide();
                 }
             }
         });
@@ -6944,6 +6953,12 @@ let pageSize = 25;
 let totalPages = 1;
 let totalRecords = 0;
 
+function actualizarControlesPaginacion() {
+    $('#pageInfo').text(`Página ${currentPage} de ${totalPages} (${totalRecords})`);
+    $('#btnPrevPage').toggleClass('disabled', currentPage <= 1);
+    $('#btnNextPage').toggleClass('disabled', currentPage >= totalPages);
+}
+
  
 
 $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
@@ -7027,7 +7042,7 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
                     let msgExtra = res.mensaje || 'El producto y sus variantes fueron procesados correctamente.';
                     if (compraInfo) msgExtra += ` (${compraInfo})`;
                     showSuccessAlert(titulo, msgExtra);
-                    $('#modalCrearProductoDesdeRecepcion').modal('hide');
+                    cerrarModal('modalCrearProductoDesdeRecepcion');
                     // Refrescar la tabla de productos listos para crear
                     const anioActual = new Date().getFullYear();
                     cargarProductosParaCrear(anioActual);
@@ -7191,72 +7206,39 @@ function cargarOpcionesAtributoYSeleccionarPorTexto(atributo_id, select_name, te
         abrirModalCrearProductoManual();
     });
     
-    // Función para inicializar modal correctamente
+    // Función para mostrar modal con Bootstrap 5 nativo
     function inicializarModal(modalId) {
-        console.log('🎯 Inicializando modal:', modalId);
-        
-        const modalElement = document.getElementById(modalId);
-        if (!modalElement) {
-            console.error('❌ Modal no encontrado:', modalId);
-            return null;
+        const el = document.getElementById(modalId);
+        if (!el) return null;
+        if (el.classList.contains('show')) return null;
+
+        let inst = bootstrap.Modal.getInstance(el);
+        if (!inst) {
+            inst = new bootstrap.Modal(el, { backdrop: true, keyboard: true, focus: true });
         }
-        
-        // Si el modal ya está visible o en transición, no hacer nada
-        if (modalElement.classList.contains('show') || modalElement.classList.contains('showing')) {
-            console.log('⏳ Modal ya está visible, ignorando:', modalId);
-            return null;
+        inst.show();
+        return inst;
+    }
+
+    // Helper para cerrar modal con Bootstrap 5 nativo
+    function cerrarModal(modalId) {
+        const el = document.getElementById(modalId);
+        if (!el) return;
+        const inst = bootstrap.Modal.getInstance(el);
+        if (inst) {
+            inst.hide();
         }
-        
-        // Solo limpiar backdrops si no hay modales visibles
-        if ($('.modal.show').length === 0) {
-            $('.modal-backdrop').remove();
-            $('body').removeClass('modal-open');
+    }
+
+    // Helper para mostrar modal por selector jQuery (reemplaza .modal('show'))
+    function mostrarModal(selector) {
+        const el = $(selector)[0];
+        if (!el) return;
+        let inst = bootstrap.Modal.getInstance(el);
+        if (!inst) {
+            inst = new bootstrap.Modal(el, { backdrop: true, keyboard: true });
         }
-        
-        try {
-            if (typeof bootstrap !== 'undefined') {
-                // Obtener instancia existente O crear una nueva
-                let modal = bootstrap.Modal.getInstance(modalElement);
-                
-                if (!modal) {
-                    modal = new bootstrap.Modal(modalElement, {
-                        backdrop: 'static',
-                        keyboard: true,
-                        focus: true
-                    });
-                    console.log('✅ Nueva instancia de modal creada:', modalId);
-                } else {
-                    console.log('✅ Reutilizando instancia existente:', modalId);
-                }
-                
-                // Mostrar el modal
-                modal.show();
-                return modal;
-            } else {
-                // Fallback a jQuery
-                $(modalElement).modal({
-                    backdrop: 'static',
-                    keyboard: true,
-                    show: true
-                });
-                console.log('✅ Modal inicializado con jQuery:', modalId);
-                return true;
-            }
-            
-        } catch (error) {
-            console.error('❌ Error al inicializar modal:', modalId, error);
-            
-            // Fallback simple con jQuery
-            try {
-                $(modalElement).modal({
-                    backdrop: 'static',
-                    show: true
-                });
-            } catch (e) {
-                console.error('❌ Fallback también falló:', e);
-            }
-            return null;
-        }
+        inst.show();
     }
 
 function abrirModalCrearProductoManual() {
@@ -9144,7 +9126,7 @@ $(document).on('click', '#btnConfigGuiaTallaManual', function() {
     const marcaSeleccionada = $('#modalCrearProductoManual select[name="atributo1"]').val();
     cargarMarcasEnGuiaTalla(marcaSeleccionada || null);
     
-    $('#modalGuiaTalla').modal('show');
+    mostrarModal('#modalGuiaTalla');
 });
 
 // Evento para editar guía de talla en modal manual
@@ -9165,7 +9147,7 @@ $(document).on('click', '#btnEditarGuiaTallaManual', function() {
         data.tallas.forEach(t => agregarFilaTalla(t));
 
         $('#modalGuiaTallaLabel').text('Editar Guía de Talla');
-        $('#modalGuiaTalla').modal('show');
+        mostrarModal('#modalGuiaTalla');
 
         cargarMarcasEnGuiaTalla(data.marca);
     });
@@ -9218,17 +9200,19 @@ $(document).on('contextmenu dblclick', '#btnConfigSobreprecioManual, #btnConfigP
     $('#inputMargenPrecioVenta').val(margenPrecioVentaGlobal);
     $('#nombreSucursalMargenes').text(sucursalMargenesActual || 'Sucursal actual');
     previewMargen();
-    $('#modalAjusteMargenes').modal('show');
+    mostrarModal('#modalAjusteMargenes');
 });
 
 function aplicarMargenesManual() {
     const costo = parseFloat($('#modalCrearProductoManual input[name="costo"]').val()) || 0;
 
     if (!isNaN(costo) && costo > 0) {
-        // Paso 1: Sobreprecio = Costo + (Costo x %SP)
-        const sobreprecio = costo + Math.round(costo * (margenSobreprecioGlobal / 100));
-        // Paso 2: Precio Venta = Sobreprecio + (Sobreprecio x %PV)
-        const precioVentaBruto = sobreprecio + Math.round(sobreprecio * (margenPrecioVentaGlobal / 100));
+        // Paso 1: Sobreprecio = margen sobre el costo (solo el delta)
+        const sobreprecio = Math.round(costo * (margenSobreprecioGlobal / 100));
+        // Paso 2: Precio Interno = Costo + Sobreprecio
+        const precioInterno = costo + sobreprecio;
+        // Paso 3: Precio Venta = Precio Interno + (Precio Interno x %PV)
+        const precioVentaBruto = precioInterno + Math.round(precioInterno * (margenPrecioVentaGlobal / 100));
         const precioVenta = redondearPrecio990(precioVentaBruto);
 
         $('#modalCrearProductoManual input[name="sobreprecio"]').val(sobreprecio);
@@ -9660,7 +9644,7 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                     $('#alertaSincManualTexto').text(txtSync);
                     $('#alertaSincManual').removeClass('d-none').addClass('show');
                 }
-                $('#modalCrearProductoManual').modal('hide');
+                cerrarModal('modalCrearProductoManual');
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
                 cargarProductosParaCrear(anioActual);
@@ -9804,7 +9788,7 @@ function mostrarModalProductoExistente(res) {
     $('#comparacionTallas').html(htmlTallas);
     
     // Mostrar modal
-    $('#modalProductoExistente').modal('show');
+    mostrarModal('#modalProductoExistente');
 }
 
 function formatearPrecio(precio) {
@@ -9892,8 +9876,8 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     confirmButtonText: 'Aceptar'
                 });
                 
-                $('#modalProductoExistente').modal('hide');
-                $('#modalCrearProductoManual').modal('hide');
+                cerrarModal('modalProductoExistente');
+                cerrarModal('modalCrearProductoManual');
 
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
@@ -10473,7 +10457,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
             </div>
         `);
         
-        $('#modalVerTallasProducto').modal('show');
+        mostrarModal('#modalVerTallasProducto');
         
         $.get(`/app/tallas_producto/${productoId}/`, function(response) {
             if (response.success) {
@@ -10667,7 +10651,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
         });
         
         copiarTallasAlModalManual(tallasParaCopiar);
-        $('#modalVerTallasProducto').modal('hide');
+        cerrarModal('modalVerTallasProducto');
         
         showSuccessAlert('Tallas copiadas', `${tallasParaCopiar.length} tallas han sido copiadas al modal de creación`);
     });
@@ -11105,7 +11089,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
         }
         
         // Mostrar modal y cargar datos
-        $('#modalDashboardFIFO').modal('show');
+        mostrarModal('#modalDashboardFIFO');
         cargarDashboardFIFO();
     }
     
@@ -11841,7 +11825,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
     
     // Abrir modal de búsqueda y edición
     $('#btnEdicionProductos').on('click', function() {
-        $('#modalBusquedaEdicionProductos').modal('show');
+        mostrarModal('#modalBusquedaEdicionProductos');
         $('#inputBuscarProductoEditar').focus();
         cargarSucursalesEnFiltroEditar();
     });
@@ -12175,7 +12159,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                         detailHtml += `<br><br><small class="text-muted"><i class="bi bi-info-circle me-1"></i>${d.movimientos_vinculados} movimientos y ${d.tickets_vinculados} ventas vinculadas (sin modificar).</small>`;
 
                         Swal.fire({ icon: 'success', title: 'Edición masiva completada', html: detailHtml });
-                        $('#modalEdicionMasiva').modal('hide');
+                        cerrarModal('modalEdicionMasiva');
                         buscarProductosParaEditar();
                     } else {
                         Swal.fire({ icon: 'error', title: 'Error', text: res.error });

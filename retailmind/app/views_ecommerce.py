@@ -21,6 +21,8 @@ from django.db import models as django_models
 from app.models import (
     PedidoEcommerce, Sucursal, Ticket, Dte,
     Ticket_Productos, TicketDetallePago, Producto_Talla, Vendedor,
+    HistorialPedidoEcommerce, MetricaAsignacionPedido,
+    SUB_ESTADO_PEDIDO_CHOICES, TRANSICIONES_SUB_ESTADO,
 )
 
 # ---------------------------------------------------------------------------
@@ -275,11 +277,14 @@ def api_recibir_pedido_ecommerce(request):
         })
 
     try:
+        # Validar stock en la sucursal para determinar sub-estado inicial
+        items_data = data.get('items', [])
         pedido = PedidoEcommerce.objects.create(
             numero_ticket_rm=_generar_numero_ticket_rm(),
             numero_pedido_canal=numero_pedido_canal,
             canal_origen=canal_origen,
             sucursal=sucursal,
+            sucursal_original=sucursal,
             rut_empresa=data.get('rut_empresa', '') or '',
             cliente_nombre=cliente_nombre,
             cliente_email=data.get('cliente_email', ''),
@@ -288,9 +293,42 @@ def api_recibir_pedido_ecommerce(request):
             descuento=data.get('descuento', 0),
             costo_envio=data.get('costo_envio', 0),
             total=data.get('total', 0),
-            items=data.get('items', []),
+            items=items_data,
             direccion_envio=data.get('direccion_envio', ''),
         )
+
+        # Verificar stock para determinar sub-estado
+        items_val = _validar_items_pedido(pedido, sucursal=sucursal)
+        todos_con_stock = all(iv['encontrado'] for iv in items_val) if items_val else False
+        items_sin = sum(1 for iv in items_val if not iv['encontrado'])
+
+        if todos_con_stock:
+            pedido.sub_estado = 'ASIGNADO'
+            pedido.fecha_asignacion = timezone.now()
+        else:
+            pedido.sub_estado = 'RECIBIDO'
+        pedido.save(update_fields=['sub_estado', 'fecha_asignacion'])
+
+        # Crear historial inicial
+        HistorialPedidoEcommerce.objects.create(
+            pedido=pedido,
+            estado_anterior='',
+            estado_nuevo='PENDIENTE',
+            sub_estado_anterior='',
+            sub_estado_nuevo=pedido.sub_estado,
+            sucursal_nueva=sucursal,
+            tipo_evento='CAMBIO_ESTADO',
+            motivo='Pedido recibido desde API',
+        )
+
+        # Crear métrica de asignación inicial
+        MetricaAsignacionPedido.objects.create(
+            pedido=pedido,
+            sucursal_asignada=sucursal,
+            todos_items_con_stock=todos_con_stock,
+            items_sin_stock=items_sin,
+        )
+
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=500)
 
@@ -299,6 +337,8 @@ def api_recibir_pedido_ecommerce(request):
         'numero_ticket_rm': pedido.numero_ticket_rm,
         'pedido_ecommerce_id': pedido.id,
         'ya_existia': False,
+        'sub_estado': pedido.sub_estado,
+        'todos_items_con_stock': todos_con_stock,
     }, status=201)
 
 
@@ -379,10 +419,25 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         if canal:
             qs = qs.filter(canal_origen=canal)
 
-        # Si el usuario pasa filtro explícito de sucursal, aplicarlo
+        sub_estado = self.request.GET.get('sub_estado', '')
+        if sub_estado:
+            qs = qs.filter(sub_estado=sub_estado)
+
+        # Filtro de sucursal: explícito, por defecto sesión, o "todas"
         sucursal_id = self.request.GET.get('sucursal_id', '')
+        ver_todas = self.request.GET.get('ver_todas', '')
+
         if sucursal_id:
+            # Filtro explícito por sucursal seleccionada
             qs = qs.filter(sucursal_id=sucursal_id)
+        elif not ver_todas:
+            # Por defecto: mostrar solo los pedidos asignados a MI sucursal de sesión
+            session_suc = (
+                self.request.session.get('idSucursalActual')
+                or self.request.session.get('sucursalActual')
+            )
+            if session_suc:
+                qs = qs.filter(sucursal_id=session_suc)
 
         q = self.request.GET.get('q', '').strip()
         if q:
@@ -401,6 +456,8 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         context['sucursales'] = Sucursal.objects.filter(activa=True).order_by('nombre')
         context['canales_choices'] = CANAL_ECOMMERCE_CHOICES
         context['estados_choices'] = ESTADO_PEDIDO_ECOMMERCE_CHOICES
+        context['sub_estados_choices'] = SUB_ESTADO_PEDIDO_CHOICES
+        context['sub_estado_filtro'] = self.request.GET.get('sub_estado', '')
         context['tipos_documento_choices'] = [
             ('BOLETA_ELECTRONICA', 'Boleta Electrónica'),
             ('BOLETA_PAPEL', 'Boleta Papel'),
@@ -441,6 +498,7 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
 
         # El filtro de sucursal activo es solo el explícito en GET
         context['sucursal_filtro'] = self.request.GET.get('sucursal_id', '')
+        context['ver_todas'] = self.request.GET.get('ver_todas', '')
 
         # ── Chequeo de stock por pedido contra la sucursal de sesión ──────────
         # Solo se ejecuta cuando hay sucursal activa y se están viendo PENDIENTES.
@@ -503,6 +561,16 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
                             pedidos_sin_stock_ids.add(pid)
 
         context['pedidos_sin_stock_ids'] = pedidos_sin_stock_ids
+
+        # QZ Tray config para impresión térmica masiva
+        from app.views_modulo_ventas import _get_qz_config
+        suc_id = str(
+            self.request.session.get('idSucursalActual')
+            or self.request.session.get('sucursalActual')
+            or ''
+        )
+        context['qz_config'] = _get_qz_config(suc_id)
+
         return context
 
 
@@ -536,9 +604,21 @@ def pedido_ecommerce_detalle(request, pedido_id):
                 messages.error(request, 'Ingresa un ID de Ticket.')
 
         elif accion == 'cancelar':
+            sub_est_ant = pedido.sub_estado
             pedido.estado = 'CANCELADO'
+            pedido.sub_estado = 'CANCELADO_CLIENTE'
             pedido.facturado_por = request.user
-            pedido.save(update_fields=['estado', 'facturado_por'])
+            pedido.save(update_fields=['estado', 'sub_estado', 'facturado_por'])
+            HistorialPedidoEcommerce.objects.create(
+                pedido=pedido,
+                estado_anterior='PENDIENTE',
+                estado_nuevo='CANCELADO',
+                sub_estado_anterior=sub_est_ant,
+                sub_estado_nuevo='CANCELADO_CLIENTE',
+                usuario=request.user,
+                tipo_evento='CAMBIO_ESTADO',
+                motivo='Cancelado manualmente por operador',
+            )
             messages.warning(request, f'Pedido {pedido.numero_ticket_rm} cancelado.')
             return redirect('pedidos_ecommerce_list')
 
@@ -572,6 +652,14 @@ def pedido_ecommerce_detalle(request, pedido_id):
     context['diferencia_total_precios'] = total_rm - total_canal
     context['hay_diferencia_precios'] = any(iv.get('descuento_canal', 0) != 0 for iv in items_validados if iv.get('precio_rm'))
     context['hay_bajo_margen'] = any(iv.get('precio_clase') == 'bajo_margen' for iv in items_validados)
+
+    # Sucursales activas para reasignación
+    context['sucursales'] = Sucursal.objects.filter(activa=True).order_by('nombre')
+
+    # QZ Tray config para impresión térmica
+    from app.views_modulo_ventas import _get_qz_config
+    suc_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+    context['qz_config'] = _get_qz_config(suc_id)
 
     return render(request, 'app/ecommerce/pedido_ecommerce_detalle.html', context)
 
@@ -729,13 +817,37 @@ def api_facturar_pedido_individual(request, pedido_id):
             ticket.estado = 'PAGADO'
             ticket.save(update_fields=['estado'])
             dte = generar_dte_desde_ticket(ticket, tipo_documento, request.user)
+            sub_estado_anterior = pedido.sub_estado
             pedido.ticket = ticket
             pedido.dte = dte
             pedido.estado = 'FACTURADO'
-            pedido.sucursal = sucursal  # actualizar sucursal a la de sesión
+            pedido.sub_estado = 'FACTURADO_OK'
+            pedido.sucursal = sucursal
             pedido.fecha_facturacion = timezone.now()
             pedido.facturado_por = request.user
-            pedido.save(update_fields=['ticket', 'dte', 'estado', 'sucursal', 'fecha_facturacion', 'facturado_por'])
+            pedido.save(update_fields=['ticket', 'dte', 'estado', 'sub_estado', 'sucursal', 'fecha_facturacion', 'facturado_por'])
+
+            # Historial de facturación
+            HistorialPedidoEcommerce.objects.create(
+                pedido=pedido,
+                estado_anterior='PENDIENTE',
+                estado_nuevo='FACTURADO',
+                sub_estado_anterior=sub_estado_anterior,
+                sub_estado_nuevo='FACTURADO_OK',
+                sucursal_nueva=sucursal,
+                usuario=request.user,
+                tipo_evento='FACTURACION',
+                motivo=f'Facturado individual como {tipo_documento}',
+            )
+
+            # Actualizar métrica con tiempo de procesamiento
+            tiempo_min = None
+            if pedido.fecha_recepcion:
+                delta = timezone.now() - pedido.fecha_recepcion
+                tiempo_min = int(delta.total_seconds() / 60)
+            MetricaAsignacionPedido.objects.filter(pedido=pedido).update(
+                tiempo_procesamiento_min=tiempo_min,
+            )
         return JsonResponse({
             'ok': True,
             'numero_ticket_rm': pedido.numero_ticket_rm,
@@ -987,13 +1099,35 @@ def facturar_ecommerce_masivo(request):
 
                 dte = generar_dte_desde_ticket(ticket, tipo_documento, request.user)
 
+                sub_estado_ant = pedido.sub_estado
                 pedido.ticket = ticket
                 pedido.dte = dte
                 pedido.estado = 'FACTURADO'
-                pedido.sucursal = sucursal  # actualizar a sucursal de sesión
+                pedido.sub_estado = 'FACTURADO_OK'
+                pedido.sucursal = sucursal
                 pedido.fecha_facturacion = timezone.now()
                 pedido.facturado_por = request.user
-                pedido.save(update_fields=['ticket', 'dte', 'estado', 'sucursal', 'fecha_facturacion', 'facturado_por'])
+                pedido.save(update_fields=['ticket', 'dte', 'estado', 'sub_estado', 'sucursal', 'fecha_facturacion', 'facturado_por'])
+
+                HistorialPedidoEcommerce.objects.create(
+                    pedido=pedido,
+                    estado_anterior='PENDIENTE',
+                    estado_nuevo='FACTURADO',
+                    sub_estado_anterior=sub_estado_ant,
+                    sub_estado_nuevo='FACTURADO_OK',
+                    sucursal_nueva=sucursal,
+                    usuario=request.user,
+                    tipo_evento='FACTURACION',
+                    motivo=f'Facturado masivo como {tipo_documento}',
+                )
+
+                tiempo_min = None
+                if pedido.fecha_recepcion:
+                    delta = timezone.now() - pedido.fecha_recepcion
+                    tiempo_min = int(delta.total_seconds() / 60)
+                MetricaAsignacionPedido.objects.filter(pedido=pedido).update(
+                    tiempo_procesamiento_min=tiempo_min,
+                )
 
             resultados.append({
                 'pedido_id': pedido.id,
@@ -1162,3 +1296,546 @@ def descargar_txt_dte_ecommerce(request, dte_id):
         logger.error('Error regenerando TXT para DTE %s: %s', dte_id, e, exc_info=True)
         from django.http import HttpResponse
         return HttpResponse(f'Error generando TXT: {e}', status=500, content_type='text/plain')
+
+
+# ---------------------------------------------------------------------------
+# API — Cambiar sub-estado de pedido
+# ---------------------------------------------------------------------------
+
+@login_required
+@csrf_exempt
+def api_cambiar_sub_estado(request, pedido_id):
+    """POST /app/ecommerce/pedidos/<id>/sub-estado/"""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'JSON inválido'}, status=400)
+
+    nuevo_sub_estado = data.get('sub_estado', '').strip()
+    motivo = data.get('motivo', '').strip()
+
+    if not nuevo_sub_estado:
+        return JsonResponse({'ok': False, 'error': 'sub_estado es obligatorio'}, status=400)
+
+    pedido = get_object_or_404(PedidoEcommerce.objects.filter(estado='PENDIENTE'), id=pedido_id)
+
+    if not pedido.puede_transicionar_sub_estado(nuevo_sub_estado):
+        permitidos = TRANSICIONES_SUB_ESTADO.get(pedido.sub_estado, [])
+        return JsonResponse({
+            'ok': False,
+            'error': f"No se puede cambiar de '{pedido.sub_estado}' a '{nuevo_sub_estado}'. Transiciones permitidas: {permitidos}",
+        }, status=400)
+
+    sub_estado_anterior = pedido.sub_estado
+    pedido.sub_estado = nuevo_sub_estado
+    if nuevo_sub_estado == 'ASIGNADO' and not pedido.fecha_asignacion:
+        pedido.fecha_asignacion = timezone.now()
+        pedido.asignado_por = request.user
+    pedido.save(update_fields=['sub_estado', 'fecha_asignacion', 'asignado_por'])
+
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=pedido.estado,
+        estado_nuevo=pedido.estado,
+        sub_estado_anterior=sub_estado_anterior,
+        sub_estado_nuevo=nuevo_sub_estado,
+        usuario=request.user,
+        tipo_evento='CAMBIO_ESTADO',
+        motivo=motivo or f'Sub-estado cambiado a {nuevo_sub_estado}',
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'sub_estado': pedido.sub_estado,
+        'sub_estado_anterior': sub_estado_anterior,
+    })
+
+
+# ---------------------------------------------------------------------------
+# API — Reasignar pedido a otra sucursal
+# ---------------------------------------------------------------------------
+
+@login_required
+@csrf_exempt
+def api_reasignar_pedido(request, pedido_id):
+    """POST /app/ecommerce/pedidos/<id>/reasignar/"""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'JSON inválido'}, status=400)
+
+    nueva_sucursal_id = data.get('sucursal_id')
+    motivo = data.get('motivo', '').strip()
+
+    if not nueva_sucursal_id:
+        return JsonResponse({'ok': False, 'error': 'sucursal_id es obligatorio'}, status=400)
+
+    try:
+        nueva_sucursal = Sucursal.objects.get(id=nueva_sucursal_id, activa=True)
+    except Sucursal.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Sucursal no encontrada o inactiva'}, status=400)
+
+    pedido = get_object_or_404(PedidoEcommerce.objects.filter(estado='PENDIENTE'), id=pedido_id)
+    sucursal_anterior = pedido.sucursal
+
+    if sucursal_anterior.id == nueva_sucursal.id:
+        return JsonResponse({'ok': False, 'error': 'La sucursal destino es la misma que la actual'}, status=400)
+
+    # Validar stock en nueva sucursal
+    items_val = _validar_items_pedido(pedido, sucursal=nueva_sucursal)
+    todos_con_stock = all(iv['encontrado'] for iv in items_val) if items_val else False
+    items_sin = sum(1 for iv in items_val if not iv['encontrado'])
+
+    sub_estado_anterior = pedido.sub_estado
+    pedido.sucursal = nueva_sucursal
+    pedido.sub_estado = 'ASIGNADO' if todos_con_stock else 'RECIBIDO'
+    pedido.fecha_asignacion = timezone.now()
+    pedido.asignado_por = request.user
+    pedido.save(update_fields=['sucursal', 'sub_estado', 'fecha_asignacion', 'asignado_por'])
+
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=pedido.estado,
+        estado_nuevo=pedido.estado,
+        sub_estado_anterior=sub_estado_anterior,
+        sub_estado_nuevo=pedido.sub_estado,
+        sucursal_anterior=sucursal_anterior,
+        sucursal_nueva=nueva_sucursal,
+        usuario=request.user,
+        tipo_evento='REASIGNACION',
+        motivo=motivo or 'Reasignación manual',
+    )
+
+    MetricaAsignacionPedido.objects.create(
+        pedido=pedido,
+        sucursal_asignada=nueva_sucursal,
+        fue_reasignado=True,
+        motivo_reasignacion='MANUAL',
+        todos_items_con_stock=todos_con_stock,
+        items_sin_stock=items_sin,
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'sucursal_nueva': {'id': nueva_sucursal.id, 'nombre': nueva_sucursal.nombre or nueva_sucursal.alias},
+        'sub_estado': pedido.sub_estado,
+        'todos_items_con_stock': todos_con_stock,
+        'items_sin_stock': items_sin,
+    })
+
+
+# ---------------------------------------------------------------------------
+# API — Sugerir mejor sucursal para un pedido
+# ---------------------------------------------------------------------------
+
+@login_required
+def api_sugerir_sucursal(request, pedido_id):
+    """GET /app/ecommerce/pedidos/<id>/sugerir-sucursal/"""
+    pedido = get_object_or_404(PedidoEcommerce.objects.filter(estado='PENDIENTE'), id=pedido_id)
+
+    # Obtener sucursales activas de la empresa
+    sucursales = Sucursal.objects.filter(activa=True).order_by('nombre')
+
+    # Filtrar por empresa del usuario si no es admin
+    user = request.user
+    if getattr(user, 'rol', '') != 'administrador':
+        try:
+            from app.models import EmpresaUser
+            eu = EmpresaUser.objects.filter(user=user).select_related('empresa').first()
+            if eu and eu.empresa:
+                sucursales = sucursales.filter(empresa=eu.empresa)
+        except Exception:
+            pass
+
+    ranking = []
+    for suc in sucursales:
+        items_val = _validar_items_pedido(pedido, sucursal=suc)
+        total_items = len(items_val)
+        items_ok = sum(1 for iv in items_val if iv['encontrado'])
+        items_sin = total_items - items_ok
+
+        # Cobertura porcentual
+        cobertura = (items_ok / total_items * 100) if total_items > 0 else 0
+
+        # Profundidad de stock: mínimo ratio stock_disponible/cantidad
+        ratios = []
+        for iv in items_val:
+            cant = iv.get('cantidad_pedida', 1)
+            disp = iv.get('stock_disponible', 0)
+            if cant > 0:
+                ratios.append(disp / cant)
+        min_ratio = min(ratios) if ratios else 0
+
+        # Carga de trabajo: pedidos PENDIENTE en esta sucursal
+        carga = PedidoEcommerce.objects.filter(sucursal=suc, estado='PENDIENTE').count()
+
+        # Score
+        score = cobertura + min(min_ratio, 5) * 10 - carga * 2
+
+        ranking.append({
+            'sucursal_id': suc.id,
+            'nombre': suc.nombre or suc.alias,
+            'items_con_stock': items_ok,
+            'items_sin_stock': items_sin,
+            'total_items': total_items,
+            'cobertura_pct': round(cobertura, 1),
+            'profundidad_stock': round(min_ratio, 2),
+            'carga_pendientes': carga,
+            'score': round(score, 1),
+            'es_actual': suc.id == pedido.sucursal_id,
+        })
+
+    ranking.sort(key=lambda x: x['score'], reverse=True)
+
+    return JsonResponse({
+        'ok': True,
+        'pedido_id': pedido.id,
+        'ranking': ranking,
+    })
+
+
+# ---------------------------------------------------------------------------
+# API — Distribución masiva de pedidos
+# ---------------------------------------------------------------------------
+
+@login_required
+@csrf_exempt
+def api_distribuir_pedidos(request):
+    """POST /app/ecommerce/pedidos/distribuir/"""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'JSON inválido'}, status=400)
+
+    pedido_ids = data.get('pedido_ids', [])
+    estrategia = data.get('estrategia', 'stock')
+    sucursal_manual_id = data.get('sucursal_id')
+
+    if not pedido_ids:
+        return JsonResponse({'ok': False, 'error': 'Selecciona al menos un pedido'}, status=400)
+
+    pedidos = PedidoEcommerce.objects.filter(id__in=pedido_ids, estado='PENDIENTE').select_related('sucursal')
+
+    # Obtener sucursales activas
+    sucursales = list(Sucursal.objects.filter(activa=True))
+    user = request.user
+    if getattr(user, 'rol', '') != 'administrador':
+        try:
+            from app.models import EmpresaUser
+            eu = EmpresaUser.objects.filter(user=user).select_related('empresa').first()
+            if eu and eu.empresa:
+                sucursales = [s for s in sucursales if s.empresa_id == eu.empresa_id]
+        except Exception:
+            pass
+
+    resultados = []
+
+    for pedido in pedidos:
+        mejor_sucursal = None
+        motivo_r = 'DISTRIBUCION_AUTO'
+
+        if estrategia == 'manual':
+            if not sucursal_manual_id:
+                resultados.append({'pedido_id': pedido.id, 'ok': False, 'error': 'sucursal_id requerido para estrategia manual'})
+                continue
+            try:
+                mejor_sucursal = Sucursal.objects.get(id=sucursal_manual_id, activa=True)
+            except Sucursal.DoesNotExist:
+                resultados.append({'pedido_id': pedido.id, 'ok': False, 'error': 'Sucursal no encontrada'})
+                continue
+            motivo_r = 'MANUAL'
+
+        elif estrategia == 'stock':
+            mejor_score = -999
+            for suc in sucursales:
+                items_val = _validar_items_pedido(pedido, sucursal=suc)
+                total_items = len(items_val)
+                items_ok = sum(1 for iv in items_val if iv['encontrado'])
+                cobertura = (items_ok / total_items * 100) if total_items > 0 else 0
+                ratios = []
+                for iv in items_val:
+                    cant = iv.get('cantidad_pedida', 1)
+                    disp = iv.get('stock_disponible', 0)
+                    if cant > 0:
+                        ratios.append(disp / cant)
+                min_ratio = min(ratios) if ratios else 0
+                carga = PedidoEcommerce.objects.filter(sucursal=suc, estado='PENDIENTE').count()
+                score = cobertura + min(min_ratio, 5) * 10 - carga * 2
+                if score > mejor_score:
+                    mejor_score = score
+                    mejor_sucursal = suc
+
+        elif estrategia == 'carga':
+            # Round-robin: asignar a la sucursal con menos pendientes que tenga stock
+            sucursales_con_stock = []
+            for suc in sucursales:
+                items_val = _validar_items_pedido(pedido, sucursal=suc)
+                if all(iv['encontrado'] for iv in items_val):
+                    carga = PedidoEcommerce.objects.filter(sucursal=suc, estado='PENDIENTE').count()
+                    sucursales_con_stock.append((suc, carga))
+            if sucursales_con_stock:
+                sucursales_con_stock.sort(key=lambda x: x[1])
+                mejor_sucursal = sucursales_con_stock[0][0]
+
+        if not mejor_sucursal:
+            resultados.append({
+                'pedido_id': pedido.id,
+                'ok': False,
+                'numero_ticket_rm': pedido.numero_ticket_rm,
+                'error': 'No se encontró sucursal con stock disponible',
+            })
+            continue
+
+        if mejor_sucursal.id == pedido.sucursal_id:
+            resultados.append({
+                'pedido_id': pedido.id,
+                'ok': True,
+                'numero_ticket_rm': pedido.numero_ticket_rm,
+                'sucursal': mejor_sucursal.nombre or mejor_sucursal.alias,
+                'cambio': False,
+            })
+            continue
+
+        sucursal_anterior = pedido.sucursal
+        items_val = _validar_items_pedido(pedido, sucursal=mejor_sucursal)
+        todos_con_stock = all(iv['encontrado'] for iv in items_val)
+        items_sin = sum(1 for iv in items_val if not iv['encontrado'])
+
+        sub_estado_anterior = pedido.sub_estado
+        pedido.sucursal = mejor_sucursal
+        pedido.sub_estado = 'ASIGNADO' if todos_con_stock else 'RECIBIDO'
+        pedido.fecha_asignacion = timezone.now()
+        pedido.asignado_por = request.user
+        pedido.save(update_fields=['sucursal', 'sub_estado', 'fecha_asignacion', 'asignado_por'])
+
+        HistorialPedidoEcommerce.objects.create(
+            pedido=pedido,
+            estado_anterior=pedido.estado,
+            estado_nuevo=pedido.estado,
+            sub_estado_anterior=sub_estado_anterior,
+            sub_estado_nuevo=pedido.sub_estado,
+            sucursal_anterior=sucursal_anterior,
+            sucursal_nueva=mejor_sucursal,
+            usuario=request.user,
+            tipo_evento='REASIGNACION',
+            motivo=f'Distribución automática ({estrategia})',
+        )
+
+        MetricaAsignacionPedido.objects.create(
+            pedido=pedido,
+            sucursal_asignada=mejor_sucursal,
+            fue_reasignado=True,
+            motivo_reasignacion=motivo_r,
+            todos_items_con_stock=todos_con_stock,
+            items_sin_stock=items_sin,
+        )
+
+        resultados.append({
+            'pedido_id': pedido.id,
+            'ok': True,
+            'numero_ticket_rm': pedido.numero_ticket_rm,
+            'sucursal': mejor_sucursal.nombre or mejor_sucursal.alias,
+            'cambio': True,
+            'todos_items_con_stock': todos_con_stock,
+        })
+
+    exitosos = sum(1 for r in resultados if r.get('ok'))
+    fallidos = sum(1 for r in resultados if not r.get('ok'))
+
+    return JsonResponse({
+        'ok': fallidos == 0,
+        'total': len(pedido_ids),
+        'exitosos': exitosos,
+        'fallidos': fallidos,
+        'resultados': resultados,
+    })
+
+
+# ---------------------------------------------------------------------------
+# API — Historial de un pedido
+# ---------------------------------------------------------------------------
+
+@login_required
+def api_historial_pedido(request, pedido_id):
+    """GET /app/ecommerce/pedidos/<id>/historial/"""
+    pedido = get_object_or_404(PedidoEcommerce, id=pedido_id)
+    historial = pedido.historial.select_related('usuario', 'sucursal_anterior', 'sucursal_nueva').order_by('-fecha')
+
+    entries = []
+    for h in historial[:50]:
+        entries.append({
+            'tipo_evento': h.tipo_evento,
+            'estado_anterior': h.estado_anterior,
+            'estado_nuevo': h.estado_nuevo,
+            'sub_estado_anterior': h.sub_estado_anterior,
+            'sub_estado_nuevo': h.sub_estado_nuevo,
+            'sucursal_anterior': (h.sucursal_anterior.nombre or h.sucursal_anterior.alias) if h.sucursal_anterior else '',
+            'sucursal_nueva': (h.sucursal_nueva.nombre or h.sucursal_nueva.alias) if h.sucursal_nueva else '',
+            'usuario': h.usuario.username if h.usuario else '',
+            'motivo': h.motivo,
+            'fecha': h.fecha.strftime('%d/%m/%Y %H:%M'),
+        })
+
+    return JsonResponse({'ok': True, 'historial': entries})
+
+
+# ---------------------------------------------------------------------------
+# Dashboard — Métricas de asignación
+# ---------------------------------------------------------------------------
+
+@login_required
+def ecommerce_dashboard_asignacion(request):
+    """GET /app/ecommerce/dashboard-asignacion/"""
+    from django.db.models import Count, Avg, Q, F
+    from datetime import timedelta
+
+    # Filtros
+    dias = int(request.GET.get('dias', 30))
+    canal = request.GET.get('canal', '')
+    fecha_desde = timezone.now() - timedelta(days=dias)
+
+    # Base queryset
+    metricas_qs = MetricaAsignacionPedido.objects.filter(fecha__gte=fecha_desde)
+    pedidos_qs = PedidoEcommerce.objects.filter(fecha_recepcion__gte=fecha_desde)
+
+    if canal:
+        pedidos_qs = pedidos_qs.filter(canal_origen=canal)
+        metricas_qs = metricas_qs.filter(pedido__canal_origen=canal)
+
+    # Filtrar por empresa del usuario
+    user = request.user
+    if getattr(user, 'rol', '') != 'administrador':
+        try:
+            from app.models import EmpresaUser
+            eu = EmpresaUser.objects.filter(user=user).select_related('empresa').first()
+            if eu and eu.empresa:
+                rut = eu.empresa.rut or ''
+                if rut:
+                    pedidos_qs = pedidos_qs.filter(
+                        django_models.Q(rut_empresa=rut) | django_models.Q(rut_empresa='')
+                    )
+                    metricas_qs = metricas_qs.filter(
+                        django_models.Q(pedido__rut_empresa=rut) | django_models.Q(pedido__rut_empresa='')
+                    )
+        except Exception:
+            pass
+
+    # KPIs por sucursal
+    sucursales_data = []
+    sucursales = Sucursal.objects.filter(activa=True).order_by('nombre')
+    for suc in sucursales:
+        m_suc = metricas_qs.filter(sucursal_asignada=suc)
+        total = m_suc.count()
+        if total == 0:
+            continue
+        reasignados = m_suc.filter(fue_reasignado=True).count()
+        sin_stock = m_suc.filter(todos_items_con_stock=False).count()
+        avg_tiempo = m_suc.filter(tiempo_procesamiento_min__isnull=False).aggregate(
+            avg=Avg('tiempo_procesamiento_min')
+        )['avg']
+
+        sucursales_data.append({
+            'sucursal_id': suc.id,
+            'nombre': suc.nombre or suc.alias,
+            'total_pedidos': total,
+            'reasignados': reasignados,
+            'tasa_reasignacion': round(reasignados / total * 100, 1) if total > 0 else 0,
+            'sin_stock': sin_stock,
+            'tasa_sin_stock': round(sin_stock / total * 100, 1) if total > 0 else 0,
+            'tiempo_promedio_min': round(avg_tiempo or 0, 0),
+            'alerta': (reasignados / total * 100) > 20 if total > 0 else False,
+        })
+
+    # Ordenar por score (menos reasignaciones = mejor)
+    sucursales_data.sort(key=lambda x: x['tasa_reasignacion'])
+
+    # KPIs globales
+    total_pedidos = pedidos_qs.count()
+    facturados = pedidos_qs.filter(estado='FACTURADO').count()
+    cancelados = pedidos_qs.filter(estado='CANCELADO').count()
+    pendientes = pedidos_qs.filter(estado='PENDIENTE').count()
+
+    context = {
+        'sucursales_data': sucursales_data,
+        'total_pedidos': total_pedidos,
+        'facturados': facturados,
+        'cancelados': cancelados,
+        'pendientes': pendientes,
+        'dias': dias,
+        'canal_filtro': canal,
+        'canales_choices': [('SHOPIFY', 'Shopify'), ('PARIS', 'Paris'), ('RIPLEY', 'Ripley'), ('WALMART', 'Walmart'), ('OTRO', 'Otro')],
+    }
+    return render(request, 'app/ecommerce/dashboard_asignacion.html', context)
+
+
+# ---------------------------------------------------------------------------
+# Export CSV de pedidos filtrados
+# ---------------------------------------------------------------------------
+
+@login_required
+def exportar_pedidos_csv(request):
+    """GET /app/ecommerce/pedidos/exportar-csv/"""
+    import csv
+    from django.http import HttpResponse
+
+    qs = PedidoEcommerce.objects.select_related('sucursal', 'ticket', 'dte').order_by('-fecha_recepcion')
+
+    estado = request.GET.get('estado', '')
+    if estado:
+        qs = qs.filter(estado=estado)
+    canal = request.GET.get('canal', '')
+    if canal:
+        qs = qs.filter(canal_origen=canal)
+    sub_estado = request.GET.get('sub_estado', '')
+    if sub_estado:
+        qs = qs.filter(sub_estado=sub_estado)
+    sucursal_id = request.GET.get('sucursal_id', '')
+    if sucursal_id:
+        qs = qs.filter(sucursal_id=sucursal_id)
+    q = request.GET.get('q', '').strip()
+    if q:
+        from django.db.models import Q
+        qs = qs.filter(
+            Q(numero_ticket_rm__icontains=q) |
+            Q(numero_pedido_canal__icontains=q) |
+            Q(cliente_nombre__icontains=q)
+        )
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="pedidos_ecommerce.csv"'
+    response.write('\ufeff')  # BOM for Excel UTF-8
+
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow([
+        'N Ticket RM', 'N Pedido Canal', 'Canal', 'Cliente', 'RUT/Doc',
+        'Sucursal', 'Total', 'Estado', 'Sub-estado', 'Fecha Recepcion',
+        'Fecha Facturacion', 'Ticket #', 'DTE #',
+    ])
+
+    for p in qs[:5000]:
+        writer.writerow([
+            p.numero_ticket_rm,
+            p.numero_pedido_canal,
+            p.canal_origen,
+            p.cliente_nombre,
+            p.cliente_documento,
+            p.sucursal.nombre or p.sucursal.alias if p.sucursal else '',
+            int(p.total or 0),
+            p.estado,
+            p.sub_estado,
+            p.fecha_recepcion.strftime('%d/%m/%Y %H:%M') if p.fecha_recepcion else '',
+            p.fecha_facturacion.strftime('%d/%m/%Y %H:%M') if p.fecha_facturacion else '',
+            p.ticket.correlativo if p.ticket else '',
+            p.dte.numero_documento if p.dte else '',
+        ])
+
+    return response

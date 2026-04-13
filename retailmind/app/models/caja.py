@@ -14,6 +14,13 @@ ESTADO_ARQUEO_CHOICES = [
     ('REVISADO', 'Revisado por Supervisor'),
 ]
 
+RESULTADO_REVISION_CHOICES = [
+    ('PENDIENTE', 'Pendiente de revisión'),
+    ('OK', 'Aprobado sin observaciones'),
+    ('OK_CON_OBS', 'Aprobado con observaciones'),
+    ('REQUIERE_ACCION', 'Requiere acción correctiva'),
+]
+
 class ArqueoCaja(models.Model):
     """
     Modelo para registrar arqueos de caja diarios
@@ -96,10 +103,44 @@ class ArqueoCaja(models.Model):
     diferencia_debito = models.IntegerField(default=0, help_text="Diferencia débito: físico - teórico")
     diferencia_credito = models.IntegerField(default=0, help_text="Diferencia crédito: físico - teórico")
     
+    # === CAJA CHICA / FONDO FIJO ===
+    fondo_fijo_snapshot = models.IntegerField(
+        default=0,
+        help_text="Snapshot del fondo fijo de caja chica al momento del cierre"
+    )
+
+    # === METADATA DE CONTEO ===
+    timestamp_conteo_fisico = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Momento exacto en que se guardó el conteo físico"
+    )
+    modo_conteo = models.CharField(
+        max_length=10,
+        choices=[('DETALLADO', 'Detallado'), ('EXPRESS', 'Express')],
+        default='DETALLADO',
+        help_text="Modo usado para el conteo físico"
+    )
+    requiere_revision_express = models.BooleanField(
+        default=False,
+        help_text="True si el conteo fue en modo express (revisión recomendada)"
+    )
+
     # === CONTROL Y ESTADO ===
     estado = models.CharField(max_length=20, choices=ESTADO_ARQUEO_CHOICES, default='ABIERTO')
     observaciones = models.TextField(blank=True, null=True)
     observaciones_diferencia = models.TextField(blank=True, null=True)
+    categoria_diferencia = models.CharField(
+        max_length=30, blank=True, null=True,
+        choices=[
+            ('ERROR_VUELTO', 'Error de vuelto'),
+            ('BILLETE_FALSO', 'Billete falso'),
+            ('DIFERENCIA_POS', 'Diferencia POS'),
+            ('FALTANTE_SIN_EXPLICAR', 'Faltante sin explicar'),
+            ('SOBRANTE', 'Sobrante'),
+            ('OTRO', 'Otro'),
+        ],
+        help_text="Categoría de la diferencia (obligatorio si >$5,000)"
+    )
     
     # === SUPERVISIÓN ===
     supervisor_revision = models.ForeignKey(
@@ -110,6 +151,12 @@ class ArqueoCaja(models.Model):
     )
     fecha_revision = models.DateTimeField(null=True, blank=True)
     observaciones_supervisor = models.TextField(blank=True, null=True)
+    resultado_revision = models.CharField(
+        max_length=20,
+        choices=RESULTADO_REVISION_CHOICES,
+        default='PENDIENTE',
+        help_text="Resultado de la revisión del supervisor"
+    )
     
     # === METADATA ===
     fecha_creacion = models.DateTimeField(auto_now_add=True)
@@ -146,8 +193,8 @@ class ArqueoCaja(models.Model):
             (self.monedas_1 * 1)
         )
         
-        # Calcular diferencia
-        self.diferencia_efectivo = self.total_efectivo_fisico - self.total_efectivo_teorico
+        # Calcular diferencia (considerando fondo fijo de caja chica)
+        self.diferencia_efectivo = self.total_efectivo_fisico - (self.total_efectivo_teorico + self.fondo_fijo_snapshot)
         
         # Auto-determinar estado
         if self.estado == 'ABIERTO' and self.fecha_cierre:
@@ -197,8 +244,8 @@ class ArqueoCaja(models.Model):
     
     @property
     def efectivo_en_caja(self):
-        """Calcula el efectivo que realmente queda en caja (después de depósitos)"""
-        return self.total_efectivo_fisico - self.total_depositos
+        """Calcula el efectivo que realmente queda en caja (después de depósitos y fondo fijo)"""
+        return self.total_efectivo_fisico - self.total_depositos - self.fondo_fijo_snapshot
     
     @property
     def diferencia_efectivo_real(self):
@@ -209,6 +256,65 @@ class ArqueoCaja(models.Model):
     def diferencia_total_real(self):
         """Diferencia total considerando efectivo en caja + diferencia POS"""
         return self.diferencia_efectivo_real + self.diferencia_transbank
+
+    # === CONTROL POR DEPÓSITO BANCARIO (el control real) ===
+
+    @property
+    def total_depositado_efectivo_verificado(self):
+        """Total de depósitos en efectivo verificados por supervisor"""
+        return sum(
+            d.monto_confirmado for d in self.depositos.filter(verificado=True, tipo_medio='EFECTIVO')
+        )
+
+    @property
+    def total_depositado_cheque_verificado(self):
+        """Total de depósitos en cheque verificados por supervisor"""
+        return sum(
+            d.monto_confirmado for d in self.depositos.filter(verificado=True, tipo_medio='CHEQUE')
+        )
+
+    @property
+    def total_depositado_verificado(self):
+        """Total de todos los depósitos verificados"""
+        return sum(
+            d.monto_confirmado for d in self.depositos.filter(verificado=True)
+        )
+
+    @property
+    def diferencia_deposito_vs_teorico(self):
+        """Control real: ¿el dinero de ventas en efectivo llegó al banco?"""
+        return self.total_depositado_efectivo_verificado - self.total_efectivo_teorico
+
+    @property
+    def diferencia_cheques_vs_teorico(self):
+        """Control de cheques: ¿los cheques recibidos se depositaron?"""
+        return self.total_depositado_cheque_verificado - self.total_cheque_teorico
+
+    @property
+    def estado_deposito(self):
+        """Estado del depósito: COMPLETO, PARCIAL, SIN_DEPOSITO"""
+        total_dep = self.total_depositado_verificado
+        esperado = self.total_efectivo_teorico + self.total_cheque_teorico
+        if esperado == 0:
+            return 'SIN_DEPOSITO'
+        if total_dep == 0:
+            return 'SIN_DEPOSITO'
+        if abs(total_dep - esperado) <= 1000:  # Tolerancia $1,000
+            return 'COMPLETO'
+        return 'PARCIAL'
+
+    @property
+    def dias_sin_revision(self):
+        """Días desde el arqueo sin ser revisado"""
+        from datetime import date
+        if self.estado == 'REVISADO':
+            return 0
+        return (date.today() - self.fecha_arqueo).days
+
+    @property
+    def requiere_revision_urgente(self):
+        """True si el arqueo tiene >3 días sin ser revisado"""
+        return self.dias_sin_revision > 3 and self.estado != 'REVISADO'
 
 
 # ========== MODELO PARA DEPÓSITOS BANCARIOS ==========
@@ -438,6 +544,91 @@ class HistorialReaperturaArqueo(models.Model):
 
     def __str__(self):
         return f"Reapertura {self.arqueo} por {self.usuario} - {self.fecha_reapertura:%d/%m/%Y %H:%M}"
+
+
+# ========== LOG DE AUDITORÍA DE ACCIONES DE CAJA ==========
+
+class LogAccionCaja(models.Model):
+    """Registro de auditoría para todas las acciones sensibles del módulo de caja."""
+    ACCIONES = [
+        ('VER_CUADRATURA', 'Visualizar Cuadratura'),
+        ('GENERAR_CUADRATURA', 'Generar Cuadratura'),
+        ('GUARDAR_CONTEO', 'Guardar Conteo Físico'),
+        ('CERRAR_ARQUEO', 'Cerrar Arqueo'),
+        ('ELIMINAR_ARQUEO', 'Eliminar Arqueo'),
+        ('REABRIR_ARQUEO', 'Reabrir Arqueo'),
+        ('CORREGIR_EXPRESS', 'Corrección Express'),
+        ('DECLARAR_DEPOSITO', 'Declarar Depósito'),
+        ('CONFIRMAR_DEPOSITO', 'Confirmar Depósito'),
+        ('REVISAR_ARQUEO', 'Revisar Arqueo'),
+    ]
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='logs_caja'
+    )
+    accion = models.CharField(max_length=30, choices=ACCIONES)
+    arqueo = models.ForeignKey(
+        ArqueoCaja, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='logs_auditoria'
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    datos_extra = models.JSONField(default=dict, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Log de Acción de Caja'
+        verbose_name_plural = 'Logs de Acciones de Caja'
+        indexes = [
+            models.Index(fields=['usuario', 'timestamp']),
+            models.Index(fields=['accion', 'timestamp']),
+            models.Index(fields=['arqueo', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_accion_display()} - {self.usuario.username} - {self.timestamp:%d/%m/%Y %H:%M}"
+
+
+def log_accion_caja(request, accion, arqueo=None, **extra):
+    """Helper para registrar acciones de auditoría de caja."""
+    LogAccionCaja.objects.create(
+        usuario=request.user,
+        accion=accion,
+        arqueo=arqueo,
+        ip_address=request.META.get('REMOTE_ADDR'),
+        datos_extra=extra or {}
+    )
+
+
+# ========== BITÁCORA DE OBSERVACIONES ==========
+
+class ObservacionArqueo(models.Model):
+    """Bitácora bidireccional de observaciones entre cajera y supervisor."""
+    TIPO_CHOICES = [
+        ('CAJERA', 'Observación de Cajera'),
+        ('SUPERVISOR', 'Observación de Supervisor'),
+        ('SISTEMA', 'Nota del Sistema'),
+    ]
+    arqueo = models.ForeignKey(
+        ArqueoCaja, on_delete=models.CASCADE, related_name='bitacora'
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='observaciones_arqueo'
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    texto = models.TextField()
+    fecha = models.DateTimeField(auto_now_add=True)
+    visible_para_cajera = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Observación de Arqueo'
+        verbose_name_plural = 'Observaciones de Arqueo'
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.arqueo.fecha_arqueo} - {self.usuario}"
 
 
 # ========== MÓDULO DE CRÉDITOS A TRABAJADORES ==========

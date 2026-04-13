@@ -147,6 +147,7 @@ class Productos_Recepcionados(models.Model):
     cantidad_esperada = models.IntegerField(default=0, help_text="Cantidad original esperada")
     cantidad_danada = models.IntegerField(default=0, help_text="Cantidad con daños")
     cantidad_faltante = models.IntegerField(default=0, help_text="Cantidad que no llegó")
+    cantidad_sobrante = models.IntegerField(default=0, help_text="Cantidad que llegó de más respecto a lo esperado")
     
     # Estado de recepción (nuevo)
     estado = models.CharField(
@@ -215,7 +216,7 @@ class Productos_Recepcionados(models.Model):
     @property
     def tiene_problemas(self):
         """Indica si este producto tiene problemas en la recepción"""
-        return self.estado in ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION']
+        return self.estado in ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
     
     @property
     def esta_ok(self):

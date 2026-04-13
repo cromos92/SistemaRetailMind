@@ -13,7 +13,7 @@ Uso:
     python manage.py migrate_from_laravel --cleanup        # Elimina datos de prueba que no existen en MySQL
     python manage.py migrate_from_laravel --cleanup --dry-run  # Ver qué se eliminaría sin ejecutar
 
-Sobreprecio: sobreprecio = max(0, precioventa - costo), consistente con la UI.
+Sobreprecio: sobreprecio = max(0, preciointerno - costo). Margen interno CD, NO margen de venta pública.
 """
 
 import os
@@ -1293,10 +1293,10 @@ class Command(BaseCommand):
             marca = row['marca'] or 'SIN ESPECIFICAR'
             color = row['color'] or 'SIN ESPECIFICAR'
 
-            # Calcular sobreprecio = precioventa - costo (misma formula que la UI)
             costo = self.safe_int(row['costo'])
+            preciointerno = self.safe_int(row['preciointerno'])
             precioventa = self.safe_int(row['precioventa'])
-            sobreprecio = max(0, precioventa - costo)
+            sobreprecio = max(0, preciointerno - costo) if preciointerno > 0 else max(0, precioventa - costo)
 
             prod_key = (articulo, alias, marca, color)
             existing_id = productos_existentes.get(prod_key)

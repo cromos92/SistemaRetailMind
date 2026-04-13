@@ -331,7 +331,7 @@
                                     <i class="ri-alarm-warning-line" style="font-size:1.3rem;color:#fff;"></i>
                                 </div>
                                 <div class="flex-grow-1">
-                                    <h6 class="alert-heading mb-1" style="color:var(--nexo-gray-900);font-weight:700;">Ventas detectadas después del cierre</h6>
+                                    <h6 class="alert-heading mb-1" style="color:var(--nexo-gray-900);font-weight:700;">Ventas detectadas despues del cierre</h6>
                                     <p class="mb-2" style="font-size:.875rem;color:var(--nexo-gray-700);">
                                         <strong><span id="cantidadVentasPostCierre">0</span> ventas</strong> por
                                         <strong style="color:var(--nexo-error);">$<span id="montoVentasPostCierre">0</span></strong>
@@ -346,7 +346,7 @@
                             </div>
                         </div>
 
-                        <!-- Fila principal: fecha + estado + botón -->
+                        <!-- Fila principal: Acciones rapidas + estado -->
                         <div class="row align-items-center g-3">
                             <div class="col-md-3 col-sm-4">
                                 <div class="d-flex align-items-center">
@@ -359,19 +359,47 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-sm-5">
+                            <div class="col-md-5 col-sm-4">
                                 <div id="estadoHoy" class="text-center py-2">
                                     <div class="spinner-border" role="status" style="color:var(--nexo-primary);width:2rem;height:2rem;"><span class="sr-only">Cargando...</span></div>
                                     <p class="mt-2 mb-0 text-muted" style="font-size:.825rem;">Verificando estado del arqueo...</p>
                                 </div>
                             </div>
-                            <div class="col-md-3 col-sm-3 text-end">
-                                <!-- Botones contextuales generados por JS en mostrarEstadoHoy / mostrarSinArqueo -->
+                            <div class="col-md-4 col-sm-4 text-end">
                                 <div id="accionesPrincipales" class="d-flex flex-wrap justify-content-end gap-2">
                                     <!-- poblado por JS -->
                                 </div>
+                                <!-- Boton siempre visible para arqueo de dias anteriores -->
+                                <button type="button" class="btn btn-outline-warning btn-sm mt-2" onclick="crearArqueoFechaPasada()" style="font-size:.8rem;">
+                                    <i class="ri-calendar-event-line me-1"></i>Arqueo de dia anterior
+                                    <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">{{ dias_tolerancia_arqueo }}d</span>
+                                </button>
                             </div>
                         </div>
+
+                        <!-- Banner observaciones del supervisor -->
+                        <div id="bannerObsSupervisor" class="alert mb-3" style="display:none;background:linear-gradient(135deg,rgba(0,102,255,.08),rgba(108,99,255,.06));border:1px solid var(--nexo-primary);border-radius:var(--nexo-radius-lg);">
+                            <div class="d-flex align-items-start">
+                                <div class="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0" style="width:40px;height:40px;background:var(--nexo-primary);">
+                                    <i class="ri-message-3-line" style="font-size:1.1rem;color:#fff;"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="alert-heading mb-1" style="color:var(--nexo-primary);font-weight:700;font-size:.88rem;">Nota del Supervisor</h6>
+                                    <p class="mb-1" id="textoObsSupervisor" style="font-size:.85rem;color:var(--nexo-gray-700);"></p>
+                                    <small class="text-muted" id="metaObsSupervisor"></small>
+                                </div>
+                                <span id="badgeResultadoRev" class="badge ms-2" style="font-size:.7rem;"></span>
+                            </div>
+                        </div>
+
+                        <!-- Panel de Bloqueos del Día (checklist visual) -->
+                        <div id="panelBloqueosHoy" class="mb-3" style="display:none;">
+                            <div class="d-flex flex-wrap gap-2" id="listaBloqueosHoy">
+                            </div>
+                        </div>
+
+                        <!-- Alerta de arqueos pendientes (poblado por JS) -->
+                        <div id="zonaAlertasPendientes"></div>
 
                         <!-- Workflow Visual -->
                         <div class="mt-3 pt-3" style="border-top:1px solid var(--nexo-gray-200);">
@@ -379,7 +407,7 @@
                                 <div class="workflow-step" id="step1">
                                     <div class="d-flex align-items-center">
                                         <div class="step-indicator completed"><i class="ri-check-line"></i></div>
-                                        <div class="ms-2"><small class="d-block text-muted">Paso 1</small><span style="font-weight:600;font-size:.85rem;">Ventas del Día</span></div>
+                                        <div class="ms-2"><small class="d-block text-muted">Paso 1</small><span style="font-weight:600;font-size:.85rem;">Ventas del Dia</span></div>
                                     </div>
                                 </div>
                                 <div class="workflow-connector"></div>
@@ -393,7 +421,7 @@
                                 <div class="workflow-step" id="step3">
                                     <div class="d-flex align-items-center">
                                         <div class="step-indicator" id="stepIndicator3"><span>3</span></div>
-                                        <div class="ms-2"><small class="d-block text-muted">Paso 3</small><span style="font-weight:600;font-size:.85rem;">Arqueo Físico</span></div>
+                                        <div class="ms-2"><small class="d-block text-muted">Paso 3</small><span style="font-weight:600;font-size:.85rem;">Arqueo Fisico</span></div>
                                     </div>
                                 </div>
                                 <div class="workflow-connector"></div>
@@ -407,7 +435,7 @@
                                 <div class="workflow-step" id="step5">
                                     <div class="d-flex align-items-center">
                                         <div class="step-indicator" id="stepIndicator5"><span>5</span></div>
-                                        <div class="ms-2"><small class="d-block text-muted">Paso 5</small><span style="font-weight:600;font-size:.85rem;">Depósito</span></div>
+                                        <div class="ms-2"><small class="d-block text-muted">Paso 5</small><span style="font-weight:600;font-size:.85rem;">Deposito</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -417,11 +445,11 @@
             </div>
         </div>
 
-        <!-- ===== FILTROS + RESUMEN RÁPIDO ===== -->
+        <!-- ===== FILTROS + RESUMEN ===== -->
         <div class="row mb-3 g-3">
             <div class="col-lg-8">
                 <div class="card h-100">
-                    <div class="card-header"><h6 class="mb-0"><i class="ri-filter-3-line me-2" style="color:var(--nexo-primary);"></i>Filtros de Búsqueda</h6></div>
+                    <div class="card-header"><h6 class="mb-0"><i class="ri-filter-3-line me-2" style="color:var(--nexo-primary);"></i>Historial de Arqueos</h6></div>
                     <div class="card-body py-3">
                         <div class="row g-2">
                             <div class="col-md-3 col-6">
@@ -436,18 +464,15 @@
                                 <label class="form-label" style="font-size:.8rem;"><i class="ri-bookmark-line me-1 text-muted"></i>Estado</label>
                                 <select class="form-select form-select-sm" id="filtroEstado">
                                     <option value="">Todos</option>
-                                    <option value="CERRADO">✓ Cerrado</option>
-                                    <option value="CON_DIFERENCIAS">⚠ Con Diferencias</option>
-                                    <option value="ABIERTO">◷ Abierto</option>
-                                    <option value="REVISADO">✔ Revisado</option>
+                                    <option value="CERRADO">Cerrado</option>
+                                    <option value="CON_DIFERENCIAS">Con Diferencias</option>
+                                    <option value="ABIERTO">Abierto</option>
+                                    <option value="REVISADO">Revisado</option>
                                 </select>
                             </div>
                             <div class="col-md-3 col-6 d-flex align-items-end gap-1">
                                 <button type="button" class="btn btn-primary btn-sm flex-grow-1" onclick="filtrarArqueos()"><i class="ri-search-line me-1"></i>Buscar</button>
                                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()" title="Limpiar"><i class="ri-refresh-line"></i></button>
-                                {% if es_administrador %}
-                                <button type="button" class="btn btn-warning btn-sm" onclick="crearArqueoFechaPasada()" title="Arqueo fecha pasada"><i class="ri-calendar-event-line"></i></button>
-                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -456,7 +481,7 @@
             <div class="col-lg-4">
                 <div class="card h-100" style="background:var(--nexo-gray-100);">
                     <div class="card-header" style="background:var(--nexo-gray-100);border-bottom:1px solid var(--nexo-gray-300);">
-                        <h6 class="mb-0"><i class="ri-pie-chart-2-line me-2" style="color:var(--nexo-accent);"></i>Resumen Rápido</h6>
+                        <h6 class="mb-0"><i class="ri-pie-chart-2-line me-2" style="color:var(--nexo-accent);"></i>Resumen del Mes</h6>
                     </div>
                     <div class="card-body py-3">
                         <div class="row g-2 mb-2">
@@ -483,11 +508,13 @@
                                 </div>
                             </div>
                         </div>
+                        {% if es_administrador %}
                         <div class="d-grid">
-                            <button type="button" class="btn btn-sm btn-warning" onclick="corregirArqueosExpress()" title="Corregir arqueos Express">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="corregirArqueosExpress()" title="Corregir arqueos Express">
                                 <i class="ri-tools-line me-1"></i>Corregir Express
                             </button>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -570,6 +597,7 @@
                                         <th><i class="ri-money-dollar-circle-line me-1"></i>Efectivo <small class="text-muted">(T/F/Dif)</small></th>
                                         <th class="col-hide-sm"><i class="ri-bank-card-line me-1"></i>Transbank <small class="text-muted">(dif.)</small></th>
                                         <th class="col-hide-sm"><i class="ri-money-dollar-circle-line me-1"></i>Venta Total</th>
+                                        <th class="col-hide-sm"><i class="ri-bank-line me-1"></i>Depósito</th>
                                         <th style="padding-right:1rem;"><i class="ri-settings-3-line me-1"></i>Acciones</th>
                                     </tr>
                                 </thead>
@@ -683,21 +711,28 @@
             <!-- Body del Wizard -->
             <div class="modal-body p-0" style="max-height:calc(100vh - 260px);overflow-y:auto;">
 
-                <!-- ---- PASO 1: RESUMEN DE VENTAS ---- -->
+                <!-- ---- PASO 1: RESUMEN DE VENTAS (colapsable) ---- -->
                 <div id="wizardStep1" class="arqueo-wizard-step active p-4">
-                    <div class="alert alert-info mb-3">
-                        <h6 class="alert-heading mb-1"><i class="ri-information-line me-2"></i>Resumen de Ventas del Día</h6>
-                        <p class="mb-0" style="font-size:.85rem;">Estos son los totales teóricos calculados automáticamente desde las ventas registradas en el sistema.</p>
+                    <div class="d-flex align-items-center justify-content-between mb-2 cursor-pointer" onclick="$('#resumenVentasCollapse').slideToggle(200);$(this).find('.ri-arrow-down-s-line,.ri-arrow-up-s-line').toggleClass('ri-arrow-down-s-line ri-arrow-up-s-line');" style="cursor:pointer;">
+                        <div class="d-flex align-items-center">
+                            <i class="ri-bar-chart-grouped-line me-2" style="color:var(--nexo-primary);font-size:1.1rem;"></i>
+                            <h6 class="mb-0" style="font-weight:700;color:var(--nexo-gray-900);font-size:.92rem;">Resumen de Ventas del Día</h6>
+                            <span class="badge ms-2" style="background:var(--nexo-primary-light);color:var(--nexo-primary);font-size:.68rem;">Informativo</span>
+                        </div>
+                        <i class="ri-arrow-down-s-line" style="font-size:1.2rem;color:var(--nexo-gray-500);"></i>
                     </div>
-                    <div class="row" id="resumenVentas">
-                        <div class="col-12 text-center py-3">
-                            <div class="spinner-border text-primary" role="status"></div>
-                            <p class="text-muted mt-2" style="font-size:.85rem;">Cargando resumen de ventas...</p>
+                    <div id="resumenVentasCollapse" style="display:none;">
+                        <div class="row mt-2" id="resumenVentas">
+                            <div class="col-12 text-center py-3">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="text-muted mt-2" style="font-size:.85rem;">Cargando resumen de ventas...</p>
+                            </div>
                         </div>
                     </div>
-                    <div class="alert alert-success mt-3 mb-0" style="font-size:.85rem;">
+                    <div class="alert alert-success mt-3 mb-0" style="font-size:.82rem;">
                         <i class="ri-arrow-right-line me-2"></i>
-                        Revise los totales y haga clic en <strong>Siguiente</strong> para iniciar el conteo físico de efectivo.
+                        Haga clic en <strong>Siguiente</strong> para iniciar el conteo físico de efectivo.
+                        <span class="text-muted ms-2">(Puede expandir el resumen de ventas arriba si necesita verificar los totales)</span>
                     </div>
                 </div>
 
@@ -926,6 +961,10 @@
                                     <span class="text-muted" style="font-size:.85rem;">Sistema espera (teórico)</span>
                                     <span class="h5 mb-0 text-info" id="efectivoTeorico">$0</span>
                                 </div>
+                                <div id="fondoFijoInfo" style="display:none;font-size:.82rem;color:var(--nexo-gray-500);margin-top:4px;">
+                                    <i class="ri-safe-2-line me-1"></i>Fondo Fijo: <strong id="fondoFijoMonto">$0</strong>
+                                    <span class="text-muted ms-2">| Esperado en caja: <strong id="esperadoEnCaja">$0</strong></span>
+                                </div>
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom:1px dashed var(--nexo-gray-200);">
                                     <span class="text-muted" style="font-size:.85rem;">Usted contó (físico)</span>
                                     <span class="h5 mb-0 text-primary" id="efectivoFisico">$0</span>
@@ -949,8 +988,11 @@
                                 <label class="form-label text-danger fw-bold">
                                     <i class="ri-alert-line me-1"></i>Explicación de la Diferencia *
                                 </label>
+                                <small class="text-muted d-block mb-1">
+                                    <i class="ri-alert-line me-1 text-warning"></i>Diferencias > $500 requieren observaciones detalladas (mínimo 20 caracteres, 3 palabras distintas)
+                                </small>
                                 <textarea class="form-control" id="observacionesDiferencia" rows="3"
-                                          placeholder="Explique detalladamente el motivo de la diferencia (mínimo 10 caracteres)..."></textarea>
+                                          placeholder="Explique detalladamente el motivo de la diferencia (mínimo 20 caracteres, 3 palabras distintas)..."></textarea>
                                 <small class="text-danger" style="font-size:.75rem;">
                                     <i class="ri-information-line me-1"></i>Obligatorio para diferencias mayores a $500. Sea específico.
                                 </small>
@@ -959,6 +1001,16 @@
                                 <i class="ri-information-line me-2"></i>
                                 Use <strong>Guardar Borrador</strong> para grabar sin cerrar, o <strong>Cerrar Arqueo</strong> para finalizar el día.
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Bitácora de observaciones (visible para cajera) -->
+                    <div id="panelBitacoraWizard" class="mt-3" style="display:none;">
+                        <hr>
+                        <h6 style="font-weight:700;font-size:.8rem;text-transform:uppercase;letter-spacing:.5px;color:var(--nexo-gray-700);">
+                            <i class="ri-message-3-line me-2" style="color:var(--nexo-primary);"></i>Observaciones y Notas
+                        </h6>
+                        <div id="bitacoraWizardContent" style="max-height:200px;overflow-y:auto;">
                         </div>
                     </div>
 
@@ -1324,16 +1376,19 @@
                         <!-- Tipo de medio -->
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Tipo de Medio *</label>
-                            <div class="d-flex gap-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="tipoMedioDeclaracion" id="tipoMedioEfectivo" value="EFECTIVO" checked>
-                                    <label class="form-check-label fw-bold" for="tipoMedioEfectivo"><i class="ri-money-dollar-circle-line me-1" style="color:var(--nexo-success);"></i>Efectivo</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="tipoMedioDeclaracion" id="tipoMedioCheque" value="CHEQUE">
-                                    <label class="form-check-label fw-bold" for="tipoMedioCheque"><i class="ri-file-text-line me-1" style="color:var(--nexo-primary);"></i>Cheque</label>
-                                </div>
+                            <div class="d-flex gap-2">
+                                <label class="btn btn-outline-success px-3 py-2 position-relative" for="tipoMedioEfectivo" style="border-radius:var(--nexo-radius-md);cursor:pointer;">
+                                    <input class="form-check-input position-absolute opacity-0" type="radio" name="tipoMedioDeclaracion" id="tipoMedioEfectivo" value="EFECTIVO" checked
+                                           onchange="this.closest('.d-flex').querySelectorAll('label.btn').forEach(l=>l.classList.remove('active'));this.closest('label').classList.add('active');">
+                                    <i class="ri-money-dollar-circle-line me-1"></i>Efectivo
+                                </label>
+                                <label class="btn btn-outline-primary px-3 py-2 position-relative" for="tipoMedioCheque" style="border-radius:var(--nexo-radius-md);cursor:pointer;">
+                                    <input class="form-check-input position-absolute opacity-0" type="radio" name="tipoMedioDeclaracion" id="tipoMedioCheque" value="CHEQUE"
+                                           onchange="this.closest('.d-flex').querySelectorAll('label.btn').forEach(l=>l.classList.remove('active'));this.closest('label').classList.add('active');">
+                                    <i class="ri-file-text-line me-1"></i>Cheque
+                                </label>
                             </div>
+                            <small class="text-muted d-block mt-1" style="font-size:.75rem;">Seleccione si deposita efectivo o cheque</small>
                         </div>
                         <!-- Monto -->
                         <div class="col-md-6">
@@ -1606,6 +1661,7 @@ const esAdministrador = {{ es_administrador|yesno:"true,false" }};
 const esSupervisor    = {{ es_supervisor|yesno:"true,false" }};
 const esCajero        = {{ es_cajero|yesno:"true,false" }};
 const puedeReabrir    = {{ puede_reabrir|yesno:"true,false" }};
+const diasToleranciaArqueo = {{ dias_tolerancia_arqueo }};
 
 // Esperar jQuery
 function waitForJQuery(callback) {
@@ -1627,6 +1683,7 @@ function initArqueoApp() {
         verificarEstadoHoy();
         cargarArqueos();
         verificarVentasPostCierre();
+        verificarArqueosPendientesAnteriores();
         $('input[name="modoArqueo"]').change(function() { cambiarModoArqueo(); });
         actualizarWorkflow('inicial');
     } catch(e) { console.error('Error al inicializar arqueo:', e); }
@@ -1864,11 +1921,93 @@ function verificarEstadoHoy() {
         method: 'GET',
         data: { fecha_desde: hoy, fecha_hasta: hoy, per_page: 1 },
         success: function(r) {
-            if (r.success && r.arqueos.length > 0) mostrarEstadoHoy(r.arqueos[0]);
-            else mostrarSinArqueo();
+            if (r.success && r.arqueos.length > 0) {
+                mostrarEstadoHoy(r.arqueos[0]);
+                cargarBloqueosHoy(hoy);
+                cargarObservacionesSupervisor(r.arqueos[0]);
+            } else {
+                mostrarSinArqueo();
+                $('#panelBloqueosHoy').hide();
+                $('#bannerObsSupervisor').hide();
+            }
         },
         error: function() { mostrarSinArqueo(); }
     });
+}
+
+function cargarBloqueosHoy(fecha) {
+    $.ajax({
+        url: '/app/api/arqueo/bloqueos/' + fecha + '/',
+        method: 'GET',
+        success: function(r) {
+            if (!r.success) return;
+            const bloqueos = r.bloqueos || [];
+            const completados = r.completados || [];
+            if (bloqueos.length === 0 && completados.length === 0) {
+                $('#panelBloqueosHoy').hide();
+                return;
+            }
+            let html = '';
+            completados.forEach(function(c) {
+                html += '<div class="d-flex align-items-center gap-1 px-2 py-1 rounded" style="background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.25);font-size:.78rem;">' +
+                    '<i class="ri-check-line" style="color:var(--nexo-success);"></i>' +
+                    '<span style="color:var(--nexo-gray-700);">' + c.titulo + '</span></div>';
+            });
+            bloqueos.forEach(function(b) {
+                const bgColor = b.bloqueante ? 'rgba(255,71,87,.08)' : 'rgba(255,176,32,.08)';
+                const borderColor = b.bloqueante ? 'rgba(255,71,87,.3)' : 'rgba(255,176,32,.3)';
+                const iconColor = b.bloqueante ? 'var(--nexo-error)' : 'var(--nexo-warning)';
+                html += '<div class="d-flex align-items-center gap-1 px-2 py-1 rounded" style="background:' + bgColor + ';border:1px solid ' + borderColor + ';font-size:.78rem;" title="' + (b.descripcion||'') + '">' +
+                    '<i class="' + (b.icono||'ri-lock-line') + '" style="color:' + iconColor + ';"></i>' +
+                    '<span style="color:var(--nexo-gray-700);">' + b.titulo + '</span></div>';
+            });
+            $('#listaBloqueosHoy').html(html);
+            $('#panelBloqueosHoy').show();
+        }
+    });
+}
+
+function cargarObservacionesSupervisor(arqueo) {
+    const obs = arqueo.observaciones_supervisor;
+    const resultado = arqueo.resultado_revision || 'PENDIENTE';
+
+    if (!obs && resultado === 'PENDIENTE') {
+        $('#bannerObsSupervisor').hide();
+        return;
+    }
+
+    if (obs) {
+        $('#textoObsSupervisor').text(obs);
+        $('#metaObsSupervisor').html('<i class="ri-user-line me-1"></i>' + (arqueo.supervisor||'Supervisor') +
+            (arqueo.fecha_revision ? ' — ' + arqueo.fecha_revision : ''));
+    } else {
+        $('#textoObsSupervisor').text('');
+        $('#metaObsSupervisor').html('');
+    }
+
+    const badgeMap = {
+        'OK': { bg: 'var(--nexo-success)', text: 'Aprobado' },
+        'OK_CON_OBS': { bg: '#6C63FF', text: 'Aprobado c/Obs' },
+        'REQUIERE_ACCION': { bg: 'var(--nexo-error)', text: 'Requiere Acción' },
+    };
+    const badge = badgeMap[resultado];
+    if (badge) {
+        $('#badgeResultadoRev').css('background', badge.bg).text(badge.text).show();
+    } else {
+        $('#badgeResultadoRev').hide();
+    }
+
+    if (resultado === 'REQUIERE_ACCION') {
+        $('#bannerObsSupervisor').css({ 'border-color': 'var(--nexo-error)', 'background': 'linear-gradient(135deg,rgba(255,71,87,.08),rgba(255,71,87,.04))' });
+        $('#bannerObsSupervisor .alert-heading').css('color', 'var(--nexo-error)').text('Acción Requerida por Supervisor');
+        $('#bannerObsSupervisor .rounded-circle').first().css('background', 'var(--nexo-error)');
+    } else if (resultado === 'OK_CON_OBS') {
+        $('#bannerObsSupervisor').css({ 'border-color': '#6C63FF', 'background': 'linear-gradient(135deg,rgba(108,99,255,.08),rgba(108,99,255,.04))' });
+        $('#bannerObsSupervisor .alert-heading').css('color', '#6C63FF').text('Observación del Supervisor');
+    }
+    if (obs || resultado !== 'PENDIENTE') {
+        $('#bannerObsSupervisor').show();
+    }
 }
 
 function mostrarEstadoHoy(arqueo) {
@@ -2007,6 +2146,58 @@ function mostrarSinArqueo() {
     actualizarWorkflow('inicial');
 }
 
+function verificarArqueosPendientesAnteriores() {
+    const hoy = new Date();
+    const diasVerificar = Math.min(diasToleranciaArqueo, 3); // Verificar hasta 3 días atrás
+    const fechas = [];
+    for (let i = 1; i <= diasVerificar; i++) {
+        const d = new Date(hoy);
+        d.setDate(d.getDate() - i);
+        if (d.getDay() !== 0) { // Ignorar domingos
+            fechas.push(d.toISOString().split('T')[0]);
+        }
+    }
+    if (fechas.length === 0) return;
+
+    const fechaDesde = fechas[fechas.length - 1];
+    const fechaHasta = fechas[0];
+
+    $.ajax({
+        url: '/app/api/arqueos/',
+        method: 'GET',
+        data: { fecha_desde: fechaDesde, fecha_hasta: fechaHasta, per_page: 10 },
+        success: function(r) {
+            if (!r.success) return;
+            const fechasConArqueo = (r.arqueos || []).map(a => a.fecha_arqueo);
+            const faltantes = fechas.filter(f => !fechasConArqueo.includes(f));
+            if (faltantes.length > 0) {
+                mostrarAlertaArqueosPendientes(faltantes);
+            }
+        }
+    });
+}
+
+function mostrarAlertaArqueosPendientes(fechasFaltantes) {
+    const listaFechas = fechasFaltantes.map(f => {
+        const d = new Date(f + 'T12:00:00');
+        return `<span class="badge bg-warning text-dark me-1 mb-1" style="cursor:pointer;font-size:.78rem;" onclick="crearArqueoParaFecha('${f}')">`
+            + d.toLocaleDateString('es-CL', {weekday:'short', day:'numeric', month:'short'})
+            + ' <i class="ri-add-line"></i></span>';
+    }).join('');
+
+    const alerta = `<div class="alert alert-warning d-flex align-items-start gap-2 mt-3" id="alertaArqueosPendientes" style="border-left:4px solid var(--nexo-warning);">
+        <i class="ri-calendar-todo-line" style="font-size:1.3rem;color:var(--nexo-warning);margin-top:2px;"></i>
+        <div>
+            <strong style="font-size:.85rem;">Arqueos pendientes de días anteriores</strong>
+            <p class="mb-1" style="font-size:.82rem;color:var(--nexo-gray-700);">Tiene ${fechasFaltantes.length} día(s) sin arqueo. Haga clic para crearlo:</p>
+            <div>${listaFechas}</div>
+        </div>
+    </div>`;
+
+    // Insertar en la zona de alertas
+    $('#zonaAlertasPendientes').html(alerta);
+}
+
 function cancelarArqueoAbierto(arqueoId) {
     Swal.fire({ title:'¿Cancelar arqueo?', text:'El arqueo se eliminará.', icon:'warning', showCancelButton:true,
         confirmButtonColor:'#FF4D4D', cancelButtonColor:'#8A8A9A', confirmButtonText:'Sí, cancelar', cancelButtonText:'No, mantener'
@@ -2097,12 +2288,29 @@ function abrirModalArqueo() {
 
     if (arqueoActual.cuadratura) {
         cargarResumenVentas(arqueoActual.cuadratura);
-        $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
-        $('#efectivoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
+        if (arqueoActual.cuadratura.modo_conteo_ciego) {
+            $('#efectivoTeorico').text('***').css('color', 'var(--nexo-gray-400)');
+            $('#efectivoTeoricoExpress').text('***').css('color', 'var(--nexo-gray-400)');
+            window._modoCiegoCuadratura = true;
+        } else {
+            $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
+            $('#efectivoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
+            window._modoCiegoCuadratura = false;
+        }
         $('#debitoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_tarjeta_debito||0));
         $('#creditoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_tarjeta_credito||0));
         $('#totalTransbankTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_transbank||0));
         window.transbankTeoricos = { debito:arqueoActual.cuadratura.total_tarjeta_debito||0, credito:arqueoActual.cuadratura.total_tarjeta_credito||0, total:arqueoActual.cuadratura.total_transbank||0 };
+        // Fondo fijo
+        if (arqueoActual.cuadratura.fondo_fijo) {
+            const ff = arqueoActual.cuadratura.fondo_fijo;
+            const esperado = (arqueoActual.cuadratura.total_efectivo||0) + ff;
+            $('#fondoFijoMonto').text('$' + formatearNumero(ff));
+            $('#esperadoEnCaja').text('$' + formatearNumero(esperado));
+            $('#fondoFijoInfo').show();
+        } else {
+            $('#fondoFijoInfo').hide();
+        }
     } else if (arqueoActual.arqueo) {
         cargarResumenVentasArqueo(arqueoActual.arqueo);
         $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.arqueo.totales_teoricos.efectivo));
@@ -2116,6 +2324,16 @@ function abrirModalArqueo() {
             $('#cierreDebitoExpress').val(arqueoActual.arqueo.cierre_transbank.debito_fisico||0);
             $('#cierreCreditoExpress').val(arqueoActual.arqueo.cierre_transbank.credito_fisico||0);
             $('#numeroLoteExpress').val(arqueoActual.arqueo.cierre_transbank.numero_lote||'');
+        }
+        // Fondo fijo from existing arqueo
+        if (arqueoActual.arqueo.fondo_fijo) {
+            const ff = arqueoActual.arqueo.fondo_fijo;
+            const esperado = (arqueoActual.arqueo.totales_teoricos.efectivo||0) + ff;
+            $('#fondoFijoMonto').text('$' + formatearNumero(ff));
+            $('#esperadoEnCaja').text('$' + formatearNumero(esperado));
+            $('#fondoFijoInfo').show();
+        } else {
+            $('#fondoFijoInfo').hide();
         }
     }
     calcularTotalExpressFisico();
@@ -2178,6 +2396,29 @@ function cargarDatosArqueoExistente(arqueo) {
     } else {
         $('#panelNeteoDepositos').hide();
     }
+    // Load bitacora if available
+    if (arqueo.bitacora && arqueo.bitacora.length > 0) {
+        renderBitacoraWizard(arqueo.bitacora);
+    } else {
+        $('#panelBitacoraWizard').hide();
+    }
+}
+
+function renderBitacoraWizard(bitacora) {
+    if (!bitacora || bitacora.length === 0) { $('#panelBitacoraWizard').hide(); return; }
+    let html = '';
+    bitacora.forEach(function(obs) {
+        const iconMap = { 'SUPERVISOR': 'ri-shield-check-line', 'CAJERA': 'ri-user-line', 'SISTEMA': 'ri-settings-3-line' };
+        const colorMap = { 'SUPERVISOR': 'var(--nexo-primary)', 'CAJERA': 'var(--nexo-success)', 'SISTEMA': 'var(--nexo-gray-500)' };
+        html += '<div class="d-flex align-items-start gap-2 py-2" style="border-bottom:1px solid var(--nexo-gray-200);">' +
+            '<i class="' + (iconMap[obs.tipo]||'ri-chat-3-line') + ' mt-1" style="color:' + (colorMap[obs.tipo]||'var(--nexo-gray-500)') + ';font-size:.9rem;"></i>' +
+            '<div class="flex-grow-1">' +
+                '<div style="font-size:.82rem;color:var(--nexo-gray-900);">' + obs.texto + '</div>' +
+                '<small class="text-muted" style="font-size:.7rem;">' + obs.usuario + ' — ' + obs.fecha + ' — ' + obs.tipo_display + '</small>' +
+            '</div></div>';
+    });
+    $('#bitacoraWizardContent').html(html);
+    $('#panelBitacoraWizard').show();
 }
 
 function renderNeteoDepositos(depositos) {
@@ -2419,7 +2660,7 @@ function cargarIndicadoresMensuales(ind) {
 function mostrarArqueos(arqueos) {
     let html = '';
     if (arqueos.length===0) {
-        html = `<tr><td colspan="7" class="text-center py-5">
+        html = `<tr><td colspan="8" class="text-center py-5">
             <div class="d-flex flex-column align-items-center">
                 <div class="rounded-circle d-flex align-items-center justify-content-center mb-3" style="width:56px;height:56px;background:var(--nexo-gray-100);">
                     <i class="ri-inbox-2-line" style="font-size:1.75rem;color:var(--nexo-gray-400);"></i>
@@ -2432,10 +2673,23 @@ function mostrarArqueos(arqueos) {
             const badge = `<span class="estado-badge estado-${a.estado.toLowerCase().replace('_','-')}">${a.estado_display}</span>`;
             const difEfHtml = a.diferencia_efectivo===0 ? '<span class="text-success"><i class="ri-check-line"></i></span>' : a.diferencia_efectivo>0 ? `<span class="text-success">+$${formatearNumero(a.diferencia_absoluta)}</span>` : `<span class="text-danger">-$${formatearNumero(a.diferencia_absoluta)}</span>`;
             const difTbHtml = (a.diferencia_transbank||0)===0 ? '<i class="ri-check-line text-success"></i>' : (a.diferencia_transbank||0)>0 ? `<span class="text-success">+$${formatearNumero(a.diferencia_transbank)}</span>` : `<span class="text-danger">-$${formatearNumero(Math.abs(a.diferencia_transbank||0))}</span>`;
+
+            // Resultado revisión badge
+            let revBadge = '';
+            const resRev = a.resultado_revision || 'PENDIENTE';
+            if (resRev === 'OK') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(0,212,170,.15);color:var(--nexo-success);">OK</span>';
+            else if (resRev === 'OK_CON_OBS') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(108,99,255,.15);color:#6C63FF;">OK c/Obs</span>';
+            else if (resRev === 'REQUIERE_ACCION') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(255,71,87,.15);color:var(--nexo-error);">Req. Acción</span>';
+
+            // Supervisor observation indicator
+            let obsIcon = '';
+            if (a.observaciones_supervisor) obsIcon = '<i class="ri-message-3-line ms-1" style="color:var(--nexo-primary);font-size:.75rem;" title="' + (a.observaciones_supervisor||'').substring(0,80).replace(/"/g,'&quot;') + '"></i>';
+            if (a.cantidad_observaciones > 0) obsIcon += '<span class="badge ms-1" style="font-size:.55rem;background:var(--nexo-primary-light);color:var(--nexo-primary);">' + a.cantidad_observaciones + '</span>';
+
             html += `<tr>
                 <td style="padding-left:1rem;font-weight:600;">${new Date(a.fecha_arqueo+'T12:00:00').toLocaleDateString('es-CL')}</td>
                 <td class="col-hide-sm"><div class="d-flex align-items-center"><div class="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width:26px;height:26px;background:var(--nexo-primary-light);"><i class="ri-user-3-line" style="font-size:.75rem;color:var(--nexo-primary);"></i></div><span style="font-size:.85rem;">${a.usuario_responsable}</span></div></td>
-                <td>${badge}</td>
+                <td><div class="d-flex align-items-center flex-wrap gap-1">${badge}${revBadge}${obsIcon}</div></td>
                 <td>
                     <div style="font-size:.8rem;line-height:1.4;">
                         <div><span class="text-muted">T:</span> $${formatearNumero(a.efectivo_teorico)}</div>
@@ -2444,6 +2698,11 @@ function mostrarArqueos(arqueos) {
                 </td>
                 <td class="col-hide-sm" style="font-size:.8rem;">${difTbHtml}</td>
                 <td class="col-hide-sm" style="font-family:monospace;font-weight:600;color:var(--nexo-primary);font-size:.85rem;">$${formatearNumero(a.venta_total)}</td>
+                <td class="col-hide-sm" style="font-size:.8rem;">
+                    ${a.fondo_fijo ? `<div><span class="text-muted">FF:</span> $${formatearNumero(a.fondo_fijo)}</div>` : ''}
+                    ${a.estado_deposito ? `<span class="badge ${a.estado_deposito==='COMPLETO'?'bg-success':a.estado_deposito==='PARCIAL'?'bg-warning text-dark':'bg-secondary'}" style="font-size:.65rem;">${a.estado_deposito==='COMPLETO'?'Dep. OK':a.estado_deposito==='PARCIAL'?'Parcial':'Sin dep.'}</span>` : ''}
+                    ${a.diferencia_deposito_vs_teorico!=null && a.diferencia_deposito_vs_teorico!==0 ? `<div class="${a.diferencia_deposito_vs_teorico>0?'text-success':'text-danger'}" style="font-size:.72rem;">${a.diferencia_deposito_vs_teorico>0?'+':''}$${formatearNumero(Math.abs(a.diferencia_deposito_vs_teorico))}</div>` : ''}
+                </td>
                 <td style="padding-right:1rem;">
                     <div class="d-flex gap-1">
                         <button class="btn btn-sm" onclick="verDetalleArqueo(${a.id})" title="Ver/editar" style="background:var(--nexo-primary-light);color:var(--nexo-primary);"><i class="ri-eye-line"></i></button>
@@ -2482,17 +2741,32 @@ function limpiarFiltros() {
     paginaActual=1; cargarArqueos();
 }
 
-// ========== ARQUEO FECHA PASADA (Admin) ==========
+// ========== ARQUEO FECHA PASADA ==========
 function crearArqueoFechaPasada() {
-    if (!esAdministrador) { mostrarError('Solo administradores pueden crear arqueos de fechas pasadas'); return; }
-    const hoy = new Date().toISOString().split('T')[0];
-    Swal.fire({ title:'Crear Arqueo de Fecha Pasada',
-        html:`<div class="text-start"><div class="alert alert-info mb-3"><i class="ri-information-line me-2"></i><strong>Administrador:</strong> Crea arqueos de días anteriores.</div>
+    const hoy = new Date();
+    const hoyStr = hoy.toISOString().split('T')[0];
+    // Calcular fecha mínima permitida según tolerancia del rol
+    const fechaMin = new Date(hoy);
+    fechaMin.setDate(fechaMin.getDate() - diasToleranciaArqueo);
+    const fechaMinStr = fechaMin.toISOString().split('T')[0];
+    // Default: ayer
+    const ayer = new Date(hoy);
+    ayer.setDate(ayer.getDate() - 1);
+    const ayerStr = ayer.toISOString().split('T')[0];
+
+    Swal.fire({ title:'Crear Arqueo de Fecha Anterior',
+        html:`<div class="text-start"><div class="alert alert-info mb-3"><i class="ri-information-line me-2"></i>Puede crear arqueos de los últimos <strong>${diasToleranciaArqueo} días</strong>.</div>
             <label class="form-label fw-bold">Seleccione la fecha:</label>
-            <input type="date" id="fechaArqueoPasado" class="form-control form-control-lg text-center" max="${hoy}">
-            <small class="text-muted mt-1 d-block">Solo puede crear arqueos hasta hoy.</small></div>`,
-        showCancelButton:true, confirmButtonText:'Crear Arqueo', cancelButtonText:'Cancelar', confirmButtonColor:'#FFB020',
-        preConfirm:()=>{ const f=document.getElementById('fechaArqueoPasado').value; if(!f){Swal.showValidationMessage('Seleccione una fecha');return false;} if(f>hoy){Swal.showValidationMessage('No puede crear arqueos futuros');return false;} return f; }
+            <input type="date" id="fechaArqueoPasado" class="form-control form-control-lg text-center" value="${ayerStr}" min="${fechaMinStr}" max="${hoyStr}">
+            <small class="text-muted mt-1 d-block">Rango: ${fechaMin.toLocaleDateString('es-CL')} a ${hoy.toLocaleDateString('es-CL')}</small></div>`,
+        showCancelButton:true, confirmButtonText:'<i class="ri-add-circle-line me-1"></i>Crear Arqueo', cancelButtonText:'Cancelar', confirmButtonColor:'#FFB020',
+        preConfirm:()=>{
+            const f=document.getElementById('fechaArqueoPasado').value;
+            if(!f){Swal.showValidationMessage('Seleccione una fecha');return false;}
+            if(f>hoyStr){Swal.showValidationMessage('No puede crear arqueos futuros');return false;}
+            if(f<fechaMinStr){Swal.showValidationMessage('Fuera del rango permitido ('+diasToleranciaArqueo+' días)');return false;}
+            return f;
+        }
     }).then(r => { if(r.isConfirmed&&r.value) crearArqueoParaFecha(r.value); });
 }
 
@@ -2566,6 +2840,14 @@ function cargarDatosCuadratura(c) {
     $('#visa').text(fmCLP(c.total_visa_mc_amex||0)); $('#debito').text(fmCLP(c.total_tarjeta_debito||0));
     $('#presto').text(fmCLP(c.total_presto||0)); $('#hites').text(fmCLP(c.total_hites||0));
     $('#efectivo').text(fmCLP(c.total_efectivo||0)); $('#transferencia').text(fmCLP(c.total_transferencia||0));
+    // Anti-fraude: ocultar teórico para cajeros hasta después del conteo
+    if (c.modo_conteo_ciego) {
+        $('#efectivo').text('Pendiente de conteo').css('color', 'var(--nexo-gray-400)');
+        $('#efectivoTeorico, #efectivoTeoricoExpress').text('***').css('color', 'var(--nexo-gray-400)');
+        window._modoCiegoCuadratura = true;
+    } else {
+        window._modoCiegoCuadratura = false;
+    }
     $('#nota_credito').text(fmCLP(c.total_notas_credito||0)); $('#convenio').text(fmCLP(c.total_convenio||0));
     $('#credito_trabajador').text(fmCLP(c.total_credito_trabajador||0)); $('#credito_externo').text(fmCLP(c.total_credito_externo||0));
     $('#falabella').text(fmCLP(c.total_falabella||0)); $('#paris').text(fmCLP(c.total_paris||0));

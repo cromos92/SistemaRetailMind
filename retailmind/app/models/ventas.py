@@ -83,6 +83,14 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
     
     # === DESPACHO DIFERIDO ===
     ('DESPACHO_COTIZACION', 'Despacho de Cotización'),
+
+    # === SOBRANTES EN RECEPCIÓN ===
+    ('RECEPCION_SOBRANTE', 'Recepción de Sobrante (Pendiente Decisión)'),
+    ('SOBRANTE_INGRESO', 'Sobrante Aceptado - Ingreso a Inventario'),
+    ('SOBRANTE_DEVUELTO', 'Sobrante Devuelto a Origen'),
+
+    # === FIX: Concepto usado en views pero no declarado ===
+    ('DEVOLUCION_NC', 'Devolución por Nota de Crédito'),
 ]
 
 ESTADO_MOVIMIENTO_CHOICES = [
@@ -314,11 +322,26 @@ class TicketDetallePago(models.Model):
 
 # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
 
+METODO_DEVOLUCION_NC_CHOICES = [
+    ('EFECTIVO_CAJA', 'Efectivo en Caja'),
+    ('TRANSFERENCIA_BANCARIA', 'Transferencia Bancaria'),
+    ('SIN_NC', 'Sin Nota de Crédito'),
+]
+
 TIPO_OPERACION_CAMBIO_CHOICES = [
     ('CAMBIO_SIMPLE', 'Cambio Simple'),
     ('CAMBIO_CON_DIFERENCIA', 'Cambio con Diferencia de Precio'),
     ('DEVOLUCION_TOTAL', 'Devolución Total'),
     ('DEVOLUCION_PARCIAL', 'Devolución Parcial'),
+    ('CAMBIO_CONCEPTO', 'Cambio por Concepto'),
+    ('DEVOLUCION_CONCEPTO', 'Devolución por Concepto'),
+]
+
+TIPO_CAMBIO_ESPECIAL_CHOICES = [
+    ('NORMAL', 'Normal'),
+    ('FUERA_PLAZO', 'Fuera de Plazo'),
+    ('CONCEPTO', 'Por Concepto'),
+    ('LEGACY', 'Legacy'),
 ]
 
 ESTADO_CAMBIO_CHOICES = [
@@ -470,7 +493,114 @@ class CambioDevolucion(models.Model):
         default=False,
         help_text="Si fue autorizado como excepción a las políticas"
     )
-    
+
+    # === TRAZABILIDAD DE AUTORIZACIÓN ===
+    autorizado_por_usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='cambios_autorizados_excepcion',
+        null=True, blank=True,
+        help_text="Supervisor que autorizó la operación (distinto de aprobado_por)"
+    )
+    sucursal_autorizador = models.ForeignKey(
+        Sucursal,
+        on_delete=models.SET_NULL,
+        related_name='cambios_autorizados_desde',
+        null=True, blank=True,
+        help_text="Sucursal del supervisor que autorizó"
+    )
+    es_autorizacion_cross_branch = models.BooleanField(
+        default=False,
+        help_text="Si la autorización fue desde otra sucursal"
+    )
+    es_fuera_de_plazo = models.BooleanField(
+        default=False,
+        help_text="Si el cambio se realizó fuera del plazo de 30 días"
+    )
+    dias_fuera_de_plazo = models.IntegerField(
+        default=0,
+        help_text="Días transcurridos después del plazo límite"
+    )
+    tipo_cambio_especial = models.CharField(
+        max_length=20,
+        choices=TIPO_CAMBIO_ESPECIAL_CHOICES,
+        default='NORMAL',
+        help_text="Tipo especial de cambio: normal, fuera de plazo, por concepto, legacy"
+    )
+    registro_autorizacion = models.ForeignKey(
+        'app.RegistroAutorizacion',
+        on_delete=models.SET_NULL,
+        related_name='cambios_autorizados_registro',
+        null=True, blank=True,
+        help_text="Registro de autorización vinculado"
+    )
+
+    # === CAMBIOS POR CONCEPTO (LEGACY) ===
+    es_cambio_concepto = models.BooleanField(
+        default=False,
+        help_text="Si es un cambio por concepto (sin mapeo de productos específicos)"
+    )
+    concepto_descripcion = models.TextField(
+        null=True, blank=True,
+        help_text="Descripción del concepto del cambio (para datos migrados)"
+    )
+    concepto_monto_original = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        null=True, blank=True,
+        help_text="Monto original del concepto"
+    )
+    documento_referencia_legacy = models.CharField(
+        max_length=100, null=True, blank=True,
+        help_text="Número de documento del sistema antiguo"
+    )
+
+    # === NOTA DE CRÉDITO ===
+    nota_credito = models.ForeignKey(
+        'app.Dte', on_delete=models.SET_NULL,
+        related_name='cambio_devolucion_nc',
+        null=True, blank=True,
+        help_text="Nota de Crédito generada por esta devolución"
+    )
+    metodo_devolucion = models.CharField(
+        max_length=30,
+        choices=METODO_DEVOLUCION_NC_CHOICES,
+        default='SIN_NC',
+        help_text="Método de devolución del dinero al cliente"
+    )
+    nc_generada = models.BooleanField(
+        default=False,
+        help_text="Si se generó Nota de Crédito para esta devolución"
+    )
+    fecha_nc = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Fecha de generación de la Nota de Crédito"
+    )
+
+    # === ESCALAMIENTO Y REVISIÓN ===
+    requiere_revision_gerencial = models.BooleanField(
+        default=False,
+        help_text="Si requiere revisión de gerencia (auto-escalamiento)"
+    )
+    revisado_por_gerencia = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='cambios_revisados_gerencia',
+        null=True, blank=True,
+        help_text="Gerente que revisó el cambio"
+    )
+    fecha_revision_gerencia = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Fecha de revisión gerencial"
+    )
+    notas_revision_gerencia = models.TextField(
+        blank=True, default='',
+        help_text="Notas de la revisión gerencial"
+    )
+    score_riesgo = models.IntegerField(
+        default=0,
+        help_text="Score de riesgo calculado (0-100)"
+    )
+
     # === METADATA ===
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -686,11 +816,21 @@ class CambioDevolucionDetalle(models.Model):
         blank=True, null=True,
         help_text="Observaciones específicas de este producto"
     )
-    
+
+    # === CAMBIOS POR CONCEPTO ===
+    es_linea_concepto = models.BooleanField(
+        default=False,
+        help_text="Si es una línea de cambio por concepto (sin producto específico)"
+    )
+    descripcion_concepto = models.CharField(
+        max_length=500, null=True, blank=True,
+        help_text="Descripción del ítem por concepto (reemplaza producto_original)"
+    )
+
     # === METADATA ===
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         verbose_name = 'Detalle de Cambio/Devolución'
         verbose_name_plural = 'Detalles de Cambios/Devoluciones'
@@ -753,11 +893,12 @@ class PagoCambioDevolucion(models.Model):
     
     # === DATOS DEL PAGO ===
     tipo_pago = models.CharField(
-        max_length=20, 
+        max_length=30, 
         choices=[
             ('PAGO_DIFERENCIA', 'Pago de Diferencia'),
             ('DEVOLUCION_EFECTIVO', 'Devolución en Efectivo'),
             ('DEVOLUCION_TARJETA', 'Devolución a Tarjeta'),
+            ('DEVOLUCION_TRANSFERENCIA', 'Devolución por Transferencia'),
             ('CREDITO_TIENDA', 'Crédito en Tienda'),
         ]
     )
@@ -838,6 +979,8 @@ class HistorialCambioDevolucion(models.Model):
             ('REVERTIDO', 'Revertido'),
             ('COBRO_DIFERENCIA', 'Cobro de Diferencia'),
             ('DEVOLUCION_PROCESADA', 'Devolución Procesada'),
+            ('NC_GENERADA', 'Nota de Crédito Generada'),
+            ('NC_ANULADA', 'Nota de Crédito Anulada'),
         ]
     )
     estado_anterior = models.CharField(max_length=30, blank=True, null=True)

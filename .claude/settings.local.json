@@ -42,7 +42,16 @@
       "Bash(grep -l \"_qz_tray_module\\\\|imprimirConQZ\" \"/c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas\"/*.html)",
       "Bash(grep -l \"qz_config\\\\|QZ_CONFIG\" \"/c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_ventas\"/*.html)",
       "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/**)",
-      "Bash(iconv -f UTF-8 -t UTF-16LE /tmp/req_fixed.txt)"
+      "Bash(iconv -f UTF-8 -t UTF-16LE /tmp/req_fixed.txt)",
+      "Bash(find /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind -type f -name \"*.py\" -path \"*/models/*\" -exec grep -l \"Pedido\\\\|Orden\\\\|Boleta\" {} \\\\;)",
+      "Read(//c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/static/**)",
+      "Bash(grep -n \"dashboard.*cambio\\\\|cambio.*dashboard\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/templates/vistas/modulo_dashboards/*.html)",
+      "Bash(grep -E \"\\\\.\\(html|js\\)$\")",
+      "Bash(grep -l \"CambioDevolucion\\\\|cambio_devolucion\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/migrations/*.py)",
+      "Bash(grep -n \"^class.*Historial\\\\|^class.*Log\\\\|^class.*Auditoria\" /c/Users/cromo/Documents/DjangoProyects/SistemaRetailMind/retailmind/app/models/*.py)",
+      "Bash(DJANGO_SETTINGS_MODULE=retailmind.settings python -c \"import django; django.setup\\(\\); from app.views_ecommerce import api_cambiar_sub_estado, api_reasignar_pedido, api_sugerir_sucursal, api_distribuir_pedidos, api_historial_pedido, ecommerce_dashboard_asignacion; print\\('OK'\\)\")",
+      "Bash(python manage.py check --deploy)",
+      "Bash(python manage.py makemigrations app --name=\"mejora_cuadratura_caja_v2\" --dry-run)"
     ]
   }
 }

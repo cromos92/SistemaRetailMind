@@ -1,0 +1,317 @@
+{% load static %}
+{% load humanize %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+:root {
+    --doc-primary: #4361ee; --doc-primary-light: #eef1ff;
+    --doc-success: #06d6a0; --doc-success-light: #e6faf4;
+    --doc-warning: #f4a236; --doc-warning-light: #fff6e8;
+    --doc-danger: #ef476f; --doc-danger-light: #fde8ed;
+    --doc-info: #118ab2; --doc-info-light: #e6f4fa;
+    --doc-gray-700: #4A4A5A; --doc-gray-500: #8A8A9A;
+    --doc-gray-100: #F5F5F7; --doc-white: #FFFFFF;
+    --doc-shadow-sm: 0 1px 3px rgba(26,26,46,.06);
+    --doc-shadow-md: 0 4px 12px rgba(26,26,46,.08);
+    --doc-shadow-lg: 0 8px 24px rgba(26,26,46,.12);
+    --doc-radius: 12px; --doc-radius-lg: 16px;
+}
+.page-content { min-height: 100vh; padding: 70px 0 60px; background: var(--doc-gray-100); }
+.doc-header {
+    background: linear-gradient(135deg, #0ab39c 0%, #405189 100%);
+    color: #fff; border-radius: var(--doc-radius-lg); padding: 28px 32px; margin-bottom: 28px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+    box-shadow: 0 8px 32px rgba(10,179,156,.3); position: relative; overflow: hidden;
+}
+.doc-header::before { content:''; position:absolute; top:-50%; right:-20%; width:300px; height:300px; background:radial-gradient(circle,rgba(255,255,255,.08) 0%,transparent 70%); border-radius:50%; }
+.doc-header h4 { margin:0; font-weight:700; font-size:1.5rem; position:relative; z-index:1; color:#fff!important; }
+.doc-header small { opacity:.8; font-size:.875rem; position:relative; z-index:1; color:#fff!important; }
+.doc-filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; position:relative; z-index:1; }
+.doc-filters input[type="date"] { padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.12); color:#fff; font-size:.85rem; color-scheme:dark; }
+.doc-filters input[type="date"]:focus { background:rgba(255,255,255,.22); outline:none; }
+.doc-filters input::-webkit-calendar-picker-indicator { filter:invert(1); }
+.doc-btn-refresh { padding:10px 22px; border-radius:10px; border:none; background:rgba(255,255,255,.2); color:#fff; cursor:pointer; font-weight:600; font-size:.85rem; transition:all .25s; }
+.doc-btn-refresh:hover { background:rgba(255,255,255,.35); }
+.doc-section-title { font-size:.85rem; font-weight:700; color:var(--doc-gray-700); margin-bottom:16px; display:flex; align-items:center; gap:8px; text-transform:uppercase; letter-spacing:.5px; }
+.doc-section-title i { color:var(--doc-primary); font-size:1rem; }
+.doc-kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:18px; margin-bottom:28px; }
+.doc-kpi-card { background:var(--doc-white); border-radius:var(--doc-radius-lg); padding:22px 20px; box-shadow:var(--doc-shadow-sm); transition:all .25s; border:1px solid rgba(0,0,0,.04); position:relative; overflow:hidden; }
+.doc-kpi-card:hover { transform:translateY(-3px); box-shadow:var(--doc-shadow-lg); }
+.doc-kpi-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+.doc-kpi-icon-box { width:46px; height:46px; border-radius:var(--doc-radius); display:flex; align-items:center; justify-content:center; font-size:1.3rem; }
+.doc-kpi-value { font-size:1.8rem; font-weight:800; color:#1A1A2E; line-height:1; margin-bottom:4px; }
+.doc-kpi-label { font-size:.8rem; color:var(--doc-gray-500); font-weight:500; }
+.doc-kpi-bar { height:4px; border-radius:2px; background:var(--doc-gray-100); margin-top:12px; overflow:hidden; }
+.doc-kpi-bar-fill { height:100%; border-radius:2px; transition:width .8s ease; }
+.doc-card { background:var(--doc-white); border-radius:var(--doc-radius-lg); box-shadow:var(--doc-shadow-sm); border:1px solid rgba(0,0,0,.04); margin-bottom:24px; }
+.doc-card-body { padding:24px; }
+.doc-pipeline { display:flex; gap:4px; margin-bottom:28px; }
+.doc-pipeline-step { flex:1; text-align:center; padding:16px 8px; border-radius:var(--doc-radius); background:var(--doc-white); box-shadow:var(--doc-shadow-sm); transition:all .25s; }
+.doc-pipeline-step:hover { transform:translateY(-2px); box-shadow:var(--doc-shadow-md); }
+.doc-pipeline-step .step-value { font-size:1.5rem; font-weight:800; }
+.doc-pipeline-step .step-label { font-size:.7rem; color:var(--doc-gray-500); text-transform:uppercase; }
+.tbl-despachos { width:100%; border-collapse:separate; border-spacing:0; }
+.tbl-despachos th { font-size:.75rem; text-transform:uppercase; color:var(--doc-gray-500); padding:10px 12px; border-bottom:2px solid var(--doc-gray-100); font-weight:600; }
+.tbl-despachos td { padding:10px 12px; border-bottom:1px solid var(--doc-gray-100); font-size:.85rem; }
+.tbl-despachos tr:hover { background:var(--doc-gray-100); }
+.pct-bar { display:inline-block; height:6px; border-radius:3px; }
+@media(max-width:992px) { .doc-kpi-grid { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:576px) { .doc-kpi-grid { grid-template-columns:1fr; } }
+</style>
+
+<div class="page-content">
+<div class="container-fluid">
+
+<!-- Header -->
+<div class="doc-header">
+    <div>
+        <h4><i class="ri-truck-line me-2"></i>Dashboard Despachos y Recepciones</h4>
+        <small>Seguimiento integral de traspasos entre sucursales</small>
+    </div>
+    <div class="doc-filters">
+        <input type="date" id="fechaInicio">
+        <input type="date" id="fechaFin">
+        <button class="doc-btn-refresh" onclick="cargarDatos()">
+            <i class="ri-refresh-line me-1"></i>Actualizar
+        </button>
+    </div>
+</div>
+
+<!-- KPIs -->
+<div class="doc-kpi-grid" id="kpiGrid">
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top">
+            <div class="doc-kpi-icon-box" style="background:var(--doc-primary-light);color:var(--doc-primary);"><i class="ri-truck-line"></i></div>
+        </div>
+        <div class="doc-kpi-value" id="kpiTraspasos">-</div>
+        <div class="doc-kpi-label">Total Traspasos</div>
+    </div>
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top">
+            <div class="doc-kpi-icon-box" style="background:var(--doc-success-light);color:var(--doc-success);"><i class="ri-checkbox-circle-line"></i></div>
+        </div>
+        <div class="doc-kpi-value" id="kpiTasaExito">-</div>
+        <div class="doc-kpi-label">Tasa de Exito (%)</div>
+        <div class="doc-kpi-bar"><div class="doc-kpi-bar-fill" id="barTasaExito" style="width:0;background:var(--doc-success);"></div></div>
+    </div>
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top">
+            <div class="doc-kpi-icon-box" style="background:var(--doc-warning-light);color:var(--doc-warning);"><i class="ri-time-line"></i></div>
+        </div>
+        <div class="doc-kpi-value" id="kpiDiasPromedio">-</div>
+        <div class="doc-kpi-label">Dias Prom. Recepcion</div>
+    </div>
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top">
+            <div class="doc-kpi-icon-box" style="background:var(--doc-danger-light);color:var(--doc-danger);"><i class="ri-alert-line"></i></div>
+        </div>
+        <div class="doc-kpi-value" id="kpiPendientes">-</div>
+        <div class="doc-kpi-label">Pendientes Regularizacion</div>
+    </div>
+    <div class="doc-kpi-card">
+        <div class="doc-kpi-top">
+            <div class="doc-kpi-icon-box" style="background:var(--doc-info-light);color:var(--doc-info);"><i class="ri-add-circle-line"></i></div>
+        </div>
+        <div class="doc-kpi-value" id="kpiSobrantes">-</div>
+        <div class="doc-kpi-label">Sobrantes Pendientes</div>
+    </div>
+</div>
+
+<!-- Pipeline -->
+<div class="doc-section-title"><i class="ri-flow-chart"></i>Pipeline de Traspasos</div>
+<div class="doc-pipeline" id="pipeline">
+    <div class="doc-pipeline-step"><div class="step-value" id="pipeEmitidos">-</div><div class="step-label">Emitidos</div></div>
+    <div class="doc-pipeline-step" style="background:var(--doc-success-light);"><div class="step-value" style="color:var(--doc-success);" id="pipeCompleto">-</div><div class="step-label">Completo</div></div>
+    <div class="doc-pipeline-step" style="background:var(--doc-warning-light);"><div class="step-value" style="color:var(--doc-warning);" id="pipeParcial">-</div><div class="step-label">Parcial</div></div>
+    <div class="doc-pipeline-step" style="background:var(--doc-info-light);"><div class="step-value" style="color:var(--doc-info);" id="pipeSobrante">-</div><div class="step-label">Sobrante</div></div>
+    <div class="doc-pipeline-step" style="background:var(--doc-danger-light);"><div class="step-value" style="color:var(--doc-danger);" id="pipeReg">-</div><div class="step-label">En Reg.</div></div>
+    <div class="doc-pipeline-step"><div class="step-value" id="pipeRechazados">-</div><div class="step-label">Rechazados</div></div>
+</div>
+
+<div class="row">
+    <!-- Tabla sucursales -->
+    <div class="col-lg-7">
+        <div class="doc-card">
+            <div class="doc-card-body">
+                <div class="doc-section-title"><i class="ri-building-2-line"></i>Rendimiento por Sucursal</div>
+                <div class="table-responsive">
+                    <table class="tbl-despachos">
+                        <thead>
+                            <tr>
+                                <th>Sucursal</th>
+                                <th class="text-center">Total</th>
+                                <th class="text-center">% OK</th>
+                                <th class="text-center">Faltantes</th>
+                                <th class="text-center">Danados</th>
+                                <th class="text-center">Sobrantes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblSucursales"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grafico tendencia -->
+    <div class="col-lg-5">
+        <div class="doc-card">
+            <div class="doc-card-body">
+                <div class="doc-section-title"><i class="ri-line-chart-line"></i>Tendencia Mensual de Problemas</div>
+                <canvas id="chartTendencia" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Regularizaciones pendientes -->
+<div class="doc-card">
+    <div class="doc-card-body">
+        <div class="doc-section-title"><i class="ri-alarm-warning-line"></i>Regularizaciones Pendientes</div>
+        <div class="table-responsive">
+            <table class="tbl-despachos">
+                <thead>
+                    <tr>
+                        <th>DTE #</th>
+                        <th>Sucursal Origen</th>
+                        <th>Fecha Emision</th>
+                        <th class="text-center">Productos Pend.</th>
+                        <th class="text-center">Dias Pendiente</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="tblRegPendientes"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+let chartTendencia = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('fechaInicio').value = inicio.toISOString().split('T')[0];
+    document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
+    cargarDatos();
+});
+
+function cargarDatos() {
+    const inicio = document.getElementById('fechaInicio').value;
+    const fin = document.getElementById('fechaFin').value;
+    const params = new URLSearchParams({ fecha_inicio: inicio, fecha_fin: fin });
+
+    fetch(`/app/api/dashboard-despachos/datos/?${params}`)
+        .then(r => r.json())
+        .then(data => {
+            renderKPIs(data.kpis);
+            renderPipeline(data.pipeline);
+            renderSucursales(data.por_sucursal);
+            renderTendencia(data.tendencia);
+            renderRegPendientes(data.regularizaciones_pendientes);
+        })
+        .catch(err => console.error('Error:', err));
+}
+
+function renderKPIs(k) {
+    document.getElementById('kpiTraspasos').textContent = k.total_traspasos;
+    document.getElementById('kpiTasaExito').textContent = k.tasa_exito + '%';
+    document.getElementById('barTasaExito').style.width = k.tasa_exito + '%';
+    document.getElementById('kpiDiasPromedio').textContent = k.avg_dias_recepcion;
+    document.getElementById('kpiPendientes').textContent = k.total_pendientes;
+    document.getElementById('kpiSobrantes').textContent = k.total_sobrantes;
+}
+
+function renderPipeline(p) {
+    document.getElementById('pipeEmitidos').textContent = p.emitidos;
+    document.getElementById('pipeCompleto').textContent = p.recepcionado_completo;
+    document.getElementById('pipeParcial').textContent = p.recepcionado_parcial;
+    document.getElementById('pipeSobrante').textContent = p.recepcionado_sobrante || 0;
+    document.getElementById('pipeReg').textContent = p.en_regularizacion;
+    document.getElementById('pipeRechazados').textContent = p.rechazados;
+}
+
+function renderSucursales(data) {
+    const tbody = document.getElementById('tblSucursales');
+    if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Sin datos para el periodo</td></tr>';
+        return;
+    }
+    tbody.innerHTML = data.map(s => {
+        const pctColor = s.pct_ok >= 90 ? 'var(--doc-success)' : s.pct_ok >= 70 ? 'var(--doc-warning)' : 'var(--doc-danger)';
+        return `<tr>
+            <td><strong>${s.sucursal}</strong></td>
+            <td class="text-center">${s.total}</td>
+            <td class="text-center">
+                <span style="color:${pctColor};font-weight:700;">${s.pct_ok}%</span>
+                <div style="width:60px;display:inline-block;vertical-align:middle;margin-left:6px;">
+                    <div style="height:4px;background:var(--doc-gray-100);border-radius:2px;">
+                        <div class="pct-bar" style="width:${s.pct_ok}%;background:${pctColor};"></div>
+                    </div>
+                </div>
+            </td>
+            <td class="text-center">${s.faltantes || '-'}</td>
+            <td class="text-center">${s.danados || '-'}</td>
+            <td class="text-center">${s.sobrantes ? '<span class="badge bg-info">+' + s.sobrantes + '</span>' : '-'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderTendencia(data) {
+    const ctx = document.getElementById('chartTendencia');
+    if (chartTendencia) chartTendencia.destroy();
+
+    if (!data.length) {
+        ctx.parentElement.innerHTML += '<p class="text-center text-muted mt-4">Sin datos para el periodo</p>';
+        return;
+    }
+
+    chartTendencia = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => d.mes),
+            datasets: [
+                { label: 'OK', data: data.map(d => d.ok), borderColor: '#06d6a0', backgroundColor: 'rgba(6,214,160,.1)', fill: true, tension: .3 },
+                { label: 'Faltantes', data: data.map(d => d.faltantes), borderColor: '#ef476f', backgroundColor: 'rgba(239,71,111,.1)', fill: true, tension: .3 },
+                { label: 'Danados', data: data.map(d => d.danados), borderColor: '#f4a236', backgroundColor: 'rgba(244,162,54,.1)', fill: true, tension: .3 },
+                { label: 'Sobrantes', data: data.map(d => d.sobrantes), borderColor: '#118ab2', backgroundColor: 'rgba(17,138,178,.1)', fill: true, tension: .3 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15 } } },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function renderRegPendientes(data) {
+    const tbody = document.getElementById('tblRegPendientes');
+    if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Sin regularizaciones pendientes</td></tr>';
+        return;
+    }
+    tbody.innerHTML = data.map(r => {
+        const diasColor = r.dias_pendiente > 7 ? 'var(--doc-danger)' : r.dias_pendiente > 3 ? 'var(--doc-warning)' : 'var(--doc-gray-700)';
+        return `<tr>
+            <td><strong>#${r.dte__numero_documento}</strong></td>
+            <td>${r.dte__sucursal__alias || '-'}</td>
+            <td>${r.dte__fecha_emision || '-'}</td>
+            <td class="text-center"><span class="badge bg-warning text-dark">${r.productos_pendientes}</span></td>
+            <td class="text-center" style="color:${diasColor};font-weight:700;">${r.dias_pendiente} dias</td>
+            <td><a href="/app/regularizar-recepciones/" class="btn btn-sm btn-outline-primary"><i class="ri-tools-line me-1"></i>Regularizar</a></td>
+        </tr>`;
+    }).join('');
+}
+</script>
+
+{% include 'layout/footer.html' %}

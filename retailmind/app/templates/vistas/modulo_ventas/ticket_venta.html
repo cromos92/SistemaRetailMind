@@ -1676,11 +1676,8 @@ div[style*="border: 1px solid #000"] {
                     </div>
                     <div class="col-md-3">
                         <label class="form-label mb-1"><small><i class="ri-price-tag-3-line me-1"></i>Filtrar por Marca</small></label>
-                        <input type="text" class="form-control form-control-sm mb-1" id="filtroMarcaTexto"
-                               placeholder="Buscar marca...">
-                        <select class="form-select form-select-sm" id="selectMarca">
+                        <select class="form-select form-select-sm" id="selectMarca" style="width:100%">
                             <option value="">Todas las marcas</option>
-                            <!-- Se cargará dinámicamente -->
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -2860,18 +2857,15 @@ $(document).ready(function() {
 
     function limpiarFiltrosModal() {
         $('#filtroBusqueda').val('');
-        $('#selectMarca').val('');
-        $('#filtroMarcaTexto').val('');
+        $('#selectMarca').val('').trigger('change');
         $('#chkSoloConStock').prop('checked', true);
         $('#chkBuscarTodasSucursales').prop('checked', false);
         $('#selectOrdenar').val('');
         $('#filtroTablaResultados').val('').prop('disabled', true);
-        // Ocultar columna de sucursal al limpiar
         $('.col-sucursal').hide();
         $('#filtroBusqueda').focus();
     }
     
-    // Cargar marcas disponibles
     function cargarMarcas() {
         $.ajax({
             url: '{% url "obtener_marcas" %}',
@@ -2885,7 +2879,22 @@ $(document).ready(function() {
                 }
                 
                 marcasCache = marcas;
-                renderMarcas('');
+                const select = $('#selectMarca');
+                const seleccionActual = select.val();
+                select.find('option:not(:first)').remove();
+                
+                marcas.forEach(function(marca) {
+                    const nombre = marca.nombre || marca.valor || '';
+                    if (nombre) {
+                        select.append(`<option value="${marca.id}">${nombre}</option>`);
+                    }
+                });
+
+                initSelect2Marca();
+
+                if (seleccionActual && select.find(`option[value="${seleccionActual}"]`).length) {
+                    select.val(seleccionActual).trigger('change');
+                }
             },
             error: function() {
                 console.warn('No se pudieron cargar las marcas');
@@ -2893,38 +2902,27 @@ $(document).ready(function() {
         });
     }
 
-    function renderMarcas(filtroTexto) {
-        const filtro = (filtroTexto || '').trim().toLowerCase();
-        const select = $('#selectMarca');
-        const seleccionActual = select.val();
-        select.find('option:not(:first)').remove();
-        
-        marcasCache.forEach(function(marca) {
-            const nombre = marca.nombre || marca.valor || '';
-            if (!nombre) {
-                return;
-            }
-            if (!filtro || nombre.toLowerCase().includes(filtro)) {
-                select.append(`<option value="${marca.id}">${nombre}</option>`);
+    function initSelect2Marca() {
+        if ($('#selectMarca').data('select2')) {
+            $('#selectMarca').select2('destroy');
+        }
+        $('#selectMarca').select2({
+            placeholder: 'Todas las marcas',
+            allowClear: true,
+            dropdownParent: $('#modalBusquedaProductos'),
+            language: {
+                noResults: function() { return 'Sin resultados'; },
+                searching: function() { return 'Buscando...'; }
             }
         });
-        
-        if (seleccionActual && select.find(`option[value="${seleccionActual}"]`).length) {
-            select.val(seleccionActual);
-        }
     }
     
-    // Cargar marcas al abrir el modal
     $('#modalBusquedaProductos').on('show.bs.modal', function() {
         cargarMarcas();
     });
 
     $('#modalBusquedaProductos').on('shown.bs.modal', function() {
         $('#filtroBusqueda').val('').focus();
-    });
-
-    $('#filtroMarcaTexto').on('input', function() {
-        renderMarcas($(this).val());
     });
     
     // Ordenamiento de columnas al hacer clic en el encabezado
@@ -3158,7 +3156,9 @@ $(document).ready(function() {
                                                data-marca="${marca}"
                                                data-talla="${tallaStock.talla || ''}"
                                                data-precio="${precioVenta}"
-                                               data-stock="${stockDisponible}">
+                                               data-stock="${stockDisponible}"
+                                               data-sucursal-id="${producto.sucursal_id || ''}"
+                                               data-sucursal="${sucursalNombre}">
                                            <i class="ri-add-line"></i> Seleccionar
                                        </button>`
                                     : `<button class="btn btn-sm btn-outline-secondary" disabled title="Sin stock disponible">
@@ -3245,6 +3245,20 @@ $(document).ready(function() {
 
     // Seleccionar producto del modal
     $(document).on('click', '.seleccionar-producto', function() {
+        const sucursalActualId = {% if sucursal_actual %}{{ sucursal_actual.id }}{% else %}null{% endif %};
+        const productoSucursalId = $(this).data('sucursal-id');
+        const productoSucursalNombre = $(this).data('sucursal') || 'otra sucursal';
+
+        if (sucursalActualId && productoSucursalId && parseInt(productoSucursalId) !== sucursalActualId) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Producto de otra sucursal',
+                html: `Este producto pertenece a <strong>${productoSucursalNombre}</strong> y no puede ser agregado al ticket de la sucursal actual.<br><br>Solo puedes vender productos que estén en tu sucursal.`,
+                confirmButtonText: 'Entendido'
+            });
+            return;
+        }
+
         const producto = {
             sku: $(this).data('sku'),
             articulo: $(this).data('articulo'),

@@ -120,6 +120,24 @@
                 <div class="kpi-label">Cumplimiento</div>
             </div>
         </div>
+        <div class="col-6 col-md-3 col-lg">
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpiRevisados" style="color:#6C63FF;">0%</div>
+                <div class="kpi-label">Revisados</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg">
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpiDepPend" style="color:var(--nexo-warning);">0</div>
+                <div class="kpi-label">Dep. Pendientes</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-lg">
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpiDifDepositos" style="color:var(--nexo-success);">$0</div>
+                <div class="kpi-label">Dif. Depósitos Mes</div>
+            </div>
+        </div>
     </div>
 
     <!-- ===== FILTROS + ACCIONES ===== -->
@@ -132,6 +150,10 @@
             <span class="filtro-tab" data-estado="DEPOSITO_CONFIRMADO" onclick="filtrarEstado(this)">Dep. Confirmados</span>
             <span class="filtro-tab" data-estado="ABIERTO" onclick="filtrarEstado(this)">Abiertos</span>
             <span class="filtro-tab" data-estado="REVISADO" onclick="filtrarEstado(this)">Revisados</span>
+            <span style="border-left:1px solid var(--nexo-gray-300);margin:0 4px;"></span>
+            <span class="filtro-tab" data-estado="" data-revision="REQUIERE_ACCION" onclick="filtrarResultado(this)" style="border-color:var(--nexo-error);color:var(--nexo-error);">Req. Acción</span>
+            <span class="filtro-tab" data-estado="" data-revision="OK_CON_OBS" onclick="filtrarResultado(this)" style="border-color:#6C63FF;color:#6C63FF;">OK c/Obs</span>
+            <span class="filtro-tab" data-estado="" data-revision="PENDIENTE" onclick="filtrarResultado(this)">Pend. Revisión</span>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-sm btn-outline-success" onclick="abrirDepositoMultidia()">
@@ -139,6 +161,9 @@
             </button>
             <button class="btn btn-sm btn-success" onclick="abrirComprobanteBancario()">
                 <i class="ri-bank-line me-1"></i>Registrar Depósito
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="verAnalisisFraude()" title="Análisis de riesgo por cajero">
+                <i class="ri-shield-star-line me-1"></i>Análisis Riesgo
             </button>
         </div>
     </div>
@@ -183,11 +208,19 @@
                 <div class="modal-body" id="detalleContenido">
                     <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
                 </div>
-                <div class="modal-footer py-2">
+                <div class="modal-footer py-2 d-flex justify-content-between">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-success btn-sm" id="btnAprobarDetalle" onclick="aprobarArqueoDetalle()" style="display:none;">
-                        <i class="ri-check-line me-1"></i>Aprobar Arqueo
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="btnRequiereAccion" onclick="revisarConResultado('REQUIERE_ACCION')" style="display:none;">
+                            <i class="ri-alarm-warning-line me-1"></i>Requiere Acción
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="btnOkConObs" onclick="revisarConResultado('OK_CON_OBS')" style="display:none;">
+                            <i class="ri-message-3-line me-1"></i>OK con Observaciones
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm" id="btnAprobarDetalle" onclick="revisarConResultado('OK')" style="display:none;">
+                            <i class="ri-check-line me-1"></i>Aprobar OK
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -365,6 +398,7 @@
 // ===== STATE =====
 let sucursalActualId = {{ sucursal_actual.id }};
 let estadoFiltro = '';
+let resultadoFiltro = '';
 let arqueoDetalleId = null;
 
 function getCookie(name) {
@@ -439,6 +473,12 @@ function renderKpis(ind) {
     document.getElementById('kpiFaltantes').textContent = ind.arqueos_faltantes || 0;
     document.getElementById('kpiDiferencias').textContent = ind.arqueos_con_diferencias || 0;
     document.getElementById('kpiCumplimiento').textContent = (ind.porcentaje_cumplimiento || 0).toFixed(0) + '%';
+    document.getElementById('kpiRevisados').textContent = (ind.porcentaje_revisados || 0).toFixed(0) + '%';
+    document.getElementById('kpiDepPend').textContent = ind.depositos_pendientes_confirmacion || 0;
+    const difDep = ind.diferencia_depositos_mes || 0;
+    const kpiDifDep = document.getElementById('kpiDifDepositos');
+    kpiDifDep.textContent = (difDep >= 0 ? '' : '-') + fmt(Math.abs(difDep));
+    kpiDifDep.style.color = difDep >= 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
 }
 
 function miniStepperHtml(estado) {
@@ -474,12 +514,21 @@ function estadoBadgeColor(estado) {
 
 function renderArqueos(arqueos) {
     const container = document.getElementById('listaArqueos');
-    if (arqueos.length === 0) {
+
+    // Client-side filter by resultado_revision when set
+    let filtered = arqueos;
+    if (resultadoFiltro) {
+        filtered = arqueos.filter(function(a) {
+            return (a.resultado_revision || 'PENDIENTE') === resultadoFiltro;
+        });
+    }
+
+    if (filtered.length === 0) {
         container.innerHTML = '<div class="text-center py-5"><i class="ri-folder-open-line" style="font-size:3rem;color:var(--nexo-gray-300);"></i><p class="text-muted mt-2">No hay arqueos en el periodo seleccionado</p></div>';
         return;
     }
     let html = '';
-    arqueos.forEach(a => {
+    filtered.forEach(a => {
         const estadoClassMap = {
             'CERRADO':'estado-cerrado','CON_DIFERENCIAS':'estado-diferencias','ABIERTO':'estado-abierto',
             'DEPOSITO_DECLARADO':'estado-deposito-declarado','DEPOSITO_CONFIRMADO':'estado-deposito-confirmado','REVISADO':'estado-revisado'
@@ -493,38 +542,76 @@ function renderArqueos(arqueos) {
         const [bgBadge, colorBadge] = estadoBadgeColor(a.estado);
         const stepper = miniStepperHtml(a.estado);
 
-        html += `<div class="arqueo-row ${estadoClass}">
-            <div class="row align-items-center g-2">
-                <div class="col-md-2">
-                    <strong style="font-size:.92rem;">${fechaDisplay}</strong>
-                    <div class="d-flex align-items-center gap-2 mt-1">
-                        <span class="badge" style="font-size:.68rem;background:${bgBadge};color:${colorBadge};">${a.estado_display}</span>
-                        ${stepper}
-                    </div>
-                </div>
-                <div class="col-md-2 text-center">
-                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">Efectivo Teorico</div>
-                    <strong style="font-family:monospace;">${fmt(a.efectivo_teorico)}</strong>
-                </div>
-                <div class="col-md-2 text-center">
-                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">Efectivo Fisico</div>
-                    <strong style="font-family:monospace;">${fmt(a.efectivo_fisico)}</strong>
-                </div>
-                <div class="col-md-2 text-center">
-                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">Diferencia</div>
-                    <strong style="font-family:monospace;color:${diffColor};">${diffSign}${fmt(diffEf)}</strong>
-                </div>
-                <div class="col-md-2 text-center">
-                    <div style="font-size:.72rem;color:var(--nexo-gray-700);">Transbank</div>
-                    <strong style="font-family:monospace;">${fmt(a.transbank_teorico || 0)}</strong>
-                    ${diffTbk!==0?`<small style="color:var(--nexo-error);font-size:.7rem;"> (dif: ${fmt(diffTbk)})</small>`:''}
-                </div>
-                <div class="col-md-2 text-end">
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick="verDetalle(${a.id})" title="Ver detalle"><i class="ri-eye-line"></i></button>
-                    ${['CON_DIFERENCIAS','DEPOSITO_CONFIRMADO','CERRADO'].includes(a.estado)?`<button class="btn btn-sm btn-success" onclick="aprobarArqueo(${a.id})" title="Aprobar"><i class="ri-check-line me-1"></i>Aprobar</button>`:''}
-                </div>
-            </div>
-        </div>`;
+        const difDep = a.diferencia_deposito_vs_teorico || 0;
+        const difDepColor = a.estado_deposito === 'COMPLETO' ? 'var(--nexo-success)' : a.estado_deposito === 'SIN_DEPOSITO' ? 'var(--nexo-gray-400)' : 'var(--nexo-error)';
+        const urgentBadge = a.requiere_revision_urgente ? '<span class="badge bg-danger ms-1" style="font-size:.65rem;">URGENTE ' + a.dias_sin_revision + 'd</span>' : '';
+        const expressBadge = a.requiere_revision_express ? '<span class="badge ms-1" style="font-size:.65rem;background:rgba(255,176,32,.15);color:var(--nexo-warning);">Express</span>' : '';
+        const fondoFijo = a.fondo_fijo ? '<div style="font-size:.68rem;color:var(--nexo-gray-500);">F.Fijo: ' + fmt(a.fondo_fijo) + '</div>' : '';
+
+        // Resultado revision badge
+        const resRev = a.resultado_revision || 'PENDIENTE';
+        let revBadge = '';
+        if (resRev === 'OK') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(0,212,170,.15);color:var(--nexo-success);">OK</span>';
+        else if (resRev === 'OK_CON_OBS') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(108,99,255,.15);color:#6C63FF;">OK c/Obs</span>';
+        else if (resRev === 'REQUIERE_ACCION') revBadge = '<span class="badge ms-1" style="font-size:.6rem;background:rgba(255,71,87,.15);color:var(--nexo-error);">Req. Acción</span>';
+
+        // Observaciones inline: cajera explanation + supervisor note indicator
+        let obsSection = '';
+        if (a.diferencia_efectivo !== 0 && a.observaciones_diferencia) {
+            obsSection += '<div style="font-size:.72rem;color:var(--nexo-gray-700);margin-top:2px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + (a.observaciones_diferencia||'').replace(/"/g,'&quot;') + '"><i class="ri-chat-3-line me-1" style="color:var(--nexo-success);"></i>' + (a.observaciones_diferencia||'').substring(0,60) + '</div>';
+        } else if (a.diferencia_efectivo !== 0) {
+            obsSection += '<div style="font-size:.68rem;color:var(--nexo-error);"><i class="ri-alert-line me-1"></i>Sin explicación</div>';
+        }
+        if (a.observaciones_supervisor) {
+            obsSection += '<div style="font-size:.68rem;color:var(--nexo-primary);margin-top:1px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Supervisor: ' + (a.observaciones_supervisor||'').replace(/"/g,'&quot;') + '"><i class="ri-shield-check-line me-1"></i>' + (a.observaciones_supervisor||'').substring(0,50) + '</div>';
+        }
+        const obsCount = a.cantidad_observaciones || 0;
+        const obsCountBadge = obsCount > 0 ? '<span class="badge ms-1" style="font-size:.55rem;background:var(--nexo-primary-light);color:var(--nexo-primary);">' + obsCount + ' notas</span>' : '';
+
+        // Action buttons
+        let actionBtns = '<button class="btn btn-sm btn-outline-primary me-1" onclick="verDetalle(' + a.id + ')" title="Ver detalle"><i class="ri-eye-line"></i></button>';
+        if (['CON_DIFERENCIAS','DEPOSITO_CONFIRMADO','CERRADO'].includes(a.estado) && resRev !== 'OK') {
+            actionBtns += '<div class="btn-group btn-group-sm ms-1"><button class="btn btn-success btn-sm" onclick="aprobarArqueoDirecto(' + a.id + ',\'OK\')" title="Aprobar OK"><i class="ri-check-line"></i></button>';
+            actionBtns += '<button class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>';
+            actionBtns += '<ul class="dropdown-menu dropdown-menu-end">';
+            actionBtns += '<li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(' + a.id + ',\'OK\');return false;"><i class="ri-check-line me-2 text-success"></i>Aprobar OK</a></li>';
+            actionBtns += '<li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(' + a.id + ',\'OK_CON_OBS\');return false;"><i class="ri-message-3-line me-2 text-primary"></i>OK con Observaciones</a></li>';
+            actionBtns += '<li><a class="dropdown-item" href="#" onclick="aprobarArqueoDirecto(' + a.id + ',\'REQUIERE_ACCION\');return false;"><i class="ri-alarm-warning-line me-2 text-danger"></i>Requiere Acción</a></li>';
+            actionBtns += '</ul></div>';
+        }
+
+        html += '<div class="arqueo-row ' + estadoClass + '" ' + (a.requiere_revision_urgente ? 'style="background:rgba(255,71,87,.04);"' : '') + '>' +
+            '<div class="row align-items-center g-2">' +
+                '<div class="col-md-2">' +
+                    '<strong style="font-size:.92rem;">' + fechaDisplay + '</strong>' +
+                    '<div class="d-flex align-items-center gap-1 flex-wrap mt-1">' +
+                        '<span class="badge" style="font-size:.68rem;background:' + bgBadge + ';color:' + colorBadge + ';">' + a.estado_display + '</span>' +
+                        revBadge + stepper + urgentBadge + expressBadge + obsCountBadge +
+                    '</div>' +
+                '</div>' +
+                '<div class="col-md-2 text-center">' +
+                    '<div style="font-size:.72rem;color:var(--nexo-gray-700);">Efectivo Teórico</div>' +
+                    '<strong style="font-family:monospace;">' + fmt(a.efectivo_teorico) + '</strong>' +
+                    fondoFijo +
+                '</div>' +
+                '<div class="col-md-2 text-center">' +
+                    '<div style="font-size:.72rem;color:var(--nexo-gray-700);">Depositado Verif.</div>' +
+                    '<strong style="font-family:monospace;color:' + difDepColor + ';">' + fmt(a.total_depositado_verificado || 0) + '</strong>' +
+                    (a.total_deposito_cheque ? '<div style="font-size:.68rem;color:var(--nexo-gray-500);">Cheq: ' + fmt(a.total_deposito_cheque) + '</div>' : '') +
+                '</div>' +
+                '<div class="col-md-2 text-center">' +
+                    '<div style="font-size:.72rem;color:var(--nexo-gray-700);">Dif. Depósito</div>' +
+                    '<strong style="font-family:monospace;color:' + difDepColor + ';">' + (difDep > 0 ? '+' : '') + fmt(difDep) + '</strong>' +
+                    '<div style="font-size:.68rem;"><span class="badge" style="font-size:.6rem;background:' + (a.estado_deposito==='COMPLETO'?'rgba(0,212,170,.15)':a.estado_deposito==='SIN_DEPOSITO'?'rgba(128,128,128,.15)':'rgba(255,71,87,.15)') + ';color:' + difDepColor + ';">' + (a.estado_deposito === 'COMPLETO' ? 'Cuadra' : a.estado_deposito === 'SIN_DEPOSITO' ? 'Sin depósito' : 'Parcial') + '</span></div>' +
+                    obsSection +
+                '</div>' +
+                '<div class="col-md-2 text-center">' +
+                    '<div style="font-size:.72rem;color:var(--nexo-gray-700);">Dif. Conteo</div>' +
+                    '<strong style="font-family:monospace;color:' + diffColor + ';">' + diffSign + fmt(diffEf) + '</strong>' +
+                    (diffTbk!==0?'<small style="color:var(--nexo-error);font-size:.7rem;"> POS: '+fmt(diffTbk)+'</small>':'') +
+                '</div>' +
+                '<div class="col-md-2 text-end">' + actionBtns + '</div>' +
+            '</div></div>';
     });
     container.innerHTML = html;
 }
@@ -534,6 +621,15 @@ function filtrarEstado(el) {
     document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
     estadoFiltro = el.dataset.estado;
+    resultadoFiltro = '';
+    cargarDatos();
+}
+
+function filtrarResultado(el) {
+    document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    estadoFiltro = '';
+    resultadoFiltro = el.dataset.revision || '';
     cargarDatos();
 }
 
@@ -547,64 +643,146 @@ function verDetalle(id) {
             if (!data.success) return;
             const a = data.arqueo;
             document.getElementById('detalleFecha').textContent = a.fecha_arqueo;
-            document.getElementById('btnAprobarDetalle').style.display = (a.estado === 'CON_DIFERENCIAS') ? '' : 'none';
+
+            const showApprove = ['CON_DIFERENCIAS','DEPOSITO_CONFIRMADO','CERRADO','DEPOSITO_DECLARADO'].includes(a.estado);
+            document.getElementById('btnAprobarDetalle').style.display = showApprove ? '' : 'none';
+            document.getElementById('btnOkConObs').style.display = showApprove ? '' : 'none';
+            document.getElementById('btnRequiereAccion').style.display = showApprove || a.estado === 'REVISADO' ? '' : 'none';
 
             let dep_html = '';
             const deps = a.depositos || [];
             if (deps.length > 0) {
                 dep_html = '<h6 class="mt-3 fw-bold" style="font-size:.85rem;"><i class="ri-bank-line me-1 text-success"></i>Depósitos Bancarios</h6><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Banco</th><th class="text-end">Monto</th><th>Comprobante</th><th>Estado</th></tr></thead><tbody>';
                 deps.forEach(d => {
-                    dep_html += `<tr><td>${d.fecha_deposito||'—'}</td><td>${d.banco_display||d.banco}</td><td class="text-end" style="font-family:monospace;font-weight:700;">${fmt(d.monto)}</td><td>${d.numero_comprobante||'—'}</td><td>${d.verificado?'<span class="badge bg-success">Verificado</span>':'<span class="badge bg-warning text-dark">Pendiente</span>'}</td></tr>`;
+                    dep_html += '<tr><td>' + (d.fecha_deposito||'—') + '</td><td>' + (d.banco_display||d.banco) + '</td><td class="text-end" style="font-family:monospace;font-weight:700;">' + fmt(d.monto) + '</td><td>' + (d.numero_comprobante||'—') + '</td><td>' + (d.verificado?'<span class="badge bg-success">Verificado</span>':'<span class="badge bg-warning text-dark">Pendiente</span>') + '</td></tr>';
                 });
                 dep_html += '</tbody></table></div>';
             }
 
-            document.getElementById('detalleContenido').innerHTML = `
-                <div class="row g-3">
-                    <div class="col-md-4"><div class="kpi-card"><div class="kpi-value" style="color:var(--nexo-primary);">${fmt(a.total_efectivo_teorico)}</div><div class="kpi-label">Efectivo Teórico</div></div></div>
-                    <div class="col-md-4"><div class="kpi-card"><div class="kpi-value">${fmt(a.total_efectivo_fisico)}</div><div class="kpi-label">Efectivo Físico</div></div></div>
-                    <div class="col-md-4"><div class="kpi-card"><div class="kpi-value" style="color:${a.diferencia_efectivo===0?'var(--nexo-success)':'var(--nexo-error)'};">${a.diferencia_efectivo>0?'+':''}${fmt(a.diferencia_efectivo)}</div><div class="kpi-label">Diferencia</div></div></div>
-                    <div class="col-md-4"><div class="kpi-card"><div class="kpi-value">${fmt(a.total_transbank_teorico)}</div><div class="kpi-label">Transbank Teórico</div></div></div>
-                    <div class="col-md-4"><div class="kpi-card"><div class="kpi-value">${fmt(a.cierre_pos_fisico)}</div><div class="kpi-label">Cierre POS</div></div></div>
-                    <div class="col-md-4"><div class="kpi-card"><div class="kpi-value" style="color:${a.diferencia_transbank===0?'var(--nexo-success)':'var(--nexo-error)'};">${fmt(a.diferencia_transbank)}</div><div class="kpi-label">Dif. Transbank</div></div></div>
-                </div>
-                <div class="row g-3 mt-2">
-                    <div class="col-md-6"><div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">${fmt(a.venta_total)}</div><div class="kpi-label">Venta Total</div></div></div>
-                    <div class="col-md-6"><div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">${a.usuario||'—'}</div><div class="kpi-label">Responsable</div></div></div>
-                </div>
-                ${a.observaciones?`<div class="alert alert-secondary mt-3" style="font-size:.85rem;"><i class="ri-chat-3-line me-1"></i>${a.observaciones}</div>`:''}
-                ${dep_html}
-            `;
+            // Resultado revision info
+            var revInfo = '';
+            var resRev = a.resultado_revision || 'PENDIENTE';
+            var revMap = {'OK':['var(--nexo-success)','Aprobado OK'],'OK_CON_OBS':['#6C63FF','Aprobado con Observaciones'],'REQUIERE_ACCION':['var(--nexo-error)','Requiere Acción']};
+            if (revMap[resRev]) {
+                revInfo = '<div class="alert mt-3 mb-2" style="font-size:.85rem;background:rgba(0,0,0,.03);border-left:4px solid ' + revMap[resRev][0] + ';"><strong style="color:' + revMap[resRev][0] + ';"><i class="ri-shield-check-line me-1"></i>' + revMap[resRev][1] + '</strong>';
+                if (a.observaciones_supervisor) revInfo += '<div class="mt-1" style="color:var(--nexo-gray-700);">' + a.observaciones_supervisor + '</div>';
+                if (a.supervisor) revInfo += '<small class="text-muted">' + a.supervisor + (a.fecha_revision ? ' — ' + a.fecha_revision : '') + '</small>';
+                revInfo += '</div>';
+            }
+
+            // Bitácora timeline
+            var bitacoraHtml = '';
+            var bitacora = a.bitacora || [];
+            if (bitacora.length > 0) {
+                bitacoraHtml = '<h6 class="mt-3 fw-bold" style="font-size:.85rem;"><i class="ri-message-3-line me-1 text-primary"></i>Bitácora de Observaciones</h6>';
+                bitacoraHtml += '<div style="max-height:250px;overflow-y:auto;">';
+                bitacora.forEach(function(obs) {
+                    var iconMap = {'SUPERVISOR':'ri-shield-check-line','CAJERA':'ri-user-line','SISTEMA':'ri-settings-3-line'};
+                    var colorMap = {'SUPERVISOR':'var(--nexo-primary)','CAJERA':'var(--nexo-success)','SISTEMA':'var(--nexo-gray-500)'};
+                    bitacoraHtml += '<div class="d-flex align-items-start gap-2 py-2" style="border-bottom:1px solid var(--nexo-gray-200);">' +
+                        '<i class="' + (iconMap[obs.tipo]||'ri-chat-3-line') + ' mt-1" style="color:' + (colorMap[obs.tipo]||'var(--nexo-gray-500)') + ';"></i>' +
+                        '<div class="flex-grow-1">' +
+                            '<div style="font-size:.82rem;color:var(--nexo-gray-900);">' + obs.texto + '</div>' +
+                            '<small class="text-muted" style="font-size:.7rem;">' + obs.usuario + ' — ' + obs.fecha + ' — ' + obs.tipo_display + '</small>' +
+                        '</div></div>';
+                });
+                bitacoraHtml += '</div>';
+            }
+            bitacoraHtml += '<div class="mt-2 d-flex gap-2"><input type="text" class="form-control form-control-sm" id="nuevaObsDetalle" placeholder="Agregar observación...">' +
+                '<button class="btn btn-sm btn-outline-primary" onclick="agregarObsDetalle()"><i class="ri-send-plane-line"></i></button></div>';
+
+            document.getElementById('detalleContenido').innerHTML =
+                '<div class="row g-3">' +
+                    '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value" style="color:var(--nexo-primary);">' + fmt(a.total_efectivo_teorico) + '</div><div class="kpi-label">Efectivo Teórico</div></div></div>' +
+                    '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value">' + fmt(a.total_efectivo_fisico) + '</div><div class="kpi-label">Efectivo Físico</div></div></div>' +
+                    '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value" style="color:' + (a.diferencia_efectivo===0?'var(--nexo-success)':'var(--nexo-error)') + ';">' + (a.diferencia_efectivo>0?'+':'') + fmt(a.diferencia_efectivo) + '</div><div class="kpi-label">Diferencia</div></div></div>' +
+                    '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value">' + fmt(a.total_transbank_teorico) + '</div><div class="kpi-label">Transbank Teórico</div></div></div>' +
+                    '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value">' + fmt(a.cierre_pos_fisico) + '</div><div class="kpi-label">Cierre POS</div></div></div>' +
+                    '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value" style="color:' + (a.diferencia_transbank===0?'var(--nexo-success)':'var(--nexo-error)') + ';">' + fmt(a.diferencia_transbank) + '</div><div class="kpi-label">Dif. Transbank</div></div></div>' +
+                '</div>' +
+                '<div class="row g-3 mt-2">' +
+                    '<div class="col-md-6"><div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">' + fmt(a.venta_total) + '</div><div class="kpi-label">Venta Total</div></div></div>' +
+                    '<div class="col-md-6"><div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">' + (a.usuario||'—') + '</div><div class="kpi-label">Responsable</div></div></div>' +
+                '</div>' +
+                (a.observaciones ? '<div class="alert alert-secondary mt-3" style="font-size:.85rem;"><i class="ri-chat-3-line me-1"></i>' + a.observaciones + '</div>' : '') +
+                revInfo + dep_html + bitacoraHtml;
         });
     new bootstrap.Modal(document.getElementById('modalDetalle')).show();
 }
 
-// ===== APROBAR =====
-function aprobarArqueo(id) {
-    Swal.fire({
-        title: '¿Aprobar este Arqueo?',
-        html: '<div class="mb-3"><label class="form-label">Observaciones (opcional):</label><textarea class="form-control" id="swalObs" rows="3"></textarea></div>',
-        icon: 'question', showCancelButton: true,
-        confirmButtonText: '<i class="ri-check-line me-1"></i>Aprobar',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#00D4AA'
-    }).then(r => {
-        if (!r.isConfirmed) return;
-        const obs = document.getElementById('swalObs').value;
-        fetch('/app/api/arqueo/revisar/', {
-            method: 'POST',
-            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
-            body: JSON.stringify({ arqueo_id: id, observaciones: obs, aprobar: true })
-        }).then(r => r.json()).then(res => {
-            if (res.success) { Swal.fire('Aprobado', 'Arqueo aprobado correctamente', 'success'); cargarDatos(); }
-            else Swal.fire('Error', res.error, 'error');
-        });
+function agregarObsDetalle() {
+    var texto = (document.getElementById('nuevaObsDetalle') || {}).value;
+    if (!texto || texto.trim().length < 5) { Swal.fire('Error', 'Mínimo 5 caracteres', 'error'); return; }
+    fetch('/app/api/arqueo/observacion/crear/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ arqueo_id: arqueoDetalleId, texto: texto.trim() })
+    }).then(r => r.json()).then(res => {
+        if (res.success) { verDetalle(arqueoDetalleId); }
+        else Swal.fire('Error', res.error, 'error');
     });
 }
 
-function aprobarArqueoDetalle() {
-    if (arqueoDetalleId) aprobarArqueo(arqueoDetalleId);
+// ===== APROBAR (nuevo sistema con resultado) =====
+function aprobarArqueoDirecto(id, resultado) {
+    if (resultado === 'OK') {
+        Swal.fire({
+            title: 'Aprobar Arqueo OK',
+            text: '¿Confirma que este arqueo está correcto?',
+            icon: 'question', showCancelButton: true,
+            confirmButtonText: '<i class="ri-check-line me-1"></i>Aprobar OK',
+            cancelButtonText: 'Cancelar', confirmButtonColor: '#00D4AA'
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            enviarRevision(id, 'OK', '');
+        });
+    } else {
+        var titulo = resultado === 'OK_CON_OBS' ? 'Aprobar con Observaciones' : 'Marcar como Requiere Acción';
+        var placeholder = resultado === 'OK_CON_OBS' ? 'Escriba las observaciones...' : 'Describa qué acción debe tomar la cajera (mín 10 caracteres)...';
+        var btnColor = resultado === 'OK_CON_OBS' ? '#6C63FF' : '#FF4757';
+        var btnText = resultado === 'OK_CON_OBS' ? '<i class="ri-message-3-line me-1"></i>OK con Obs' : '<i class="ri-alarm-warning-line me-1"></i>Requiere Acción';
+
+        Swal.fire({
+            title: titulo,
+            html: '<div class="mb-3 text-start"><label class="form-label fw-bold">Observaciones *</label><textarea class="form-control" id="swalObs" rows="4" placeholder="' + placeholder + '"></textarea></div>',
+            icon: resultado === 'REQUIERE_ACCION' ? 'warning' : 'question',
+            showCancelButton: true, confirmButtonText: btnText,
+            cancelButtonText: 'Cancelar', confirmButtonColor: btnColor,
+            preConfirm: function() {
+                var obs = document.getElementById('swalObs').value;
+                if (!obs || obs.trim().length < 5) { Swal.showValidationMessage('Ingrese observaciones (mín 5 caracteres)'); return false; }
+                if (resultado === 'REQUIERE_ACCION' && obs.trim().length < 10) { Swal.showValidationMessage('Mínimo 10 caracteres para acciones requeridas'); return false; }
+                return obs;
+            }
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            enviarRevision(id, resultado, r.value);
+        });
+    }
 }
+
+function enviarRevision(id, resultado, observaciones) {
+    fetch('/app/api/arqueo/revisar/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ arqueo_id: id, resultado_revision: resultado, observaciones: observaciones, aprobar: resultado !== 'REQUIERE_ACCION' })
+    }).then(r => r.json()).then(res => {
+        if (res.success) {
+            var msg = resultado === 'OK' ? 'Arqueo aprobado' : resultado === 'OK_CON_OBS' ? 'Arqueo aprobado con observaciones' : 'Acción requerida registrada';
+            Swal.fire('Listo', msg, 'success');
+            cargarDatos();
+            var modal = bootstrap.Modal.getInstance(document.getElementById('modalDetalle'));
+            if (modal) modal.hide();
+        } else Swal.fire('Error', res.error, 'error');
+    });
+}
+
+function revisarConResultado(resultado) {
+    if (arqueoDetalleId) aprobarArqueoDirecto(arqueoDetalleId, resultado);
+}
+
+function aprobarArqueo(id) { aprobarArqueoDirecto(id, 'OK'); }
+function aprobarArqueoDetalle() { if (arqueoDetalleId) aprobarArqueoDirecto(arqueoDetalleId, 'OK'); }
 
 // ===== COMPROBANTE BANCARIO =====
 function abrirComprobanteBancario() {
@@ -805,6 +983,50 @@ function enviarConfirmacion() {
             if (res.success) { Swal.fire('Confirmado', res.message, 'success'); bootstrap.Modal.getInstance(document.getElementById('modalConfirmarDep')).hide(); cargarDatos(); }
             else Swal.fire('Error', res.error, 'error');
         });
+}
+
+// ===== ANÁLISIS DE FRAUDE =====
+function verAnalisisFraude() {
+    Swal.fire({
+        title: '<i class="ri-shield-star-line me-2"></i>Análisis de Riesgo por Cajero',
+        html: '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Analizando patrones...</p></div>',
+        width: '800px',
+        showConfirmButton: false,
+        showCloseButton: true,
+        didOpen: function() {
+            fetch('/app/api/arqueo/analisis-fraude/?sucursal_id=' + sucursalActualId)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) { Swal.update({html: '<div class="alert alert-danger">' + data.error + '</div>'}); return; }
+                    const analisis = data.analisis || [];
+                    if (analisis.length === 0) { Swal.update({html: '<div class="text-center text-muted py-4">Sin datos suficientes para análisis</div>'}); return; }
+                    let html = '<div class="text-start">';
+                    analisis.forEach(function(c) {
+                        const riesgoColor = c.nivel_riesgo === 'ALTO' ? 'var(--nexo-error)' : c.nivel_riesgo === 'MEDIO' ? 'var(--nexo-warning)' : 'var(--nexo-success)';
+                        const riesgoBg = c.nivel_riesgo === 'ALTO' ? 'rgba(255,71,87,.1)' : c.nivel_riesgo === 'MEDIO' ? 'rgba(255,176,32,.1)' : 'rgba(0,212,170,.05)';
+                        html += '<div class="p-3 mb-2 rounded" style="background:' + riesgoBg + ';border:1px solid ' + riesgoColor + ';">';
+                        html += '<div class="d-flex justify-content-between align-items-center mb-2">';
+                        html += '<strong>' + c.usuario_nombre + '</strong>';
+                        html += '<span class="badge" style="background:' + riesgoColor + ';color:#fff;">' + c.nivel_riesgo + '</span>';
+                        html += '</div>';
+                        html += '<div style="font-size:.82rem;color:var(--nexo-gray-700);">' + c.total_arqueos + ' arqueos analizados</div>';
+                        if (c.indicadores) {
+                            var ind = c.indicadores;
+                            html += '<div class="row g-1 mt-2" style="font-size:.78rem;">';
+                            if (ind.porcentaje_exactos) html += '<div class="col-6"><span class="text-muted">Exactos:</span> <strong style="color:' + (ind.porcentaje_exactos.alerta?'var(--nexo-error)':'inherit') + ';">' + ind.porcentaje_exactos.valor + '%</strong></div>';
+                            if (ind.faltante_acumulado) html += '<div class="col-6"><span class="text-muted">Faltante acum.:</span> <strong style="color:' + (ind.faltante_acumulado.alerta?'var(--nexo-error)':'inherit') + ';">' + fmt(ind.faltante_acumulado.valor) + '</strong></div>';
+                            if (ind.uso_express_pct) html += '<div class="col-6"><span class="text-muted">Express:</span> <strong>' + ind.uso_express_pct.valor + '%</strong></div>';
+                            if (ind.deposito_vs_teorico) html += '<div class="col-6"><span class="text-muted">Dep. vs Teórico:</span> <strong style="color:' + (ind.deposito_vs_teorico.alerta?'var(--nexo-error)':'inherit') + ';">' + ind.deposito_vs_teorico.porcentaje_depositado + '%</strong></div>';
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                    Swal.update({html: html});
+                })
+                .catch(function() { Swal.update({html: '<div class="alert alert-danger">Error de conexión</div>'}); });
+        }
+    });
 }
 </script>
 

@@ -25,6 +25,8 @@ from .models import (
     Requerimiento,
     Cliente, Proveedor, ContactoEmpresa, Empresa,
     Sucursal,
+    Productos_Recepcionados,
+    Movimientos_Producto,
 )
 
 logger = logging.getLogger('app')
@@ -408,3 +410,176 @@ def api_dashboard_requerimientos(request):
     })
 
 
+# ==================== DESPACHOS / RECEPCIONES ====================
+
+@login_required
+@require_GET
+def dashboard_despachos(request):
+    return render(request, 'vistas/modulo_dashboards/dashboard_despachos.html')
+
+
+@login_required
+@require_GET
+def api_dashboard_despachos(request):
+    """Analytics detallados de despachos, recepciones y regularizaciones."""
+    suc_id, emp_id = _get_sucursal_empresa(request)
+    inicio, fin = _parse_date_range(request)
+
+    # Base: DTEs de traspaso no descartados
+    traspasos_qs = Dte.objects.filter(
+        descartado=False,
+        tipo_transaccion='TRASPASO',
+        fecha_emision__range=[inicio, fin],
+    )
+    if emp_id:
+        traspasos_qs = traspasos_qs.filter(
+            Q(emisor_id=emp_id) | Q(receptor_id=emp_id)
+        )
+    if suc_id:
+        traspasos_qs = traspasos_qs.filter(
+            Q(sucursal_id=suc_id) | Q(dte_movimientos__sucursal_destino_id=suc_id)
+        ).distinct()
+
+    total_traspasos = traspasos_qs.count()
+
+    # --- KPIs principales ---
+    por_estado_dte = dict(
+        traspasos_qs.values_list('estado_dte').annotate(c=Count('id')).values_list('estado_dte', 'c')
+    )
+
+    # Recepciones base
+    rec_qs = Productos_Recepcionados.objects.filter(
+        dte__isnull=False,
+        dte__descartado=False,
+        dte__tipo_transaccion='TRASPASO',
+    )
+    if emp_id:
+        rec_qs = rec_qs.filter(
+            Q(dte__emisor_id=emp_id) | Q(dte__receptor_id=emp_id)
+        )
+    if suc_id:
+        rec_qs = rec_qs.filter(
+            Q(dte__sucursal_id=suc_id) | Q(dte__dte_movimientos__sucursal_destino_id=suc_id)
+        ).distinct()
+
+    rec_periodo = rec_qs.filter(
+        Q(fecha_recepcion__date__range=[inicio, fin]) |
+        Q(fecha_recepcion__isnull=True, dte__fecha_emision__range=[inicio, fin])
+    )
+
+    total_recepciones = rec_periodo.count()
+    total_ok = rec_periodo.filter(estado='RECEPCIONADO_OK').count()
+    tasa_exito = round((total_ok / total_recepciones * 100) if total_recepciones else 0, 1)
+
+    total_faltantes = rec_periodo.filter(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL']).count()
+    total_danados = rec_periodo.filter(estado='RECEPCIONADO_DANADO').count()
+    total_sobrantes = rec_periodo.filter(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']).count()
+    total_regularizados = rec_periodo.filter(estado='REGULARIZADO').count()
+    total_pendientes = rec_periodo.filter(
+        estado__in=['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE',
+                    'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION',
+                    'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
+    ).count()
+
+    # Tiempo promedio emisión a recepción
+    dtes_con_recepcion = traspasos_qs.filter(fecha_recepcion__isnull=False)
+    avg_dias_raw = None
+    if dtes_con_recepcion.exists():
+        from django.db.models import ExpressionWrapper, DurationField
+        dtes_con_recepcion = dtes_con_recepcion.annotate(
+            dias_dur=ExpressionWrapper(
+                F('fecha_recepcion') - F('fecha_emision'),
+                output_field=DurationField()
+            )
+        )
+        avg_dias_raw = dtes_con_recepcion.aggregate(avg=Avg('dias_dur'))['avg']
+    avg_dias = round(avg_dias_raw.days, 1) if avg_dias_raw else 0
+
+    # --- Pipeline ---
+    pipeline = {
+        'emitidos': por_estado_dte.get('EMITIDO', 0),
+        'recepcionado_completo': por_estado_dte.get('RECEPCIONADO_COMPLETO', 0),
+        'recepcionado_parcial': por_estado_dte.get('RECEPCIONADO_PARCIAL', 0),
+        'recepcionado_sobrante': por_estado_dte.get('RECEPCIONADO_SOBRANTE', 0),
+        'en_regularizacion': por_estado_dte.get('EN_REGULARIZACION', 0),
+        'rechazados': por_estado_dte.get('RECHAZADO', 0),
+        'anulados': por_estado_dte.get('ANULADO', 0) + por_estado_dte.get('CANCELADO', 0),
+    }
+
+    # --- Por sucursal (origen) ---
+    por_sucursal = []
+    suc_data = rec_periodo.filter(dte__sucursal__isnull=False).values(
+        'dte__sucursal__alias'
+    ).annotate(
+        total=Count('id'),
+        ok=Count('id', filter=Q(estado='RECEPCIONADO_OK')),
+        faltantes=Count('id', filter=Q(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL'])),
+        danados=Count('id', filter=Q(estado='RECEPCIONADO_DANADO')),
+        sobrantes=Count('id', filter=Q(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'])),
+    ).order_by('-total')[:15]
+
+    for s in suc_data:
+        total = s['total'] or 1
+        por_sucursal.append({
+            'sucursal': s['dte__sucursal__alias'],
+            'total': s['total'],
+            'ok': s['ok'],
+            'pct_ok': round(s['ok'] / total * 100, 1),
+            'faltantes': s['faltantes'],
+            'danados': s['danados'],
+            'sobrantes': s['sobrantes'],
+        })
+
+    # --- Tendencia mensual de problemas ---
+    tendencia = list(
+        rec_periodo.filter(fecha_recepcion__isnull=False).annotate(
+            mes=TruncMonth('fecha_recepcion')
+        ).values('mes').annotate(
+            total=Count('id'),
+            ok=Count('id', filter=Q(estado='RECEPCIONADO_OK')),
+            faltantes=Count('id', filter=Q(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL'])),
+            danados=Count('id', filter=Q(estado='RECEPCIONADO_DANADO')),
+            sobrantes=Count('id', filter=Q(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'])),
+        ).order_by('mes')
+    )
+    for t in tendencia:
+        t['mes'] = t['mes'].strftime('%Y-%m') if t['mes'] else ''
+
+    # --- Regularizaciones pendientes (lista) ---
+    reg_pendientes = list(
+        rec_qs.filter(
+            estado__in=['EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION',
+                        'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE',
+                        'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE']
+        ).values(
+            'dte__numero_documento', 'dte__sucursal__alias', 'dte__fecha_emision'
+        ).annotate(
+            productos_pendientes=Count('id')
+        ).order_by('-dte__fecha_emision')[:20]
+    )
+    for r in reg_pendientes:
+        fecha_emi = r['dte__fecha_emision']
+        if fecha_emi:
+            r['dias_pendiente'] = (timezone.now().date() - fecha_emi).days
+        else:
+            r['dias_pendiente'] = 0
+        r['dte__fecha_emision'] = str(fecha_emi) if fecha_emi else ''
+
+    return JsonResponse({
+        'kpis': {
+            'total_traspasos': total_traspasos,
+            'total_recepciones': total_recepciones,
+            'tasa_exito': tasa_exito,
+            'avg_dias_recepcion': avg_dias,
+            'total_pendientes': total_pendientes,
+            'total_faltantes': total_faltantes,
+            'total_danados': total_danados,
+            'total_sobrantes': total_sobrantes,
+            'total_regularizados': total_regularizados,
+        },
+        'pipeline': pipeline,
+        'por_sucursal': por_sucursal,
+        'tendencia': tendencia,
+        'regularizaciones_pendientes': reg_pendientes,
+        'periodo': {'inicio': str(inicio), 'fin': str(fin)},
+    })

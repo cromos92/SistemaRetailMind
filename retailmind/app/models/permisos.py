@@ -548,6 +548,23 @@ class CodigoAutorizacionDinamico(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
     usado = models.BooleanField(default=False, verbose_name='¿Código usado?')
     activo = models.BooleanField(default=True, verbose_name='¿Código activo?')
+    tipo_codigo = models.CharField(
+        max_length=20,
+        choices=[('HORARIO', 'Horario'), ('TRANSACCION', 'Por Transacción')],
+        default='HORARIO',
+        verbose_name='Tipo de código'
+    )
+    operacion_asociada = models.CharField(
+        max_length=50, null=True, blank=True,
+        verbose_name='Operación asociada (para códigos por transacción)'
+    )
+    generado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='codigos_autorizacion_generados',
+        verbose_name='Supervisor que generó el código'
+    )
     
     class Meta:
         verbose_name = 'Código de Autorización Dinámico'
@@ -635,9 +652,47 @@ class CodigoAutorizacionDinamico(models.Model):
             fecha_hora_fin=hora_fin,
             activo=True
         )
-        
+
         return codigo_obj
-    
+
+    @classmethod
+    def generar_codigo_transaccion(cls, supervisor, operacion_id):
+        """
+        Genera un código de un solo uso vinculado a una operación específica.
+        A diferencia del código horario, este expira en 10 minutos y es de uso único.
+        """
+        import hashlib
+        from django.conf import settings as django_settings
+        import pytz
+
+        ahora_utc = timezone.now()
+        chile_tz = pytz.timezone('America/Santiago')
+        ahora = ahora_utc.astimezone(chile_tz)
+
+        hora_inicio = ahora
+        hora_fin = ahora + timezone.timedelta(minutes=10)
+
+        secret_key = getattr(django_settings, 'SECRET_KEY', 'retailmind-secret-2024')
+        cadena_base = f"{ahora.isoformat()}{secret_key}{operacion_id}{supervisor.id}"
+        hash_obj = hashlib.sha256(cadena_base.encode())
+        codigo_hash = hash_obj.hexdigest()
+
+        codigo_numerico = ''.join(filter(str.isdigit, codigo_hash))[:6]
+        if len(codigo_numerico) < 6:
+            codigo_numerico = (codigo_numerico + codigo_hash.replace('a', '1').replace('b', '2').replace('c', '3').replace('d', '4').replace('e', '5').replace('f', '6'))[:6]
+
+        codigo_obj = cls.objects.create(
+            codigo=codigo_numerico,
+            fecha_hora_inicio=hora_inicio,
+            fecha_hora_fin=hora_fin,
+            activo=True,
+            tipo_codigo='TRANSACCION',
+            operacion_asociada=str(operacion_id),
+            generado_por=supervisor
+        )
+
+        return codigo_obj
+
     @classmethod
     def validar_codigo(cls, codigo_ingresado):
         """
@@ -733,7 +788,53 @@ class RegistroAutorizacion(models.Model):
         blank=True,
         related_name='autorizaciones'
     )
-    
+
+    # === TRAZABILIDAD CROSS-BRANCH ===
+    usuario_autorizador = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='autorizaciones_otorgadas',
+        verbose_name='Supervisor que autorizó'
+    )
+    sucursal_solicitante = models.ForeignKey(
+        'Sucursal',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='autorizaciones_solicitadas_sucursal',
+        verbose_name='Sucursal que solicitó'
+    )
+    sucursal_autorizador = models.ForeignKey(
+        'Sucursal',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='autorizaciones_otorgadas_sucursal',
+        verbose_name='Sucursal del autorizador'
+    )
+    es_cross_branch = models.BooleanField(
+        default=False,
+        verbose_name='¿Autorización entre sucursales?'
+    )
+    requiere_revision = models.BooleanField(
+        default=False,
+        verbose_name='¿Requiere revisión gerencial?'
+    )
+    revisado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='autorizaciones_revisadas',
+        verbose_name='Revisado por'
+    )
+    fecha_revision = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Fecha de revisión'
+    )
+    notas_revision = models.TextField(
+        blank=True, default='',
+        verbose_name='Notas de revisión'
+    )
+
     class Meta:
         verbose_name = 'Registro de Autorización'
         verbose_name_plural = 'Registros de Autorizaciones'

@@ -32,6 +32,7 @@ ESTADO_DTE_CHOICES = [
     ('ACEPTADO', 'Aceptado'),  # Mantener por compatibilidad
     ('RECEPCIONADO_COMPLETO', 'Recepcionado Completo'),
     ('RECEPCIONADO_PARCIAL', 'Recepcionado Parcial'),
+    ('RECEPCIONADO_SOBRANTE', 'Recepcionado con Sobrantes'),
     ('EN_REGULARIZACION', 'En Regularización'),
     ('RECHAZADO', 'Rechazado'),
     ('ANULADO', 'Anulado'),
@@ -47,6 +48,8 @@ ESTADO_RECEPCION_PRODUCTO_CHOICES = [
     ('EN_REGULARIZACION', 'En Regularización'),
     ('EN_SOLICITUD_REGULARIZACION', 'En Solicitud de Regularización'),  # NUEVO
     ('REGULARIZADO', 'Regularizado'),
+    ('RECEPCIONADO_SOBRANTE', 'Recepcionado con Sobrantes'),
+    ('SOBRANTE_PENDIENTE', 'Sobrante Pendiente de Decisión'),
 ]
 
 # Nuevos choices para Solicitudes de Regularización
@@ -55,6 +58,7 @@ TIPO_PROBLEMA_CHOICES = [
     ('DANADO', 'Dañado'),
     ('PARCIAL', 'Recepción Parcial'),
     ('INCORRECTO', 'Producto Incorrecto'),
+    ('SOBRANTE', 'Sobrante'),
 ]
 
 TIPO_SOLUCION_CHOICES = [
@@ -62,6 +66,8 @@ TIPO_SOLUCION_CHOICES = [
     ('REENVIO', 'Reenvío del mismo producto'),
     ('CAMBIO_PRODUCTO', 'Cambio por otro producto'),
     ('AJUSTE_CANTIDAD', 'Ajustar solo cantidad'),
+    ('DEVOLUCION_SOBRANTE', 'Devolución de Sobrante a Origen'),
+    ('ACEPTAR_SOBRANTE', 'Aceptar Sobrante en Inventario'),
 ]
 
 ESTADO_SOLICITUD_CHOICES = [
@@ -157,11 +163,33 @@ class Dte(models.Model):
         help_text="Motivo por el cual se descartó"
     )
 
+    # === CAMPOS PARA MODO DE PRECIO EN DESPACHO EXTERNO ===
+    TIPO_PRECIO_EXTERNO_CHOICES = [
+        ('COSTO', 'Solo Costo'),
+        ('SOBREPRECIO', 'Costo + Sobreprecio'),
+        ('CUSTOM_PCT', 'Porcentaje Custom'),
+    ]
+    tipo_precio_externo = models.CharField(
+        max_length=20,
+        choices=TIPO_PRECIO_EXTERNO_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Modo de precio usado en despacho externo"
+    )
+    porcentaje_custom = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Porcentaje de margen custom sobre el costo (solo si tipo_precio_externo=CUSTOM_PCT)"
+    )
+
     # Transiciones de estado permitidas: origen -> {destinos válidos}
     TRANSICIONES_VALIDAS = {
-        'EMITIDO': {'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL', 'RECHAZADO', 'ANULADO', 'CANCELADO'},
-        'ACEPTADO': {'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL', 'RECHAZADO', 'ANULADO', 'CANCELADO'},
+        'EMITIDO': {'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_SOBRANTE', 'RECHAZADO', 'ANULADO', 'CANCELADO'},
+        'ACEPTADO': {'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_SOBRANTE', 'RECHAZADO', 'ANULADO', 'CANCELADO'},
         'RECEPCIONADO_PARCIAL': {'EN_REGULARIZACION', 'RECEPCIONADO_COMPLETO'},
+        'RECEPCIONADO_SOBRANTE': {'EN_REGULARIZACION', 'RECEPCIONADO_COMPLETO'},
         'EN_REGULARIZACION': {'RECEPCIONADO_COMPLETO'},
         'RECHAZADO': {'EMITIDO'},
         'RECEPCIONADO_COMPLETO': set(),

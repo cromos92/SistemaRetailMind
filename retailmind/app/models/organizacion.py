@@ -156,6 +156,14 @@ class Sucursal(models.Model):
     telefono = models.CharField(max_length=20, blank=True, null=True, verbose_name='Teléfono')
     email = models.EmailField(blank=True, null=True, verbose_name='Email')
     activa = models.BooleanField(default=True, verbose_name='Activa')
+
+    # --- Caja Chica / Fondo Fijo ---
+    fondo_fijo_caja = models.IntegerField(
+        default=0,
+        verbose_name='Fondo Fijo Caja Chica',
+        help_text='Monto fijo que siempre permanece en caja (pesos). No se deposita.'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 

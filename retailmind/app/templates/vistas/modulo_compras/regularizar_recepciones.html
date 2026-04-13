@@ -71,7 +71,7 @@
 
         <!-- Estadísticas NEXO -->
         <div class="row g-3 mb-4">
-            <div class="col-md-3">
+            <div class="col">
                 <div class="stat-card card">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
@@ -79,14 +79,14 @@
                                 <i class="ri-alert-line"></i>
                             </div>
                             <div class="ms-3">
-                                <p class="stat-label mb-0">Productos Pendientes</p>
+                                <p class="stat-label mb-0">Pendientes</p>
                                 <h4 class="stat-value mb-0" id="totalPendientes">0</h4>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col">
                 <div class="stat-card card">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
@@ -101,7 +101,22 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col">
+                <div class="stat-card card" style="border-left: 3px solid #0dcaf0;">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon" style="background: rgba(13,202,240,0.1); color: #0dcaf0;">
+                                <i class="ri-add-circle-line"></i>
+                            </div>
+                            <div class="ms-3">
+                                <p class="stat-label mb-0">Sobrantes</p>
+                                <h4 class="stat-value mb-0" id="totalSobrantes">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
                 <div class="stat-card card">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
@@ -116,7 +131,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col">
                 <div class="stat-card card">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
@@ -124,7 +139,7 @@
                                 <i class="ri-file-list-line"></i>
                             </div>
                             <div class="ms-3">
-                                <p class="stat-label mb-0">DTEs con Problemas</p>
+                                <p class="stat-label mb-0">DTEs</p>
                                 <h4 class="stat-value mb-0" id="totalDTEs">0</h4>
                             </div>
                         </div>
@@ -145,6 +160,7 @@
                             <option value="FALTANTE">❌ Faltantes</option>
                             <option value="RECEPCIONADO_PARCIAL">⚠️ Parciales</option>
                             <option value="RECEPCIONADO_DANADO">💔 Dañados</option>
+                            <option value="SOBRANTE">📦 Sobrantes</option>
                             <option value="EN_REGULARIZACION">🔄 En Regularización</option>
                             <option value="EN_SOLICITUD_REGULARIZACION">📝 En Solicitud</option>
                             <option value="REGULARIZADO">✅ Regularizados</option>
@@ -200,7 +216,8 @@
                                 <th class="text-center">Recibido</th>
                                 <th class="text-center">Faltante</th>
                                 <th class="text-center">Dañado</th>
-                                <th class="text-center">Tipo</th>
+                                <th class="text-center">Sobrante</th>
+                                <th class="text-center">Estado</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
                         </thead>
@@ -1655,7 +1672,7 @@ function actualizarTabla() {
     if (productosProblemas.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10">
+                <td colspan="11">
                     <div class="empty-state">
                         <i class="ri-inbox-line"></i>
                         <p>No hay productos con problemas pendientes</p>
@@ -1683,6 +1700,7 @@ function actualizarTabla() {
                 total_recibido: 0,
                 total_faltante: 0,
                 total_danado: 0,
+                total_sobrante: 0,
                 requiere_nc: prod.requiere_nc,
                 soy_emisor: prod.soy_emisor,
                 soy_receptor: prod.soy_receptor,
@@ -1694,6 +1712,31 @@ function actualizarTabla() {
         dteGroups[dteNum].total_recibido += prod.cantidad_recibida || 0;
         dteGroups[dteNum].total_faltante += prod.cantidad_faltante || 0;
         dteGroups[dteNum].total_danado += prod.cantidad_danada || 0;
+        dteGroups[dteNum].total_sobrante += prod.cantidad_sobrante || 0;
+    });
+
+    // Calcular estado real de cada grupo DTE
+    Object.values(dteGroups).forEach(dte => {
+        const estados = dte.productos.map(p => p.estado);
+        const todosRegularizados = estados.every(e => e === 'REGULARIZADO');
+        const algunoRegularizado = estados.some(e => e === 'REGULARIZADO');
+        const algunoSobrante = estados.some(e => e === 'RECEPCIONADO_SOBRANTE' || e === 'SOBRANTE_PENDIENTE');
+        const algunoEnSolicitud = estados.some(e => e === 'EN_SOLICITUD_REGULARIZACION');
+        const pendientes = dte.productos.filter(p => p.estado !== 'REGULARIZADO').length;
+
+        if (todosRegularizados) {
+            dte.estado_grupo = 'REGULARIZADO';
+        } else if (algunoEnSolicitud) {
+            dte.estado_grupo = 'EN_SOLICITUD';
+        } else if (algunoRegularizado) {
+            dte.estado_grupo = 'PARCIAL';
+        } else if (algunoSobrante && pendientes === dte.productos.filter(p => p.estado === 'RECEPCIONADO_SOBRANTE' || p.estado === 'SOBRANTE_PENDIENTE').length) {
+            dte.estado_grupo = 'SOBRANTE';
+        } else {
+            dte.estado_grupo = 'PENDIENTE';
+        }
+        dte.productos_pendientes = pendientes;
+        dte.productos_regularizados = dte.productos.length - pendientes;
     });
     
     // Ordenar DTEs por fecha descendente (más reciente primero)
@@ -1735,12 +1778,27 @@ function actualizarTabla() {
             <td class="text-center"><span class="qty-missing">${dte.total_faltante || '-'}</span></td>
             <td class="text-center"><span class="qty-damaged">${dte.total_danado || '-'}</span></td>
             <td class="text-center">
-                ${dte.requiere_nc ? 
-                    '<span class="status-tag requires-nc"><i class="ri-file-text-line"></i> NC</span>' : 
-                    '<span class="status-tag adjustment"><i class="ri-edit-line"></i> Ajuste</span>'}
+                ${dte.total_sobrante > 0 ?
+                    `<span class="badge bg-info">+${dte.total_sobrante}</span>` : '-'}
+            </td>
+            <td class="text-center">
+                ${dte.estado_grupo === 'REGULARIZADO' ?
+                    '<span class="badge bg-success"><i class="ri-checkbox-circle-line me-1"></i>Regularizado</span>' :
+                dte.estado_grupo === 'PARCIAL' ?
+                    `<span class="badge bg-warning text-dark"><i class="ri-progress-4-line me-1"></i>${dte.productos_regularizados}/${dte.productos.length}</span>` :
+                dte.estado_grupo === 'EN_SOLICITUD' ?
+                    '<span class="badge bg-primary"><i class="ri-mail-send-line me-1"></i>En Solicitud</span>' :
+                dte.estado_grupo === 'SOBRANTE' ?
+                    '<span class="badge bg-info"><i class="ri-add-circle-line me-1"></i>Sobrante</span>' :
+                    `<span class="badge bg-danger"><i class="ri-alert-line me-1"></i>Pendiente (${dte.productos_pendientes})</span>`
+                }
             </td>
             <td class="text-end">
-                ${dte.soy_receptor && !dte.soy_emisor ?
+                ${dte.estado_grupo === 'REGULARIZADO' ?
+                    `<button class="action-btn info" onclick="verDetalleDTE('${dte.dte_numero}')" title="Ver detalle">
+                        <i class="ri-eye-line"></i>
+                    </button>` :
+                dte.soy_receptor && !dte.soy_emisor ?
                     `<div class="d-flex flex-column align-items-end gap-1">
                         <div class="d-flex gap-1">
                             <button class="action-btn info" onclick="verDetalleDTE('${dte.dte_numero}')" title="Ver detalle">
@@ -1750,11 +1808,11 @@ function actualizarTabla() {
                                 <i class="ri-close-line"></i>
                             </button>
                         </div>
-                        <span class="status-tag waiting"><i class="ri-time-line"></i> Esperando</span>
+                        <span class="status-tag waiting"><i class="ri-time-line"></i> Esperando emisor</span>
                     </div>` :
                     `<div class="d-flex gap-1 justify-content-end">
-                        ${!dte.requiere_nc ? 
-                            `<button class="action-btn primary" onclick="mostrarOpcionesRegularizacionGuia('${dte.dte_numero}')" title="Regularizar Individual">
+                        ${!dte.requiere_nc ?
+                            `<button class="action-btn primary" onclick="mostrarOpcionesRegularizacionGuia('${dte.dte_numero}')" title="Regularizar">
                                 <i class="ri-settings-3-line me-1"></i> Regularizar
                             </button>` :
                             `<button class="action-btn success" onclick="abrirModalRegularizarDTE('${dte.dte_numero}')">
@@ -1771,12 +1829,23 @@ function actualizarTabla() {
 
 function abrirModalRegularizarDTE(dteNumero) {
     const productosDTE = productosProblemas.filter(p => String(p.dte_numero) === String(dteNumero));
-    
+
     if (!productosDTE.length) {
         Swal.fire('Error', 'No se encontraron productos para este DTE', 'error');
         return;
     }
-    
+
+    // Filtrar solo pendientes
+    const pendientes = productosDTE.filter(p => p.estado !== 'REGULARIZADO');
+    if (pendientes.length === 0) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Ya regularizado',
+            html: `Todos los productos del DTE #${dteNumero} ya fueron regularizados.`
+        });
+        return;
+    }
+
     $('#dteTitulo').text(dteNumero);
     
     // Obtener el tipo de documento del primer producto del grupo
@@ -1997,58 +2066,103 @@ function anularRegularizacionDTE(dteNumero) {
     });
 }
 
+function getEstadoBadgeReg(estado) {
+    const map = {
+        'REGULARIZADO': '<span class="badge bg-success">Regularizado</span>',
+        'EN_REGULARIZACION': '<span class="badge bg-primary">En regularizacion</span>',
+        'EN_SOLICITUD_REGULARIZACION': '<span class="badge bg-primary">En solicitud</span>',
+        'RECEPCIONADO_PARCIAL': '<span class="badge bg-warning text-dark">Parcial</span>',
+        'RECEPCIONADO_DANADO': '<span class="badge bg-danger">Danado</span>',
+        'FALTANTE': '<span class="badge bg-secondary">Faltante</span>',
+        'RECEPCIONADO_SOBRANTE': '<span class="badge bg-info">Sobrante</span>',
+        'SOBRANTE_PENDIENTE': '<span class="badge bg-info">Sobrante pend.</span>',
+        'RECEPCIONADO_OK': '<span class="badge bg-success">OK</span>',
+    };
+    return map[estado] || `<span class="badge bg-secondary">${estado}</span>`;
+}
+
 function verDetalleDTE(dteNumero) {
     const productosDTE = productosProblemas.filter(p => String(p.dte_numero) === String(dteNumero));
     if (!productosDTE.length) return;
-    
-    // Obtener el tipo de documento
+
     const tipoDocumento = productosDTE[0]?.tipo_documento_display || productosDTE[0]?.tipo_documento || 'DTE';
-    
-    const tablaHTML = productosDTE.map(prod => `
-        <tr>
-            <td><strong>${prod.producto_nombre}</strong></td>
-            <td><code>${prod.sku}</code></td>
-            <td><span class="badge bg-info">${prod.talla}</span></td>
-            <td>${prod.cantidad_esperada}</td>
-            <td class="text-success">${prod.cantidad_recibida}</td>
-            <td class="text-danger">${prod.cantidad_faltante}</td>
-            <td class="text-warning">${prod.cantidad_danada}</td>
-            <td><small>${prod.observaciones || '-'}</small></td>
-        </tr>
-    `).join('');
-    
+    const regularizados = productosDTE.filter(p => p.estado === 'REGULARIZADO').length;
+    const pendientes = productosDTE.length - regularizados;
+    const haySobrantes = productosDTE.some(p => (p.cantidad_sobrante || 0) > 0 && p.estado !== 'REGULARIZADO');
+
+    // Alerta contextual segun estado
+    let alertaHtml = '';
+    if (pendientes === 0) {
+        alertaHtml = `<div class="alert alert-success py-2 mb-3">
+            <i class="ri-checkbox-circle-line me-2"></i>
+            <strong>Todos los productos regularizados</strong> (${regularizados}/${productosDTE.length})
+        </div>`;
+    } else if (regularizados > 0) {
+        alertaHtml = `<div class="alert alert-warning py-2 mb-3">
+            <i class="ri-progress-4-line me-2"></i>
+            <strong>${regularizados} regularizado(s)</strong>, <strong>${pendientes} pendiente(s)</strong>
+        </div>`;
+    } else {
+        alertaHtml = `<div class="alert alert-danger py-2 mb-3">
+            <i class="ri-alert-line me-2"></i>
+            <strong>${pendientes} producto(s) pendientes</strong> de regularizacion
+        </div>`;
+    }
+
+    const tablaHTML = productosDTE.map(prod => {
+        const esRegularizado = prod.estado === 'REGULARIZADO';
+        const rowStyle = esRegularizado ? 'opacity:.6;' : '';
+        return `
+        <tr style="${rowStyle}">
+            <td><strong>${prod.producto_nombre}</strong><br><small class="text-muted">${prod.sku}</small></td>
+            <td class="text-center"><span class="badge bg-light text-dark">${prod.talla}</span></td>
+            <td class="text-center">${prod.cantidad_esperada}</td>
+            <td class="text-center">${prod.cantidad_recibida}</td>
+            <td class="text-center">${prod.cantidad_faltante || '-'}</td>
+            <td class="text-center">${prod.cantidad_danada || '-'}</td>
+            <td class="text-center">${(prod.cantidad_sobrante || 0) > 0 ? '<span class="text-info fw-bold">+' + prod.cantidad_sobrante + '</span>' : '-'}</td>
+            <td class="text-center">${getEstadoBadgeReg(prod.estado)}</td>
+            <td class="text-center">
+                ${(prod.cantidad_sobrante || 0) > 0 && !esRegularizado ?
+                    `<button class="btn btn-sm btn-outline-info py-0" onclick="Swal.close(); decidirSobrante(${prod.id});">
+                        Decidir
+                    </button>` :
+                esRegularizado && prod.solucion_aplicada ?
+                    `<small class="text-muted">${prod.solucion_aplicada}</small>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
+
     Swal.fire({
-        title: `<i class="bi bi-file-text text-info"></i> ${tipoDocumento} #${dteNumero}`,
+        title: `${tipoDocumento} #${dteNumero}`,
         html: `
             <div class="text-start">
-                <div class="alert alert-warning mb-3">
-                    <i class="bi bi-clock-history me-2"></i>
-                    <strong>En espera:</strong> El emisor debe regularizar estos productos.
-                </div>
+                ${alertaHtml}
+                ${haySobrantes ? `<div class="alert alert-info py-2 mb-3">
+                    <i class="ri-add-circle-line me-2"></i>Hay sobrantes pendientes de decision.
+                </div>` : ''}
                 <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
+                    <table class="table table-sm table-hover mb-0" style="font-size:.85rem;">
+                        <thead class="table-light">
                             <tr>
                                 <th>Producto</th>
-                                <th>SKU</th>
-                                <th>Talla</th>
-                                <th>Esperado</th>
-                                <th>Recibido</th>
-                                <th>Faltante</th>
-                                <th>Dañado</th>
-                                <th>Obs.</th>
+                                <th class="text-center">Talla</th>
+                                <th class="text-center">Esp.</th>
+                                <th class="text-center">Rec.</th>
+                                <th class="text-center">Falt.</th>
+                                <th class="text-center">Dan.</th>
+                                <th class="text-center">Sob.</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-center"></th>
                             </tr>
                         </thead>
-                        <tbody>
-                            ${tablaHTML}
-                        </tbody>
+                        <tbody>${tablaHTML}</tbody>
                     </table>
                 </div>
             </div>
         `,
-        icon: 'info',
         confirmButtonText: 'Cerrar',
-        width: '900px'
+        width: '950px'
     });
 }
 
@@ -2372,8 +2486,94 @@ function verEstadoSolicitud(productoId) {
 function actualizarEstadisticas(stats) {
     document.getElementById('totalPendientes').textContent = stats.pendientes || 0;
     document.getElementById('totalFaltantes').textContent = stats.faltantes || 0;
+    document.getElementById('totalSobrantes').textContent = stats.sobrantes || 0;
     document.getElementById('totalRegularizados').textContent = stats.regularizados || 0;
     document.getElementById('totalDTEs').textContent = stats.dtes_con_problemas || 0;
+}
+
+function decidirSobrante(productoId) {
+    const prod = productosProblemas.find(p => p.id === productoId);
+    if (!prod) return;
+
+    Swal.fire({
+        title: 'Decidir sobre Sobrante',
+        html: `
+            <div class="text-start">
+                <div class="alert alert-info mb-3">
+                    <strong>${prod.producto_nombre}</strong> (${prod.sku}) - Talla: ${prod.talla}
+                </div>
+                <div class="row text-center mb-3">
+                    <div class="col"><small class="text-muted">Esperado</small><br><strong>${prod.cantidad_esperada}</strong></div>
+                    <div class="col"><small class="text-muted">Recibido</small><br><strong>${prod.cantidad_recibida}</strong></div>
+                    <div class="col"><small class="text-muted">Sobrante</small><br><strong class="text-info">+${prod.cantidad_sobrante}</strong></div>
+                </div>
+                <hr>
+                <label class="form-label fw-bold">¿Qué hacer con las ${prod.cantidad_sobrante} unidades sobrantes?</label>
+                <div class="d-grid gap-2 mb-3">
+                    <label class="btn btn-outline-success text-start p-3" id="btnOpcionAceptar">
+                        <input type="radio" name="decisionSobrante" value="ACEPTAR" class="me-2" checked>
+                        <i class="bi bi-check-circle me-1"></i> <strong>Aceptar e incorporar al inventario</strong>
+                        <br><small class="text-muted ms-4">El stock se incrementará en +${prod.cantidad_sobrante} unidades</small>
+                    </label>
+                    <label class="btn btn-outline-warning text-start p-3" id="btnOpcionDevolver">
+                        <input type="radio" name="decisionSobrante" value="DEVOLVER" class="me-2">
+                        <i class="bi bi-arrow-return-left me-1"></i> <strong>Devolver a sucursal origen</strong>
+                        <br><small class="text-muted ms-4">Se notificará a ${prod.sucursal_origen} para coordinar el retorno</small>
+                    </label>
+                </div>
+                <label class="form-label">Observaciones</label>
+                <textarea id="sobranteObservaciones" class="form-control" rows="2" placeholder="Motivo de la decisión..."></textarea>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-check me-1"></i>Confirmar Decisión',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0ab39c',
+        width: '600px',
+        preConfirm: () => {
+            const decision = document.querySelector('input[name="decisionSobrante"]:checked')?.value;
+            const observaciones = document.getElementById('sobranteObservaciones').value.trim();
+            if (!decision) {
+                Swal.showValidationMessage('Selecciona una opción');
+                return false;
+            }
+            return { decision, observaciones };
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        const { decision, observaciones } = result.value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                          document.cookie.split('csrftoken=')[1]?.split(';')[0];
+
+        fetch('/app/dte/decidir_sobrante/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                recepcion_id: productoId,
+                decision: decision,
+                observaciones: observaciones
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: decision === 'ACEPTAR' ? 'Sobrante Aceptado' : 'Sobrante Devuelto',
+                    text: data.message,
+                    timer: 3000
+                });
+                cargarProductosProblemas();
+            } else {
+                Swal.fire('Error', data.error || 'Error al procesar', 'error');
+            }
+        })
+        .catch(() => Swal.fire('Error', 'Error de conexión', 'error'));
+    });
 }
 
 function abrirModalRegularizar(productoId) {
@@ -3626,26 +3826,48 @@ function mostrarError(mensaje) {
  */
 function mostrarOpcionesRegularizacionGuia(dteNumero) {
     const productosDTE = productosProblemas.filter(p => String(p.dte_numero) === String(dteNumero));
-    
+
     if (!productosDTE.length) {
-        Swal.fire('Error', 'No se encontraron productos para esta guía', 'error');
+        Swal.fire('Error', 'No se encontraron productos para esta guia', 'error');
         return;
     }
-    
-    // Construir lista de productos con problemas
-    let htmlProductos = '<div class="list-group mb-3">';
-    productosDTE.forEach(prod => {
+
+    const pendientes = productosDTE.filter(p => p.estado !== 'REGULARIZADO');
+    const regularizados = productosDTE.filter(p => p.estado === 'REGULARIZADO');
+
+    if (pendientes.length === 0) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Ya regularizado',
+            html: `Todos los productos del DTE #${dteNumero} ya fueron regularizados (${regularizados.length}/${productosDTE.length}).`
+        });
+        return;
+    }
+
+    // Construir lista de productos pendientes
+    let htmlProductos = '';
+    if (regularizados.length > 0) {
+        htmlProductos += `<div class="alert alert-success py-2 mb-2" style="font-size:.8rem;">
+            <i class="ri-checkbox-circle-line me-1"></i>${regularizados.length} producto(s) ya regularizado(s)
+        </div>`;
+    }
+    htmlProductos += '<div class="list-group mb-3">';
+    pendientes.forEach(prod => {
         const cantidadProblema = (prod.cantidad_faltante || 0) + (prod.cantidad_danada || 0);
+        const esSobrante = (prod.cantidad_sobrante || 0) > 0;
         htmlProductos += `
-            <div class="list-group-item" style="cursor: pointer;" onclick="abrirModalRegularizacionIndividualGuia(${prod.id})">
+            <div class="list-group-item list-group-item-action" style="cursor: pointer;" onclick="${esSobrante ? `Swal.close(); decidirSobrante(${prod.id})` : `abrirModalRegularizacionIndividualGuia(${prod.id})`}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <h6 class="mb-1">${prod.producto_nombre}</h6>
                         <small class="text-muted">SKU: ${prod.sku} | Talla: ${prod.talla}</small>
                     </div>
                     <div class="text-end">
-                        <span class="badge bg-danger">${cantidadProblema} unidades</span><br>
-                        <small class="text-muted">${prod.estado}</small>
+                        ${esSobrante ?
+                            `<span class="badge bg-info">+${prod.cantidad_sobrante} sobrante</span>` :
+                            `<span class="badge bg-danger">${cantidadProblema} unidades</span>`
+                        }<br>
+                        ${getEstadoBadgeReg(prod.estado)}
                     </div>
                 </div>
             </div>

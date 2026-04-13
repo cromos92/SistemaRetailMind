@@ -425,27 +425,36 @@ def confirmar_recepcion_api(request):
                 if not producto_talla:
                     continue
                 
-                cantidad_recepcionada = int(prod_data.get('cantidad_recepcionada', 0))
                 cantidad_esperada = int(prod_data.get('cantidad_esperada', 0))
+                cantidad_recepcionada_raw = int(prod_data.get('cantidad_recepcionada', 0))
                 cantidad_danada = int(prod_data.get('cantidad_danada', 0))
-                cantidad_faltante = int(prod_data.get('cantidad_faltante', 0))
+                cantidad_sobrante = int(prod_data.get('cantidad_sobrante', 0))  # Campo separado del frontend
                 estado = prod_data.get('estado', 'RECEPCIONADO_OK')
                 observaciones = prod_data.get('observaciones', '')
-                
+
+                # Clampear recepcionada: nunca más que la esperada (el sobrante va aparte)
+                cantidad_recepcionada = min(cantidad_recepcionada_raw, cantidad_esperada)
+                cantidad_faltante = max(0, cantidad_esperada - cantidad_recepcionada)
+
                 # ✅ Acumular totales
                 total_esperado += cantidad_esperada
                 total_recepcionado += cantidad_recepcionada
-                
+
                 tiene_problemas = (
                     estado != 'RECEPCIONADO_OK' or
                     cantidad_danada > 0 or
                     cantidad_faltante > 0 or
+                    cantidad_sobrante > 0 or
                     cantidad_recepcionada != cantidad_esperada
                 )
-                
+
                 if tiene_problemas:
                     productos_problemas += 1
-                    estado_final = 'EN_REGULARIZACION'
+                    # Determinar estado final según tipo de problema
+                    if cantidad_sobrante > 0 and cantidad_faltante == 0 and cantidad_danada == 0:
+                        estado_final = 'RECEPCIONADO_SOBRANTE'
+                    else:
+                        estado_final = 'EN_REGULARIZACION'
                     productos_con_problemas_data.append({
                         'sku': producto_talla.sku,
                         'descripcion': producto_talla.producto.descripcion if producto_talla.producto else '',
@@ -455,12 +464,13 @@ def confirmar_recepcion_api(request):
                         'cantidad_recepcionada': cantidad_recepcionada,
                         'cantidad_faltante': cantidad_faltante,
                         'cantidad_danada': cantidad_danada,
+                        'cantidad_sobrante': cantidad_sobrante,
                         'observaciones': observaciones
                     })
                 else:
                     productos_ok += 1
                     estado_final = 'RECEPCIONADO_OK'
-                
+
                 # Preparar registro de recepción
                 recepciones_a_crear.append(Productos_Recepcionados(
                     dte=dte,
@@ -470,15 +480,18 @@ def confirmar_recepcion_api(request):
                     cantidad_esperada=cantidad_esperada,
                     cantidad_danada=cantidad_danada,
                     cantidad_faltante=cantidad_faltante,
+                    cantidad_sobrante=cantidad_sobrante,
                     estado=estado_final,
                     observaciones=observaciones,
                     fecha_recepcion=hoy,
                     recepcionado_por=usuario
                 ))
-                
-                # Calcular cantidad a ingresar
-                cantidad_a_ingresar = cantidad_recepcionada - cantidad_danada
-                if cantidad_a_ingresar <= 0:
+
+                # Calcular cantidad a ingresar al inventario
+                # Solo ingresar lo documentado (no sobrantes) - sobrantes requieren aprobación
+                cantidad_documentada = min(cantidad_recepcionada, cantidad_esperada)
+                cantidad_a_ingresar = cantidad_documentada - cantidad_danada
+                if cantidad_a_ingresar <= 0 and cantidad_sobrante <= 0:
                     continue
                 
                 # Buscar o crear talla en destino
@@ -515,25 +528,44 @@ def confirmar_recepcion_api(request):
                     tallas_destino_existentes[sku] = talla_destino
                     print(f"  ✨ SKU {sku} creado en {sucursal_destino.alias}")
                 
-                # Acumular cantidad a actualizar
-                tallas_a_actualizar[sku] = tallas_a_actualizar.get(sku, 0) + cantidad_a_ingresar
-                
-                # Preparar movimiento
-                movimientos_a_crear.append(Movimientos_Producto(
-                    dte=dte,
-                    ProductoTalla=talla_destino,
-                    sucursal_origen=dte.sucursal,
-                    sucursal_destino=sucursal_destino,
-                    cantidad=cantidad_a_ingresar,
-                    costo=talla_destino.producto.costo,
-                    sobreprecio=talla_destino.producto.sobreprecio,
-                    precio=talla_destino.producto.precioventa,
-                    concepto='TRASPASO_ENTRADA',
-                    tipo_movimiento='INGRESO',
-                    estado='COMPLETADO',
-                    responsable=usuario,
-                    observaciones=f'Recepción DTE #{dte.numero_documento}'
-                ))
+                # Acumular cantidad documentada a actualizar (no incluye sobrante)
+                if cantidad_a_ingresar > 0:
+                    tallas_a_actualizar[sku] = tallas_a_actualizar.get(sku, 0) + cantidad_a_ingresar
+
+                    # Movimiento de ingreso documentado (COMPLETADO)
+                    movimientos_a_crear.append(Movimientos_Producto(
+                        dte=dte,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=dte.sucursal,
+                        sucursal_destino=sucursal_destino,
+                        cantidad=cantidad_a_ingresar,
+                        costo=talla_destino.producto.costo,
+                        sobreprecio=talla_destino.producto.sobreprecio,
+                        precio=talla_destino.producto.precioventa,
+                        concepto='TRASPASO_ENTRADA',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=f'Recepción DTE #{dte.numero_documento}'
+                    ))
+
+                # Movimiento pendiente para sobrante (NO entra al inventario automáticamente)
+                if cantidad_sobrante > 0:
+                    movimientos_a_crear.append(Movimientos_Producto(
+                        dte=dte,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=dte.sucursal,
+                        sucursal_destino=sucursal_destino,
+                        cantidad=cantidad_sobrante,
+                        costo=talla_destino.producto.costo,
+                        sobreprecio=talla_destino.producto.sobreprecio,
+                        precio=talla_destino.producto.precioventa,
+                        concepto='RECEPCION_SOBRANTE',
+                        tipo_movimiento='INGRESO',
+                        estado='PENDIENTE',
+                        responsable=usuario,
+                        observaciones=f'Sobrante +{cantidad_sobrante} en recepción DTE #{dte.numero_documento} - Pendiente decisión bodega'
+                    ))
             
             # ============================================
             # FASE 3: Bulk inserts
@@ -556,12 +588,25 @@ def confirmar_recepcion_api(request):
             # ============================================
             # FASE 5: Actualizar DTE
             # ============================================
+            # Contar sobrantes para diferenciar tipo de problema
+            productos_sobrantes = sum(1 for p in productos_con_problemas_data if p.get('cantidad_sobrante', 0) > 0)
+            productos_faltantes_danados = productos_problemas - productos_sobrantes
+
             if productos_problemas == 0:
                 dte.estado_dte = 'RECEPCIONADO_COMPLETO'
                 mensaje = 'Recepción completada. Todos los productos OK.'
+            elif productos_faltantes_danados == 0 and productos_sobrantes > 0:
+                # Solo sobrantes, sin faltantes ni dañados
+                dte.estado_dte = 'RECEPCIONADO_PARCIAL'
+                mensaje = f'Recepción procesada. {productos_sobrantes} producto(s) con sobrantes pendientes de decisión por bodega.'
             else:
                 dte.estado_dte = 'RECEPCIONADO_PARCIAL'
-                mensaje = f'Recepción procesada. {productos_problemas} producto(s) requieren atención.'
+                msg_parts = []
+                if productos_faltantes_danados > 0:
+                    msg_parts.append(f'{productos_faltantes_danados} con faltante/daño')
+                if productos_sobrantes > 0:
+                    msg_parts.append(f'{productos_sobrantes} con sobrantes')
+                mensaje = f'Recepción procesada. {", ".join(msg_parts)} requieren atención.'
             
             dte.fecha_recepcion = hoy.date()
             dte.hora = hoy.time()
@@ -598,6 +643,7 @@ def confirmar_recepcion_api(request):
             'estado_dte': dte.estado_dte,
             'productos_ok': productos_ok,
             'productos_problemas': productos_problemas,
+            'productos_sobrantes': productos_sobrantes,
             'total_esperado': total_esperado,
             'total_recepcionado': total_recepcionado
         })
@@ -608,6 +654,183 @@ def confirmar_recepcion_api(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al confirmar recepción: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def decidir_sobrante_api(request):
+    """
+    Bodega decide qué hacer con stock sobrante de una recepción.
+    Opciones: ACEPTAR (ingresa al inventario) o DEVOLVER (se marca para retorno a origen).
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    recepcion_id = data.get('recepcion_id')
+    decision = data.get('decision', '').upper()  # ACEPTAR o DEVOLVER
+    observaciones = data.get('observaciones', '').strip()
+
+    if not recepcion_id:
+        return JsonResponse({'success': False, 'error': 'Falta recepcion_id.'}, status=400)
+    if decision not in ('ACEPTAR', 'DEVOLVER'):
+        return JsonResponse({'success': False, 'error': 'Decisión inválida. Use ACEPTAR o DEVOLVER.'}, status=400)
+
+    sucursal_id = request.session.get('idSucursalActual')
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión.'}, status=400)
+
+    usuario = request.user.username
+
+    try:
+        from .models import Productos_Recepcionados, NotificacionDTE
+
+        recepcion = Productos_Recepcionados.objects.select_related(
+            'dte', 'dte__sucursal', 'producto_talla', 'producto_talla__producto'
+        ).get(id=recepcion_id)
+    except Productos_Recepcionados.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Recepción no encontrada.'}, status=404)
+
+    if recepcion.cantidad_sobrante <= 0:
+        return JsonResponse({'success': False, 'error': 'Este producto no tiene sobrante registrado.'}, status=400)
+
+    if recepcion.estado not in ('RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'):
+        return JsonResponse({'success': False, 'error': f'Estado no válido para decidir sobrante: {recepcion.estado}'}, status=400)
+
+    try:
+        with transaction.atomic():
+            hoy = timezone.now()
+            sucursal_destino = get_object_or_404(Sucursal, id=sucursal_id)
+            producto_talla = recepcion.producto_talla
+            dte = recepcion.dte
+
+            # Buscar talla en destino
+            talla_destino = Producto_Talla.objects.filter(
+                sku=producto_talla.sku,
+                producto__sucursal=sucursal_destino
+            ).first()
+
+            if decision == 'ACEPTAR':
+                # Ingresar sobrante al inventario
+                if talla_destino:
+                    Producto_Talla.objects.filter(id=talla_destino.id).update(
+                        stock=F('stock') + recepcion.cantidad_sobrante
+                    )
+                    talla_para_mov = talla_destino
+                else:
+                    talla_para_mov = producto_talla
+
+                # Crear movimiento de ingreso completado
+                Movimientos_Producto.objects.create(
+                    dte=dte,
+                    ProductoTalla=talla_para_mov,
+                    sucursal_origen=dte.sucursal if dte else None,
+                    sucursal_destino=sucursal_destino,
+                    cantidad=recepcion.cantidad_sobrante,
+                    costo=talla_para_mov.producto.costo,
+                    sobreprecio=talla_para_mov.producto.sobreprecio,
+                    precio=talla_para_mov.producto.precioventa,
+                    concepto='SOBRANTE_INGRESO',
+                    tipo_movimiento='INGRESO',
+                    estado='COMPLETADO',
+                    responsable=usuario,
+                    observaciones=f'Sobrante aceptado (+{recepcion.cantidad_sobrante}) DTE #{dte.numero_documento if dte else "N/A"}. {observaciones}'
+                )
+
+                # Marcar movimiento PENDIENTE anterior como COMPLETADO
+                Movimientos_Producto.objects.filter(
+                    dte=dte,
+                    ProductoTalla=talla_para_mov,
+                    concepto='RECEPCION_SOBRANTE',
+                    estado='PENDIENTE'
+                ).update(estado='COMPLETADO', observaciones=f'Sobrante aceptado por {usuario} - {observaciones}')
+
+                recepcion.estado = 'REGULARIZADO'
+                recepcion.fecha_regularizacion = hoy
+                recepcion.regularizado_por = usuario
+                recepcion.observaciones = f'{recepcion.observaciones or ""}\nSobrante ACEPTADO por {usuario}: {observaciones}'.strip()
+                recepcion.save()
+
+                msg = f'Sobrante de {recepcion.cantidad_sobrante} unidades aceptado e incorporado al inventario.'
+
+            else:  # DEVOLVER
+                # Crear movimiento de devolución
+                Movimientos_Producto.objects.create(
+                    dte=dte,
+                    ProductoTalla=talla_destino or producto_talla,
+                    sucursal_origen=sucursal_destino,
+                    sucursal_destino=dte.sucursal if dte else None,
+                    cantidad=recepcion.cantidad_sobrante,
+                    costo=(talla_destino or producto_talla).producto.costo,
+                    sobreprecio=(talla_destino or producto_talla).producto.sobreprecio,
+                    precio=(talla_destino or producto_talla).producto.precioventa,
+                    concepto='SOBRANTE_DEVUELTO',
+                    tipo_movimiento='EGRESO',
+                    estado='COMPLETADO',
+                    responsable=usuario,
+                    observaciones=f'Sobrante devuelto a origen ({recepcion.cantidad_sobrante}) DTE #{dte.numero_documento if dte else "N/A"}. {observaciones}'
+                )
+
+                # Cancelar movimiento PENDIENTE
+                Movimientos_Producto.objects.filter(
+                    dte=dte,
+                    ProductoTalla=talla_destino or producto_talla,
+                    concepto='RECEPCION_SOBRANTE',
+                    estado='PENDIENTE'
+                ).update(estado='CANCELADO', observaciones=f'Sobrante devuelto por {usuario} - {observaciones}')
+
+                recepcion.estado = 'REGULARIZADO'
+                recepcion.fecha_regularizacion = hoy
+                recepcion.regularizado_por = usuario
+                recepcion.observaciones = f'{recepcion.observaciones or ""}\nSobrante DEVUELTO por {usuario}: {observaciones}'.strip()
+                recepcion.save()
+
+                # Notificar a sucursal origen
+                if dte and dte.sucursal:
+                    try:
+                        NotificacionDTE.objects.create(
+                            dte=dte,
+                            empresa_receptora=dte.emisor,
+                            sucursal=dte.sucursal,
+                            sucursal_reportante=sucursal_destino,
+                            tipo='REGULARIZACION_REQUERIDA',
+                            titulo=f'Sobrante devuelto - DTE #{dte.numero_documento}',
+                            mensaje=f'{sucursal_destino.alias} devuelve {recepcion.cantidad_sobrante} unidades sobrantes de {producto_talla.sku}. {observaciones}',
+                            productos_problemas=1,
+                            detalle_problemas=f'SKU: {producto_talla.sku} - Sobrante devuelto: {recepcion.cantidad_sobrante} unidades'
+                        )
+                    except Exception:
+                        pass  # Notificación secundaria
+
+                msg = f'Sobrante de {recepcion.cantidad_sobrante} unidades marcado para devolución a sucursal origen.'
+
+            # Verificar si todos los productos del DTE están resueltos
+            if dte:
+                pendientes = Productos_Recepcionados.objects.filter(
+                    dte=dte,
+                    estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE', 'EN_REGULARIZACION',
+                                'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE',
+                                'EN_SOLICITUD_REGULARIZACION']
+                ).count()
+                if pendientes == 0:
+                    dte.estado_dte = 'RECEPCIONADO_COMPLETO'
+                    dte.save(update_fields=['estado_dte'])
+
+        return JsonResponse({
+            'success': True,
+            'message': msg,
+            'decision': decision,
+            'cantidad_sobrante': recepcion.cantidad_sobrante,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al procesar sobrante: {str(e)}'
         }, status=500)
 
 
@@ -1339,17 +1562,17 @@ def obtener_productos_regularizar(request):
         
         # Determinar estados a mostrar según el filtro
         if estado_filtro == 'TODOS':
-            # Mostrar todos: pendientes + regularizados
-            estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'REGULARIZADO']
+            # Mostrar todos: pendientes + regularizados + sobrantes
+            estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'REGULARIZADO', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
         elif estado_filtro == 'REGULARIZADO':
-            # Solo regularizados
             estados_a_mostrar = ['REGULARIZADO']
+        elif estado_filtro == 'SOBRANTE':
+            estados_a_mostrar = ['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
         elif estado_filtro:
-            # Si hay un filtro específico, usar solo ese
             estados_a_mostrar = [estado_filtro]
         else:
-            # Sin filtro: mostrar solo pendientes (NO regularizados)
-            estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION']
+            # Sin filtro: mostrar solo pendientes (NO regularizados) + sobrantes
+            estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
         
         queryset = Productos_Recepcionados.objects.filter(
             Q(dte__isnull=False) &  # Solo traspasos/DTEs
@@ -1385,8 +1608,10 @@ def obtener_productos_regularizar(request):
         
         # Calcular estadísticas
         total_queryset = queryset.count()
-        pendientes = queryset.exclude(estado='REGULARIZADO').count()
+        pendientes = queryset.exclude(estado__in=['REGULARIZADO']).count()
         faltantes = queryset.filter(estado='FALTANTE').count()
+        sobrantes = queryset.filter(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']).count()
+        danados = queryset.filter(estado='RECEPCIONADO_DANADO').count()
         regularizados = queryset.filter(estado='REGULARIZADO').count()
         dtes_con_problemas = queryset.values('dte').distinct().count()
         
@@ -1486,6 +1711,8 @@ def obtener_productos_regularizar(request):
                 'cantidad_recibida': recepcion.stockArribado or 0,
                 'cantidad_danada': recepcion.cantidad_danada or 0,
                 'cantidad_faltante': recepcion.cantidad_faltante or 0,
+                'cantidad_sobrante': recepcion.cantidad_sobrante or 0,
+                'es_sobrante': (recepcion.cantidad_sobrante or 0) > 0,
                 'estado': recepcion.estado,
                 'estado_display': recepcion.get_estado_display() if hasattr(recepcion, 'get_estado_display') else recepcion.estado,
                 'observaciones': recepcion.observaciones or '',
@@ -1514,6 +1741,8 @@ def obtener_productos_regularizar(request):
             'estadisticas': {
                 'pendientes': pendientes,
                 'faltantes': faltantes,
+                'danados': danados,
+                'sobrantes': sobrantes,
                 'regularizados': regularizados,
                 'dtes_con_problemas': dtes_con_problemas
             }
@@ -1562,7 +1791,14 @@ def procesar_ajuste_interno_individual(request):
         with transaction.atomic():
             # Obtener la recepción
             recepcion = Productos_Recepcionados.objects.select_for_update().get(id=recepcion_id)
-            
+
+            # Validar que no esté ya regularizado
+            if recepcion.estado == 'REGULARIZADO':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Este producto ya fue regularizado anteriormente.'
+                }, status=400)
+
             # Validar que sea una guía (sin NC)
             if recepcion.dte and recepcion.dte.requiere_nota_credito_check():
                 return JsonResponse({
@@ -2183,11 +2419,19 @@ def regularizar_producto_api(request):
             }, status=400)
         
         recepcion = get_object_or_404(Productos_Recepcionados, id=producto_id)
+
+        # Validar que no esté ya regularizado
+        if recepcion.estado == 'REGULARIZADO':
+            return JsonResponse({
+                'success': False,
+                'error': 'Este producto ya fue regularizado anteriormente.'
+            }, status=400)
+
         usuario = request.user.username
         hoy = timezone.now()
-        
+
         with transaction.atomic():
-            
+
             # NUEVO: Manejar solicitud de NC (entre empresas)
             if tipo_regularizacion == 'SOLICITAR_NC' or (es_solicitud and tipo_solucion == 'NOTA_CREDITO'):
                 # Crear solicitud de NC
@@ -3484,6 +3728,130 @@ def obtener_detalle_dte_recepcionado(request):
             'success': False,
             'error': f'Error al obtener detalles del DTE: {str(e)}'
         }, status=500)
+
+
+@login_required
+@require_GET
+def dte_audit_api(request, dte_id):
+    """Timeline completa de movimientos y eventos asociados a un DTE."""
+    try:
+        dte = Dte.objects.select_related('emisor', 'receptor', 'sucursal').get(id=dte_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    from .models import Productos_Recepcionados, Solicitud_Regularizacion, LoteProducto
+
+    # Timeline de eventos
+    timeline = []
+
+    # 1. Emisión
+    timeline.append({
+        'tipo': 'emision',
+        'fecha': str(dte.fecha_emision),
+        'hora': str(dte.hora) if dte.hora else '',
+        'descripcion': f'DTE #{dte.numero_documento} emitido ({dte.tipo_documento})',
+        'responsable': dte.responsable or '-',
+        'detalle': f'Origen: {dte.sucursal.alias if dte.sucursal else "-"} | Destino: {dte.receptor.nombre if dte.receptor else "-"}',
+    })
+
+    # 2. Movimientos
+    movimientos = Movimientos_Producto.objects.filter(dte=dte).select_related(
+        'ProductoTalla', 'sucursal_origen', 'sucursal_destino'
+    ).order_by('fecha', 'hora')
+
+    for mov in movimientos:
+        sku = mov.ProductoTalla.sku if mov.ProductoTalla else '-'
+        timeline.append({
+            'tipo': 'movimiento',
+            'fecha': str(mov.fecha),
+            'hora': str(mov.hora) if mov.hora else '',
+            'descripcion': f'{mov.get_concepto_display()} - {sku} x{mov.cantidad}',
+            'responsable': mov.responsable or '-',
+            'detalle': f'{mov.get_tipo_movimiento_display()} | Estado: {mov.estado} | {mov.sucursal_origen.alias if mov.sucursal_origen else "?"} → {mov.sucursal_destino.alias if mov.sucursal_destino else "?"}',
+            'concepto': mov.concepto,
+            'estado': mov.estado,
+        })
+
+    # 3. Recepciones
+    recepciones = Productos_Recepcionados.objects.filter(dte=dte).select_related('producto_talla').order_by('fecha_recepcion')
+    for rec in recepciones:
+        sku = rec.producto_talla.sku if rec.producto_talla else '-'
+        detalle = f'Esperado: {rec.cantidad_esperada} | Recibido: {rec.stockArribado}'
+        if rec.cantidad_faltante > 0:
+            detalle += f' | Faltante: {rec.cantidad_faltante}'
+        if rec.cantidad_danada > 0:
+            detalle += f' | Dañado: {rec.cantidad_danada}'
+        if rec.cantidad_sobrante > 0:
+            detalle += f' | Sobrante: +{rec.cantidad_sobrante}'
+
+        timeline.append({
+            'tipo': 'recepcion',
+            'fecha': str(rec.fecha_recepcion.date()) if rec.fecha_recepcion else str(rec.fecha),
+            'hora': str(rec.fecha_recepcion.time()) if rec.fecha_recepcion else '',
+            'descripcion': f'Recepción {sku} - {rec.get_estado_display()}',
+            'responsable': rec.recepcionado_por or '-',
+            'detalle': detalle,
+            'estado': rec.estado,
+        })
+
+    # 4. Solicitudes de regularización
+    solicitudes = Solicitud_Regularizacion.objects.filter(dte_original=dte).order_by('fecha_solicitud')
+    for sol in solicitudes:
+        timeline.append({
+            'tipo': 'solicitud',
+            'fecha': str(sol.fecha_solicitud.date()) if sol.fecha_solicitud else '',
+            'hora': str(sol.fecha_solicitud.time()) if sol.fecha_solicitud else '',
+            'descripcion': f'Solicitud #{sol.numero_solicitud} - {sol.get_tipo_problema_display()}',
+            'responsable': sol.usuario_solicita or '-',
+            'detalle': f'Estado: {sol.get_estado_display()} | Solución: {sol.get_tipo_solucion_solicitada_display()}',
+            'estado': sol.estado,
+        })
+
+    # 5. Notas de crédito relacionadas
+    ncs = Dte.objects.filter(documento_afectado=dte, es_nota_credito=True).order_by('fecha_emision')
+    for nc in ncs:
+        timeline.append({
+            'tipo': 'nota_credito',
+            'fecha': str(nc.fecha_emision),
+            'hora': '',
+            'descripcion': f'NC #{nc.numero_documento} - ${nc.monto_con_iva}',
+            'responsable': nc.responsable or '-',
+            'detalle': f'Estado: {nc.estado_dte}',
+        })
+
+    # Ordenar por fecha
+    timeline.sort(key=lambda x: x.get('fecha', '') + x.get('hora', ''))
+
+    # Resumen de impacto en stock
+    stock_impact = {}
+    for mov in movimientos:
+        if mov.ProductoTalla:
+            sku = mov.ProductoTalla.sku
+            if sku not in stock_impact:
+                stock_impact[sku] = {'sku': sku, 'ingresos': 0, 'egresos': 0, 'pendientes': 0}
+            if mov.estado == 'COMPLETADO':
+                if mov.cantidad > 0 and mov.tipo_movimiento == 'INGRESO':
+                    stock_impact[sku]['ingresos'] += mov.cantidad
+                elif mov.tipo_movimiento == 'EGRESO':
+                    stock_impact[sku]['egresos'] += abs(mov.cantidad)
+            elif mov.estado == 'PENDIENTE':
+                stock_impact[sku]['pendientes'] += mov.cantidad
+
+    return JsonResponse({
+        'success': True,
+        'dte': {
+            'id': dte.id,
+            'numero': dte.numero_documento,
+            'tipo': dte.tipo_documento,
+            'estado': dte.estado_dte,
+            'fecha_emision': str(dte.fecha_emision),
+            'fecha_recepcion': str(dte.fecha_recepcion) if dte.fecha_recepcion else None,
+            'emisor': dte.emisor.nombre if dte.emisor else '-',
+            'sucursal_origen': dte.sucursal.alias if dte.sucursal else '-',
+        },
+        'timeline': timeline,
+        'stock_impact': list(stock_impact.values()),
+    }, json_dumps_params={'default': str})
 
 
 def generar_nota_credito_automatica(dte_original, productos_afectados, usuario, motivo):
@@ -15603,6 +15971,15 @@ def emitir_dte(request):
         observaciones = data.get('observaciones', '')
         forma_pago_str = data.get('forma_pago', 'Contado')   # 'Contado' o 'Credito'
         dias_credito = int(data.get('dias_credito', 0) or 0)
+        tipo_precio_externo = data.get('tipo_precio_externo')
+        porcentaje_custom_raw = data.get('porcentaje_custom')
+        from decimal import Decimal, InvalidOperation
+        porcentaje_custom = None
+        if porcentaje_custom_raw is not None:
+            try:
+                porcentaje_custom = Decimal(str(porcentaje_custom_raw))
+            except (InvalidOperation, ValueError):
+                porcentaje_custom = None
         
         # DEBUG: Mostrar cada campo individualmente
         print(f"📝 metodo_despacho: '{metodo_despacho}' (len: {len(str(metodo_despacho)) if metodo_despacho else 0})")
@@ -15824,7 +16201,7 @@ def emitir_dte(request):
             
             # Crear DTE con todos los campos requeridos
             try:
-                dte = Dte.objects.create(
+                dte_kwargs = dict(
                     emisor=emisor,
                     receptor=receptor,
                     numero_documento=numero_documento,
@@ -15837,12 +16214,18 @@ def emitir_dte(request):
                     fecha_emision=fecha_emision_date,
                     fecha_vencimiento=fecha_vencimiento_date,
                     diasCredito=dias_credito_final,
-                    bultos=1,  # Por defecto
+                    bultos=1,
                     unidades_productos=total_unidades,
                     tipo_transaccion=tipo_transaccion,
                     referencias=referencias_texto,
-                    sucursal=sucursal
+                    sucursal=sucursal,
                 )
+                if metodo_despacho == 'externo' and tipo_precio_externo:
+                    tipo_map = {'costo': 'COSTO', 'sobreprecio': 'SOBREPRECIO', 'custom_pct': 'CUSTOM_PCT'}
+                    dte_kwargs['tipo_precio_externo'] = tipo_map.get(tipo_precio_externo, 'COSTO')
+                    if tipo_precio_externo == 'custom_pct' and porcentaje_custom is not None:
+                        dte_kwargs['porcentaje_custom'] = porcentaje_custom
+                dte = Dte.objects.create(**dte_kwargs)
                 print(f"✅ DTE creado exitosamente: ID={dte.id}")
             except Exception as e:
                 print(f"❌ ERROR al crear DTE: {e}")
@@ -16470,6 +16853,7 @@ def obtener_productos_sucursal(request):
                 'articulo': producto.articulo,
                 'descripcion': producto.descripcion,
                 'sucursal': producto.sucursal.alias,
+                'sucursal_id': producto.sucursal_id,
                 'categoria': producto.categoria.nombre if producto.categoria else '',
                 'marca': producto.atributo1.valor if producto.atributo1 else '',
                 'color': producto.atributo2.valor if producto.atributo2 else '',
