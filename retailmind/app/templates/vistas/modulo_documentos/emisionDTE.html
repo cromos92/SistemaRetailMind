@@ -1257,7 +1257,7 @@
                                             <th class="py-1" style="white-space:nowrap;">Artículo</th>
                                             <th class="py-1">Descripción / Atributos</th>
                                             <th class="text-end py-1">Costo</th>
-                                            <th class="text-end py-1" id="thPrecioResultados">Precio</th>
+                                            <th class="text-end py-1">Sobreprecio</th>
                                             <th class="text-center py-1">Stock</th>
                                             <th class="text-center py-1">Agregar</th>
                                         </tr>
@@ -1580,7 +1580,7 @@
                                 <th class="text-center py-2" title="Disponible para agregar ahora">
                                     <i class="bi bi-check-circle"></i> Dispon.
                                 </th>
-                                <th class="text-end py-2">Precio</th>
+                                <th class="text-end py-2" id="thPrecioModal">Precio</th>
                                 <th class="text-center py-2" style="width: 100px;">Cantidad</th>
                                 <th class="text-end py-2">Subtotal</th>
                                 <th class="text-center py-2" style="width: 44px;"></th>
@@ -1919,18 +1919,14 @@ function initializeEventListeners() {
                 $('#receptorSelect').val('');
                 loadSucursalesDestino();
                 $('#precioExternoContainer').slideUp(300);
-                $('#thPrecioResultados').text('P. Interno');
                 $('#resumenPrecio').closest('.badge').hide();
             } else {
                 $('#sucursalDestinoSelect').val('');
                 loadReceptores();
                 $('#precioExternoContainer').slideDown(300);
-                const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
-                $('#thPrecioResultados').text(labels[selectedPrecioExterno] || 'Precio');
             }
 
-            // Refrescar precios en tabla de busqueda y detalle
-            actualizarPreciosTablaResultados();
+            // Refrescar precios en detalle de despacho
             recalcularPreciosExterno();
             
             // Mostrar feedback visual
@@ -3134,22 +3130,12 @@ function displayProductsInTable(products) {
         return;
     }
     
-    // Actualizar header de columna de precio segun metodo de despacho
-    if (selectedMethod === 'interno') {
-        $('#thPrecioResultados').text('P. Interno');
-    } else if (selectedMethod === 'externo') {
-        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
-        $('#thPrecioResultados').text(labels[selectedPrecioExterno] || 'Precio');
-    } else {
-        $('#thPrecioResultados').text('P. Venta');
-    }
-
     products.forEach(product => {
         const marca = product.marca || '-';
         const color = product.color || '-';
         const sexo = product.sexo || '-';
         const costo = product.costo || 0;
-        const precioMostrar = getPrecioSegunMetodo(product);
+        const sobreprecio = product.sobreprecio || 0;
         const stockTotal = product.stock_total || 0;
         const descripcion = product.descripcion || '-';
         
@@ -3192,7 +3178,7 @@ function displayProductsInTable(products) {
                     ${attrBadges ? `<div class="mt-1">${attrBadges}</div>` : ''}
                 </td>
                 <td class="text-end align-middle" style="white-space:nowrap;">$${parseInt(costo).toLocaleString()}</td>
-                <td class="text-end align-middle fw-bold text-success" style="white-space:nowrap;">$${parseInt(precioMostrar).toLocaleString()}</td>
+                <td class="text-end align-middle text-muted" style="white-space:nowrap;">$${parseInt(sobreprecio).toLocaleString()}</td>
                 <td class="text-center align-middle">
                     <span class="badge rounded-pill ${stockTotal <= 0 ? 'bg-danger' : stockTotal <= 4 ? 'bg-warning text-dark' : 'bg-success'} px-2" style="font-size:0.8rem;min-width:2rem;">${stockTotal}</span>
                     ${stockEnDespacho > 0 ? `<div class="text-muted" style="font-size:0.65rem;">${stockEnDespacho} en doc.</div>` : ''}
@@ -3258,6 +3244,16 @@ function selectProduct(productId) {
     // Mostrar el precio correcto según el método de despacho
     const precioAUsar = getPrecioSegunMetodo(product);
     $('#art-modal_preciointerno').text(`$${precioAUsar.toLocaleString()}`);
+
+    // Actualizar label de columna precio en modal segun modo
+    if (selectedMethod === 'interno') {
+        $('#thPrecioModal').text('P. Interno');
+    } else if (selectedMethod === 'externo') {
+        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
+        $('#thPrecioModal').text(labels[selectedPrecioExterno] || 'Precio');
+    } else {
+        $('#thPrecioModal').text('Precio');
+    }
     
     // Llenar tabla de tallas con validación robusta
     loadTallasDisponibles(product);
@@ -3324,19 +3320,21 @@ function getPrecioSegunMetodo(product) {
     return parseInt(product.precio_venta || 0);
 }
 
-function actualizarPreciosTablaResultados() {
-    if (!productData || productData.length === 0) return;
-    $('#datos_tabla_productos tr[data-product-id]').each(function() {
-        const prodId = parseInt($(this).data('product-id'));
-        const prod = productData.find(p => p.id === prodId);
-        if (prod) {
-            const precio = getPrecioSegunMetodo(prod);
-            $(this).find('td:eq(3)').text(`$${parseInt(precio).toLocaleString()}`);
-        }
-    });
-}
-
 function recalcularPreciosExterno() {
+    // Actualizar label de columna precio en modal y badge del producto
+    if (selectedMethod === 'interno') {
+        $('#thPrecioModal').text('P. Interno');
+    } else if (selectedMethod === 'externo') {
+        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
+        $('#thPrecioModal').text(labels[selectedPrecioExterno] || 'Precio');
+    }
+
+    // Actualizar badge de precio en header del modal si hay producto abierto
+    if (window.currentProduct) {
+        const nuevoPrecioBadge = getPrecioSegunMetodo(window.currentProduct);
+        $('#art-modal_preciointerno').text(`$${nuevoPrecioBadge.toLocaleString()}`);
+    }
+
     // Recalcular filas del modal de tallas (si esta abierto)
     $('#tabla_modal_ventas_interna tr[data-talla-id]').each(function() {
         const $row = $(this);
@@ -3377,20 +3375,6 @@ function recalcularPreciosExterno() {
         });
         $row.data('tallas', tallasData);
     });
-
-    // Actualizar precios en la tabla de resultados de busqueda
-    if (productData && productData.length > 0) {
-        $('#datos_tabla_productos tr[data-product-id]').each(function() {
-            const prodId = parseInt($(this).data('product-id'));
-            const prod = productData.find(p => p.id === prodId);
-            if (prod) {
-                const nuevoPrecio = getPrecioSegunMetodo(prod);
-                $(this).find('td:eq(3)').text(`$${parseInt(nuevoPrecio).toLocaleString()}`);
-            }
-        });
-        const labels = { costo: 'Al Costo', sobreprecio: 'P. Interno', custom_pct: `+${customPctValue}%` };
-        $('#thPrecioResultados').text(labels[selectedPrecioExterno] || 'Precio');
-    }
 
     // Actualizar resumen/totales
     if (typeof updateModalSummary === 'function') updateModalSummary();

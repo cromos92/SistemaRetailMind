@@ -63,6 +63,7 @@ from .ventas import (  # noqa: F401
     CambioDevolucionDetalle,
     PagoCambioDevolucion,
     HistorialCambioDevolucion,
+    METODO_DEVOLUCION_NC_CHOICES,
 )
 
 from .inventario import (  # noqa: F401

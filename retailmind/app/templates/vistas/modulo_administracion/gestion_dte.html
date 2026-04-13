@@ -1074,10 +1074,14 @@
                             // ✅ NUEVO: Generar información de asociación NC ↔ Factura
                             let asociacionNC = '';
                             if (dte.es_nota_credito && dte.documento_afectado_numero) {
-                                // Es una NC: mostrar enlace a factura original
                                 asociacionNC = `<br><a href="#" class="nc-link" onclick="buscarDTE('${dte.documento_afectado_numero}'); return false;" title="Ver factura original">
                                     <i class="bi bi-link-45deg"></i> Ref: #${dte.documento_afectado_numero}
                                 </a>`;
+                                if (dte.origen_devolucion) {
+                                    asociacionNC += `<br><a href="/app/ventas/cambios-devoluciones/" class="text-info small" title="${dte.origen_devolucion.tipo_operacion} - ${dte.origen_devolucion.metodo_devolucion}">
+                                        <i class="bi bi-arrow-return-left"></i> ${dte.origen_devolucion.numero_operacion}
+                                    </a>`;
+                                }
                             } else if (dte.nc_asociadas && dte.nc_asociadas.length > 0) {
                                 // Tiene NC asociadas: mostrar indicador
                                 const totalNC = dte.nc_asociadas.reduce((sum, nc) => sum + parseFloat(nc.monto_con_iva || 0), 0);

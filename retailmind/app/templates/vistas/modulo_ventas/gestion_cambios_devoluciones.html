@@ -3008,6 +3008,89 @@
 </div>
 
 <!-- Modal: Loading -->
+<!-- Modal: Generar Nota de Crédito -->
+<div class="modal fade" id="modalGenerarNC" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0" style="background:#1a1f2e;">
+            <div class="modal-header py-2 px-3" style="background:#1a1f2e; border-bottom:2px solid #0d6efd;">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:30px;height:30px;background:#0d6efd;">
+                        <i class="ri-file-text-line text-white" style="font-size:0.9rem;"></i>
+                    </div>
+                    <div>
+                        <div class="text-white fw-bold" style="font-size:0.95rem;">Generar Nota de Crédito</div>
+                        <div class="text-secondary" style="font-size:0.72rem;" id="nc-modal-operacion">-</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-3 py-3" style="background:#0f1117;">
+                <!-- Resumen del documento -->
+                <div class="mb-3 p-2 rounded" style="background:#161b27; border:1px solid #2a3045;">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div style="font-size:0.65rem; text-transform:uppercase; color:#7b8ba3;">Ticket Original</div>
+                            <div class="text-white fw-semibold" id="nc-ticket-original">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div style="font-size:0.65rem; text-transform:uppercase; color:#7b8ba3;">Tipo Operación</div>
+                            <div class="text-white" id="nc-tipo-operacion">-</div>
+                        </div>
+                        <div class="col-6">
+                            <div style="font-size:0.65rem; text-transform:uppercase; color:#7b8ba3;">Monto a Devolver</div>
+                            <div class="fw-bold" style="color:#ff8a8a; font-size:1.1rem;" id="nc-monto-devolucion">$0</div>
+                        </div>
+                        <div class="col-6">
+                            <div style="font-size:0.65rem; text-transform:uppercase; color:#7b8ba3;">Motivo</div>
+                            <div class="text-white" id="nc-motivo">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selección de método de devolución -->
+                <div class="mb-3">
+                    <label class="form-label text-white fw-semibold" style="font-size:0.85rem;">
+                        <i class="ri-money-dollar-circle-line me-1" style="color:#0d6efd;"></i>
+                        Método de Devolución al Cliente
+                    </label>
+                    <div class="d-flex gap-2">
+                        <div class="flex-fill">
+                            <input type="radio" class="btn-check" name="metodoDevolucionNC" id="nc-metodo-efectivo" value="EFECTIVO_CAJA" checked>
+                            <label class="btn btn-outline-success w-100 py-3 text-start" for="nc-metodo-efectivo" style="font-size:0.82rem;">
+                                <i class="ri-money-dollar-circle-fill d-block mb-1" style="font-size:1.3rem;"></i>
+                                <strong>Efectivo en Caja</strong>
+                                <div style="font-size:0.68rem; opacity:0.8;">Afecta cuadratura de caja</div>
+                            </label>
+                        </div>
+                        <div class="flex-fill">
+                            <input type="radio" class="btn-check" name="metodoDevolucionNC" id="nc-metodo-transferencia" value="TRANSFERENCIA_BANCARIA">
+                            <label class="btn btn-outline-info w-100 py-3 text-start" for="nc-metodo-transferencia" style="font-size:0.82rem;">
+                                <i class="ri-bank-line d-block mb-1" style="font-size:1.3rem;"></i>
+                                <strong>Transferencia Bancaria</strong>
+                                <div style="font-size:0.68rem; opacity:0.8;">No afecta caja (solo venta total)</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:0.78rem;">
+                    <i class="ri-information-line me-1"></i>
+                    <strong>Importante:</strong> La NC se emitirá como documento tipo 61 (SII) referenciando el documento original.
+                    Se generará el TXT Acepta para su posterior envío al proveedor de facturación electrónica.
+                </div>
+            </div>
+            <div class="modal-footer py-2 px-3" style="background:#161b27; border-top:1px solid #2a3045;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" id="btn-confirmar-nc" onclick="confirmarGenerarNC()">
+                    <i class="ri-file-text-line me-1"></i> Generar Nota de Crédito
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="modalLoading" tabindex="-1" data-backdrop="static" data-keyboard="false">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -3918,6 +4001,25 @@ function generarBotonesAccion(cambio) {
                 <i class="ri-printer-line me-1"></i>Ticket
             </button>
         `);
+    }
+
+    // Badge NC en la tabla
+    const esDevolucionLista = (cambio.tipo_operacion === 'DEVOLUCION_TOTAL' || cambio.tipo_operacion === 'DEVOLUCION_PARCIAL');
+    const estadoPermiteNCLista = ['COMPLETADO', 'EJECUTADO_DEVOL_PENDIENTE', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE'].includes(cambio.estado);
+    if (esDevolucionLista && estadoPermiteNCLista) {
+        if (cambio.nc_generada) {
+            botones.push(`
+                <span class="badge bg-primary align-self-center px-2" style="font-size:0.65rem;" title="NC #${cambio.nota_credito_numero || ''} - ${cambio.metodo_devolucion_display}">
+                    <i class="ri-file-text-line"></i> NC #${cambio.nota_credito_numero || ''}
+                </span>
+            `);
+        } else {
+            botones.push(`
+                <button class="btn btn-outline-primary btn-sm px-2" onclick='abrirModalNC(${cambio.id})' title='Generar Nota de Crédito'>
+                    <i class="ri-file-text-line me-1"></i>NC
+                </button>
+            `);
+        }
     }
 
     if (cambio.estado === 'CANCELADO') {
@@ -6293,6 +6395,34 @@ function mostrarDetalleCambio(data) {
             </div>
         `);
     }
+
+    // Botón Generar NC (solo para devoluciones completadas/ejecutadas sin NC previa)
+    const esDevolucion = (cambio.tipo_operacion === 'DEVOLUCION_TOTAL' || cambio.tipo_operacion === 'DEVOLUCION_PARCIAL');
+    const estadoPermiteNC = ['COMPLETADO', 'EJECUTADO_DEVOL_PENDIENTE', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE'].includes(cambio.estado);
+
+    if (esDevolucion && estadoPermiteNC) {
+        if (cambio.nc_generada && cambio.nota_credito) {
+            accionesEl.append(`
+                <div class="d-flex align-items-center gap-2 ms-2">
+                    <span class="badge bg-primary" style="font-size:0.75rem;">
+                        <i class="ri-file-text-line me-1"></i>NC #${cambio.nota_credito.numero}
+                    </span>
+                    <span class="badge bg-secondary" style="font-size:0.7rem;">
+                        ${cambio.metodo_devolucion_display} - $${Number(cambio.nota_credito.monto).toLocaleString('es-CL')}
+                    </span>
+                    <button class="btn btn-sm btn-outline-primary" onclick="verDetalleNC(${cambio.id})" title="Ver detalle NC">
+                        <i class="ri-eye-line"></i>
+                    </button>
+                </div>
+            `);
+        } else {
+            accionesEl.append(`
+                <button class="btn btn-sm btn-primary ms-2" onclick='abrirModalNC(${cambio.id})'>
+                    <i class="ri-file-text-line me-1"></i> Generar NC
+                </button>
+            `);
+        }
+    }
     
     if (['CANCELADO', 'RECHAZADO'].includes(cambio.estado)) {
         accionesEl.append(`
@@ -7099,6 +7229,179 @@ function revertirCambio(cambioId) {
                 }
             });
         }
+    });
+}
+
+// ========== NOTA DE CRÉDITO DESDE DEVOLUCIONES ==========
+let ncCambioActualId = null;
+
+function abrirModalNC(cambioId) {
+    ncCambioActualId = cambioId;
+
+    $.get(`/app/ventas/api/cambio-detalle/${cambioId}/`, function(response) {
+        if (!response.success) {
+            mostrarError(response.error || 'Error al cargar detalle');
+            return;
+        }
+        const cambio = response.cambio;
+        const montoDevolucion = Math.abs(cambio.diferencia_monto) > 0
+            ? Math.abs(cambio.diferencia_monto)
+            : cambio.monto_original;
+
+        $('#nc-modal-operacion').text(cambio.numero_operacion);
+        $('#nc-ticket-original').text('#' + (cambio.ticket_original?.correlativo || '-'));
+        $('#nc-tipo-operacion').text(cambio.tipo_operacion_display);
+        $('#nc-monto-devolucion').text('$' + Number(montoDevolucion).toLocaleString('es-CL'));
+        $('#nc-motivo').text(cambio.motivo_principal_display);
+
+        $('#nc-metodo-efectivo').prop('checked', true);
+        $('#btn-confirmar-nc').prop('disabled', false);
+
+        const modal = new bootstrap.Modal(document.getElementById('modalGenerarNC'));
+        modal.show();
+    }).fail(function() {
+        mostrarError('Error de conexión al cargar detalle');
+    });
+}
+
+function confirmarGenerarNC() {
+    if (!ncCambioActualId) return;
+
+    const metodo = $('input[name="metodoDevolucionNC"]:checked').val();
+    if (!metodo) {
+        mostrarError('Seleccione un método de devolución');
+        return;
+    }
+
+    const metodoTexto = metodo === 'EFECTIVO_CAJA' ? 'Efectivo en Caja' : 'Transferencia Bancaria';
+
+    Swal.fire({
+        title: 'Confirmar Generación de NC',
+        html: `
+            <p>Se generará una <strong>Nota de Crédito</strong> con método de devolución:</p>
+            <div class="alert alert-info text-center">
+                <strong>${metodoTexto}</strong>
+            </div>
+            <p class="small text-muted">
+                ${metodo === 'EFECTIVO_CAJA'
+                    ? 'Esta NC afectará la cuadratura de caja (restará del efectivo teórico).'
+                    : 'Esta NC NO afectará la caja. Solo se descontará del total de ventas.'}
+            </p>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0d6efd',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="ri-file-text-line me-1"></i> Generar NC',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $('#btn-confirmar-nc').prop('disabled', true);
+            mostrarLoading('Generando Nota de Crédito...');
+
+            $.ajax({
+                url: '/app/ventas/api/generar-nc-devolucion/',
+                method: 'POST',
+                data: JSON.stringify({
+                    cambio_devolucion_id: ncCambioActualId,
+                    metodo_devolucion: metodo
+                }),
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(resp) {
+                    ocultarLoading();
+                    if (resp.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('modalGenerarNC'))?.hide();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Nota de Crédito Generada',
+                            html: `
+                                <div class="text-start">
+                                    <p><strong>NC #${resp.data.nc_numero}</strong></p>
+                                    <p>Monto: <strong>$${Number(resp.data.nc_monto).toLocaleString('es-CL')}</strong></p>
+                                    <p>Método: ${resp.data.metodo_devolucion_display}</p>
+                                    ${resp.data.txt_generado
+                                        ? '<div class="alert alert-success py-1 px-2 small mt-2"><i class="ri-check-line me-1"></i>TXT Acepta generado correctamente</div>'
+                                        : '<div class="alert alert-warning py-1 px-2 small mt-2"><i class="ri-alert-line me-1"></i>No se pudo generar el TXT Acepta</div>'
+                                    }
+                                </div>
+                            `,
+                            confirmButtonText: 'Aceptar'
+                        });
+                        cargarCambiosDevoluciones();
+                        if (document.getElementById('modalDetalleCambio').classList.contains('show')) {
+                            verDetalleCambio(ncCambioActualId);
+                        }
+                    } else {
+                        $('#btn-confirmar-nc').prop('disabled', false);
+                        mostrarError(resp.error || 'Error al generar NC');
+                    }
+                },
+                error: function(xhr) {
+                    ocultarLoading();
+                    $('#btn-confirmar-nc').prop('disabled', false);
+                    const errorMsg = xhr.responseJSON?.error || 'Error de conexión al generar NC';
+                    mostrarError(errorMsg);
+                }
+            });
+        }
+    });
+}
+
+function verDetalleNC(cambioId) {
+    $.get(`/app/ventas/api/nc-devolucion/${cambioId}/`, function(response) {
+        if (!response.success || !response.nc_generada) {
+            mostrarError('No se encontró la Nota de Crédito');
+            return;
+        }
+        const nc = response.data;
+        let productosHtml = '';
+        if (nc.productos && nc.productos.length > 0) {
+            productosHtml = `
+                <table class="table table-sm table-bordered mt-2" style="font-size:0.8rem;">
+                    <thead class="table-light"><tr>
+                        <th>Artículo</th><th>Talla</th><th class="text-center">Cant.</th>
+                        <th class="text-end">P.Unit.</th><th class="text-end">Subtotal</th>
+                    </tr></thead>
+                    <tbody>
+                        ${nc.productos.map(p => `
+                            <tr>
+                                <td>${p.articulo}</td>
+                                <td>${p.talla || '-'}</td>
+                                <td class="text-center">${p.cantidad}</td>
+                                <td class="text-end">$${Number(p.precio_unitario).toLocaleString('es-CL')}</td>
+                                <td class="text-end">$${Number(p.subtotal).toLocaleString('es-CL')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        Swal.fire({
+            title: `Nota de Crédito #${nc.nc_numero}`,
+            html: `
+                <div class="text-start" style="font-size:0.85rem;">
+                    <div class="row g-2 mb-2">
+                        <div class="col-6"><strong>Fecha:</strong> ${nc.nc_fecha}</div>
+                        <div class="col-6"><strong>Estado:</strong> <span class="badge bg-success">${nc.nc_estado}</span></div>
+                        <div class="col-6"><strong>Método:</strong> ${nc.metodo_devolucion_display}</div>
+                        <div class="col-6"><strong>Doc. Original:</strong> #${nc.documento_afectado || '-'}</div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-4"><strong>Neto:</strong> $${Number(nc.nc_monto_neto).toLocaleString('es-CL')}</div>
+                        <div class="col-4"><strong>IVA:</strong> $${Number(nc.nc_iva).toLocaleString('es-CL')}</div>
+                        <div class="col-4"><strong>Total:</strong> <span class="fw-bold text-primary">$${Number(nc.nc_monto_total).toLocaleString('es-CL')}</span></div>
+                    </div>
+                    <div class="mb-2"><strong>Motivo:</strong> ${nc.motivo || '-'}</div>
+                    ${productosHtml}
+                </div>
+            `,
+            width: '600px',
+            confirmButtonText: 'Cerrar'
+        });
+    }).fail(function() {
+        mostrarError('Error al cargar detalle de NC');
     });
 }
 

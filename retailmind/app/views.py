@@ -574,6 +574,12 @@ def confirmar_recepcion_api(request):
                 Productos_Recepcionados.objects.bulk_create(recepciones_a_crear)
             
             if movimientos_a_crear:
+                ahora = timezone.now()
+                for mov in movimientos_a_crear:
+                    if not mov.fecha:
+                        mov.fecha = ahora.date()
+                    if not mov.hora:
+                        mov.hora = ahora.time()
                 Movimientos_Producto.objects.bulk_create(movimientos_a_crear)
             
             # ============================================
@@ -879,13 +885,17 @@ def rechazar_recepcion_api(request):
             # Marcar movimientos de salida como RECHAZADOS
             # Los movimientos de TRASPASO_SALIDA se guardan con estado COMPLETADO (el stock ya salió),
             # por eso buscamos tanto PENDIENTE_RECEPCION como COMPLETADO
+            from django.db.models.functions import Concat
+            from django.db.models import Value
             Movimientos_Producto.objects.filter(
                 dte=dte,
                 concepto='TRASPASO_SALIDA',
                 estado__in=['PENDIENTE_RECEPCION', 'COMPLETADO']
             ).update(
                 estado='RECHAZADO',
-                observaciones=F('observaciones') + f'\n❌ RECHAZADO: {motivo_rechazo}'
+                observaciones=Concat(
+                    F('observaciones'), Value(f'\n❌ RECHAZADO: {motivo_rechazo}')
+                )
             )
             
             # Marcar el DTE como rechazado (pero NO ponemos fecha_recepcion para poder rehabilitar)
@@ -5387,13 +5397,14 @@ def verGestionCompras(request):
     
     # Obtener IDs de atributos para el modal Agregar Producto Manual
     try:
-        marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
-        color = Productos_Atributos.objects.get(nombre__iexact='Color')
-        # IMPORTANTE: Usar "Sexo" que es el atributo real usado en productos (ID 3)
+        marca = Productos_Atributos.objects.filter(nombre__iexact='Marca').first()
+        color = Productos_Atributos.objects.filter(nombre__iexact='Color').first()
         genero = Productos_Atributos.objects.filter(nombre__iexact='Sexo').first()
         if not genero:
             genero = Productos_Atributos.objects.filter(nombre__iexact='Género').first()
-    except Productos_Atributos.DoesNotExist:
+        if not genero:
+            genero = Productos_Atributos.objects.filter(nombre__icontains='gener').first()
+    except Exception:
         marca = color = genero = None
     
     sucursal_id = request.session.get('idSucursalActual')
@@ -5893,46 +5904,44 @@ def obtener_compras_por_anio(request):
         page = 1
         page_size = 20
 
-    # Query base optimizada - EXCLUIR compras eliminadas
-    compras_query = Compras.objects.filter(
+    # Query base - EXCLUIR compras eliminadas
+    compras_base = Compras.objects.filter(
         fecha__year=anio
     ).exclude(
-        estado='ELIMINADA'  # Soft delete: no mostrar eliminadas
-    ).select_related('empresa').annotate(
-        # Calcular total de unidades y costo total usando subconsultas
+        estado='ELIMINADA'
+    )
+
+    # Si hay búsqueda, primero encontrar IDs que coincidan (sin annotate)
+    # para que los JOINs de búsqueda no corrompan las agregaciones
+    if search:
+        matching_ids = compras_base.filter(
+            Q(nombre__icontains=search) |
+            Q(empresa__nombre__icontains=search) |
+            Q(responsable__icontains=search) |
+            Q(temporada__icontains=search) |
+            Q(compras_producto__nombre__icontains=search) |
+            Q(compras_producto__descripcion__icontains=search) |
+            Q(compras_producto__atributo1__icontains=search) |
+            Q(compras_producto__atributo2__icontains=search) |
+            Q(compras_producto__atributo3__icontains=search) |
+            Q(compras_producto__atributo4__icontains=search) |
+            Q(compras_producto__compras_producto_talla__talla__icontains=search)
+        ).values_list('id', flat=True).distinct()
+        compras_base = compras_base.filter(id__in=matching_ids)
+
+    # Ahora anotar sobre la query limpia (sin JOINs de búsqueda)
+    compras_query = compras_base.select_related('empresa').annotate(
         unidades_totales=Sum('compras_producto__compras_producto_talla__stock'),
         costo_total=Sum(
             F('compras_producto__compras_producto_talla__stock') *
             F('compras_producto__costo')
         ),
-        # Calcular total recepcionado
         total_recepcionado=Sum('compras_producto__compras_producto_talla__productos_recepcionados__stockArribado'),
-        # Productos recepcionados pendientes de crear en el sistema
         pendientes_crear=Count(
             'compras_producto__compras_producto_talla__productos_recepcionados',
             filter=Q(compras_producto__compras_producto_talla__productos_recepcionados__producto_talla__isnull=True)
         )
     )
-
-    # Aplicar búsqueda si se proporciona
-    # BÚSQUEDA MEJORADA: incluye campos de la compra Y de los productos
-    if search:
-        compras_query = compras_query.filter(
-            # Campos de la COMPRA
-            Q(nombre__icontains=search) |
-            Q(empresa__nombre__icontains=search) |
-            Q(responsable__icontains=search) |
-            Q(temporada__icontains=search) |
-            # Campos de los PRODUCTOS de la compra
-            Q(compras_producto__nombre__icontains=search) |           # Nombre producto
-            Q(compras_producto__descripcion__icontains=search) |      # Descripción producto
-            Q(compras_producto__atributo1__icontains=search) |        # Marca
-            Q(compras_producto__atributo2__icontains=search) |        # Color
-            Q(compras_producto__atributo3__icontains=search) |        # Género
-            Q(compras_producto__atributo4__icontains=search) |        # Atributo extra
-            # Campos de las TALLAS de los productos
-            Q(compras_producto__compras_producto_talla__talla__icontains=search)  # Talla
-        ).distinct()  # Evitar duplicados por el JOIN con productos
 
     # Contar total de registros para paginación
     total_count = compras_query.count()
@@ -5940,7 +5949,7 @@ def obtener_compras_por_anio(request):
     # Aplicar paginación
     offset = (page - 1) * page_size
     compras = compras_query.values(
-        'id', 'nombre', 'empresa__nombre', 'responsable', 'temporada',
+        'id', 'nombre', 'empresa_id', 'empresa__nombre', 'responsable', 'temporada',
         'fecha', 'fechaInicioTemporada', 'fechaTerminoTemporada',
         'unidades_totales', 'costo_total', 'total_recepcionado', 'pendientes_crear'
     )[offset:offset + page_size]
@@ -5962,6 +5971,7 @@ def obtener_compras_por_anio(request):
         data.append({
             'id': compra['id'],
             'nombre': compra['nombre'],
+            'empresa_id': compra['empresa_id'],
             'proveedor': compra['empresa__nombre'],
             'responsable': compra['responsable'],
             'temporada': compra['temporada'],
@@ -8383,7 +8393,9 @@ def obtener_productos_para_crear(request):
  
 def opciones_atributo(request):
     atributo_id = request.GET.get('atributo_id')
-    opciones = AtributoOpcion.objects.filter(atributo_id=atributo_id)
+    if not atributo_id:
+        return JsonResponse([], safe=False)
+    opciones = AtributoOpcion.objects.filter(atributo_id=atributo_id).order_by('valor')
     return JsonResponse([{'id': o.id, 'valor': o.valor} for o in opciones], safe=False)
 
 
@@ -10615,12 +10627,6 @@ def facturas_pendientes(request):
     """
     from datetime import date, timedelta
     
-    empresa_id = request.session.get('idEmpresaActual')
-    try:
-        empresa_id = int(empresa_id) if empresa_id is not None else None
-    except (TypeError, ValueError):
-        empresa_id = None
-    
     proveedor_id = request.GET.get('proveedor_id')
     try:
         proveedor_id = int(proveedor_id) if proveedor_id else None
@@ -10641,58 +10647,38 @@ def facturas_pendientes(request):
         limit = 50
 
     # ============================================================
-    # FILTRO PRINCIPAL: Solo DTEs de COMPRA con estados PENDIENTES
-    # Estados excluidos: RECEPCIONADO_COMPLETO, ANULADO, RECHAZADO
+    # FILTRO: Requiere proveedor_id para devolver resultados
     # ============================================================
-    ESTADOS_PENDIENTES = ['EMITIDO', 'ACEPTADO', 'RECEPCIONADO_PARCIAL', 'EN_REGULARIZACION']
+    if not proveedor_id:
+        return JsonResponse([], safe=False)
     
-    # Fecha de corte - por defecto mes actual
-    if meses == 1:
-        # Mes actual: desde el día 1 del mes
-        fecha_corte = date.today().replace(day=1)
-    else:
-        # N meses atrás
-        fecha_corte = date.today() - timedelta(days=meses * 30)
+    ESTADOS_EXCLUIDOS = ['ANULADO', 'CANCELADO', 'RECHAZADO']
+    fecha_corte = date.today() - timedelta(days=meses * 30)
     
+    # Buscar DTEs de COMPRA de TODAS las sucursales/empresas del usuario
     facturas = Dte.objects.filter(
         tipo_transaccion='COMPRA',
-        estado_dte__in=ESTADOS_PENDIENTES,
-        fecha_emision__gte=fecha_corte  # Solo facturas recientes
+        fecha_emision__gte=fecha_corte
+    ).exclude(
+        estado_dte__in=ESTADOS_EXCLUIDOS
     ).select_related('emisor')
     
-    if empresa_id:
-        facturas = facturas.filter(
-            Q(receptor_id=empresa_id) | Q(emisor_id=empresa_id)
-        )
-    else:
-        # Fallback: usar empresas asociadas al usuario
-        empresas_usuario = EmpresaUser.objects.filter(
-            user=request.user
-        ).values_list('empresa_id', flat=True)
-        
-        if empresas_usuario:
-            facturas = facturas.filter(receptor_id__in=list(empresas_usuario))
-    
-    # ============================================================
-    # FILTRO POR PROVEEDOR (MUY IMPORTANTE)
-    # Si no hay proveedor_id, devolver lista vacía o muy limitada
-    # ============================================================
-    if proveedor_id:
-        try:
-            from .models import Empresa
-            prov = Empresa.objects.get(id=proveedor_id)
-            if prov.rut:
-                # Buscar por ID o por RUT (mismo proveedor puede tener múltiples registros)
-                facturas = facturas.filter(
-                    Q(emisor_id=proveedor_id) | Q(emisor__rut=prov.rut)
-                )
-            else:
-                facturas = facturas.filter(emisor_id=proveedor_id)
-        except Exception:
+    # Filtro por proveedor (emisor del DTE)
+    try:
+        from .models import Empresa
+        prov = Empresa.objects.get(id=proveedor_id)
+        if prov.rut:
+            facturas = facturas.filter(
+                Q(emisor_id=proveedor_id) | Q(emisor__rut=prov.rut)
+            )
+        else:
             facturas = facturas.filter(emisor_id=proveedor_id)
-    else:
-        # SIN PROVEEDOR: Devolver lista vacía (el usuario debe seleccionar proveedor)
-        return JsonResponse([], safe=False)
+    except Exception:
+        facturas = facturas.filter(emisor_id=proveedor_id)
+    
+    # Excluir descartados (soft delete)
+    if hasattr(Dte, 'descartado'):
+        facturas = facturas.filter(descartado=False)
     
     if q:
         facturas = facturas.filter(numero_documento__icontains=q)
@@ -10799,9 +10785,10 @@ def obtener_movimientos_producto(request):
         fecha_inicio_dt = hoy - timedelta(days=30)
         fecha_fin_dt = hoy
 
-    # ✅ OPTIMIZACIÓN: Filtro simplificado solo por sucursal_origen/destino
-    # Eliminamos JOINs innecesarios con ticket y dte para el filtro de sucursal
-    # ya que los movimientos siempre tienen sucursal_origen o sucursal_destino
+    # Mostrar solo movimientos relevantes para esta sucursal:
+    # - Egresos donde esta sucursal es el origen (cosas que salieron)
+    # - Ingresos donde esta sucursal es el destino (cosas que llegaron)
+    # - Movimientos sin sucursal_destino que pertenecen a esta sucursal (ventas, ajustes, etc.)
     movimientos = Movimientos_Producto.objects.select_related(
         'ProductoTalla__producto__atributo1',
         'ProductoTalla__producto__atributo2', 
@@ -10811,14 +10798,20 @@ def obtener_movimientos_producto(request):
         'sucursal_origen', 
         'sucursal_destino'
     ).filter(
-        Q(sucursal_origen_id=sucursal_id) | Q(sucursal_destino_id=sucursal_id)
+        Q(sucursal_origen_id=sucursal_id, tipo_movimiento='EGRESO') |
+        Q(sucursal_destino_id=sucursal_id, tipo_movimiento='INGRESO') |
+        Q(sucursal_origen_id=sucursal_id, sucursal_destino__isnull=True)
     )
     
-    # ✅ OPTIMIZACIÓN: Aplicar filtro de fecha primero (más selectivo)
-    if fecha_inicio_dt:
-        movimientos = movimientos.filter(fecha__gte=fecha_inicio_dt)
-    if fecha_fin_dt:
-        movimientos = movimientos.filter(fecha__lte=fecha_fin_dt)
+    # Aplicar filtro de fecha (incluir movimientos sin fecha para no perder datos)
+    if fecha_inicio_dt and fecha_fin_dt:
+        movimientos = movimientos.filter(
+            Q(fecha__gte=fecha_inicio_dt, fecha__lte=fecha_fin_dt) | Q(fecha__isnull=True)
+        )
+    elif fecha_inicio_dt:
+        movimientos = movimientos.filter(Q(fecha__gte=fecha_inicio_dt) | Q(fecha__isnull=True))
+    elif fecha_fin_dt:
+        movimientos = movimientos.filter(Q(fecha__lte=fecha_fin_dt) | Q(fecha__isnull=True))
     
     # Aplicar otros filtros
     if tipo:
@@ -18324,11 +18317,10 @@ def cargar_dte_ventas(request):
                 'error': 'Usuario no tiene empresa asignada'
             })
         
-        # Construir query base - DTEs de VENTA y TRASPASO de la sucursal del usuario
-        # Incluimos TRASPASO porque también son documentos emitidos por la sucursal
+        # Construir query base - DTEs de VENTA, TRASPASO y DEVOLUCION de la sucursal del usuario
         query = Dte.objects.filter(
             sucursal=sucursal_usuario,
-            tipo_transaccion__in=['VENTA', 'TRASPASO']
+            tipo_transaccion__in=['VENTA', 'TRASPASO', 'DEVOLUCION']
         ).select_related('receptor', 'vendedor', 'sucursal')
         
         # Aplicar filtros de fecha
@@ -18407,6 +18399,19 @@ def cargar_dte_ventas(request):
                     es_nota_credito=True
                 ).values('id', 'numero_documento', 'monto_con_iva', 'fecha_emision')
                 nc_asociadas = list(nc_list)
+
+            # Buscar si la NC proviene de una devolución al cliente
+            origen_devolucion = None
+            if es_nota_credito:
+                from .models import CambioDevolucion
+                cambio_nc = CambioDevolucion.objects.filter(nota_credito=dte).first()
+                if cambio_nc:
+                    origen_devolucion = {
+                        'cambio_id': cambio_nc.id,
+                        'numero_operacion': cambio_nc.numero_operacion,
+                        'tipo_operacion': cambio_nc.get_tipo_operacion_display(),
+                        'metodo_devolucion': cambio_nc.get_metodo_devolucion_display(),
+                    }
             
             items.append({
                 'id': dte.id,
@@ -18433,7 +18438,8 @@ def cargar_dte_ventas(request):
                 'es_nota_credito': es_nota_credito,
                 'documento_afectado_numero': documento_afectado_numero,
                 'documento_afectado_id': documento_afectado_id,
-                'nc_asociadas': nc_asociadas
+                'nc_asociadas': nc_asociadas,
+                'origen_devolucion': origen_devolucion,
             })
         
         return JsonResponse({

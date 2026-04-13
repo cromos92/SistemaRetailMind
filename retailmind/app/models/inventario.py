@@ -10,6 +10,14 @@ from .ventas import (
 from .dte import Dte
 
 
+def django_date_today():
+    return timezone.now().date()
+
+
+def django_time_now():
+    return timezone.now().time()
+
+
 class Traspaso(models.Model):
     # === RELACIONES ===
     sucursal_origen = models.ForeignKey(Sucursal, related_name='traspasos_origen', on_delete=models.CASCADE)
@@ -161,8 +169,8 @@ class Movimientos_Producto(models.Model):
     costo = models.IntegerField(default=0)
     sobreprecio = models.IntegerField(default=0)
     precio = models.IntegerField(default=0)
-    fecha = models.DateField(null=True, blank=True)  # Sin auto_now para permitir migración con fechas originales
-    hora = models.TimeField(null=True, blank=True)  # Sin auto_now para permitir migración con fechas originales
+    fecha = models.DateField(default=django_date_today, blank=True)
+    hora = models.TimeField(default=django_time_now, blank=True)
     
     # === CONCEPTOS Y ESTADOS ===
     concepto = models.CharField(max_length=50, choices=CONCEPTO_MOVIMIENTO_CHOICES, default='INGRESO_INICIAL')

@@ -108,6 +108,9 @@ from .views_modulo_ventas import (
     obtener_cola_revision_gerencial,
     revisar_cambio_gerencial,
     exportar_cambios_devoluciones,
+    # Funciones NC desde Devoluciones
+    generar_nc_devolucion,
+    detalle_nc_devolucion,
     # Funciones Clientes POS
     guardar_cliente_pos,
     enviar_ticket_email,
@@ -812,6 +815,10 @@ urlpatterns = [
     path('ventas/api/cola-revision-gerencial/', obtener_cola_revision_gerencial, name='obtener_cola_revision_gerencial'),
     path('ventas/api/revisar-cambio-gerencial/', revisar_cambio_gerencial, name='revisar_cambio_gerencial'),
     path('ventas/api/exportar-cambios/', exportar_cambios_devoluciones, name='exportar_cambios_devoluciones'),
+
+    # APIs de Notas de Crédito desde Devoluciones
+    path('ventas/api/generar-nc-devolucion/', generar_nc_devolucion, name='generar_nc_devolucion'),
+    path('ventas/api/nc-devolucion/<int:cambio_id>/', detalle_nc_devolucion, name='detalle_nc_devolucion'),
 
     # ========== MÓDULO DE COTIZACIONES ==========
     # Vista principal

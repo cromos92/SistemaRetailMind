@@ -39,7 +39,8 @@ from .models import (
     TIPO_POS_CHOICES, ESTADO_TRANSACCION_POS_CHOICES, TIPO_TARJETA_CHOICES,
     # Modelos de Cambios y Devoluciones
     CambioDevolucion, CambioDevolucionDetalle, PagoCambioDevolucion, HistorialCambioDevolucion,
-    TIPO_OPERACION_CAMBIO_CHOICES, ESTADO_CAMBIO_CHOICES, MOTIVO_CAMBIO_CHOICES, CONDICION_PRODUCTO_CHOICES
+    TIPO_OPERACION_CAMBIO_CHOICES, ESTADO_CAMBIO_CHOICES, MOTIVO_CAMBIO_CHOICES, CONDICION_PRODUCTO_CHOICES,
+    METODO_DEVOLUCION_NC_CHOICES,
 )
 
 
@@ -4553,6 +4554,9 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_facturas': 0,
         'total_facturas_exentas': 0,
         'total_notas_credito': 0,
+        'total_nc_efectivo': 0,
+        'total_nc_transferencia': 0,
+        'cantidad_notas_credito': 0,
         'cantidad_tickets': 0,
         'cantidad_boletas': 0,
         'cantidad_boletas_electronicas': 0,
@@ -4681,6 +4685,13 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             cuadratura_data['total_descuentos'] += descuento_dte
         elif dte.tipo_documento == 'NOTA DE CREDITO':
             cuadratura_data['total_notas_credito'] += monto_dte
+            cuadratura_data['cantidad_notas_credito'] += 1
+            pagos_nc = dte.dte_asociado.all()
+            tiene_efectivo = pagos_nc.filter(metodo_pago='EFECTIVO').exists()
+            if tiene_efectivo:
+                cuadratura_data['total_nc_efectivo'] += monto_dte
+            else:
+                cuadratura_data['total_nc_transferencia'] += monto_dte
         
         # ⚠️ IMPORTANTE: Solo procesar pagos del DTE si NO tiene ticket asociado
         # Si el folio del DTE está en la lista de tickets, sus pagos ya fueron procesados
@@ -4782,6 +4793,9 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         cuadratura_data['total_facturas_exentas'] -
         cuadratura_data['total_notas_credito']
     )
+
+    # NC en efectivo resta del efectivo teórico de caja
+    cuadratura_data['total_efectivo'] -= cuadratura_data['total_nc_efectivo']
     
     return cuadratura_data
 
@@ -8123,6 +8137,10 @@ def reabrir_arqueo(request):
                 arqueo.total_facturas_teorico += monto_dte
             elif dte.tipo_documento == 'NOTA DE CREDITO':
                 arqueo.total_notas_credito_teorico += monto_dte
+                pagos_nc = dte.dte_asociado.all()
+                tiene_efectivo = pagos_nc.filter(metodo_pago='EFECTIVO').exists()
+                if tiene_efectivo:
+                    arqueo.total_efectivo_teorico -= monto_dte
         
         # Actualizar totales agregados
         arqueo.total_tarjetas_comerciales_teorico = arqueo.total_hites_teorico
@@ -9551,7 +9569,7 @@ def listar_cambios_devoluciones(request):
         # Construir queryset base
         queryset = CambioDevolucion.objects.select_related(
             'ticket_original', 'ticket_nuevo', 'sucursal', 'solicitado_por', 'aprobado_por',
-            'autorizado_por_usuario', 'revisado_por_gerencia',
+            'autorizado_por_usuario', 'revisado_por_gerencia', 'nota_credito',
         ).prefetch_related(
             'detalles__producto_original__ProductoTalla__producto',
             'detalles__producto_nuevo__producto',
@@ -9687,6 +9705,11 @@ def listar_cambios_devoluciones(request):
                 'score_riesgo': cambio.score_riesgo,
                 'requiere_revision_gerencial': cambio.requiere_revision_gerencial,
                 'revisado_por_gerencia': cambio.revisado_por_gerencia.get_full_name() if cambio.revisado_por_gerencia else None,
+                # Nota de Crédito
+                'nc_generada': cambio.nc_generada,
+                'metodo_devolucion': cambio.metodo_devolucion,
+                'metodo_devolucion_display': cambio.get_metodo_devolucion_display() if cambio.metodo_devolucion != 'SIN_NC' else '',
+                'nota_credito_numero': cambio.nota_credito.numero_documento if cambio.nota_credito_id else None,
             })
 
         total_diferencia = queryset.aggregate(
@@ -10276,7 +10299,7 @@ def obtener_detalle_cambio(request, cambio_id):
         cambio = get_object_or_404(
             CambioDevolucion.objects.select_related(
                 'ticket_original', 'ticket_nuevo', 'sucursal', 
-                'solicitado_por', 'aprobado_por'
+                'solicitado_por', 'aprobado_por', 'nota_credito'
             ).prefetch_related(
                 'detalles__producto_original__ProductoTalla__producto',
                 'detalles__producto_nuevo__producto',
@@ -10365,6 +10388,19 @@ def obtener_detalle_cambio(request, cambio_id):
                 'correlativo': cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else '',
                 'total': float(cambio.ticket_nuevo.total) if cambio.ticket_nuevo else 0,
             } if cambio.ticket_nuevo else None,
+
+            # Nota de Crédito
+            'nc_generada': cambio.nc_generada,
+            'metodo_devolucion': cambio.metodo_devolucion,
+            'metodo_devolucion_display': cambio.get_metodo_devolucion_display() if cambio.metodo_devolucion != 'SIN_NC' else '',
+            'fecha_nc': cambio.fecha_nc.strftime('%d/%m/%Y %H:%M') if cambio.fecha_nc else None,
+            'nota_credito': {
+                'id': cambio.nota_credito.id,
+                'numero': cambio.nota_credito.numero_documento,
+                'monto': float(cambio.nota_credito.monto_con_iva),
+                'fecha': cambio.nota_credito.fecha_emision.strftime('%d/%m/%Y'),
+                'estado': cambio.nota_credito.estado_dte,
+            } if cambio.nota_credito else None,
         }
         
         # Detalles de productos
@@ -14657,3 +14693,393 @@ def exportar_dashboard_ventas_excel(request):
             'success': False,
             'error': f'Error al exportar dashboard: {str(e)}'
         }, status=500)
+
+
+# ========== NOTA DE CRÉDITO DESDE DEVOLUCIONES ==========
+
+@login_required
+@require_POST
+@transaction.atomic
+def generar_nc_devolucion(request):
+    """
+    Genera una Nota de Crédito (NC) a partir de un CambioDevolucion completado.
+    La NC se vincula al DTE original del ticket y afecta la cuadratura de caja
+    según el método de devolución elegido (efectivo caja o transferencia bancaria).
+    """
+    from datetime import date
+    from decimal import Decimal
+    from collections import defaultdict
+    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        body = json.loads(request.body)
+    except (ValueError, json.JSONDecodeError):
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    cambio_id = body.get('cambio_devolucion_id')
+    metodo_devolucion = body.get('metodo_devolucion')
+
+    if not cambio_id:
+        return JsonResponse({'success': False, 'error': 'ID de cambio/devolución requerido'}, status=400)
+    if metodo_devolucion not in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA'):
+        return JsonResponse({'success': False, 'error': 'Método de devolución inválido. Use EFECTIVO_CAJA o TRANSFERENCIA_BANCARIA'}, status=400)
+
+    # Validar permisos: solo admin, administracion, jefe_local
+    try:
+        empresa_user = EmpresaUser.objects.get(user=request.user, active=True)
+    except EmpresaUser.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Usuario no tiene empresa asignada'}, status=403)
+
+    rol = getattr(empresa_user, 'rol', None) or getattr(request.user, 'rol', '')
+    if rol not in ('administrador', 'administracion', 'jefe_local'):
+        return JsonResponse({'success': False, 'error': 'No tiene permisos para generar Notas de Crédito'}, status=403)
+
+    # Obtener CambioDevolucion
+    try:
+        cambio = CambioDevolucion.objects.select_related(
+            'ticket_original', 'sucursal'
+        ).prefetch_related('detalles__producto_original__ProductoTalla__producto').get(id=cambio_id)
+    except CambioDevolucion.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Cambio/Devolución no encontrado'}, status=404)
+
+    # Validar estado
+    estados_validos = ('COMPLETADO', 'EJECUTADO_DEVOL_PENDIENTE', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE')
+    if cambio.estado not in estados_validos:
+        return JsonResponse({
+            'success': False,
+            'error': f'El cambio/devolución debe estar en estado completado o ejecutado. Estado actual: {cambio.get_estado_display()}'
+        }, status=400)
+
+    # Validar tipo de operación (solo devoluciones)
+    tipos_devolucion = ('DEVOLUCION_TOTAL', 'DEVOLUCION_PARCIAL')
+    if cambio.tipo_operacion not in tipos_devolucion:
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo se puede generar NC para devoluciones (total o parcial)'
+        }, status=400)
+
+    # Validar que no tenga NC generada
+    if cambio.nc_generada:
+        return JsonResponse({
+            'success': False,
+            'error': 'Ya se generó una Nota de Crédito para esta devolución',
+            'nota_credito_id': cambio.nota_credito_id
+        }, status=400)
+
+    # Validar sucursal del usuario
+    sucursal_id = request.session.get('idSucursalActual')
+    if cambio.sucursal_id != int(sucursal_id):
+        return JsonResponse({'success': False, 'error': 'El cambio/devolución no pertenece a su sucursal actual'}, status=403)
+
+    # Buscar DTE original del ticket
+    ticket_original = cambio.ticket_original
+    dte_original = None
+
+    if ticket_original.folio_dte:
+        dte_original = Dte.objects.filter(
+            numero_documento=ticket_original.folio_dte,
+            sucursal=cambio.sucursal,
+            tipo_documento__in=['BOLETA ELECTRONICA', 'FACTURA ELECTRONICA', 'BOLETA PAPEL'],
+            estado_dte__in=['EMITIDO', 'ACEPTADO']
+        ).first()
+
+    if not dte_original:
+        dte_original = Dte.objects.filter(
+            sucursal=cambio.sucursal,
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            tipo_documento__in=['BOLETA ELECTRONICA', 'FACTURA ELECTRONICA', 'BOLETA PAPEL'],
+            estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            fecha_emision=ticket_original.fecha
+        ).order_by('-id').first()
+
+    empresa_id = request.session.get('idEmpresaActual')
+    empresa = Empresa.objects.get(id=empresa_id)
+
+    # Calcular monto de la NC según los detalles de la devolución
+    detalles = cambio.detalles.all()
+    monto_devolucion = abs(cambio.diferencia_monto) if cambio.diferencia_monto < 0 else cambio.monto_original
+
+    if cambio.tipo_operacion == 'DEVOLUCION_PARCIAL':
+        monto_devolucion = sum(
+            abs(d.precio_original_unitario * d.cantidad_original)
+            for d in detalles if d.cantidad_original > 0
+        )
+
+    monto_neto = int(round(monto_devolucion / Decimal('1.19')))
+    iva = int(monto_devolucion) - monto_neto
+    monto_con_iva = int(monto_devolucion)
+
+    # Obtener correlativo para NC
+    numero_nc = obtener_siguiente_correlativo(cambio.sucursal, 'NOTA DE CREDITO')
+
+    # Determinar tipo SII del documento original para la referencia
+    tipo_sii_original = 39  # boleta por defecto
+    folio_original = ''
+    fecha_original = date.today().strftime('%Y-%m-%d')
+
+    if dte_original:
+        if 'FACTURA' in dte_original.tipo_documento:
+            tipo_sii_original = 33
+        elif 'BOLETA' in dte_original.tipo_documento:
+            tipo_sii_original = 39
+        folio_original = str(dte_original.numero_documento)
+        fecha_original = dte_original.fecha_emision.strftime('%Y-%m-%d')
+    elif ticket_original.folio_dte:
+        folio_original = str(ticket_original.folio_dte)
+        fecha_original = ticket_original.fecha.strftime('%Y-%m-%d')
+
+    referencias_json = json.dumps([{
+        'tipo_documento': tipo_sii_original,
+        'folio': folio_original,
+        'fecha': fecha_original,
+        'razon': '1'
+    }])
+
+    # Crear el DTE tipo NC
+    nc = Dte.objects.create(
+        emisor=empresa,
+        receptor=dte_original.receptor if dte_original and dte_original.receptor else None,
+        tipo_documento='NOTA DE CREDITO',
+        numero_documento=numero_nc,
+        monto_neto=monto_neto,
+        monto_con_iva=monto_con_iva,
+        descuento=0,
+        fecha_emision=date.today(),
+        fecha_vencimiento=date.today(),
+        diasCredito=0,
+        bultos=0,
+        unidades_productos=sum(d.cantidad_original for d in detalles if d.cantidad_original > 0),
+        estado_dte='EMITIDO',
+        estado_pago='PAGADO',
+        tipo_transaccion='DEVOLUCION',
+        responsable=request.user.username,
+        sucursal=cambio.sucursal,
+        hora=timezone.now().time(),
+        es_nota_credito=True,
+        documento_afectado=dte_original,
+        motivo_nc=f"Devolución {cambio.get_tipo_operacion_display()} - {cambio.numero_operacion}. Motivo: {cambio.get_motivo_principal_display()}",
+        referencias=referencias_json,
+    )
+
+    # Crear líneas de productos en la NC
+    for detalle in detalles:
+        if detalle.cantidad_original <= 0:
+            continue
+        if detalle.producto_original and detalle.producto_original.ProductoTalla:
+            pt = detalle.producto_original.ProductoTalla
+            Dte_Productos.objects.create(
+                dte=nc,
+                productoTalla=pt,
+                descripcion=pt.producto.articulo if pt.producto else '',
+                costo=0,
+                sobreprecio=0,
+                precio=detalle.precio_original_unitario,
+                stock=detalle.cantidad_original,
+                activo=True
+            )
+
+    # Crear detalle de pago de la NC según método de devolución
+    metodo_pago_nc = 'EFECTIVO' if metodo_devolucion == 'EFECTIVO_CAJA' else 'TRANSFERENCIA'
+    Dte_Detalle_Pago.objects.create(
+        dte=nc,
+        metodo_pago=metodo_pago_nc,
+        monto=monto_con_iva,
+    )
+
+    # Actualizar CambioDevolucion
+    cambio.nota_credito = nc
+    cambio.nc_generada = True
+    cambio.metodo_devolucion = metodo_devolucion
+    cambio.fecha_nc = timezone.now()
+    cambio.save(update_fields=['nota_credito', 'nc_generada', 'metodo_devolucion', 'fecha_nc'])
+
+    # Registrar en historial
+    HistorialCambioDevolucion.objects.create(
+        cambio_devolucion=cambio,
+        accion='NC_GENERADA',
+        estado_anterior=cambio.estado,
+        estado_nuevo=cambio.estado,
+        usuario=request.user,
+        descripcion=f"Nota de Crédito #{numero_nc} generada. Método: {cambio.get_metodo_devolucion_display()}. Monto: ${monto_con_iva:,}",
+        datos_adicionales={
+            'nc_id': nc.id,
+            'nc_numero': numero_nc,
+            'metodo_devolucion': metodo_devolucion,
+            'monto_nc': monto_con_iva,
+            'dte_original_id': dte_original.id if dte_original else None,
+        }
+    )
+
+    # Generar TXT Acepta
+    contenido_txt = None
+    nombre_archivo = f"NC_61_{numero_nc}_{nc.fecha_emision.strftime('%Y%m%d')}.txt"
+    try:
+        productos_agrupados = defaultdict(lambda: {
+            'tallas': [], 'cantidad_total': 0, 'precio': 0,
+            'monto_total': 0, 'articulo': '', 'marca': '', 'color': ''
+        })
+        for dp in nc.dte_productos.select_related('productoTalla__producto'):
+            producto = dp.productoTalla.producto
+            key = producto.articulo
+            g = productos_agrupados[key]
+            talla_nombre = str(dp.productoTalla.talla) if hasattr(dp.productoTalla, 'talla') and dp.productoTalla.talla else 'U'
+            g['tallas'].append(f"{dp.stock}:{talla_nombre}")
+            g['cantidad_total'] += dp.stock
+            g['precio'] = dp.precio
+            g['monto_total'] += dp.stock * dp.precio
+            g['articulo'] = producto.articulo
+            if not g['marca'] and producto.atributo1:
+                g['marca'] = producto.atributo1.valor
+            if not g['color'] and producto.atributo2:
+                g['color'] = producto.atributo2.valor
+
+        detalle_txt = []
+        for articulo, g in productos_agrupados.items():
+            tallas_str = ' '.join(g['tallas'])
+            marca_limpia = limpiar_texto(g['marca'] or '')
+            color_limpio = limpiar_texto(g['color'] or '')
+            marca_color = f"{marca_limpia} {color_limpio}".strip()
+            nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
+            detalle_txt.append({
+                'nombre': limpiar_texto(nombre_final),
+                'descripcion': '',
+                'cantidad': g['cantidad_total'],
+                'unidad': 'UN',
+                'precio_unitario': g['precio'],
+                'descuento_pct': 0,
+                'monto_descuento': 0,
+                'monto_item': g['monto_total'],
+                'codigo': limpiar_texto(g['articulo'])
+            })
+
+        referencias_nc = json.loads(nc.referencias) if isinstance(nc.referencias, str) else []
+
+        datos_txt = {
+            'documento': {
+                'tipo_documento': 61,
+                'folio': nc.numero_documento,
+                'fecha_emision': nc.fecha_emision.strftime('%Y-%m-%d'),
+                'fecha_vencimiento': nc.fecha_vencimiento.strftime('%Y-%m-%d'),
+                'forma_pago': 1,
+                'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
+            },
+            'emisor': {
+                'rut': empresa.rut,
+                'razon_social': limpiar_texto(empresa.razon_social or ''),
+                'giro': limpiar_texto(empresa.giro or ''),
+                'acteco': empresa.acteco or '',
+                'direccion': limpiar_texto(cambio.sucursal.direccion if cambio.sucursal else empresa.direccion or ''),
+                'comuna': limpiar_texto(empresa.comuna or ''),
+                'ciudad': limpiar_texto(empresa.ciudad or ''),
+                'codigo_vendedor': limpiar_texto(request.user.username or 'USUARIO'),
+                'sucursal': limpiar_texto(cambio.sucursal.alias if cambio.sucursal else ''),
+                'telefono': empresa.contacto1 or '',
+            },
+            'receptor': {
+                'rut': nc.receptor.rut if nc.receptor else '66666666-6',
+                'razon_social': limpiar_texto(nc.receptor.razon_social if nc.receptor else 'CONSUMIDOR FINAL'),
+                'giro': limpiar_texto(nc.receptor.giro if nc.receptor else ''),
+                'direccion': limpiar_texto(nc.receptor.direccion if nc.receptor else ''),
+                'comuna': limpiar_texto(nc.receptor.comuna if nc.receptor else ''),
+                'ciudad': limpiar_texto(nc.receptor.ciudad if nc.receptor else ''),
+            },
+            'totales': {
+                'monto_neto': monto_neto,
+                'monto_exento': 0,
+                'tasa_iva': 19,
+                'iva': iva,
+                'monto_total': monto_con_iva,
+                'descuento_global': 0
+            },
+            'detalle': detalle_txt,
+            'referencias': referencias_nc
+        }
+
+        contenido_txt = generar_txt_nota_credito_acepta(datos_txt)
+
+        import os
+        ruta_nc = os.path.join('MEDIA', 'documentos_electronicos', 'nc')
+        os.makedirs(ruta_nc, exist_ok=True)
+        with open(os.path.join(ruta_nc, nombre_archivo), 'w', encoding='utf-8') as f:
+            f.write(contenido_txt)
+
+    except Exception as e:
+        logger.error(f"Error generando TXT Acepta para NC #{numero_nc}: {e}")
+        contenido_txt = None
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Nota de Crédito #{numero_nc} generada exitosamente',
+        'data': {
+            'nc_id': nc.id,
+            'nc_numero': numero_nc,
+            'nc_monto': monto_con_iva,
+            'metodo_devolucion': metodo_devolucion,
+            'metodo_devolucion_display': dict(METODO_DEVOLUCION_NC_CHOICES).get(metodo_devolucion, ''),
+            'cambio_id': cambio.id,
+            'numero_operacion': cambio.numero_operacion,
+            'txt_generado': contenido_txt is not None,
+            'nombre_archivo_txt': nombre_archivo if contenido_txt else None,
+        }
+    })
+
+
+@login_required
+@require_GET
+def detalle_nc_devolucion(request, cambio_id):
+    """
+    Retorna el detalle de la Nota de Crédito asociada a un CambioDevolucion.
+    """
+    try:
+        cambio = CambioDevolucion.objects.select_related(
+            'nota_credito', 'nota_credito__emisor', 'nota_credito__receptor',
+            'ticket_original', 'sucursal'
+        ).get(id=cambio_id)
+    except CambioDevolucion.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Cambio/Devolución no encontrado'}, status=404)
+
+    sucursal_id = request.session.get('idSucursalActual')
+    if cambio.sucursal_id != int(sucursal_id):
+        return JsonResponse({'success': False, 'error': 'Sin acceso a esta operación'}, status=403)
+
+    if not cambio.nc_generada or not cambio.nota_credito:
+        return JsonResponse({
+            'success': True,
+            'nc_generada': False,
+            'data': None
+        })
+
+    nc = cambio.nota_credito
+    productos_nc = []
+    for dp in nc.dte_productos.select_related('productoTalla__producto'):
+        producto = dp.productoTalla.producto if dp.productoTalla else None
+        productos_nc.append({
+            'articulo': producto.articulo if producto else dp.descripcion,
+            'talla': str(dp.productoTalla.talla) if dp.productoTalla and hasattr(dp.productoTalla, 'talla') else '',
+            'cantidad': dp.stock,
+            'precio_unitario': float(dp.precio),
+            'subtotal': float(dp.precio * dp.stock),
+        })
+
+    return JsonResponse({
+        'success': True,
+        'nc_generada': True,
+        'data': {
+            'nc_id': nc.id,
+            'nc_numero': nc.numero_documento,
+            'nc_fecha': nc.fecha_emision.strftime('%d/%m/%Y'),
+            'nc_monto_neto': float(nc.monto_neto),
+            'nc_iva': float(nc.monto_con_iva - nc.monto_neto),
+            'nc_monto_total': float(nc.monto_con_iva),
+            'nc_estado': nc.estado_dte,
+            'metodo_devolucion': cambio.metodo_devolucion,
+            'metodo_devolucion_display': cambio.get_metodo_devolucion_display(),
+            'fecha_nc': cambio.fecha_nc.strftime('%d/%m/%Y %H:%M') if cambio.fecha_nc else None,
+            'numero_operacion': cambio.numero_operacion,
+            'motivo': nc.motivo_nc,
+            'productos': productos_nc,
+            'documento_afectado': nc.documento_afectado.numero_documento if nc.documento_afectado else None,
+        }
+    })

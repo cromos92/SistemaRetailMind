@@ -162,12 +162,13 @@
 #tablaCompras thead th {
     color: white;
     font-weight: 600;
-    font-size: 0.75rem;
+    font-size: 0.73rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: 1rem 0.75rem;
+    padding: 0.7rem 0.6rem;
     border: none;
     white-space: nowrap;
+    background: inherit;
 }
 
 #tablaCompras tbody tr {
@@ -424,9 +425,7 @@
 
 /* --- Tablet landscape (≤1200px) --- */
 @media (max-width: 1199.98px) {
-    #tablaCompras .col-hide-xl {
-        display: none;
-    }
+    #tablaCompras .col-hide-xl { display: none; }
 }
 
 /* --- Tablet portrait (≤992px) --- */
@@ -436,250 +435,135 @@
         gap: 12px !important;
     }
     .card-header .col-auto,
-    .card-header .col.text-end {
-        width: 100%;
-    }
-    .card-header .col.text-end .d-flex {
-        justify-content: flex-start !important;
-    }
+    .card-header .col.text-end { width: 100%; }
+    .card-header .col.text-end .d-flex { justify-content: flex-start !important; }
 
-    #tablaCompras .col-hide-lg {
-        display: none;
-    }
-    #tablaCompras thead th {
-        padding: 0.75rem 0.5rem;
-        font-size: 0.7rem;
-    }
-    #tablaCompras tbody td {
-        padding: 0.65rem 0.5rem;
-        font-size: 0.8rem;
-    }
+    #tablaCompras .col-hide-lg { display: none; }
+    #tablaCompras thead th { padding: 0.75rem 0.5rem; font-size: 0.7rem; }
+    #tablaCompras tbody td { padding: 0.65rem 0.5rem; font-size: 0.8rem; }
 
-    .resumen-flotante {
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 10px 14px;
-    }
-    .resumen-flotante .stat-item {
-        flex: 1 1 auto;
-        min-width: 80px;
-    }
-    .resumen-flotante .stat-value {
-        font-size: 1rem;
-    }
+    .resumen-flotante { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+    .resumen-flotante .stat-item { flex: 1 1 auto; min-width: 80px; }
+    .resumen-flotante .stat-value { font-size: 1rem; }
 }
 
 /* --- Mobile landscape / small tablet (≤768px) --- */
 @media (max-width: 767.98px) {
-    .page-content {
-        padding: 0.5rem !important;
-    }
-    .card-body {
-        padding: 12px;
-    }
+    .page-content { padding: 0.5rem !important; }
+    .card-body { padding: 10px; }
 
-    .pagination-controls {
-        padding: 12px;
-    }
-    .pagination-controls .row > div {
-        margin-bottom: 0.5rem;
-    }
-    .pagination-controls .input-group {
-        flex-wrap: nowrap;
-    }
-    .pagination-controls .btn-group {
-        width: 100%;
-    }
-    .pagination-controls .btn-group .btn {
-        flex: 1;
-    }
+    .pagination-controls { padding: 10px; }
+    .pagination-controls .row > div { margin-bottom: 0.5rem; }
+    .pagination-controls .input-group { flex-wrap: nowrap; }
+    .pagination-controls .btn-group { width: 100%; }
+    .pagination-controls .btn-group .btn { flex: 1; }
 
-    .card-header .d-flex.justify-content-end {
-        flex-wrap: wrap;
-        gap: 6px !important;
-    }
-    .card-header .btn {
-        padding: 0.4rem 0.75rem;
-        font-size: 0.8rem;
-    }
-    .card-header .input-group {
-        width: 140px !important;
-    }
+    .card-header .d-flex.justify-content-end { flex-wrap: wrap; gap: 6px !important; }
+    .card-header .btn { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
+    .card-header .input-group { width: 140px !important; }
 
-    #tablaCompras .col-hide-md {
-        display: none;
-    }
+    #tablaCompras .col-hide-md { display: none; }
     #tablaCompras thead th {
-        font-size: 0.65rem;
-        padding: 0.6rem 0.4rem;
-        letter-spacing: 0;
+        font-size: 0.65rem; padding: 0.5rem 0.4rem; letter-spacing: 0;
     }
-    #tablaCompras thead th i {
-        display: none;
-    }
-    #tablaCompras tbody td {
-        font-size: 0.78rem;
-        padding: 0.5rem 0.4rem;
-    }
+    #tablaCompras thead th i { display: none; }
+    #tablaCompras tbody td { font-size: 0.78rem; padding: 0.5rem 0.4rem; }
 
-    .btn-group-sm .btn {
-        padding: 0.25rem 0.4rem;
-        font-size: 0.7rem;
-    }
+    .modal-footer .d-flex.justify-content-between { flex-direction: column; gap: 10px; }
+    .modal-footer .d-flex.justify-content-between small { text-align: center; }
+    .modal-footer .d-flex.justify-content-between .d-flex.gap-2 { width: 100%; justify-content: stretch; }
+    .modal-footer .d-flex.justify-content-between .d-flex.gap-2 .btn { flex: 1; }
 
-    .modal-footer .d-flex.justify-content-between {
-        flex-direction: column;
-        gap: 10px;
-    }
-    .modal-footer .d-flex.justify-content-between small {
-        text-align: center;
-    }
-    .modal-footer .d-flex.justify-content-between .d-flex.gap-2 {
-        width: 100%;
-        justify-content: stretch;
-    }
-    .modal-footer .d-flex.justify-content-between .d-flex.gap-2 .btn {
-        flex: 1;
-    }
-
-    .acciones-masivas-bar {
-        padding: 10px 12px;
-    }
-    .acciones-masivas-bar .btn {
-        padding: 6px 10px;
-        font-size: 0.75rem;
-    }
+    .acciones-masivas-bar { padding: 10px 12px; }
+    .acciones-masivas-bar .btn { padding: 6px 10px; font-size: 0.75rem; }
 }
 
 /* --- Mobile portrait (≤576px) --- */
 @media (max-width: 575.98px) {
-    .page-content {
-        padding: 0.25rem !important;
-    }
-    .card {
-        border-radius: 10px !important;
-    }
-    .card-body {
-        padding: 8px;
-    }
+    .page-content { padding: 0.25rem !important; }
+    .card { border-radius: 10px !important; }
+    .card-body { padding: 6px; }
 
-    .card-header .row.align-items-center.gy-3 > .col-auto:first-child .icon-box {
-        display: none;
-    }
-    .card-header h5 {
-        font-size: 1rem;
-    }
-    .card-header small {
-        font-size: 0.7rem;
-    }
-    .card-header .input-group {
-        width: 120px !important;
-    }
-    .card-header .btn {
-        padding: 0.3rem 0.5rem;
-        font-size: 0.75rem;
-    }
-    .card-header .btn .d-none.d-lg-inline {
-        display: none !important;
-    }
+    .card-header .row.align-items-center.gy-3 > .col-auto:first-child .icon-box { display: none; }
+    .card-header h5 { font-size: 1rem; }
+    .card-header small { font-size: 0.7rem; }
+    .card-header .input-group { width: 120px !important; }
+    .card-header .btn { padding: 0.3rem 0.5rem; font-size: 0.75rem; }
+    .card-header .btn .d-none.d-lg-inline { display: none !important; }
 
-    .pagination-controls {
-        padding: 8px;
-        border-radius: 8px;
-    }
-    #searchCompras {
-        font-size: 0.8rem;
-    }
-    .pagination-controls small.text-muted {
-        display: none;
-    }
-    .page-info {
-        min-width: 100px;
-        font-size: 0.75rem;
-        padding: 0.3rem 0.5rem;
-    }
+    .pagination-controls { padding: 8px; border-radius: 8px; }
+    #searchCompras { font-size: 0.8rem; }
+    .pagination-controls small.text-muted { display: none; }
+    .page-info { min-width: 80px; font-size: 0.72rem; padding: 0.25rem 0.4rem; }
 
-    #tablaCompras .col-hide-sm {
-        display: none;
-    }
+    #tablaCompras .col-hide-sm { display: none; }
+
+    /* Tabla compacta mobile */
+    #tablaCompras { font-size: 0.8rem; }
     #tablaCompras thead th {
-        font-size: 0.6rem;
-        padding: 0.5rem 0.3rem;
+        font-size: 0.6rem; padding: 6px 4px; white-space: nowrap;
     }
     #tablaCompras tbody td {
-        font-size: 0.75rem;
-        padding: 0.4rem 0.3rem;
+        font-size: 0.8rem; padding: 8px 4px; vertical-align: top;
     }
+    #tablaCompras tbody tr { border-bottom: 1px solid #e9ecef; }
+    #tablaCompras tbody tr:hover { transform: none; }
 
-    .btn-group-sm .btn {
-        padding: 0.2rem 0.35rem;
-        font-size: 0.65rem;
-    }
-    .td-actions .btn-group {
-        flex-wrap: wrap;
-        gap: 2px;
-    }
+    .td-proveedor { font-weight: 600; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+    .td-nombre { min-width: 120px; }
+    .td-recep { min-width: 70px; }
 
-    .table-responsive {
-        max-height: 400px !important;
-    }
+    .td-actions { width: 40px !important; padding: 4px 2px !important; text-align: center !important; }
+    .td-actions .dropdown .btn { padding: 4px 6px; font-size: 0.75rem; }
+
+    .table-responsive { max-height: 70vh !important; border: none !important; }
 
     .resumen-flotante {
-        flex-direction: column;
-        text-align: center;
-        gap: 4px;
-        padding: 8px 12px;
-        border-radius: 8px 8px 0 0;
+        flex-direction: column; text-align: center; gap: 4px;
+        padding: 8px 12px; border-radius: 8px 8px 0 0;
     }
-    .resumen-flotante .stat-value {
-        font-size: 0.9rem;
-    }
-    .resumen-flotante .stat-label {
-        font-size: 0.6rem;
-    }
+    .resumen-flotante .stat-value { font-size: 0.9rem; }
+    .resumen-flotante .stat-label { font-size: 0.6rem; }
 
-    .modal-dialog {
-        margin: 0.5rem;
-    }
-    .modal-dialog.modal-lg,
-    .modal-dialog.modal-xl {
-        max-width: calc(100% - 1rem);
-    }
-    .modal-body {
-        padding: 12px !important;
-    }
-    .modal-body .row.g-3 {
-        --bs-gutter-x: 0.5rem;
-        --bs-gutter-y: 0.5rem;
-    }
+    .modal-dialog { margin: 0.5rem; }
+    .modal-dialog.modal-lg, .modal-dialog.modal-xl { max-width: calc(100% - 1rem); }
+    .modal-body { padding: 12px !important; }
+    .modal-body .row.g-3 { --bs-gutter-x: 0.5rem; --bs-gutter-y: 0.5rem; }
 
-    .input-cantidad-wrapper .form-control {
-        width: 55px;
-        font-size: 0.85rem;
-        padding: 6px 2px;
-    }
-    .btn-cantidad-rapida {
-        width: 24px;
-        height: 24px;
-        font-size: 0.6rem;
-    }
+    .input-cantidad-wrapper .form-control { width: 55px; font-size: 0.85rem; padding: 6px 2px; }
+    .btn-cantidad-rapida { width: 24px; height: 24px; font-size: 0.6rem; }
 
-    #csvPreviewSection .table th,
-    #csvPreviewSection .table td {
-        font-size: 0.7rem;
-        padding: 0.3rem;
-    }
-    .csv-upload-zone .card-body {
-        padding: 1.5rem !important;
-    }
-    .csv-upload-zone .display-1 {
-        font-size: 3rem !important;
-    }
+    #csvPreviewSection .table th, #csvPreviewSection .table td { font-size: 0.7rem; padding: 0.3rem; }
+    .csv-upload-zone .card-body { padding: 1.5rem !important; }
+    .csv-upload-zone .display-1 { font-size: 3rem !important; }
+}
+
+/* --- Extra small (≤400px) --- */
+@media (max-width: 400px) {
+    .td-proveedor { max-width: 70px; font-size: 0.72rem; }
+    .td-nombre { font-size: 0.72rem; }
+    #tablaCompras tbody td { padding: 6px 3px; }
 }
 
 /* Animaciones suaves */
 .btn, .badge, .dropdown-item, tr {
     transition: all 0.2s ease;
+}
+
+/* Dropdown acciones mobile */
+.td-actions .dropdown-menu {
+    font-size: 0.85rem;
+    min-width: 190px;
+    border-radius: 10px;
+    border: 1px solid #e9ecef;
+}
+.td-actions .dropdown-item {
+    padding: 8px 14px;
+    font-size: 0.82rem;
+}
+.td-actions .dropdown-item i {
+    width: 18px;
+    text-align: center;
 }
 
 /* Stats cards en tabla */
@@ -1013,6 +897,165 @@
     border-color: #405189;
     box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
 }
+
+/* ==================== RESPONSIVE - MODAL PRODUCTO MANUAL ==================== */
+
+/* Tablet (≤992px) */
+@media (max-width: 991.98px) {
+    #modalProductoManual .modal-dialog {
+        max-width: calc(100% - 1rem);
+        margin: 0.5rem auto;
+    }
+    #modalProductoManual .modal-body {
+        padding: 16px !important;
+    }
+    #modalProductoManual .col-md-3 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+
+/* Mobile (≤767px) */
+@media (max-width: 767.98px) {
+    #modalProductoManual .modal-dialog {
+        max-width: 100%;
+        margin: 0;
+        min-height: 100vh;
+    }
+    #modalProductoManual .modal-content {
+        border-radius: 0 !important;
+        min-height: 100vh;
+    }
+    #modalProductoManual .modal-header {
+        padding: 12px 16px !important;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    #modalProductoManual .modal-header .rounded-circle {
+        width: 36px !important;
+        height: 36px !important;
+    }
+    #modalProductoManual .modal-header h5 {
+        font-size: 0.95rem;
+    }
+    #modalProductoManual .modal-body {
+        padding: 12px !important;
+        overflow-y: auto;
+    }
+    #modalProductoManual .modal-body .mb-4 {
+        margin-bottom: 0.75rem !important;
+    }
+    #modalProductoManual .modal-body .mb-3 {
+        margin-bottom: 0.5rem !important;
+    }
+    #modalProductoManual .d-flex.align-items-center.gap-2.mb-3 {
+        margin-bottom: 0.5rem !important;
+    }
+    #modalProductoManual .badge.rounded-pill {
+        font-size: 0.7rem;
+        padding: 4px 10px !important;
+    }
+    #modalProductoManual .d-flex.align-items-center.gap-2.mb-3 small {
+        display: none;
+    }
+    #modalProductoManual .form-label {
+        font-size: 0.75rem !important;
+        margin-bottom: 0.2rem;
+    }
+    #modalProductoManual .form-control,
+    #modalProductoManual .form-select {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.6rem;
+    }
+    #modalProductoManual .select2-container--default .select2-selection--single {
+        height: 34px;
+    }
+    #modalProductoManual .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 32px;
+        font-size: 0.85rem;
+    }
+    #modalProductoManual .input-group-text {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.8rem;
+    }
+    #modalProductoManual #tablaTallasManual {
+        font-size: 0.8rem;
+    }
+    #modalProductoManual .modal-footer {
+        padding: 10px 12px !important;
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+    }
+    #modalProductoManual .modal-footer .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 8px;
+    }
+    #modalProductoManual .modal-footer small {
+        text-align: center;
+        font-size: 0.7rem;
+    }
+    #modalProductoManual .modal-footer .d-flex.gap-2 {
+        width: 100%;
+    }
+    #modalProductoManual .modal-footer .d-flex.gap-2 .btn {
+        flex: 1;
+        font-size: 0.85rem;
+        padding: 0.5rem;
+    }
+}
+
+/* ==================== RESPONSIVE - STEPPER WORKFLOW ==================== */
+
+@media (max-width: 767.98px) {
+    .page-content > .container-fluid > .card > .px-4.py-3 {
+        padding: 8px 12px !important;
+    }
+    .page-content > .container-fluid > .card > .px-4.py-3 .d-flex {
+        font-size: 0.65rem !important;
+    }
+    .page-content > .container-fluid > .card > .px-4.py-3 .rounded-circle {
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 0.6rem !important;
+    }
+    .page-content > .container-fluid > .card > .px-4.py-3 div[style*="width:30px"] {
+        width: 16px !important;
+        margin: 0 3px !important;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .page-content > .container-fluid > .card > .px-4.py-3 {
+        display: none !important;
+    }
+}
+
+/* ==================== RESPONSIVE - HEADER BUTTONS ==================== */
+
+@media (max-width: 991.98px) {
+    .card-header .col.text-end .d-flex {
+        flex-wrap: wrap;
+        gap: 4px !important;
+    }
+    .card-header .col.text-end .d-flex .btn {
+        font-size: 0.72rem;
+        padding: 0.3rem 0.5rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .card-header .col.text-end .d-flex .btn span.d-none.d-lg-inline {
+        display: none !important;
+    }
+    .card-header .col-auto:has(.input-group) {
+        width: 100%;
+    }
+    .card-header .col-auto .input-group {
+        width: 100% !important;
+    }
+}
 </style>
 <div class="page-content">
     <div class="container-fluid">
@@ -1198,56 +1241,38 @@
                 </div>
 
                 <!-- Tabla de compras -->
-                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
                     <table class="table table-hover align-middle mb-0" id="tablaCompras">
-                        <thead>
+                        <thead class="sticky-top" style="z-index: 2;">
                             <tr>
-                                <th class="col-hide-sm" style="width: 60px;">
-                                    <span class="d-flex align-items-center">
-                                        <i class="bi bi-hash me-1"></i>ID
-                                    </span>
+                                <th class="col-hide-sm" style="width: 50px;">
+                                    <i class="bi bi-hash me-1"></i>ID
                                 </th>
                                 <th>
-                                    <span class="d-flex align-items-center">
-                                        <i class="bi bi-building me-1"></i>Proveedor
-                                    </span>
+                                    <i class="bi bi-building me-1 d-none d-md-inline"></i>Proveedor
                                 </th>
                                 <th>
-                                    <span class="d-flex align-items-center">
-                                        <i class="bi bi-tag me-1"></i>Nombre
-                                    </span>
+                                    <i class="bi bi-tag me-1 d-none d-md-inline"></i>Compra
                                 </th>
                                 <th class="col-hide-md">
-                                    <span class="d-flex align-items-center">
-                                        <i class="bi bi-calendar-range me-1"></i>Temporada
-                                    </span>
+                                    <i class="bi bi-calendar-range me-1"></i>Temporada
                                 </th>
                                 <th class="col-hide-sm">
-                                    <span class="d-flex align-items-center">
-                                        <i class="bi bi-calendar-check me-1"></i>Fecha
-                                    </span>
+                                    <i class="bi bi-calendar-check me-1"></i>Fecha
                                 </th>
                                 <th class="text-end col-hide-md">
-                                    <span class="d-flex align-items-center justify-content-end">
-                                        <i class="bi bi-currency-dollar me-1"></i>Costo
-                                    </span>
+                                    <i class="bi bi-currency-dollar me-1"></i>Costo
                                 </th>
                                 <th class="text-center col-hide-sm">
-                                    <span class="d-flex align-items-center justify-content-center">
-                                        <i class="bi bi-box-seam me-1"></i>Uds.
-                                    </span>
+                                    <i class="bi bi-box-seam me-1"></i>Uds.
                                 </th>
                                 <th class="text-center">
-                                    <span class="d-flex align-items-center justify-content-center">
-                                        <i class="bi bi-check2-circle me-1"></i>Recep.
-                                    </span>
+                                    <i class="bi bi-check2-circle me-1 d-none d-md-inline"></i>Avance
                                 </th>
                                 <th class="col-hide-lg">
-                                    <span class="d-flex align-items-center">
-                                        <i class="bi bi-person me-1"></i>Responsable
-                                    </span>
+                                    <i class="bi bi-person me-1"></i>Responsable
                                 </th>
-                                <th class="text-center" style="min-width: 100px;">Acciones</th>
+                                <th class="text-center" style="min-width: 40px;"><i class="bi bi-gear"></i></th>
                             </tr>
                         </thead>
                         <tbody id="tbodyCompras">
@@ -2047,7 +2072,7 @@
 
 <!-- Modal Agregar Producto Manual - Estilo NEXO -->
 <div class="modal fade" id="modalProductoManual" tabindex="-1" aria-labelledby="modalProductoManualLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
             <!-- Header con gradiente NEXO -->
             <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #405189 0%, #1a1a2e 100%);">
@@ -2075,20 +2100,21 @@
                             </span>
                             <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
                         </div>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold text-muted small">
-                                    <i class="bi bi-receipt me-1 text-primary"></i>DTE (Factura/Guía)
-                                </label>
-                                <select class="form-select select2" id="selectDteManual" name="dte_id" required>
-                                    <option value="">Seleccione un DTE</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6">
+                        <div class="row g-2 g-md-3">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label fw-semibold text-muted small">
                                     <i class="bi bi-building me-1 text-primary"></i>Proveedor
                                 </label>
-                                <input type="text" class="form-control bg-light" id="proveedorManual" name="proveedor" readonly placeholder="Se carga automáticamente">
+                                <input type="text" class="form-control bg-light" id="proveedorNombreManual" readonly placeholder="Se asigna de la compra">
+                                <input type="hidden" id="proveedorIdManual" name="proveedor_id">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold text-muted small">
+                                    <i class="bi bi-receipt me-1 text-primary"></i>DTE (Factura/Guía) *
+                                </label>
+                                <select class="form-select" id="selectDteManual" name="dte_id" required>
+                                    <option value="">Cargando DTEs...</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -2101,14 +2127,14 @@
                             </span>
                             <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
                         </div>
-                        <div class="row g-3">
-                            <div class="col-md-6">
+                        <div class="row g-2 g-md-3">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label fw-semibold text-muted small">
                                     <i class="bi bi-tag me-1 text-info"></i>Nombre del Producto *
                                 </label>
                                 <input type="text" class="form-control" name="nombre" required placeholder="Ej: Zapatilla Running Pro">
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label fw-semibold text-muted small">
                                     <i class="bi bi-card-text me-1 text-info"></i>Descripción
                                 </label>
@@ -2126,8 +2152,8 @@
                             <small class="text-muted ms-2"><i class="bi bi-lightbulb text-warning"></i> Selecciona o escribe un nuevo valor</small>
                             <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
                         </div>
-                        <div class="row g-3">
-                            <div class="col-md-3">
+                        <div class="row g-2 g-md-3">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label fw-semibold text-muted small">
                                     <i class="bi bi-award me-1" style="color: #6f42c1;"></i>Marca *
                                 </label>
@@ -2135,7 +2161,7 @@
                                     <option value="">Seleccionar...</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label fw-semibold text-muted small">
                                     <i class="bi bi-palette me-1" style="color: #d63384;"></i>Color *
                                 </label>
@@ -2143,7 +2169,7 @@
                                     <option value="">Seleccionar...</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label fw-semibold text-muted small">
                                     <i class="bi bi-gender-ambiguous me-1" style="color: #0d6efd;"></i>Género *
                                 </label>
@@ -2151,7 +2177,7 @@
                                     <option value="">Seleccionar...</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-6 col-md-3">
                                 <label class="form-label fw-semibold text-muted small">
                                     <i class="bi bi-bookmark me-1 text-secondary"></i>Extra
                                 </label>
@@ -2168,23 +2194,23 @@
                             </span>
                             <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
                         </div>
-                        <div class="row g-3">
-                            <div class="col-md-6">
+                        <div class="row g-2 g-md-3">
+                            <div class="col-6">
                                 <label class="form-label fw-semibold text-muted small">
                                     <i class="bi bi-cash me-1 text-danger"></i>Costo *
                                 </label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-light">$</span>
-                                    <input type="number" class="form-control" name="costo" required min="0" step="0.01" placeholder="0">
+                                    <input type="number" class="form-control" id="inputCostoManual" name="costo" required min="0" step="1" placeholder="0">
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-6">
                                 <label class="form-label fw-semibold text-muted small">
-                                    <i class="bi bi-tag me-1 text-success"></i>Precio Venta *
+                                    <i class="bi bi-tag me-1 text-success"></i>Precio * <small class="text-muted d-none d-md-inline">(2x costo)</small>
                                 </label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-light">$</span>
-                                    <input type="number" class="form-control" name="precioSugerido" required min="0" step="0.01" placeholder="0">
+                                    <input type="number" class="form-control" id="inputPrecioManual" name="precioSugerido" required min="0" step="1" placeholder="0">
                                 </div>
                             </div>
                         </div>
@@ -2286,9 +2312,10 @@ function hideGlobalLoader() {
 const PUEDE_ELIMINAR_COMPRA = {{ puede_eliminar_compra|yesno:"true,false" }};
 
 // IDs de atributos del sistema (Marca, Color, Género)
-const ID_ATRIBUTO_MARCA = parseInt("{{ id_atributo_marca|default:0 }}");
-const ID_ATRIBUTO_COLOR = parseInt("{{ id_atributo_color|default:0 }}");
-const ID_ATRIBUTO_GENERO = parseInt("{{ id_atributo_genero|default:0 }}");
+const ID_ATRIBUTO_MARCA = parseInt("{{ id_atributo_marca|default:0 }}") || 0;
+const ID_ATRIBUTO_COLOR = parseInt("{{ id_atributo_color|default:0 }}") || 0;
+const ID_ATRIBUTO_GENERO = parseInt("{{ id_atributo_genero|default:0 }}") || 0;
+console.log('IDs Atributos → Marca:', ID_ATRIBUTO_MARCA, 'Color:', ID_ATRIBUTO_COLOR, 'Género:', ID_ATRIBUTO_GENERO);
 
 // Encapsular toda la lógica en un módulo para evitar variables globales
 const GestionCompras = (function() {
@@ -2386,67 +2413,89 @@ const GestionCompras = (function() {
         $('#modalProductoManual').on('show.bs.modal', function(e) {
             const button = $(e.relatedTarget);
             const compraId = button.data('id');
-            
-            $('#compraIdManual').val(compraId);
-            $('#proveedorManual').val('');
-            $('#selectDteManual').val('').trigger('change');
+            const empresaId = button.data('empresa-id');
+            const proveedorNombre = button.data('proveedor-nombre') || '';
+
             $('#formProductoManual')[0].reset();
-            $('#compraIdManual').val(compraId); // Volver a setear después del reset
-            
-            cargarDtesDisponiblesManual();
-            cargarAtributosParaSelects(); // Cargar atributos del sistema
+            $('#compraIdManual').val(compraId);
+
+            // Mostrar proveedor de la compra (bloqueado) y cargar sus DTEs
+            $('#proveedorNombreManual').val(proveedorNombre);
+            $('#proveedorIdManual').val(empresaId || '');
+
+            if (empresaId) {
+                cargarDtesDisponiblesManual(empresaId);
+            } else {
+                $('#selectDteManual').empty().append('<option value="">Sin proveedor asignado</option>');
+            }
+
+            cargarAtributosParaSelects();
         });
         
-        // Función para cargar opciones de un atributo específico por ID
-        function cargarOpcionesAtributo(atributo_id, selectId) {
-            if (!atributo_id || atributo_id === 0) {
-                console.warn('ID de atributo no válido:', atributo_id);
-                return;
-            }
-            
-            $.get(`/app/opciones_atributo/?atributo_id=${atributo_id}`, function(data) {
-                const select = $(selectId);
-                select.empty().append('<option value="">Seleccionar...</option>');
-                
-                if (data && data.length > 0) {
-                    data.forEach(function(opcion) {
-                        select.append(`<option value="${opcion.id}">${opcion.valor}</option>`);
-                    });
-                }
-                console.log(`Opciones cargadas para ${selectId}:`, data ? data.length : 0);
-            }).fail(function(error) {
-                console.error(`Error al cargar opciones para ${selectId}:`, error);
-            });
-        }
-        
-        // Función para cargar atributos del sistema en los selects
         function cargarAtributosParaSelects() {
-            // Destruir select2 existentes para reinicializar
-            ['#selectMarcaManual', '#selectColorManual', '#selectGeneroManual', '#selectTallaManual'].forEach(function(sel) {
-                if ($(sel).hasClass('select2-hidden-accessible')) {
-                    $(sel).select2('destroy');
-                }
+            const selectors = ['#selectMarcaManual', '#selectColorManual', '#selectGeneroManual', '#selectTallaManual'];
+
+            // Destruir Select2 existentes y limpiar
+            selectors.forEach(function(sel) {
+                try {
+                    if ($(sel).hasClass('select2-hidden-accessible')) {
+                        $(sel).select2('destroy');
+                    }
+                } catch(e) { /* ignore */ }
             });
-            
-            // Limpiar selects
-            $('#selectMarcaManual, #selectColorManual, #selectGeneroManual, #selectTallaManual').empty();
-            
-            // Cargar opciones desde la misma lista de atributos que usa Gestión de Productos
-            cargarOpcionesAtributo(ID_ATRIBUTO_MARCA, '#selectMarcaManual');
-            cargarOpcionesAtributo(ID_ATRIBUTO_COLOR, '#selectColorManual');
-            cargarOpcionesAtributo(ID_ATRIBUTO_GENERO, '#selectGeneroManual');
-            
-            // Para tallas, mantener la carga desde la API existente o crear opción vacía
-            let tallasHtml = '<option value="">Seleccionar talla...</option>';
-            $('#selectTallaManual').html(tallasHtml);
-            
-            // Inicializar Select2 con tags (permite crear nuevos valores) después de un breve delay
-            setTimeout(function() {
-                inicializarSelect2ConTags();
-            }, 300);
+            $('#modalProductoManual .select2-container').remove();
+            selectors.forEach(function(sel) {
+                $(sel).empty().append('<option value="">Cargando...</option>');
+            });
+
+            // Una sola llamada que trae marca, color, genero y tallas
+            $.get('/app/api/atributos-compras/', function(res) {
+                if (!res.success) {
+                    console.error('Error cargando atributos:', res.error);
+                    return;
+                }
+                const attr = res.atributos;
+                console.log('Atributos cargados:', Object.keys(attr).map(k => k + ':' + (attr[k].opciones||[]).length));
+
+                // Poblar cada select
+                const mapping = [
+                    { key: 'marca', sel: '#selectMarcaManual' },
+                    { key: 'color', sel: '#selectColorManual' },
+                    { key: 'genero', sel: '#selectGeneroManual' },
+                    { key: 'talla', sel: '#selectTallaManual' }
+                ];
+
+                mapping.forEach(function(m) {
+                    const select = $(m.sel);
+                    select.empty().append('<option value="">Seleccionar...</option>');
+                    const opciones = attr[m.key] ? attr[m.key].opciones : [];
+                    opciones.forEach(function(val) {
+                        select.append(`<option value="${val}">${val}</option>`);
+                    });
+                });
+
+                // Inicializar Select2 con tags
+                initAtributoSelect2();
+            }).fail(function(err) {
+                console.error('Error API atributos-compras:', err.status, err.statusText);
+                selectors.forEach(function(sel) {
+                    $(sel).empty().append('<option value="">Error al cargar</option>');
+                });
+                initAtributoSelect2();
+            });
         }
-        
-        function inicializarSelect2ConTags() {
+
+        function initAtributoSelect2() {
+            const selectors = ['#selectMarcaManual', '#selectColorManual', '#selectGeneroManual', '#selectTallaManual'];
+            selectors.forEach(function(sel) {
+                try {
+                    if ($(sel).hasClass('select2-hidden-accessible')) {
+                        $(sel).select2('destroy');
+                    }
+                } catch(e) { /* ignore */ }
+            });
+            $('#modalProductoManual .select2-container').remove();
+
             const select2Config = {
                 width: '100%',
                 dropdownParent: $('#modalProductoManual'),
@@ -2454,17 +2503,12 @@ const GestionCompras = (function() {
                 allowClear: true,
                 tags: true,
                 language: {
-                    noResults: function() { return "Sin resultados - Escribe para crear uno nuevo"; },
-                    inputTooShort: function() { return "Escribe para buscar..."; }
+                    noResults: function() { return "Sin resultados - Escribe para crear"; }
                 },
                 createTag: function(params) {
                     const term = $.trim(params.term);
                     if (term === '') return null;
-                    return {
-                        id: term,
-                        text: term,
-                        newTag: true
-                    };
+                    return { id: term, text: term, newTag: true };
                 },
                 templateResult: function(data) {
                     if (data.newTag) {
@@ -2473,41 +2517,29 @@ const GestionCompras = (function() {
                     return data.text;
                 }
             };
-            
+
             $('#selectMarcaManual').select2(select2Config);
             $('#selectColorManual').select2(select2Config);
             $('#selectGeneroManual').select2(select2Config);
             $('#selectTallaManual').select2(select2Config);
         }
-        
-        function inicializarSelect2Fallback() {
-            const fallbackConfig = {
-                width: '100%',
-                dropdownParent: $('#modalProductoManual'),
-                placeholder: 'Escribir valor...',
-                tags: true,
-                allowClear: true
-            };
-            $('#selectMarcaManual, #selectColorManual, #selectGeneroManual, #selectTallaManual').select2(fallbackConfig);
-        }
 
-        // Al seleccionar un DTE, mostrar el proveedor asociado
-        $('#selectDteManual').on('change', function() {
-            const dteId = $(this).val();
-            if (!dteId) {
-                $('#proveedorManual').val('');
-                return;
+        // (Proveedor se selecciona primero, DTEs se cargan en consecuencia)
+
+        // Auto-calcular precio venta = 2x costo
+        $('#inputCostoManual').on('input', function() {
+            const costo = parseFloat($(this).val()) || 0;
+            if (costo > 0) {
+                $('#inputPrecioManual').val(Math.round(costo * 2));
             }
-            // Buscar proveedor del DTE seleccionado
-            const option = $(this).find('option:selected');
-            const proveedor = option.data('proveedor') || '';
-            $('#proveedorManual').val(proveedor);
         });
     });
     // ... (el resto de la lógica de eventos y funciones, reemplazando alert() por showError/showSuccess/showInfo, usando showLoading/hideLoading, y encapsulando variables y funciones dentro de GestionCompras) ...
-    // Inicializar select2 y tooltips en cada modal abierto
+    // Inicializar select2 y tooltips en cada modal abierto (excepto modalProductoManual que maneja sus propios selects)
     $(document).on('shown.bs.modal', '.modal', function() {
-        initSelect2();
+        if (this.id !== 'modalProductoManual') {
+            initSelect2();
+        }
         initTooltips();
     });
     // Exportar funciones si necesitas usarlas fuera
@@ -4519,13 +4551,18 @@ function resetCSVUpload() {
                                 estadoBadge = '<span class="badge bg-warning text-dark ms-1">Pendiente</span>';
                             }
                             const diasBadge = `<span class="badge ${compra.dias_temporada > 30 ? 'bg-success' : (compra.dias_temporada > 0 ? 'bg-warning text-dark' : 'bg-danger')}">${compra.dias_temporada > 0 ? compra.dias_temporada + ' días' : 'Finalizada'}</span>`;
+                            const progreso = compra.unidades > 0 ? Math.round((compra.recepcionado / compra.unidades) * 100) : 0;
+                            const progresoColor = progreso >= 100 ? '#0ab39c' : (progreso > 0 ? '#f7b84b' : '#e9ecef');
                             const fila = `
 <tr>
     <td class="text-nowrap col-hide-sm">${compra.id}</td>
-    <td>${resaltarBusquedaCompras(compra.proveedor ?? '-', search)}</td>
-    <td>
-        ${resaltarBusquedaCompras(compra.nombre, search)}
-        <span class="d-md-none d-block mt-1">${diasBadge} ${estadoBadge}</span>
+    <td class="td-proveedor">${resaltarBusquedaCompras(compra.proveedor ?? '-', search)}</td>
+    <td class="td-nombre">
+        <div class="d-flex flex-column">
+            <span>${resaltarBusquedaCompras(compra.nombre, search)}</span>
+            <span class="d-md-none text-muted" style="font-size:0.7rem;">${compra.fecha} · $${compra.costo_total.toLocaleString()}</span>
+            <span class="d-md-none mt-1">${diasBadge} ${estadoBadge}</span>
+        </div>
     </td>
     <td class="col-hide-md">
         ${resaltarBusquedaCompras(compra.temporada, search)}<br>${diasBadge}
@@ -4533,17 +4570,27 @@ function resetCSVUpload() {
     <td class="text-nowrap col-hide-sm">${compra.fecha}</td>
     <td class="text-nowrap col-hide-md text-end">$${compra.costo_total.toLocaleString()}</td>
     <td class="text-nowrap text-center col-hide-sm">${compra.unidades}</td>
-    <td class="text-nowrap text-center">
-        ${compra.recepcionado}
-        <span class="d-none d-md-inline">${estadoBadge}</span>
+    <td class="text-nowrap text-center td-recep">
+        <div class="d-none d-md-block">
+            ${compra.recepcionado}/${compra.unidades}
+            ${estadoBadge}
+        </div>
+        <div class="d-md-none">
+            <div class="d-flex align-items-center gap-1">
+                <div style="flex:1;height:4px;background:#e9ecef;border-radius:2px;overflow:hidden;">
+                    <div style="width:${Math.min(progreso,100)}%;height:100%;background:${progresoColor};border-radius:2px;"></div>
+                </div>
+                <span style="font-size:0.65rem;min-width:28px;">${compra.recepcionado}/${compra.unidades}</span>
+            </div>
+        </div>
     </td>
     <td class="col-hide-lg">${resaltarBusquedaCompras(compra.responsable, search)}</td>
     <td class="td-actions">
-        <div class="btn-group btn-group-sm flex-wrap">
+        <div class="btn-group btn-group-sm d-none d-md-flex">
             <a class="btn btn-soft-primary" href="#" data-bs-toggle="modal" data-bs-target="#modalImportarCSV" data-id="${compra.id}" title="Cargar CSV">
                 <i class="bi bi-upload"></i>
             </a>
-            <a class="btn btn-soft-info agregar-producto-manual" href="#" data-id="${compra.id}" data-bs-toggle="modal" data-bs-target="#modalProductoManual" title="Agregar Producto">
+            <a class="btn btn-soft-info agregar-producto-manual" href="#" data-id="${compra.id}" data-empresa-id="${compra.empresa_id}" data-proveedor-nombre="${compra.proveedor || ''}" data-bs-toggle="modal" data-bs-target="#modalProductoManual" title="Agregar Producto">
                 <i class="bi bi-plus"></i>
             </a>
             <a class="btn btn-soft-success gestionar-compra" href="#" data-id="${compra.id}" title="Gestionar/Recepcionar">
@@ -4552,12 +4599,25 @@ function resetCSVUpload() {
             ${compra.recepcionado > 0 ? `<a class="btn btn-soft-warning editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}" title="Editar Recepciones">
                 <i class="bi bi-pencil-square"></i>
             </a>` : ''}
-            ${compra.recepcionado > 0 ? `<a class="btn btn-soft-teal" href="/app/verGestionProducto/" title="Crear Productos Recepcionados" style="color:#0ab39c;border-color:#0ab39c;">
+            ${compra.recepcionado > 0 ? `<a class="btn btn-soft-teal" href="/app/verGestionProducto/" title="Crear Productos" style="color:#0ab39c;border-color:#0ab39c;">
                 <i class="bi bi-archive"></i>
             </a>` : ''}
             ${PUEDE_ELIMINAR_COMPRA ? `<a class="btn btn-soft-danger eliminar-compra" href="#" data-id="${compra.id}" title="Eliminar">
                 <i class="bi bi-trash"></i>
             </a>` : ''}
+        </div>
+        <div class="dropdown d-md-none">
+            <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalImportarCSV" data-id="${compra.id}"><i class="bi bi-upload me-2 text-primary"></i>Cargar CSV</a></li>
+                <li><a class="dropdown-item agregar-producto-manual" href="#" data-id="${compra.id}" data-empresa-id="${compra.empresa_id}" data-proveedor-nombre="${compra.proveedor || ''}" data-bs-toggle="modal" data-bs-target="#modalProductoManual"><i class="bi bi-plus me-2 text-info"></i>Agregar Producto</a></li>
+                <li><a class="dropdown-item gestionar-compra" href="#" data-id="${compra.id}"><i class="bi bi-box-seam me-2 text-success"></i>Recepcionar</a></li>
+                ${compra.recepcionado > 0 ? `<li><a class="dropdown-item editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}"><i class="bi bi-pencil-square me-2 text-warning"></i>Editar Recepciones</a></li>` : ''}
+                ${compra.recepcionado > 0 ? `<li><a class="dropdown-item" href="/app/verGestionProducto/"><i class="bi bi-archive me-2" style="color:#0ab39c;"></i>Crear Productos</a></li>` : ''}
+                ${PUEDE_ELIMINAR_COMPRA ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger eliminar-compra" href="#" data-id="${compra.id}"><i class="bi bi-trash me-2"></i>Eliminar</a></li>` : ''}
+            </ul>
         </div>
     </td>
 </tr>`;
@@ -5479,20 +5539,48 @@ function resetCSVUpload() {
         }, 1500);
     });
 
-    function cargarDtesDisponiblesManual() {
+    function cargarDtesDisponiblesManual(proveedorId) {
+        const select = $('#selectDteManual');
+
+        // Destruir select2 previo si existe
+        try {
+            if (select.hasClass('select2-hidden-accessible')) {
+                select.select2('destroy');
+            }
+        } catch(e) { /* ignore */ }
+        select.empty().append('<option value="">Cargando DTEs...</option>');
+
+        if (!proveedorId) {
+            select.empty().append('<option value="">Sin proveedor</option>');
+            return;
+        }
+
         $.get('/app/facturas_pendientes/', {
-            meses: 2  // Mostrar facturas de los últimos 2 meses
+            proveedor_id: proveedorId,
+            meses: 12
         }, function(data) {
-            const select = $('#selectDteManual');
-            select.empty().append('<option value="">Seleccione un DTE</option>');
-            data.forEach(function(dte) {
-                // dte ahora tiene: id, text, proveedor_nombre
-                const texto = dte.proveedor_nombre ? 
-                    `${dte.text} - ${dte.proveedor_nombre}` : 
-                    dte.text;
-                select.append(`<option value="${dte.id}" data-proveedor="${dte.proveedor_nombre || ''}">${texto}</option>`);
+            console.log('DTEs recibidos para proveedor', proveedorId, ':', data);
+            select.empty();
+            if (!data || data.length === 0) {
+                select.append('<option value="">Sin DTEs para este proveedor</option>');
+            } else {
+                select.append('<option value="">Seleccione un DTE (' + data.length + ')</option>');
+                data.forEach(function(dte) {
+                    const fecha = dte.fecha ? ` (${dte.fecha})` : '';
+                    select.append(`<option value="${dte.id}">${dte.text}${fecha}</option>`);
+                });
+            }
+            // Inicializar Select2 para DTE
+            try { select.select2('destroy'); } catch(e) {}
+            select.select2({
+                width: '100%',
+                dropdownParent: $('#modalProductoManual'),
+                placeholder: 'Seleccione un DTE',
+                allowClear: true
             });
-            select.trigger('change.select2');
+        }).fail(function(xhr) {
+            console.error('Error cargando DTEs:', xhr.status, xhr.responseText);
+            select.empty().append('<option value="">Error al cargar DTEs</option>');
         });
     }
 
