@@ -22,6 +22,7 @@ from .views_modulo_ventas import (
     ticket_pago_pos,
     buscar_ticket_pos,
     anular_ticket_pendiente,
+    crear_ticket_pendiente_pos,
     # Funciones Gestión Documentos
     gestion_ventas_documentos,
     listar_documentos_ventas,
@@ -623,6 +624,7 @@ urlpatterns = [
     path('api/tickets/buscar/', buscar_ticket_pos, name='buscar_ticket_pos'),
     path('api/tickets/<str:correlativo>/pagos/', registrar_pagos_ticket, name='registrar_pagos_ticket'),
     path('api/tickets/anular/', anular_ticket_pendiente, name='anular_ticket_pendiente'),
+    path('api/tickets/crear-pendiente/', crear_ticket_pendiente_pos, name='crear_ticket_pendiente_pos'),
     path('ticket-pago-pos/', ticket_pago_pos, name='ticket_pago_pos'),
 
     # ========== QZ TRAY — IMPRESIÓN TÉRMICA ==========

@@ -229,60 +229,10 @@
                 <!-- Contenido de cada paso -->
                 <div class="step-content">
                     
-                    <!-- PASO 1: Selección de Ticket -->
-                    <div id="step1" class="step-pane active">
-                        <div class="row justify-content-center">
-                            <div class="col-md-8 col-lg-7">
-                                <div class="card shadow-sm">
-                                    <div class="card-header bg-primary">
-                                        <h6 class="mb-0 fw-bold text-white">
-                                            <i class="ri-ticket-2-line me-1"></i> Seleccionar Ticket
-                                        </h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="row g-2 mb-3">
-                                            <div class="col-12">
-                                                <div class="input-group">
-                                                    <span class="input-group-text"><i class="ri-search-line"></i></span>
-                                                    <input type="text" 
-                                                           id="inputTicket" 
-                                                           class="form-control"
-                                                           placeholder="Número de Ticket"
-                                                           autofocus>
-                                                    <button class="btn btn-primary" onclick="buscarTicketPorNumero()">
-                                                        Buscar
-                                                    </button>
-                                                </div>
-                                                <small class="text-muted">Presione Enter para buscar</small>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-success w-100" onclick="crearNuevoTicket()">
-                                                    <i class="ri-add-line"></i> Nuevo Ticket
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-warning w-100" onclick="abrirModalCotizaciones()">
-                                                    <i class="ri-file-list-3-line"></i> Cotización
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <!-- Lista de tickets pendientes -->
-                                        <div>
-                                            <h6 class="mb-2 fw-bold" style="font-size:0.8rem; text-transform:uppercase; color:var(--nexo-gray-500); letter-spacing:0.5px;">
-                                                <i class="ri-time-line text-warning"></i> Pendientes de hoy
-                                            </h6>
-                                            <div class="list-group" id="listaTicketsPendientes" style="max-height: 45vh; overflow-y:auto;">
-                                                <div class="text-center py-3">
-                                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                                                    <small class="text-muted ms-2">Cargando...</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <!-- PASO 1: Elementos internos (ocultos, requeridos por JS) -->
+                    <div id="step1" class="step-pane active" style="display:none;">
+                        <input type="hidden" id="inputTicket" value="">
+                        <div id="listaTicketsPendientes" style="display:none;"></div>
                     </div>
 
                     <!-- PASO 2: Datos del Cliente y Tipo de Documento -->
@@ -3410,6 +3360,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dashboard: '{% url "dashboard_stats" %}',
         buscarTicket: '{% url "buscar_ticket_pos" %}',
         crearTicket: '{% url "crear_ticket" %}',
+        crearTicketPendiente: '{% url "crear_ticket_pendiente_pos" %}',
         registrarPagos: (correlativo) => `{% url 'registrar_pagos_ticket' correlativo=0 %}`.replace('/0/', `/${correlativo}/`),
         validarRut: '{% url "validar_rut_cliente" %}',
         buscarCliente: '{% url "buscar_cliente_rut" %}',
@@ -3488,14 +3439,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const qs = document.getElementById('dashboardQuickStart');
         const val = (qs ? qs.value.trim() : '');
         if (!val) {
-            // Nueva venta directa
             if (qs) qs.value = '';
             iniciarNuevaVenta();
         } else {
-            // Buscar ticket por número → ir al wizard prellenado
             mostrarVista('wizard');
             reiniciarWizard();
-            irAPaso(1);
             document.getElementById('inputTicket').value = val;
             if (qs) qs.value = '';
             buscarTicketPorNumero();
@@ -4088,14 +4036,34 @@ document.addEventListener('DOMContentLoaded', function() {
     function iniciarNuevaVenta() {
         mostrarVista('wizard');
         reiniciarWizard();
-        irAPaso(1);
+
+        fetch(apiUrls.crearTicketPendiente, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                cargarTicket(data.ticket);
+                mostrarNotificacion(`Ticket #${data.ticket.ticket_id} creado`, 'success');
+                irAPaso(2);
+            } else {
+                mostrarNotificacion(data.error || 'Error al crear ticket', 'error');
+                volverAlDashboard();
+            }
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            mostrarNotificacion('Error de conexión al crear ticket', 'error');
+            volverAlDashboard();
+        });
     }
 
     function buscarTicket() {
-        mostrarVista('wizard');
-        reiniciarWizard();
-        irAPaso(1);
-        document.getElementById('inputTicket').focus();
+        iniciarNuevaVenta();
     }
 
     function mostrarVista(vista) {
@@ -4244,7 +4212,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function pasoAnterior() {
-        if (pasoActual > 1) {
+        if (pasoActual > 2) {
             irAPaso(pasoActual - 1);
         }
     }
@@ -4296,10 +4264,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnSiguiente = document.getElementById('btnSiguiente');
         const txtContexto  = document.getElementById('txtContextoBotones');
 
-        btnAnterior.disabled = pasoActual === 1;
+        btnAnterior.disabled = pasoActual <= 2;
 
         const cfg = {
-            1: { sig: 'Datos del cliente <i class="ri-arrow-right-line ms-1"></i>', ctx: 'Selecciona o crea el ticket de venta', cls: 'btn-primary' },
+            1: { sig: 'Datos del cliente <i class="ri-arrow-right-line ms-1"></i>', ctx: 'Creando ticket…', cls: 'btn-primary' },
             2: { sig: 'Ir a productos y pagos <i class="ri-arrow-right-line ms-1"></i>', ctx: 'Completa los datos del cliente / empresa', cls: 'btn-success' },
             3: { sig: 'Revisar y confirmar <i class="ri-arrow-right-line ms-1"></i>', ctx: 'Agrega productos y registra los pagos', cls: 'btn-primary' },
             4: { sig: '<i class="ri-check-line me-1"></i> Finalizar Venta', ctx: 'Revisa el resumen y confirma la venta', cls: 'btn-success' },
@@ -9132,13 +9100,9 @@ body {
     }
 
     function editarTicket(correlativo) {
-        // Cambiar a vista wizard
         mostrarVista('wizard');
-        
-        // Cargar el ticket en el wizard para editarlo
+        reiniciarWizard();
         document.getElementById('inputTicket').value = correlativo;
-        
-        // Buscar y cargar el ticket
         buscarTicketPorNumero();
     }
 

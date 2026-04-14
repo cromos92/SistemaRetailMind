@@ -1815,17 +1815,28 @@ def obtener_productos_regularizar(request):
         
         # Filtros
         estado_filtro = request.GET.get('estado', '')
+        tab_filtro = request.GET.get('tab', '')
         proveedor_filtro = request.GET.get('proveedor', '')
         busqueda = request.GET.get('buscar', '')
         
-        # ✅ MOSTRAR PRODUCTOS CON PROBLEMAS Y REGULARIZADOS:
-        # 1. Productos que ESTA SUCURSAL RECEPCIONÓ con problemas → Para solicitar solución
-        # 2. Productos que ESTA SUCURSAL ENVIÓ y fueron recepcionados con problemas → Para DAR solución
-        # 3. Productos REGULARIZADOS (solo si se filtran explícitamente)
+        # Determinar estados a mostrar según tab o filtro de estado
+        incluir_rechazados_dte = False
         
-        # Determinar estados a mostrar según el filtro
-        if estado_filtro == 'TODOS':
-            # Mostrar todos: pendientes + regularizados + sobrantes
+        if tab_filtro == 'pendiente':
+            estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
+        elif tab_filtro == 'en_regularizacion':
+            estados_a_mostrar = ['EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION']
+        elif tab_filtro == 'sobrante':
+            estados_a_mostrar = ['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
+        elif tab_filtro == 'regularizado':
+            estados_a_mostrar = ['REGULARIZADO']
+        elif tab_filtro == 'rechazado':
+            estados_a_mostrar = []
+            incluir_rechazados_dte = True
+        elif tab_filtro == 'todos':
+            estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'REGULARIZADO', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
+            incluir_rechazados_dte = True
+        elif estado_filtro == 'TODOS':
             estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'REGULARIZADO', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
         elif estado_filtro == 'REGULARIZADO':
             estados_a_mostrar = ['REGULARIZADO']
@@ -1834,21 +1845,31 @@ def obtener_productos_regularizar(request):
         elif estado_filtro:
             estados_a_mostrar = [estado_filtro]
         else:
-            # Sin filtro: mostrar solo pendientes (NO regularizados) + sobrantes
             estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
         
-        queryset = Productos_Recepcionados.objects.filter(
-            Q(dte__isnull=False) &  # Solo traspasos/DTEs
-            (
-                # Caso 1A: Productos que YO RECIBÍ (están en mi inventario)
-                Q(producto_talla__producto__sucursal_id=sucursal_id) |
-                # Caso 1B: Productos que YO RECIBÍ (buscar por sucursal destino del DTE)
-                Q(dte__dte_movimientos__sucursal_destino_id=sucursal_id) |
-                # Caso 2: Productos que YO ENVIÉ (soy el emisor del DTE)
-                Q(dte__sucursal_id=sucursal_id)
-            ) &
-            Q(estado__in=estados_a_mostrar)
-        ).select_related(
+        sucursal_filter = (
+            Q(producto_talla__producto__sucursal_id=sucursal_id) |
+            Q(dte__dte_movimientos__sucursal_destino_id=sucursal_id) |
+            Q(dte__sucursal_id=sucursal_id)
+        )
+        
+        if incluir_rechazados_dte and estados_a_mostrar:
+            queryset = Productos_Recepcionados.objects.filter(
+                Q(dte__isnull=False) & sucursal_filter &
+                (Q(estado__in=estados_a_mostrar) | Q(dte__estado_dte='RECHAZADO'))
+            )
+        elif incluir_rechazados_dte:
+            queryset = Productos_Recepcionados.objects.filter(
+                Q(dte__isnull=False) & sucursal_filter &
+                Q(dte__estado_dte='RECHAZADO')
+            )
+        else:
+            queryset = Productos_Recepcionados.objects.filter(
+                Q(dte__isnull=False) & sucursal_filter &
+                Q(estado__in=estados_a_mostrar)
+            )
+        
+        queryset = queryset.select_related(
             'dte',
             'dte__emisor',
             'dte__receptor',
@@ -1869,13 +1890,19 @@ def obtener_productos_regularizar(request):
                 Q(dte__numero_documento__icontains=busqueda)
             )
         
-        # Calcular estadísticas
+        # Calcular estadísticas (base amplia para conteos de tabs)
+        base_stats_qs = Productos_Recepcionados.objects.filter(
+            Q(dte__isnull=False) & sucursal_filter
+        ).distinct()
+        
         total_queryset = queryset.count()
-        pendientes = queryset.exclude(estado__in=['REGULARIZADO']).count()
-        faltantes = queryset.filter(estado='FALTANTE').count()
-        sobrantes = queryset.filter(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']).count()
-        danados = queryset.filter(estado='RECEPCIONADO_DANADO').count()
-        regularizados = queryset.filter(estado='REGULARIZADO').count()
+        pendientes = base_stats_qs.filter(estado__in=['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']).count()
+        faltantes = base_stats_qs.filter(estado='FALTANTE').count()
+        sobrantes = base_stats_qs.filter(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']).count()
+        danados = base_stats_qs.filter(estado='RECEPCIONADO_DANADO').count()
+        en_regularizacion = base_stats_qs.filter(estado__in=['EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION']).count()
+        regularizados = base_stats_qs.filter(estado='REGULARIZADO').count()
+        rechazados_dte = base_stats_qs.filter(dte__estado_dte='RECHAZADO').count()
         dtes_con_problemas = queryset.values('dte').distinct().count()
         
         productos = []
@@ -1963,6 +1990,8 @@ def obtener_productos_regularizar(request):
                 'id': recepcion.id,
                 'dte_numero': recepcion.dte.numero_documento if recepcion.dte else '-',
                 'dte_fecha': recepcion.dte.fecha_emision if recepcion.dte else None,
+                'dte_estado_dte': recepcion.dte.estado_dte if recepcion.dte else '-',
+                'dte_motivo_rechazo': recepcion.dte.motivo_rechazo if recepcion.dte else '',
                 'tipo_documento': recepcion.dte.tipo_documento if recepcion.dte else '-',
                 'tipo_documento_display': recepcion.dte.get_tipo_documento_display() if recepcion.dte else '-',
                 'sku': str(recepcion.producto_talla.sku) if recepcion.producto_talla else '-',
@@ -2006,7 +2035,9 @@ def obtener_productos_regularizar(request):
                 'faltantes': faltantes,
                 'danados': danados,
                 'sobrantes': sobrantes,
+                'en_regularizacion': en_regularizacion,
                 'regularizados': regularizados,
+                'rechazados': rechazados_dte,
                 'dtes_con_problemas': dtes_con_problemas
             }
         }, json_dumps_params={'default': str})
@@ -2670,10 +2701,10 @@ def regularizar_producto_api(request):
         
         data = json.loads(request.body or '{}')
         producto_id = data.get('producto_id')
-        tipo_regularizacion = data.get('tipo_regularizacion')  # 'AJUSTAR', 'CAMBIAR_PRODUCTO', 'SOLICITAR_NC'
+        tipo_regularizacion = data.get('tipo_regularizacion')  # 'AJUSTAR', 'CAMBIAR_PRODUCTO', 'SOLICITAR_NC', 'MERCADERIA_ENCONTRADA', 'REGULARIZAR_CON_NC'
         observaciones = data.get('observaciones', '')
-        es_solicitud = data.get('es_solicitud', False)  # NUEVO: indica si es solicitud
-        tipo_solucion = data.get('tipo_solucion', '')  # Para identificar tipo de solicitud
+        es_solicitud = data.get('es_solicitud', False)
+        tipo_solucion = data.get('tipo_solucion', '')
         
         if not producto_id or not tipo_regularizacion:
             return JsonResponse({
@@ -2683,7 +2714,6 @@ def regularizar_producto_api(request):
         
         recepcion = get_object_or_404(Productos_Recepcionados, id=producto_id)
 
-        # Validar que no esté ya regularizado
         if recepcion.estado == 'REGULARIZADO':
             return JsonResponse({
                 'success': False,
@@ -2694,6 +2724,195 @@ def regularizar_producto_api(request):
         hoy = timezone.now()
 
         with transaction.atomic():
+
+            # MERCADERÍA ENCONTRADA: Se encontró la mercadería, agregar stock a bodega destino
+            if tipo_regularizacion == 'MERCADERIA_ENCONTRADA':
+                cantidad_encontrada = int(data.get('cantidad_encontrada', 0))
+                if cantidad_encontrada <= 0:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'La cantidad encontrada debe ser mayor a 0'
+                    }, status=400)
+                
+                sucursal_destino_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+                sucursal_destino = Sucursal.objects.get(id=sucursal_destino_id)
+                
+                if recepcion.producto_talla:
+                    recepcion.producto_talla.stock += cantidad_encontrada
+                    recepcion.producto_talla.save()
+                
+                Movimientos_Producto.objects.create(
+                    dte=recepcion.dte,
+                    ProductoTalla=recepcion.producto_talla,
+                    sucursal_origen=recepcion.dte.sucursal if recepcion.dte else None,
+                    sucursal_destino=sucursal_destino,
+                    cantidad=cantidad_encontrada,
+                    concepto='REGULARIZACION_TRASPASO',
+                    tipo_movimiento='INGRESO',
+                    estado='COMPLETADO',
+                    responsable_ingreso=usuario,
+                    fecha=hoy.date(),
+                    hora=hoy.time(),
+                    observaciones=f"Mercadería encontrada: +{cantidad_encontrada} unidades ingresadas a {sucursal_destino.alias}. {observaciones}"
+                )
+                
+                recepcion.stockArribado = (recepcion.stockArribado or 0) + cantidad_encontrada
+                recepcion.cantidad_faltante = max(0, (recepcion.cantidad_faltante or 0) - cantidad_encontrada)
+                recepcion.estado = 'REGULARIZADO' if recepcion.cantidad_faltante == 0 else recepcion.estado
+                recepcion.fecha_regularizacion = hoy
+                recepcion.regularizado_por = usuario
+                recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] Mercadería encontrada: +{cantidad_encontrada} unidades ingresadas a bodega {sucursal_destino.alias}. {observaciones}"
+                recepcion.save()
+                
+                if recepcion.dte:
+                    pendientes_dte = Productos_Recepcionados.objects.filter(
+                        dte=recepcion.dte
+                    ).exclude(estado__in=['REGULARIZADO', 'RECEPCIONADO_OK']).count()
+                    if pendientes_dte == 0:
+                        recepcion.dte.estado_dte = 'RECEPCIONADO_COMPLETO'
+                        recepcion.dte.save()
+                
+                from .models import NotificacionDTE
+                NotificacionDTE.objects.create(
+                    dte=recepcion.dte,
+                    tipo='REGULARIZACION_REQUERIDA',
+                    titulo=f'Mercadería encontrada - DTE #{recepcion.dte.numero_documento if recepcion.dte else "N/A"}',
+                    mensaje=f'Se encontraron {cantidad_encontrada} unidades de {recepcion.producto_talla.producto.articulo if recepcion.producto_talla and recepcion.producto_talla.producto else "producto"} y se ingresaron al inventario de {sucursal_destino.alias}.',
+                    sucursal=sucursal_destino
+                )
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Mercadería encontrada: +{cantidad_encontrada} unidades ingresadas a {sucursal_destino.alias}',
+                    'tipo': 'MERCADERIA_ENCONTRADA',
+                    'cantidad_ingresada': cantidad_encontrada,
+                    'bodega_destino': sucursal_destino.alias,
+                    'alerta': f'Se ingresaron {cantidad_encontrada} unidades al inventario de {sucursal_destino.alias}. Faltante restante: {recepcion.cantidad_faltante}'
+                })
+            
+            # REGULARIZAR CON NC (con decisión): Devolver stock a bodega principal y opcionalmente crear NC
+            if tipo_regularizacion == 'REGULARIZAR_CON_NC':
+                from decimal import Decimal as DecimalNC
+                hacer_nc = data.get('hacer_nc', True)
+                motivo = data.get('motivo_nc', observaciones)
+                cantidad_nc = int(data.get('cantidad_nc', 0))
+                
+                if cantidad_nc <= 0:
+                    cantidad_nc = (recepcion.cantidad_faltante or 0) + (recepcion.cantidad_danada or 0)
+                
+                if cantidad_nc <= 0:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'No hay cantidad para regularizar'
+                    }, status=400)
+                
+                sucursal_origen = recepcion.dte.sucursal if recepcion.dte else None
+                
+                if sucursal_origen and recepcion.producto_talla:
+                    producto_origen = Producto_Talla.objects.filter(
+                        sku=recepcion.producto_talla.sku,
+                        producto__sucursal=sucursal_origen
+                    ).first()
+                    if producto_origen:
+                        producto_origen.stock += cantidad_nc
+                        producto_origen.save()
+                    
+                    Movimientos_Producto.objects.create(
+                        dte=recepcion.dte,
+                        ProductoTalla=producto_origen or recepcion.producto_talla,
+                        sucursal_origen=Sucursal.objects.get(id=request.session.get('idSucursalActual', request.session.get('sucursalActual'))),
+                        sucursal_destino=sucursal_origen,
+                        cantidad=cantidad_nc,
+                        concepto='DEVOLUCION_NC' if hacer_nc else 'REGULARIZACION_TRASPASO',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable_ingreso=usuario,
+                        fecha=hoy.date(),
+                        hora=hoy.time(),
+                        observaciones=f"{'NC' if hacer_nc else 'Regularización sin NC'}: Devolución de {cantidad_nc} unidades a {sucursal_origen.alias}. {motivo}"
+                    )
+                
+                nc_info = None
+                if hacer_nc and recepcion.dte and recepcion.dte_producto:
+                    dte_original = recepcion.dte
+                    if dte_original.tipo_documento in ['FACTURA ELECTRONICA', 'FACTURA', 'BOLETA ELECTRONICA', 'BOLETA']:
+                        precio_unitario = recepcion.dte_producto.precio
+                        total_neto = cantidad_nc * precio_unitario
+                        iva = total_neto * DecimalNC('0.19')
+                        total_con_iva = total_neto + iva
+                        
+                        numero_nc = obtener_siguiente_correlativo(dte_original.sucursal, 'NOTA DE CREDITO')
+                        
+                        nota_credito = Dte.objects.create(
+                            emisor=dte_original.emisor,
+                            receptor=dte_original.receptor,
+                            numero_documento=numero_nc,
+                            tipo_documento='NOTA DE CREDITO',
+                            monto_neto=total_neto,
+                            monto_con_iva=total_con_iva,
+                            estado_pago='PENDIENTE',
+                            estado_dte='EMITIDO',
+                            responsable=usuario,
+                            fecha_emision=hoy.date(),
+                            fecha_vencimiento=hoy.date(),
+                            diasCredito=0,
+                            bultos=1,
+                            unidades_productos=cantidad_nc,
+                            tipo_transaccion='TRASPASO',
+                            sucursal=dte_original.sucursal,
+                            es_nota_credito=True,
+                            documento_afectado=dte_original,
+                            motivo_nc=motivo,
+                            referencias=f"NC por regularización DTE #{dte_original.numero_documento}. {motivo}"
+                        )
+                        
+                        from .models import Dte_Productos
+                        Dte_Productos.objects.create(
+                            dte=nota_credito,
+                            productoTalla=recepcion.dte_producto.productoTalla,
+                            descripcion=f"NC: {recepcion.dte_producto.descripcion}",
+                            costo=recepcion.dte_producto.costo,
+                            sobreprecio=recepcion.dte_producto.sobreprecio,
+                            precio=recepcion.dte_producto.precio,
+                            stock=cantidad_nc,
+                            activo=True
+                        )
+                        
+                        nc_info = {
+                            'numero_nc': numero_nc,
+                            'monto_total': float(total_con_iva)
+                        }
+                
+                recepcion.estado = 'REGULARIZADO'
+                recepcion.fecha_regularizacion = hoy
+                recepcion.regularizado_por = usuario
+                accion = 'NC generada' if hacer_nc and nc_info else 'Regularización sin NC'
+                recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] {accion}: Stock devuelto a bodega origen ({sucursal_origen.alias if sucursal_origen else 'N/A'}). {motivo}"
+                recepcion.save()
+                
+                if recepcion.dte:
+                    pendientes_dte = Productos_Recepcionados.objects.filter(
+                        dte=recepcion.dte
+                    ).exclude(estado__in=['REGULARIZADO', 'RECEPCIONADO_OK']).count()
+                    if pendientes_dte == 0:
+                        recepcion.dte.estado_dte = 'RECEPCIONADO_COMPLETO'
+                        recepcion.dte.save()
+                
+                result = {
+                    'success': True,
+                    'message': f'Regularización completada. Stock devuelto a {sucursal_origen.alias if sucursal_origen else "bodega origen"}.',
+                    'tipo': 'REGULARIZAR_CON_NC' if hacer_nc else 'REGULARIZAR_SIN_NC',
+                    'stock_devuelto': cantidad_nc,
+                }
+                if nc_info:
+                    result['nc_generada'] = True
+                    result['numero_nc'] = nc_info['numero_nc']
+                    result['monto_nc'] = nc_info['monto_total']
+                    result['message'] += f' NC #{nc_info["numero_nc"]} generada por ${nc_info["monto_total"]:,.0f}'
+                else:
+                    result['nc_generada'] = False
+                
+                return JsonResponse(result)
 
             # NUEVO: Manejar solicitud de NC (entre empresas)
             if tipo_regularizacion == 'SOLICITAR_NC' or (es_solicitud and tipo_solucion == 'NOTA_CREDITO'):

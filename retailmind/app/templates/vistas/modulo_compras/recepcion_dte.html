@@ -1630,104 +1630,9 @@
     </div>
 </div>
 
-<!-- Modal DTEs con Problemas -->
-<div class="modal fade" id="modalDTEsProblemas" tabindex="-1">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header bg-warning" style="background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%) !important;">
-                <h5 class="modal-title text-dark">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>DTEs con Productos Problemáticos
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted mb-3">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Estos DTEs tienen productos con problemas (faltantes o parciales) que requieren regularización.
-                </p>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>DTE</th>
-                                <th>Fecha Emisión</th>
-                                <th>Fecha Recepción</th>
-                                <th>Origen</th>
-                                <th>Productos OK</th>
-                                <th>Con Problemas</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tablaDTEsProblemasBody">
-                            <tr>
-                                <td colspan="8" class="text-center py-3">
-                                    <div class="spinner-border text-warning"></div>
-                                    <p class="text-muted mt-2">Cargando...</p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <a href="/app/regularizar-recepciones/" class="btn btn-warning">
-                    <i class="bi bi-tools me-1"></i>Ir a Regularización
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Modal DTEs con Problemas - Reemplazado por redirección a regularizar-recepciones -->
 
-<!-- Modal DTEs Rechazados (para que el emisor pueda rehabilitar) -->
-<div class="modal fade" id="modalDTEsRechazados" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-error) 0%, #CC3D3D 100%);">
-                <h5 class="modal-title text-white">
-                    <i class="bi bi-x-octagon me-2"></i>DTEs Rechazados por Destino
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info mb-3">
-                    <i class="bi bi-info-circle me-2"></i>
-                    Estos son los DTEs que <strong>TÚ enviaste</strong> pero fueron <strong>rechazados</strong> por la sucursal destino.
-                    <ul class="mb-0 mt-2 small">
-                        <li><strong>Rehabilitar:</strong> Vuelve a dejar disponible para que destino reintente la recepción</li>
-                        <li><strong>Anular Guía:</strong> Cancela el traspaso y devuelve el stock a tu bodega</li>
-                        <li><strong>Anular con NC:</strong> Para facturas — genera Nota de Crédito, devuelve stock y descarga TXT Acepta</li>
-                    </ul>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-hover table-sm">
-                        <thead>
-                            <tr>
-                                <th>DTE</th>
-                                <th>Fecha</th>
-                                <th>Destino</th>
-                                <th>Motivo Rechazo</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tablaDTEsRechazadosBody">
-                            <tr>
-                                <td colspan="5" class="text-center py-3">
-                                    <div class="spinner-border text-danger"></div>
-                                    <p class="text-muted mt-2">Cargando...</p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Modal DTEs Rechazados - Reemplazado por redirección a regularizar-recepciones -->
 
 <!-- Modal historial completo -->
 <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
@@ -3470,64 +3375,7 @@ function procesarRecepcion(incluirProblemas) {
 }
 
 function verDTEsConProblemas() {
-    $.getJSON('/app/dte/obtener_dtes_con_problemas/')
-        .done(response => {
-            if (!response.success) {
-                Swal.fire('Error', response.error || 'No se pudieron cargar los DTEs', 'error');
-                return;
-            }
-            
-            const items = response.items || [];
-            const tbody = $('#tablaDTEsProblemasBody');
-            tbody.empty();
-            
-            if (items.length === 0) {
-                tbody.html(`
-                    <tr>
-                        <td colspan="8" class="text-center py-4">
-                            <i class="bi bi-check-circle-fill text-success display-4"></i>
-                            <p class="text-muted mt-2">¡Excelente! No hay DTEs con productos problemáticos</p>
-                        </td>
-                    </tr>
-                `);
-            } else {
-                items.forEach(dte => {
-                    const porcentajeOK = Math.round((dte.productos_ok / dte.total_productos) * 100);
-                    const estadoBadge = dte.estado_dte === 'RECEPCIONADO_PARCIAL' ? 
-                        '<span class="badge bg-warning">Parcial</span>' : 
-                        '<span class="badge bg-info">En Regularización</span>';
-                    
-                    tbody.append(`
-                        <tr>
-                            <td><strong>#${dte.numero_documento}</strong><br><small class="text-muted">${dte.tipo_documento}</small></td>
-                            <td><small>${new Date(dte.fecha_emision).toLocaleDateString('es-CL')}</small></td>
-                            <td><small>${dte.fecha_recepcion ? new Date(dte.fecha_recepcion).toLocaleDateString('es-CL') : '-'}</small></td>
-                            <td><small>${dte.sucursal_origen}<br><span class="text-muted">${dte.emisor}</span></small></td>
-                            <td>
-                                <span class="badge bg-success">${dte.productos_ok}</span>
-                                <div class="progress mt-1" style="height: 5px;">
-                                    <div class="progress-bar bg-success" style="width: ${porcentajeOK}%"></div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge bg-warning">${dte.productos_problemas}</span>
-                            </td>
-                            <td>${estadoBadge}</td>
-                            <td>
-                                <a href="/app/regularizar-recepciones/" class="btn btn-sm btn-warning" title="Regularizar">
-                                    <i class="bi bi-tools"></i>
-                                </a>
-                            </td>
-                        </tr>
-                    `);
-                });
-            }
-            
-            new bootstrap.Modal(document.getElementById('modalDTEsProblemas')).show();
-        })
-        .fail(() => {
-            Swal.fire('Error', 'No se pudieron cargar los DTEs con problemas', 'error');
-        });
+    window.location.href = '/app/regularizar-recepciones/?tab=pendiente';
 }
 
 // ========== FUNCIONES PARA DTEs RECHAZADOS (que yo envié) ==========
@@ -3549,89 +3397,7 @@ function cargarDTEsRechazados() {
 }
 
 function verDTEsRechazados() {
-    const tbody = $('#tablaDTEsRechazadosBody');
-    tbody.html(`
-        <tr>
-            <td colspan="5" class="text-center py-3">
-                <div class="spinner-border text-danger"></div>
-                <p class="text-muted mt-2">Cargando...</p>
-            </td>
-        </tr>
-    `);
-    
-    new bootstrap.Modal(document.getElementById('modalDTEsRechazados')).show();
-    
-    $.getJSON('/app/dte/obtener_rechazados/')
-        .done(response => {
-            if (!response.success) {
-                tbody.html(`<tr><td colspan="5" class="text-center text-danger">${response.error || 'Error al cargar'}</td></tr>`);
-                return;
-            }
-            
-            const items = response.items || [];
-            tbody.empty();
-            
-            if (items.length === 0) {
-                tbody.html(`
-                    <tr>
-                        <td colspan="5" class="text-center py-4">
-                            <i class="bi bi-check-circle-fill text-success display-4"></i>
-                            <p class="text-muted mt-2">¡Excelente! No tienes DTEs rechazados</p>
-                        </td>
-                    </tr>
-                `);
-            } else {
-                items.forEach(dte => {
-                    const esFactura = dte.tipo_documento.includes('FACTURA');
-                    const esGuia = dte.tipo_documento === 'GUIA';
-                    let botonesAccion = `
-                        <button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${dte.id}, '${dte.numero_documento}')" title="Rehabilitar para que puedan volver a recibirlo">
-                            <i class="bi bi-arrow-counterclockwise me-1"></i>Rehabilitar
-                        </button>`;
-
-                    {% if user_rol == 'administrador' or user_rol == 'jefe_local' or user_rol == 'administracion' %}
-                    if (esGuia) {
-                        botonesAccion += `
-                            <button class="btn btn-danger btn-sm" onclick="anularDTERechazado(${dte.id}, '${dte.numero_documento}')" title="Anular guía y devolver stock al origen">
-                                <i class="bi bi-x-circle me-1"></i>Anular Guía
-                            </button>`;
-                    } else if (esFactura) {
-                        botonesAccion += `
-                            <button class="btn btn-warning btn-sm" onclick="anularFacturaRechazada(${dte.id}, '${dte.numero_documento}', '${dte.tipo_documento}')" title="Anular factura con Nota de Crédito y devolver stock">
-                                <i class="bi bi-file-earmark-text me-1"></i>Anular con NC
-                            </button>`;
-                    } else {
-                        botonesAccion += `
-                            <button class="btn btn-danger btn-sm" onclick="anularDTERechazado(${dte.id}, '${dte.numero_documento}')" title="Anular DTE y devolver stock al origen">
-                                <i class="bi bi-x-circle me-1"></i>Anular
-                            </button>`;
-                    }
-                    {% endif %}
-
-                    tbody.append(`
-                        <tr>
-                            <td>
-                                <strong>#${dte.numero_documento}</strong>
-                                <br><span class="badge ${esFactura ? 'bg-primary' : 'bg-info'} bg-opacity-75" style="font-size:0.68rem;">${dte.tipo_documento}</span>
-                            </td>
-                            <td><small>${dte.fecha_emision}</small></td>
-                            <td><small>${dte.receptor}</small></td>
-                            <td>
-                                <small class="text-danger">${dte.motivo_rechazo}</small>
-                            </td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    ${botonesAccion}
-                                </div>
-                            </td>
-                        </tr>
-                    `);
-                });
-            }
-        })
-        .fail(() => {
-            tbody.html(`<tr><td colspan="5" class="text-center text-danger">Error al cargar DTEs rechazados</td></tr>`);
-        });
+    window.location.href = '/app/regularizar-recepciones/?tab=rechazado';
 }
 
 function rehabilitarDTE(dteId, numeroDocumento) {
@@ -3716,8 +3482,6 @@ function rehabilitarDTE(dteId, numeroDocumento) {
                     confirmButtonText: 'Entendido'
                 });
                 
-                // Cerrar modal y recargar
-                bootstrap.Modal.getInstance(document.getElementById('modalDTEsRechazados')).hide();
                 cargarDTEsRechazados();
                 cargarRecepciones();
             } else {
@@ -3812,8 +3576,10 @@ function anularDTERechazado(dteId, numeroDocumento) {
                 });
 
                 const modalEl = document.getElementById('modalDTEsRechazados');
-                const modal = bootstrap.Modal.getInstance(modalEl);
-                if (modal) modal.hide();
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                }
                 cargarDTEsRechazados();
                 cargarRecepciones();
             } else {
@@ -3908,8 +3674,10 @@ function anularFacturaRechazada(dteId, numeroDocumento, tipoDocumento) {
                 });
 
                 const modalEl = document.getElementById('modalDTEsRechazados');
-                const modal = bootstrap.Modal.getInstance(modalEl);
-                if (modal) modal.hide();
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                }
                 cargarDTEsRechazados();
                 cargarRecepciones();
             } else {

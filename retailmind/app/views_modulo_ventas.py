@@ -2110,6 +2110,54 @@ def buscar_ticket_pos(request):
     return _obtener_ticket_para_pos(request, correlativo_int)
 
 
+@login_required
+@require_POST
+def crear_ticket_pendiente_pos(request):
+    """Crear un ticket PENDIENTE vacío desde el POS Dashboard para iniciar una nueva venta."""
+    try:
+        sucursal_id = (
+            request.session.get('idSucursalActual')
+            or request.session.get('sucursalActual')
+        )
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión'}, status=400)
+
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+
+        vendedor = Vendedor.objects.filter(sucursales=sucursal, activo=True).first()
+        if not vendedor:
+            vendedor = Vendedor.objects.filter(
+                empresa=sucursal.empresa, activo=True
+            ).first() if hasattr(sucursal, 'empresa') and sucursal.empresa else None
+        if not vendedor:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay vendedores activos configurados para esta sucursal'
+            }, status=400)
+
+        with transaction.atomic():
+            correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
+            ticket = Ticket.objects.create(
+                correlativo=correlativo,
+                sucursal=sucursal,
+                vendedor=vendedor,
+                subTotal=0,
+                descuento=0,
+                total=0,
+                estado='PENDIENTE',
+                responsable=request.user.username,
+                modulo_origen='POS',
+            )
+
+        return JsonResponse({
+            'success': True,
+            'ticket': construir_ticket_data(ticket),
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al crear ticket: {str(e)}'}, status=500)
+
+
 def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     """
     Generar DTE (Boleta o Factura Electrónica) desde un Ticket
