@@ -265,6 +265,7 @@
                 }
                 
                 this.isConnected = false;
+                this.readBuffer = [];
                 console.log('🔌 POS desconectado');
                 return true;
                 
@@ -315,73 +316,77 @@
         }
 
         /**
-         * Leer respuesta del POS
+         * Leer respuesta del POS (usa buffer compartido para no perder bytes entre llamadas)
          * @param {number} customTimeout - Timeout personalizado (opcional)
          */
         async readResponse(customTimeout = null) {
             return new Promise((resolve, reject) => {
-                let buffer = [];
                 let timeout;
                 const timeoutMs = customTimeout || this.timeout;
+                let settled = false;
+
+                const settle = (fn, val) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeout);
+                    fn(val);
+                };
+
+                const tryParse = () => {
+                    const buf = this.readBuffer;
+
+                    // ACK solo si es el primer byte y no hay datos de trama detrás
+                    const ackIdx = buf.indexOf(ACK);
+                    if (ackIdx >= 0) {
+                        const stxBefore = buf.indexOf(STX);
+                        if (stxBefore < 0 || ackIdx < stxBefore) {
+                            this.readBuffer = buf.slice(ackIdx + 1);
+                            console.log('✅ ACK recibido del POS');
+                            settle(resolve, { type: 'ACK' });
+                            return true;
+                        }
+                    }
+
+                    // Buscar trama completa STX...ETX LRC
+                    const stxIndex = buf.indexOf(STX);
+                    if (stxIndex >= 0) {
+                        const etxIndex = buf.indexOf(ETX, stxIndex + 1);
+                        if (etxIndex >= 0 && buf.length >= etxIndex + 2) {
+                            const data = buf.slice(stxIndex + 1, etxIndex);
+                            this.readBuffer = buf.slice(etxIndex + 2);
+
+                            const decoder = new TextDecoder();
+                            const response = decoder.decode(new Uint8Array(data));
+                            console.log(`📥 Respuesta: ${response}`);
+
+                            this.sendAck().catch(err => console.warn('Error enviando ACK:', err));
+                            settle(resolve, { type: 'DATA', data: response });
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                // Intentar con datos que ya estén en el buffer
+                if (tryParse()) return;
 
                 const read = async () => {
                     try {
                         const { value, done } = await this.reader.read();
-                        
-                        if (done) {
-                            reject(new Error('Conexión cerrada'));
-                            return;
-                        }
+                        if (done) { settle(reject, new Error('Conexión cerrada')); return; }
 
-                        // Agregar bytes al buffer
-                        buffer.push(...value);
+                        this.readBuffer.push(...value);
 
-                        // Verificar si es ACK simple (byte único 0x06)
-                        if (buffer.length === 1 && buffer[0] === ACK) {
-                            clearTimeout(timeout);
-                            console.log('✅ ACK recibido del POS');
-                            resolve({ type: 'ACK' });
-                            return;
-                        }
-
-                        // Buscar trama completa (STX...ETX LRC)
-                        const stxIndex = buffer.indexOf(STX);
-                        if (stxIndex >= 0) {
-                            const etxIndex = buffer.indexOf(ETX, stxIndex);
-                            if (etxIndex >= 0 && buffer.length >= etxIndex + 2) {
-                                // Trama completa recibida
-                                const frame = buffer.slice(stxIndex, etxIndex + 2);
-                                const data = frame.slice(1, frame.length - 2); // Sin STX, ETX, LRC
-                                
-                                clearTimeout(timeout);
-                                
-                                const decoder = new TextDecoder();
-                                const response = decoder.decode(new Uint8Array(data));
-                                console.log(`📥 Respuesta: ${response}`);
-                                
-                                // ✅ ENVIAR ACK AL POS (confirmar recepción)
-                                this.sendAck().catch(err => console.warn('Error enviando ACK:', err));
-                                
-                                resolve({ type: 'DATA', data: response });
-                                return;
-                            }
-                        }
-
-                        // Continuar leyendo
-                        read();
-                        
+                        if (!tryParse()) read();
                     } catch (error) {
-                        clearTimeout(timeout);
-                        reject(error);
+                        settle(reject, error);
                     }
                 };
 
-                // Iniciar lectura
                 read();
 
-                // Timeout
                 timeout = setTimeout(() => {
-                    reject(new Error(`Timeout (${timeoutMs}ms) esperando respuesta del POS`));
+                    settle(reject, new Error(`Timeout (${timeoutMs}ms) esperando respuesta del POS`));
                 }, timeoutMs);
             });
         }
@@ -548,7 +553,6 @@
             try {
                 console.log('📋 Consultando última venta...');
                 
-                // Construir y enviar comando manualmente
                 const command = '0250|';
                 const encoder = new TextEncoder();
                 const commandBytes = encoder.encode(command);
@@ -563,14 +567,14 @@
                 console.log(`📤 Enviando: ${command}`);
                 await this.writer.write(frame);
                 
-                // 1. Esperar ACK
-                const ack = await this.readResponse(5000);
+                // 1. Esperar ACK (10s)
+                const ack = await this.readResponse(10000);
                 if (ack.type !== 'ACK') {
                     throw new Error('No se recibió ACK del POS');
                 }
                 
-                // 2. Esperar datos
-                const response = await this.readResponse(10000);
+                // 2. Esperar datos (30s — el POS puede tardar si está imprimiendo)
+                const response = await this.readResponse(30000);
                 
                 if (response.type === 'DATA') {
                     return this.parseSaleResponse(response.data);
@@ -733,6 +737,7 @@
         
         /**
          * Obtener detalle de ventas del día
+         * El POS envía múltiples tramas 0261 (una por transacción) y cierra con 0260.
          * @param {boolean} printOnPOS - Si debe imprimir en el POS (0=no, 1=sí)
          */
         async getSalesDetail(printOnPOS = false) {
@@ -753,27 +758,53 @@
                 console.log(`📤 Enviando: ${command}`);
                 await this.writer.write(frame);
 
-                // 1. Esperar ACK
-                const ack = await this.readResponse(5000);
+                // 1. Esperar ACK (10s)
+                const ack = await this.readResponse(10000);
                 if (ack.type !== 'ACK') {
                     throw new Error('No se recibió ACK del POS');
                 }
 
-                // 2. Esperar datos
-                const response = await this.readResponse(15000);
+                // 2. Leer tramas: pueden ser múltiples 0261 (detalle) + una 0260 (resumen)
+                const transactions = [];
+                const perFrameTimeout = printOnPOS ? 30000 : 15000;
+                const maxFrames = 200;
 
-                if (response.type === 'DATA') {
+                for (let i = 0; i < maxFrames; i++) {
+                    const response = await this.readResponse(perFrameTimeout);
+                    if (response.type !== 'DATA') break;
+
                     const parts = response.data.split('|');
+                    const funcCode = parseInt(parts[0]);
+
+                    if (funcCode === 261) {
+                        // Trama de detalle individual
+                        transactions.push(this.parseSaleResponse(response.data));
+                        console.log(`   📄 Transacción ${transactions.length} recibida`);
+                        continue;
+                    }
+
+                    // Trama de resumen (0260) o cualquier otra → fin
                     return {
-                        functionCode: parseInt(parts[0]),
+                        functionCode: funcCode,
                         responseCode: parseInt(parts[1]),
-                        txCount: parseInt(parts[2]) || 0,
+                        txCount: parseInt(parts[2]) || transactions.length,
                         txTotal: parseInt(parts[3]) || 0,
                         successful: parseInt(parts[1]) === 0,
-                        responseMessage: RESPONSE_CODES[parseInt(parts[1])] || `Código ${parts[1]}`
+                        responseMessage: RESPONSE_CODES[parseInt(parts[1])] || `Código ${parts[1]}`,
+                        transactions: transactions
                     };
                 }
-                throw new Error('Respuesta inválida');
+
+                // Si solo hubo tramas 0261 sin resumen final
+                return {
+                    functionCode: 260,
+                    responseCode: 0,
+                    txCount: transactions.length,
+                    txTotal: transactions.reduce((s, t) => s + (t.amount || 0), 0),
+                    successful: true,
+                    responseMessage: 'APROBADA',
+                    transactions: transactions
+                };
             } catch (error) {
                 console.error('❌ Error obteniendo detalle:', error);
                 throw error;
@@ -803,6 +834,8 @@
         closeDay: () => pos.closeDay(),
         refund: (operationId) => pos.refund(operationId),
         getSalesDetail: (printOnPOS) => pos.getSalesDetail(printOnPOS),
+        getDetails: (printOnPOS) => pos.getSalesDetail(printOnPOS),
+        getLastSale: () => pos.lastSale(),
         
         // Estado (propiedad, no función)
         get isConnected() {
