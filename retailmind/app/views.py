@@ -16598,9 +16598,13 @@ def obtener_sucursales(request):
             excluir_mismo_rut = False
             
         elif filtro_tipo == 'factura_otras_empresas':
-            # FACTURA: Solo sucursales de OTRAS empresas (diferentes RUT para evitar auto-factura)
+            # FACTURA: Sucursales de OTRAS empresas (diferentes RUT para evitar auto-factura)
+            # Se busca en TODAS las empresas del sistema, no solo las asignadas al usuario,
+            # para que usuarios con una sola empresa asignada puedan facturar a otras.
             print(f"📋 FACTURA INTERNA: Solo sucursales de otras empresas")
-            empresas_filtro = empresas_usuario_list
+            todas_las_empresas = list(Empresa.objects.filter(activo=True).values_list('id', flat=True))
+            print(f"🔍 DEBUG - Todas las empresas activas del sistema: {todas_las_empresas}")
+            empresas_filtro = todas_las_empresas
             excluir_mismo_rut = True
             
         else:
