@@ -697,6 +697,10 @@
             margin-top: 10px;
         }
 
+        .nexo-filter-actions .nexo-btn {
+            width: 100%;
+        }
+
         .nexo-kpi-strip {
             flex-wrap: wrap;
         }
@@ -711,6 +715,35 @@
 
         .nexo-table {
             font-size: 0.8rem;
+        }
+
+        .nexo-table-header {
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: flex-start;
+        }
+    }
+
+    @media screen and (max-width: 576px) {
+        .nexo-table {
+            font-size: 0.75rem;
+        }
+
+        .nexo-kpi-chip {
+            min-width: 100%;
+        }
+
+        .nexo-hero h1 {
+            font-size: 1.25rem;
+        }
+
+        .nexo-hero {
+            padding: 20px;
+        }
+
+        .nexo-pagination {
+            flex-direction: column;
+            text-align: center;
         }
     }
 

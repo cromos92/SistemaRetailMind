@@ -1063,6 +1063,14 @@
             min-height: 34px;
         }
     }
+
+    @media (max-width: 480px) {
+        .recepcion-header { flex-direction: column; gap: 0.5rem; }
+        .recepcion-header .btn { width: 100%; }
+        .recepcion-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+        .recepcion-table { font-size: 0.7rem; }
+        .recepcion-table th, .recepcion-table td { padding: 0.35rem; }
+    }
 </style>
 
 <!-- Loader con estilo del proyecto -->

@@ -507,6 +507,19 @@
 /* Sync switch */
 #edit_propagar_sucursales:checked + label span { color: #198754 !important; }
 #edit_propagar_sucursales:not(:checked) + label span { color: #6c757d !important; }
+
+@media (max-width: 768px) {
+    .modal-edicion .modal-dialog { max-width: calc(100% - 1rem); margin: 0.5rem; }
+    .modal-edicion .row > [class*="col-md-"],
+    .modal-edicion .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    .modal-edicion .nav-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .modal-edicion .nav-tabs .nav-link { white-space: nowrap; flex-shrink: 0; }
+}
+@media (max-width: 576px) {
+    .modal-edicion .modal-body { padding: 0.625rem; }
+    .modal-edicion .form-label { font-size: 0.813rem; }
+    .tallas-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 0.25rem; }
+}
 </style>
 
 <script>

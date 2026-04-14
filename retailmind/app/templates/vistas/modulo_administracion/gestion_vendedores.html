@@ -694,6 +694,48 @@
     align-items: center;
     gap: 0.25rem;
 }
+
+/* ========== RESPONSIVE - Tablet ========== */
+@media (max-width: 768px) {
+    .vendedores-stats { flex-direction: column; gap: 0.5rem; }
+    .vendedores-stats .stat-card { width: 100%; }
+    .vendedores-header { flex-direction: column; gap: 0.5rem; }
+    .vendedores-header .btn { width: 100%; }
+    .nexo-page-header .d-flex { flex-direction: column; gap: 0.75rem; }
+    .nexo-page-header .d-flex .d-flex.gap-2 { width: 100%; flex-direction: column; }
+    .nexo-page-header .d-flex .d-flex.gap-2 .nexo-btn { width: 100%; justify-content: center; }
+    .nexo-page-title { font-size: 1.25rem; }
+    .nexo-stat-card { padding: 1rem; }
+    .nexo-stat-card .stat-value { font-size: 1.5rem; }
+    .nexo-stat-card .stat-icon { width: 44px; height: 44px; font-size: 1.25rem; }
+    .nexo-filter-section { padding: 1rem; }
+    .nexo-filter-section .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .nexo-card-header { padding: 1rem; flex-direction: column; gap: 0.5rem; }
+    .nexo-card-body { padding: 1rem; }
+    .nexo-table thead th { font-size: 0.7rem; padding: 0.75rem 0.625rem; }
+    .nexo-table tbody td { font-size: 0.8rem; padding: 0.75rem 0.625rem; }
+    .nexo-btn-action { min-height: 44px; min-width: 44px; }
+    .nexo-tabs { gap: 0.25rem; }
+    .nexo-tab { padding: 0.625rem 0.875rem; font-size: 0.75rem; }
+    .nexo-tabs-container { padding: 0.75rem 1rem; }
+    .nexo-modal .modal-dialog { margin: 0.5rem; }
+}
+
+/* ========== RESPONSIVE - Small Mobile ========== */
+@media (max-width: 576px) {
+    .tabla-vendedores { font-size: 0.75rem; }
+    .vendedor-info { font-size: 0.813rem; }
+    .vendedor-stats { font-size: 0.75rem; }
+    .nexo-avatar { width: 36px; height: 36px; font-size: 0.813rem; }
+    .comision-badge { font-size: 0.7rem; padding: 0.25rem 0.625rem; }
+    .nexo-badge { font-size: 0.65rem; padding: 0.25rem 0.5rem; }
+    .nexo-page-title { font-size: 1.125rem; }
+    .nexo-page-subtitle { font-size: 0.813rem; }
+    .nexo-stat-card .stat-value { font-size: 1.25rem; }
+    .nexo-stat-card .stat-label { font-size: 0.75rem; }
+    .nexo-tab { flex: 1 1 auto; justify-content: center; text-align: center; }
+    .nexo-modal .modal-body { padding: 1rem; }
+}
 </style>
 
 <div class="main-content">

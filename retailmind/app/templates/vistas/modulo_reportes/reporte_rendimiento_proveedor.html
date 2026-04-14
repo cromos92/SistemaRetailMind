@@ -27,6 +27,27 @@
     .rp-bar { height: 6px; border-radius: 3px; background: #e9ecef; overflow: hidden; min-width: 60px; }
     .rp-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
     .rp-loader { display: flex; align-items: center; justify-content: center; padding: 60px; }
+
+    @media (max-width: 768px) {
+        .rp-header .d-flex { flex-direction: column; gap: 0.5rem; }
+        .rp-header .d-flex .d-flex { flex-wrap: wrap; }
+        .card-body .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+        #kpisContainer > [class*="col"] { flex: 0 0 50%; max-width: 50%; }
+        .card-body .chart-container, .card-body [style*="height:300px"] { height: 250px !important; }
+    }
+
+    @media (max-width: 576px) {
+        .rp-header { padding: 12px 16px; }
+        .rp-header h5 { font-size: 0.95rem; }
+        .rp-header .btn { width: 100%; }
+        .card-body .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+        #kpisContainer > [class*="col"] { flex: 0 0 100%; max-width: 100%; }
+        .rp-table { font-size: 0.75rem; }
+        .rp-table thead th, .rp-table tbody td { padding: 0.375rem 0.5rem; white-space: nowrap; }
+        .rp-kpi-value { font-size: 1rem; }
+        .rp-kpi-label { font-size: 0.6rem; }
+        .card-body .chart-container, .card-body [style*="height:300px"] { height: 200px !important; }
+    }
 </style>
 
 <div class="main-content">

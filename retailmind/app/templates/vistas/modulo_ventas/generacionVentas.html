@@ -2645,6 +2645,50 @@
     #previewDocumento { padding: 8px !important; }
 }
 
+/* ============================================================
+   RESPONSIVE: Tablets (max-width: 992px)
+   ============================================================ */
+@media (max-width: 992px) {
+    .pos-stepper-header { flex-wrap: wrap; gap: 0.5rem; }
+    .pos-stepper-header .step { font-size: 0.813rem; }
+    .kpi-bar .kpi-item { min-width: 120px; }
+    .kpi-bar { flex-wrap: wrap; gap: 0.5rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .producto-grid { grid-template-columns: 1fr !important; }
+    .pos-layout-container .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    .checkout-panel { position: static !important; }
+}
+
+/* ============================================================
+   RESPONSIVE: Mobile landscape (max-width: 768px)
+   ============================================================ */
+@media (max-width: 768px) {
+    .pos-stepper-header { flex-direction: column; align-items: stretch; }
+    .pos-stepper-header .step { width: 100%; justify-content: flex-start; padding: 0.625rem 0.75rem; }
+    .pos-stepper-header .step-line { display: none; }
+    .kpi-bar { flex-direction: column; }
+    .kpi-bar .kpi-item { width: 100%; }
+    .ticket-area { max-height: 40vh; }
+    .btn-checkout, .btn-pagar { width: 100%; min-height: 50px; font-size: 1rem; }
+    .modal-pago .modal-dialog { max-width: 100%; margin: 0.5rem; }
+    .metodos-pago-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ============================================================
+   RESPONSIVE: Mobile portrait (max-width: 576px)
+   ============================================================ */
+@media (max-width: 576px) {
+    .pos-stepper-header .step { font-size: 0.75rem; padding: 0.5rem 0.625rem; }
+    .kpi-bar .kpi-item .kpi-value { font-size: 1rem; }
+    .kpi-bar .kpi-item .kpi-label { font-size: 0.688rem; }
+    .producto-item { padding: 0.5rem; }
+    .producto-item .producto-nombre { font-size: 0.813rem; }
+    .producto-item .producto-precio { font-size: 0.875rem; }
+    .ticket-item { font-size: 0.813rem; padding: 0.375rem 0.5rem; }
+    .metodos-pago-grid { grid-template-columns: 1fr !important; }
+    .resumen-venta { font-size: 0.875rem; }
+    .resumen-venta .total-line { font-size: 1.125rem; }
+}
+
 /* ===== QUICKSTART BAR (dashboard) ===== */
 .pos-quickstart-bar {
     background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);

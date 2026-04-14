@@ -1767,6 +1767,17 @@
     background: rgba(0, 212, 170, 0.15);
     color: #00a882;
 }
+
+@media (max-width: 768px) {
+    .regularizar-header { flex-direction: column; gap: 0.5rem; }
+    .regularizar-header .btn { width: 100%; }
+    .regularizar-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .regularizar-table th, .regularizar-table td { padding: 0.5rem; white-space: nowrap; }
+}
+@media (max-width: 576px) {
+    .regularizar-table { font-size: 0.75rem; }
+    .regularizar-actions .btn { width: 100%; }
+}
 </style>
 
 {% include '../../layout/footer.html' %}

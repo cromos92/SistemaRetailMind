@@ -298,6 +298,20 @@
             margin-bottom: 3mm !important;
         }
     }
+
+    @media (max-width: 768px) {
+        .step-wizard { flex-direction: column; }
+        .step-wizard .step { width: 100%; }
+        .step-wizard .step-connector { display: none; }
+        .cuadratura-content .row > [class*="col-md-"],
+        .cuadratura-content .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    }
+
+    @media (max-width: 576px) {
+        .step-wizard .step { padding: 0.5rem; font-size: 0.813rem; }
+        .denominacion-input { width: 80px !important; min-height: 44px; font-size: 16px !important; }
+        .cuadratura-total { font-size: 1.125rem; }
+    }
 </style>
 
 <div class="page-content">

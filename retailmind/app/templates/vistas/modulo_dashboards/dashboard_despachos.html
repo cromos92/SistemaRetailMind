@@ -86,7 +86,29 @@
 .dias-danger { color:var(--doc-danger); }
 
 @media(max-width:992px) { .doc-kpi-grid { grid-template-columns:repeat(2,1fr); } .incompletos-grid { grid-template-columns:repeat(2,1fr); } }
-@media(max-width:576px) { .doc-kpi-grid { grid-template-columns:1fr; } .incompletos-grid { grid-template-columns:1fr; } }
+
+@media (max-width: 768px) {
+    .doc-header { flex-direction: column; align-items: flex-start; padding: 20px 22px; }
+    .doc-filters { width: 100%; }
+    .doc-filters input[type="date"] { flex: 1; min-width: 0; }
+    .doc-kpi-grid { gap: 12px; }
+    .doc-kpi-value { font-size: 1.35rem; }
+    .doc-pipeline { flex-wrap: wrap; gap: 8px; }
+    .doc-pipeline-step { min-width: calc(50% - 8px); }
+    .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+}
+
+@media(max-width:576px) {
+    .doc-header { padding: 16px 18px; border-radius: 10px; }
+    .doc-header h4 { font-size: 1.15rem; }
+    .doc-filters { flex-direction: column; gap: 8px; }
+    .doc-filters input[type="date"], .doc-btn-refresh { width: 100%; text-align: center; }
+    .doc-kpi-grid { grid-template-columns: 1fr; }
+    .doc-kpi-card { padding: 14px; }
+    .doc-kpi-value { font-size: 1.15rem; }
+    .incompletos-grid { grid-template-columns: 1fr; }
+    .doc-pipeline-step { min-width: 100%; }
+}
 </style>
 
 <div class="page-content">

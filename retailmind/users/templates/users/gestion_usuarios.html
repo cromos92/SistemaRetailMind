@@ -795,6 +795,23 @@
     @keyframes spin {
         to { transform: rotate(360deg); }
     }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+        .nexo-hero-content { flex-direction: column; gap: 0.5rem; }
+        .nexo-hero-content .nexo-btn { width: 100%; }
+        .nexo-filters-bar { flex-direction: column; }
+        .nexo-filter-group { min-width: 100%; margin-bottom: 0.5rem; }
+        .nexo-filter-actions { margin-left: 0; }
+        .modal-dialog .row > [class*="col-md-"],
+        .modal-dialog .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    }
+    @media (max-width: 576px) {
+        .nexo-table { font-size: 0.75rem; }
+        .nexo-table thead th { padding: 10px 8px; font-size: 0.65rem; }
+        .nexo-table tbody td { padding: 10px 8px; }
+        .nexo-btn-sm { padding: 0.375rem 0.5rem; font-size: 0.75rem; }
+    }
 </style>
 
 <div class="page-content">

@@ -7,6 +7,34 @@
 <!-- NEXO Design System CSS -->
 <link rel="stylesheet" href="{% static 'css/nexo-design-system.css' %}">
 
+<style>
+/* Dashboard Ventas Nexo - Responsive overrides */
+@media (max-width: 992px) {
+    .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    .nexo-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+    .nexo-dashboard-header { padding: 20px; border-radius: 12px; }
+    .nexo-dashboard-title { font-size: 1.3rem; }
+    .nexo-filter-section { padding: 16px; }
+    .nexo-filter-section .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .nexo-filter-shortcuts { justify-content: center; flex-wrap: wrap; }
+    .nexo-filter-shortcuts .btn { font-size: 0.78rem; padding: 5px 10px; }
+    .nexo-header-actions { display: flex; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap; }
+    .nexo-header-actions .btn { width: 100%; }
+}
+
+@media (max-width: 576px) {
+    .nexo-dashboard-header { padding: 16px; }
+    .nexo-dashboard-title { font-size: 1.125rem; }
+    .nexo-dashboard-subtitle { font-size: 0.8rem; }
+    .nexo-kpi-grid { grid-template-columns: 1fr; }
+    .nexo-filter-shortcuts { gap: 4px; }
+    .nexo-filter-shortcuts .btn { font-size: 0.72rem; padding: 4px 8px; }
+}
+</style>
+
 <div class="page-content nexo-page">
     <div class="container-fluid">
 

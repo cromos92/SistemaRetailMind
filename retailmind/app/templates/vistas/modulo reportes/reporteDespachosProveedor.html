@@ -173,6 +173,12 @@
     .kpi-item { min-width: 50%; border-bottom: 1px solid var(--nexo-gray-100); }
 }
 
+@media (max-width: 576px) {
+    .kpi-item { min-width: 100%; }
+    .kpi-item-value { font-size: 1rem; }
+    .kpi-item-label { font-size: 0.6rem; }
+}
+
 /* ========== INDICADORES STRIP COMPACTO ========== */
 .indicadores-strip {
     background: var(--nexo-white);
@@ -247,6 +253,26 @@
 
 @media (max-width: 768px) {
     .indicador-item { min-width: 50%; border-bottom: 1px solid var(--nexo-gray-100); }
+}
+
+@media (max-width: 576px) {
+    .indicador-item { min-width: 100%; }
+    .indicador-item-value { font-size: 1rem; }
+    .reporte-header { padding: 16px; }
+    .reporte-header h2 { font-size: 1.2rem; }
+    .reporte-header p { font-size: 0.8rem; }
+    .reporte-header .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; text-align: center !important; }
+    .reporte-header .header-icon { margin: 0 auto 8px; }
+    .reporte-header .d-flex { flex-direction: column; align-items: center; }
+    .reporte-header .btn-nexo-success { width: 100%; margin-top: 0.5rem; }
+    .filtros-section { padding: 16px; }
+    .filtros-section .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    .filtros-section .d-flex.gap-2 { flex-direction: column; }
+    .filtros-section .d-flex.gap-2 .btn { width: 100%; }
+    .table-nexo { font-size: 0.72rem; }
+    .table-nexo thead th, .table-nexo tbody td { padding: 0.375rem 0.5rem; }
+    .proveedor-nombre { font-size: 0.75rem; }
+    .pagination-nexo { flex-direction: column; gap: 0.5rem; text-align: center; }
 }
 
 /* ========== SECCIÓN DE FILTROS ========== */

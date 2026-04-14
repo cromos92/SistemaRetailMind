@@ -586,6 +586,18 @@
         width: 100%;
         justify-content: center;
     }
+    .movimientos-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .kardex-header { flex-direction: column; gap: 0.5rem; }
+    .kardex-header .btn { width: 100%; }
+    .movimiento-detail { font-size: 0.813rem; }
+    .movimientos-table th, .movimientos-table td { padding: 0.5rem; white-space: nowrap; }
+}
+
+@media (max-width: 576px) {
+    .movimientos-table { font-size: 0.75rem; }
+    .fecha-range { flex-direction: column; gap: 0.5rem; }
+    .fecha-range .form-control { width: 100%; }
+    .movimiento-badge { font-size: 0.688rem; padding: 0.2rem 0.4rem; }
 }
 
 /* ========== SELECT2 NEXO THEME ========== */

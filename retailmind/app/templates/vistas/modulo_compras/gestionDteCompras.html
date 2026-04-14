@@ -816,6 +816,13 @@
         background-color: #6c757d;
         border-color: #6c757d;
     }
+
+    @media (max-width: 576px) {
+        .dte-compras-header { flex-direction: column; gap: 0.5rem; }
+        .dte-compras-header .btn { width: 100%; }
+        .tabla-dte-compras { font-size: 0.75rem; }
+        .dte-compras-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    }
 </style>
 
 <!-- Loader con estilo del proyecto -->

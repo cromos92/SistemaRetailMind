@@ -889,6 +889,15 @@
     .compact-actions {
         width: 100%;
     }
+    .inventarios-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .inventario-card { padding: 0.75rem; }
+    .inventario-actions { flex-wrap: wrap; gap: 0.25rem; }
+    .inventario-actions .btn { flex: 1 1 auto; font-size: 0.813rem; }
+}
+@media (max-width: 576px) {
+    .inventarios-header { flex-direction: column; gap: 0.5rem; }
+    .inventarios-header .btn { width: 100%; }
+    .inventario-status { font-size: 0.75rem; }
 }
 </style>
 

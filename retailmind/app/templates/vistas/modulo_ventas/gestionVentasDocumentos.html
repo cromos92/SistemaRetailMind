@@ -813,6 +813,18 @@ input[type=number] { -moz-appearance: textfield; }
 .sortable.desc .sort-icon::before {
     content: "\ea4e"; /* ri-arrow-down-line */
 }
+
+@media (max-width: 768px) {
+    .filtros-documentos .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    .stats-bar { flex-direction: column; gap: 0.5rem; }
+    .stats-bar .stat-item { width: 100%; }
+    .documento-actions { flex-wrap: wrap; gap: 0.25rem; }
+    .documento-actions .btn { flex: 1 1 auto; font-size: 0.813rem; }
+}
+@media (max-width: 576px) {
+    .tabla-documentos { font-size: 0.75rem; }
+    .documento-actions .btn { padding: 0.375rem 0.5rem; }
+}
 </style>
 
 {% include '../../layout/footer.html' %}

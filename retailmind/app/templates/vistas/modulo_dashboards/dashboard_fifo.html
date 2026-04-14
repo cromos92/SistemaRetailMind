@@ -709,6 +709,31 @@
 .animate-delay-2 { animation-delay: 0.2s; }
 .animate-delay-3 { animation-delay: 0.3s; }
 .animate-delay-4 { animation-delay: 0.4s; }
+
+/* Dashboard responsive */
+@media (max-width: 992px) {
+    .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+}
+
+@media (max-width: 768px) {
+    .dashboard-header { padding: 1.5rem; }
+    .dashboard-header h4 { font-size: 1.25rem; }
+    .kpi-card .kpi-value { font-size: 1.35rem; }
+    .nexo-table { font-size: 0.78rem; }
+    .nexo-table th, .nexo-table td { padding: 8px 10px; }
+    .filter-bar { flex-direction: column; }
+    .filter-bar select, .filter-bar input { width: 100%; }
+}
+
+@media (max-width: 576px) {
+    .dashboard-header { padding: 1rem; border-radius: 0 0 12px 12px; }
+    .dashboard-header h4 { font-size: 1.05rem; }
+    .kpi-card { padding: 14px; }
+    .kpi-card .kpi-value { font-size: 1.125rem; }
+    .kpi-card .kpi-label { font-size: 0.65rem; }
+    .nexo-card { border-radius: 10px; }
+    .panel-body { padding: 14px; }
+}
 </style>
 
 <div class="main-content dashboard-fifo-container">

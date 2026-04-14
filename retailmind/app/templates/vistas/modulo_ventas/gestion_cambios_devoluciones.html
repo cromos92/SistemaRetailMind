@@ -1700,6 +1700,19 @@
         .resumen-flujo { gap: 0.35rem; }
         .resumen-flujo-arrow { font-size: 1rem; width: 22px; }
     }
+
+    @media (max-width: 768px) {
+        .kpi-cambios-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 0.5rem; }
+        .filtros-cambios .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+        .modal-cambio .modal-dialog { max-width: calc(100% - 1rem); margin: 0.5rem; }
+        .pasos-devolucion { flex-direction: column; }
+        .pasos-devolucion .paso { width: 100%; }
+    }
+    @media (max-width: 576px) {
+        .kpi-cambios-grid { grid-template-columns: 1fr !important; }
+        .cambio-detail { font-size: 0.813rem; }
+        .btn-accion-cambio { width: 100%; }
+    }
 </style>
 
 <!-- ============================================================== -->

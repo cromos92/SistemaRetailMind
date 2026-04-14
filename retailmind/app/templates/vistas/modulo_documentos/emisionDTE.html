@@ -886,6 +886,21 @@
         max-height: 200px;
     }
 }
+
+/* Enhanced mobile for DTE emission */
+@media (max-width: 576px) {
+    .dte-section { padding: 0.75rem !important; }
+    .dte-section .section-title { font-size: 0.938rem; }
+    .receptor-info .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    .productos-dte-table { font-size: 0.75rem; }
+    .productos-dte-table th, .productos-dte-table td { padding: 0.375rem 0.5rem; }
+    .total-dte { font-size: 1.125rem; }
+    .method-option { min-height: 60px; }
+    .method-option i { font-size: 1.25rem !important; }
+    .method-option span { font-size: 0.75rem !important; }
+    .acciones-dte { flex-direction: column; gap: 0.5rem; }
+    .acciones-dte .btn { width: 100%; }
+}
 </style>
 
 <!-- Loading overlay -->

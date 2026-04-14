@@ -280,6 +280,7 @@
         .welcome-header {
             padding: 20px;
             flex-direction: column;
+            gap: 0.5rem;
             text-align: center;
         }
         .welcome-header .welcome-left {
@@ -293,6 +294,20 @@
         }
         .modulo-grid {
             grid-template-columns: 1fr;
+        }
+        .featured-card {
+            padding: 1rem;
+        }
+    }
+    @media (max-width: 576px) {
+        .welcome-header .welcome-text h2 {
+            font-size: 1.25rem;
+        }
+        .welcome-header .welcome-text p {
+            font-size: 0.875rem;
+        }
+        .sin-opciones-card {
+            padding: 40px 20px;
         }
     }
     @media (min-width: 769px) and (max-width: 1199px) {

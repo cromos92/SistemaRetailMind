@@ -52,6 +52,18 @@
     @media(max-width:768px) {
         .sucursal-pill { font-size: .72rem; padding: .3rem .6rem; }
         .kpi-card .kpi-value { font-size: 1.1rem; }
+        .arqueos-header { flex-direction: column; gap: 0.5rem; }
+        .arqueos-header .form-select, .arqueos-header .form-control { width: 100%; }
+        .kpi-arqueos { flex-direction: column; gap: 0.5rem; }
+        .kpi-arqueos .kpi-item { width: 100%; }
+        .nav-pills { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+        .nav-pills .nav-link { white-space: nowrap; flex-shrink: 0; }
+        .arqueo-row { flex-direction: column; gap: 0.5rem; }
+    }
+    @media (max-width: 576px) {
+        .kpi-arqueos .kpi-value { font-size: 1.125rem; }
+        .arqueo-row .estado-badge { font-size: 0.688rem; }
+        .arqueos-filters { flex-direction: column; }
     }
 </style>
 

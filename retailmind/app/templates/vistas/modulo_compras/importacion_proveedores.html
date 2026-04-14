@@ -47,6 +47,19 @@
     font-size: 0.9rem;
     padding: 8px 15px;
 }
+
+@media (max-width: 768px) {
+    .import-header { flex-direction: column; gap: 0.5rem; }
+    .import-header .btn { width: 100%; }
+    .import-zone { padding: 1.5rem 1rem; }
+    .import-results .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+}
+@media (max-width: 576px) {
+    .import-zone { padding: 1rem 0.75rem; min-height: auto; }
+    .import-zone i { font-size: 2rem; }
+    .import-zone p { font-size: 0.813rem; }
+    .import-table { font-size: 0.75rem; }
+}
 </style>
 
 <div class="page-content">

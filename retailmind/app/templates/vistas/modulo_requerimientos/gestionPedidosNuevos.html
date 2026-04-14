@@ -70,6 +70,23 @@
     }
 
     /* Verde oscuro */
+
+    @media (max-width: 768px) {
+        .pedidos-header { flex-direction: column; gap: 0.5rem; }
+        .pedidos-header .btn { width: 100%; }
+        .pedidos-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+        .card-header .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+        .card-body .row.g-3 > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+        .nav-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .nav-tabs .nav-link { white-space: nowrap; font-size: 0.8rem; padding: 0.5rem 0.75rem; }
+    }
+    @media (max-width: 576px) {
+        .tabla-pedidos { font-size: 0.75rem; }
+        .pedido-status { font-size: 0.688rem; }
+        #orderTable.dataTable tbody td { font-size: 12px; padding: 0.4rem; }
+        #orderTable.dataTable thead th { font-size: 12px; padding: 0.4rem; }
+        .badge-mkp { font-size: 0.8em; padding: 0.3em 0.6em; }
+    }
 </style>
 
 

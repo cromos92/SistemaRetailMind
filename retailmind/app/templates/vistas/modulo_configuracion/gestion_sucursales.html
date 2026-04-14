@@ -702,6 +702,26 @@
     .select2-container {
         width: 100% !important;
     }
+
+    /* ===== Responsive 576px ===== */
+    @media (max-width: 576px) {
+        .sucursales-header { flex-direction: column; gap: 0.5rem; }
+        .sucursales-header .btn { width: 100%; }
+        .sucursal-card { padding: 0.75rem; }
+        .sucursal-info { font-size: 0.813rem; }
+        .modal-sucursal .modal-dialog { margin: 0.25rem; max-width: calc(100% - 0.5rem); }
+        .modal-sucursal .modal-body .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+        .nexo-page-header { gap: 0.5rem; }
+        .nexo-page-title { font-size: 1.15rem; }
+        .nexo-page-title-icon { width: 36px; height: 36px; font-size: 1.1rem; }
+        .nexo-card-header { padding: 0.75rem 1rem; }
+        .nexo-card-body { padding: 0.75rem; }
+        .nexo-modal .modal-dialog { margin: 0.25rem; max-width: calc(100% - 0.5rem); }
+        .nexo-modal .modal-body { padding: 1rem; }
+        .nexo-modal .modal-body .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+        .nexo-btn { width: 100%; }
+        .nexo-table thead th, .nexo-table tbody td { padding: 0.5rem; font-size: 0.8rem; }
+    }
 </style>
 
 <div class="page-content nexo-page">

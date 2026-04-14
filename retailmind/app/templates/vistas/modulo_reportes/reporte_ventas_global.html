@@ -15,6 +15,28 @@
 .var-down{background:#f8d7da;color:#721c24}
 .var-neutral{background:#e2e3e5;color:#383d41}
 .suc-row td{font-size:.8rem;padding:.3rem .5rem !important}
+
+@media (max-width: 768px) {
+    .card-body .row > [class*="col-md-"],
+    .card-body .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .row.g-2 > [class*="col-md-"] { flex: 0 0 50%; max-width: 50%; }
+    .emp-header .d-flex { flex-direction: column; gap: 0.5rem; }
+    .emp-header .d-flex .d-flex { flex-wrap: wrap; }
+    #chartEmpresas { min-height: 250px !important; }
+}
+
+@media (max-width: 576px) {
+    .row.g-2 > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    .emp-header { padding: 0.5rem 0.75rem; }
+    .emp-header .fw-bold { font-size: 0.85rem; }
+    .kpi-sm .kpi-val { font-size: 0.95rem; }
+    .kpi-sm .kpi-label { font-size: 0.6rem; }
+    .suc-row td { font-size: 0.72rem; padding: 0.25rem 0.4rem !important; }
+    .emp-body .table th { font-size: 0.62rem; }
+    .var-badge { font-size: 0.6rem; padding: 1px 4px; }
+    #chartEmpresas { min-height: 200px !important; }
+    .d-flex.align-items-center.justify-content-between.mb-2 { flex-direction: column; gap: 0.5rem; text-align: center; }
+}
 </style>
 
 <div class="page-content">

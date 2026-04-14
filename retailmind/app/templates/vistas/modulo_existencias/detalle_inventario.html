@@ -647,6 +647,15 @@
     .inventory-meta { flex-direction: column; gap: 1rem; }
     .quick-stats { flex-wrap: wrap; }
     .stat-item { min-width: calc(50% - 0.5rem); }
+    .inventario-detail-header { flex-direction: column; gap: 0.5rem; }
+    .inventario-progress { margin: 0.5rem 0; }
+    .inventario-detail .row > [class*="col-md-"],
+    .inventario-detail .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+}
+@media (max-width: 576px) {
+    .inventario-detail-table { font-size: 0.75rem; }
+    .inventario-detail-table input { min-height: 44px; font-size: 16px !important; }
+    .import-zone { padding: 1rem; }
 }
 </style>
 

@@ -6,6 +6,19 @@
 
 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_assets.html' %}
 
+<style>
+    @media (max-width: 768px) {
+        .requerimiento-header { flex-direction: column; gap: 0.5rem; }
+        .requerimiento-header .btn { width: 100%; }
+        .tipo-requerimiento-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    }
+    @media (max-width: 576px) {
+        .tipo-requerimiento-grid { grid-template-columns: 1fr !important; }
+        .tipo-requerimiento-card { padding: 0.75rem; }
+        .requerimiento-step-content .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    }
+</style>
+
 <div class="page-content">
     <div class="container-fluid">
         

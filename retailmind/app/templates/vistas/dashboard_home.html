@@ -116,6 +116,20 @@
 /* Pulse animation for live indicator */
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 .live-dot { width:7px; height:7px; background:var(--nexo-accent); border-radius:50%; animation:pulse 2s ease-in-out infinite; display:inline-block; }
+
+/* Additional Responsive */
+@media(max-width:768px){
+    .home-header { flex-direction:column; gap:0.5rem; }
+    .home-header-meta { flex-wrap:wrap; justify-content:center; }
+}
+@media(max-width:576px){
+    .home-header h1 { font-size:1.15rem; }
+    .home-kpi-val { font-size:1.2rem; }
+    .home-kpi { padding:.7rem .9rem; }
+    .home-panel-body { padding:.75rem 1rem; }
+    .home-nav-row { grid-template-columns:1fr; }
+    .home-quick-grid { grid-template-columns:1fr; }
+}
 </style>
 
 <div class="page-content">

@@ -263,6 +263,17 @@
         font-size: 0.8rem;
         font-weight: 600;
     }
+
+    @media (max-width: 768px) {
+        .detalle-dte-header { flex-direction: column; gap: 0.5rem; }
+        .detalle-dte .row > [class*="col-md-"],
+        .detalle-dte .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    }
+    @media (max-width: 576px) {
+        .detalle-dte-card { padding: 0.75rem; }
+        .detalle-dte-table { font-size: 0.75rem; }
+        .detalle-dte-total { font-size: 1.125rem; }
+    }
 </style>
 
 <div class="page-content">

@@ -1113,8 +1113,33 @@ div[style*="border: 1px solid #000"] {
     flex-wrap: nowrap;
 }
 @media screen and (max-width: 1400px) { .accesos-grid { } }
-@media screen and (max-width: 900px)  { .accesos-grid { } }
-@media screen and (max-width: 600px)  { .accesos-grid { } }
+
+@media screen and (max-width: 900px) {
+    .accesos-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 0.5rem; }
+    .vendedores-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+@media screen and (max-width: 768px) {
+    .pos-main-layout { gap: 0.5rem !important; padding: 0.5rem !important; }
+    .pos-sidebar, .pos-left-panel { min-width: 0 !important; }
+    .ticket-header { flex-direction: column; gap: 0.5rem; }
+    .ticket-header .btn { width: 100%; }
+    .ticket-total { font-size: 1.25rem; }
+    .accesos-strip { flex-wrap: wrap; gap: 0.5rem; }
+}
+
+@media screen and (max-width: 600px) {
+    .accesos-grid { grid-template-columns: 1fr !important; }
+    .vendedores-grid { grid-template-columns: 1fr !important; }
+    .vendedor-card { padding: 0.5rem; font-size: 0.813rem; }
+}
+
+@media screen and (max-width: 576px) {
+    .pos-main-layout { padding: 0.25rem !important; }
+    .ticket-items { max-height: 35vh; }
+    .ticket-total { font-size: 1.125rem; }
+    .accesos-strip .btn { font-size: 0.75rem; padding: 0.375rem 0.5rem; }
+}
 
 .acceso-card {
     position: relative;

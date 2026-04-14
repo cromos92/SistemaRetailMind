@@ -483,6 +483,37 @@
         font-size: 1rem;
         margin: 0;
     }
+
+    /* ========== RESPONSIVE - Tablet ========== */
+    @media (max-width: 768px) {
+        .correlativos-header { flex-direction: column; gap: 0.5rem; }
+        .correlativos-header .btn { width: 100%; }
+        .correlativos-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+        .page-title-box { flex-direction: column !important; gap: 0.5rem; }
+        .page-title-box .page-title-right { width: 100%; }
+        .d-flex.justify-content-between.align-items-center.flex-wrap { flex-direction: column; align-items: stretch !important; }
+        .d-flex.justify-content-between.align-items-center.flex-wrap > div:last-child { width: 100%; display: flex; flex-direction: column; gap: 0.5rem; }
+        .d-flex.justify-content-between.align-items-center.flex-wrap > div:last-child .btn { width: 100%; }
+        .d-flex.justify-content-between.align-items-center.flex-wrap > div:last-child .ms-2 { margin-left: 0 !important; }
+        .nexo-card-header { padding: 0.875rem 1rem; }
+        .nexo-card-header h5 { font-size: 0.9rem; }
+        .stats-card { padding: 0.5rem 0.75rem; }
+        .stats-card h3 { font-size: 1.125rem; }
+        .stats-card p { font-size: 0.7rem; }
+        .btn-action { width: 36px; height: 36px; min-height: 44px; min-width: 44px; }
+    }
+
+    /* ========== RESPONSIVE - Small Mobile ========== */
+    @media (max-width: 576px) {
+        .tabla-correlativos { font-size: 0.75rem; }
+        .correlativo-badge { font-size: 0.688rem; }
+        .table-nexo thead th { font-size: 0.7rem; padding: 0.625rem 0.5rem; }
+        .table-nexo tbody td { font-size: 0.75rem; padding: 0.625rem 0.5rem; }
+        .badge-nexo { font-size: 0.65rem; padding: 0.25rem 0.5rem; }
+        .modal-dialog { margin: 0.5rem; }
+        .modal-body-nexo { padding: 1rem; }
+        .modal-dialog.modal-lg, .modal-dialog.modal-xl { max-width: calc(100% - 1rem); }
+    }
 </style>
 
 <div class="main-content">

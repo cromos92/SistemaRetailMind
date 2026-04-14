@@ -14,6 +14,27 @@
 .hist-item:last-child{border:0}
 .foto-grid img{border-radius:6px;cursor:pointer;transition:transform .2s}
 .foto-grid img:hover{transform:scale(1.02)}
+
+@media (max-width: 768px) {
+    .requerimiento-detail .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    .requerimiento-timeline { padding-left: 1rem; }
+    .requerimiento-info { font-size: 0.875rem; }
+    .requerimiento-actions { flex-wrap: wrap; gap: 0.5rem; }
+    .requerimiento-actions .btn { flex: 1 1 auto; }
+    .dt-card .card-body .row > [class*="col-md-"] { flex: 0 0 50%; max-width: 50%; }
+    .dt-card .card-body .row > .col-md-2,
+    .dt-card .card-body .row > .col-md-3 { flex: 0 0 50%; max-width: 50%; }
+}
+@media (max-width: 576px) {
+    .requerimiento-detail-card { padding: 0.75rem; }
+    .requerimiento-badge { font-size: 0.688rem; }
+    .requerimiento-table { font-size: 0.75rem; }
+    .dt-card .card-body .row > [class*="col-md-"] { flex: 0 0 100%; max-width: 100%; }
+    .dt-value { font-size: 0.8rem; }
+    .dt-label { font-size: 0.7rem; }
+    .hist-item { font-size: 0.75rem; }
+    .foto-grid .row > [class*="col-"] { flex: 0 0 50%; max-width: 50%; }
+}
 </style>
 
 <div class="page-content">

@@ -781,6 +781,15 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
     .docs-table-wrapper {
         max-height: 320px;
     }
+
+    .etiquetas-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .etiqueta-preview { transform: scale(0.85); transform-origin: top left; }
+    .etiquetas-actions { flex-direction: column; gap: 0.5rem; }
+    .etiquetas-actions .btn { width: 100%; }
+}
+@media (max-width: 576px) {
+    .etiqueta-preview { transform: scale(0.7); }
+    .tabla-etiquetas { font-size: 0.75rem; }
 }
 </style>
 

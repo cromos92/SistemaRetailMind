@@ -261,6 +261,18 @@
         .btn-sm { min-height: 36px; font-size: .8rem; }
     }
 
+    /* Ultra mobile */
+    @media (max-width: 576px) {
+        .cuadratura-header { flex-direction: column; gap: 0.5rem; text-align: center; }
+        .cuadratura-header .btn { width: 100%; }
+        .denominacion-row { flex-direction: column; gap: 0.25rem; }
+        .denominacion-row input { width: 100% !important; }
+        .supervision-banner { flex-direction: column; padding: 0.75rem; text-align: center; }
+        .modal-cuadratura .modal-dialog { margin: 0.25rem; max-width: calc(100% - 0.5rem); }
+        .paso-header { font-size: 0.875rem; }
+        .resumen-cierre .total { font-size: 1.125rem; }
+    }
+
     @media (min-width: 769px) {
         .col-show-sm { display: none !important; }
     }
@@ -1728,10 +1740,11 @@ function cambiarPasoArqueo(paso) {
     }
 
     // Botones del footer
+    const esSoloLectura = $('#modalArqueo .conteo-input:first').prop('disabled');
     $('#btnWizardPrev').toggleClass('d-none', paso === 1);
     $('#btnWizardNext').toggleClass('d-none', paso === 4);
-    $('#btnGuardarConteo').toggleClass('d-none', paso !== 4);
-    $('#btnCerrarArqueo').toggleClass('d-none', paso !== 4);
+    $('#btnGuardarConteo').toggleClass('d-none', paso !== 4 || esSoloLectura);
+    $('#btnCerrarArqueo').toggleClass('d-none', paso !== 4 || esSoloLectura);
     $('#btnImprimirArqueo').toggleClass('d-none', paso !== 4);
 }
 
@@ -2275,6 +2288,7 @@ function continuarArqueo(arqueoId) {
             if (r.success) {
                 arqueoActual = { id:arqueoId, fecha:r.arqueo.fecha_arqueo, arqueo:r.arqueo };
                 abrirModalArqueo(); cargarDatosArqueoExistente(r.arqueo);
+                aplicarModoSoloLectura(false);
             } else mostrarError('Error: ' + r.error);
         },
         error:function(xhr){mostrarLoading(false);mostrarError('Error: '+xhr.responseText);}
@@ -2709,7 +2723,7 @@ function mostrarArqueos(arqueos) {
                 </td>
                 <td style="padding-right:1rem;">
                     <div class="d-flex gap-1">
-                        <button class="btn btn-sm" onclick="verDetalleArqueo(${a.id})" title="Ver/editar" style="background:var(--nexo-primary-light);color:var(--nexo-primary);"><i class="ri-eye-line"></i></button>
+                        <button class="btn btn-sm" onclick="verDetalleArqueo(${a.id})" title="${a.estado==='ABIERTO'?'Editar':'Ver detalle'}" style="background:var(--nexo-primary-light);color:var(--nexo-primary);"><i class="${a.estado==='ABIERTO'?'ri-edit-line':'ri-eye-line'}"></i></button>
                         <button class="btn btn-sm" onclick="imprimirArqueoId(${a.id})" title="Imprimir" style="background:var(--nexo-gray-100);color:var(--nexo-gray-700);"><i class="ri-printer-line"></i></button>
                         ${puedeReabrir && ['CERRADO','CON_DIFERENCIAS','DEPOSITO_DECLARADO','DEPOSITO_CONFIRMADO','REVISADO'].includes(a.estado) ? `<button class="btn btn-sm btn-warning" onclick="reabrirArqueoFecha('${a.fecha_arqueo}')" title="Reabrir"><i class="ri-lock-unlock-line"></i></button>` : ''}
                     </div>
@@ -2792,7 +2806,46 @@ function crearArqueoParaFecha(fecha) {
     });
 }
 
-function verDetalleArqueo(id) { continuarArqueo(id); }
+function verDetalleArqueo(id) {
+    limpiarModalArqueo();
+    mostrarLoading(true);
+    $.ajax({ url:`/app/api/arqueo/${id}/`, method:'GET',
+        success:function(r) {
+            mostrarLoading(false);
+            if (r.success) {
+                arqueoActual = { id:id, fecha:r.arqueo.fecha_arqueo, arqueo:r.arqueo };
+                const estadoArqueo = r.arqueo.estado || 'ABIERTO';
+                const esSoloLectura = estadoArqueo !== 'ABIERTO';
+                abrirModalArqueo();
+                cargarDatosArqueoExistente(r.arqueo);
+                aplicarModoSoloLectura(esSoloLectura, estadoArqueo);
+            } else mostrarError('Error: ' + r.error);
+        },
+        error:function(xhr){mostrarLoading(false);mostrarError('Error: '+xhr.responseText);}
+    });
+}
+
+function aplicarModoSoloLectura(soloLectura, estado) {
+    const modal = $('#modalArqueo');
+    if (soloLectura) {
+        modal.find('.conteo-input, #montoTotalExpress, #cierreDebitoExpress, #cierreCreditoExpress, #numeroLoteExpress, #observaciones, #observacionesDiferencia')
+             .prop('disabled', true).css('opacity', '0.7');
+        modal.find('input[name="modoArqueo"]').prop('disabled', true);
+        $('#btnToggleModo').prop('disabled', true);
+        $('#btnGuardarConteo').addClass('d-none');
+        $('#btnCerrarArqueo').addClass('d-none');
+        const estadoLabels = { 'CERRADO':'Cerrado', 'CON_DIFERENCIAS':'Con Diferencias', 'DEPOSITO_DECLARADO':'Dep. Declarado', 'DEPOSITO_CONFIRMADO':'Dep. Confirmado', 'REVISADO':'Revisado' };
+        const label = estadoLabels[estado] || estado;
+        $('#modalArqueoLabel').html(`<i class="ri-eye-line me-2"></i>Arqueo de Caja <span class="badge bg-light text-dark ms-2" style="font-size:.7rem;">${label} — Solo lectura</span> — <span id="fechaArqueoModal">${$('#fechaArqueoModal').text()}</span>`);
+    } else {
+        modal.find('.conteo-input, #montoTotalExpress, #cierreDebitoExpress, #cierreCreditoExpress, #numeroLoteExpress, #observaciones, #observacionesDiferencia')
+             .prop('disabled', false).css('opacity', '1');
+        modal.find('input[name="modoArqueo"]').prop('disabled', false);
+        $('#btnToggleModo').prop('disabled', false);
+        $('#modalArqueoLabel').html('<i class="ri-calculator-line me-2"></i>Arqueo de Caja — <span id="fechaArqueoModal">' + $('#fechaArqueoModal').text() + '</span>');
+    }
+}
+
 function imprimirArqueoId(id) { mostrarInfo('Función de impresión en desarrollo para arqueo #'+id); }
 
 function corregirArqueosExpress() {

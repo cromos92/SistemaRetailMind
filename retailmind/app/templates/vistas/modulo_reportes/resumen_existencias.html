@@ -460,6 +460,24 @@
     }
 }
 
+@media (max-width: 576px) {
+    .nexo-header h1 { font-size: 1.2rem; }
+    .nexo-header, .nexo-controls { padding: 16px; }
+    .nexo-controls { flex-direction: column; gap: 0.75rem; }
+    .nexo-control-group { width: 100%; }
+    .nexo-control-group select, .nexo-control-group input { min-width: 100%; }
+    .nexo-btn-group { width: 100%; }
+    .nexo-btn-group .nexo-btn { flex: 1; justify-content: center; }
+    .nexo-btn { width: 100%; justify-content: center; }
+    .nexo-totales-grid { grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px; }
+    .nexo-tarjeta-total .valor { font-size: 1.4rem; }
+    .nexo-tarjeta-total h3 { font-size: 0.7rem; }
+    .nexo-tabla { font-size: 0.75rem; }
+    .nexo-tabla th, .nexo-tabla td { padding: 0.375rem 0.5rem; white-space: nowrap; }
+    .nexo-tabla-wrapper { padding: 0 12px 12px; }
+    .nexo-alert { margin: 12px 16px 0; font-size: 0.85rem; }
+}
+
 /* ========== IMPRESIÓN ========== */
 @media print {
     .nexo-controls, .nexo-btn { display: none !important; }

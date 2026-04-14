@@ -718,6 +718,24 @@ kbd.sc {
     .modal-stats-row { grid-template-columns: repeat(2,1fr); }
     .modal-summary { grid-template-columns: repeat(3,1fr); }
 }
+
+@media (max-width: 576px) {
+    .busqueda-header { flex-direction: column; gap: 0.5rem; }
+    .busqueda-header .form-control { width: 100%; }
+    .busqueda-header .btn { width: 100%; }
+    .resultado-producto { flex-direction: column; gap: 0.5rem; }
+    .resultado-producto .producto-img { width: 50px; height: 50px; }
+    .resultado-producto .producto-info { font-size: 0.813rem; }
+    .resultado-producto .producto-stock { font-size: 0.875rem; }
+    .filtros-busqueda .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+}
+
+@media (max-width: 480px) {
+    .resultados-grid { gap: 0.5rem; }
+    .resultado-producto { padding: 0.5rem; }
+    .sucursal-selector { flex-direction: column; }
+    .sucursal-selector .btn { width: 100%; }
+}
 </style>
 
 <!-- Loader -->

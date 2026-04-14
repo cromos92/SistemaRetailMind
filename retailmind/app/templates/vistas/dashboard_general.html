@@ -158,6 +158,20 @@
 .status-danger { background: #f8d7da; color: #721c24; }
 .status-info { background: #d1ecf1; color: #0c5460; }
 .status-secondary { background: #e2e3e5; color: #383d41; }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .d-flex.justify-content-between { flex-direction: column; gap: 0.5rem; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .metric-value { font-size: 2rem; }
+    .metric-icon { font-size: 2rem; right: 10px; top: 10px; }
+}
+@media (max-width: 576px) {
+    .kpi-grid { grid-template-columns: 1fr; }
+    .chart-container-small { height: 200px !important; }
+    .table-dashboard { font-size: 0.8rem; }
+    .quick-link { padding: 0.75rem; font-size: 0.85rem; }
+}
 </style>
 
 <div class="page-content">

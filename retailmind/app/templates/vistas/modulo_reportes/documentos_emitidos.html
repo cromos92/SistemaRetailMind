@@ -892,6 +892,25 @@ td{padding:2px;border-bottom:1px dotted #ccc}
     .kpi-total { flex: 0 0 100%; border-top: 2px solid #adb5bd; }
 }
 
+/* ── MOBILE 576px ────────────────────────────────────── */
+@media (max-width: 576px) {
+    .docs-header { flex-direction: column; gap: 0.5rem; text-align: center; }
+    .docs-header .btn { width: 100%; }
+    .card-body .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    .docs-table { font-size: 0.75rem; }
+    .docs-table th, .docs-table td { padding: 0.375rem 0.5rem; white-space: nowrap; }
+    .kpi-bar { flex-direction: column; }
+    .kpi-item { flex: 0 0 100%; border-bottom: 1px solid #dee2e6; }
+    .kpi-sep { display: none; }
+    .kpi-total { flex: 0 0 100%; }
+    .kpi-val { font-size: 1rem; }
+    .resumen-item strong { font-size: 12px; }
+    .btn-ticket-cambio { padding: 4px 6px; font-size: 11px; }
+    .btn-tc-text { display: none; }
+    .btn-group { flex-wrap: wrap; }
+    .btn-group .btn { font-size: 10px; padding: 2px 6px; }
+}
+
 /* ── PRINT ────────────────────────────────────────────── */
 @media print {
     .no-print, .col-acciones-print, .btn-ticket-cambio,

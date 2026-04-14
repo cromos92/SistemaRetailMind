@@ -472,6 +472,17 @@
         font-size: 14px;
         color: #7f8c8d;
     }
+
+    @media (max-width: 768px) {
+        .precios-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+        .precios-actions { flex-wrap: wrap; gap: 0.5rem; }
+        .precios-actions .btn { flex: 1 1 auto; }
+    }
+    @media (max-width: 576px) {
+        .tabla-precios { font-size: 0.75rem; }
+        .tabla-precios th, .tabla-precios td { padding: 0.375rem 0.5rem; }
+        .precio-input { width: 80px !important; min-height: 44px; font-size: 16px !important; }
+    }
 </style>
 
 <div class="page-content">

@@ -10,6 +10,17 @@
     .section-compact .card-body{padding:.75rem}
     .section-compact .form-label{font-size:.8rem;margin-bottom:.2rem}
     .section-compact .form-control,.section-compact .form-select{font-size:.85rem;padding:.35rem .6rem}
+
+    @media (max-width: 768px) {
+        .tipo-card-container { flex-wrap: wrap; }
+        .tipo-card { flex: 1 1 calc(50% - 0.5rem) !important; }
+        .form-section .row > [class*="col-md-"],
+        .form-section .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    }
+    @media (max-width: 576px) {
+        .tipo-card { flex: 1 1 100% !important; }
+        .form-section { padding: 0.75rem; }
+    }
 </style>
 
 <div class="container-fluid p-0 section-compact">

@@ -25,6 +25,16 @@
     margin: 5px 0;
     font-size: 0.9rem;
 }
+
+@media (max-width: 768px) {
+    .diagnostico-stats { flex-direction: column; gap: 0.5rem; }
+    .diagnostico-stats .stat-card { width: 100%; }
+    .diagnostico-content .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+}
+@media (max-width: 576px) {
+    .diagnostico-header { flex-direction: column; gap: 0.5rem; }
+    .diagnostico-value { font-size: 1rem; }
+}
 </style>
 
 <div class="main-content">

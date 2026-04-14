@@ -1,0 +1,1118 @@
+/**
+ * NEXO Responsive System - RetailMind
+ * CSS centralizado para responsive en todos los modulos
+ * Compatible: celulares, tablets, PCs touch, desktops
+ * Breakpoints Bootstrap 5: 576 / 768 / 992 / 1200 / 1400
+ */
+
+/* ==========================================================================
+   1. TOUCH TARGETS GLOBALES
+   Minimo 44x44px para dispositivos touch (WCAG 2.5.5)
+   ========================================================================== */
+@media (max-width: 992px) {
+    .btn:not(.btn-sm):not(.btn-icon) {
+        min-height: 44px;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .form-control,
+    .form-select,
+    .input-nexo,
+    .nexo-form-control,
+    .nexo-form-select {
+        min-height: 44px;
+        font-size: 16px !important; /* Prevent iOS zoom on focus */
+    }
+
+    .nav-link,
+    .nav-pills .nav-link {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .form-check-input {
+        width: 1.25em;
+        height: 1.25em;
+    }
+
+    .form-check-label {
+        padding-left: 0.25rem;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    select.form-select option {
+        padding: 0.5rem;
+    }
+
+    .select2-container .select2-selection--single {
+        min-height: 44px !important;
+    }
+
+    .select2-container .select2-selection--single .select2-selection__rendered {
+        line-height: 42px !important;
+    }
+
+    .select2-container .select2-selection--single .select2-selection__arrow {
+        height: 42px !important;
+    }
+
+    .select2-container .select2-selection--multiple {
+        min-height: 44px !important;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        min-width: 44px;
+        min-height: 44px;
+        line-height: 44px;
+        padding: 0 0.5rem !important;
+    }
+
+    .dataTables_wrapper .dataTables_length select {
+        min-height: 44px;
+    }
+}
+
+/* Pointer coarse = dispositivo touch */
+@media (pointer: coarse) {
+    .btn:not(.btn-sm):not(.btn-icon) {
+        min-height: 44px;
+    }
+
+    .dropdown-item {
+        padding: 0.625rem 1rem;
+        min-height: 44px;
+    }
+
+    .list-group-item {
+        padding: 0.75rem 1rem;
+    }
+
+    .close, .btn-close {
+        width: 44px;
+        height: 44px;
+        padding: 0.75rem;
+    }
+}
+
+/* ==========================================================================
+   2. TABLAS RESPONSIVE
+   ========================================================================== */
+.table-responsive-nexo {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+}
+
+.table-responsive-nexo::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 20px;
+    background: linear-gradient(to left, rgba(0,0,0,0.05), transparent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.table-responsive-nexo.is-scrollable::after {
+    opacity: 1;
+}
+
+@media (max-width: 992px) {
+    .table-responsive,
+    .table-responsive-nexo {
+        margin: 0 -0.75rem;
+        padding: 0 0.75rem;
+        width: calc(100% + 1.5rem);
+    }
+
+    .table-nexo th,
+    .table-nexo td,
+    .nexo-table th,
+    .nexo-table td {
+        padding: 0.625rem 0.75rem;
+        font-size: 0.813rem;
+    }
+
+    .table-nexo th:first-child,
+    .table-nexo td:first-child,
+    .nexo-table th:first-child,
+    .nexo-table td:first-child {
+        position: sticky;
+        left: 0;
+        background: inherit;
+        z-index: 1;
+    }
+
+    table.dataTable thead th,
+    table.dataTable tbody td {
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 576px) {
+    .table-nexo th,
+    .table-nexo td,
+    .nexo-table th,
+    .nexo-table td {
+        padding: 0.5rem 0.5rem;
+        font-size: 0.75rem;
+    }
+}
+
+/* ==========================================================================
+   3. MODALES MOBILE
+   ========================================================================== */
+@media (max-width: 576px) {
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+
+    .modal-dialog-scrollable .modal-body {
+        max-height: calc(100vh - 160px);
+    }
+
+    .modal-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .modal-body {
+        padding: 0.75rem;
+    }
+
+    .modal-footer {
+        padding: 0.5rem 0.75rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .modal-footer .btn {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .modal-title {
+        font-size: 1rem;
+    }
+
+    .modal-xl .modal-dialog,
+    .modal-lg .modal-dialog {
+        max-width: calc(100% - 1rem);
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-dialog.modal-xl,
+    .modal-dialog.modal-lg {
+        max-width: calc(100% - 1rem);
+        margin: 0.5rem;
+    }
+
+    .modal-body .row > [class*="col-lg-"],
+    .modal-body .row > [class*="col-xl-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+/* ==========================================================================
+   4. KPI GRIDS RESPONSIVE
+   ========================================================================== */
+@media (max-width: 1200px) {
+    .nexo-kpi-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .nexo-kpi-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem !important;
+    }
+
+    .nexo-kpi-card {
+        padding: 1rem !important;
+    }
+
+    .nexo-kpi-value {
+        font-size: 1.375rem !important;
+    }
+
+    .nexo-kpi-label {
+        font-size: 0.75rem !important;
+    }
+
+    .kpi-card-nexo {
+        padding: 1rem;
+    }
+
+    .kpi-value-nexo {
+        font-size: 1.375rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .nexo-kpi-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.5rem !important;
+    }
+
+    .nexo-kpi-card {
+        padding: 0.875rem !important;
+    }
+
+    .nexo-kpi-value {
+        font-size: 1.25rem !important;
+    }
+
+    .nexo-kpi-icon {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 1rem !important;
+    }
+
+    .kpi-card-nexo {
+        padding: 0.875rem;
+    }
+
+    .kpi-value-nexo {
+        font-size: 1.25rem;
+    }
+}
+
+/* ==========================================================================
+   5. FILTROS RESPONSIVE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .nexo-filter-section {
+        padding: 1rem !important;
+    }
+
+    .nexo-filter-section .row > [class*="col-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: 0.5rem;
+    }
+
+    .nexo-filter-section .row > [class*="col-md-"],
+    .nexo-filter-section .row > [class*="col-lg-"],
+    .nexo-filter-section .row > [class*="col-xl-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    .nexo-filter-shortcuts {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        padding-bottom: 0.5rem !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nexo-filter-shortcuts .btn {
+        flex-shrink: 0 !important;
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 576px) {
+    .nexo-filter-section {
+        padding: 0.75rem !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .nexo-filter-section .btn {
+        width: 100%;
+    }
+}
+
+/* ==========================================================================
+   6. DASHBOARD HEADERS RESPONSIVE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .nexo-dashboard-header {
+        padding: 1.25rem !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .nexo-dashboard-header .row {
+        flex-direction: column;
+    }
+
+    .nexo-dashboard-title {
+        font-size: 1.25rem !important;
+    }
+
+    .nexo-dashboard-subtitle {
+        font-size: 0.813rem !important;
+    }
+
+    .nexo-header-actions {
+        margin-top: 0.75rem !important;
+        flex-wrap: wrap !important;
+    }
+
+    .nexo-header-actions .btn {
+        flex: 1 1 auto;
+        text-align: center;
+    }
+}
+
+@media (max-width: 576px) {
+    .nexo-dashboard-header {
+        padding: 1rem !important;
+        border-radius: 8px !important;
+    }
+
+    .nexo-dashboard-title {
+        font-size: 1.125rem !important;
+    }
+
+    .nexo-header-actions {
+        flex-direction: column !important;
+    }
+
+    .nexo-header-actions .btn {
+        width: 100%;
+    }
+}
+
+/* ==========================================================================
+   7. POS LAYOUTS RESPONSIVE
+   ========================================================================== */
+@media (max-width: 1200px) {
+    .pos-main-layout {
+        grid-template-columns: 280px 1fr !important;
+    }
+}
+
+@media (max-width: 992px) {
+    .pos-main-layout {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto !important;
+    }
+
+    .pos-right-panel {
+        position: static !important;
+        top: auto !important;
+        max-height: none !important;
+    }
+
+    .pos-left-panel,
+    .pos-sidebar {
+        order: 2;
+    }
+
+    .pos-content,
+    .pos-main {
+        order: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .pos-main-layout {
+        gap: 0.75rem !important;
+        padding: 0.5rem !important;
+    }
+}
+
+/* ==========================================================================
+   8. CHARTS RESPONSIVE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .nexo-chart-container {
+        height: 250px !important;
+    }
+
+    .nexo-chart-container-sm {
+        height: 180px !important;
+    }
+
+    .nexo-chart-header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.5rem;
+    }
+
+    .nexo-chart-body {
+        padding: 0.75rem !important;
+    }
+
+    .nexo-chart-card {
+        margin-bottom: 1rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .nexo-chart-container {
+        height: 200px !important;
+    }
+
+    .nexo-chart-container-sm {
+        height: 150px !important;
+    }
+}
+
+/* ==========================================================================
+   9. TEXTO ADAPTATIVO
+   ========================================================================== */
+@media (max-width: 768px) {
+    .page-title-box h4,
+    .page-title {
+        font-size: 1rem !important;
+    }
+
+    .nexo-section-title {
+        font-size: 1rem !important;
+    }
+
+    .nexo-section-icon {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 1rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .page-title-box h4,
+    .page-title {
+        font-size: 0.938rem !important;
+    }
+
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    h3 { font-size: 1.125rem !important; }
+    h4 { font-size: 1rem !important; }
+    h5 { font-size: 0.938rem !important; }
+}
+
+/* ==========================================================================
+   10. SCROLL HORIZONTAL INDICATORS
+   ========================================================================== */
+.touch-scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.touch-scroll-x::-webkit-scrollbar {
+    height: 4px;
+}
+
+.touch-scroll-x::-webkit-scrollbar-thumb {
+    background: var(--nexo-gray-300, #D1D1D9);
+    border-radius: 2px;
+}
+
+/* ==========================================================================
+   11. UTILITY CLASSES MOBILE
+   ========================================================================== */
+.mobile-stack {
+    display: flex;
+    gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .mobile-stack {
+        flex-direction: column !important;
+    }
+
+    .mobile-full-width {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .mobile-hide {
+        display: none !important;
+    }
+
+    .mobile-show {
+        display: block !important;
+    }
+
+    .mobile-text-center {
+        text-align: center !important;
+    }
+
+    .mobile-p-0 {
+        padding: 0 !important;
+    }
+
+    .mobile-px-1 {
+        padding-left: 0.25rem !important;
+        padding-right: 0.25rem !important;
+    }
+
+    .mobile-gap-sm {
+        gap: 0.5rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .xs-hide {
+        display: none !important;
+    }
+
+    .xs-show {
+        display: block !important;
+    }
+
+    .xs-full-width {
+        width: 100% !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+
+    .xs-stack {
+        flex-direction: column !important;
+    }
+
+    .xs-text-center {
+        text-align: center !important;
+    }
+}
+
+/* ==========================================================================
+   12. SELECT2 MOBILE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-dropdown {
+        max-width: calc(100vw - 2rem);
+    }
+
+    .select2-results__option {
+        padding: 0.625rem 0.75rem !important;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    .select2-search--dropdown .select2-search__field {
+        min-height: 44px;
+        font-size: 16px !important;
+    }
+}
+
+/* ==========================================================================
+   13. DATATABLES MOBILE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_length {
+        float: none !important;
+        text-align: left !important;
+        margin-bottom: 0.5rem;
+    }
+
+    .dataTables_wrapper .dataTables_filter input {
+        width: 100% !important;
+        margin-left: 0 !important;
+    }
+
+    .dataTables_wrapper .dataTables_info {
+        float: none !important;
+        text-align: center !important;
+        font-size: 0.813rem;
+        padding-top: 0.5rem;
+    }
+
+    .dataTables_wrapper .dataTables_paginate {
+        float: none !important;
+        text-align: center !important;
+        margin-top: 0.5rem;
+    }
+
+    .dataTables_wrapper .dt-buttons {
+        float: none !important;
+        margin-bottom: 0.5rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+
+    .dataTables_wrapper .dt-buttons .btn {
+        flex: 1 1 auto;
+        font-size: 0.813rem;
+    }
+
+    div.dataTables_wrapper div.dataTables_filter label {
+        width: 100%;
+    }
+}
+
+@media (max-width: 576px) {
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        padding: 0.25rem 0.5rem !important;
+        font-size: 0.75rem;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button.previous,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.next {
+        padding: 0.25rem 0.75rem !important;
+    }
+}
+
+/* ==========================================================================
+   14. CARDS RESPONSIVE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .card-nexo {
+        border-radius: 8px;
+    }
+
+    .card-nexo-header {
+        padding: 1rem 1rem;
+    }
+
+    .card-nexo-body {
+        padding: 1rem;
+    }
+
+    .card-nexo-footer {
+        padding: 0.75rem 1rem;
+    }
+
+    .card {
+        margin-bottom: 0.75rem;
+    }
+
+    .card-body {
+        padding: 0.875rem;
+    }
+
+    .card-header {
+        padding: 0.75rem 0.875rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .card-nexo-body {
+        padding: 0.75rem;
+    }
+
+    .card-body {
+        padding: 0.75rem;
+    }
+}
+
+/* ==========================================================================
+   15. WIZARD / STEPPER RESPONSIVE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .step-indicator {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.5rem !important;
+    }
+
+    .step-indicator .step {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 0.75rem;
+        width: 100%;
+    }
+
+    .step-line,
+    .flow-separator {
+        display: none !important;
+    }
+
+    .step-indicator .step-number {
+        flex-shrink: 0;
+    }
+
+    .wizard-header,
+    .checkout-wizard-header {
+        padding: 0.75rem !important;
+    }
+
+    .dte-section {
+        padding: 1rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .step-indicator .step-label {
+        font-size: 0.813rem !important;
+    }
+}
+
+/* ==========================================================================
+   16. AUTH / LOGIN PAGES RESPONSIVE
+   ========================================================================== */
+@media (max-width: 576px) {
+    .auth-page-wrapper .auth-page-content {
+        padding: 1rem;
+    }
+
+    .auth-page-wrapper .card {
+        margin: 0.5rem;
+        border-radius: 12px;
+    }
+
+    .auth-page-wrapper .card-body {
+        padding: 1.25rem;
+    }
+
+    .auth-page-wrapper h5 {
+        font-size: 1.125rem;
+    }
+}
+
+/* ==========================================================================
+   17. PAGE CONTENT / CONTAINER
+   ========================================================================== */
+@media (max-width: 768px) {
+    .page-content {
+        padding: 0.5rem 0.5rem 3.5rem 0.5rem !important;
+    }
+
+    .container-fluid {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .page-content {
+        padding: 0.25rem 0.25rem 3.5rem 0.25rem !important;
+    }
+
+    .container-fluid {
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
+    }
+}
+
+/* ==========================================================================
+   18. BADGES & PILLS RESPONSIVE
+   ========================================================================== */
+@media (max-width: 576px) {
+    .badge-nexo,
+    .nexo-badge {
+        font-size: 0.688rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .badge {
+        font-size: 0.688rem;
+    }
+}
+
+/* ==========================================================================
+   19. ALERTS RESPONSIVE
+   ========================================================================== */
+@media (max-width: 576px) {
+    .nexo-alert {
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem;
+    }
+
+    .nexo-alert-icon {
+        width: 28px;
+        height: 28px;
+        font-size: 0.938rem;
+    }
+}
+
+/* ==========================================================================
+   20. METHOD SELECTORS / DISPATCH TYPE CARDS
+   ========================================================================== */
+@media (max-width: 768px) {
+    .method-selector {
+        padding: 0.75rem !important;
+    }
+
+    .method-selector .method-option,
+    .dispatch-type-card,
+    .tipo-card {
+        padding: 0.75rem !important;
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 576px) {
+    .method-selector {
+        flex-direction: column !important;
+    }
+
+    .method-selector .method-option,
+    .dispatch-type-card,
+    .tipo-card {
+        width: 100% !important;
+    }
+}
+
+/* ==========================================================================
+   21. IMPORT / UPLOAD ZONES
+   ========================================================================== */
+@media (max-width: 576px) {
+    .dropzone,
+    .upload-zone,
+    .import-zone {
+        padding: 1.5rem 1rem !important;
+        min-height: auto !important;
+    }
+
+    .dropzone .dz-message {
+        font-size: 0.875rem;
+    }
+}
+
+/* ==========================================================================
+   22. STATS / MINI STATS
+   ========================================================================== */
+@media (max-width: 768px) {
+    .nexo-stats-mini {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+
+    .nexo-stats-mini-value {
+        font-size: 0.875rem;
+    }
+}
+
+/* ==========================================================================
+   23. GRID LAYOUT HELPERS (col overrides for mobile)
+   ========================================================================== */
+@media (max-width: 576px) {
+    .row > .col-6:not(.col-xs-6) {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+/* ==========================================================================
+   24. EMPTY STATE RESPONSIVE
+   ========================================================================== */
+@media (max-width: 576px) {
+    .empty-state-nexo {
+        padding: 2rem 1rem;
+    }
+
+    .empty-state-nexo i {
+        font-size: 2.5rem;
+    }
+
+    .empty-state-nexo h4 {
+        font-size: 1rem;
+    }
+}
+
+/* ==========================================================================
+   25. SIDEBAR OVERLAY FOR MOBILE
+   ========================================================================== */
+@media (max-width: 768px) {
+    .vertical-menu,
+    .app-menu {
+        z-index: 1050;
+    }
+
+    body.sidebar-enable .vertical-overlay {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 1040;
+    }
+}
+
+/* ==========================================================================
+   26. FOOTER RESPONSIVE
+   ========================================================================== */
+@media (max-width: 576px) {
+    .footer {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .footer .row > div {
+        text-align: center !important;
+        margin-bottom: 0.25rem;
+    }
+}
+
+/* ==========================================================================
+   27. PRINT: UNIVERSAL HIDE NON-ESSENTIAL
+   ========================================================================== */
+@media print {
+    .nexo-filter-section,
+    .nexo-header-actions,
+    .dataTables_filter,
+    .dataTables_length,
+    .dataTables_paginate,
+    .dataTables_info,
+    .dt-buttons,
+    .back-to-top,
+    #back-to-top,
+    .sidebar-enable,
+    .vertical-menu,
+    .app-menu,
+    .navbar-header,
+    .topbar,
+    .footer {
+        display: none !important;
+    }
+}
+
+/* ==========================================================================
+   28. VENDEDORES GRID (POS)
+   ========================================================================== */
+@media (max-width: 768px) {
+    .vendedores-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.5rem !important;
+    }
+
+    .vendedor-card {
+        padding: 0.5rem !important;
+        font-size: 0.813rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .vendedores-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ==========================================================================
+   29. ACCESOS STRIP (POS)
+   ========================================================================== */
+@media (max-width: 768px) {
+    .accesos-grid,
+    .accesos-strip {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+    }
+
+    .accesos-grid .acceso-btn,
+    .accesos-strip .btn {
+        flex: 1 1 calc(50% - 0.5rem);
+        min-width: 0;
+        font-size: 0.813rem;
+        padding: 0.5rem;
+        text-align: center;
+    }
+}
+
+@media (max-width: 576px) {
+    .accesos-grid .acceso-btn,
+    .accesos-strip .btn {
+        flex: 1 1 100%;
+    }
+}
+
+/* ==========================================================================
+   30. TOOLBAR / ACTION BAR
+   ========================================================================== */
+@media (max-width: 768px) {
+    .page-title-box {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.5rem;
+    }
+
+    .page-title-box .page-title-right {
+        width: 100%;
+    }
+
+    .page-title-box .breadcrumb {
+        flex-wrap: wrap;
+    }
+
+    .hstack.gap-2,
+    .d-flex.gap-2 {
+        flex-wrap: wrap;
+    }
+}
+
+/* ==========================================================================
+   31. PRODUCT CARDS (Existencias)
+   ========================================================================== */
+@media (max-width: 768px) {
+    .prod-card-main {
+        flex-direction: column !important;
+    }
+
+    .prod-card-main > * {
+        width: 100% !important;
+    }
+}
+
+/* ==========================================================================
+   32. LOADING OVERLAY
+   ========================================================================== */
+@media (max-width: 576px) {
+    #fullscreenLoader div {
+        padding: 1rem;
+    }
+
+    #fullscreenLoader .spinner-border {
+        width: 2rem !important;
+        height: 2rem !important;
+    }
+
+    #fullscreenLoader p {
+        font-size: 0.875rem;
+    }
+}
+
+/* ==========================================================================
+   33. DENOMINATION TABLE (Cuadratura)
+   ========================================================================== */
+@media (max-width: 576px) {
+    .denominacion-table input,
+    .denominaciones input[type="number"] {
+        width: 80px !important;
+        min-height: 44px;
+        font-size: 16px !important;
+    }
+}
+
+/* ==========================================================================
+   34. TRANSITION SMOOTHING FOR RESPONSIVE
+   ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+    .nexo-kpi-card,
+    .card-nexo,
+    .card,
+    .modal-dialog {
+        transition: all 0.2s ease;
+    }
+}
+
+/* ==========================================================================
+   35. LANDSCAPE PHONE SPECIFIC
+   ========================================================================== */
+@media (max-height: 500px) and (orientation: landscape) {
+    .modal-body {
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+
+    .nexo-chart-container {
+        height: 180px !important;
+    }
+
+    .page-content {
+        padding-top: 0.25rem !important;
+    }
+}

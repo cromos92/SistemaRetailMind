@@ -1072,6 +1072,16 @@
         justify-content: center;
     }
 }
+
+@media (max-width: 768px) {
+    .cambios-precios-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .cambios-precios-actions { flex-wrap: wrap; }
+    .cambios-precios-actions .btn { flex: 1 1 auto; }
+}
+@media (max-width: 576px) {
+    .tabla-cambios-precios { font-size: 0.75rem; }
+    .precio-anterior, .precio-nuevo { font-size: 0.813rem; }
+}
 </style>
 
 <div class="page-content revisar-precios-page">

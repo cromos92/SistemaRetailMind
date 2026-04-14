@@ -4615,9 +4615,12 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     }
     
     # ========== PROCESAR TICKETS ==========
+    # Usar campo `fecha` (DateField, auto_now) en vez de `created_at` (DateTimeField)
+    # porque `fecha` se actualiza al pagar el ticket, mientras que `created_at`
+    # refleja cuando se creó (posiblemente como PENDIENTE en otro momento).
     tickets_del_dia = Ticket.objects.filter(
         sucursal=sucursal,
-        created_at__range=[inicio_dia, fin_dia],
+        fecha=fecha_obj,
         estado='PAGADO'
     ).prefetch_related('pagos')
     
@@ -4694,7 +4697,7 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     # Obtener folios de DTEs que ya tienen ticket asociado para evitar duplicar pagos
     folios_tickets = Ticket.objects.filter(
         sucursal=sucursal,
-        created_at__range=[inicio_dia, fin_dia],
+        fecha=fecha_obj,
         folio_dte__isnull=False
     ).values_list('folio_dte', flat=True)
     
@@ -4705,8 +4708,11 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION']
     ).prefetch_related('dte_asociado')
     
+    folios_tickets_set = set(folios_tickets)
+
     for dte in dtes_del_dia:
         monto_dte = dte.monto_con_iva or 0
+        tiene_ticket_asociado = dte.numero_documento in folios_tickets_set
         
         # Calcular suma de pagos para detectar descuentos
         suma_pagos_dte = sum((p.monto or 0) for p in dte.dte_asociado.all())
@@ -4715,23 +4721,8 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         # Usar monto real pagado (con descuento aplicado) para cuadratura
         monto_real = suma_pagos_dte if suma_pagos_dte > 0 else monto_dte
         
-        if dte.tipo_documento == 'BOLETA ELECTRONICA':
-            cuadratura_data['total_boletas_electronicas'] += monto_real
-            cuadratura_data['cantidad_boletas_electronicas'] += 1
-            cuadratura_data['total_descuentos'] += descuento_dte
-        elif dte.tipo_documento == 'BOLETA PAPEL':
-            cuadratura_data['total_boletas_papel'] += monto_real
-            cuadratura_data['cantidad_boletas_papel'] += 1
-            cuadratura_data['total_descuentos'] += descuento_dte
-        elif dte.tipo_documento == 'FACTURA ELECTRONICA':
-            cuadratura_data['total_facturas'] += monto_real
-            cuadratura_data['cantidad_facturas'] += 1
-            cuadratura_data['total_descuentos'] += descuento_dte
-        elif dte.tipo_documento == 'FACTURA EXENTA':
-            cuadratura_data['total_facturas_exentas'] += monto_real
-            cuadratura_data['cantidad_facturas_exentas'] += 1
-            cuadratura_data['total_descuentos'] += descuento_dte
-        elif dte.tipo_documento == 'NOTA DE CREDITO':
+        # NC siempre se procesan (para restarlas)
+        if dte.tipo_documento == 'NOTA DE CREDITO':
             cuadratura_data['total_notas_credito'] += monto_dte
             cuadratura_data['cantidad_notas_credito'] += 1
             pagos_nc = dte.dte_asociado.all()
@@ -4740,10 +4731,34 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 cuadratura_data['total_nc_efectivo'] += monto_dte
             else:
                 cuadratura_data['total_nc_transferencia'] += monto_dte
-        
-        # ⚠️ IMPORTANTE: Solo procesar pagos del DTE si NO tiene ticket asociado
-        # Si el folio del DTE está en la lista de tickets, sus pagos ya fueron procesados
-        tiene_ticket_asociado = dte.numero_documento in folios_tickets
+        elif not tiene_ticket_asociado:
+            # Solo contar montos DTE si NO tienen ticket asociado (evita doble conteo)
+            if dte.tipo_documento == 'BOLETA ELECTRONICA':
+                cuadratura_data['total_boletas_electronicas'] += monto_real
+                cuadratura_data['cantidad_boletas_electronicas'] += 1
+                cuadratura_data['total_descuentos'] += descuento_dte
+            elif dte.tipo_documento == 'BOLETA PAPEL':
+                cuadratura_data['total_boletas_papel'] += monto_real
+                cuadratura_data['cantidad_boletas_papel'] += 1
+                cuadratura_data['total_descuentos'] += descuento_dte
+            elif dte.tipo_documento == 'FACTURA ELECTRONICA':
+                cuadratura_data['total_facturas'] += monto_real
+                cuadratura_data['cantidad_facturas'] += 1
+                cuadratura_data['total_descuentos'] += descuento_dte
+            elif dte.tipo_documento == 'FACTURA EXENTA':
+                cuadratura_data['total_facturas_exentas'] += monto_real
+                cuadratura_data['cantidad_facturas_exentas'] += 1
+                cuadratura_data['total_descuentos'] += descuento_dte
+        else:
+            # Ticket con DTE: solo registrar cantidades de documentos (no montos)
+            if dte.tipo_documento == 'BOLETA ELECTRONICA':
+                cuadratura_data['cantidad_boletas_electronicas'] += 1
+            elif dte.tipo_documento == 'BOLETA PAPEL':
+                cuadratura_data['cantidad_boletas_papel'] += 1
+            elif dte.tipo_documento == 'FACTURA ELECTRONICA':
+                cuadratura_data['cantidad_facturas'] += 1
+            elif dte.tipo_documento == 'FACTURA EXENTA':
+                cuadratura_data['cantidad_facturas_exentas'] += 1
         
         # Procesar pagos del DTE SOLO si no tiene ticket asociado
         if not tiene_ticket_asociado:
@@ -5406,10 +5421,10 @@ def obtener_detalle_arqueo(request, arqueo_id):
         # ========== PROCESAR TICKETS ==========
         tickets_del_dia = Ticket.objects.filter(
             sucursal=sucursal,
-            created_at__range=[inicio_dia, fin_dia],
+            fecha=fecha_obj,
             estado='PAGADO'
         ).prefetch_related('pagos')
-        
+
         for ticket in tickets_del_dia:
             # Procesar pagos del ticket
             for pago in ticket.pagos.all():
@@ -5454,7 +5469,7 @@ def obtener_detalle_arqueo(request, arqueo_id):
         # Evitar doble conteo de DTEs que ya tienen ticket asociado
         folios_tickets = Ticket.objects.filter(
             sucursal=sucursal,
-            created_at__range=[inicio_dia, fin_dia],
+            fecha=fecha_obj,
             folio_dte__isnull=False
         ).values_list('folio_dte', flat=True)
         
@@ -6560,7 +6575,7 @@ def obtener_transacciones_dia(request):
         # ========== OBTENER TICKETS ==========
         tickets_del_dia = Ticket.objects.filter(
             sucursal=sucursal,
-            created_at__range=[inicio_dia, fin_dia],
+            fecha=fecha_obj,
             estado='PAGADO'
         ).prefetch_related('pagos').order_by('created_at')
         
@@ -8116,7 +8131,7 @@ def reabrir_arqueo(request):
         # Procesar tickets del día completo
         tickets_del_dia = Ticket.objects.filter(
             sucursal=sucursal,
-            created_at__range=[inicio_dia, fin_dia],
+            fecha=fecha_obj,
             estado='PAGADO'
         ).prefetch_related('pagos')
         
@@ -8166,7 +8181,7 @@ def reabrir_arqueo(request):
         # Procesar DTEs
         folios_tickets = Ticket.objects.filter(
             sucursal=sucursal,
-            created_at__range=[inicio_dia, fin_dia]
+            fecha=fecha_obj
         ).exclude(folio_dte__isnull=True).values_list('folio_dte', flat=True)
         
         dtes_del_dia = Dte.objects.filter(

@@ -1397,5 +1397,31 @@ function verDocumentosVendedor(vendedorId, vendedorNombre) {
         display: none !important;
     }
 }
+
+@media (max-width: 768px) {
+    .row.g-3 > [class*="col-md-"],
+    .row.g-3 > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+    .row.mb-4 > .col-md-3 { flex: 0 0 50%; max-width: 50%; }
+    .display-5 { font-size: 1.5rem; }
+    .fs-5 { font-size: 0.9rem !important; }
+    #chartTopVendedores, #chartParticipacionVendedores,
+    #chartVentasSucursales, #chartComparativaSucursales { min-height: 250px !important; }
+}
+
+@media (max-width: 576px) {
+    .row.g-3 > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    .row.mb-4 > .col-md-3 { flex: 0 0 100%; max-width: 100%; }
+    .display-5 { font-size: 1.25rem; }
+    .table { font-size: 0.75rem; }
+    .table th, .table td { padding: 0.375rem 0.5rem; white-space: nowrap; }
+    .card-header .d-flex { flex-direction: column; gap: 0.5rem; }
+    .card-header .d-flex div { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+    .card-header .btn { width: 100%; }
+    .nav-tabs .nav-link { font-size: 0.8rem; padding: 6px 10px; }
+    #chartTopVendedores, #chartParticipacionVendedores,
+    #chartVentasSucursales, #chartComparativaSucursales { min-height: 200px !important; }
+    .avatar-sm { height: 2.2rem; width: 2.2rem; }
+    .fs-3 { font-size: 1.1rem !important; }
+}
 </style>
 
