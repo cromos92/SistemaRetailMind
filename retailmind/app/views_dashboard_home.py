@@ -16,7 +16,7 @@ from .models import (
     Sucursal, EmpresaUser, Empresa, Compras, Compras_Producto, Compras_Producto_Talla,
     Productos_Recepcionados, Requerimiento, Movimientos_Producto, LoteProducto,
     CambioDevolucion, Solicitud_Regularizacion, Traspaso, AjusteInventario,
-    PermisoRol, OpcionMenu,
+    PermisoRol, OpcionMenu, ModuloSistema,
     ArqueoCaja, DepositoBancario, CambioPrecioPendiente,
 )
 
@@ -24,41 +24,122 @@ from .models import (
 @login_required
 def bienvenida(request):
     """
-    Página de bienvenida básica para usuarios sin acceso al dashboard completo.
+    Página de bienvenida con accesos rápidos organizados por módulo y perfil.
     No requiere permisos especiales.
     """
     sucursal_id = request.session.get('idSucursalActual')
     sucursal_actual = None
     if sucursal_id:
         sucursal_actual = Sucursal.objects.filter(id=sucursal_id).first()
-    
-    # Obtener opciones del menú que el usuario SÍ puede ver
-    opciones_disponibles = []
+
+    rol = request.user.rol
+    modulos_con_opciones = []
+    total_accesos = 0
+
     try:
-        opciones = OpcionMenu.objects.filter(
-            activo=True,
-            padre__isnull=True  # Solo opciones principales, no submenús
-        ).select_related('modulo').order_by('modulo__orden', 'orden')
-        
-        for opcion in opciones:
-            if PermisoRol.tiene_permiso(request.user, opcion.codigo, 'puede_ver', sucursal_id):
-                opciones_disponibles.append({
-                    'nombre': opcion.nombre,
-                    'codigo': opcion.codigo,
-                    'icono': opcion.icono or 'ri-apps-line',
-                    'url_name': opcion.url_name,
-                    'url_path': opcion.url_path,
-                    'modulo': opcion.modulo.nombre if opcion.modulo else 'General'
+        modulos = ModuloSistema.objects.filter(activo=True).order_by('orden')
+
+        for modulo in modulos:
+            opciones_hijas = OpcionMenu.objects.filter(
+                activo=True,
+                modulo=modulo,
+                padre__isnull=False,
+                es_submenu=False,
+            ).filter(
+                Q(url_name__isnull=False) | Q(url_path__isnull=False)
+            ).exclude(url_name='').exclude(url_path='').select_related('modulo').order_by('orden')
+
+            items = []
+            for opcion in opciones_hijas:
+                if PermisoRol.tiene_permiso(request.user, opcion.codigo, 'puede_ver', sucursal_id):
+                    items.append({
+                        'nombre': opcion.nombre,
+                        'codigo': opcion.codigo,
+                        'icono': opcion.icono or 'ri-apps-line',
+                        'url_name': opcion.url_name,
+                        'url_path': opcion.url_path,
+                    })
+
+            if not items:
+                opciones_padre = OpcionMenu.objects.filter(
+                    activo=True,
+                    modulo=modulo,
+                    padre__isnull=True,
+                    es_submenu=False,
+                ).filter(
+                    Q(url_name__isnull=False) | Q(url_path__isnull=False)
+                ).exclude(url_name='').exclude(url_path='').select_related('modulo').order_by('orden')
+
+                for opcion in opciones_padre:
+                    if PermisoRol.tiene_permiso(request.user, opcion.codigo, 'puede_ver', sucursal_id):
+                        items.append({
+                            'nombre': opcion.nombre,
+                            'codigo': opcion.codigo,
+                            'icono': opcion.icono or 'ri-apps-line',
+                            'url_name': opcion.url_name,
+                            'url_path': opcion.url_path,
+                        })
+
+            if items:
+                total_accesos += len(items)
+                modulos_con_opciones.append({
+                    'nombre': modulo.nombre,
+                    'codigo': modulo.codigo,
+                    'icono': modulo.icono or 'ri-apps-line',
+                    'opciones': items,
                 })
     except Exception as e:
         print(f"Error obteniendo opciones: {e}")
-    
+
+    ACCESOS_DESTACADOS_POR_ROL = {
+        'administrador': [
+            'dashboard_general', 'gestion_usuarios', 'gestion_permisos',
+            'gestion_sucursales', 'gestion_empresas', 'pos_dashboard',
+            'documentos_emitidos', 'existencias_resumen',
+        ],
+        'administracion': [
+            'dashboard_general', 'documentos_emitidos', 'recepcion_dte',
+            'existencias_resumen', 'requerimientos', 'gestion_dte',
+        ],
+        'jefe_local': [
+            'dashboard_general', 'pos_dashboard', 'existencias_resumen',
+            'requerimientos', 'cambios_devoluciones', 'revision_arqueos',
+        ],
+        'cajero': [
+            'pos_dashboard', 'generacion_ventas', 'cambios_devoluciones',
+            'arqueo_caja', 'documentos_emitidos',
+        ],
+        'vendedor': [
+            'pos_dashboard', 'generacion_ventas', 'existencias_resumen',
+            'requerimientos',
+        ],
+    }
+
+    codigos_destacados = ACCESOS_DESTACADOS_POR_ROL.get(rol, [])
+    accesos_destacados = []
+
+    for modulo_data in modulos_con_opciones:
+        for opcion in modulo_data['opciones']:
+            if opcion['codigo'] in codigos_destacados:
+                accesos_destacados.append({
+                    **opcion,
+                    'modulo': modulo_data['nombre'],
+                })
+
+    accesos_destacados.sort(key=lambda x: (
+        codigos_destacados.index(x['codigo'])
+        if x['codigo'] in codigos_destacados else 999
+    ))
+
     context = {
         'sucursal_actual': sucursal_actual,
         'fecha_actual': timezone.now().date(),
-        'opciones_disponibles': opciones_disponibles,
+        'modulos_con_opciones': modulos_con_opciones,
+        'accesos_destacados': accesos_destacados,
+        'total_accesos': total_accesos,
+        'rol_display': request.user.get_rol_display(),
     }
-    
+
     return render(request, 'vistas/bienvenida.html', context)
 
 

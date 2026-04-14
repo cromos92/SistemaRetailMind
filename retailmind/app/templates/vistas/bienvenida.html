@@ -4,194 +4,400 @@
 {% include 'layout/menu.html' %}
 
 <style>
-    .bienvenida-container {
-        min-height: calc(100vh - 200px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .bienvenida-card {
+    /* ===== Welcome Header ===== */
+    .welcome-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 20px;
-        padding: 40px;
+        border-radius: 16px;
+        padding: 28px 32px;
         color: white;
-        text-align: center;
-        max-width: 600px;
-        box-shadow: 0 20px 60px rgba(102, 126, 234, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+        box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+        margin-bottom: 28px;
     }
-    
-    .bienvenida-icon {
-        font-size: 4rem;
-        margin-bottom: 20px;
-        opacity: 0.9;
+    .welcome-header .welcome-left {
+        display: flex;
+        align-items: center;
+        gap: 20px;
     }
-    
-    .bienvenida-titulo {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 10px;
-    }
-    
-    .bienvenida-subtitulo {
-        font-size: 1.1rem;
-        opacity: 0.9;
-        margin-bottom: 30px;
-    }
-    
-    .bienvenida-info {
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 30px;
-    }
-    
-    .info-item {
+    .welcome-header .welcome-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.2);
         display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 1.7rem;
+        flex-shrink: 0;
+    }
+    .welcome-header .welcome-text h2 {
+        margin: 0;
+        font-size: 1.4rem;
+        font-weight: 700;
+        line-height: 1.3;
+    }
+    .welcome-header .welcome-text p {
+        margin: 4px 0 0;
+        font-size: 0.9rem;
+        opacity: 0.85;
+    }
+    .welcome-header .welcome-badges {
+        display: flex;
         gap: 10px;
-        margin: 10px 0;
+        flex-wrap: wrap;
     }
-    
-    .info-item i {
-        font-size: 1.2rem;
+    .welcome-header .welcome-badge {
+        background: rgba(255,255,255,0.18);
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 0.82rem;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        backdrop-filter: blur(4px);
     }
-    
-    /* Opciones disponibles */
-    .opciones-container {
-        margin-top: 40px;
+    .welcome-header .welcome-badge i {
+        font-size: 1rem;
+        opacity: 0.9;
     }
-    
-    .opciones-titulo {
-        color: var(--vz-heading-color);
+
+    /* ===== Featured Shortcuts ===== */
+    .featured-section {
+        margin-bottom: 32px;
+    }
+    .section-title {
+        font-size: 1.05rem;
         font-weight: 600;
-        margin-bottom: 20px;
-        font-size: 1.1rem;
+        color: var(--vz-heading-color, #333);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
-    
-    .opciones-grid {
+    .section-title .badge-count {
+        background: #667eea;
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+    .featured-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 15px;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 14px;
     }
-    
-    .opcion-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        transition: all 0.3s ease;
-        border: 1px solid #e9ecef;
+    .featured-card {
+        background: var(--vz-card-bg, white);
+        border-radius: 14px;
+        padding: 20px 18px;
         text-decoration: none;
         color: inherit;
-        display: block;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        border: 1px solid var(--vz-border-color, #e9ecef);
+        transition: all 0.25s ease;
+        position: relative;
+        overflow: hidden;
     }
-    
-    .opcion-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-        border-color: #667eea;
+    .featured-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: var(--card-accent, #667eea);
+        border-radius: 4px 0 0 4px;
+        opacity: 0;
+        transition: opacity 0.25s ease;
     }
-    
-    .opcion-card i {
-        font-size: 2rem;
-        color: #667eea;
-        margin-bottom: 10px;
-        display: block;
+    .featured-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+        border-color: var(--card-accent, #667eea);
+        text-decoration: none;
+        color: inherit;
     }
-    
-    .opcion-card .nombre {
+    .featured-card:hover::before {
+        opacity: 1;
+    }
+    .featured-card .fc-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+        background: var(--card-accent-bg, rgba(102, 126, 234, 0.1));
+        color: var(--card-accent, #667eea);
+    }
+    .featured-card .fc-info .fc-name {
         font-weight: 600;
-        color: #333;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
+        color: var(--vz-heading-color, #333);
+        line-height: 1.3;
     }
-    
-    .opcion-card .modulo {
+    .featured-card .fc-info .fc-module {
         font-size: 0.75rem;
-        color: #888;
-        margin-top: 5px;
+        color: var(--vz-secondary-color, #888);
+        margin-top: 2px;
     }
-    
-    .sin-opciones {
+
+    /* ===== Module Sections ===== */
+    .modulo-section {
+        margin-bottom: 24px;
+    }
+    .modulo-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--modulo-color, #667eea);
+    }
+    .modulo-header .modulo-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        background: var(--modulo-color-bg, rgba(102, 126, 234, 0.1));
+        color: var(--modulo-color, #667eea);
+    }
+    .modulo-header h6 {
+        margin: 0;
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: var(--vz-heading-color, #333);
+    }
+    .modulo-header .modulo-count {
+        font-size: 0.72rem;
+        color: var(--vz-secondary-color, #888);
+        background: var(--vz-light, #f3f6f9);
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: auto;
+    }
+    .modulo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+    }
+    .modulo-item {
+        background: var(--vz-card-bg, white);
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--vz-border-color, #e9ecef);
+        transition: all 0.2s ease;
+    }
+    .modulo-item:hover {
+        background: var(--modulo-color-bg, rgba(102, 126, 234, 0.06));
+        border-color: var(--modulo-color, #667eea);
+        text-decoration: none;
+        color: inherit;
+        transform: translateX(4px);
+    }
+    .modulo-item .mi-icon {
+        font-size: 1.15rem;
+        color: var(--modulo-color, #667eea);
+        width: 20px;
         text-align: center;
-        padding: 40px;
-        color: #888;
+        flex-shrink: 0;
     }
-    
-    .sin-opciones i {
-        font-size: 3rem;
-        margin-bottom: 15px;
-        opacity: 0.5;
+    .modulo-item .mi-name {
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--vz-heading-color, #444);
+    }
+    .modulo-item .mi-arrow {
+        margin-left: auto;
+        font-size: 0.8rem;
+        color: var(--vz-secondary-color, #ccc);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .modulo-item:hover .mi-arrow {
+        opacity: 1;
+        color: var(--modulo-color, #667eea);
+    }
+
+    /* ===== Empty State ===== */
+    .sin-opciones-card {
+        background: var(--vz-card-bg, white);
+        border-radius: 16px;
+        padding: 60px 40px;
+        text-align: center;
+        border: 2px dashed var(--vz-border-color, #dee2e6);
+    }
+    .sin-opciones-card i {
+        font-size: 3.5rem;
+        color: var(--vz-secondary-color, #adb5bd);
+        margin-bottom: 16px;
+    }
+    .sin-opciones-card h5 {
+        color: var(--vz-heading-color, #495057);
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    .sin-opciones-card p {
+        color: var(--vz-secondary-color, #6c757d);
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    /* ===== Module Color Palette ===== */
+    .modulo-section:nth-child(6n+1) { --modulo-color: #667eea; --modulo-color-bg: rgba(102,126,234,0.08); }
+    .modulo-section:nth-child(6n+2) { --modulo-color: #28a745; --modulo-color-bg: rgba(40,167,69,0.08); }
+    .modulo-section:nth-child(6n+3) { --modulo-color: #e83e8c; --modulo-color-bg: rgba(232,62,140,0.08); }
+    .modulo-section:nth-child(6n+4) { --modulo-color: #fd7e14; --modulo-color-bg: rgba(253,126,20,0.08); }
+    .modulo-section:nth-child(6n+5) { --modulo-color: #6f42c1; --modulo-color-bg: rgba(111,66,193,0.08); }
+    .modulo-section:nth-child(6n+6) { --modulo-color: #20c997; --modulo-color-bg: rgba(32,201,151,0.08); }
+
+    .featured-card:nth-child(6n+1) { --card-accent: #667eea; --card-accent-bg: rgba(102,126,234,0.1); }
+    .featured-card:nth-child(6n+2) { --card-accent: #28a745; --card-accent-bg: rgba(40,167,69,0.1); }
+    .featured-card:nth-child(6n+3) { --card-accent: #e83e8c; --card-accent-bg: rgba(232,62,140,0.1); }
+    .featured-card:nth-child(6n+4) { --card-accent: #fd7e14; --card-accent-bg: rgba(253,126,20,0.1); }
+    .featured-card:nth-child(6n+5) { --card-accent: #6f42c1; --card-accent-bg: rgba(111,66,193,0.1); }
+    .featured-card:nth-child(6n+6) { --card-accent: #20c997; --card-accent-bg: rgba(32,201,151,0.1); }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+        .welcome-header {
+            padding: 20px;
+            flex-direction: column;
+            text-align: center;
+        }
+        .welcome-header .welcome-left {
+            flex-direction: column;
+        }
+        .welcome-header .welcome-badges {
+            justify-content: center;
+        }
+        .featured-grid {
+            grid-template-columns: 1fr;
+        }
+        .modulo-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (min-width: 769px) and (max-width: 1199px) {
+        .featured-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
     }
 </style>
 
 <div class="page-content">
     <div class="container-fluid">
-        
-        <!-- Card de bienvenida -->
-        <div class="bienvenida-container">
-            <div class="bienvenida-card">
-                <div class="bienvenida-icon">
-                    <i class="ri-hand-heart-line"></i>
+
+        <!-- Welcome Header -->
+        <div class="welcome-header">
+            <div class="welcome-left">
+                <div class="welcome-avatar">
+                    <i class="ri-user-smile-line"></i>
                 </div>
-                <h1 class="bienvenida-titulo">
-                    ¡Bienvenido, {{ user.first_name|default:user.username }}!
-                </h1>
-                <p class="bienvenida-subtitulo">
-                    Estás conectado al sistema RetailMind
-                </p>
-                
-                <div class="bienvenida-info">
-                    {% if sucursal_actual %}
-                    <div class="info-item">
-                        <i class="ri-building-line"></i>
-                        <span>Sucursal: <strong>{{ sucursal_actual.alias }}</strong></span>
-                    </div>
-                    {% endif %}
-                    <div class="info-item">
-                        <i class="ri-user-line"></i>
-                        <span>Rol: <strong>{{ user.get_rol_display }}</strong></span>
-                    </div>
-                    <div class="info-item">
-                        <i class="ri-calendar-line"></i>
-                        <span>{{ fecha_actual|date:"l, d F Y" }}</span>
-                    </div>
+                <div class="welcome-text">
+                    <h2>Hola, {{ user.first_name|default:user.username }}</h2>
+                    <p>Bienvenido al sistema RetailMind</p>
                 </div>
-                
-                <p style="font-size: 0.9rem; opacity: 0.8;">
-                    <i class="ri-information-line me-1"></i>
-                    Usa el menú lateral para navegar a las opciones disponibles
-                </p>
+            </div>
+            <div class="welcome-badges">
+                {% if sucursal_actual %}
+                <div class="welcome-badge">
+                    <i class="ri-building-line"></i>
+                    {{ sucursal_actual.alias }}
+                </div>
+                {% endif %}
+                <div class="welcome-badge">
+                    <i class="ri-shield-user-line"></i>
+                    {{ rol_display }}
+                </div>
+                <div class="welcome-badge">
+                    <i class="ri-calendar-line"></i>
+                    {{ fecha_actual|date:"d M Y" }}
+                </div>
             </div>
         </div>
-        
-        <!-- Opciones disponibles -->
-        {% if opciones_disponibles %}
-        <div class="opciones-container">
-            <h5 class="opciones-titulo">
-                <i class="ri-apps-line me-2"></i>
-                Accesos Rápidos
-            </h5>
-            <div class="opciones-grid">
-                {% for opcion in opciones_disponibles %}
-                <a href="{% if opcion.url_name %}{% url opcion.url_name %}{% elif opcion.url_path %}{{ opcion.url_path }}{% else %}#{% endif %}" 
-                   class="opcion-card">
-                    <i class="{{ opcion.icono }}"></i>
-                    <div class="nombre">{{ opcion.nombre }}</div>
-                    <div class="modulo">{{ opcion.modulo }}</div>
+
+        {% if accesos_destacados %}
+        <!-- Accesos Destacados por Perfil -->
+        <div class="featured-section">
+            <div class="section-title">
+                <i class="ri-star-line"></i>
+                Accesos Rápidos para tu Perfil
+                <span class="badge-count">{{ accesos_destacados|length }}</span>
+            </div>
+            <div class="featured-grid">
+                {% for opcion in accesos_destacados %}
+                <a href="{% if opcion.url_name %}{% url opcion.url_name %}{% elif opcion.url_path %}{{ opcion.url_path }}{% else %}#{% endif %}"
+                   class="featured-card">
+                    <div class="fc-icon">
+                        <i class="{{ opcion.icono }}"></i>
+                    </div>
+                    <div class="fc-info">
+                        <div class="fc-name">{{ opcion.nombre }}</div>
+                        <div class="fc-module">{{ opcion.modulo }}</div>
+                    </div>
                 </a>
                 {% endfor %}
             </div>
         </div>
-        {% else %}
-        <div class="sin-opciones">
+        {% endif %}
+
+        {% if modulos_con_opciones %}
+        <!-- Todos los Módulos -->
+        <div class="section-title" style="margin-bottom: 20px;">
+            <i class="ri-layout-grid-line"></i>
+            Todos los Módulos Disponibles
+            <span class="badge-count">{{ total_accesos }} opciones</span>
+        </div>
+
+        {% for modulo in modulos_con_opciones %}
+        <div class="modulo-section">
+            <div class="modulo-header">
+                <div class="modulo-icon">
+                    <i class="{{ modulo.icono }}"></i>
+                </div>
+                <h6>{{ modulo.nombre }}</h6>
+                <span class="modulo-count">{{ modulo.opciones|length }} opción{{ modulo.opciones|length|pluralize:"es" }}</span>
+            </div>
+            <div class="modulo-grid">
+                {% for opcion in modulo.opciones %}
+                <a href="{% if opcion.url_name %}{% url opcion.url_name %}{% elif opcion.url_path %}{{ opcion.url_path }}{% else %}#{% endif %}"
+                   class="modulo-item">
+                    <i class="{{ opcion.icono }} mi-icon"></i>
+                    <span class="mi-name">{{ opcion.nombre }}</span>
+                    <i class="ri-arrow-right-s-line mi-arrow"></i>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% elif not accesos_destacados %}
+        <!-- Sin opciones -->
+        <div class="sin-opciones-card">
             <i class="ri-lock-line d-block"></i>
-            <p>No tienes opciones disponibles asignadas a tu perfil.</p>
-            <p class="small text-muted">Contacta al administrador para solicitar acceso.</p>
+            <h5>Sin opciones disponibles</h5>
+            <p>No tienes opciones asignadas a tu perfil. Contacta al administrador para solicitar acceso.</p>
         </div>
         {% endif %}
-        
+
     </div>
 </div>
 

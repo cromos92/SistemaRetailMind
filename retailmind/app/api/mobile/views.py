@@ -40,7 +40,7 @@ class CodigoAutorizacionActualView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        codigo_obj = CodigoAutorizacionDinamico.obtener_codigo_actual()
+        codigo_obj = CodigoAutorizacionDinamico.obtener_codigo_actual(request.user)
         if not codigo_obj:
             return Response(
                 {"success": False, "error": "No se pudo generar el código de autorización"},

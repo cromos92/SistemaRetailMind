@@ -382,10 +382,11 @@ class NotificacionDTE(models.Model):
         ('REGULARIZACION_REQUERIDA', 'Regularización Requerida'),
         ('RECHAZO_DTE', 'DTE Rechazado por Destino'),
         ('VENCIMIENTO_PROXIMO', 'Vencimiento Próximo'),
+        ('CORRECCION_RECEPCION', 'Corrección de Recepción por Emisor'),
     ]
     
     tipo = models.CharField(
-        max_length=30,
+        max_length=35,
         choices=TIPO_NOTIFICACION_CHOICES,
         default='DTE_RECIBIDO'
     )

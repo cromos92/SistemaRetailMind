@@ -23,7 +23,22 @@ from app.models import (
     Ticket_Productos, TicketDetallePago, Producto_Talla, Vendedor,
     HistorialPedidoEcommerce, MetricaAsignacionPedido,
     SUB_ESTADO_PEDIDO_CHOICES, TRANSICIONES_SUB_ESTADO,
+    PermisoRol,
 )
+
+
+def _verificar_permiso_ecommerce(request, tipo_permiso):
+    """
+    Verifica un permiso específico sobre ecommerce_pedidos_todos.
+    Retorna None si tiene permiso, o un JsonResponse 403 si no.
+    """
+    sucursal_id = request.session.get('idSucursalActual')
+    if not PermisoRol.tiene_permiso(request.user, 'ecommerce_pedidos_todos', tipo_permiso, sucursal_id=sucursal_id):
+        return JsonResponse({
+            'ok': False,
+            'error': f'No tiene permiso para esta acción (requiere {tipo_permiso})',
+        }, status=403)
+    return None
 
 # ---------------------------------------------------------------------------
 # Helper: validar items del pedido contra productos de la sucursal
@@ -600,8 +615,12 @@ def pedido_ecommerce_detalle(request, pedido_id):
     )
     if request.method == 'POST':
         accion = request.POST.get('accion')
+        sucursal_id = request.session.get('idSucursalActual')
 
         if accion == 'vincular_ticket':
+            if not PermisoRol.tiene_permiso(request.user, 'ecommerce_pedidos_todos', 'puede_crear', sucursal_id=sucursal_id):
+                messages.error(request, 'No tiene permiso para vincular tickets.')
+                return redirect('pedido_ecommerce_detalle', pedido_id=pedido.id)
             ticket_id = request.POST.get('ticket_id', '').strip()
             if ticket_id:
                 try:
@@ -618,6 +637,9 @@ def pedido_ecommerce_detalle(request, pedido_id):
                 messages.error(request, 'Ingresa un ID de Ticket.')
 
         elif accion == 'cancelar':
+            if not PermisoRol.tiene_permiso(request.user, 'ecommerce_pedidos_todos', 'puede_eliminar', sucursal_id=sucursal_id):
+                messages.error(request, 'No tiene permiso para cancelar pedidos.')
+                return redirect('pedido_ecommerce_detalle', pedido_id=pedido.id)
             sub_est_ant = pedido.sub_estado
             pedido.estado = 'CANCELADO'
             pedido.sub_estado = 'CANCELADO_CLIENTE'
@@ -720,6 +742,9 @@ def api_guardar_match_sku(request, pedido_id):
     """POST /app/ecommerce/pedidos/<id>/guardar-match/"""
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
     pedido = get_object_or_404(PedidoEcommerce.objects.filter(estado='PENDIENTE'), id=pedido_id)
     try:
         data = json.loads(request.body)
@@ -755,6 +780,9 @@ def api_facturar_pedido_individual(request, pedido_id):
     """POST /app/ecommerce/pedidos/<id>/facturar/"""
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_crear')
+    if denegado:
+        return denegado
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -1010,6 +1038,8 @@ def facturar_ecommerce_masivo(request):
     POST /api/ecommerce/facturar-masivo/
 
     Crea Ticket + DTE automáticamente para cada pedido ecommerce seleccionado.
+
+    Requiere permiso puede_crear sobre ecommerce_pedidos_todos.
     - Sucursal: siempre la activa en sesión del operador
     - Vendedor: siempre codigo_vendedor=1000 (Venta Internet)
     - Método de pago: se deduce del canal_origen de cada pedido
@@ -1023,6 +1053,9 @@ def facturar_ecommerce_masivo(request):
     """
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'Método no permitido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_crear')
+    if denegado:
+        return denegado
 
     # Sucursal activa de sesión (obligatoria)
     sucursal, err = _get_session_sucursal(request)
@@ -1322,6 +1355,9 @@ def api_cambiar_sub_estado(request, pedido_id):
     """POST /app/ecommerce/pedidos/<id>/sub-estado/"""
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
 
     try:
         data = json.loads(request.body)
@@ -1378,6 +1414,9 @@ def api_reasignar_pedido(request, pedido_id):
     """POST /app/ecommerce/pedidos/<id>/reasignar/"""
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
 
     try:
         data = json.loads(request.body)

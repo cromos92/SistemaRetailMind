@@ -540,9 +540,11 @@ class PermisoUsuario(models.Model):
 class CodigoAutorizacionDinamico(models.Model):
     """
     Códigos dinámicos que cambian cada hora para autorizar operaciones críticas.
-    Solo usuarios con rol 'administrador' o 'jefe_local' pueden generar y usar estos códigos.
+    Cada supervisor (administrador/jefe_local) recibe su propio código único.
+    Los códigos son de un solo uso: tras validarse, se marca como usado y el
+    supervisor debe generar uno nuevo.
     """
-    codigo = models.CharField(max_length=6, unique=True, db_index=True, verbose_name='Código de 6 dígitos')
+    codigo = models.CharField(max_length=6, db_index=True, verbose_name='Código de 6 dígitos')
     fecha_hora_inicio = models.DateTimeField(verbose_name='Fecha y hora de inicio de validez')
     fecha_hora_fin = models.DateTimeField(verbose_name='Fecha y hora de fin de validez')
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -571,86 +573,93 @@ class CodigoAutorizacionDinamico(models.Model):
         verbose_name_plural = 'Códigos de Autorización Dinámicos'
         ordering = ['-fecha_hora_inicio']
         indexes = [
-            models.Index(fields=['codigo', 'activo']),
+            models.Index(fields=['codigo', 'activo', 'usado']),
             models.Index(fields=['fecha_hora_inicio', 'fecha_hora_fin']),
+            models.Index(fields=['generado_por', 'activo', 'usado']),
         ]
     
     def __str__(self):
-        return f"{self.codigo} - Válido: {self.fecha_hora_inicio.strftime('%H:%M')} a {self.fecha_hora_fin.strftime('%H:%M')}"
+        estado = "USADO" if self.usado else "VIGENTE"
+        supervisor = self.generado_por.get_full_name() if self.generado_por else "Sistema"
+        return f"{self.codigo} ({estado}) - {supervisor} - {self.fecha_hora_inicio.strftime('%H:%M')} a {self.fecha_hora_fin.strftime('%H:%M')}"
     
     def es_valido(self):
-        """Verifica si el código está dentro del rango de tiempo válido"""
+        """Verifica si el código está dentro del rango de tiempo válido y no ha sido usado"""
         import pytz
         ahora_utc = timezone.now()
         chile_tz = pytz.timezone('America/Santiago')
         ahora = ahora_utc.astimezone(chile_tz)
-        return self.activo and self.fecha_hora_inicio <= ahora <= self.fecha_hora_fin
+        return (
+            self.activo
+            and not self.usado
+            and self.fecha_hora_inicio <= ahora <= self.fecha_hora_fin
+        )
+
+    def marcar_como_usado(self):
+        """Marca el código como usado de forma atómica"""
+        self.usado = True
+        self.save(update_fields=['usado'])
     
     @classmethod
-    def obtener_codigo_actual(cls):
-        """Obtiene o crea el código válido para la hora actual"""
+    def obtener_codigo_actual(cls, usuario):
+        """Obtiene o crea el código válido para la hora actual de un supervisor específico"""
         import pytz
         ahora_utc = timezone.now()
         chile_tz = pytz.timezone('America/Santiago')
         ahora = ahora_utc.astimezone(chile_tz)
         
-        # Buscar código válido existente
         codigo_valido = cls.objects.filter(
             fecha_hora_inicio__lte=ahora,
             fecha_hora_fin__gte=ahora,
-            activo=True
+            activo=True,
+            usado=False,
+            generado_por=usuario
         ).first()
         
         if codigo_valido:
             return codigo_valido
         
-        # Si no existe, generar uno nuevo
-        return cls.generar_codigo_horario()
+        return cls.generar_codigo_horario(usuario)
     
     @classmethod
-    def generar_codigo_horario(cls):
-        """Genera un código único para la hora actual"""
-        import hashlib
-        from django.conf import settings
+    def _generar_codigo_aleatorio(cls):
+        """Genera un código numérico de 6 dígitos criptográficamente seguro"""
+        import secrets
+        return f"{secrets.randbelow(1000000):06d}"
+
+    @classmethod
+    def generar_codigo_horario(cls, usuario):
+        """Genera un código aleatorio único para la hora actual, vinculado a un supervisor"""
         import pytz
         
-        # Obtener la hora actual en la zona horaria de Chile
         ahora_utc = timezone.now()
         chile_tz = pytz.timezone('America/Santiago')
         ahora = ahora_utc.astimezone(chile_tz)
         
-        # Redondear a la hora actual (eliminar minutos, segundos)
         hora_inicio = ahora.replace(minute=0, second=0, microsecond=0)
         hora_fin = hora_inicio + timezone.timedelta(hours=1)
         
-        # Verificar si ya existe un código para esta hora
-        codigo_existente = cls.objects.filter(
-            fecha_hora_inicio=hora_inicio,
-            fecha_hora_fin=hora_fin
-        ).first()
+        max_intentos = 10
+        for intento in range(max_intentos):
+            codigo_numerico = cls._generar_codigo_aleatorio()
+            
+            if not cls.objects.filter(
+                codigo=codigo_numerico,
+                activo=True,
+                usado=False,
+                fecha_hora_inicio__lte=ahora,
+                fecha_hora_fin__gte=ahora
+            ).exists():
+                break
+        else:
+            raise ValueError("No se pudo generar un código único tras múltiples intentos")
         
-        if codigo_existente:
-            return codigo_existente
-        
-        # Generar código único usando hash
-        secret_key = getattr(settings, 'SECRET_KEY', 'retailmind-secret-2024')
-        cadena_base = f"{hora_inicio.isoformat()}{secret_key}retailmind"
-        hash_obj = hashlib.sha256(cadena_base.encode())
-        codigo_hash = hash_obj.hexdigest()
-        
-        # Tomar los primeros 6 dígitos del hash (convertir a número)
-        codigo_numerico = ''.join(filter(str.isdigit, codigo_hash))[:6]
-        
-        # Si no hay suficientes dígitos, complementar con parte del hash
-        if len(codigo_numerico) < 6:
-            codigo_numerico = (codigo_numerico + codigo_hash.replace('a', '1').replace('b', '2').replace('c', '3').replace('d', '4').replace('e', '5').replace('f', '6'))[:6]
-        
-        # Crear el código
         codigo_obj = cls.objects.create(
             codigo=codigo_numerico,
             fecha_hora_inicio=hora_inicio,
             fecha_hora_fin=hora_fin,
-            activo=True
+            activo=True,
+            generado_por=usuario
         )
 
         return codigo_obj
@@ -659,10 +668,8 @@ class CodigoAutorizacionDinamico(models.Model):
     def generar_codigo_transaccion(cls, supervisor, operacion_id):
         """
         Genera un código de un solo uso vinculado a una operación específica.
-        A diferencia del código horario, este expira en 10 minutos y es de uso único.
+        Expira en 10 minutos.
         """
-        import hashlib
-        from django.conf import settings as django_settings
         import pytz
 
         ahora_utc = timezone.now()
@@ -672,14 +679,14 @@ class CodigoAutorizacionDinamico(models.Model):
         hora_inicio = ahora
         hora_fin = ahora + timezone.timedelta(minutes=10)
 
-        secret_key = getattr(django_settings, 'SECRET_KEY', 'retailmind-secret-2024')
-        cadena_base = f"{ahora.isoformat()}{secret_key}{operacion_id}{supervisor.id}"
-        hash_obj = hashlib.sha256(cadena_base.encode())
-        codigo_hash = hash_obj.hexdigest()
-
-        codigo_numerico = ''.join(filter(str.isdigit, codigo_hash))[:6]
-        if len(codigo_numerico) < 6:
-            codigo_numerico = (codigo_numerico + codigo_hash.replace('a', '1').replace('b', '2').replace('c', '3').replace('d', '4').replace('e', '5').replace('f', '6'))[:6]
+        max_intentos = 10
+        for _ in range(max_intentos):
+            codigo_numerico = cls._generar_codigo_aleatorio()
+            if not cls.objects.filter(
+                codigo=codigo_numerico, activo=True, usado=False,
+                fecha_hora_inicio__lte=ahora, fecha_hora_fin__gte=ahora
+            ).exists():
+                break
 
         codigo_obj = cls.objects.create(
             codigo=codigo_numerico,
@@ -696,10 +703,10 @@ class CodigoAutorizacionDinamico(models.Model):
     @classmethod
     def validar_codigo(cls, codigo_ingresado):
         """
-        Valida si un código ingresado es correcto para la hora actual
+        Valida si un código ingresado es correcto y vigente.
         
         Returns:
-            tuple: (es_valido: bool, mensaje: str, codigo_obj: CodigoAutorizacionDinamico or None)
+            tuple: (es_valido, mensaje, codigo_obj)
         """
         if not codigo_ingresado or len(str(codigo_ingresado).strip()) != 6:
             return False, 'El código debe tener 6 dígitos', None
@@ -710,16 +717,22 @@ class CodigoAutorizacionDinamico(models.Model):
         chile_tz = pytz.timezone('America/Santiago')
         ahora = ahora_utc.astimezone(chile_tz)
         
-        # Buscar el código
         codigo_obj = cls.objects.filter(
             codigo=codigo_ingresado,
-            activo=True
+            activo=True,
+            usado=False
         ).first()
         
         if not codigo_obj:
+            codigo_usado = cls.objects.filter(
+                codigo=codigo_ingresado,
+                activo=True,
+                usado=True
+            ).first()
+            if codigo_usado:
+                return False, 'Este código ya fue utilizado. Solicite uno nuevo al supervisor.', None
             return False, 'Código de autorización inválido', None
         
-        # Verificar si está en el rango de tiempo válido
         if not codigo_obj.es_valido():
             return False, 'Código de autorización expirado', None
         

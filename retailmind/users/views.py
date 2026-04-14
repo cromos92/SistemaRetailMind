@@ -369,6 +369,24 @@ def crear_usuario(request):
         )
         password_temp = usuario.generar_password_temporal()
         
+        # Asignar la misma empresa/sucursal del admin que lo crea
+        empresa_id = request.session.get('idEmpresaActual')
+        sucursal_id = request.session.get('idSucursalActual')
+        if empresa_id:
+            eu_defaults = {
+                'status': True,
+                'active': True,
+            }
+            if sucursal_id:
+                eu_defaults['sucursal_id'] = sucursal_id
+            # Desactivar cualquier otra asignación previa
+            EmpresaUser.objects.filter(user=usuario).update(active=False)
+            EmpresaUser.objects.update_or_create(
+                user=usuario,
+                empresa_id=empresa_id,
+                defaults=eu_defaults,
+            )
+
         # Enviar correo con credenciales
         try:
             login_url = getattr(settings, 'SITE_URL', 'http://localhost:8000').rstrip('/') + '/'
@@ -2457,3 +2475,64 @@ def cambiar_sucursal_activa_usuario(request, usuario_id):
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+@login_required
+@csrf_exempt
+@transaction.atomic
+def corregir_usuarios_sin_sucursal(request):
+    """
+    Asigna la sucursal del admin a todos los EmpresaUser que no tienen sucursal.
+    Solo accesible por administradores.
+    """
+    es_admin = getattr(request.user, 'rol', None) == 'administrador'
+    if not es_admin:
+        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+
+    sucursal_id = request.session.get('idSucursalActual')
+    empresa_id = request.session.get('idEmpresaActual')
+
+    if not sucursal_id or not empresa_id:
+        return JsonResponse({'success': False, 'error': 'No tienes sucursal activa en tu sesión.'}, status=400)
+
+    try:
+        sucursal = Sucursal.objects.get(id=sucursal_id)
+    except Sucursal.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Sucursal no encontrada.'}, status=404)
+
+    sin_sucursal = EmpresaUser.objects.filter(
+        empresa_id=empresa_id,
+        sucursal__isnull=True,
+        status=True
+    ).select_related('user')
+
+    corregidos = []
+    for eu in sin_sucursal:
+        eu.sucursal = sucursal
+        if not EmpresaUser.objects.filter(user=eu.user, active=True, sucursal__isnull=False).exists():
+            eu.active = True
+        eu.save(update_fields=['sucursal', 'active'])
+        corregidos.append(f"{eu.user.get_full_name()} ({eu.user.email})")
+
+    usuarios_sin_empresa = Usuario.objects.filter(
+        es_activo=True
+    ).exclude(
+        id__in=EmpresaUser.objects.values_list('user_id', flat=True)
+    )
+
+    for usuario in usuarios_sin_empresa:
+        EmpresaUser.objects.create(
+            user=usuario,
+            empresa_id=empresa_id,
+            sucursal=sucursal,
+            status=True,
+            active=True,
+        )
+        corregidos.append(f"{usuario.get_full_name()} ({usuario.email}) [nuevo]")
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{len(corregidos)} usuario(s) corregido(s). Sucursal asignada: {sucursal.alias}',
+        'usuarios_corregidos': corregidos,
+    })

@@ -11603,8 +11603,8 @@ def obtener_codigo_autorizacion_actual(request):
                 'requiere_rol': 'Administrador o Jefe Local'
             }, status=403)
         
-        # Obtener o generar el código actual
-        codigo_obj = CodigoAutorizacionDinamico.obtener_codigo_actual()
+        # Obtener o generar el código actual para este supervisor
+        codigo_obj = CodigoAutorizacionDinamico.obtener_codigo_actual(request.user)
         
         if not codigo_obj:
             return JsonResponse({
@@ -11646,10 +11646,25 @@ def obtener_codigo_autorizacion_actual(request):
 @csrf_exempt
 def validar_codigo_autorizacion(request):
     """
-    Valida un código de autorización dinámico ingresado por el usuario
+    Valida un código de autorización dinámico ingresado por el usuario.
+    Incluye protección anti brute-force: máximo 5 intentos fallidos en 15 minutos.
     """
     try:
         from .models import CodigoAutorizacionDinamico, RegistroAutorizacion
+        
+        # Protección anti brute-force: max 5 intentos fallidos en 15 minutos
+        hace_15_min = timezone.now() - timezone.timedelta(minutes=15)
+        intentos_fallidos = RegistroAutorizacion.objects.filter(
+            usuario_solicitante=request.user,
+            exitoso=False,
+            fecha_hora__gte=hace_15_min
+        ).count()
+        
+        if intentos_fallidos >= 5:
+            return JsonResponse({
+                'success': False,
+                'error': 'Demasiados intentos fallidos. Intente nuevamente en 15 minutos.'
+            }, status=429)
         
         data = json.loads(request.body)
         codigo_ingresado = data.get('codigo', '').strip()
@@ -11665,15 +11680,18 @@ def validar_codigo_autorizacion(request):
         # Validar el código
         es_valido, mensaje, codigo_obj = CodigoAutorizacionDinamico.validar_codigo(codigo_ingresado)
         
-        # Registrar el intento de autorización
+        # Registrar el intento de autorización con trazabilidad del supervisor
         try:
             cambio_obj = None
             if cambio_id:
                 cambio_obj = CambioDevolucion.objects.get(id=cambio_id)
             
+            supervisor = codigo_obj.generado_por if (es_valido and codigo_obj) else None
+            
             registro = RegistroAutorizacion.objects.create(
                 codigo_usado=codigo_obj if es_valido else None,
                 usuario_solicitante=request.user,
+                usuario_autorizador=supervisor,
                 tipo_operacion=tipo_operacion,
                 descripcion=f"{'Autorización exitosa' if es_valido else 'Intento fallido'}: {mensaje}",
                 ip_origen=request.META.get('REMOTE_ADDR'),
@@ -11681,7 +11699,9 @@ def validar_codigo_autorizacion(request):
                 cambio_devolucion=cambio_obj,
                 datos_adicionales={
                     'codigo_ingresado': codigo_ingresado,
-                    'mensaje': mensaje
+                    'mensaje': mensaje,
+                    'supervisor_id': supervisor.id if supervisor else None,
+                    'supervisor_nombre': supervisor.get_full_name() if supervisor else None
                 }
             )
         except Exception as e:
@@ -11693,16 +11713,16 @@ def validar_codigo_autorizacion(request):
                 'error': mensaje
             })
         
-        # Marcar el código como usado (opcional, dependiendo de si quieres reutilización)
-        # codigo_obj.usado = True
-        # codigo_obj.save()
+        # Marcar el código como usado (un solo uso por código)
+        codigo_obj.marcar_como_usado()
         
         return JsonResponse({
             'success': True,
             'mensaje': 'Código de autorización validado correctamente',
             'codigo': {
                 'codigo': codigo_obj.codigo,
-                'valido_hasta': codigo_obj.fecha_hora_fin.strftime('%H:%M')
+                'valido_hasta': codigo_obj.fecha_hora_fin.strftime('%H:%M'),
+                'supervisor': codigo_obj.generado_por.get_full_name() if codigo_obj.generado_por else None
             }
         })
         

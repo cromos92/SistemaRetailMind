@@ -1021,7 +1021,7 @@
         }
 
         /* Real-time summary */
-        #resumenOK, #resumenParcial, #resumenDanado, #resumenFaltante {
+        #resumenOK, #resumenParcial, #resumenFaltante {
             font-size: 18px;
         }
     }
@@ -1285,6 +1285,24 @@
                     </div>
                 </div>
 
+                <!-- Card de DTEs pendientes de corregir (que YO envié y recibieron con problemas) -->
+                <div class="card mb-3 border-warning d-none" id="cardDTEsCorregir">
+                    <div class="card-header bg-warning bg-opacity-10">
+                        <h6 class="mb-0 text-warning">
+                            <i class="bi bi-tools me-2"></i>Pendientes de Corregir
+                            <span class="badge bg-warning text-dark ms-1" id="badgeCorregir">0</span>
+                        </h6>
+                    </div>
+                    <div class="card-body py-2">
+                        <p class="small text-muted mb-2">
+                            DTEs que enviaste y fueron recepcionados con problemas. Puedes corregir las cantidades.
+                        </p>
+                        <button type="button" class="btn btn-outline-warning btn-sm w-100" id="btnVerDTEsCorregir">
+                            <i class="bi bi-pencil-square me-1"></i>Ver y Corregir
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Card de DTEs rechazados (que YO envié) -->
                 <div class="card mb-3 border-danger d-none" id="cardDTEsRechazados">
                     <div class="card-header bg-danger bg-opacity-10">
@@ -1487,10 +1505,6 @@
                                     <small class="text-muted">Con Problemas</small>
                                 </div>
                                 <div class="col">
-                                    <div class="fw-bold text-danger" id="resumenDanado">0</div>
-                                    <small class="text-muted">Danados</small>
-                                </div>
-                                <div class="col">
                                     <div class="fw-bold text-secondary" id="resumenFaltante">0</div>
                                     <small class="text-muted">Faltantes</small>
                                 </div>
@@ -1573,19 +1587,6 @@
                     </div>
                 </div>
 
-                <!-- Cantidad Dañada (Opcional) -->
-                <div class="mb-3">
-                    <label class="form-label">
-                        <i class="bi bi-exclamation-triangle text-warning me-1"></i>¿Cuantas llegaron danadas? (opcional)
-                    </label>
-                    <input type="number" id="problemaCantidadDanada" class="form-control"
-                           min="0" value="0" placeholder="0">
-                    <small class="text-muted">Unidades con defectos o problemas</small>
-                    <div id="errorCantidadDanada" class="text-danger small mt-1" style="display:none;">
-                        <i class="bi bi-exclamation-circle me-1"></i>La cantidad danada no puede ser mayor a la recepcionada
-                    </div>
-                </div>
-
                 <!-- Sobrante (separado - NO entra al stock) -->
                 <div class="mb-3 p-3 border rounded" style="background: rgba(13,202,240,.05); border-color: #0dcaf0 !important;">
                     <label class="form-label fw-bold text-info mb-1">
@@ -1642,7 +1643,7 @@
             <div class="modal-body">
                 <p class="text-muted mb-3">
                     <i class="bi bi-info-circle me-1"></i>
-                    Estos DTEs tienen productos con problemas (faltantes, dañados o parciales) que requieren regularización.
+                    Estos DTEs tienen productos con problemas (faltantes o parciales) que requieren regularización.
                 </p>
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -1798,7 +1799,6 @@
                                 <th>Talla</th>
                                 <th class="text-center">Esperado</th>
                                 <th class="text-center">Recibido</th>
-                                <th class="text-center">Dañados</th>
                                 <th class="text-center">Faltantes</th>
                                 <th>Estado</th>
                                 <th>Observaciones</th>
@@ -1806,7 +1806,7 @@
                         </thead>
                         <tbody id="verDteProductosBody">
                             <tr>
-                                <td colspan="12" class="text-center text-muted py-4">Cargando productos...</td>
+                                <td colspan="11" class="text-center text-muted py-4">Cargando productos...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1818,19 +1818,15 @@
                         <div class="card border-success">
                             <div class="card-body py-2">
                                 <div class="row text-center">
-                                    <div class="col-3">
+                                    <div class="col-4">
                                         <div class="fw-bold text-success" id="verResumenOK">0</div>
                                         <small class="text-muted">OK ✅</small>
                                     </div>
-                                    <div class="col-3">
+                                    <div class="col-4">
                                         <div class="fw-bold text-warning" id="verResumenParcial">0</div>
                                         <small class="text-muted">Con Problemas ⚠️</small>
                                     </div>
-                                    <div class="col-3">
-                                        <div class="fw-bold text-danger" id="verResumenDanado">0</div>
-                                        <small class="text-muted">Dañados 🔴</small>
-                                    </div>
-                                    <div class="col-3">
+                                    <div class="col-4">
                                         <div class="fw-bold text-secondary" id="verResumenFaltante">0</div>
                                         <small class="text-muted">Faltantes ❌</small>
                                     </div>
@@ -1844,6 +1840,101 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle me-1"></i>Cerrar
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Corregir Recepción (para emisor) -->
+<div class="modal fade" id="modalCorregirRecepcion" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%) !important;">
+                <h5 class="modal-title text-dark">
+                    <i class="bi bi-tools me-2"></i>Corregir Recepción - DTE #<span id="corregirDteNumero">-</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Destino:</strong> <span id="corregirDteDestino">-</span> |
+                    <strong>Fecha emisión:</strong> <span id="corregirDteFecha">-</span> |
+                    <strong>Recepcionado:</strong> <span id="corregirDteFechaRecepcion">-</span>
+                </div>
+                <p class="text-muted mb-3">
+                    Ajusta la cantidad correcta para cada producto. Solo se muestran productos con problemas.
+                    El stock en la sucursal destino se actualizará automáticamente.
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead class="table-warning">
+                            <tr>
+                                <th>SKU</th>
+                                <th>Producto</th>
+                                <th>Talla</th>
+                                <th class="text-center">Esperada</th>
+                                <th class="text-center">Recibida</th>
+                                <th class="text-center">Faltante</th>
+                                <th class="text-center">Cantidad Correcta</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corregirProductosBody">
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <div class="spinner-border text-warning"></div>
+                                    <p class="mt-2 text-muted">Cargando productos...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        <i class="bi bi-chat-left-text me-1"></i>Observaciones de la corrección
+                    </label>
+                    <textarea id="corregirObservaciones" class="form-control" rows="2"
+                              placeholder="Ej: Revisado fisicamente, todas las unidades fueron enviadas correctamente."></textarea>
+                </div>
+                <div class="alert alert-warning d-none" id="corregirResumen">
+                    <i class="bi bi-arrow-up-circle me-2"></i>
+                    <strong>Resumen:</strong> <span id="corregirResumenTexto">-</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarCorreccion" disabled>
+                    <i class="bi bi-check-circle me-1"></i>Confirmar Corrección
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Lista DTEs para Corregir -->
+<div class="modal fade" id="modalListaDTEsCorregir" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%) !important;">
+                <h5 class="modal-title text-dark">
+                    <i class="bi bi-tools me-2"></i>DTEs Pendientes de Corrección
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">
+                    DTEs que enviaste y fueron recepcionados con problemas. Selecciona uno para corregir las cantidades.
+                </p>
+                <div id="listaDTEsCorregirBody">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-warning"></div>
+                        <p class="mt-2 text-muted">Cargando...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1895,7 +1986,7 @@ $(document).ready(function() {
     $('#btnVerDTEsProblemas').on('click', verDTEsConProblemas);
     
     // Auto-cálculo en modal de problemas + limpiar errores al escribir
-    $('#problemaCantidadRecepcionada, #problemaCantidadDanada, #problemaCantidadSobranteInput').on('input', function() {
+    $('#problemaCantidadRecepcionada, #problemaCantidadSobranteInput').on('input', function() {
         $(this).removeClass('is-invalid');
         calcularFaltanteAutomatico();
     });
@@ -1903,14 +1994,16 @@ $(document).ready(function() {
         $(this).removeClass('is-invalid');
     });
     
-    // Eventos para DTEs rechazados (que yo envié)
     $('#btnVerDTEsRechazados').on('click', verDTEsRechazados);
+    $('#btnVerDTEsCorregir').on('click', verDTEsParaCorregir);
+    $('#btnConfirmarCorreccion').on('click', confirmarCorreccionEmisor);
 
     inicializarReferenciaFechas();
     cargarInfoSucursal();
     cargarRecepciones();
     cargarHistorial();
-    cargarDTEsRechazados(); // Cargar DTEs que yo envié y fueron rechazados
+    cargarDTEsRechazados();
+    cargarDTEsParaCorregir();
 });
 
 function inicializarReferenciaFechas() {
@@ -2421,7 +2514,6 @@ function getEstadoBadge(estado) {
     const badges = {
         'RECEPCIONADO_OK': '<span class="badge bg-success">OK</span>',
         'RECEPCIONADO_PARCIAL': '<span class="badge bg-warning">Parcial</span>',
-        'RECEPCIONADO_DANADO': '<span class="badge bg-danger">Dañado</span>',
         'FALTANTE': '<span class="badge bg-secondary">Faltante</span>',
         'EN_REGULARIZACION': '<span class="badge bg-info">En Reg.</span>',
         'RECEPCIONADO_SOBRANTE': '<span class="badge bg-info">Sobrante</span>',
@@ -2473,29 +2565,18 @@ function actualizarCantidadRecepcionada(index, cantidad) {
     }
     
     prod.cantidad_recepcionada = cantidad;
-    
-    // Auto-calcular faltante (considerando dañadas)
     prod.cantidad_faltante = Math.max(0, prod.cantidad_esperada - cantidad);
     
-    // Auto-determinar estado basándose en la cantidad recibida y dañadas
-    if (cantidad === prod.cantidad_esperada && prod.cantidad_danada === 0) {
-        // Todo llegó completo y sin daños
+    if (cantidad === prod.cantidad_esperada) {
         prod.estado = 'RECEPCIONADO_OK';
         prod.marcado_ok = true;
     } else if (cantidad === 0) {
-        // Nada llegó
         prod.estado = 'FALTANTE';
         prod.marcado_ok = false;
-    } else if (prod.cantidad_danada > 0) {
-        // Hay productos dañados
-        prod.estado = 'RECEPCIONADO_DANADO';
-        prod.marcado_ok = false;
     } else if (cantidad < prod.cantidad_esperada) {
-        // Llegó menos de lo esperado
         prod.estado = 'RECEPCIONADO_PARCIAL';
         prod.marcado_ok = false;
     } else {
-        // Por defecto
         prod.estado = 'RECEPCIONADO_OK';
         prod.marcado_ok = true;
     }
@@ -2565,18 +2646,14 @@ function abrirObservacionMasiva() {
         return;
     }
     
-    // Clasificar productos desmarcados por estado
     const parciales = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_PARCIAL');
-    const danados = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_DANADO');
     const faltantes = productosDesmarcados.filter(p => p.estado === 'FALTANTE');
     const sobrantesObs = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_SOBRANTE');
     const sinEstado = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_OK');
 
-    // Crear lista resumen por tipo
     let resumenHtml = '<div class="d-flex flex-wrap gap-2 justify-content-center mb-3">';
     if (faltantes.length > 0) resumenHtml += `<span class="badge bg-secondary">${faltantes.length} faltantes</span>`;
     if (parciales.length > 0) resumenHtml += `<span class="badge bg-warning text-dark">${parciales.length} parciales</span>`;
-    if (danados.length > 0) resumenHtml += `<span class="badge bg-danger">${danados.length} dañados</span>`;
     if (sobrantesObs.length > 0) resumenHtml += `<span class="badge bg-info">${sobrantesObs.length} sobrantes</span>`;
     if (sinEstado.length > 0) resumenHtml += `<span class="badge bg-light text-dark">${sinEstado.length} sin revisar</span>`;
     resumenHtml += '</div>';
@@ -2758,7 +2835,7 @@ function limpiarBusqueda() {
 }
 
 function actualizarResumenVerificacion() {
-    let ok = 0, parcial = 0, danado = 0, faltante = 0, sobrante = 0;
+    let ok = 0, faltante = 0, sobrante = 0;
     let verificados = 0;
     let productosSinObservaciones = 0;
     
@@ -2771,13 +2848,11 @@ function actualizarResumenVerificacion() {
         
         const recepcionada = prod.cantidad_recepcionada || 0;
         const esperada = prod.cantidad_esperada || 0;
-        const cantDanada = prod.cantidad_danada || 0;
         const cantSobrante = prod.cantidad_sobrante || 0;
         const cantFaltante = Math.max(0, esperada - recepcionada);
-        const cantBuena = Math.max(0, Math.min(recepcionada, esperada) - cantDanada);
+        const cantBuena = Math.min(recepcionada, esperada);
         
         ok += cantBuena;
-        danado += cantDanada;
         faltante += cantFaltante;
         sobrante += cantSobrante;
     });
@@ -2786,7 +2861,6 @@ function actualizarResumenVerificacion() {
 
     $('#resumenOK').text(ok);
     $('#resumenParcial').text(lineasConProblema);
-    $('#resumenDanado').text(danado);
     $('#resumenFaltante').text(faltante);
     if ($('#resumenSobrante').length) $('#resumenSobrante').text(sobrante);
     $('#contadorProductos').text(`${verificados} de ${productosVerificacion.length}`);
@@ -2843,11 +2917,9 @@ function abrirModalProblema(index) {
     productoEditandoIndex = index;
     const prod = productosVerificacion[index];
     
-    // Limpiar estados de error previos
-    $('#problemaCantidadRecepcionada, #problemaCantidadDanada, #problemaCantidadSobranteInput, #problemaObservaciones').removeClass('is-invalid');
-    $('#errorCantidadRecepcionada, #errorCantidadDanada').hide();
+    $('#problemaCantidadRecepcionada, #problemaCantidadSobranteInput, #problemaObservaciones').removeClass('is-invalid');
+    $('#errorCantidadRecepcionada').hide();
 
-    // Llenar datos
     $('#problemaProductoNombre').text(prod.descripcion);
     $('#problemaProductoSKU').text(prod.sku);
     $('#problemaProductoTalla').text(prod.talla);
@@ -2857,7 +2929,6 @@ function abrirModalProblema(index) {
     $('#problemaCantidadEsperada').text(prod.cantidad_esperada);
     $('#problemaCantidadRecepcionada').val(Math.min(prod.cantidad_recepcionada, prod.cantidad_esperada));
     $('#problemaCantidadRecepcionada').attr('max', prod.cantidad_esperada);
-    $('#problemaCantidadDanada').val(prod.cantidad_danada);
     $('#problemaCantidadSobranteInput').val(prod.cantidad_sobrante || 0);
     $('#problemaObservaciones').val(prod.observaciones);
 
@@ -2869,12 +2940,10 @@ function abrirModalProblema(index) {
 function calcularFaltanteAutomatico() {
     const esperada = parseInt($('#problemaCantidadEsperada').text()) || 0;
     const recepcionada = parseInt($('#problemaCantidadRecepcionada').val()) || 0;
-    const danada = parseInt($('#problemaCantidadDanada').val()) || 0;
     const sobrante = parseInt($('#problemaCantidadSobranteInput').val()) || 0;
 
     let hayError = false;
 
-    // Recepcionada no puede ser mayor a la esperada
     $('#maxEsperadaLabel').text(esperada);
     if (recepcionada > esperada) {
         $('#errorCantidadRecepcionada').show();
@@ -2885,19 +2954,8 @@ function calcularFaltanteAutomatico() {
         $('#problemaCantidadRecepcionada').removeClass('is-invalid');
     }
 
-    // Danada no puede ser mayor a la recepcionada
-    if (danada > recepcionada) {
-        $('#errorCantidadDanada').show();
-        $('#problemaCantidadDanada').addClass('is-invalid');
-        hayError = true;
-    } else {
-        $('#errorCantidadDanada').hide();
-        $('#problemaCantidadDanada').removeClass('is-invalid');
-    }
-
     $('#btnGuardarProblema').prop('disabled', hayError);
 
-    // Faltante = lo que no llego del DTE
     const faltante = Math.max(0, esperada - recepcionada);
 
     $('#problemaCantidadFaltanteCalc').text(faltante);
@@ -2905,7 +2963,6 @@ function calcularFaltanteAutomatico() {
     $('#problemaCantidadSobranteCalc').text(sobrante);
     $('#problemaCantidadSobrante').val(sobrante);
 
-    // Mostrar/ocultar sobrante en resumen
     if (sobrante > 0) {
         $('#resumenSobranteRow').show();
     } else {
@@ -2913,33 +2970,21 @@ function calcularFaltanteAutomatico() {
     }
     $('#resumenFaltanteRow').show();
 
-    // Determinar estado
     let estado = '';
     let estadoTexto = '';
 
     if (recepcionada === 0 && sobrante === 0) {
         estado = 'FALTANTE';
         estadoTexto = '<span class="badge bg-secondary">FALTANTE</span>';
-    } else if (sobrante > 0 && faltante === 0 && danada === 0) {
+    } else if (sobrante > 0 && faltante === 0) {
         estado = 'RECEPCIONADO_SOBRANTE';
         estadoTexto = `<span class="badge bg-success">DTE OK</span> <span class="badge bg-info">+${sobrante} sobrante a regularizar</span>`;
-    } else if (sobrante > 0) {
-        // Tiene sobrante + algun otro problema
-        estado = faltante > 0 ? 'RECEPCIONADO_PARCIAL' : (danada > 0 ? 'RECEPCIONADO_DANADO' : 'RECEPCIONADO_SOBRANTE');
-        let badges = [];
-        if (faltante > 0) badges.push(`<span class="badge bg-warning">faltan ${faltante}</span>`);
-        if (danada > 0) badges.push(`<span class="badge bg-danger">${danada} danadas</span>`);
-        badges.push(`<span class="badge bg-info">+${sobrante} sobrante</span>`);
-        estadoTexto = badges.join(' ');
-    } else if (recepcionada === esperada && danada === 0) {
+    } else if (sobrante > 0 && faltante > 0) {
+        estado = 'RECEPCIONADO_PARCIAL';
+        estadoTexto = `<span class="badge bg-warning">faltan ${faltante}</span> <span class="badge bg-info">+${sobrante} sobrante</span>`;
+    } else if (recepcionada === esperada) {
         estado = 'RECEPCIONADO_OK';
         estadoTexto = '<span class="badge bg-success">RECEPCIONADO OK</span>';
-    } else if (danada > 0 && faltante === 0) {
-        estado = 'RECEPCIONADO_DANADO';
-        estadoTexto = `<span class="badge bg-danger">${danada} DANADAS</span>`;
-    } else if (danada > 0 && faltante > 0) {
-        estado = 'RECEPCIONADO_DANADO';
-        estadoTexto = `<span class="badge bg-danger">${danada} danadas</span> <span class="badge bg-warning">faltan ${faltante}</span>`;
     } else if (faltante > 0) {
         estado = 'RECEPCIONADO_PARCIAL';
         estadoTexto = `<span class="badge bg-warning">FALTAN ${faltante}</span>`;
@@ -2951,12 +2996,11 @@ function calcularFaltanteAutomatico() {
     $('#problemaEstado').val(estado);
     $('#problemaEstadoCalc').html(estadoTexto);
 
-    $('#resumenAutocalculo').removeClass('alert-secondary alert-success alert-warning alert-danger alert-info')
+    $('#resumenAutocalculo').removeClass('alert-secondary alert-success alert-warning alert-info')
                            .addClass(
                                estado === 'RECEPCIONADO_OK' ? 'alert-success' :
                                estado === 'FALTANTE' ? 'alert-secondary' :
-                               estado === 'RECEPCIONADO_SOBRANTE' ? 'alert-info' :
-                               estado === 'RECEPCIONADO_DANADO' ? 'alert-danger' : 'alert-warning'
+                               estado === 'RECEPCIONADO_SOBRANTE' ? 'alert-info' : 'alert-warning'
                            );
 }
 
@@ -2967,7 +3011,6 @@ function guardarProblema() {
     const esperada = prod.cantidad_esperada;
     const recepcionadaRaw = $('#problemaCantidadRecepcionada').val();
     const recepcionada = parseInt(recepcionadaRaw) || 0;
-    const danada = parseInt($('#problemaCantidadDanada').val()) || 0;
     const sobrante = parseInt($('#problemaCantidadSobranteInput').val()) || 0;
     const observaciones = ($('#problemaObservaciones').val() || '').trim();
     const faltante = Math.max(0, esperada - recepcionada);
@@ -2986,22 +3029,14 @@ function guardarProblema() {
         errores.push('La cantidad recepcionada no puede ser negativa.');
         $('#problemaCantidadRecepcionada').addClass('is-invalid');
     }
-    if (danada > recepcionada) {
-        errores.push(`La cantidad dañada (${danada}) no puede ser mayor a la recepcionada (${recepcionada}).`);
-        $('#problemaCantidadDanada').addClass('is-invalid');
-    }
-    if (danada < 0) {
-        errores.push('La cantidad dañada no puede ser negativa.');
-        $('#problemaCantidadDanada').addClass('is-invalid');
-    }
     if (sobrante < 0) {
         errores.push('La cantidad sobrante no puede ser negativa.');
         $('#problemaCantidadSobranteInput').addClass('is-invalid');
     }
 
-    const tieneProblema = faltante > 0 || danada > 0 || sobrante > 0;
+    const tieneProblema = faltante > 0 || sobrante > 0;
     if (tieneProblema && !observaciones) {
-        errores.push('Debes ingresar observaciones cuando hay faltante, dañado o sobrante.');
+        errores.push('Debes ingresar observaciones cuando hay faltante o sobrante.');
         $('#problemaObservaciones').addClass('is-invalid');
     }
 
@@ -3015,11 +3050,10 @@ function guardarProblema() {
         return;
     }
 
-    // Limpiar clases de error
-    $('#problemaCantidadRecepcionada, #problemaCantidadDanada, #problemaCantidadSobranteInput, #problemaObservaciones').removeClass('is-invalid');
+    $('#problemaCantidadRecepcionada, #problemaCantidadSobranteInput, #problemaObservaciones').removeClass('is-invalid');
 
     prod.cantidad_recepcionada = Math.min(recepcionada, esperada);
-    prod.cantidad_danada = danada;
+    prod.cantidad_danada = 0;
     prod.cantidad_faltante = faltante;
     prod.cantidad_sobrante = sobrante;
     prod.estado = $('#problemaEstado').val();
@@ -3078,22 +3112,18 @@ function confirmarRecepcion() {
     
     // Si hay productos desmarcados con observaciones, procesarlos
     if (hayProductosDesmarcados) {
-        // Clasificar productos desmarcados por estado
         const parciales = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_PARCIAL').length;
-        const danados = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_DANADO').length;
         const faltantes = productosDesmarcados.filter(p => p.estado === 'FALTANTE').length;
         const sobrantes = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_SOBRANTE' || (p.cantidad_sobrante && p.cantidad_sobrante > 0)).length;
 
         let detalleProblemas = '';
         if (faltantes > 0) detalleProblemas += `<li>${faltantes} faltante(s) completo(s)</li>`;
         if (parciales > 0) detalleProblemas += `<li>${parciales} parcial(es)</li>`;
-        if (danados > 0) detalleProblemas += `<li>${danados} con productos dañados</li>`;
         if (sobrantes > 0) detalleProblemas += `<li class="text-info">${sobrantes} con sobrantes (pendientes de decisión por bodega)</li>`;
         
-        // Calcular totales de stock que se actualizará
         const totalOK = productosMarcadosOK.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
-        const totalBuenasDesmarcados = productosDesmarcados.reduce((sum, p) => sum + Math.max(0, p.cantidad_recepcionada - p.cantidad_danada), 0);
-        const totalNoIngresa = productosDesmarcados.reduce((sum, p) => sum + p.cantidad_faltante + p.cantidad_danada, 0);
+        const totalBuenasDesmarcados = productosDesmarcados.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
+        const totalNoIngresa = productosDesmarcados.reduce((sum, p) => sum + p.cantidad_faltante, 0);
         
         Swal.fire({
             title: '⚠️ Recepción con Productos Desmarcados',
@@ -3109,7 +3139,7 @@ function confirmarRecepcion() {
                         <ul class="mt-2 mb-0">
                             <li>✅ <strong>${totalOK}</strong> unidades de productos marcados OK</li>
                             ${totalBuenasDesmarcados > 0 ? `<li>⚠️ <strong>${totalBuenasDesmarcados}</strong> unidades parciales (recibidas en buen estado)</li>` : ''}
-                            <li>❌ <strong>${totalNoIngresa}</strong> unidades NO se agregarán al stock (faltantes + dañadas)</li>
+                            <li>❌ <strong>${totalNoIngresa}</strong> unidades NO se agregarán al stock (faltantes)</li>
                         </ul>
                     </div>
                     <div class="alert alert-warning mb-0">
@@ -3197,7 +3227,6 @@ function rechazarRecepcion() {
     const motivos = [
         { texto: 'No llego mercaderia', icono: 'ri-inbox-unarchive-line', color: 'danger' },
         { texto: 'No corresponde a esta tienda', icono: 'ri-store-line', color: 'danger' },
-        { texto: 'Productos completamente danados', icono: 'ri-error-warning-line', color: 'danger' },
         { texto: 'Productos no corresponden a lo documentado', icono: 'ri-file-unknow-line', color: 'warning' },
         { texto: 'Bultos abiertos o manipulados', icono: 'ri-lock-unlock-line', color: 'warning' },
         { texto: 'Despacho duplicado', icono: 'ri-file-copy-line', color: 'secondary' },
@@ -4069,17 +4098,15 @@ function verDTERecepcionado(dteId) {
                 return;
             }
             
-            let contOK = 0, contConProblema = 0, contDanado = 0, contFaltante = 0;
+            let contOK = 0, contConProblema = 0, contFaltante = 0;
             
             productos.forEach(prod => {
                 const recep = prod.cantidad_recepcionada || 0;
                 const esper = prod.cantidad_esperada || 0;
-                const danad = prod.cantidad_danada || 0;
-                const buenas = Math.max(0, Math.min(recep, esper) - danad);
+                const buenas = Math.min(recep, esper);
                 const falt = Math.max(0, esper - recep);
 
                 contOK += buenas;
-                contDanado += danad;
                 contFaltante += falt;
                 if (prod.estado !== 'RECEPCIONADO_OK') contConProblema++;
 
@@ -4088,8 +4115,6 @@ function verDTERecepcionado(dteId) {
                     rowClass = 'table-success';
                 } else if (prod.estado === 'RECEPCIONADO_PARCIAL') {
                     rowClass = 'table-warning';
-                } else if (prod.estado === 'RECEPCIONADO_DANADO') {
-                    rowClass = 'table-danger';
                 } else if (prod.estado === 'FALTANTE') {
                     rowClass = 'table-secondary';
                 }
@@ -4106,7 +4131,6 @@ function verDTERecepcionado(dteId) {
                         <td class="text-center"><span class="badge bg-secondary">${prod.talla}</span></td>
                         <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
                         <td class="text-center"><strong class="text-success">${prod.cantidad_recepcionada}</strong></td>
-                        <td class="text-center"><strong class="text-danger">${prod.cantidad_danada}</strong></td>
                         <td class="text-center"><strong class="text-secondary">${prod.cantidad_faltante}</strong></td>
                         <td>${estadoBadge}</td>
                         <td><small class="text-muted">${prod.observaciones || '-'}</small></td>
@@ -4114,16 +4138,278 @@ function verDTERecepcionado(dteId) {
                 `);
             });
             
-            // Actualizar resumen
             $('#verResumenOK').text(contOK);
             $('#verResumenParcial').text(contConProblema);
-            $('#verResumenDanado').text(contDanado);
             $('#verResumenFaltante').text(contFaltante);
         })
         .fail(() => {
             Swal.fire('Error', 'No se pudieron cargar los detalles del DTE', 'error');
             modalVerDTE.hide();
         });
+}
+
+// ========== CORRECCIÓN DE RECEPCIÓN POR EMISOR ==========
+
+let dtesParaCorregirData = [];
+let correccionDteId = null;
+let correccionProductos = [];
+
+function cargarDTEsParaCorregir() {
+    $.getJSON('/app/dtes-pendientes-regularizar/')
+        .done(response => {
+            if (response.success && response.dtes && response.dtes.length > 0) {
+                dtesParaCorregirData = response.dtes;
+                $('#cardDTEsCorregir').removeClass('d-none');
+                $('#badgeCorregir').text(response.dtes.length);
+            } else {
+                $('#cardDTEsCorregir').addClass('d-none');
+                dtesParaCorregirData = [];
+            }
+        })
+        .fail(() => {
+            $('#cardDTEsCorregir').addClass('d-none');
+        });
+}
+
+function verDTEsParaCorregir() {
+    const modal = new bootstrap.Modal(document.getElementById('modalListaDTEsCorregir'));
+    modal.show();
+
+    if (dtesParaCorregirData.length === 0) {
+        $('#listaDTEsCorregirBody').html('<p class="text-center text-muted py-3">No hay DTEs pendientes.</p>');
+        return;
+    }
+
+    let html = '<div class="list-group">';
+    dtesParaCorregirData.forEach(dte => {
+        html += `
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">
+                            <span class="badge bg-secondary me-1">DTE #${dte.numero_documento}</span>
+                            ${dte.urgente ? '<span class="badge bg-danger">Urgente</span>' : ''}
+                        </h6>
+                        <p class="mb-1 small text-muted">
+                            Enviado a: <strong>${dte.destino_nombre}</strong> |
+                            Recibido: ${dte.fecha_recepcion} |
+                            <span class="text-danger fw-bold">${dte.productos_problema} producto(s)</span> con problemas
+                        </p>
+                        ${dte.dias_pendiente > 0 ? `<span class="badge bg-warning text-dark">${dte.dias_pendiente} día(s) pendiente</span>` : ''}
+                    </div>
+                    <button class="btn btn-warning btn-sm" onclick="abrirCorreccionDTE(${dte.id})">
+                        <i class="bi bi-pencil-square me-1"></i>Corregir
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    $('#listaDTEsCorregirBody').html(html);
+}
+
+function abrirCorreccionDTE(dteId) {
+    bootstrap.Modal.getInstance(document.getElementById('modalListaDTEsCorregir'))?.hide();
+
+    const modalCorregir = new bootstrap.Modal(document.getElementById('modalCorregirRecepcion'));
+    modalCorregir.show();
+
+    $('#corregirProductosBody').html('<tr><td colspan="8" class="text-center py-4"><div class="spinner-border text-warning"></div></td></tr>');
+    $('#btnConfirmarCorreccion').prop('disabled', true);
+    $('#corregirResumen').addClass('d-none');
+    $('#corregirObservaciones').val('');
+
+    $.getJSON(`/app/dte/obtener_productos_problema/?dte_id=${dteId}`)
+        .done(response => {
+            if (!response.success) {
+                Swal.fire('Error', response.error || 'No se pudieron cargar los productos.', 'error');
+                modalCorregir.hide();
+                return;
+            }
+
+            correccionDteId = dteId;
+            correccionProductos = response.productos;
+
+            const dte = response.dte;
+            $('#corregirDteNumero').text(dte.numero_documento);
+            $('#corregirDteDestino').text(dte.destino);
+            $('#corregirDteFecha').text(dte.fecha_emision);
+            $('#corregirDteFechaRecepcion').text(dte.fecha_recepcion);
+
+            renderizarProductosCorreccion();
+        })
+        .fail(() => {
+            Swal.fire('Error', 'Error de conexión al cargar productos.', 'error');
+            modalCorregir.hide();
+        });
+}
+
+function renderizarProductosCorreccion() {
+    const tbody = $('#corregirProductosBody');
+    tbody.empty();
+
+    if (correccionProductos.length === 0) {
+        tbody.html('<tr><td colspan="8" class="text-center text-muted py-3">Sin productos con problemas.</td></tr>');
+        return;
+    }
+
+    correccionProductos.forEach((prod, i) => {
+        const estadoBadge = getEstadoBadge(prod.estado);
+        tbody.append(`
+            <tr>
+                <td><small class="font-monospace">${prod.sku}</small></td>
+                <td><small>${prod.descripcion}</small></td>
+                <td class="text-center"><span class="badge bg-secondary">${prod.talla}</span></td>
+                <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
+                <td class="text-center"><strong class="text-success">${prod.cantidad_recepcionada}</strong></td>
+                <td class="text-center"><strong class="text-danger">${prod.cantidad_faltante}</strong></td>
+                <td class="text-center">
+                    <input type="number" class="form-control form-control-sm text-center correccion-cantidad"
+                           data-index="${i}" data-recepcion-id="${prod.recepcion_id}"
+                           min="${prod.cantidad_recepcionada}" max="${prod.cantidad_esperada}"
+                           value="${prod.cantidad_esperada}" style="width: 80px; display: inline-block;">
+                </td>
+                <td>${estadoBadge}</td>
+            </tr>
+        `);
+    });
+
+    $('.correccion-cantidad').on('input', actualizarResumenCorreccion);
+    actualizarResumenCorreccion();
+}
+
+function actualizarResumenCorreccion() {
+    let totalDelta = 0;
+    let productosConCambio = 0;
+    let hayError = false;
+
+    $('.correccion-cantidad').each(function() {
+        const index = $(this).data('index');
+        const prod = correccionProductos[index];
+        const nuevaCantidad = parseInt($(this).val()) || 0;
+        const delta = nuevaCantidad - prod.cantidad_recepcionada;
+
+        if (nuevaCantidad > prod.cantidad_esperada || nuevaCantidad < prod.cantidad_recepcionada) {
+            $(this).addClass('is-invalid');
+            hayError = true;
+        } else {
+            $(this).removeClass('is-invalid');
+        }
+
+        if (delta > 0) {
+            totalDelta += delta;
+            productosConCambio++;
+        }
+    });
+
+    if (productosConCambio > 0 && !hayError) {
+        $('#corregirResumen').removeClass('d-none');
+        $('#corregirResumenTexto').text(
+            `Se corregirán ${productosConCambio} producto(s), agregando ${totalDelta} unidad(es) al stock de destino.`
+        );
+        $('#btnConfirmarCorreccion').prop('disabled', false);
+    } else {
+        if (hayError) {
+            $('#corregirResumen').removeClass('d-none');
+            $('#corregirResumenTexto').text('Corrige los valores marcados en rojo.');
+        } else {
+            $('#corregirResumen').addClass('d-none');
+        }
+        $('#btnConfirmarCorreccion').prop('disabled', true);
+    }
+}
+
+function confirmarCorreccionEmisor() {
+    const productos = [];
+
+    $('.correccion-cantidad').each(function() {
+        const index = $(this).data('index');
+        const prod = correccionProductos[index];
+        const nuevaCantidad = parseInt($(this).val()) || 0;
+        const delta = nuevaCantidad - prod.cantidad_recepcionada;
+
+        if (delta > 0) {
+            productos.push({
+                recepcion_id: prod.recepcion_id,
+                cantidad_corregida: nuevaCantidad,
+                observaciones: ''
+            });
+        }
+    });
+
+    if (productos.length === 0) {
+        Swal.fire('Sin cambios', 'No hay cantidades que corregir.', 'info');
+        return;
+    }
+
+    const observaciones = ($('#corregirObservaciones').val() || '').trim();
+
+    Swal.fire({
+        title: 'Confirmar corrección',
+        html: `
+            <div class="text-start">
+                <p>Vas a corregir <strong>${productos.length}</strong> producto(s) del DTE.</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    El stock en la sucursal destino se actualizará automáticamente
+                    y se enviará una notificación al receptor.
+                </div>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, corregir',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#ffc107',
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        showGlobalLoader();
+
+        $.ajax({
+            url: '/app/dte/corregir_recepcion_emisor/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            contentType: 'application/json',
+            data: JSON.stringify({
+                dte_id: correccionDteId,
+                productos: productos,
+                observaciones: observaciones
+            }),
+            success: function(response) {
+                hideGlobalLoader();
+                if (response.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('modalCorregirRecepcion'))?.hide();
+
+                    const detalle = response.productos_corregidos.map(p =>
+                        `<li><strong>${p.sku}</strong>: +${p.delta} unidades (total: ${p.nueva_cantidad})</li>`
+                    ).join('');
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Corrección aplicada',
+                        html: `
+                            <div class="text-start">
+                                <p>${response.message}</p>
+                                <ul class="mb-0">${detalle}</ul>
+                            </div>
+                        `,
+                        confirmButtonText: 'Entendido'
+                    });
+
+                    cargarDTEsParaCorregir();
+                    cargarRecepciones();
+                } else {
+                    Swal.fire('Error', response.error || 'No se pudo aplicar la corrección.', 'error');
+                }
+            },
+            error: function(xhr) {
+                hideGlobalLoader();
+                const msg = xhr.responseJSON?.error || 'Error de conexión.';
+                Swal.fire('Error', msg, 'error');
+            }
+        });
+    });
 }
 </script>
 

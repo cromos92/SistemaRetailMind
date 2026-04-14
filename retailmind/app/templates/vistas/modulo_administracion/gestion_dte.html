@@ -1137,8 +1137,8 @@
             <button class="nexo-action-btn warning" title="Descargar TXT Acepta" onclick="descargarTXTAcepta(${dte.id || 0}, '${dte.tipo_documento}', '${dte.numero_documento}')">
                 <i class="bi bi-file-earmark-text"></i>
             </button>` : ''}
-            ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' ? `
-            <button class="nexo-action-btn danger" title="Anular ${dte.tipo_documento}" onclick="anularDocumento(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}')">
+            ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' && (dte.monto_con_iva - (dte.total_nc_acumulado || 0)) > 0 ? `
+            <button class="nexo-action-btn danger" title="Generar NC para ${dte.tipo_documento}" onclick="anularDocumento(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}', ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})">
                 <i class="bi bi-x-circle"></i>
             </button>` : ''}
             {% endif %}
@@ -1600,15 +1600,43 @@
         }
     }
 
-    async function anularDocumento(dteId, numeroDoc, tipoDocumento) {
+    async function anularDocumento(dteId, numeroDoc, tipoDocumento, montoOriginal, ncAcumulado) {
         const esBoleta = tipoDocumento.toUpperCase().includes('BOLETA');
         const nombreDoc = esBoleta ? 'Boleta Electrónica' : 'Factura Electrónica';
+        const montoRestante = montoOriginal - (ncAcumulado || 0);
+        const tieneNCPrevias = (ncAcumulado || 0) > 0;
+        const fmtCLP = (n) => '$' + Math.round(n).toLocaleString('es-CL');
 
-        // Paso 1: tipo de anulación + datos del cliente + motivo
+        const infoNCPrevias = tieneNCPrevias
+            ? `<div class="alert alert-info py-2 px-3 mb-3 small">
+                   <i class="bi bi-info-circle me-1"></i>
+                   Ya existen NC por <strong>${fmtCLP(ncAcumulado)}</strong> de ${fmtCLP(montoOriginal)}.
+                   Disponible: <strong>${fmtCLP(montoRestante)}</strong>
+               </div>`
+            : '';
+
+        // Paso 1: tipo de anulación + monto + datos del cliente + motivo
         const { value: formData, isConfirmed } = await Swal.fire({
-            title: `Anular ${nombreDoc} #${numeroDoc}`,
+            title: `Generar NC — ${nombreDoc} #${numeroDoc}`,
             html: `
                 <div class="text-start">
+                    ${infoNCPrevias}
+                    <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-cash-stack me-1"></i>Monto de la Nota de Crédito:</p>
+                    <div class="row g-2 mb-3 align-items-center">
+                        <div class="col-7">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" id="anulMontoNC" class="form-control" value="${montoRestante}" min="1" max="${montoRestante}" step="1">
+                            </div>
+                            <small class="text-muted">Máximo: ${fmtCLP(montoRestante)}</small>
+                        </div>
+                        <div class="col-5">
+                            <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="document.getElementById('anulMontoNC').value=${montoRestante}">
+                                Monto completo
+                            </button>
+                        </div>
+                    </div>
+
                     <p class="mb-2 fw-bold" style="font-size:0.9rem;">Tipo de anulación:</p>
                     <div class="d-flex flex-column gap-2 mb-3">
                         <label class="p-2 border rounded" style="cursor:pointer;">
@@ -1691,7 +1719,8 @@
 
                     <div class="alert alert-danger mt-3 mb-0 py-2 small">
                         <i class="bi bi-exclamation-triangle me-1"></i>
-                        Se creará una Nota de Crédito, el documento quedará <strong>ANULADO</strong> y se descargará el TXT Acepta.
+                        Se creará una Nota de Crédito y se descargará el TXT Acepta.
+                        <span id="anulInfoTotal"></span>
                     </div>
                 </div>
             `,
@@ -1707,8 +1736,29 @@
                         if (e.key === 'Enter') { e.preventDefault(); buscarClienteAnulacion(); }
                     });
                 }
+                const montoEl = document.getElementById('anulMontoNC');
+                const infoEl = document.getElementById('anulInfoTotal');
+                const actualizarInfo = () => {
+                    const v = parseInt(montoEl.value) || 0;
+                    if (v >= montoRestante) {
+                        infoEl.innerHTML = '<br>El documento quedará <strong>ANULADO</strong> y se revertirá el stock.';
+                    } else {
+                        infoEl.innerHTML = '<br>NC parcial: el documento <strong>no</strong> se marcará como anulado. Podrá generar otra NC por el restante.';
+                    }
+                };
+                montoEl.addEventListener('input', actualizarInfo);
+                actualizarInfo();
             },
             preConfirm: () => {
+                const montoVal = parseInt(document.getElementById('anulMontoNC').value) || 0;
+                if (montoVal <= 0) {
+                    Swal.showValidationMessage('El monto debe ser mayor a 0');
+                    return false;
+                }
+                if (montoVal > montoRestante) {
+                    Swal.showValidationMessage('El monto excede el saldo disponible (' + fmtCLP(montoRestante) + ')');
+                    return false;
+                }
                 const selectVal = document.getElementById('anulMotivoSelect').value;
                 const txtVal = document.getElementById('anulMotivo').value.trim();
                 if (!selectVal) {
@@ -1722,6 +1772,7 @@
                 const motivoFinal = selectVal === 'OTRO' ? txtVal : (txtVal ? `${selectVal}. ${txtVal}` : selectVal);
                 return {
                     tipoAnulacion: (document.querySelector('input[name="tipoAnulacion"]:checked') || {}).value || 'ANULACION',
+                    montoNC: montoVal,
                     clienteNombre: document.getElementById('anulClienteNombre').value.trim(),
                     clienteRut: document.getElementById('anulClienteRut').value.trim(),
                     clienteId: document.getElementById('anulClienteId').value || null,
@@ -1787,6 +1838,7 @@
                     dte_id: dteId,
                     tipo_anulacion: tipoAnulacion,
                     metodo_devolucion: metodoDevolucion,
+                    monto_nc: formData.montoNC,
                     cliente_nombre: formData.clienteNombre,
                     cliente_rut: formData.clienteRut,
                     motivo: formData.motivo
@@ -1809,16 +1861,20 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
+            const esTotal = formData.montoNC >= montoRestante;
             const resumenMetodo = metodoDevolucion === 'EFECTIVO_CAJA'
                 ? '<br><span class="text-warning"><i class="bi bi-cash-coin me-1"></i>NC resta del efectivo en cuadratura</span>'
                 : metodoDevolucion === 'TRANSFERENCIA_BANCARIA'
                     ? '<br><span class="text-info"><i class="bi bi-bank me-1"></i>NC registrada como transferencia en cuadratura</span>'
                     : '';
+            const resumenMonto = !esTotal
+                ? `<br><span class="text-primary"><i class="bi bi-pie-chart me-1"></i>NC parcial por ${fmtCLP(formData.montoNC)} de ${fmtCLP(montoOriginal)}</span>`
+                : '';
 
             await Swal.fire({
                 icon: 'success',
-                title: 'Documento Anulado',
-                html: `Nota de Crédito creada.<br>TXT Acepta descargado.<br><small class="text-muted">${nombreDoc} #${numeroDoc} marcada como ANULADO.</small>${resumenMetodo}`,
+                title: esTotal ? 'Documento Anulado' : 'NC Parcial Generada',
+                html: `Nota de Crédito por <strong>${fmtCLP(formData.montoNC)}</strong> creada.<br>TXT Acepta descargado.${esTotal ? `<br><small class="text-muted">${nombreDoc} #${numeroDoc} marcada como ANULADO.</small>` : `<br><small class="text-muted">${nombreDoc} #${numeroDoc} sigue vigente. Puede generar otra NC por el restante.</small>`}${resumenMetodo}${resumenMonto}`,
                 confirmButtonText: 'Aceptar'
             });
             cargarDTEs(currentPageDTE, currentSearchDTE);

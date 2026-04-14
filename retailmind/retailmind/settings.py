@@ -234,9 +234,9 @@ LOGIN_REDIRECT_URL = 'verHome'
 LOGOUT_REDIRECT_URL = 'login'
 
 # ========== CONFIGURACIÓN 2FA / PIN ==========
-# True  → todos los usuarios deben ingresar un PIN al hacer login (recomendado)
+# True  → todos los usuarios deben ingresar un PIN al hacer login
 # False → solo los usuarios con requiere_2fa=True en su perfil
-REQUIRE_2FA_FOR_ALL = True
+REQUIRE_2FA_FOR_ALL = False
 # 'session' → el PIN expira a los 10 minutos
 # 'daily'   → el mismo PIN sirve durante todo el día
 PIN_2FA_MODE = 'session'

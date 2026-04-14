@@ -51,4 +51,5 @@ urlpatterns = [
     # APIs para gestión de permisos
     path('api/usuarios-por-rol/', views.usuarios_por_rol, name='usuarios_por_rol'),
     path('api/cambiar-rol-usuario/', views.cambiar_rol_usuario, name='cambiar_rol_usuario'),
+    path('api/corregir-usuarios-sin-sucursal/', views.corregir_usuarios_sin_sucursal, name='corregir_usuarios_sin_sucursal'),
 ]

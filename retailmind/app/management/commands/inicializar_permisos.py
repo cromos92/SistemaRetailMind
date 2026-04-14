@@ -21,6 +21,7 @@ class Command(BaseCommand):
         self.crear_modulo_requerimientos()
         self.crear_modulo_reportes()
         self.crear_modulo_configuracion()
+        self.crear_modulo_ecommerce()
         self.crear_modulo_usuario()  # Nuevo módulo para opciones de usuario
         
         # Crear permisos por defecto para cada rol
@@ -50,6 +51,9 @@ class Command(BaseCommand):
             ('dashboard_productos', 'Dashboard Productos', None, '/app/dashboard_productos/', 'bi-box-seam', 3),
             ('dashboard_fifo', 'Dashboard FIFO', None, '/app/dashboard_fifo/', 'bi-arrow-repeat', 4),
             ('dashboard_compras_estrategico', 'Dashboard Compras', None, '/app/verDashboardCompras/', 'ri-shopping-bag-line', 5),
+            ('dashboard_documentos', 'Dashboard Documentos', None, '/app/dashboard-documentos/', 'ri-file-list-line', 6),
+            ('dashboard_despachos', 'Dashboard Despachos', None, '/app/dashboard-despachos/', 'ri-truck-line', 7),
+            ('dashboard_requerimientos', 'Dashboard Requerimientos', None, '/app/dashboard-requerimientos/', 'ri-customer-service-2-line', 8),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -86,6 +90,7 @@ class Command(BaseCommand):
             ('gestion_documentos_ventas', 'Consulta Documentos', 'gestion_ventas_documentos', 'ri-file-search-line', 4),
             ('cuadratura_caja', 'Cuadratura y Arqueo', 'cuadratura_caja', 'ri-calculator-line', 5),
             ('pos_transbank', 'POS Transbank', 'gestion_transbank_pos_sdk', 'ri-bank-card-line', 6),
+            ('revision_arqueos', 'Revisión Arqueos y Depósitos', 'revision_arqueos', 'ri-shield-check-line', 7),
         ]
         
         for codigo, nombre, url_name, icono, orden in opciones:
@@ -197,6 +202,7 @@ class Command(BaseCommand):
         opciones = [
             ('gestion_compras', 'Gestión Compras', None, '/app/verGestionCompras/', 'ri-shopping-bag-line', 1),
             ('gestion_dte_compras', 'Gestión Documentos Compras', None, '/app/verGestionDteCompras/', 'ri-file-list-line', 2),
+            ('prediccion_compras', 'Predicción de Compras', None, '/app/prediccion/', 'ri-line-chart-line', 3),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -272,6 +278,7 @@ class Command(BaseCommand):
             # Reportes Compras
             ('reporte_despachos_proveedor', 'Despachos por Proveedor', None, '/app/verReporteDespachosProveedor/', 'bi-truck', 8),
             ('reporte_compras', 'Reporte de Compras', None, '/app/reportes/compras/', 'bi-bag', 9),
+            ('reporte_rendimiento_proveedor', 'Rendimiento por Proveedor', None, '/app/reportes/rendimiento-proveedor/', 'bi-people', 10),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -326,6 +333,39 @@ class Command(BaseCommand):
         
         self.stdout.write('[Configuracion] Modulo Configuracion creado')
 
+    def crear_modulo_ecommerce(self):
+        """Crear módulo Ecommerce y sus opciones"""
+        modulo, created = ModuloSistema.objects.get_or_create(
+            codigo='ecommerce',
+            defaults={
+                'nombre': 'Ecommerce',
+                'descripcion': 'Gestión de pedidos de comercio electrónico',
+                'icono': 'ri-shopping-cart-2-line',
+                'orden': 9
+            }
+        )
+
+        opciones = [
+            ('ecommerce_pedidos_pendientes', 'Pendientes de Facturar', 'pedidos_ecommerce_list', None, 'bi-hourglass-split', 1),
+            ('ecommerce_pedidos_facturados', 'Facturados', 'pedidos_ecommerce_list', None, 'bi-check-circle', 2),
+            ('ecommerce_pedidos_todos', 'Todos los Pedidos', 'pedidos_ecommerce_list', None, 'bi-grid-3x3-gap', 3),
+        ]
+
+        for codigo, nombre, url_name, url_path, icono, orden in opciones:
+            OpcionMenu.objects.get_or_create(
+                codigo=codigo,
+                defaults={
+                    'modulo': modulo,
+                    'nombre': nombre,
+                    'url_name': url_name,
+                    'url_path': url_path,
+                    'icono': icono,
+                    'orden': orden
+                }
+            )
+
+        self.stdout.write('[Ecommerce] Modulo Ecommerce creado')
+
     def crear_modulo_usuario(self):
         """Crear módulo Usuario con opciones de perfil y acciones rápidas"""
         modulo, created = ModuloSistema.objects.get_or_create(
@@ -334,7 +374,7 @@ class Command(BaseCommand):
                 'nombre': 'Mi Cuenta',
                 'descripcion': 'Opciones de perfil de usuario y acciones rápidas',
                 'icono': 'ri-user-settings-line',
-                'orden': 9
+                'orden': 10
             }
         )
         
@@ -387,10 +427,12 @@ class Command(BaseCommand):
         # Códigos que el jefe local puede ver
         codigos_permitidos = [
             # Dashboard
-            'dashboard_general', 'dashboard_ventas', 'dashboard_productos', 'dashboard_fifo', 'dashboard_compras_estrategico',
+            'dashboard_general', 'dashboard_ventas', 'dashboard_productos', 'dashboard_fifo',
+            'dashboard_compras_estrategico', 'dashboard_documentos', 'dashboard_despachos',
+            'dashboard_requerimientos',
             # Ventas
             'ticket_venta', 'cambios_devoluciones', 'pos_dashboard', 'gestion_documentos_ventas',
-            'cuadratura_caja', 'pos_transbank',
+            'cuadratura_caja', 'pos_transbank', 'revision_arqueos',
             # Documentos
             'emision_dte', 'gestion_dte', 'recepcion_dte', 'regularizar_recepciones',
             'gestion_cotizaciones', 'gestion_creditos',
@@ -398,13 +440,16 @@ class Command(BaseCommand):
             'gestion_producto', 'edicion_rapida_precios', 'revisar_cambios_precios', 'movimientos_producto',
             'gestion_inventarios', 'gestion_etiquetas_zebra', 'buscar_productos_sucursal',
             # Compras
-            'gestion_compras', 'gestion_dte_compras',
+            'gestion_compras', 'gestion_dte_compras', 'prediccion_compras',
+            # Ecommerce
+            'ecommerce_pedidos_pendientes', 'ecommerce_pedidos_facturados', 'ecommerce_pedidos_todos',
             # Requerimientos
             'lista_requerimientos', 'crear_requerimiento', 'gestionar_requerimientos',
             # Reportes
             'reporte_ventas_sucursal', 'reporte_documentos_emitidos', 'reporte_existencias',
             'reporte_existencias_marca', 'reporte_existencias_sucursal', 'reporte_despachos_proveedor',
             'resumen_existencias', 'reporte_movimientos_sucursal', 'reporte_compras',
+            'reporte_rendimiento_proveedor',
             # Configuración
             'gestion_clientes', 'gestion_vendedores',
             # Mi Cuenta

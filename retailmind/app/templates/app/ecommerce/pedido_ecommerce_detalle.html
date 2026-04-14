@@ -1,4 +1,5 @@
 {% load static %}
+{% load permisos_tags %}
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 
@@ -388,7 +389,8 @@
     </div>
     {% endwith %}
 
-    <!-- Botón avanzar -->
+    <!-- Botón avanzar (requiere puede_editar) -->
+    {% if user|puede_editar_en:'ecommerce_pedidos_todos' %}
     {% if pedido.sub_estado == 'RECIBIDO' %}
       <button class="btn btn-sm btn-primary ms-3" style="font-size:.72rem;white-space:nowrap;" onclick="avanzarSubEstado('ASIGNADO')">
         <i class="bi bi-arrow-right me-1"></i>Asignar
@@ -401,6 +403,7 @@
       <button class="btn btn-sm btn-primary ms-3" style="font-size:.72rem;white-space:nowrap;" onclick="avanzarSubEstado('LISTO_DESPACHO')">
         <i class="bi bi-arrow-right me-1"></i>Listo
       </button>
+    {% endif %}
     {% endif %}
   </div>
   {% elif pedido.estado == 'FACTURADO' %}
@@ -568,7 +571,7 @@
                     {% if iv.encontrado %}
                       <div class="match-ok"><i class="bi bi-check-circle-fill"></i><span>{{ iv.producto_nombre_rm|default:iv.sku }}</span></div>
                       <div class="match-stock">Stock disponible: <strong>{{ iv.stock_disponible }}</strong></div>
-                      {% if pedido.estado == 'PENDIENTE' %}
+                      {% if pedido.estado == 'PENDIENTE' and user|puede_editar_en:'ecommerce_pedidos_todos' %}
                       <button class="btn btn-outline-secondary btn-sm py-0 px-2 mt-2" style="font-size:.7rem;"
                         onclick="abrirBuscador({{ forloop.counter0 }})">
                         <i class="bi bi-search me-1"></i>Cambiar
@@ -577,7 +580,7 @@
                     {% elif iv.sin_stock %}
                       <div class="match-fail"><i class="bi bi-exclamation-circle-fill"></i><span>Sin stock — {{ iv.producto_nombre_rm|default:iv.sku }}</span></div>
                       <div class="match-stock" style="color:#dc2626;">Stock disponible: <strong>0</strong></div>
-                      {% if pedido.estado == 'PENDIENTE' %}
+                      {% if pedido.estado == 'PENDIENTE' and user|puede_editar_en:'ecommerce_pedidos_todos' %}
                       <button class="btn btn-warning btn-sm py-0 px-2 mt-2" style="font-size:.72rem;"
                         onclick="abrirBuscador({{ forloop.counter0 }})">
                         <i class="bi bi-search me-1"></i>Buscar con stock
@@ -585,7 +588,7 @@
                       {% endif %}
                     {% else %}
                       <div class="match-fail"><i class="bi bi-x-circle-fill"></i><span>No encontrado en {{ sucursal_validacion.alias }}</span></div>
-                      {% if pedido.estado == 'PENDIENTE' %}
+                      {% if pedido.estado == 'PENDIENTE' and user|puede_editar_en:'ecommerce_pedidos_todos' %}
                       <button class="btn btn-warning btn-sm py-0 px-2 mt-2" style="font-size:.72rem;"
                         onclick="abrirBuscador({{ forloop.counter0 }})">
                         <i class="bi bi-search me-1"></i>Buscar producto
@@ -752,8 +755,8 @@
         </div>
       </div>
 
-      <!-- ── REASIGNACIÓN ────────────────────────────────────── -->
-      {% if pedido.estado == 'PENDIENTE' %}
+      <!-- ── REASIGNACIÓN (requiere puede_editar) ─────────────── -->
+      {% if pedido.estado == 'PENDIENTE' and user|puede_editar_en:'ecommerce_pedidos_todos' %}
       <div class="rm-card reasign-card">
         <div class="rm-card-header">
           <div class="rm-card-header-title" style="color:#7c3aed;"><i class="bi bi-arrow-left-right" style="color:#8b5cf6;"></i>Reasignar Sucursal</div>
@@ -805,8 +808,8 @@
         </div>
       </div>
 
-      <!-- ── FACTURAR ─────────────────────────────────────────── -->
-      {% if pedido.estado == 'PENDIENTE' %}
+      <!-- ── FACTURAR (requiere puede_crear) ────────────────────── -->
+      {% if pedido.estado == 'PENDIENTE' and user|puede_crear_en:'ecommerce_pedidos_todos' %}
 
       <div class="rm-card facturar-card" id="card-facturar">
         <div class="rm-card-header">
@@ -885,7 +888,8 @@
         </div>
       </div>
 
-      <!-- Zona de riesgo -->
+      <!-- Zona de riesgo (requiere puede_eliminar) -->
+      {% if user|puede_eliminar_en:'ecommerce_pedidos_todos' %}
       <div class="danger-zone rm-card">
         <div class="rm-card-header">
           <div class="rm-card-header-title" style="color:#b91c1c;"><i class="bi bi-exclamation-octagon-fill" style="color:#f87171;"></i>Zona de riesgo</div>
@@ -900,6 +904,7 @@
           </form>
         </div>
       </div>
+      {% endif %}
 
       {% endif %}
 

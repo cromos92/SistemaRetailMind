@@ -807,6 +807,9 @@
                     <p class="mb-0">Administra los usuarios del sistema, sus roles y permisos</p>
                 </div>
                 <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="corregirUsuariosSinSucursal()" title="Asignar tu sucursal a usuarios que no tienen una">
+                        <i class="ri-tools-line me-1"></i> Corregir Sin Sucursal
+                    </button>
                     <button type="button" class="btn btn-light" onclick="mostrarModalImportar()" title="Importar desde CSV">
                         <i class="ri-upload-line me-1"></i> Importar
                     </button>
@@ -2678,6 +2681,57 @@ function reenviarCredenciales(usuarioId, nombreCompleto, email) {
                 }
             });
         }
+    });
+}
+
+function corregirUsuariosSinSucursal() {
+    Swal.fire({
+        title: 'Corregir usuarios sin sucursal',
+        html: `
+            <div class="text-start">
+                <p>Se asignará <strong>tu sucursal actual</strong> a todos los usuarios que no tienen sucursal asignada.</p>
+                <div class="alert alert-warning">
+                    <i class="ri-information-line me-2"></i>
+                    Esto corregirá el problema de "Sin sucursal" al iniciar sesión.
+                </div>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, corregir',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#ffc107',
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        $.ajax({
+            url: '{% url "users:corregir_usuarios_sin_sucursal" %}',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.success) {
+                    let detalle = '';
+                    if (response.usuarios_corregidos.length > 0) {
+                        detalle = '<ul class="text-start mb-0">' +
+                            response.usuarios_corregidos.map(u => `<li>${u}</li>`).join('') +
+                            '</ul>';
+                    }
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Corrección aplicada',
+                        html: `<p>${response.message}</p>${detalle}`,
+                        confirmButtonText: 'Entendido'
+                    });
+                    cargarUsuarios();
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function(xhr) {
+                Swal.fire('Error', xhr.responseJSON?.error || 'Error de conexión', 'error');
+            }
+        });
     });
 }
 

@@ -19,6 +19,7 @@ URL_PERMISO_MAP = {
     '/app/verDashboardCompras/': 'dashboard_compras_estrategico',
     '/app/ventas/dashboard': 'dashboard_ventas',
     '/app/dashboard-documentos/': 'dashboard_documentos',
+    '/app/dashboard-despachos/': 'dashboard_despachos',
     '/app/dashboard-requerimientos/': 'dashboard_requerimientos',
     '/app/prediccion/': 'prediccion_compras',
     
@@ -67,6 +68,13 @@ URL_PERMISO_MAP = {
     '/app/reporte-movimientos-sucursal/': 'reporte_movimientos_sucursal',
     '/app/verReporteDespachosProveedor/': 'reporte_despachos_proveedor',
     '/app/reportes/compras/': 'reporte_compras',
+    '/app/reportes/rendimiento-proveedor/': 'reporte_rendimiento_proveedor',
+    
+    # Ventas (adicionales)
+    '/app/ventas/revision-arqueos/': 'revision_arqueos',
+    
+    # Ecommerce
+    '/app/ecommerce/pedidos/': 'ecommerce_pedidos_todos',
     
     # Configuración
     '/app/gestion_usuarios/': 'gestion_usuarios',
@@ -117,16 +125,37 @@ class PermisosMenuMiddleware:
         self.get_response = get_response
     
     def __call__(self, request):
-        # Verificar permisos antes de procesar la vista
+        if (request.user.is_authenticated
+                and not request.session.get('idSucursalActual')
+                and request.path.startswith('/app/')):
+            self._corregir_sesion_sin_sucursal(request)
+
         resultado_verificacion = self.verificar_permiso(request)
         
         if resultado_verificacion is not None:
-            # Si hay resultado, significa que se denegó el acceso
             return resultado_verificacion
         
-        # Procesar la vista normalmente
         response = self.get_response(request)
         return response
+
+    @staticmethod
+    def _corregir_sesion_sin_sucursal(request):
+        from .models import EmpresaUser
+        eu = EmpresaUser.objects.filter(
+            user=request.user, status=True, sucursal__isnull=False
+        ).select_related('empresa', 'sucursal').first()
+        if not eu:
+            return
+        if not eu.active:
+            EmpresaUser.objects.filter(user=request.user).update(active=False)
+            eu.active = True
+            eu.save(update_fields=['active'])
+        request.session['idEmpresaActual'] = eu.empresa.id
+        request.session['idSucursalActual'] = eu.sucursal.id
+        request.session['direccionSucursal'] = eu.sucursal.direccion or 'Sin dirección'
+        request.session['alias'] = eu.sucursal.alias or 'Sin sucursal'
+        request.session['nombreEmpresaActual'] = eu.empresa.nombre
+        request.session['rutEmpresaActual'] = eu.empresa.rut
     
     def verificar_permiso(self, request):
         """

@@ -415,9 +415,10 @@
                             </button>
                         </div>
 
-                        <div class="ms-1 header-item d-none d-sm-flex">
+                        <div class="ms-1 header-item d-flex">
                             <button type="button"
-                                class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle light-dark-mode shadow-none">
+                                class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle light-dark-mode shadow-none"
+                                title="Cambiar tema claro/oscuro">
                                 <i class='bx bx-moon fs-22'></i>
                             </button>
                         </div>
@@ -535,6 +536,7 @@
                         </style>
                         {% endif %}
 
+                        {% if user|puede_ver_opcion:'recepcion_dte' or user|puede_ver_opcion:'regularizar_recepciones' or user|puede_ver_opcion:'revisar_cambios_precios' %}
                         <div class="dropdown topbar-head-dropdown ms-1 header-item" id="notificationDropdown">
                             <button type="button"
                                 class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle shadow-none"
@@ -566,6 +568,7 @@
                                     <div class="px-2 pt-2">
                                         <ul class="nav nav-tabs dropdown-tabs nav-tabs-custom" data-dropdown-tabs="true"
                                             id="notificationItemsTab" role="tablist">
+                                            {% if user|puede_ver_opcion:'recepcion_dte' %}
                                             <li class="nav-item waves-effect waves-light">
                                                 <a class="nav-link" data-bs-toggle="tab" href="#dtes-noti-tab"
                                                     role="tab" aria-selected="false" onclick="cargarNotificacionesDTE()">
@@ -573,19 +576,24 @@
                                                     <span id="badge-dtes-pendientes" class="badge bg-danger ms-1" style="display: none;">0</span>
                                                 </a>
                                             </li>
+                                            {% endif %}
+                                            {% if user|puede_ver_opcion:'regularizar_recepciones' %}
                                             <li class="nav-item waves-effect waves-light">
                                                 <a class="nav-link" data-bs-toggle="tab" href="#regularizar-noti-tab"
                                                     role="tab" aria-selected="false" onclick="cargarNotificacionesRegularizar()">
-                                                    <i class="ri-tools-line me-1"></i> Regularizar
+                                                    <i class="ri-tools-line me-1"></i> Corregir
                                                     <span id="badge-regularizar-pendientes" class="badge bg-warning ms-1" style="display: none;">0</span>
                                                 </a>
                                             </li>
+                                            {% endif %}
+                                            {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
                                             <li class="nav-item waves-effect waves-light">
                                                 <a class="nav-link active" data-bs-toggle="tab" href="#precios-noti-tab"
                                                     role="tab" aria-selected="true">
                                                     <i class="ri-money-dollar-circle-line me-1"></i> Precios
                                                 </a>
                                             </li>
+                                            {% endif %}
                                         </ul>
                                     </div>
 
@@ -593,6 +601,7 @@
 
                                 <div class="tab-content position-relative" id="notificationItemsTabContent">
                                     <!-- Tab de DTEs Recibidos Pendientes -->
+                                    {% if user|puede_ver_opcion:'recepcion_dte' %}
                                     <div class="tab-pane fade py-2 ps-2" id="dtes-noti-tab" role="tabpanel">
                                         <div data-simplebar style="max-height: 300px;" class="pe-2" id="dtes-container">
                                             <!-- Loader -->
@@ -630,8 +639,10 @@
                                             </a>
                                         </div>
                                     </div>
+                                    {% endif %}
 
                                     <!-- Tab de DTEs Pendientes de Regularizar (SOY EMISOR) -->
+                                    {% if user|puede_ver_opcion:'regularizar_recepciones' %}
                                     <div class="tab-pane fade py-2 ps-2" id="regularizar-noti-tab" role="tabpanel">
                                         <div data-simplebar style="max-height: 300px;" class="pe-2" id="regularizar-container">
                                             <!-- Loader -->
@@ -666,8 +677,10 @@
                                             </a>
                                         </div>
                                     </div>
+                                    {% endif %}
 
                                     <!-- Tab de Notificaciones de Precios -->
+                                    {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
                                     <div class="tab-pane fade show active py-2 ps-2" id="precios-noti-tab" role="tabpanel">
                                         <!-- Contador de alertas sin leer (sin botones de eliminación — gestionar desde revisar-pendientes) -->
                                         <div id="notif-actions" class="d-flex align-items-center px-2 pb-2 border-bottom mb-2" style="display: none !important;">
@@ -708,6 +721,7 @@
                                             </a>
                                         </div>
                                     </div>
+                                    {% endif %}
 
                                     <!-- Tab de Cambios Pendientes -->
                                     <div class="tab-pane fade py-2 ps-2" id="pendientes-tab" role="tabpanel">
@@ -747,14 +761,13 @@
                         let dtesCargados = false;
                         let regularizarCargados = false;
                         
-                        // Variables para conteo total de alertas
                         let totalAlertasPrecios = 0;
                         let totalAlertasDTEs = 0;
                         let totalAlertasRegularizar = 0;
+                        let totalAlertasCorrecciones = 0;
                         
-                        // Actualizar badge total de la campanita (DTEs + Precios + Regularizar)
                         function actualizarBadgeTotal() {
-                            const totalAlertas = totalAlertasPrecios + totalAlertasDTEs + totalAlertasRegularizar;
+                            const totalAlertas = totalAlertasPrecios + totalAlertasDTEs + totalAlertasRegularizar + totalAlertasCorrecciones;
                             const badge = document.getElementById('notification-badge');
                             const headerCount = document.getElementById('notification-count-header');
                             
@@ -772,15 +785,37 @@
                             }
                         }
                         
-                        // Cargar notificaciones al iniciar
+                        async function actualizarBadgeCorrecciones() {
+                            try {
+                                const response = await fetch('/app/notificaciones-dte/?tipo=CORRECCION_RECEPCION&solo_no_leidas=true&limit=10');
+                                const data = await response.json();
+                                
+                                if (data.success && data.total_no_leidas > 0) {
+                                    totalAlertasCorrecciones = data.total_no_leidas;
+                                } else {
+                                    totalAlertasCorrecciones = 0;
+                                }
+                                actualizarBadgeTotal();
+                            } catch (error) {
+                                totalAlertasCorrecciones = 0;
+                            }
+                        }
+
                         document.addEventListener('DOMContentLoaded', function() {
+                            {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
                             actualizarBadgeNotificaciones();
-                            actualizarBadgeDTEs();
-                            actualizarBadgeRegularizar();
-                            // Actualizar cada 60 segundos
                             setInterval(actualizarBadgeNotificaciones, 60000);
+                            {% endif %}
+                            {% if user|puede_ver_opcion:'recepcion_dte' %}
+                            actualizarBadgeDTEs();
                             setInterval(actualizarBadgeDTEs, 60000);
+                            {% endif %}
+                            {% if user|puede_ver_opcion:'regularizar_recepciones' %}
+                            actualizarBadgeRegularizar();
+                            actualizarBadgeCorrecciones();
                             setInterval(actualizarBadgeRegularizar, 60000);
+                            setInterval(actualizarBadgeCorrecciones, 60000);
+                            {% endif %}
                         });
                         
                         // Actualizar el badge de DTEs pendientes
@@ -919,7 +954,7 @@
                                 
                                 if (data.success && data.dtes && data.dtes.length > 0) {
                                     list.innerHTML = data.dtes.map(dte => `
-                                        <a href="{% url 'regularizar_recepciones' %}" class="text-reset notification-item d-block dropdown-item position-relative">
+                                        <a href="{% url 'recepcion_dte' %}" class="text-reset notification-item d-block dropdown-item position-relative">
                                             <div class="d-flex">
                                                 <div class="avatar-xs me-3 flex-shrink-0">
                                                     <span class="avatar-title ${dte.urgente ? 'bg-soft-danger text-danger' : 'bg-soft-warning text-warning'} rounded-circle fs-16">
@@ -941,6 +976,9 @@
                                                     <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
                                                         <span><i class="mdi mdi-clock-outline"></i> Recibido: ${dte.fecha_recepcion}</span>
                                                         ${dte.dias_pendiente > 0 ? '<span class="badge bg-warning text-dark ms-2">' + dte.dias_pendiente + ' días</span>' : ''}
+                                                    </p>
+                                                    <p class="mb-0 mt-1">
+                                                        <small class="text-warning"><i class="ri-pencil-line"></i> Click para corregir</small>
                                                     </p>
                                                 </div>
                                             </div>
@@ -1329,16 +1367,29 @@
 
                         // Inicializar badges al cargar la página y refrescar cada 90s
                         document.addEventListener('DOMContentLoaded', function() {
+                            {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
                             actualizarBadgeNotificaciones();
+                            {% endif %}
+                            {% if user|puede_ver_opcion:'recepcion_dte' %}
                             actualizarBadgeDTEs();
+                            {% endif %}
+                            {% if user|puede_ver_opcion:'regularizar_recepciones' %}
                             actualizarBadgeRegularizar();
+                            {% endif %}
                             setInterval(function() {
+                                {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
                                 actualizarBadgeNotificaciones();
+                                {% endif %}
+                                {% if user|puede_ver_opcion:'recepcion_dte' %}
                                 actualizarBadgeDTEs();
+                                {% endif %}
+                                {% if user|puede_ver_opcion:'regularizar_recepciones' %}
                                 actualizarBadgeRegularizar();
+                                {% endif %}
                             }, 90000);
                         });
                         </script>
+                        {% endif %}
 
                         <!-- Quick Sucursal Switcher - Solo para Administradores -->
                         {% if user.is_authenticated %}
@@ -1841,11 +1892,17 @@
                     <ul class="navbar-nav" id="navbar-nav">
                         <!-- ========== MÓDULO DASHBOARD ========== -->
                         {% contar_opciones_disponibles user 'dashboard' as total_dashboard %}
-                        {% if total_dashboard > 0 %}
+                        {% if total_dashboard == 1 and user|puede_ver_opcion:'dashboard_general' %}
+                        <li class="nav-item">
+                            <a href="{% url 'verHome' %}" class="nav-link menu-link">
+                                <i class="ri-dashboard-3-line"></i> <span>Dashboard</span>
+                            </a>
+                        </li>
+                        {% elif total_dashboard > 1 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#dashboards" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="dashboards">
-                                <i class="ri-pie-chart-line"></i> <span data-key="t-charts">Dashboard </span>
+                                <i class="ri-pie-chart-line"></i> <span data-key="t-charts">Dashboard</span>
                             </a>
                             <div class="menu-dropdown collapse" id="dashboards" style="">
                                 <ul class="nav nav-sm flex-column">
@@ -1923,12 +1980,17 @@
                         {% endif %}
                         <!-- ========== MÓDULO VENTAS ========== -->
                         {% contar_opciones_disponibles user 'ventas' as total_ventas %}
-                        {% if total_ventas > 0 %}
+                        {% if total_ventas == 1 and user|puede_ver_opcion:'pos_dashboard' %}
+                        <li class="nav-item">
+                            <a href="{% url 'pos_dashboard' %}" class="nav-link menu-link">
+                                <i class="ri-dashboard-3-line"></i> <span>Generar Venta</span>
+                            </a>
+                        </li>
+                        {% elif total_ventas > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloVentas" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloVentas">
-                                <i class=" ri-money-cny-circle-line"></i> <span data-key="t-charts">Modulo Ventas
-                                </span>
+                                <i class="ri-money-cny-circle-line"></i> <span data-key="t-charts">Modulo Ventas</span>
                             </a>
                             <div class="menu-dropdown collapse" id="moduloVentas" style="">
                                 <ul class="nav nav-sm flex-column">
@@ -1967,7 +2029,7 @@
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user.is_superuser or user.rol == 'administrador' or user.rol == 'administracion' %}
+                                    {% if user|puede_ver_opcion:'revision_arqueos' %}
                                     <li class="nav-item">
                                         <a href="{% url 'revision_arqueos' %}" class="nav-link" data-key="t-revision-arqueos">
                                             <i class="ri-shield-check-line"></i> Revisión Arqueos y Depósitos
@@ -1986,7 +2048,8 @@
                         </li>
                         {% endif %}
                         <!-- ========== MÓDULO ECOMMERCE ========== -->
-                        {% if user.is_authenticated %}
+                        {% contar_opciones_disponibles user 'ecommerce' as total_ecommerce %}
+                        {% if total_ecommerce > 0 %}
                         {% with pedidos_pendientes=pending_ecommerce_count %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloEcommerce" data-bs-toggle="collapse"
@@ -1999,6 +2062,7 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloEcommerce">
                                 <ul class="nav nav-sm flex-column">
+                                    {% if user|puede_ver_opcion:'ecommerce_pedidos_pendientes' %}
                                     <li class="nav-item">
                                         <a href="{% url 'pedidos_ecommerce_list' %}?estado=PENDIENTE" class="nav-link" data-key="t-pedidos-pendientes">
                                             <i class="bi bi-hourglass-split text-warning"></i> Pendientes de Facturar
@@ -2007,16 +2071,21 @@
                                             {% endif %}
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'ecommerce_pedidos_facturados' %}
                                     <li class="nav-item">
                                         <a href="{% url 'pedidos_ecommerce_list' %}?estado=FACTURADO" class="nav-link" data-key="t-pedidos-facturados">
                                             <i class="bi bi-check-circle text-success"></i> Facturados
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'ecommerce_pedidos_todos' %}
                                     <li class="nav-item">
                                         <a href="{% url 'pedidos_ecommerce_list' %}" class="nav-link" data-key="t-pedidos-todos">
                                             <i class="bi bi-grid-3x3-gap"></i> Todos los Pedidos
                                         </a>
                                     </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
@@ -2092,11 +2161,32 @@
                         {% endif %}
                         <!-- ========== MÓDULO EXISTENCIAS ========== -->
                         {% contar_opciones_disponibles user 'existencias' as total_existencias %}
-                        {% if total_existencias > 0 %}
+                        {% if total_existencias == 1 %}
+                        <!-- Solo 1 opción: link directo sin dropdown -->
+                        {% if user|puede_ver_opcion:'gestion_producto' %}
+                        <li class="nav-item">
+                            <a href="/app/verGestionProducto/" class="nav-link menu-link">
+                                <i class="ri-archive-line"></i> <span>Gestión Producto</span>
+                            </a>
+                        </li>
+                        {% elif user|puede_ver_opcion:'buscar_productos_sucursal' %}
+                        <li class="nav-item">
+                            <a href="{% url 'buscar_productos_sucursal' %}" class="nav-link menu-link">
+                                <i class="ri-search-line"></i> <span>Buscar Producto</span>
+                            </a>
+                        </li>
+                        {% elif user|puede_ver_opcion:'movimientos_producto' %}
+                        <li class="nav-item">
+                            <a href="/app/verMovimientosProducto/" class="nav-link menu-link">
+                                <i class="ri-arrow-left-right-line"></i> <span>Movimientos Producto</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% elif total_existencias > 1 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarCharts" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="sidebarCharts">
-                                <i class=" ri-store-3-line"></i> <span data-key="t-charts">Modulo Existencias </span>
+                                <i class="ri-store-3-line"></i> <span data-key="t-charts">Modulo Existencias</span>
                             </a>
                             <div class="menu-dropdown collapse" id="sidebarCharts" style="">
                                 <ul class="nav nav-sm flex-column">
@@ -2142,6 +2232,13 @@
                                         </a>
                                     </li>
                                     {% endif %}
+                                    {% if user|puede_ver_opcion:'buscar_productos_sucursal' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'buscar_productos_sucursal' %}" class="nav-link" data-key="t-buscar-productos">
+                                            <i class="ri-search-line"></i> Buscar Producto Sucursal
+                                        </a>
+                                    </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
@@ -2183,11 +2280,25 @@
                         {% endif %}
                         <!-- ========== MÓDULO REQUERIMIENTOS ========== -->
                         {% contar_opciones_disponibles user 'requerimientos' as total_requerimientos %}
-                        {% if total_requerimientos > 0 %}
+                        {% if total_requerimientos == 1 %}
+                        {% if user|puede_ver_opcion:'lista_requerimientos' %}
+                        <li class="nav-item">
+                            <a href="{% url 'modulo_requerimientos' %}" class="nav-link menu-link">
+                                <i class="ri-list-check"></i> <span>Requerimientos</span>
+                            </a>
+                        </li>
+                        {% elif user|puede_ver_opcion:'crear_requerimiento' %}
+                        <li class="nav-item">
+                            <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link menu-link">
+                                <i class="ri-add-circle-line"></i> <span>Crear Requerimiento</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% elif total_requerimientos > 1 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloRequerimientos" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloRequerimientos">
-                                <i class="ri-customer-service-2-line"></i> <span data-key="t-charts">Modulo Requerimientos</span>
+                                <i class="ri-customer-service-2-line"></i> <span data-key="t-charts">Requerimientos</span>
                             </a>
                             <div class="menu-dropdown collapse" id="moduloRequerimientos">
                                 <ul class="nav nav-sm flex-column">
@@ -2195,6 +2306,20 @@
                                     <li class="nav-item">
                                         <a href="{% url 'modulo_requerimientos' %}" class="nav-link" data-key="t-lista-requerimientos">
                                             <i class="ri-list-check"></i> Requerimientos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'crear_requerimiento' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link" data-key="t-crear-requerimiento">
+                                            <i class="ri-add-circle-line"></i> Crear Requerimiento
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestionar_requerimientos' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'gestionar_requerimientos_vista' %}" class="nav-link" data-key="t-gestionar-requerimientos">
+                                            <i class="ri-settings-3-line"></i> Gestionar Requerimientos
                                         </a>
                                     </li>
                                     {% endif %}
@@ -2213,7 +2338,7 @@
                             <div class="menu-dropdown collapse" id="moduloReportes">
                                 <ul class="nav nav-sm flex-column">
                                     <!-- Sección: Reportes Compras -->
-                                    {% if user|puede_ver_opcion:'reporte_despachos_proveedor' or user|puede_ver_opcion:'reporte_compras' %}
+                                    {% if user|puede_ver_opcion:'reporte_despachos_proveedor' or user|puede_ver_opcion:'reporte_compras' or user|puede_ver_opcion:'reporte_rendimiento_proveedor' %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesCompras" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesCompras">
@@ -2234,6 +2359,8 @@
                                                         <i class="bi bi-bag"></i> Reporte de Compras
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if user|puede_ver_opcion:'reporte_rendimiento_proveedor' %}
                                                 <li class="nav-item">
                                                     <a href="/app/reportes/rendimiento-proveedor/" class="nav-link" data-key="t-rendimiento-proveedor">
                                                         <i class="bi bi-people"></i> Rendimiento por Proveedor

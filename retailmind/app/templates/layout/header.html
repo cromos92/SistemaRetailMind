@@ -10,6 +10,24 @@
     <meta content="Plantilla Premium de Administración y Panel de Control Multipropósito" name="description" />
     <meta content="Webappsolutions" name="Javier Araya" />
   
+    <!-- Persistir preferencia de tema en localStorage (antes de layout.js) -->
+    <script>
+    (function(){
+        var saved = localStorage.getItem('theme-preference');
+        if (saved) {
+            sessionStorage.setItem('data-layout-mode', saved);
+            document.documentElement.setAttribute('data-layout-mode', saved);
+            if (saved === 'dark') {
+                document.documentElement.setAttribute('data-topbar', 'dark');
+                document.documentElement.setAttribute('data-sidebar', 'dark');
+                sessionStorage.setItem('data-topbar', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-topbar', 'light');
+                sessionStorage.setItem('data-topbar', 'light');
+            }
+        }
+    })();
+    </script>
     <!-- Layout config Js -->
     <script src="{% static 'js/layout.js' %}"></script>
     <!-- Bootstrap Css -->

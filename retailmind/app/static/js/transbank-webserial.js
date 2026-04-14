@@ -587,7 +587,31 @@
          */
         async getTotals() {
             try {
-                const response = await this.sendCommand('0700||');
+                console.log('📊 Consultando totales del día...');
+
+                const command = '0700||';
+                const encoder = new TextEncoder();
+                const commandBytes = encoder.encode(command);
+
+                let lrc = 0;
+                for (let byte of commandBytes) {
+                    lrc ^= byte;
+                }
+                lrc ^= ETX;
+
+                const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
+                console.log(`📤 Enviando: ${command}`);
+                await this.writer.write(frame);
+
+                // 1. Esperar ACK
+                const ack = await this.readResponse(5000);
+                if (ack.type !== 'ACK') {
+                    throw new Error('No se recibió ACK del POS');
+                }
+
+                // 2. Esperar datos
+                const response = await this.readResponse(15000);
+
                 if (response.type === 'DATA') {
                     const parts = response.data.split('|');
                     return {
@@ -715,8 +739,29 @@
             try {
                 console.log('📋 Obteniendo detalle de ventas...');
                 const print = printOnPOS ? '1' : '0';
-                const response = await this.sendCommand(`0260|${print}|`);
-                
+                const command = `0260|${print}|`;
+                const encoder = new TextEncoder();
+                const commandBytes = encoder.encode(command);
+
+                let lrc = 0;
+                for (let byte of commandBytes) {
+                    lrc ^= byte;
+                }
+                lrc ^= ETX;
+
+                const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
+                console.log(`📤 Enviando: ${command}`);
+                await this.writer.write(frame);
+
+                // 1. Esperar ACK
+                const ack = await this.readResponse(5000);
+                if (ack.type !== 'ACK') {
+                    throw new Error('No se recibió ACK del POS');
+                }
+
+                // 2. Esperar datos
+                const response = await this.readResponse(15000);
+
                 if (response.type === 'DATA') {
                     const parts = response.data.split('|');
                     return {

@@ -149,32 +149,48 @@ Si no solicitaste este código, ignora este mensaje.
 def _finalizar_login(request, user):
     login(request, user)
 
-    # Verificar si el usuario necesita cambiar su contraseña
     if hasattr(user, 'requiere_cambio_password') and user.requiere_cambio_password:
         messages.warning(request, '🔐 Debes cambiar tu contraseña temporal para continuar.')
         return redirect('cambiar_password_obligatorio')
 
     try:
-        # Buscar todas las empresas activas del usuario
-        empresas_activas = EmpresaUser.objects.filter(user=user, active=True)
+        # 1) Buscar EmpresaUser activa con sucursal
+        empresa_user = EmpresaUser.objects.filter(
+            user=user, active=True, sucursal__isnull=False
+        ).select_related('empresa', 'sucursal').first()
 
-        if empresas_activas.exists():
-            # Si hay múltiples empresas activas, tomar la primera (puedes cambiar esta lógica)
-            # Alternativa: ordenar por fecha de creación o permitir al usuario elegir
-            empresa_user = empresas_activas.first()
+        # 2) Si no hay activa con sucursal, buscar cualquiera con status=True y sucursal
+        if not empresa_user:
+            empresa_user = EmpresaUser.objects.filter(
+                user=user, status=True, sucursal__isnull=False
+            ).select_related('empresa', 'sucursal').first()
+            if empresa_user:
+                EmpresaUser.objects.filter(user=user).update(active=False)
+                empresa_user.active = True
+                empresa_user.save(update_fields=['active'])
 
+        if empresa_user:
             request.session['idEmpresaActual'] = empresa_user.empresa.id
-            request.session['idSucursalActual'] = empresa_user.sucursal.id if empresa_user.sucursal else None
-            request.session['direccionSucursal'] = empresa_user.sucursal.direccion if empresa_user.sucursal else 'Sin dirección'
-            request.session['alias'] = empresa_user.sucursal.alias if empresa_user.sucursal else 'Sin sucursal'
+            request.session['idSucursalActual'] = empresa_user.sucursal.id
+            request.session['direccionSucursal'] = empresa_user.sucursal.direccion or 'Sin dirección'
+            request.session['alias'] = empresa_user.sucursal.alias or 'Sin sucursal'
             request.session['nombreEmpresaActual'] = empresa_user.empresa.nombre
             request.session['rutEmpresaActual'] = empresa_user.empresa.rut
-
-            # Si hay múltiples empresas, mostrar mensaje informativo
-            if empresas_activas.count() > 1:
-                messages.info(request, f'Tienes acceso a {empresas_activas.count()} empresas. Actualmente trabajando con: {empresa_user.empresa.nombre}')
-
             return redirect('verHome')
+
+        # 3) Tiene empresa pero sin sucursal → cargar empresa y redirigir a seleccionar sucursal
+        empresa_sin_suc = EmpresaUser.objects.filter(
+            user=user, status=True
+        ).select_related('empresa').first()
+
+        if empresa_sin_suc:
+            request.session['idEmpresaActual'] = empresa_sin_suc.empresa.id
+            request.session['idSucursalActual'] = None
+            request.session['alias'] = 'Sin sucursal'
+            request.session['nombreEmpresaActual'] = empresa_sin_suc.empresa.nombre
+            request.session['rutEmpresaActual'] = empresa_sin_suc.empresa.rut
+            messages.warning(request, 'No tienes sucursal asignada. Selecciona una para continuar, o contacta al administrador.')
+            return redirect('cambiar_empresa')
 
         messages.warning(request, 'No tienes una empresa activa asignada. Contacta al administrador.')
         return redirect('verHome')
