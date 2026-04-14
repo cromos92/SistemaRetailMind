@@ -54,7 +54,14 @@ import json
 @login_required
 def recepcion_dte(request):
     """Vista web para la recepción de traspasos internos."""
-    return render(request, 'vistas/modulo_compras/recepcion_dte.html')
+    user_rol = ''
+    try:
+        eu = EmpresaUser.objects.filter(user=request.user, active=True).first()
+        if eu:
+            user_rol = eu.rol or ''
+    except Exception:
+        pass
+    return render(request, 'vistas/modulo_compras/recepcion_dte.html', {'user_rol': user_rol})
 
 
 @login_required
@@ -79,15 +86,14 @@ def recepciones_pendientes_api(request):
         sucursal_origen_id = request.GET.get('sucursal_origen')
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
+        estado_filtro = request.GET.get('estado', '').strip()
 
-        # Solo DTEs pendientes de recepción (estado EMITIDO)
+        # Base: DTEs de traspaso dirigidos a esta sucursal
         queryset = (
             Dte.objects.filter(
                 tipo_transaccion='TRASPASO',
-                estado_dte='EMITIDO',  # ✅ Solo pendientes de recepción
                 dte_movimientos__concepto='TRASPASO_SALIDA',
                 dte_movimientos__tipo_movimiento='EGRESO',
-                dte_movimientos__estado='COMPLETADO',  # ✅ COMPLETADO porque el stock ya salió
                 dte_movimientos__sucursal_destino_id=sucursal_destino_id
             )
             .select_related('emisor', 'sucursal')
@@ -97,6 +103,12 @@ def recepciones_pendientes_api(request):
             )
             .distinct()
         )
+
+        # Filtrar por estado (por defecto solo EMITIDO/pendientes)
+        if estado_filtro:
+            queryset = queryset.filter(estado_dte=estado_filtro)
+        else:
+            queryset = queryset.exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
 
         if tipo_documento:
             queryset = queryset.filter(tipo_documento=tipo_documento)
@@ -135,11 +147,9 @@ def recepciones_pendientes_api(request):
             movimientos_salida = [
                 mov for mov in dte.dte_movimientos.all()
                 if mov.concepto == 'TRASPASO_SALIDA'
-                and mov.estado == 'COMPLETADO'  # ✅ COMPLETADO porque el stock ya salió
                 and mov.sucursal_destino_id == sucursal_destino_id
             ]
             if not movimientos_salida:
-                # Si no hay movimiento pendiente asociado directamente, continuar con el siguiente
                 continue
 
             movimiento_origen = movimientos_salida[0]
@@ -245,6 +255,14 @@ def recepciones_pendientes_api(request):
             dte__sucursal_id=sucursal_destino_id,
             estado__in=['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION']
         ).count()
+
+        # Conteo por estado (para indicadores del sidebar)
+        conteo_estados_qs = Dte.objects.filter(
+            tipo_transaccion='TRASPASO',
+            dte_movimientos__concepto='TRASPASO_SALIDA',
+            dte_movimientos__sucursal_destino_id=sucursal_destino_id,
+        ).values('estado_dte').annotate(total=Count('id', distinct=True))
+        conteo_estados = {r['estado_dte']: r['total'] for r in conteo_estados_qs}
         
         return JsonResponse({
             'success': True,
@@ -261,6 +279,7 @@ def recepciones_pendientes_api(request):
                 'pendientes_mes': pendientes_mes,
                 'productos_con_problemas': productos_con_problemas,
             },
+            'conteo_estados': conteo_estados,
             'origenes': sorted(origenes_dict.values(), key=lambda x: x['alias'].lower()),
         }, json_dumps_params={'default': str})
 
@@ -912,29 +931,27 @@ def rechazar_recepcion_api(request):
             print(f"✓ DTE #{dte.numero_documento} - RECHAZADO")
             print(f"  Motivo: {motivo_rechazo}")
             
-            # ========================================
-            # ENVIAR NOTIFICACIÓN AL EMISOR
-            # ========================================
-            try:
-                from .models import NotificacionDTE
-                
-                sucursal_destino = get_object_or_404(Sucursal, id=sucursal_destino_id)
-                
-                # Crear notificación de rechazo para el emisor
-                NotificacionDTE.objects.create(
-                    dte=dte,
-                    empresa_receptora=dte.emisor,  # Notificar al EMISOR
-                    sucursal=dte.sucursal,  # La sucursal emisora
-                    sucursal_reportante=sucursal_destino,  # Quién rechazó
-                    tipo='REGULARIZACION_REQUERIDA',
-                    titulo=f"❌ DTE #{dte.numero_documento} Rechazado",
-                    mensaje=f"La sucursal {sucursal_destino.alias} ha rechazado la recepción del DTE #{dte.numero_documento}.\n\nMotivo: {motivo_rechazo}\n\nPuedes rehabilitar este DTE para que puedan volver a intentar recibirlo.",
-                    productos_problemas=0,
-                    detalle_problemas=f"Rechazado por: {usuario}\nMotivo: {motivo_rechazo}"
-                )
-                print(f"✓ Notificación de rechazo enviada a {dte.sucursal.alias}")
-            except Exception as e:
-                print(f"⚠ Error al crear notificación de rechazo: {str(e)}")
+            # Notificación al emisor (dentro de la transacción para garantizar creación)
+            from .models import NotificacionDTE
+            sucursal_destino = Sucursal.objects.get(id=sucursal_destino_id)
+            
+            NotificacionDTE.objects.create(
+                dte=dte,
+                empresa_receptora=dte.emisor,
+                sucursal=dte.sucursal,
+                sucursal_reportante=sucursal_destino,
+                tipo='RECHAZO_DTE',
+                titulo=f"❌ DTE #{dte.numero_documento} Rechazado",
+                mensaje=(
+                    f"La sucursal {sucursal_destino.alias} ha rechazado la recepción "
+                    f"del DTE #{dte.numero_documento}.\n\n"
+                    f"Motivo: {motivo_rechazo}\n\n"
+                    f"Puedes rehabilitar o anular este DTE desde Recepción DTE."
+                ),
+                productos_problemas=0,
+                detalle_problemas=f"Rechazado por: {usuario}\nMotivo: {motivo_rechazo}"
+            )
+            print(f"✓ Notificación de rechazo enviada a {dte.sucursal.alias}")
 
         return JsonResponse({
             'success': True,
@@ -1144,6 +1161,19 @@ def cancelar_dte_traspaso_api(request):
     if dte.sucursal_id != int(sucursal_actual_id):
         return JsonResponse({'success': False, 'error': 'Solo la sucursal emisora puede cancelar este DTE.'}, status=403)
 
+    # Solo perfil administrador puede anular DTEs de traspaso
+    try:
+        empresa_user = EmpresaUser.objects.get(user=request.user, active=True)
+    except EmpresaUser.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Usuario no tiene empresa asignada.'}, status=403)
+
+    rol = getattr(empresa_user, 'rol', None) or getattr(request.user, 'rol', '')
+    if rol not in ('administrador', 'jefe_local', 'administracion'):
+        return JsonResponse({
+            'success': False,
+            'error': 'No tiene permisos para anular DTEs de traspaso.'
+        }, status=403)
+
     try:
         with transaction.atomic():
             hoy = timezone.now()
@@ -1166,9 +1196,13 @@ def cancelar_dte_traspaso_api(request):
                     unidades_revertidas += cantidad_revertir
 
             # Marcar movimientos como CANCELADO
+            from django.db.models.functions import Concat
+            from django.db.models import Value
             movimientos_salida.update(
                 estado='CANCELADO',
-                observaciones=F('observaciones') + f'\n❌ CANCELADO: {motivo} — {usuario} {hoy.strftime("%Y-%m-%d %H:%M")}'
+                observaciones=Concat(
+                    F('observaciones'), Value(f'\n❌ CANCELADO: {motivo} — {usuario} {hoy.strftime("%Y-%m-%d %H:%M")}')
+                )
             )
 
             # Actualizar DTE
@@ -15238,6 +15272,180 @@ def emision_dte(request):
     
     return render(request, 'vistas/modulo_documentos/emisionDTE.html', context)
 
+
+@login_required
+def emision_dte_concepto(request):
+    """
+    Vista para emisión de DTE por concepto (sin mercadería).
+    Soporta: Factura Electrónica (33), Factura Exenta (34),
+    Nota de Crédito (61), Guía de Despacho (52).
+    """
+    context = {}
+    sucursal_id = request.session.get('idSucursalActual')
+    empresa_id = request.session.get('idEmpresaActual')
+
+    if sucursal_id and empresa_id:
+        try:
+            sucursal_actual = Sucursal.objects.select_related('empresa').get(id=sucursal_id)
+            context['sucursal_actual'] = sucursal_actual
+            context['empresa_actual'] = sucursal_actual.empresa
+            context['alias_sucursal'] = sucursal_actual.alias
+        except Sucursal.DoesNotExist:
+            context['sucursal_actual'] = None
+            context['empresa_actual'] = None
+            context['alias_sucursal'] = ''
+
+    return render(request, 'vistas/modulo_documentos/emisionDTEConcepto.html', context)
+
+
+@require_POST
+@login_required
+def emitir_dte_concepto(request):
+    """
+    Procesar emisión de DTE por concepto (servicios, sin inventario).
+    No genera movimientos de stock ni requiere Producto_Talla.
+    """
+    try:
+        data = json.loads(request.body)
+
+        tipo_documento = data.get('tipo_documento')
+        receptor_id = data.get('receptor_id')
+        fecha_emision = data.get('fecha_emision')
+        detalle_conceptos = data.get('detalle_conceptos', [])
+        observaciones = data.get('observaciones', '')
+        forma_pago_str = data.get('forma_pago', 'Contado')
+        dias_credito = int(data.get('dias_credito', 0) or 0)
+        referencia = data.get('referencia')
+
+        if not all([tipo_documento, receptor_id, fecha_emision]):
+            return JsonResponse({
+                'success': False,
+                'error': 'Faltan datos obligatorios (tipo documento, receptor, fecha)'
+            }, status=400)
+
+        tipos_validos = ['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'NOTA DE CREDITO', 'GUIA']
+        if tipo_documento not in tipos_validos:
+            return JsonResponse({
+                'success': False,
+                'error': f'Tipo de documento inválido: {tipo_documento}. Válidos: {tipos_validos}'
+            }, status=400)
+
+        if not detalle_conceptos:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe incluir al menos un concepto'
+            }, status=400)
+
+        if tipo_documento == 'NOTA DE CREDITO' and not referencia:
+            return JsonResponse({
+                'success': False,
+                'error': 'Nota de Crédito requiere referencia a documento original'
+            }, status=400)
+
+        sucursal_id = request.session.get('idSucursalActual')
+        empresa_id = request.session.get('idEmpresaActual')
+
+        if not sucursal_id or not empresa_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa en la sesión.'
+            }, status=400)
+
+        emisor = get_object_or_404(Empresa, id=empresa_id)
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        receptor = get_object_or_404(Empresa, id=receptor_id)
+
+        with transaction.atomic():
+            subtotal_neto = 0
+            for item in detalle_conceptos:
+                cantidad = int(item.get('cantidad', 0))
+                precio = int(float(item.get('precio_unitario', 0)))
+                subtotal_neto += cantidad * precio
+
+            es_exenta = tipo_documento == 'FACTURA EXENTA'
+            subtotal_decimal = Decimal(str(subtotal_neto))
+
+            if es_exenta:
+                iva = Decimal('0')
+                total_con_iva = subtotal_decimal
+            else:
+                iva = subtotal_decimal * Decimal('0.19')
+                total_con_iva = subtotal_decimal + iva
+
+            numero_documento = obtener_siguiente_correlativo(sucursal, tipo_documento)
+
+            from datetime import timedelta
+            fecha_emision_date = parse_date(fecha_emision)
+            es_credito = (forma_pago_str == 'Credito' and dias_credito > 0)
+            fecha_vencimiento_date = (
+                fecha_emision_date + timedelta(days=dias_credito)
+                if es_credito else fecha_emision_date
+            )
+            dias_credito_final = dias_credito if es_credito else 0
+
+            referencias_texto = f"DTE por concepto (sin mercadería)"
+            if observaciones:
+                referencias_texto += f". {observaciones}"
+
+            es_nc = tipo_documento == 'NOTA DE CREDITO'
+
+            dte = Dte.objects.create(
+                emisor=emisor,
+                receptor=receptor,
+                numero_documento=numero_documento,
+                tipo_documento=tipo_documento,
+                monto_neto=subtotal_decimal,
+                monto_con_iva=total_con_iva,
+                estado_pago='PENDIENTE',
+                estado_dte='EMITIDO',
+                responsable=request.user.username,
+                fecha_emision=fecha_emision_date,
+                fecha_vencimiento=fecha_vencimiento_date,
+                diasCredito=dias_credito_final,
+                bultos=0,
+                unidades_productos=0,
+                tipo_transaccion='VENTA',
+                referencias=referencias_texto,
+                sucursal=sucursal,
+                es_nota_credito=es_nc,
+            )
+
+            for item in detalle_conceptos:
+                desc = item.get('descripcion', 'Concepto')
+                cantidad = int(item.get('cantidad', 1))
+                unidad = item.get('unidad', 'UN')
+                precio = int(float(item.get('precio_unitario', 0)))
+                monto_item = cantidad * precio
+
+                Dte_Productos.objects.create(
+                    dte=dte,
+                    productoTalla=None,
+                    descripcion=f"[{unidad}] {desc}",
+                    costo=0,
+                    sobreprecio=0,
+                    precio=precio,
+                    precio_unitario=precio,
+                    monto_item=monto_item,
+                    stock=cantidad,
+                    activo=True,
+                )
+
+            return JsonResponse({
+                'success': True,
+                'dte_id': dte.id,
+                'numero_documento': numero_documento,
+                'total': float(total_con_iva)
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al emitir DTE por concepto: {str(e)}'
+        }, status=500)
+
+
 @login_required
 def debug_session(request):
     """
@@ -15381,6 +15589,75 @@ def empresas_clientes(request):
             'success': False,
             'error': f'Error al obtener clientes: {str(e)}'
         }, status=500)
+
+@require_POST
+@login_required
+def crear_empresa_rapida(request):
+    """
+    Crear una empresa de forma rápida desde el modal de emisión DTE.
+    Solo campos esenciales para poder emitir documentos.
+    """
+    try:
+        data = json.loads(request.body)
+
+        rut = data.get('rut', '').strip()
+        razon_social = data.get('razon_social', '').strip()
+        giro = data.get('giro', '').strip()
+        direccion = data.get('direccion', '').strip()
+        comuna = data.get('comuna', '').strip()
+        ciudad = data.get('ciudad', '').strip()
+
+        if not all([rut, razon_social, giro, direccion, comuna, ciudad]):
+            return JsonResponse({
+                'success': False,
+                'error': 'Campos obligatorios: RUT, Razón Social, Giro, Dirección, Comuna, Ciudad'
+            }, status=400)
+
+        if Empresa.objects.filter(rut=rut).exists():
+            empresa_existente = Empresa.objects.filter(rut=rut).first()
+            return JsonResponse({
+                'success': True,
+                'empresa_id': empresa_existente.id,
+                'mensaje': f'La empresa con RUT {rut} ya existe. Se seleccionó automáticamente.'
+            })
+
+        nombre_fantasia = data.get('nombre_fantasia', '').strip() or razon_social
+        email = data.get('email', '').strip()
+        telefono = data.get('telefono', '').strip()
+        acteco = data.get('acteco', '').strip()
+
+        empresa = Empresa.objects.create(
+            nombre=razon_social,
+            rut=rut,
+            razon_social=razon_social,
+            nombre_fantasia=nombre_fantasia,
+            giro=giro,
+            direccion=direccion,
+            comuna=comuna,
+            ciudad=ciudad,
+            esProveedor=False,
+            correoVendedor=email or '',
+            correoIntercambio=email or '',
+            correoAdministrador=email or '',
+            acteco=acteco or '',
+            telefono=telefono or '',
+            email=email or None,
+            tipo_empresa='CLIENTE',
+            activo=True,
+        )
+
+        return JsonResponse({
+            'success': True,
+            'empresa_id': empresa.id,
+            'mensaje': f'Empresa {razon_social} creada exitosamente.'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al crear empresa: {str(e)}'
+        }, status=500)
+
 
 @require_GET
 @login_required
@@ -17951,16 +18228,26 @@ def gestion_dte(request):
 @login_required
 def anular_factura_dte(request):
     """
-    Anula una Factura Electrónica creando una Nota de Crédito y marcando la
-    factura original como ANULADO.  Devuelve el TXT Acepta de la NC.
+    Anula una Factura Electrónica o Boleta Electrónica creando una Nota de
+    Crédito y marcando el documento original como ANULADO.
+    Devuelve el TXT Acepta de la NC.
 
     Recibe JSON:
-        { "dte_id": int, "tipo_anulacion": "ANULACION" | "DEVOLUCION" }
+        {
+            "dte_id": int,
+            "tipo_anulacion": "ANULACION" | "DEVOLUCION",
+            "metodo_devolucion": "EFECTIVO_CAJA" | "TRANSFERENCIA_BANCARIA" | "NO_AFECTA_CAJA"
+        }
 
     - ANULACION  → NC con tipo_transaccion='ANULACION'  (misma jornada,
                    no entra en cuadratura)
     - DEVOLUCION → NC con tipo_transaccion='DEVOLUCION' (día distinto,
                    sí aparece en cuadratura como resta en venta_total)
+
+    metodo_devolucion controla cómo afecta la cuadratura de caja:
+    - EFECTIVO_CAJA         → resta del efectivo teórico en cuadratura
+    - TRANSFERENCIA_BANCARIA → se registra como NC por transferencia
+    - NO_AFECTA_CAJA        → sin detalle de pago (anulación misma jornada)
     """
     import json as _json
     from decimal import Decimal
@@ -17980,27 +18267,60 @@ def anular_factura_dte(request):
     if tipo_anulacion not in ('ANULACION', 'DEVOLUCION'):
         tipo_anulacion = 'ANULACION'
 
-    # --- Obtener factura original ---
+    metodo_devolucion = body.get('metodo_devolucion', 'NO_AFECTA_CAJA')
+    if metodo_devolucion not in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'NO_AFECTA_CAJA'):
+        metodo_devolucion = 'NO_AFECTA_CAJA'
+
+    if tipo_anulacion == 'ANULACION':
+        metodo_devolucion = 'NO_AFECTA_CAJA'
+
+    cliente_nombre = body.get('cliente_nombre', '').strip()
+    cliente_rut = body.get('cliente_rut', '').strip()
+    motivo_anulacion = body.get('motivo', '').strip()
+
+    TIPOS_ANULABLES = [
+        'FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
+        'BOLETA ELECTRONICA', 'BOLETA_ELECTRONICA',
+    ]
+
     try:
         dte = Dte.objects.select_related('emisor', 'receptor', 'sucursal').get(
             id=dte_id,
-            tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA']
+            tipo_documento__in=TIPOS_ANULABLES
         )
     except Dte.DoesNotExist:
-        return JsonResponse({'error': 'Factura no encontrada'}, status=404)
+        return JsonResponse({'error': 'Documento no encontrado o tipo no anulable'}, status=404)
 
     if dte.estado_dte == 'ANULADO':
-        return JsonResponse({'error': 'La factura ya está anulada'}, status=400)
+        return JsonResponse({'error': 'El documento ya está anulado'}, status=400)
 
     empresa_actual_id = request.session.get('idEmpresaActual')
     if dte.emisor_id != empresa_actual_id:
         return JsonResponse({'error': 'Sin permiso sobre este DTE'}, status=403)
 
+    MAPA_TIPO_SII = {
+        'FACTURA ELECTRONICA': 33,
+        'FACTURA_ELECTRONICA': 33,
+        'BOLETA ELECTRONICA': 39,
+        'BOLETA_ELECTRONICA': 39,
+    }
+    tipo_sii_original = MAPA_TIPO_SII.get(dte.tipo_documento, 33)
+
     with transaction.atomic():
         # 1. Correlativo NC
         numero_nc = obtener_siguiente_correlativo(dte.sucursal, 'NOTA DE CREDITO')
 
-        # 2. Crear registro NC
+        # 2. Construir motivo descriptivo para la NC
+        motivo_nc_texto = motivo_anulacion or (
+            'Anulación de documento' if tipo_anulacion == 'ANULACION'
+            else 'Devolución de documento'
+        )
+        if cliente_nombre:
+            motivo_nc_texto += f" — Cliente: {cliente_nombre}"
+        if cliente_rut:
+            motivo_nc_texto += f" (RUT: {cliente_rut})"
+
+        # 3. Crear registro NC
         nc = Dte.objects.create(
             emisor=dte.emisor,
             receptor=dte.receptor,
@@ -18011,18 +18331,35 @@ def anular_factura_dte(request):
             descuento=dte.descuento or 0,
             fecha_emision=date.today(),
             fecha_vencimiento=date.today(),
+            bultos=dte.bultos or 0,
+            unidades_productos=dte.unidades_productos or 0,
+            diasCredito=0,
             estado_dte='EMITIDO',
             estado_pago='PAGADO',
             tipo_transaccion=tipo_anulacion,
             responsable=request.user.username,
             sucursal=dte.sucursal,
+            es_nota_credito=True,
+            documento_afectado=dte,
+            motivo_nc=motivo_nc_texto,
+            hora=timezone.now().time(),
             referencias=_json.dumps([{
-                'tipo_documento': 33,
+                'tipo_documento': tipo_sii_original,
                 'folio': dte.numero_documento,
                 'fecha': dte.fecha_emision.strftime('%Y-%m-%d'),
-                'razon': '1'   # 1 = anula documento
+                'razon': '1'
             }])
         )
+
+        # 2b. Registrar detalle de pago en la NC para cuadratura de caja
+        if metodo_devolucion == 'EFECTIVO_CAJA':
+            Dte_Detalle_Pago.objects.create(
+                dte=nc, metodo_pago='EFECTIVO', monto=nc.monto_con_iva
+            )
+        elif metodo_devolucion == 'TRANSFERENCIA_BANCARIA':
+            Dte_Detalle_Pago.objects.create(
+                dte=nc, metodo_pago='TRANSFERENCIA', monto=nc.monto_con_iva
+            )
 
         # 3. Copiar productos de la factura a la NC
         for dp in dte.dte_productos.select_related('productoTalla__producto'):
@@ -18317,10 +18654,10 @@ def cargar_dte_ventas(request):
                 'error': 'Usuario no tiene empresa asignada'
             })
         
-        # Construir query base - DTEs de VENTA, TRASPASO y DEVOLUCION de la sucursal del usuario
+        # Construir query base - DTEs de venta de la sucursal del usuario
         query = Dte.objects.filter(
             sucursal=sucursal_usuario,
-            tipo_transaccion__in=['VENTA', 'TRASPASO', 'DEVOLUCION']
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'TRASPASO', 'DEVOLUCION', 'ANULACION']
         ).select_related('receptor', 'vendedor', 'sucursal')
         
         # Aplicar filtros de fecha
@@ -18480,6 +18817,7 @@ def _obtener_tipos_principales_correlativos():
 def _obtener_tipos_empresa_correlativos():
     return {
         'FACTURA ELECTRONICA',
+        'FACTURA EXENTA',
         'GUIA',
         'NOTA DE CREDITO',
         'NOTA DE DEBITO'

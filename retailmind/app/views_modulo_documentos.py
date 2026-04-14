@@ -2453,7 +2453,11 @@ def generar_txt_desde_dte_existente(request):
         tipo_numerico = tipo_mapping.get(dte.tipo_documento, 33)
         
         # Calcular IVA desde monto_con_iva y monto_neto
-        iva_calculado = int(dte.monto_con_iva - dte.monto_neto)
+        es_exenta = tipo_numerico == 34
+        if es_exenta:
+            iva_calculado = 0
+        else:
+            iva_calculado = int(dte.monto_con_iva - dte.monto_neto)
         
         # ✅ CORREGIDO: Buscar sucursal_destino para usar su dirección en lugar de la empresa receptora
         sucursal_destino = None
@@ -2498,11 +2502,11 @@ def generar_txt_desde_dte_existente(request):
                 'sucursal': limpiar_texto(sucursal_destino.alias if sucursal_destino else '')
             },
             'totales': {
-                'monto_neto': int(dte.monto_neto),  # ✅ Campo correcto
-                'monto_exento': 0,
-                'tasa_iva': 19,
-                'iva': iva_calculado,  # ✅ Calculado
-                'monto_total': int(dte.monto_con_iva),  # ✅ Campo correcto
+                'monto_neto': 0 if es_exenta else int(dte.monto_neto),
+                'monto_exento': int(dte.monto_neto) if es_exenta else 0,
+                'tasa_iva': 0 if es_exenta else 19,
+                'iva': iva_calculado,
+                'monto_total': int(dte.monto_con_iva),
                 'descuento_global': int(dte.descuento) if dte.descuento else 0
             },
             'detalle': [],
@@ -2524,6 +2528,22 @@ def generar_txt_desde_dte_existente(request):
         })
 
         for dte_producto in dte.dte_productos.select_related('productoTalla__producto'):
+            if dte_producto.productoTalla is None:
+                # Item de concepto (sin mercadería)
+                datos['detalle'].append({
+                    'nombre': limpiar_texto(dte_producto.descripcion or 'Concepto'),
+                    'descripcion': '',
+                    'cantidad': dte_producto.stock,
+                    'unidad': 'UN',
+                    'precio_unitario': dte_producto.precio_unitario or dte_producto.precio,
+                    'descuento_pct': float(dte_producto.descuento_pct) if dte_producto.descuento_pct else 0,
+                    'monto_descuento': int(dte_producto.descuento_monto or 0),
+                    'monto_item': dte_producto.monto_item or (dte_producto.stock * dte_producto.precio),
+                    'codigo': 'SRV',
+                    'indicador_exencion': 1 if tipo_numerico == 34 else '',
+                })
+                continue
+
             producto = dte_producto.productoTalla.producto
             producto_talla = dte_producto.productoTalla
             articulo_key = producto.articulo

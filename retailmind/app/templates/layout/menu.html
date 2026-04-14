@@ -1903,6 +1903,13 @@
                                         </a>
                                     </li>
                                     {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_despachos' %}
+                                    <li class="nav-item">
+                                        <a href="/app/dashboard-despachos/" class="nav-link" data-key="t-dashboard-despachos">
+                                            <i class="ri-truck-line"></i> Dashboard Despachos
+                                        </a>
+                                    </li>
+                                    {% endif %}
                                     {% if user|puede_ver_opcion:'dashboard_requerimientos' %}
                                     <li class="nav-item">
                                         <a href="/app/dashboard-requerimientos/" class="nav-link" data-key="t-dashboard-requerimientos">
@@ -2029,6 +2036,11 @@
                                     <li class="nav-item">
                                         <a href="/app/emisionDTE/" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-file-earmark-plus"></i> Emisión DTE
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="/app/emisionDTEConcepto/" class="nav-link" data-key="t-emision-concepto">
+                                            <i class="bi bi-file-earmark-text"></i> Emisión por Concepto
                                         </a>
                                     </li>
                                     {% endif %}

@@ -380,6 +380,7 @@ class NotificacionDTE(models.Model):
         ('ACTUALIZACION_PENDIENTE', 'Actualización de Stock Pendiente'),
         ('RECEPCION_COMPLETADA', 'Recepción Completada'),
         ('REGULARIZACION_REQUERIDA', 'Regularización Requerida'),
+        ('RECHAZO_DTE', 'DTE Rechazado por Destino'),
         ('VENCIMIENTO_PROXIMO', 'Vencimiento Próximo'),
     ]
     

@@ -1137,8 +1137,8 @@
             <button class="nexo-action-btn warning" title="Descargar TXT Acepta" onclick="descargarTXTAcepta(${dte.id || 0}, '${dte.tipo_documento}', '${dte.numero_documento}')">
                 <i class="bi bi-file-earmark-text"></i>
             </button>` : ''}
-            ${(dte.tipo_documento === 'FACTURA ELECTRONICA' || dte.tipo_documento === 'FACTURA_ELECTRONICA') && dte.estado_dte !== 'ANULADO' ? `
-            <button class="nexo-action-btn danger" title="Anular Factura Electrónica" onclick="anularFactura(${dte.id || 0}, '${dte.numero_documento}')">
+            ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' ? `
+            <button class="nexo-action-btn danger" title="Anular ${dte.tipo_documento}" onclick="anularDocumento(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}')">
                 <i class="bi bi-x-circle"></i>
             </button>` : ''}
             {% endif %}
@@ -1397,38 +1397,377 @@
         return cookieValue;
     }
 
-    async function anularFactura(dteId, numeroDoc) {
-        // Paso 1: preguntar tipo de anulación
-        const { value: tipoAnulacion, isConfirmed } = await Swal.fire({
-            title: `Anular Factura #${numeroDoc}`,
+    function buscarClienteAnulacion() {
+        const rutInput = document.getElementById('anulClienteRut');
+        const nombreInput = document.getElementById('anulClienteNombre');
+        const estadoBadge = document.getElementById('anulClienteEstado');
+        const noEncontradoDiv = document.getElementById('anulClienteNoEncontrado');
+        const extraDiv = document.getElementById('anulClienteExtra');
+        const clienteIdInput = document.getElementById('anulClienteId');
+
+        const rut = (rutInput.value || '').trim();
+        if (!rut || rut.length < 7) {
+            estadoBadge.className = 'badge bg-danger d-inline-block w-100 py-2';
+            estadoBadge.style.fontSize = '0.72rem';
+            estadoBadge.textContent = 'Ingrese un RUT válido';
+            estadoBadge.classList.remove('d-none');
+            return;
+        }
+
+        estadoBadge.className = 'badge bg-secondary d-inline-block w-100 py-2';
+        estadoBadge.style.fontSize = '0.72rem';
+        estadoBadge.textContent = 'Buscando...';
+        estadoBadge.classList.remove('d-none');
+        noEncontradoDiv.classList.add('d-none');
+
+        fetch(`/app/api/buscar-cliente/?rut=${encodeURIComponent(rut)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.cliente) {
+                    nombreInput.value = data.cliente.nombre || '';
+                    nombreInput.readOnly = true;
+                    nombreInput.style.background = '#d1e7dd';
+                    clienteIdInput.value = data.cliente_id || '';
+                    estadoBadge.className = 'badge bg-success d-inline-block w-100 py-2';
+                    estadoBadge.style.fontSize = '0.72rem';
+                    estadoBadge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Cliente encontrado';
+                    noEncontradoDiv.classList.add('d-none');
+                    extraDiv.classList.add('d-none');
+                    if (data.cliente.email) {
+                        const emailEl = document.getElementById('anulClienteEmail');
+                        if (emailEl) emailEl.value = data.cliente.email;
+                    }
+                } else {
+                    nombreInput.value = '';
+                    nombreInput.readOnly = false;
+                    nombreInput.style.background = '#fff';
+                    clienteIdInput.value = '';
+                    estadoBadge.className = 'badge bg-warning text-dark d-inline-block w-100 py-2';
+                    estadoBadge.style.fontSize = '0.72rem';
+                    estadoBadge.textContent = 'No encontrado';
+                    noEncontradoDiv.classList.remove('d-none');
+                    if (data.rut_formateado) {
+                        rutInput.value = data.rut_formateado;
+                    }
+                }
+            })
+            .catch(() => {
+                estadoBadge.className = 'badge bg-danger d-inline-block w-100 py-2';
+                estadoBadge.style.fontSize = '0.72rem';
+                estadoBadge.textContent = 'Error de conexión';
+            });
+    }
+
+    function crearClienteDesdeAnulacion() {
+        const rut = (document.getElementById('anulClienteRut').value || '').trim();
+
+        Swal.fire({
+            title: '<i class="bi bi-person-plus me-2"></i>Crear Nuevo Cliente',
             html: `
-                <p class="text-start mb-3">Selecciona el tipo de anulación:</p>
-                <div class="d-flex flex-column gap-2 text-start">
-                    <label class="p-2 border rounded" style="cursor:pointer;">
-                        <input type="radio" name="tipoAnulacion" value="ANULACION" checked class="me-2">
-                        <strong>Anulación misma jornada</strong><br>
-                        <small class="text-muted ms-4">La venta nunca se efectuó o el cliente no pagó. Desaparece de la cuadratura de hoy.</small>
-                    </label>
-                    <label class="p-2 border rounded" style="cursor:pointer;">
-                        <input type="radio" name="tipoAnulacion" value="DEVOLUCION" class="me-2">
-                        <strong>Devolución / anulación posterior</strong><br>
-                        <small class="text-muted ms-4">El cliente ya pagó y se le devuelve el dinero. Aparece como NC negativa en la cuadratura de hoy.</small>
-                    </label>
+                <div class="text-start">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">RUT</label>
+                        <input type="text" id="nuevoClienteRut" class="form-control form-control-sm" value="${rut}" readonly style="background:#e9ecef;">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">Nombre / Razón Social <span class="text-danger">*</span></label>
+                        <input type="text" id="nuevoClienteNombre" class="form-control form-control-sm" placeholder="Nombre completo o razón social">
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Email</label>
+                            <input type="email" id="nuevoClienteEmail" class="form-control form-control-sm" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Teléfono</label>
+                            <input type="text" id="nuevoClienteTelefono" class="form-control form-control-sm" placeholder="+56 9 1234 5678">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Giro</label>
+                            <input type="text" id="nuevoClienteGiro" class="form-control form-control-sm" placeholder="Giro comercial">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Dirección</label>
+                            <input type="text" id="nuevoClienteDireccion" class="form-control form-control-sm" placeholder="Dirección">
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Comuna</label>
+                            <input type="text" id="nuevoClienteComuna" class="form-control form-control-sm" placeholder="Comuna">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Ciudad</label>
+                            <input type="text" id="nuevoClienteCiudad" class="form-control form-control-sm" placeholder="Ciudad">
+                        </div>
+                    </div>
                 </div>
-                <hr class="my-3">
-                <p class="small text-danger text-start mb-0">Esta acción creará una Nota de Crédito, marcará la factura como <strong>ANULADO</strong> y descargará el TXT Acepta.</p>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-person-plus me-1"></i>Crear Cliente',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#198754',
+            width: '520px',
+            preConfirm: () => {
+                const nombre = document.getElementById('nuevoClienteNombre').value.trim();
+                if (!nombre) {
+                    Swal.showValidationMessage('El nombre es obligatorio');
+                    return false;
+                }
+                return {
+                    rut: document.getElementById('nuevoClienteRut').value.trim(),
+                    nombre: nombre,
+                    email: document.getElementById('nuevoClienteEmail').value.trim(),
+                    telefono: document.getElementById('nuevoClienteTelefono').value.trim(),
+                    giro: document.getElementById('nuevoClienteGiro').value.trim(),
+                    direccion: document.getElementById('nuevoClienteDireccion').value.trim(),
+                    comuna: document.getElementById('nuevoClienteComuna').value.trim(),
+                    ciudad: document.getElementById('nuevoClienteCiudad').value.trim()
+                };
+            }
+        }).then(result => {
+            if (!result.isConfirmed) return;
+            const d = result.value;
+
+            fetch('/app/api/guardar-cliente-pos/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    nombre: d.nombre,
+                    rut: d.rut,
+                    email: d.email,
+                    telefono: d.telefono,
+                    giro: d.giro,
+                    direccion: d.direccion,
+                    comuna: d.comuna,
+                    ciudad: d.ciudad
+                })
+            })
+            .then(r => r.json())
+            .then(resp => {
+                if (resp.success) {
+                    document.getElementById('anulClienteNombre').value = d.nombre;
+                    document.getElementById('anulClienteNombre').readOnly = true;
+                    document.getElementById('anulClienteNombre').style.background = '#d1e7dd';
+                    document.getElementById('anulClienteId').value = resp.cliente_id || '';
+
+                    const estadoBadge = document.getElementById('anulClienteEstado');
+                    estadoBadge.className = 'badge bg-success d-inline-block w-100 py-2';
+                    estadoBadge.style.fontSize = '0.72rem';
+                    estadoBadge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Cliente creado';
+                    estadoBadge.classList.remove('d-none');
+                    document.getElementById('anulClienteNoEncontrado').classList.add('d-none');
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Cliente Creado',
+                        text: `${d.nombre} (${d.rut}) registrado exitosamente`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire('Error', resp.error || 'No se pudo crear el cliente', 'error');
+                }
+            })
+            .catch(() => {
+                Swal.fire('Error', 'Error de conexión al crear cliente', 'error');
+            });
+        });
+    }
+
+    function actualizarMotivoAnulacion() {
+        const sel = document.getElementById('anulMotivoSelect');
+        const txt = document.getElementById('anulMotivo');
+        if (sel.value === 'OTRO') {
+            txt.classList.remove('d-none');
+            txt.value = '';
+            txt.placeholder = 'Especifique el motivo de anulación...';
+            txt.required = true;
+            txt.focus();
+        } else if (sel.value) {
+            txt.classList.remove('d-none');
+            txt.value = '';
+            txt.placeholder = 'Detalle adicional (opcional)...';
+            txt.required = false;
+        } else {
+            txt.classList.add('d-none');
+            txt.value = '';
+        }
+    }
+
+    async function anularDocumento(dteId, numeroDoc, tipoDocumento) {
+        const esBoleta = tipoDocumento.toUpperCase().includes('BOLETA');
+        const nombreDoc = esBoleta ? 'Boleta Electrónica' : 'Factura Electrónica';
+
+        // Paso 1: tipo de anulación + datos del cliente + motivo
+        const { value: formData, isConfirmed } = await Swal.fire({
+            title: `Anular ${nombreDoc} #${numeroDoc}`,
+            html: `
+                <div class="text-start">
+                    <p class="mb-2 fw-bold" style="font-size:0.9rem;">Tipo de anulación:</p>
+                    <div class="d-flex flex-column gap-2 mb-3">
+                        <label class="p-2 border rounded" style="cursor:pointer;">
+                            <input type="radio" name="tipoAnulacion" value="ANULACION" checked class="me-2">
+                            <strong>Anulación misma jornada</strong><br>
+                            <small class="text-muted ms-4">La venta nunca se efectuó o el cliente no pagó. No afecta la cuadratura de caja.</small>
+                        </label>
+                        <label class="p-2 border rounded" style="cursor:pointer;">
+                            <input type="radio" name="tipoAnulacion" value="DEVOLUCION" class="me-2">
+                            <strong>Devolución / anulación posterior</strong><br>
+                            <small class="text-muted ms-4">El cliente ya pagó y se le devuelve el dinero. La NC figurará en la cuadratura de hoy.</small>
+                        </label>
+                    </div>
+
+                    <hr class="my-2">
+                    <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-person me-1"></i>Datos del cliente (opcional):</p>
+                    <div class="row g-2 mb-1">
+                        <div class="col-8">
+                            <div class="input-group input-group-sm">
+                                <input type="text" id="anulClienteRut" class="form-control" placeholder="RUT (ej: 12345678-9)">
+                                <button type="button" class="btn btn-outline-primary" onclick="buscarClienteAnulacion()" title="Buscar cliente">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <span id="anulClienteEstado" class="badge d-none w-100 py-2" style="font-size:0.72rem;"></span>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-1">
+                        <div class="col-12">
+                            <input type="text" id="anulClienteNombre" class="form-control form-control-sm" placeholder="Nombre del cliente" readonly style="background:#f8f9fa;">
+                        </div>
+                    </div>
+                    <div id="anulClienteExtra" class="d-none">
+                        <div class="row g-2 mb-1">
+                            <div class="col-6">
+                                <input type="email" id="anulClienteEmail" class="form-control form-control-sm" placeholder="Email (opcional)">
+                            </div>
+                            <div class="col-6">
+                                <input type="text" id="anulClienteTelefono" class="form-control form-control-sm" placeholder="Teléfono (opcional)">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="anulClienteNoEncontrado" class="d-none mt-1">
+                        <div class="alert alert-warning py-1 px-2 mb-0 small d-flex align-items-center justify-content-between">
+                            <span><i class="bi bi-exclamation-triangle me-1"></i>Cliente no encontrado</span>
+                            <button type="button" class="btn btn-sm btn-warning py-0 px-2" onclick="crearClienteDesdeAnulacion()" style="font-size:0.75rem;">
+                                <i class="bi bi-person-plus me-1"></i>Crear Cliente
+                            </button>
+                        </div>
+                    </div>
+                    <input type="hidden" id="anulClienteId" value="">
+
+                    <hr class="my-2">
+                    <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-chat-left-text me-1"></i>Motivo de la anulación <span class="text-danger">*</span>:</p>
+                    <select id="anulMotivoSelect" class="form-select form-select-sm mb-2" onchange="actualizarMotivoAnulacion()">
+                        <option value="">-- Seleccione motivo --</option>
+                        <optgroup label="Devolución del cliente">
+                            <option value="Producto con falla o defecto">Producto con falla o defecto</option>
+                            <option value="Producto no corresponde a lo solicitado">Producto no corresponde a lo solicitado</option>
+                            <option value="Cliente se arrepiente de la compra">Cliente se arrepiente de la compra</option>
+                            <option value="Producto dañado en entrega">Producto dañado en entrega</option>
+                            <option value="Talla o modelo incorrecto">Talla o modelo incorrecto</option>
+                        </optgroup>
+                        <optgroup label="Error operativo">
+                            <option value="Error en facturación (datos incorrectos)">Error en facturación (datos incorrectos)</option>
+                            <option value="Error de precio o descuento">Error de precio o descuento</option>
+                            <option value="Documento duplicado">Documento duplicado</option>
+                            <option value="Venta no concretada (cliente no pagó)">Venta no concretada (cliente no pagó)</option>
+                        </optgroup>
+                        <optgroup label="Garantía / Requerimiento">
+                            <option value="Devolución por garantía">Devolución por garantía</option>
+                            <option value="Resolución de requerimiento / reclamo">Resolución de requerimiento / reclamo</option>
+                        </optgroup>
+                        <option value="OTRO">Otro (especificar)</option>
+                    </select>
+                    <textarea id="anulMotivo" class="form-control form-control-sm d-none" rows="2"
+                              placeholder="Detalle adicional del motivo..."></textarea>
+
+                    <div class="alert alert-danger mt-3 mb-0 py-2 small">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Se creará una Nota de Crédito, el documento quedará <strong>ANULADO</strong> y se descargará el TXT Acepta.
+                    </div>
+                </div>
             `,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: '<i class="bi bi-x-circle me-1"></i>Confirmar Anulación',
+            confirmButtonText: '<i class="bi bi-x-circle me-1"></i>Continuar',
             cancelButtonText: 'Cancelar',
+            width: '580px',
+            didOpen: () => {
+                const rutEl = document.getElementById('anulClienteRut');
+                if (rutEl) {
+                    rutEl.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); buscarClienteAnulacion(); }
+                    });
+                }
+            },
             preConfirm: () => {
-                const sel = document.querySelector('input[name="tipoAnulacion"]:checked');
-                return sel ? sel.value : 'ANULACION';
+                const selectVal = document.getElementById('anulMotivoSelect').value;
+                const txtVal = document.getElementById('anulMotivo').value.trim();
+                if (!selectVal) {
+                    Swal.showValidationMessage('Debe seleccionar un motivo de anulación');
+                    return false;
+                }
+                if (selectVal === 'OTRO' && !txtVal) {
+                    Swal.showValidationMessage('Debe especificar el motivo');
+                    return false;
+                }
+                const motivoFinal = selectVal === 'OTRO' ? txtVal : (txtVal ? `${selectVal}. ${txtVal}` : selectVal);
+                return {
+                    tipoAnulacion: (document.querySelector('input[name="tipoAnulacion"]:checked') || {}).value || 'ANULACION',
+                    clienteNombre: document.getElementById('anulClienteNombre').value.trim(),
+                    clienteRut: document.getElementById('anulClienteRut').value.trim(),
+                    clienteId: document.getElementById('anulClienteId').value || null,
+                    motivo: motivoFinal
+                };
             }
         });
 
         if (!isConfirmed) return;
+
+        const tipoAnulacion = formData.tipoAnulacion;
+        let metodoDevolucion = 'NO_AFECTA_CAJA';
+
+        // Paso 2: si es DEVOLUCION, preguntar cómo afecta la cuadratura de caja
+        if (tipoAnulacion === 'DEVOLUCION') {
+            const { value: metodo, isConfirmed: confirmado2 } = await Swal.fire({
+                title: `Devolución — Cuadratura de Caja`,
+                html: `
+                    <p class="text-start mb-3">¿Cómo se devuelve el dinero al cliente?<br>
+                    <small class="text-muted">Esto determina cómo se refleja la NC en la cuadratura de caja de la sucursal.</small></p>
+                    <div class="d-flex flex-column gap-2 text-start">
+                        <label class="p-3 border rounded" style="cursor:pointer;">
+                            <input type="radio" name="metodoDevolucion" value="EFECTIVO_CAJA" checked class="me-2">
+                            <strong><i class="bi bi-cash-coin me-1"></i>Devolución en Efectivo</strong><br>
+                            <small class="text-muted ms-4">Se devuelve dinero de la caja. La NC <strong>resta del efectivo teórico</strong> en la cuadratura del día.</small>
+                        </label>
+                        <label class="p-3 border rounded" style="cursor:pointer;">
+                            <input type="radio" name="metodoDevolucion" value="TRANSFERENCIA_BANCARIA" class="me-2">
+                            <strong><i class="bi bi-bank me-1"></i>Devolución por Transferencia</strong><br>
+                            <small class="text-muted ms-4">Se transfiere al cliente. La NC aparece en cuadratura como transferencia, <strong>no afecta el efectivo</strong> de caja.</small>
+                        </label>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Confirmar Anulación',
+                cancelButtonText: 'Cancelar',
+                preConfirm: () => {
+                    const sel = document.querySelector('input[name="metodoDevolucion"]:checked');
+                    return sel ? sel.value : 'EFECTIVO_CAJA';
+                }
+            });
+
+            if (!confirmado2) return;
+            metodoDevolucion = metodo;
+        }
 
         Swal.fire({
             title: 'Procesando...',
@@ -1444,7 +1783,14 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCookie('csrftoken')
                 },
-                body: JSON.stringify({ dte_id: dteId, tipo_anulacion: tipoAnulacion })
+                body: JSON.stringify({
+                    dte_id: dteId,
+                    tipo_anulacion: tipoAnulacion,
+                    metodo_devolucion: metodoDevolucion,
+                    cliente_nombre: formData.clienteNombre,
+                    cliente_rut: formData.clienteRut,
+                    motivo: formData.motivo
+                })
             });
 
             if (!resp.ok) {
@@ -1463,13 +1809,19 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
+            const resumenMetodo = metodoDevolucion === 'EFECTIVO_CAJA'
+                ? '<br><span class="text-warning"><i class="bi bi-cash-coin me-1"></i>NC resta del efectivo en cuadratura</span>'
+                : metodoDevolucion === 'TRANSFERENCIA_BANCARIA'
+                    ? '<br><span class="text-info"><i class="bi bi-bank me-1"></i>NC registrada como transferencia en cuadratura</span>'
+                    : '';
+
             await Swal.fire({
                 icon: 'success',
-                title: 'Factura Anulada',
-                html: `Nota de Crédito creada.<br>TXT Acepta descargado.<br><small class="text-muted">Factura #${numeroDoc} marcada como ANULADO.</small>`,
+                title: 'Documento Anulado',
+                html: `Nota de Crédito creada.<br>TXT Acepta descargado.<br><small class="text-muted">${nombreDoc} #${numeroDoc} marcada como ANULADO.</small>${resumenMetodo}`,
                 confirmButtonText: 'Aceptar'
             });
-            cargarDTEs();
+            cargarDTEs(currentPageDTE, currentSearchDTE);
         } catch (e) {
             Swal.fire('Error', e.message, 'error');
         }

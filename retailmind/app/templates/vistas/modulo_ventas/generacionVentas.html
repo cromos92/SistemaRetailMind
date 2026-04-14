@@ -19,9 +19,6 @@
                             <small class="text-muted">Gestión de tickets y ventas · <span id="posHeaderSucursal" class="fw-medium text-primary"></span></small>
                         </div>
                     </div>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="actualizarDashboard()" title="Actualizar">
-                        <i class="ri-refresh-line"></i>
-                    </button>
                 </div>
 
                 <!-- Indicadores KPI — barra compacta -->
@@ -110,9 +107,6 @@
                                 </button>
                                 <button class="btn btn-sm btn-warning" onclick="abrirModalCotizaciones()">
                                     <i class="ri-file-list-3-line"></i> Cotización
-                                </button>
-                                <button class="btn btn-sm btn-info" onclick="verReportes()">
-                                    <i class="ri-bar-chart-box-line"></i> Reportes
                                 </button>
                             </div>
                         </div>
@@ -822,6 +816,42 @@
                                                     <br><small>Saldo: <span id="saldo-credito-trabajador" class="fw-bold"></span></small>
                                                 </div>
                                                 <button type="button" class="btn-close btn-sm" onclick="desactivarCreditoTrabajador()"></button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Indicador crédito externo activo -->
+                                        <div id="indicador-credito-externo" style="display: none;" class="alert alert-info border-info mt-1 mb-0 py-2 px-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <div>
+                                                    <i class="ri-bank-card-fill text-info"></i>
+                                                    <strong id="nombre-credext-activo" class="small"></strong>
+                                                    <span class="badge bg-info bg-opacity-25 text-info ms-1" style="font-size:0.6rem" id="folio-credext-activo"></span>
+                                                </div>
+                                                <button type="button" class="btn-close btn-sm" onclick="desactivarCreditoExterno()" title="Desactivar crédito externo"></button>
+                                            </div>
+                                            <div class="mb-1">
+                                                <div class="d-flex justify-content-between align-items-center" style="font-size:0.7rem;">
+                                                    <span class="text-muted">Cupo Total:</span>
+                                                    <strong id="cupo-total-credext" class="text-dark"></strong>
+                                                </div>
+                                                <div class="progress mt-1" style="height: 14px; border-radius: 8px;">
+                                                    <div id="barra-cupo-ocupado" class="progress-bar bg-info" role="progressbar" style="width: 0%; transition: width 0.4s ease;">
+                                                        <span style="font-size:0.6rem; font-weight:600;" id="label-barra-ocupado"></span>
+                                                    </div>
+                                                    <div id="barra-cupo-disponible" class="progress-bar bg-info bg-opacity-25" role="progressbar" style="width: 100%;">
+                                                        <span style="font-size:0.6rem; font-weight:600; color:#0d6efd;" id="label-barra-disponible"></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-between" style="font-size:0.7rem;">
+                                                <div>
+                                                    <i class="ri-checkbox-circle-fill text-info"></i> Ocupado:
+                                                    <strong id="cupo-ocupado-credext" class="text-info"></strong>
+                                                </div>
+                                                <div>
+                                                    <i class="ri-wallet-3-fill text-success"></i> Disponible:
+                                                    <strong id="cupo-disponible-credext" class="text-success"></strong>
+                                                </div>
                                             </div>
                                         </div>
                                 
@@ -6049,6 +6079,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function eliminarPago(index) {
+        const pagoEliminado = pagosActuales[index];
+        // Si se elimina un pago de crédito externo, desactivar el crédito persistente
+        if (pagoEliminado && pagoEliminado.metodo_pago === 'CREDITO_EXTERNO' && creditoExternoActivo) {
+            creditoExternoActivo = null;
+            document.getElementById('indicador-credito-externo').style.display = 'none';
+            mostrarNotificacion('Crédito externo desactivado', 'info');
+        }
         pagosActuales.splice(index, 1);
         actualizarListaPagos();
         actualizarResumenVenta();
@@ -6117,8 +6154,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // === FUNCIONES DE RESUMEN ===
 
+    let _ajustandoCreditoExterno = false;
     function actualizarResumenVenta() {
         if (!ticketActual) return;
+
+        // Auto-ajustar crédito externo activo cuando cambian los productos/totales
+        if (creditoExternoActivo && !_ajustandoCreditoExterno) {
+            _ajustandoCreditoExterno = true;
+            _autoAjustarCreditoExterno();
+            _ajustandoCreditoExterno = false;
+        }
 
         const totales = ticketActual.totales || {};
         const totalPagado = pagosActuales.reduce((sum, pago) => sum + (pago.monto || 0), 0);
@@ -7632,7 +7677,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 timerProgressBar: true
                             }).then(() => {
                                 desactivarCreditoTrabajador();
-                                // ✅ CORREGIDO: Preguntar por ticket de cambio antes de volver al dashboard
+                                limpiarCreditoExternoAlFinalizar();
                                 preguntarTicketCambio(ticketActual.ticket_id);
                             });
                         } else {
@@ -8888,9 +8933,9 @@ body {
     // === FUNCIONES DE NAVEGACIÓN ===
 
     function volverAlDashboard() {
+        limpiarCreditoExternoAlFinalizar();
         mostrarVista('dashboard');
         actualizarDashboard();
-        // Re-enfocar la barra de inicio rápido
         setTimeout(() => {
             const qs = document.getElementById('dashboardQuickStart');
             if (qs) { qs.value = ''; qs.focus(); }
@@ -10086,7 +10131,7 @@ body {
         mostrarNotificacion(mensaje, 'success');
     };
     
-    // ========== INTEGRACIÓN CRÉDITO EXTERNO ==========
+    // ========== INTEGRACIÓN CRÉDITO EXTERNO (con cupo persistente) ==========
     
     let creditoExternoActivo = null;
 
@@ -10096,20 +10141,25 @@ body {
             return;
         }
 
+        // Si ya hay un crédito externo activo, solo re-ajustar el monto
+        if (creditoExternoActivo) {
+            reajustarPagoCreditoExterno();
+            return;
+        }
+
         const saldoPendiente = calcularSaldoPendiente();
         if (saldoPendiente <= 0) {
             Swal.fire({ icon: 'info', title: 'Ticket Pagado', text: 'El ticket ya está completamente pagado' });
             return;
         }
 
-        // Variable para trackear si el cliente ya existe en DB
         let credextClienteExiste = false;
 
         const { value: datosCreditoExt } = await Swal.fire({
-            title: '<i class="ri-bank-card-line text-info"></i> Crédito Externo',
+            title: '<i class="ri-bank-card-line text-info"></i> Activar Crédito Externo',
             html: `
                 <div class="text-start">
-                    <p class="text-muted small mb-3">Ingrese los datos del crédito externo. Si la persona no existe, se creará automáticamente como cliente.</p>
+                    <p class="text-muted small mb-3">Active un crédito externo con cupo. El pago se ajustará automáticamente al agregar o quitar productos.</p>
 
                     <div class="row g-2">
                         <div class="col-12">
@@ -10148,42 +10198,46 @@ body {
                         </div>
                         <div class="col-6">
                             <label class="form-label fw-bold small mb-1">
-                                <i class="ri-money-dollar-circle-line"></i> Monto crédito
+                                <i class="ri-safe-2-line"></i> Cupo Total
                                 <span class="badge bg-danger bg-opacity-75 ms-1" style="font-size:9px;">OBLIGATORIO</span>
                             </label>
-                            <input type="number" id="credext-monto" class="form-control form-control-sm"
-                                   placeholder="${formatearMoneda(saldoPendiente)}" value="${saldoPendiente}" min="1">
+                            <input type="number" id="credext-cupo" class="form-control form-control-sm"
+                                   placeholder="Ej: 120000" min="1">
                         </div>
                     </div>
 
-                    <div class="alert alert-light border mt-3 py-2 small" id="credext-resumen" style="display:none;">
-                        <div class="d-flex justify-content-between">
-                            <span>Saldo pendiente:</span>
-                            <strong id="credext-saldo">${formatearMoneda(saldoPendiente)}</strong>
+                    <div class="alert alert-info border-info mt-3 py-2 small" id="credext-resumen">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Saldo del ticket:</span>
+                            <strong>${formatearMoneda(saldoPendiente)}</strong>
                         </div>
                         <div class="d-flex justify-content-between">
-                            <span>Monto a aplicar:</span>
-                            <strong class="text-info" id="credext-aplicar">${formatearMoneda(saldoPendiente)}</strong>
+                            <span>Se aplicará al crédito:</span>
+                            <strong class="text-info" id="credext-preview-aplicar">${formatearMoneda(saldoPendiente)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between" id="credext-preview-restante-row" style="display:none !important;">
+                            <span>Cupo restante después:</span>
+                            <strong class="text-success" id="credext-preview-restante">-</strong>
+                        </div>
+                        <div id="credext-preview-excede" style="display:none;" class="text-danger mt-1 fw-bold">
+                            <i class="ri-error-warning-fill"></i> El saldo excede el cupo. Se usará el cupo completo.
                         </div>
                     </div>
                 </div>
             `,
-            width: '500px',
+            width: '520px',
             showCancelButton: true,
-            confirmButtonText: '<i class="ri-check-line"></i> Aplicar Crédito',
+            confirmButtonText: '<i class="ri-bank-card-line"></i> Activar Crédito',
             cancelButtonText: 'Cancelar',
             confirmButtonColor: '#17a2b8',
             didOpen: () => {
                 const rutInput = document.getElementById('credext-rut');
                 const nombreInput = document.getElementById('credext-nombre');
                 const emailInput = document.getElementById('credext-email');
-                const montoInput = document.getElementById('credext-monto');
-                const resumen = document.getElementById('credext-resumen');
+                const cupoInput = document.getElementById('credext-cupo');
 
                 rutInput.focus();
-                resumen.style.display = 'block';
 
-                // Buscar persona por RUT
                 document.getElementById('credext-buscar-rut').addEventListener('click', function() {
                     const rut = rutInput.value.trim();
                     if (!rut) return;
@@ -10210,7 +10264,6 @@ body {
                         });
                 });
 
-                // Búsqueda con Enter en el campo RUT
                 rutInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
@@ -10218,11 +10271,27 @@ body {
                     }
                 });
 
-                // Actualizar resumen al cambiar monto
-                montoInput.addEventListener('input', function() {
-                    const monto = parseInt(this.value) || 0;
-                    const aplicar = Math.min(monto, saldoPendiente);
-                    document.getElementById('credext-aplicar').textContent = formatearMoneda(aplicar);
+                // Preview dinámico al escribir el cupo
+                cupoInput.addEventListener('input', function() {
+                    const cupo = parseInt(this.value) || 0;
+                    const aplicar = Math.min(cupo, saldoPendiente);
+                    const restante = cupo - aplicar;
+                    const excede = saldoPendiente > cupo && cupo > 0;
+
+                    document.getElementById('credext-preview-aplicar').textContent = formatearMoneda(aplicar);
+
+                    const restanteRow = document.getElementById('credext-preview-restante-row');
+                    const excedeDiv = document.getElementById('credext-preview-excede');
+
+                    if (cupo > 0) {
+                        restanteRow.style.display = 'flex';
+                        restanteRow.style.cssText = 'display:flex !important';
+                        document.getElementById('credext-preview-restante').textContent = formatearMoneda(restante);
+                    } else {
+                        restanteRow.style.display = 'none';
+                        restanteRow.style.cssText = 'display:none !important';
+                    }
+                    excedeDiv.style.display = excede ? 'block' : 'none';
                 });
             },
             preConfirm: () => {
@@ -10230,25 +10299,22 @@ body {
                 const nombre = document.getElementById('credext-nombre').value.trim();
                 const email = document.getElementById('credext-email').value.trim();
                 const folio = document.getElementById('credext-folio').value.trim();
-                const monto = parseInt(document.getElementById('credext-monto').value) || 0;
+                const cupo = parseInt(document.getElementById('credext-cupo').value) || 0;
 
                 if (!rut) { Swal.showValidationMessage('Ingrese el RUT de la persona'); return false; }
                 if (!nombre) { Swal.showValidationMessage('Ingrese el nombre de la persona'); return false; }
                 if (!folio) { Swal.showValidationMessage('Ingrese el número de folio'); return false; }
-                if (monto <= 0) { Swal.showValidationMessage('Ingrese un monto válido'); return false; }
+                if (cupo <= 0) { Swal.showValidationMessage('Ingrese el cupo total del crédito'); return false; }
 
-                return { rut, nombre, email, folio, monto: Math.min(monto, saldoPendiente), clienteExiste: credextClienteExiste };
+                return { rut, nombre, email, folio, cupo, clienteExiste: credextClienteExiste };
             }
         });
 
         if (!datosCreditoExt) return;
 
-        const montoAplicar = datosCreditoExt.monto;
-
         // Si el cliente no existe en la DB, crearlo automáticamente
         if (!datosCreditoExt.clienteExiste) {
             try {
-                // Separar nombre en nombre y apellido (primer espacio)
                 const partes = datosCreditoExt.nombre.trim().split(/\s+/);
                 const nombre = partes[0] || datosCreditoExt.nombre;
                 const apellido = partes.slice(1).join(' ') || '';
@@ -10271,7 +10337,6 @@ body {
                 if (dataCliente.success) {
                     mostrarNotificacion(`Cliente "${datosCreditoExt.nombre}" creado en el sistema`, 'success');
                 } else {
-                    // Si ya existe por RUT, no es error grave
                     console.log('Cliente no creado (puede que ya exista):', dataCliente.error);
                 }
             } catch (err) {
@@ -10279,7 +10344,17 @@ body {
             }
         }
 
-        // Registrar pago con los datos ingresados
+        // Guardar crédito externo como activo (persistente)
+        creditoExternoActivo = {
+            rut: datosCreditoExt.rut,
+            nombre: datosCreditoExt.nombre,
+            email: datosCreditoExt.email,
+            folio: datosCreditoExt.folio,
+            cupo_total: datosCreditoExt.cupo
+        };
+
+        // Agregar pago automático por el monto del saldo (hasta el cupo)
+        const montoAplicar = Math.min(saldoPendiente, datosCreditoExt.cupo);
         pagosActuales.push({
             metodo_pago: 'CREDITO_EXTERNO',
             monto: montoAplicar,
@@ -10290,13 +10365,146 @@ body {
         });
         actualizarListaPagos();
         actualizarResumenVenta();
+        actualizarIndicadorCreditoExterno();
 
-        const nuevoSaldo = calcularSaldoPendiente();
-        mostrarNotificacion(
-            nuevoSaldo <= 0 ? `Crédito externo aplicado (Folio: ${datosCreditoExt.folio}) - Ticket completamente pagado` :
-            `Crédito externo aplicado (Folio: ${datosCreditoExt.folio}) - Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`, 'success'
-        );
+        mostrarNotificacion(`Crédito externo activado — Cupo: ${formatearMoneda(datosCreditoExt.cupo)}`, 'success');
     };
+
+    // Ajuste silencioso llamado desde actualizarResumenVenta (no llama actualizarResumenVenta)
+    function _autoAjustarCreditoExterno() {
+        if (!creditoExternoActivo) return;
+        const idxCredExt = pagosActuales.findIndex(p => p.metodo_pago === 'CREDITO_EXTERNO');
+        const totalTicket = ticketActual?.totales?.total || 0;
+        const pagadoSinCredExt = pagosActuales.reduce((sum, p, i) => {
+            return i === idxCredExt ? sum : sum + (p.monto || 0);
+        }, 0);
+        const saldoSinCredExt = Math.max(0, totalTicket - pagadoSinCredExt);
+        const nuevoMonto = Math.min(saldoSinCredExt, creditoExternoActivo.cupo_total);
+
+        if (idxCredExt >= 0) {
+            if (nuevoMonto <= 0) {
+                pagosActuales.splice(idxCredExt, 1);
+            } else {
+                pagosActuales[idxCredExt].monto = nuevoMonto;
+            }
+        } else if (nuevoMonto > 0) {
+            pagosActuales.push({
+                metodo_pago: 'CREDITO_EXTERNO',
+                monto: nuevoMonto,
+                voucher: creditoExternoActivo.folio,
+                notas: JSON.stringify({ nombre: creditoExternoActivo.nombre, rut: creditoExternoActivo.rut, email: creditoExternoActivo.email, folio: creditoExternoActivo.folio }),
+                trabajador_nombre: creditoExternoActivo.nombre,
+                tipo_tarjeta: `Crédito Ext. - ${creditoExternoActivo.nombre}`
+            });
+        }
+        actualizarListaPagos();
+        actualizarIndicadorCreditoExterno();
+    }
+
+    // Re-ajusta el pago de crédito externo al saldo pendiente actual (sin reabrir modal)
+    function reajustarPagoCreditoExterno() {
+        if (!creditoExternoActivo) return;
+
+        const idxCredExt = pagosActuales.findIndex(p => p.metodo_pago === 'CREDITO_EXTERNO');
+
+        // Calcular saldo SIN el pago de crédito externo
+        const totalTicket = ticketActual?.totales?.total || 0;
+        const pagadoSinCredExt = pagosActuales.reduce((sum, p, i) => {
+            return i === idxCredExt ? sum : sum + (p.monto || 0);
+        }, 0);
+        const saldoSinCredExt = Math.max(0, totalTicket - pagadoSinCredExt);
+        const nuevoMonto = Math.min(saldoSinCredExt, creditoExternoActivo.cupo_total);
+
+        if (idxCredExt >= 0) {
+            if (nuevoMonto <= 0) {
+                pagosActuales.splice(idxCredExt, 1);
+            } else {
+                pagosActuales[idxCredExt].monto = nuevoMonto;
+            }
+        } else if (nuevoMonto > 0) {
+            pagosActuales.push({
+                metodo_pago: 'CREDITO_EXTERNO',
+                monto: nuevoMonto,
+                voucher: creditoExternoActivo.folio,
+                notas: JSON.stringify({ nombre: creditoExternoActivo.nombre, rut: creditoExternoActivo.rut, email: creditoExternoActivo.email, folio: creditoExternoActivo.folio }),
+                trabajador_nombre: creditoExternoActivo.nombre,
+                tipo_tarjeta: `Crédito Ext. - ${creditoExternoActivo.nombre}`
+            });
+        }
+
+        actualizarListaPagos();
+        actualizarResumenVenta();
+        actualizarIndicadorCreditoExterno();
+    }
+
+    function actualizarIndicadorCreditoExterno() {
+        const indicador = document.getElementById('indicador-credito-externo');
+        if (!creditoExternoActivo) {
+            indicador.style.display = 'none';
+            return;
+        }
+
+        indicador.style.display = 'block';
+
+        const cupoTotal = creditoExternoActivo.cupo_total;
+        const pagoCredExt = pagosActuales.find(p => p.metodo_pago === 'CREDITO_EXTERNO');
+        const ocupado = pagoCredExt ? pagoCredExt.monto : 0;
+        const disponible = cupoTotal - ocupado;
+        const pctOcupado = cupoTotal > 0 ? Math.round((ocupado / cupoTotal) * 100) : 0;
+        const pctDisponible = 100 - pctOcupado;
+
+        document.getElementById('nombre-credext-activo').textContent = creditoExternoActivo.nombre;
+        document.getElementById('folio-credext-activo').textContent = `Folio: ${creditoExternoActivo.folio}`;
+        document.getElementById('cupo-total-credext').textContent = formatearMoneda(cupoTotal);
+        document.getElementById('cupo-ocupado-credext').textContent = formatearMoneda(ocupado);
+        document.getElementById('cupo-disponible-credext').textContent = formatearMoneda(disponible);
+
+        const barraOcupado = document.getElementById('barra-cupo-ocupado');
+        const barraDisponible = document.getElementById('barra-cupo-disponible');
+        barraOcupado.style.width = pctOcupado + '%';
+        barraDisponible.style.width = pctDisponible + '%';
+        document.getElementById('label-barra-ocupado').textContent = pctOcupado > 8 ? `${pctOcupado}% usado` : '';
+        document.getElementById('label-barra-disponible').textContent = pctDisponible > 12 ? `${pctDisponible}% libre` : '';
+
+        // Colores según uso
+        if (pctOcupado >= 90) {
+            barraOcupado.className = 'progress-bar bg-danger';
+        } else if (pctOcupado >= 70) {
+            barraOcupado.className = 'progress-bar bg-warning';
+        } else {
+            barraOcupado.className = 'progress-bar bg-info';
+        }
+
+        indicador.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    window.desactivarCreditoExterno = function() {
+        Swal.fire({
+            icon: 'question',
+            title: 'Desactivar Crédito Externo',
+            text: `¿Desactivar el crédito de ${creditoExternoActivo?.nombre || ''}? Se eliminará el pago asociado.`,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, desactivar',
+            cancelButtonText: 'No',
+            confirmButtonColor: '#dc3545'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                creditoExternoActivo = null;
+                const idx = pagosActuales.findIndex(p => p.metodo_pago === 'CREDITO_EXTERNO');
+                if (idx >= 0) pagosActuales.splice(idx, 1);
+                actualizarListaPagos();
+                actualizarResumenVenta();
+                document.getElementById('indicador-credito-externo').style.display = 'none';
+                mostrarNotificacion('Crédito externo desactivado', 'info');
+            }
+        });
+    };
+
+    function limpiarCreditoExternoAlFinalizar() {
+        creditoExternoActivo = null;
+        const indicador = document.getElementById('indicador-credito-externo');
+        if (indicador) indicador.style.display = 'none';
+    }
     
     // ========== INTEGRACIÓN POS TRANSBANK (WEB SERIAL API) ==========
     

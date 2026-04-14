@@ -551,6 +551,9 @@ urlpatterns = [
 
     # === URLs PARA EMISIÓN DE DTE ===
     path('emisionDTE/', views.emision_dte, name='emision_dte'),
+    path('emisionDTEConcepto/', views.emision_dte_concepto, name='emision_dte_concepto'),
+    path('emitir_dte_concepto/', views.emitir_dte_concepto, name='emitir_dte_concepto'),
+    path('crear_empresa_rapida/', views.crear_empresa_rapida, name='crear_empresa_rapida'),
     path('recepcion-dte/', views.recepcion_dte, name='recepcion_dte'),
     path('dte/recepciones_pendientes/', views.recepciones_pendientes_api, name='recepciones_pendientes_api'),
     path('dte/historial_recepciones/', views.historial_recepciones_api, name='historial_recepciones_api'),

@@ -126,8 +126,21 @@
     
     /* Fila de DTE recepcionado */
     .dte-recepcionado {
-        background-color: var(--nexo-primary-light) !important;
-        opacity: 0.95;
+        background-color: rgba(0, 212, 170, 0.08) !important;
+        border-left: 3px solid var(--nexo-success);
+    }
+    
+    .table-info {
+        background-color: rgba(0, 102, 255, 0.08) !important;
+        border-left: 3px solid var(--nexo-info);
+    }
+    
+    .table-danger {
+        border-left: 3px solid var(--nexo-error);
+    }
+    
+    .table-warning {
+        border-left: 3px solid var(--nexo-warning);
     }
 
     /* Tabla con estilos Nexo */
@@ -1128,18 +1141,30 @@
                                     </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <label for="filterTipoDocumento" class="form-label">Tipo de documento</label>
-                                    <select id="filterTipoDocumento" class="form-select">
+                                    <label for="filterEstadoDte" class="form-label">Estado</label>
+                                    <select id="filterEstadoDte" class="form-select">
                                         <option value="">Todos</option>
-                                        <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
-                                        <option value="GUIA">Guía de Despacho</option>
+                                        <option value="EMITIDO" selected>Pendientes</option>
+                                        <option value="RECEPCIONADO_COMPLETO">Recepcionado completo</option>
+                                        <option value="RECEPCIONADO_PARCIAL">Recepcionado parcial</option>
+                                        <option value="EN_REGULARIZACION">En regularización</option>
+                                        <option value="RECHAZADO">Rechazados</option>
+                                        <option value="CANCELADO">Cancelados</option>
                                     </select>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-2">
+                                    <label for="filterTipoDocumento" class="form-label">Tipo doc.</label>
+                                    <select id="filterTipoDocumento" class="form-select">
+                                        <option value="">Todos</option>
+                                        <option value="FACTURA ELECTRONICA">Factura</option>
+                                        <option value="GUIA">Guía</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
                                     <label for="filterFechaInicio" class="form-label">Fecha desde</label>
                                     <input type="date" id="filterFechaInicio" class="form-control">
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <label for="filterFechaFin" class="form-label">Fecha hasta</label>
                                     <input type="date" id="filterFechaFin" class="form-control">
                                 </div>
@@ -1183,15 +1208,62 @@
             </div>
 
             <div class="col-lg-3">
+                <!-- Indicadores por estado -->
+                <div class="card mb-3" style="border:none;box-shadow:var(--nexo-shadow-md);">
+                    <div class="card-body p-3">
+                        <div class="section-title mb-2">
+                            <i class="bi bi-bar-chart-fill me-2 text-primary"></i>DTEs por Estado
+                        </div>
+                        <div id="indicadoresEstado" class="d-flex flex-column gap-2">
+                            <div class="estado-indicator" data-estado="EMITIDO" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(255,176,32,0.1);border-left:3px solid var(--nexo-warning);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span style="font-size:13px;"><i class="bi bi-hourglass-split text-warning me-1"></i>Pendientes</span>
+                                    <span class="badge bg-warning text-dark fw-bold" id="conteoEmitido">0</span>
+                                </div>
+                            </div>
+                            <div class="estado-indicator" data-estado="RECEPCIONADO_COMPLETO" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(0,212,170,0.08);border-left:3px solid var(--nexo-success);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span style="font-size:13px;"><i class="bi bi-check-circle-fill text-success me-1"></i>Recepcionados</span>
+                                    <span class="badge bg-success fw-bold" id="conteoRecepcionado">0</span>
+                                </div>
+                            </div>
+                            <div class="estado-indicator" data-estado="RECEPCIONADO_PARCIAL" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(255,176,32,0.06);border-left:3px solid #e69a00;transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span style="font-size:13px;"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>Parcial</span>
+                                    <span class="badge bg-warning text-dark fw-bold" id="conteoParcial">0</span>
+                                </div>
+                            </div>
+                            <div class="estado-indicator" data-estado="EN_REGULARIZACION" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(0,102,255,0.06);border-left:3px solid var(--nexo-info);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span style="font-size:13px;"><i class="bi bi-arrow-repeat text-info me-1"></i>En regularización</span>
+                                    <span class="badge bg-info fw-bold" id="conteoRegularizacion">0</span>
+                                </div>
+                            </div>
+                            <div class="estado-indicator" data-estado="RECHAZADO" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(255,77,77,0.06);border-left:3px solid var(--nexo-error);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span style="font-size:13px;"><i class="bi bi-x-circle-fill text-danger me-1"></i>Rechazados</span>
+                                    <span class="badge bg-danger fw-bold" id="conteoRechazado">0</span>
+                                </div>
+                            </div>
+                            <div class="estado-indicator" data-estado="" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:var(--nexo-gray-100);border-left:3px solid var(--nexo-gray-500);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span style="font-size:13px;"><i class="bi bi-grid-fill text-secondary me-1"></i>Ver todos</span>
+                                    <span class="badge bg-secondary fw-bold" id="conteoTodos">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card resumen-card mb-3">
                     <div class="card-body">
                         <div class="section-title">
-                            <i class="bi bi-clipboard-check me-2 text-primary"></i>Resumen de recepción
+                            <i class="bi bi-clipboard-check me-2 text-primary"></i>Resumen
                         </div>
                         <ul class="list-unstyled mb-0">
                             <li class="mb-2"><span class="text-muted">Recibidos hoy:</span> <strong id="resumenRecibidos">0</strong></li>
                             <li class="mb-2"><span class="text-muted">Pendientes:</span> <strong id="resumenPendientes">0</strong></li>
-                            <li class="mb-2"><span class="text-muted">DTE pendientes mes actual:</span> <strong id="resumenPendientesMes">0</strong></li>
+                            <li class="mb-2"><span class="text-muted">Pendientes mes actual:</span> <strong id="resumenPendientesMes">0</strong></li>
                             <li><span class="text-muted">Total unidades:</span> <strong id="resumenUnidades">0</strong></li>
                             <li id="itemProblemasResumen" style="display:none;" class="mt-3 pt-3 border-top">
                                 <div class="alert alert-warning mb-2 p-2">
@@ -1223,7 +1295,7 @@
                     </div>
                     <div class="card-body py-2">
                         <p class="small text-muted mb-2">
-                            Tienes DTEs que enviaste pero fueron rechazados. Puedes rehabilitarlos.
+                            Tienes DTEs que enviaste pero fueron rechazados. Puedes rehabilitarlos o anularlos.
                         </p>
                         <button type="button" class="btn btn-outline-danger btn-sm w-100" id="btnVerDTEsRechazados">
                             <i class="bi bi-eye me-1"></i>Ver y Rehabilitar
@@ -1412,7 +1484,7 @@
                                 </div>
                                 <div class="col">
                                     <div class="fw-bold text-warning" id="resumenParcial">0</div>
-                                    <small class="text-muted">Parcial</small>
+                                    <small class="text-muted">Con Problemas</small>
                                 </div>
                                 <div class="col">
                                     <div class="fw-bold text-danger" id="resumenDanado">0</div>
@@ -1621,7 +1693,11 @@
                 <div class="alert alert-info mb-3">
                     <i class="bi bi-info-circle me-2"></i>
                     Estos son los DTEs que <strong>TÚ enviaste</strong> pero fueron <strong>rechazados</strong> por la sucursal destino.
-                    Puedes <strong>rehabilitarlos</strong> para que puedan volver a intentar recibirlos.
+                    <ul class="mb-0 mt-2 small">
+                        <li><strong>Rehabilitar:</strong> Vuelve a dejar disponible para que destino reintente la recepción</li>
+                        <li><strong>Anular Guía:</strong> Cancela el traspaso y devuelve el stock a tu bodega</li>
+                        <li><strong>Anular con NC:</strong> Para facturas — genera Nota de Crédito, devuelve stock y descarga TXT Acepta</li>
+                    </ul>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover table-sm">
@@ -1748,7 +1824,7 @@
                                     </div>
                                     <div class="col-3">
                                         <div class="fw-bold text-warning" id="verResumenParcial">0</div>
-                                        <small class="text-muted">Parcial ⚠️</small>
+                                        <small class="text-muted">Con Problemas ⚠️</small>
                                     </div>
                                     <div class="col-3">
                                         <div class="fw-bold text-danger" id="verResumenDanado">0</div>
@@ -1792,7 +1868,7 @@ $(document).ready(function() {
     modalProblema = new bootstrap.Modal(document.getElementById('modalDetalleProblema'));
 
     $('#btnRefresh').on('click', () => cargarRecepciones(true));
-    $('#filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => cargarRecepciones());
+    $('#filterEstadoDte, #filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => { paginaActual = 1; cargarRecepciones(); });
     $('#btnPrev').on('click', () => cambiarPagina(-1));
     $('#btnNext').on('click', () => cambiarPagina(1));
     $('#btnConfirmarRecepcion').on('click', confirmarRecepcion);
@@ -1818,8 +1894,14 @@ $(document).ready(function() {
     $('#btnGuardarProblema').on('click', guardarProblema);
     $('#btnVerDTEsProblemas').on('click', verDTEsConProblemas);
     
-    // Auto-cálculo en modal de problemas
-    $('#problemaCantidadRecepcionada, #problemaCantidadDanada, #problemaCantidadSobranteInput').on('input', calcularFaltanteAutomatico);
+    // Auto-cálculo en modal de problemas + limpiar errores al escribir
+    $('#problemaCantidadRecepcionada, #problemaCantidadDanada, #problemaCantidadSobranteInput').on('input', function() {
+        $(this).removeClass('is-invalid');
+        calcularFaltanteAutomatico();
+    });
+    $('#problemaObservaciones').on('input', function() {
+        $(this).removeClass('is-invalid');
+    });
     
     // Eventos para DTEs rechazados (que yo envié)
     $('#btnVerDTEsRechazados').on('click', verDTEsRechazados);
@@ -1890,6 +1972,7 @@ function cargarInfoSucursal() {
 function cargarRecepciones(forzarActualizacion = false) {
     const filtros = {
         tipo_documento: $('#filterTipoDocumento').val(),
+        estado: $('#filterEstadoDte').val(),
         fecha_inicio: $('#filterFechaInicio').val(),
         fecha_fin: $('#filterFechaFin').val(),
         pagina: paginaActual
@@ -1917,6 +2000,7 @@ function cargarRecepciones(forzarActualizacion = false) {
 
         renderTablaRecepciones();
         actualizarResumen(response.resumen || {});
+        actualizarConteoEstados(response.conteo_estados || {});
         actualizarPaginacion();
 
         if (forzarActualizacion) {
@@ -1970,56 +2054,103 @@ function renderTablaRecepciones() {
             ? resumenItems.map(item => `<span class="badge bg-secondary me-1">${item.talla} (${item.cantidad})</span>`).join(' ')
             : '<span class="text-muted">Sin detalle</span>';
 
-        // Determinar si está recepcionado
-        const estaRecepcionado = doc.fecha_recepcion !== null;
-        const rowClass = estaRecepcionado ? 'dte-recepcionado' : '';
-        
-        // Badge de estado
-        let estadoBadge = '';
-        if (estaRecepcionado) {
-            if (doc.estado_dte === 'RECEPCIONADO_COMPLETO') {
-                estadoBadge = '<span class="badge badge-recepcionado">✅ Recepcionado</span>';
-            } else if (doc.estado_dte === 'RECEPCIONADO_PARCIAL') {
-                estadoBadge = '<span class="badge bg-warning">⚠️ Parcial</span>';
-            } else if (doc.estado_dte === 'EN_REGULARIZACION') {
-                estadoBadge = '<span class="badge bg-info">🔄 En Regularización</span>';
-            } else {
-                estadoBadge = '<span class="badge badge-recepcionado">✅ Recepcionado</span>';
-            }
-        } else {
-            estadoBadge = '<span class="badge badge-pendiente">⏳ Pendiente</span>';
-        }
-        
+        // Calcular días desde emisión
+        const diasDesdeEmision = Math.floor((new Date() - new Date(doc.fecha_emision)) / (1000 * 60 * 60 * 24));
+        const diasClass = diasDesdeEmision > 7 ? 'text-danger fw-bold' : diasDesdeEmision > 3 ? 'text-warning fw-bold' : 'text-muted';
+
+        // Configuración visual por estado
+        const ESTADO_CONFIG = {
+            'EMITIDO': {
+                badge: '<span class="badge badge-pendiente"><i class="bi bi-hourglass-split me-1"></i>Pendiente</span>',
+                rowClass: '',
+                indicador: `<small class="${diasClass}">${diasDesdeEmision}d</small>`,
+            },
+            'RECEPCIONADO_COMPLETO': {
+                badge: '<span class="badge badge-recepcionado"><i class="bi bi-check-circle-fill me-1"></i>Recepcionado</span>',
+                rowClass: 'dte-recepcionado',
+                indicador: doc.fecha_recepcion ? `<small class="text-success">${new Date(doc.fecha_recepcion).toLocaleDateString('es-CL')}</small>` : '',
+            },
+            'RECEPCIONADO_PARCIAL': {
+                badge: '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle-fill me-1"></i>Parcial</span>',
+                rowClass: 'table-warning',
+                indicador: `<small class="text-warning">${diasDesdeEmision}d</small>`,
+            },
+            'EN_REGULARIZACION': {
+                badge: '<span class="badge" style="background:var(--nexo-info);color:#fff;"><i class="bi bi-arrow-repeat me-1"></i>En Regularización</span>',
+                rowClass: 'table-info',
+                indicador: `<small class="text-info">${diasDesdeEmision}d</small>`,
+            },
+            'RECHAZADO': {
+                badge: '<span class="badge bg-danger"><i class="bi bi-x-circle-fill me-1"></i>Rechazado</span>',
+                rowClass: 'table-danger',
+                indicador: `<small class="text-danger fw-bold">${diasDesdeEmision}d</small>`,
+            },
+            'CANCELADO': {
+                badge: '<span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>Cancelado</span>',
+                rowClass: '',
+                indicador: '',
+            },
+            'ANULADO': {
+                badge: '<span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>Anulado</span>',
+                rowClass: '',
+                indicador: '',
+            },
+        };
+
+        const estado = doc.estado_dte || 'EMITIDO';
+        const config = ESTADO_CONFIG[estado] || ESTADO_CONFIG['EMITIDO'];
+
         // Botones según estado
         let botonesHtml = '';
-        if (estaRecepcionado) {
-            botonesHtml = `
-                <button class="btn btn-success btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalles de recepción">
-                    <i class="bi bi-eye me-1"></i>Ver
-                </button>
-            `;
-        } else {
-            botonesHtml = `
-                <button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})" title="Recepcionar documento">
-                    <i class="bi bi-box-arrow-in-down me-1"></i>Recepcionar
-                </button>
-            `;
+        switch (estado) {
+            case 'EMITIDO':
+                botonesHtml = `<button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})" title="Recepcionar documento">
+                    <i class="bi bi-box-arrow-in-down me-1"></i>Recepcionar</button>`;
+                break;
+            case 'RECEPCIONADO_COMPLETO':
+                botonesHtml = `<button class="btn btn-outline-success btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle recepción">
+                    <i class="bi bi-eye me-1"></i>Ver</button>`;
+                break;
+            case 'RECEPCIONADO_PARCIAL':
+            case 'EN_REGULARIZACION':
+                botonesHtml = `<button class="btn btn-outline-warning btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
+                    <i class="bi bi-eye me-1"></i>Ver</button>
+                    <a href="/app/regularizar-recepciones/" class="btn btn-warning btn-sm ms-1" title="Ir a regularizar">
+                    <i class="bi bi-tools"></i></a>`;
+                break;
+            case 'RECHAZADO':
+                botonesHtml = `<button class="btn btn-outline-danger btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver motivo rechazo">
+                    <i class="bi bi-eye me-1"></i>Ver</button>`;
+                break;
+            default:
+                botonesHtml = `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
+                    <i class="bi bi-eye me-1"></i>Ver</button>`;
         }
 
+        // Motivo de rechazo si aplica
+        const motivoRechazo = (estado === 'RECHAZADO' && doc.referencias)
+            ? `<br><small class="text-danger"><i class="bi bi-chat-left-text me-1"></i>${doc.referencias.substring(0, 80)}${doc.referencias.length > 80 ? '...' : ''}</small>`
+            : '';
+
         tbody.append(`
-            <tr data-id="${doc.id}" class="${rowClass}">
+            <tr data-id="${doc.id}" class="${config.rowClass}">
                 <td>
                     <div class="fw-bold">${badgeTipo} Nº ${doc.numero_documento}</div>
-                    <small class="text-muted">${doc.referencias || 'Sin observaciones'}</small>
+                    <small class="text-muted">${doc.observaciones || doc.referencias || ''}</small>
                 </td>
                 <td>
                     <strong>${doc.sucursal_origen}</strong>
                     <br><small class="text-muted">${doc.empresa_origen}</small>
                 </td>
-                <td>${fechaEmision}</td>
+                <td>
+                    ${fechaEmision}
+                    <br>${config.indicador}
+                </td>
                 <td class="detalle-tallas">${resumenHtml}</td>
                 <td class="text-center"><span class="badge bg-dark">${doc.total_unidades}</span></td>
-                <td class="text-center">${estadoBadge}</td>
+                <td class="text-center">
+                    ${config.badge}${motivoRechazo}
+                </td>
                 <td class="text-center">
                     ${botonesHtml}
                 </td>
@@ -2061,7 +2192,40 @@ function actualizarResumen(resumen) {
     }
 }
 
-// Filtro de sucursal origen eliminado - ya no es necesario
+function actualizarConteoEstados(conteo) {
+    const emitido = conteo['EMITIDO'] || 0;
+    const completo = conteo['RECEPCIONADO_COMPLETO'] || 0;
+    const parcial = conteo['RECEPCIONADO_PARCIAL'] || 0;
+    const regularizacion = conteo['EN_REGULARIZACION'] || 0;
+    const rechazado = conteo['RECHAZADO'] || 0;
+    const total = Object.values(conteo).reduce((s, v) => s + v, 0);
+
+    $('#conteoEmitido').text(emitido);
+    $('#conteoRecepcionado').text(completo);
+    $('#conteoParcial').text(parcial);
+    $('#conteoRegularizacion').text(regularizacion);
+    $('#conteoRechazado').text(rechazado);
+    $('#conteoTodos').text(total);
+
+    // Resaltar el indicador activo
+    const estadoActual = $('#filterEstadoDte').val();
+    $('.estado-indicator').each(function() {
+        const estado = $(this).data('estado');
+        if (estado === estadoActual || (estado === '' && estadoActual === '')) {
+            $(this).css('box-shadow', '0 0 0 2px var(--nexo-primary)');
+        } else {
+            $(this).css('box-shadow', 'none');
+        }
+    });
+}
+
+// Click en indicadores del sidebar para filtrar
+$(document).on('click', '.estado-indicator', function() {
+    const estado = $(this).data('estado');
+    $('#filterEstadoDte').val(estado === undefined ? '' : estado);
+    paginaActual = 1;
+    cargarRecepciones();
+});
 
 function actualizarPaginacion() {
     if (totalPaginas <= 1) {
@@ -2601,48 +2765,27 @@ function actualizarResumenVerificacion() {
     productosVerificacion.forEach(prod => {
         if (prod.marcado_ok) verificados++;
         
-        // ✅ MEJORADO: Contar productos DESMARCADOS sin observaciones
         if (!prod.marcado_ok && (!prod.observaciones || prod.observaciones.trim() === '')) {
             productosSinObservaciones++;
         }
         
-        // Calcular cantidades para este producto
-        const cantidadBuena = Math.max(0, prod.cantidad_recepcionada - prod.cantidad_danada);
-        const cantidadFaltante = Math.max(0, prod.cantidad_esperada - prod.cantidad_recepcionada);
-        const cantidadDanada = prod.cantidad_danada || 0;
+        const recepcionada = prod.cantidad_recepcionada || 0;
+        const esperada = prod.cantidad_esperada || 0;
+        const cantDanada = prod.cantidad_danada || 0;
+        const cantSobrante = prod.cantidad_sobrante || 0;
+        const cantFaltante = Math.max(0, esperada - recepcionada);
+        const cantBuena = Math.max(0, Math.min(recepcionada, esperada) - cantDanada);
         
-        // Sumar UNIDADES correctamente según el estado
-        switch(prod.estado) {
-            case 'RECEPCIONADO_OK': 
-                // Todo OK - solo suma a OK
-                ok += prod.cantidad_recepcionada;
-                break;
-            case 'RECEPCIONADO_PARCIAL': 
-                // Parcial: las buenas van a parcial, las faltantes a faltante
-                parcial += cantidadBuena;
-                faltante += cantidadFaltante;
-                danado += cantidadDanada;
-                break;
-            case 'RECEPCIONADO_DANADO': 
-                // Dañado: las dañadas van a dañado, las buenas a parcial, las faltantes a faltante
-                danado += cantidadDanada;
-                if (cantidadBuena > 0) parcial += cantidadBuena;
-                if (cantidadFaltante > 0) faltante += cantidadFaltante;
-                break;
-            case 'FALTANTE':
-                // Faltante completo - todo a faltante
-                faltante += prod.cantidad_esperada;
-                break;
-            case 'RECEPCIONADO_SOBRANTE':
-                // Sobrante: cantidad documentada va a OK, sobrante se cuenta aparte
-                ok += Math.min(prod.cantidad_recepcionada, prod.cantidad_esperada);
-                sobrante += prod.cantidad_sobrante || 0;
-                break;
-        }
+        ok += cantBuena;
+        danado += cantDanada;
+        faltante += cantFaltante;
+        sobrante += cantSobrante;
     });
 
+    const lineasConProblema = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK').length;
+
     $('#resumenOK').text(ok);
-    $('#resumenParcial').text(parcial);
+    $('#resumenParcial').text(lineasConProblema);
     $('#resumenDanado').text(danado);
     $('#resumenFaltante').text(faltante);
     if ($('#resumenSobrante').length) $('#resumenSobrante').text(sobrante);
@@ -2700,6 +2843,10 @@ function abrirModalProblema(index) {
     productoEditandoIndex = index;
     const prod = productosVerificacion[index];
     
+    // Limpiar estados de error previos
+    $('#problemaCantidadRecepcionada, #problemaCantidadDanada, #problemaCantidadSobranteInput, #problemaObservaciones').removeClass('is-invalid');
+    $('#errorCantidadRecepcionada, #errorCantidadDanada').hide();
+
     // Llenar datos
     $('#problemaProductoNombre').text(prod.descripcion);
     $('#problemaProductoSKU').text(prod.sku);
@@ -2817,14 +2964,66 @@ function guardarProblema() {
     if (productoEditandoIndex === null) return;
     
     const prod = productosVerificacion[productoEditandoIndex];
-    
-    // Tomar valores del modal
-    prod.cantidad_recepcionada = Math.min(parseInt($('#problemaCantidadRecepcionada').val()) || 0, prod.cantidad_esperada);
-    prod.cantidad_danada = parseInt($('#problemaCantidadDanada').val()) || 0;
-    prod.cantidad_faltante = parseInt($('#problemaCantidadFaltante').val()) || 0;
-    prod.cantidad_sobrante = parseInt($('#problemaCantidadSobranteInput').val()) || 0;
+    const esperada = prod.cantidad_esperada;
+    const recepcionadaRaw = $('#problemaCantidadRecepcionada').val();
+    const recepcionada = parseInt(recepcionadaRaw) || 0;
+    const danada = parseInt($('#problemaCantidadDanada').val()) || 0;
+    const sobrante = parseInt($('#problemaCantidadSobranteInput').val()) || 0;
+    const observaciones = ($('#problemaObservaciones').val() || '').trim();
+    const faltante = Math.max(0, esperada - recepcionada);
+
+    let errores = [];
+
+    if (recepcionadaRaw === '' || recepcionadaRaw === null) {
+        errores.push('Debes ingresar la cantidad recepcionada.');
+        $('#problemaCantidadRecepcionada').addClass('is-invalid');
+    }
+    if (recepcionada > esperada) {
+        errores.push(`La cantidad recepcionada (${recepcionada}) no puede ser mayor a la esperada (${esperada}).`);
+        $('#problemaCantidadRecepcionada').addClass('is-invalid');
+    }
+    if (recepcionada < 0) {
+        errores.push('La cantidad recepcionada no puede ser negativa.');
+        $('#problemaCantidadRecepcionada').addClass('is-invalid');
+    }
+    if (danada > recepcionada) {
+        errores.push(`La cantidad dañada (${danada}) no puede ser mayor a la recepcionada (${recepcionada}).`);
+        $('#problemaCantidadDanada').addClass('is-invalid');
+    }
+    if (danada < 0) {
+        errores.push('La cantidad dañada no puede ser negativa.');
+        $('#problemaCantidadDanada').addClass('is-invalid');
+    }
+    if (sobrante < 0) {
+        errores.push('La cantidad sobrante no puede ser negativa.');
+        $('#problemaCantidadSobranteInput').addClass('is-invalid');
+    }
+
+    const tieneProblema = faltante > 0 || danada > 0 || sobrante > 0;
+    if (tieneProblema && !observaciones) {
+        errores.push('Debes ingresar observaciones cuando hay faltante, dañado o sobrante.');
+        $('#problemaObservaciones').addClass('is-invalid');
+    }
+
+    if (errores.length > 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Corrige antes de guardar',
+            html: '<ul class="text-start mb-0">' + errores.map(e => `<li>${e}</li>`).join('') + '</ul>',
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+
+    // Limpiar clases de error
+    $('#problemaCantidadRecepcionada, #problemaCantidadDanada, #problemaCantidadSobranteInput, #problemaObservaciones').removeClass('is-invalid');
+
+    prod.cantidad_recepcionada = Math.min(recepcionada, esperada);
+    prod.cantidad_danada = danada;
+    prod.cantidad_faltante = faltante;
+    prod.cantidad_sobrante = sobrante;
     prod.estado = $('#problemaEstado').val();
-    prod.observaciones = $('#problemaObservaciones').val();
+    prod.observaciones = observaciones;
     prod.marcado_ok = (prod.estado === 'RECEPCIONADO_OK');
     
     // Cerrar modal
@@ -3354,11 +3553,37 @@ function verDTEsRechazados() {
                 `);
             } else {
                 items.forEach(dte => {
+                    const esFactura = dte.tipo_documento.includes('FACTURA');
+                    const esGuia = dte.tipo_documento === 'GUIA';
+                    let botonesAccion = `
+                        <button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${dte.id}, '${dte.numero_documento}')" title="Rehabilitar para que puedan volver a recibirlo">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Rehabilitar
+                        </button>`;
+
+                    {% if user_rol == 'administrador' or user_rol == 'jefe_local' or user_rol == 'administracion' %}
+                    if (esGuia) {
+                        botonesAccion += `
+                            <button class="btn btn-danger btn-sm" onclick="anularDTERechazado(${dte.id}, '${dte.numero_documento}')" title="Anular guía y devolver stock al origen">
+                                <i class="bi bi-x-circle me-1"></i>Anular Guía
+                            </button>`;
+                    } else if (esFactura) {
+                        botonesAccion += `
+                            <button class="btn btn-warning btn-sm" onclick="anularFacturaRechazada(${dte.id}, '${dte.numero_documento}', '${dte.tipo_documento}')" title="Anular factura con Nota de Crédito y devolver stock">
+                                <i class="bi bi-file-earmark-text me-1"></i>Anular con NC
+                            </button>`;
+                    } else {
+                        botonesAccion += `
+                            <button class="btn btn-danger btn-sm" onclick="anularDTERechazado(${dte.id}, '${dte.numero_documento}')" title="Anular DTE y devolver stock al origen">
+                                <i class="bi bi-x-circle me-1"></i>Anular
+                            </button>`;
+                    }
+                    {% endif %}
+
                     tbody.append(`
                         <tr>
                             <td>
                                 <strong>#${dte.numero_documento}</strong>
-                                <br><small class="text-muted">${dte.tipo_documento}</small>
+                                <br><span class="badge ${esFactura ? 'bg-primary' : 'bg-info'} bg-opacity-75" style="font-size:0.68rem;">${dte.tipo_documento}</span>
                             </td>
                             <td><small>${dte.fecha_emision}</small></td>
                             <td><small>${dte.receptor}</small></td>
@@ -3366,9 +3591,9 @@ function verDTEsRechazados() {
                                 <small class="text-danger">${dte.motivo_rechazo}</small>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-success" onclick="rehabilitarDTE(${dte.id}, '${dte.numero_documento}')" title="Rehabilitar para que puedan volver a recibirlo">
-                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Rehabilitar
-                                </button>
+                                <div class="btn-group btn-group-sm">
+                                    ${botonesAccion}
+                                </div>
                             </td>
                         </tr>
                     `);
@@ -3471,6 +3696,216 @@ function rehabilitarDTE(dteId, numeroDocumento) {
             }
         }).fail(xhr => {
             Swal.fire('Error', xhr.responseJSON?.error || 'Error de conexión', 'error');
+        });
+    });
+}
+
+function anularDTERechazado(dteId, numeroDocumento) {
+    Swal.fire({
+        title: '⚠️ Anular DTE Rechazado',
+        html: `
+            <div class="text-start">
+                <p>¿Deseas <strong class="text-danger">anular definitivamente</strong> el DTE <strong>#${numeroDocumento}</strong>?</p>
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Esta acción es irreversible.</strong> Al anular:
+                    <ul class="mb-0 mt-2">
+                        <li>El stock será <strong>devuelto a la bodega de origen</strong></li>
+                        <li>Los movimientos de salida quedarán <strong>cancelados</strong></li>
+                        <li>El DTE quedará en estado <strong>CANCELADO</strong></li>
+                        <li>Se notificará a la sucursal destino</li>
+                    </ul>
+                </div>
+                <label class="form-label mt-3 fw-bold">Motivo de anulación <span class="text-danger">*</span>:</label>
+                <textarea
+                    id="motivoAnulacionDTE"
+                    class="swal2-input swal2-textarea"
+                    rows="3"
+                    placeholder="Ej: Producto devuelto por rechazo definitivo..."
+                    style="width: 100%; display: block; box-sizing: border-box; resize: vertical;"
+                    required
+                ></textarea>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-x-circle me-1"></i>Sí, anular DTE',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545',
+        width: '550px',
+        focusConfirm: false,
+        didOpen: () => {
+            const textarea = document.getElementById('motivoAnulacionDTE');
+            if (textarea) {
+                textarea.removeAttribute('disabled');
+                textarea.removeAttribute('readonly');
+                setTimeout(() => textarea.focus(), 150);
+            }
+        },
+        preConfirm: () => {
+            const motivo = document.getElementById('motivoAnulacionDTE').value.trim();
+            if (!motivo) {
+                Swal.showValidationMessage('Debe ingresar un motivo de anulación');
+                return false;
+            }
+            return motivo;
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        Swal.fire({
+            title: 'Procesando...',
+            html: 'Anulando DTE y revirtiendo stock...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        $.ajax({
+            url: '/app/dte/cancelar_traspaso/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                dte_id: dteId,
+                motivo: result.value
+            })
+        }).done(response => {
+            if (response.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'DTE Anulado',
+                    html: `<p>${response.message}</p>
+                           <div class="alert alert-success mt-3">
+                               <i class="bi bi-check-circle me-2"></i>
+                               El stock fue devuelto a la bodega de origen.
+                           </div>`,
+                    confirmButtonText: 'Entendido'
+                });
+
+                const modalEl = document.getElementById('modalDTEsRechazados');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+                cargarDTEsRechazados();
+                cargarRecepciones();
+            } else {
+                Swal.fire('Error', response.error || 'No se pudo anular el DTE', 'error');
+            }
+        }).fail(xhr => {
+            Swal.fire('Error', xhr.responseJSON?.error || 'Error de conexión', 'error');
+        });
+    });
+}
+
+function anularFacturaRechazada(dteId, numeroDocumento, tipoDocumento) {
+    Swal.fire({
+        title: '📄 Anular Factura con Nota de Crédito',
+        html: `
+            <div class="text-start">
+                <p>¿Deseas anular la <strong>${tipoDocumento} #${numeroDocumento}</strong>?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Se realizarán las siguientes acciones:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Se generará una <strong>Nota de Crédito</strong> (tipo 61 SII)</li>
+                        <li>El stock será <strong>devuelto a la bodega de origen</strong></li>
+                        <li>Los movimientos de salida quedarán <strong>cancelados</strong></li>
+                        <li>La factura quedará en estado <strong>ANULADO</strong></li>
+                        <li>Se generará el <strong>TXT Acepta</strong> de la NC</li>
+                    </ul>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de anulación:</label>
+                    <select id="tipoAnulacionFactura" class="form-select">
+                        <option value="DEVOLUCION">Devolución (fue rechazada por destino)</option>
+                        <option value="ANULACION">Anulación (error en emisión)</option>
+                    </select>
+                </div>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-file-earmark-text me-1"></i>Anular con NC',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#e67e22',
+        width: '580px',
+        focusConfirm: false
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        const tipoAnulacion = document.getElementById('tipoAnulacionFactura').value;
+
+        Swal.fire({
+            title: 'Procesando...',
+            html: 'Generando Nota de Crédito y revirtiendo stock...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        $.ajax({
+            url: '/app/documentos/anular-factura/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                dte_id: dteId,
+                tipo_anulacion: tipoAnulacion
+            }),
+            xhrFields: { responseType: 'blob' }
+        }).done(function(blob, statusText, xhr) {
+            const contentType = xhr.getResponseHeader('Content-Type') || '';
+            if (contentType.includes('text/plain')) {
+                const disposition = xhr.getResponseHeader('Content-Disposition') || '';
+                const match = disposition.match(/filename="?([^"]+)"?/);
+                const filename = match ? match[1] : `NC_${numeroDocumento}.txt`;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a); URL.revokeObjectURL(url);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Factura Anulada con NC',
+                    html: `<p>Se anuló la factura <strong>#${numeroDocumento}</strong> y se generó la Nota de Crédito.</p>
+                           <div class="alert alert-success mt-2">
+                               <i class="bi bi-check-circle me-2"></i>
+                               El TXT Acepta fue descargado. Súbelo a tu proveedor de facturación electrónica.
+                           </div>
+                           <div class="alert alert-info mt-2">
+                               <i class="bi bi-box-seam me-2"></i>
+                               El stock fue devuelto a la bodega de origen.
+                           </div>`,
+                    confirmButtonText: 'Entendido'
+                });
+
+                const modalEl = document.getElementById('modalDTEsRechazados');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+                cargarDTEsRechazados();
+                cargarRecepciones();
+            } else {
+                blob.text().then(text => {
+                    try {
+                        const resp = JSON.parse(text);
+                        Swal.fire('Error', resp.error || 'No se pudo anular la factura', 'error');
+                    } catch(e) {
+                        Swal.fire('Error', 'Respuesta inesperada del servidor', 'error');
+                    }
+                });
+            }
+        }).fail(function(xhr) {
+            if (xhr.responseType === 'blob' && xhr.response) {
+                xhr.response.text().then(text => {
+                    try {
+                        const resp = JSON.parse(text);
+                        Swal.fire('Error', resp.error || 'Error al anular factura', 'error');
+                    } catch(e) {
+                        Swal.fire('Error', 'Error de conexión al anular factura', 'error');
+                    }
+                });
+            } else {
+                Swal.fire('Error', 'Error de conexión al anular factura', 'error');
+            }
         });
     });
 }
@@ -3634,23 +4069,29 @@ function verDTERecepcionado(dteId) {
                 return;
             }
             
-            let contOK = 0, contParcial = 0, contDanado = 0, contFaltante = 0;
+            let contOK = 0, contConProblema = 0, contDanado = 0, contFaltante = 0;
             
             productos.forEach(prod => {
-                // Determinar clase de fila según estado
+                const recep = prod.cantidad_recepcionada || 0;
+                const esper = prod.cantidad_esperada || 0;
+                const danad = prod.cantidad_danada || 0;
+                const buenas = Math.max(0, Math.min(recep, esper) - danad);
+                const falt = Math.max(0, esper - recep);
+
+                contOK += buenas;
+                contDanado += danad;
+                contFaltante += falt;
+                if (prod.estado !== 'RECEPCIONADO_OK') contConProblema++;
+
                 let rowClass = '';
                 if (prod.estado === 'RECEPCIONADO_OK') {
                     rowClass = 'table-success';
-                    contOK += prod.cantidad_recepcionada;
                 } else if (prod.estado === 'RECEPCIONADO_PARCIAL') {
                     rowClass = 'table-warning';
-                    contParcial += (prod.cantidad_recepcionada - prod.cantidad_danada);
                 } else if (prod.estado === 'RECEPCIONADO_DANADO') {
                     rowClass = 'table-danger';
-                    contDanado += prod.cantidad_danada;
                 } else if (prod.estado === 'FALTANTE') {
                     rowClass = 'table-secondary';
-                    contFaltante += prod.cantidad_faltante;
                 }
                 
                 const estadoBadge = getEstadoBadge(prod.estado);
@@ -3675,7 +4116,7 @@ function verDTERecepcionado(dteId) {
             
             // Actualizar resumen
             $('#verResumenOK').text(contOK);
-            $('#verResumenParcial').text(contParcial);
+            $('#verResumenParcial').text(contConProblema);
             $('#verResumenDanado').text(contDanado);
             $('#verResumenFaltante').text(contFaltante);
         })

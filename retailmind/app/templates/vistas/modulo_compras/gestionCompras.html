@@ -1669,6 +1669,96 @@
         #modalRecepcionProductos .modal-body { padding: 8px !important; }
         #modalRecepcionProductos .modal-footer { padding: 6px 12px !important; }
 
+        /* --- Guía de pasos --- */
+        .recepcion-guia-pasos {
+            background: linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 100%);
+            border: 1px solid #c5cae9;
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+        }
+        .recepcion-guia-pasos .paso {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.78rem;
+            color: #37474f;
+        }
+        .recepcion-guia-pasos .paso .paso-num {
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: #405189;
+            color: white;
+            font-size: 0.68rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .recepcion-guia-pasos .paso.paso-opcional .paso-num {
+            background: #78909c;
+        }
+        .recepcion-guia-pasos .paso-separador {
+            width: 20px;
+            text-align: center;
+            color: #90a4ae;
+            font-size: 0.7rem;
+        }
+
+        /* --- Grupo producto: campos de aplicar masivo --- */
+        .producto-grupo .masivo-control {
+            background: #eef0f7;
+            border: 1px dashed #9fa8da;
+            border-radius: 6px;
+            padding: 2px 4px;
+        }
+        .producto-grupo .masivo-control input {
+            background: transparent;
+            border: none;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .producto-grupo .masivo-control input:focus {
+            outline: none;
+            background: white;
+            border-radius: 4px;
+        }
+        .producto-grupo .masivo-control .btn-aplicar-masivo {
+            background: #405189;
+            border: none;
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        .producto-grupo .masivo-control .btn-aplicar-masivo:hover {
+            background: #2e3b61;
+        }
+
+        /* --- Columna editable highlight --- */
+        #tablaRecepcionProductos thead th.col-editable {
+            background: rgba(10,179,156,0.35) !important;
+            position: relative;
+        }
+        #tablaRecepcionProductos thead th.col-editable::after {
+            content: '✎';
+            font-size: 0.55rem;
+            margin-left: 3px;
+            opacity: 0.8;
+        }
+
+        /* --- Factura opcional badge --- */
+        .factura-opcional-badge {
+            font-size: 0.55rem;
+            color: #78909c;
+            font-weight: 400;
+            display: block;
+            line-height: 1;
+            margin-top: 1px;
+        }
+
         .recepcion-toolbar { font-size: 0.8rem; }
         .recepcion-toolbar .form-control,
         .recepcion-toolbar .form-select,
@@ -1758,6 +1848,41 @@
                     <div class="modal-body p-2" style="background: #f8f9fa;">
                         <input type="hidden" id="globalIDCompraRecepcion">
 
+                        <!-- Guía de pasos para el usuario -->
+                        <div class="recepcion-guia-pasos" id="guiaPasosRecepcion">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <div class="paso">
+                                        <span class="paso-num">1</span>
+                                        <span><strong>Expandir</strong> un producto haciendo clic en su fila</span>
+                                    </div>
+                                    <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
+                                    <div class="paso">
+                                        <span class="paso-num">2</span>
+                                        <span>Ingresar la <strong>cantidad recibida</strong> en cada talla</span>
+                                    </div>
+                                    <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
+                                    <div class="paso paso-opcional">
+                                        <span class="paso-num">3</span>
+                                        <span>Asociar <strong>factura</strong> <em>(opcional)</em></span>
+                                    </div>
+                                    <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
+                                    <div class="paso">
+                                        <span class="paso-num">4</span>
+                                        <span>Clic en <strong>Guardar Recepción</strong></span>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-2" id="btnOcultarGuia" title="Ocultar guía">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                            <div class="mt-1" style="font-size:0.7rem;color:#607d8b;">
+                                <i class="bi bi-lightbulb text-warning me-1"></i>
+                                <strong>Tip:</strong> Usa los botones <em>"Todo"</em> o <em>"50%"</em> en la barra de acciones para rellenar todas las cantidades de golpe. 
+                                También puedes ingresar cantidad y factura a nivel de producto y hacer clic en <em>"Aplicar"</em>.
+                            </div>
+                        </div>
+
                         <!-- Panel resumen DTEs del proveedor -->
                         <div id="panelDtesRecepcion" class="mb-2" style="display:none;">
                             <div class="card border-0" style="border-radius:10px;background:linear-gradient(135deg,#e8f5e9,#e3f2fd);box-shadow:0 1px 4px rgba(0,0,0,0.06);">
@@ -1834,24 +1959,30 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Fila 2: Acciones masivas -->
+                            <!-- Fila 2: Acciones rápidas -->
                             <div class="acciones-masivas-bar p-2">
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <button type="button" class="btn btn-success btn-sm py-1" id="btnRecepcionarTodo" title="Recepcionar todas las cantidades pendientes">
-                                        <i class="bi bi-check-all me-1"></i>Todo
+                                    <span class="text-white-50 me-1" style="font-size:0.7rem;white-space:nowrap;">Rellenar:</span>
+                                    <button type="button" class="btn btn-success btn-sm py-1" id="btnRecepcionarTodo" title="Rellenar todas las cantidades pendientes con el máximo">
+                                        <i class="bi bi-check-all me-1"></i>Todo (100%)
                                     </button>
-                                    <button type="button" class="btn btn-warning btn-sm py-1 text-dark" id="btnRecepcionarMitad" title="Recepcionar 50%">
+                                    <button type="button" class="btn btn-warning btn-sm py-1 text-dark" id="btnRecepcionarMitad" title="Rellenar con el 50% de las cantidades pendientes">
                                         <i class="bi bi-percent"></i> 50%
                                     </button>
+                                    <div class="vr mx-1" style="border-color:rgba(255,255,255,0.2);"></div>
+                                    <span class="text-white-50 me-1" style="font-size:0.7rem;white-space:nowrap;">Factura global:</span>
                                     <div class="input-group input-group-sm" style="width: 200px;">
-                                        <span class="input-group-text bg-primary text-white border-0 py-0"><i class="bi bi-receipt"></i></span>
-                                        <input type="text" class="form-control py-1" id="facturaGlobalMasiva" placeholder="Factura global..." list="facturas-global-list">
+                                        <input type="text" class="form-control py-1" id="facturaGlobalMasiva" placeholder="Seleccionar factura..." list="facturas-global-list">
                                         <datalist id="facturas-global-list"></datalist>
-                                        <button class="btn btn-primary py-0" type="button" id="btnAplicarFacturaGlobal" title="Aplicar factura a todos"><i class="bi bi-arrow-right-circle"></i></button>
+                                        <button class="btn btn-primary py-0" type="button" id="btnAplicarFacturaGlobal" title="Asignar esta factura a todas las filas"><i class="bi bi-arrow-down-circle me-1"></i><span class="d-none d-lg-inline">Asignar</span></button>
                                     </div>
-                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnLimpiarTodo" title="Limpiar todo"><i class="bi bi-eraser"></i></button>
-                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnRecargarFacturas" title="Recargar facturas"><i class="bi bi-arrow-clockwise"></i></button>
-                                    <button type="button" class="btn btn-outline-danger btn-sm py-1" id="btnToggleEliminar" title="Modo eliminar productos">
+                                    <div class="vr mx-1" style="border-color:rgba(255,255,255,0.2);"></div>
+                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnExpandirTodos" title="Expandir todos los productos">
+                                        <i class="bi bi-arrows-expand"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnLimpiarTodo" title="Borrar todas las cantidades y facturas ingresadas"><i class="bi bi-eraser"></i></button>
+                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnRecargarFacturas" title="Recargar lista de facturas disponibles"><i class="bi bi-arrow-clockwise"></i></button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm py-1" id="btnToggleEliminar" title="Activar modo para eliminar productos de la compra">
                                         <i class="bi bi-trash3 me-1"></i>Eliminar
                                     </button>
                                     <button type="button" class="btn btn-danger btn-sm py-1" id="btnEliminarSeleccionados" style="display: none;" title="Eliminar productos seleccionados">
@@ -1883,8 +2014,8 @@
                                                 <th class="text-white" style="width: 70px;">Precio</th>
                                                 <th class="text-white" style="width: 55px;">Stock</th>
                                                 <th class="text-white" style="width: 80px;">Talla</th>
-                                                <th class="text-white" style="width: 100px; background: rgba(10,179,156,0.3);">Cantidad</th>
-                                                <th class="text-white" style="min-width: 160px; background: rgba(10,179,156,0.3);">Factura</th>
+                                                <th class="text-white col-editable" style="width: 100px;">Cantidad recibida</th>
+                                                <th class="text-white col-editable" style="min-width: 160px;">Factura<span class="factura-opcional-badge">opcional</span></th>
                                                 <th class="text-white" style="width: 100px;">Estado</th>
                                                 <th class="text-white col-eliminar" style="width: 50px; display: none;">
                                                     <input type="checkbox" class="form-check-input" id="checkEliminarTodos" title="Seleccionar todos">
@@ -1917,11 +2048,13 @@
                         </div>
                     </div>
 
-                    <!-- Footer compacto -->
+                    <!-- Footer con resumen y acción principal -->
                     <div class="modal-footer border-0 py-2 px-3" style="background: #eef0f3;">
-                        <small class="text-muted me-auto"><i class="bi bi-info-circle me-1"></i>Se agregarán automáticamente al inventario</small>
+                        <small class="text-muted me-auto">
+                            <i class="bi bi-info-circle me-1"></i>Solo se guardarán las tallas donde hayas ingresado una cantidad. Los productos quedarán listos para crear en inventario.
+                        </small>
                         <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancelar</button>
-                        <button type="button" class="btn btn-sm px-3 text-white" id="btnGuardarRecepcion" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none;">
+                        <button type="button" class="btn btn-sm px-4 text-white fw-bold" id="btnGuardarRecepcion" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; font-size: 0.85rem;">
                             <i class="bi bi-check2-circle me-1"></i>Guardar Recepción
                         </button>
                     </div>
@@ -2842,18 +2975,19 @@ const GestionCompras = (function() {
         <small class="text-muted d-block" style="font-size:0.65rem">${producto.tallas.length} t.</small>
     </td>
     <td>
-        <input type="number" class="form-control form-control-sm recepcion-masiva-input"
-               data-grupo="${grupoId}" data-stock-total="${stockTotal}"
-               placeholder="${stockTotal}" max="${stockTotal}" style="width:60px">
+        <div class="masivo-control d-flex align-items-center gap-1" title="Ingresa cantidad y haz clic en Aplicar para distribuir entre las tallas">
+            <input type="number" class="recepcion-masiva-input"
+                   data-grupo="${grupoId}" data-stock-total="${stockTotal}"
+                   placeholder="${stockTotal}" max="${stockTotal}" style="width:50px;text-align:center;">
+        </div>
     </td>
     <td>
-        <div class="input-group input-group-sm">
-            <input type="text" class="form-control factura-masiva-input" 
+        <div class="masivo-control d-flex align-items-center gap-1" title="Ingresa factura y haz clic en Aplicar para asignar a todas las tallas">
+            <input type="text" class="factura-masiva-input flex-grow-1" 
                    list="${datalistIdProducto}" data-grupo="${grupoId}"
-                   placeholder="Factura..." style="font-size:0.75rem">
-            <button type="button" class="btn btn-sm text-white aplicar-masivo px-2" data-grupo="${grupoId}" 
-                    style="background:#405189;border:none;font-size:0.7rem" title="Aplicar a tallas">
-                <i class="bi bi-check-all"></i>
+                   placeholder="N° factura..." style="min-width:70px;">
+            <button type="button" class="btn-aplicar-masivo aplicar-masivo" data-grupo="${grupoId}">
+                <i class="bi bi-arrow-down-circle me-1"></i>Aplicar
             </button>
         </div>
         <datalist id="${datalistIdProducto}">${facturaOptions}</datalist>
@@ -2942,7 +3076,7 @@ const GestionCompras = (function() {
         <div class="input-factura-wrapper">
             <input type="text" class="form-control form-control-sm factura-datalist-input ${selectedFacturaValue ? 'has-factura' : ''}" 
                    list="${datalistId}" data-ids='${tallaIdsStr}' data-grupo="${grupoId}"
-                   value="${selectedFacturaValue}" placeholder="Factura...">
+                   value="${selectedFacturaValue}" placeholder="N° factura (opcional)">
             <i class="bi bi-receipt factura-icon"></i>
         </div>
         <datalist id="${datalistId}">${facturaOptions}</datalist>
@@ -2964,6 +3098,7 @@ const GestionCompras = (function() {
         // Manejar click en filas de grupo para expandir/colapsar
         $('.producto-grupo').off('click').on('click', function(e) {
             if ($(e.target).is('.check-eliminar-producto, .form-check-input')) return;
+            if ($(e.target).closest('.masivo-control').length) return;
             const grupoId = $(this).data('grupo');
             const icon = $(this).find('.expand-icon');
             const tallasRows = $(`.talla-detalle[data-grupo="${grupoId}"]`);
@@ -2972,7 +3107,26 @@ const GestionCompras = (function() {
             $(this).toggleClass('expandido');
             tallasRows.toggle();
         });
+
+        // Auto-expandir todos los grupos al cargar
+        setTimeout(function() {
+            $('.producto-grupo').each(function() {
+                const grupoId = $(this).data('grupo');
+                const icon = $(this).find('.expand-icon');
+                const tallasRows = $(`.talla-detalle[data-grupo="${grupoId}"]`);
+                if (!tallasRows.is(':visible')) {
+                    icon.addClass('expanded');
+                    $(this).addClass('expandido');
+                    tallasRows.show();
+                }
+            });
+        }, 50);
         
+        // Prevenir que clicks en controles masivos colapsen el grupo
+        $('.masivo-control').off('click').on('click', function(e) {
+            e.stopPropagation();
+        });
+
         // Manejar aplicar masivo
         $('.aplicar-masivo').off('click').on('click', function(e) {
             e.stopPropagation();
@@ -3240,6 +3394,39 @@ const GestionCompras = (function() {
                 text: 'Por favor, abre primero una recepción de compra.',
                 confirmButtonText: 'Entendido'
             });
+        }
+    });
+
+    // ========== GUIA DE PASOS + EXPANDIR TODOS ==========
+
+    $('#btnOcultarGuia').on('click', function() {
+        $('#guiaPasosRecepcion').slideUp(200);
+    });
+
+    // Mostrar guía cada vez que se abre el modal
+    $('#modalRecepcionProductos').on('show.bs.modal', function() {
+        $('#guiaPasosRecepcion').show();
+    });
+
+    // Botón expandir/colapsar todos
+    $('#btnExpandirTodos').on('click', function() {
+        const todosVisibles = $('.talla-detalle:visible').length === $('.talla-detalle').length;
+        if (todosVisibles) {
+            // Colapsar todos
+            $('.producto-grupo').each(function() {
+                $(this).find('.expand-icon').removeClass('expanded');
+                $(this).removeClass('expandido');
+            });
+            $('.talla-detalle').hide();
+            $(this).attr('title', 'Expandir todos los productos').find('i').removeClass('bi-arrows-collapse').addClass('bi-arrows-expand');
+        } else {
+            // Expandir todos
+            $('.producto-grupo').each(function() {
+                $(this).find('.expand-icon').addClass('expanded');
+                $(this).addClass('expandido');
+            });
+            $('.talla-detalle').show();
+            $(this).attr('title', 'Colapsar todos los productos').find('i').removeClass('bi-arrows-expand').addClass('bi-arrows-collapse');
         }
     });
 
@@ -5284,9 +5471,21 @@ function resetCSVUpload() {
         if (datos.length === 0) {
             Swal.fire({
                 icon: 'warning',
-                title: 'Sin datos para guardar',
-                text: 'Debes ingresar al menos una cantidad a recepcionar.',
-                confirmButtonText: 'Entendido'
+                title: 'No hay productos para recepcionar',
+                html: `<div style="text-align:left;font-size:0.9rem;">
+                    <p class="mb-2">Para guardar una recepción debes:</p>
+                    <ol class="mb-2">
+                        <li>Hacer clic en un producto para <strong>expandir sus tallas</strong></li>
+                        <li>Ingresar la <strong>cantidad recibida</strong> en al menos una talla</li>
+                        <li>Opcionalmente, asociar una <strong>factura</strong></li>
+                    </ol>
+                    <p class="text-muted mb-0" style="font-size:0.82rem;">
+                        <i class="bi bi-lightbulb text-warning me-1"></i>
+                        Tip: Usa el botón <strong>"Todo (100%)"</strong> para rellenar todas las cantidades automáticamente.
+                    </p>
+                </div>`,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#405189'
             });
             return;
         }
@@ -5307,11 +5506,14 @@ function resetCSVUpload() {
                         cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
 
                         const totalRecepcionados = datos.length;
+                        const totalUnidades = datos.reduce((sum, d) => sum + d.recepcionado, 0);
                         Swal.fire({
                             icon: 'success',
-                            title: 'Recepcion guardada',
-                            html: `<p>Se recepcionaron <strong>${totalRecepcionados}</strong> item(s) correctamente.</p>
-                                   <p class="text-muted mb-0" style="font-size:.85rem;">Los productos estan listos para ser creados en el sistema.</p>`,
+                            title: '¡Recepción guardada!',
+                            html: `<div style="text-align:left;">
+                                <p><i class="bi bi-check-circle-fill text-success me-1"></i>Se recepcionaron <strong>${totalUnidades}</strong> unidades en <strong>${totalRecepcionados}</strong> línea(s).</p>
+                                <p class="text-muted mb-0" style="font-size:.82rem;"><i class="bi bi-arrow-right me-1"></i>Los productos están listos para ser creados en el módulo de <strong>Gestión de Productos</strong>.</p>
+                            </div>`,
                             showCancelButton: true,
                             confirmButtonText: '<i class="bi bi-archive me-1"></i>Ir a Crear Productos',
                             cancelButtonText: 'Seguir en Compras',

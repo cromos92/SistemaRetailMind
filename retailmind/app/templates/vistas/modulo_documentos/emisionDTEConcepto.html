@@ -1,0 +1,1293 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+
+<style>
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+}
+
+.dte-section {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    border: 1px solid var(--nexo-gray-300);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: box-shadow var(--nexo-transition-normal);
+}
+.dte-section:hover { box-shadow: var(--nexo-shadow-md); }
+
+.dte-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
+    color: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 12px 18px;
+    margin-bottom: 14px;
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.method-selector {
+    background: white;
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+.method-selector:hover {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 4px 12px rgba(0,102,255,0.15);
+}
+.method-selector.active {
+    border-color: var(--nexo-primary);
+    background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #f0f8ff 100%);
+    box-shadow: 0 8px 25px rgba(0,102,255,0.3);
+    transform: scale(1.02);
+}
+.method-selector.active::after {
+    content: '\2713';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    background: var(--nexo-primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 12px;
+}
+.method-selector i {
+    font-size: 1.4rem;
+    margin-bottom: 4px;
+    color: var(--nexo-gray-500);
+    transition: all 0.2s ease;
+}
+.method-selector:hover i, .method-selector.active i {
+    color: var(--nexo-primary);
+}
+
+.step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.step { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.step-number {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+.step.active .step-number {
+    background: var(--nexo-accent);
+    color: white;
+    box-shadow: 0 0 12px rgba(0,212,170,0.5);
+}
+.step.completed .step-number {
+    background: var(--nexo-accent);
+    color: white;
+}
+.step-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.6;
+}
+.step.active .step-label, .step.completed .step-label { opacity: 1; }
+.step-line {
+    height: 2px;
+    background: rgba(255,255,255,0.15);
+    flex: 1;
+    min-width: 40px;
+}
+
+.wizard-navigation {
+    display: flex;
+    justify-content: between;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 12px 0;
+    border-top: 1px solid var(--nexo-gray-300);
+}
+.wizard-nav-left { flex: 1; }
+.wizard-nav-right { flex: 1; text-align: right; }
+
+.step-content { transition: all 0.3s ease; }
+
+.btn-nexo-primary {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    color: white; border: none;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 600;
+    transition: all 0.25s ease;
+}
+.btn-nexo-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,102,255,0.35);
+    color: white;
+}
+.btn-nexo-primary:disabled {
+    opacity: 0.5; transform: none; box-shadow: none;
+}
+
+.btn-nexo-outline {
+    background: transparent;
+    border: 1px solid var(--nexo-gray-300);
+    color: var(--nexo-gray-700);
+    border-radius: var(--nexo-radius-md);
+}
+.btn-nexo-outline:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.concepto-row { transition: background 0.2s ease; }
+.concepto-row:hover { background: var(--nexo-primary-light); }
+.concepto-row .form-control, .concepto-row .form-select {
+    border-color: var(--nexo-gray-300);
+}
+.concepto-row .form-control:focus, .concepto-row .form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 2px rgba(0,102,255,0.12);
+}
+
+.table thead th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.3px;
+}
+.table-sm td, .table-sm th { padding: 0.3rem 0.5rem; }
+
+.pos-right-panel {
+    position: sticky;
+    top: 60px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+@media (max-width: 991px) {
+    .pos-right-panel { position: static; max-height: none; overflow-y: visible; }
+}
+</style>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" style="display:none; position:fixed; z-index:1060; top:0; left:0; width:100%; height:100%; background-color:rgba(255,255,255,0.8); text-align:center;">
+    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
+        <div class="spinner-border text-primary" role="status" style="width:3rem; height:3rem;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-3 fw-bold">Procesando información...</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <!-- Header Principal con Wizard -->
+        <div class="dte-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Emisión DTE por Concepto</h6>
+                    <small class="opacity-75">{{ user.username }} &bull; {{ "now"|date:"d/m/Y" }} &bull; Sin mercadería</small>
+                </div>
+                <div class="text-end">
+                    <div class="step-indicator gap-2" style="margin-top:0;">
+                        <div class="step active" data-step="1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">Config.</div>
+                        </div>
+                        <div class="step-line" style="min-width:40px; margin-top:-15px;"></div>
+                        <div class="step" data-step="2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Conceptos</div>
+                        </div>
+                        <div class="step-line" style="min-width:40px; margin-top:-15px;"></div>
+                        <div class="step" data-step="3">
+                            <div class="step-number">3</div>
+                            <div class="step-label">Emisión</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== PASO 1: CONFIGURACIÓN ==================== -->
+        <div class="dte-section fade-in step-content" id="step-1" data-step="1">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <div class="section-progress" style="font-size:0.7rem; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:0.5px;">Paso 1 de 3</div>
+                    <h6 class="mb-0" style="color:var(--nexo-secondary); font-weight:600;">
+                        <i class="bi bi-gear-fill me-2" style="color:var(--nexo-primary);"></i>Configuración del Documento
+                    </h6>
+                </div>
+            </div>
+
+            <!-- Tipo de Documento -->
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label fw-bold mb-0">
+                        <i class="bi bi-1-circle-fill text-primary me-1"></i>Tipo de Documento
+                    </label>
+                    <span class="badge bg-danger small" id="badgeTipoDocumento">Requerido</span>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6 col-md-3">
+                        <div class="method-selector shadow-sm" data-tipo="FACTURA ELECTRONICA">
+                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
+                                <i class="bi bi-receipt"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Factura Electrónica</h6>
+                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 33 - Con IVA</p>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="method-selector shadow-sm" data-tipo="FACTURA EXENTA">
+                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
+                                <i class="bi bi-receipt-cutoff"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Factura Exenta</h6>
+                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 34 - Sin IVA</p>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="method-selector shadow-sm" data-tipo="NOTA DE CREDITO">
+                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
+                                <i class="bi bi-file-earmark-minus"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Nota de Crédito</h6>
+                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 61 - Anulación</p>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="method-selector shadow-sm" data-tipo="GUIA">
+                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
+                                <i class="bi bi-clipboard-check"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 small">Guía de Despacho</h6>
+                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 52 - Traslado</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Campos del documento -->
+            <div class="row g-2 mt-2">
+                <div class="col-md-4">
+                    <label for="receptorSelect" class="form-label fw-bold mb-1 small">
+                        <i class="bi bi-building me-1"></i>Empresa Receptora
+                    </label>
+                    <div class="d-flex gap-1">
+                        <div class="flex-grow-1">
+                            <select id="receptorSelect" class="form-select form-select-sm">
+                                <option value="">Seleccionar empresa...</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success flex-shrink-0" id="btnNuevaEmpresa"
+                                title="Crear nueva empresa" style="height:31px; width:31px; padding:0;">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label for="fechaEmision" class="form-label fw-bold mb-1 small">Fecha Emisión</label>
+                    <input type="date" id="fechaEmision" class="form-control form-control-sm" value="">
+                </div>
+                <div class="col-md-2">
+                    <label for="formaPago" class="form-label fw-bold mb-1 small">Forma de Pago</label>
+                    <select id="formaPago" class="form-select form-select-sm" onchange="toggleDiasCredito()">
+                        <option value="Contado">Contado</option>
+                        <option value="Credito" selected>Crédito</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="diasCreditoContainer">
+                    <label for="diasCredito" class="form-label fw-bold mb-1 small">Días Crédito</label>
+                    <input type="number" id="diasCredito" class="form-control form-control-sm" value="30" min="1" max="365">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold mb-1 small">Folio</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">N°</span>
+                        <input type="text" class="form-control text-center fw-bold" id="folio_unico" value="---" readonly style="background:#f0f8ff;">
+                    </div>
+                    <small class="text-muted" style="font-size:0.65rem;">Asignado automáticamente</small>
+                </div>
+            </div>
+
+            <!-- Referencia NC (solo para Nota de Crédito) -->
+            <div id="referenciaNCContainer" style="display:none;" class="mt-3">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning bg-opacity-10 py-2">
+                        <h6 class="mb-0 small fw-bold"><i class="bi bi-link-45deg me-1"></i>Documento de Referencia (Nota de Crédito)</h6>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Tipo Doc. Referencia</label>
+                                <select id="tipoDocRef" class="form-select form-select-sm">
+                                    <option value="33">Factura Electrónica (33)</option>
+                                    <option value="34">Factura Exenta (34)</option>
+                                    <option value="52">Guía de Despacho (52)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">N° Folio Referencia</label>
+                                <input type="number" id="folioRef" class="form-control form-control-sm" placeholder="N° documento original">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Fecha Doc. Referencia</label>
+                                <input type="date" id="fechaRef" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Razón Referencia</label>
+                                <select id="razonRef" class="form-select form-select-sm">
+                                    <option value="1">Anula documento de referencia</option>
+                                    <option value="2">Corrige texto del documento</option>
+                                    <option value="3">Corrige montos</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info según tipo -->
+            <div class="row mt-2">
+                <div class="col-12">
+                    <div id="infoFacturaExenta" class="alert alert-info py-2 mb-0 small" style="display:none;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Factura Exenta:</strong> Los montos se registran como exentos de IVA. El total será igual al monto exento.
+                    </div>
+                    <div id="infoNotaCredito" class="alert alert-warning py-2 mb-0 small" style="display:none;">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong>Nota de Crédito:</strong> Debe referenciar un documento original (factura o guía).
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-navigation">
+                <div class="wizard-nav-left"></div>
+                <div class="wizard-nav-right">
+                    <button type="button" class="btn btn-nexo-primary btn-sm px-4" id="btnSiguientePaso1" disabled>
+                        Continuar a Conceptos <i class="bi bi-arrow-right-circle-fill ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== PASO 2: DETALLE DE CONCEPTOS ==================== -->
+        <div class="dte-section fade-in step-content" id="step-2" data-step="2" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <div class="section-progress" style="font-size:0.7rem; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:0.5px;">Paso 2 de 3</div>
+                    <h6 class="mb-0" style="color:var(--nexo-secondary); font-weight:600;">
+                        <i class="bi bi-list-check me-2" style="color:var(--nexo-primary);"></i>Detalle de Conceptos / Servicios
+                    </h6>
+                </div>
+                <small class="text-muted" id="resumenConfigHeader"></small>
+            </div>
+
+            <div class="row g-2">
+                <!-- Panel izquierdo: tabla de conceptos -->
+                <div class="col-lg-8 col-12">
+                    <div class="card" style="border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius-lg); overflow:hidden;">
+                        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); color:white; border:none;">
+                            <h6 class="mb-0 small"><i class="bi bi-card-list me-1"></i>Líneas de Detalle</h6>
+                            <button type="button" class="btn btn-sm btn-success" id="btnAgregarConcepto">
+                                <i class="bi bi-plus-circle me-1"></i>Agregar Línea
+                            </button>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height:450px; overflow-y:auto;">
+                                <table class="table table-sm mb-0" style="font-size:0.82rem;" id="tablaConceptos">
+                                    <thead style="background:var(--nexo-gray-100); position:sticky; top:0; z-index:2;">
+                                        <tr>
+                                            <th style="width:5%;" class="text-center">#</th>
+                                            <th style="width:35%;">Descripción</th>
+                                            <th style="width:10%;" class="text-center">Cant.</th>
+                                            <th style="width:10%;" class="text-center">Unidad</th>
+                                            <th style="width:15%;" class="text-end">Precio Unit.</th>
+                                            <th style="width:15%;" class="text-end">Subtotal</th>
+                                            <th style="width:10%;" class="text-center">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="conceptosBody">
+                                        <tr id="emptyConceptRow">
+                                            <td colspan="7" class="text-center text-muted py-4">
+                                                <i class="bi bi-card-list" style="font-size:2rem; color:#ccc;"></i>
+                                                <p class="mt-2 mb-0">No hay conceptos agregados</p>
+                                                <small>Presione "Agregar Línea" para comenzar</small>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Plantillas rápidas -->
+                    <div class="mt-2">
+                        <small class="text-muted fw-bold"><i class="bi bi-lightning-charge me-1"></i>Plantillas rápidas:</small>
+                        <div class="d-flex gap-1 flex-wrap mt-1">
+                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de consultoría" data-unit="HRS">
+                                <i class="bi bi-briefcase me-1"></i>Consultoría
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Arriendo de espacio comercial" data-unit="MES">
+                                <i class="bi bi-house me-1"></i>Arriendo
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de mantención" data-unit="SRV">
+                                <i class="bi bi-tools me-1"></i>Mantención
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Comisión por venta" data-unit="UN">
+                                <i class="bi bi-percent me-1"></i>Comisión
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de transporte" data-unit="SRV">
+                                <i class="bi bi-truck me-1"></i>Transporte
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Honorarios profesionales" data-unit="SRV">
+                                <i class="bi bi-person-badge me-1"></i>Honorarios
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel derecho: resumen y totales -->
+                <div class="col-lg-4 col-12">
+                    <div class="pos-right-panel">
+
+                        <!-- Resumen de configuración -->
+                        <div class="card mb-2" style="border:1px solid var(--nexo-gray-300);">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex flex-wrap gap-2 align-items-center small">
+                                    <span><i class="bi bi-file-earmark-text me-1 text-primary"></i><strong>Tipo:</strong> <span id="resumenTipo">-</span></span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 align-items-center small mt-1">
+                                    <span><i class="bi bi-building me-1 text-primary"></i><strong>Receptor:</strong> <span id="resumenReceptor">-</span></span>
+                                    <span class="vr mx-1" style="height:14px;"></span>
+                                    <span><i class="bi bi-calendar me-1 text-muted"></i><span id="resumenFecha">-</span></span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 mt-1 pt-1 border-top">
+                                    <span class="badge bg-primary rounded-pill" id="resumenLineas">0 líneas</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Observaciones -->
+                        <div class="card mb-2">
+                            <div class="card-body py-2 px-3">
+                                <label class="form-label small fw-semibold mb-1">
+                                    <i class="bi bi-chat-text me-1"></i>Observaciones
+                                </label>
+                                <textarea id="observacionesFinales" class="form-control form-control-sm" rows="2"
+                                          placeholder="Observaciones adicionales del documento..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Totales -->
+                        <div class="card mb-2" style="border:none; border-radius:var(--nexo-radius-lg); overflow:hidden; box-shadow:var(--nexo-shadow-md);">
+                            <div class="card-header py-2 px-3" style="background:linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); color:white; border:none;">
+                                <h6 class="mb-0 small" style="color:white;"><i class="bi bi-calculator-fill me-2"></i>Totales</h6>
+                            </div>
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between mb-1 small" id="filaNetoContainer">
+                                    <span>Subtotal (Neto):</span>
+                                    <span id="finalSubtotalNeto">$0</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1 small" id="filaExentoContainer" style="display:none;">
+                                    <span>Monto Exento:</span>
+                                    <span id="finalMontoExento">$0</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1 small" id="filaIvaContainer">
+                                    <span>IVA (19%):</span>
+                                    <span id="finalMontoIva">$0</span>
+                                </div>
+                                <hr class="my-1">
+                                <div class="d-flex justify-content-between fw-bold align-items-start">
+                                    <span>Total:</span>
+                                    <div class="text-end">
+                                        <span id="finalMontoTotal" class="fs-5 text-primary">$0</span>
+                                        <div><small class="text-muted fw-normal"><span id="finalTotalLineas">0</span> líneas</small></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botón principal de emisión -->
+                        <button id="btnEmitir" type="button" class="btn w-100 py-2 mb-2" disabled
+                                style="background:linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color:white; border:none; border-radius:var(--nexo-radius-md); font-weight:600; font-size:0.95rem; box-shadow:0 4px 14px rgba(0,212,170,0.35); transition:all 0.3s ease;">
+                            <i class="bi bi-send-fill me-2"></i>
+                            <span>Emitir Documento</span>
+                            <span id="spinner_btn" style="display:none" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                        </button>
+
+                        <!-- Navegación -->
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-nexo-outline btn-sm flex-fill" id="btnVolverPaso1">
+                                <i class="bi bi-arrow-left-circle me-1"></i>Volver
+                            </button>
+                            <button type="button" class="btn btn-sm flex-fill" id="btnLimpiarConceptos"
+                                    style="background:rgba(255,176,32,0.15); color:var(--nexo-warning); border:1px solid var(--nexo-warning);">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal Crear Empresa Rápida -->
+<div class="modal fade" id="modalNuevaEmpresa" tabindex="-1" aria-labelledby="modalNuevaEmpresaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="border:none; border-radius:var(--nexo-radius-xl); overflow:hidden;">
+            <div class="modal-header py-2 px-3" style="background:linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); border:none;">
+                <h5 class="modal-title" id="modalNuevaEmpresaLabel" style="color:white; font-weight:600;">
+                    <i class="bi bi-building-add me-2"></i>Crear Nueva Empresa
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNuevaEmpresa">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold mb-1">RUT <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="empRut" placeholder="12.345.678-9" required>
+                            <div class="invalid-feedback">RUT es obligatorio</div>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold mb-1">Razón Social <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="empRazonSocial" placeholder="Nombre legal de la empresa" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold mb-1">Nombre Fantasía</label>
+                            <input type="text" class="form-control form-control-sm" id="empNombreFantasia" placeholder="Nombre comercial">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold mb-1">Giro <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="empGiro" placeholder="Actividad económica" required>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold mb-1">Dirección <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="empDireccion" placeholder="Calle, número, oficina" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold mb-1">Comuna <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="empComuna" placeholder="Comuna" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold mb-1">Ciudad <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="empCiudad" placeholder="Ciudad" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold mb-1">Teléfono</label>
+                            <input type="text" class="form-control form-control-sm" id="empTelefono" placeholder="+56 9 1234 5678">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold mb-1">Email</label>
+                            <input type="email" class="form-control form-control-sm" id="empEmail" placeholder="contacto@empresa.cl">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold mb-1">Código Acteco</label>
+                            <input type="text" class="form-control form-control-sm" id="empActeco" placeholder="Ej: 461000">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer py-2 px-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-success btn-sm px-4" id="btnGuardarEmpresa">
+                    <i class="bi bi-check-circle me-1"></i>Guardar y Seleccionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+// ========== ESTADO GLOBAL ==========
+let selectedTipoDocumento = null;
+let conceptoCounter = 0;
+const ALIAS_SUCURSAL = '{{ alias_sucursal|default:"" }}';
+
+// ========== HELPERS ==========
+function getCookie(name) {
+    let v = null;
+    document.cookie.split(';').forEach(c => {
+        c = c.trim();
+        if (c.startsWith(name + '=')) v = decodeURIComponent(c.substring(name.length + 1));
+    });
+    return v;
+}
+
+function formatCLP(n) {
+    return '$' + Math.round(n).toLocaleString('es-CL');
+}
+
+function showLoading() { document.getElementById('loadingOverlay').style.display = 'block'; }
+function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+
+function esExenta() {
+    return selectedTipoDocumento === 'FACTURA EXENTA';
+}
+
+function esNotaCredito() {
+    return selectedTipoDocumento === 'NOTA DE CREDITO';
+}
+
+// ========== PASO 1: CONFIGURACIÓN ==========
+
+// Selección de tipo de documento
+document.querySelectorAll('.method-selector[data-tipo]').forEach(el => {
+    el.addEventListener('click', function() {
+        document.querySelectorAll('.method-selector[data-tipo]').forEach(s => s.classList.remove('active'));
+        this.classList.add('active');
+        selectedTipoDocumento = this.dataset.tipo;
+
+        // Mostrar/ocultar campos según tipo
+        const ncContainer = document.getElementById('referenciaNCContainer');
+        const infoExenta = document.getElementById('infoFacturaExenta');
+        const infoNC = document.getElementById('infoNotaCredito');
+
+        ncContainer.style.display = esNotaCredito() ? 'block' : 'none';
+        infoExenta.style.display = esExenta() ? 'block' : 'none';
+        infoNC.style.display = esNotaCredito() ? 'block' : 'none';
+
+        document.getElementById('badgeTipoDocumento').style.display = 'none';
+        validarPaso1();
+    });
+});
+
+function toggleDiasCredito() {
+    const fp = document.getElementById('formaPago').value;
+    document.getElementById('diasCreditoContainer').style.display = fp === 'Credito' ? 'block' : 'none';
+}
+
+function validarPaso1() {
+    const tipoOk = !!selectedTipoDocumento;
+    const receptorOk = !!document.getElementById('receptorSelect').value;
+    const fechaOk = !!document.getElementById('fechaEmision').value;
+
+    let ncOk = true;
+    if (esNotaCredito()) {
+        ncOk = !!document.getElementById('folioRef').value;
+    }
+
+    document.getElementById('btnSiguientePaso1').disabled = !(tipoOk && receptorOk && fechaOk && ncOk);
+}
+
+// Listeners de validación
+['receptorSelect', 'fechaEmision', 'folioRef'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', validarPaso1);
+    if (el) el.addEventListener('input', validarPaso1);
+});
+
+// Cargar empresas clientes
+function cargarEmpresas() {
+    $.ajax({
+        url: '/app/empresas_clientes/',
+        method: 'GET',
+        success: function(response) {
+            const empresas = Array.isArray(response) ? response : (response.empresas || []);
+            const sel = $('#receptorSelect');
+            sel.empty().append('<option value="">Seleccionar empresa...</option>');
+            empresas.forEach(e => {
+                const nombre = e.razon_social || e.nombre || 'Sin nombre';
+                sel.append(`<option value="${e.id}" data-rut="${e.rut}">${nombre} (${e.rut})</option>`);
+            });
+            sel.select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Buscar empresa...',
+                allowClear: true,
+                width: '100%'
+            }).on('change', validarPaso1);
+        },
+        error: function(xhr) {
+            console.error('Error al cargar empresas:', xhr);
+        }
+    });
+}
+
+// Fecha de hoy
+document.getElementById('fechaEmision').value = new Date().toISOString().split('T')[0];
+
+// Ir a paso 2
+document.getElementById('btnSiguientePaso1').addEventListener('click', function() {
+    goToStep(2);
+
+    // Actualizar resumen
+    const tipoTextos = {
+        'FACTURA ELECTRONICA': 'Factura Electrónica (33)',
+        'FACTURA EXENTA': 'Factura Exenta (34)',
+        'NOTA DE CREDITO': 'Nota de Crédito (61)',
+        'GUIA': 'Guía de Despacho (52)'
+    };
+    document.getElementById('resumenTipo').textContent = tipoTextos[selectedTipoDocumento] || selectedTipoDocumento;
+    document.getElementById('resumenReceptor').textContent = $('#receptorSelect option:selected').text() || '-';
+    document.getElementById('resumenFecha').textContent = document.getElementById('fechaEmision').value;
+
+    actualizarTotales();
+});
+
+// ========== NAVEGACIÓN WIZARD ==========
+function goToStep(step) {
+    document.querySelectorAll('.step-content').forEach(s => s.style.display = 'none');
+    const target = document.getElementById('step-' + step);
+    if (target) target.style.display = 'block';
+
+    document.querySelectorAll('.step-indicator .step').forEach(s => {
+        const sn = parseInt(s.dataset.step);
+        s.classList.remove('active', 'completed');
+        if (sn < step) s.classList.add('completed');
+        if (sn === step) s.classList.add('active');
+    });
+}
+
+document.getElementById('btnVolverPaso1').addEventListener('click', () => goToStep(1));
+
+// ========== PASO 2: CONCEPTOS ==========
+document.getElementById('btnAgregarConcepto').addEventListener('click', () => agregarLineaConcepto('', 1, 'UN', 0));
+
+function agregarLineaConcepto(descripcion, cantidad, unidad, precio) {
+    conceptoCounter++;
+    const idx = conceptoCounter;
+
+    const emptyRow = document.getElementById('emptyConceptRow');
+    if (emptyRow) emptyRow.remove();
+
+    const tbody = document.getElementById('conceptosBody');
+    const tr = document.createElement('tr');
+    tr.className = 'concepto-row';
+    tr.dataset.idx = idx;
+
+    const subtotal = Math.round(cantidad * precio);
+
+    tr.innerHTML = `
+        <td class="text-center align-middle fw-bold text-muted">${idx}</td>
+        <td>
+            <input type="text" class="form-control form-control-sm concepto-desc" placeholder="Descripción del servicio o concepto..."
+                   value="${descripcion}" data-idx="${idx}">
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm text-center concepto-cant" min="1" step="1" value="${cantidad}" data-idx="${idx}">
+        </td>
+        <td>
+            <select class="form-select form-select-sm concepto-unidad" data-idx="${idx}">
+                <option value="UN" ${unidad==='UN'?'selected':''}>UN</option>
+                <option value="SRV" ${unidad==='SRV'?'selected':''}>SRV</option>
+                <option value="HRS" ${unidad==='HRS'?'selected':''}>HRS</option>
+                <option value="MES" ${unidad==='MES'?'selected':''}>MES</option>
+                <option value="KG" ${unidad==='KG'?'selected':''}>KG</option>
+                <option value="M2" ${unidad==='M2'?'selected':''}>M2</option>
+                <option value="GLB" ${unidad==='GLB'?'selected':''}>GLB</option>
+            </select>
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm text-end concepto-precio" min="0" step="1" value="${precio}" data-idx="${idx}" placeholder="0">
+        </td>
+        <td class="text-end align-middle fw-bold concepto-subtotal" data-idx="${idx}">
+            ${formatCLP(subtotal)}
+        </td>
+        <td class="text-center align-middle">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-concepto" data-idx="${idx}" title="Eliminar línea">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+
+    // Bind events
+    tr.querySelector('.concepto-cant').addEventListener('input', () => recalcularLinea(idx));
+    tr.querySelector('.concepto-precio').addEventListener('input', () => recalcularLinea(idx));
+    tr.querySelector('.btn-eliminar-concepto').addEventListener('click', () => eliminarLinea(idx));
+
+    actualizarTotales();
+
+    // Focus en descripción si está vacía
+    if (!descripcion) {
+        tr.querySelector('.concepto-desc').focus();
+    }
+}
+
+function recalcularLinea(idx) {
+    const row = document.querySelector(`tr[data-idx="${idx}"]`);
+    if (!row) return;
+    const cant = parseFloat(row.querySelector('.concepto-cant').value) || 0;
+    const precio = parseFloat(row.querySelector('.concepto-precio').value) || 0;
+    const subtotal = Math.round(cant * precio);
+    row.querySelector('.concepto-subtotal').textContent = formatCLP(subtotal);
+    actualizarTotales();
+}
+
+function eliminarLinea(idx) {
+    const row = document.querySelector(`tr[data-idx="${idx}"]`);
+    if (row) row.remove();
+
+    const tbody = document.getElementById('conceptosBody');
+    if (tbody.children.length === 0) {
+        tbody.innerHTML = `
+            <tr id="emptyConceptRow">
+                <td colspan="7" class="text-center text-muted py-4">
+                    <i class="bi bi-card-list" style="font-size:2rem; color:#ccc;"></i>
+                    <p class="mt-2 mb-0">No hay conceptos agregados</p>
+                    <small>Presione "Agregar Línea" para comenzar</small>
+                </td>
+            </tr>`;
+    }
+    actualizarTotales();
+}
+
+function actualizarTotales() {
+    let sumaSubtotales = 0;
+    let numLineas = 0;
+
+    document.querySelectorAll('.concepto-row').forEach(row => {
+        const cant = parseFloat(row.querySelector('.concepto-cant').value) || 0;
+        const precio = parseFloat(row.querySelector('.concepto-precio').value) || 0;
+        sumaSubtotales += Math.round(cant * precio);
+        numLineas++;
+    });
+
+    const netoContainer = document.getElementById('filaNetoContainer');
+    const exentoContainer = document.getElementById('filaExentoContainer');
+    const ivaContainer = document.getElementById('filaIvaContainer');
+
+    if (esExenta()) {
+        netoContainer.style.display = 'none';
+        exentoContainer.style.display = 'flex';
+        ivaContainer.style.display = 'none';
+        document.getElementById('finalMontoExento').textContent = formatCLP(sumaSubtotales);
+        document.getElementById('finalMontoTotal').textContent = formatCLP(sumaSubtotales);
+    } else {
+        netoContainer.style.display = 'flex';
+        exentoContainer.style.display = 'none';
+        ivaContainer.style.display = 'flex';
+        const iva = Math.round(sumaSubtotales * 0.19);
+        const total = sumaSubtotales + iva;
+        document.getElementById('finalSubtotalNeto').textContent = formatCLP(sumaSubtotales);
+        document.getElementById('finalMontoIva').textContent = formatCLP(iva);
+        document.getElementById('finalMontoTotal').textContent = formatCLP(total);
+    }
+
+    document.getElementById('finalTotalLineas').textContent = numLineas;
+    document.getElementById('resumenLineas').textContent = numLineas + ' líneas';
+
+    // Habilitar botón emitir si hay al menos 1 línea con datos
+    const hayLineasValidas = numLineas > 0 && sumaSubtotales > 0;
+    document.getElementById('btnEmitir').disabled = !hayLineasValidas;
+}
+
+// Plantillas rápidas
+document.querySelectorAll('.plantilla-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        agregarLineaConcepto(this.dataset.desc, 1, this.dataset.unit, 0);
+    });
+});
+
+// Limpiar conceptos
+document.getElementById('btnLimpiarConceptos').addEventListener('click', function() {
+    Swal.fire({
+        title: '¿Limpiar todos los conceptos?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, limpiar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (result.isConfirmed) {
+            conceptoCounter = 0;
+            document.getElementById('conceptosBody').innerHTML = `
+                <tr id="emptyConceptRow">
+                    <td colspan="7" class="text-center text-muted py-4">
+                        <i class="bi bi-card-list" style="font-size:2rem; color:#ccc;"></i>
+                        <p class="mt-2 mb-0">No hay conceptos agregados</p>
+                        <small>Presione "Agregar Línea" para comenzar</small>
+                    </td>
+                </tr>`;
+            actualizarTotales();
+        }
+    });
+});
+
+// ========== EMISIÓN ==========
+document.getElementById('btnEmitir').addEventListener('click', function() {
+    // Recopilar conceptos
+    const conceptos = [];
+    let hayError = false;
+
+    document.querySelectorAll('.concepto-row').forEach(row => {
+        const desc = row.querySelector('.concepto-desc').value.trim();
+        const cant = parseFloat(row.querySelector('.concepto-cant').value) || 0;
+        const unidad = row.querySelector('.concepto-unidad').value;
+        const precio = parseFloat(row.querySelector('.concepto-precio').value) || 0;
+
+        if (!desc) {
+            hayError = true;
+            row.querySelector('.concepto-desc').classList.add('is-invalid');
+        } else {
+            row.querySelector('.concepto-desc').classList.remove('is-invalid');
+        }
+
+        if (cant <= 0 || precio <= 0) {
+            hayError = true;
+        }
+
+        conceptos.push({ descripcion: desc, cantidad: cant, unidad: unidad, precio_unitario: precio });
+    });
+
+    if (hayError || conceptos.length === 0) {
+        Swal.fire('Error', 'Verifique que todos los conceptos tengan descripción, cantidad y precio válidos.', 'error');
+        return;
+    }
+
+    // Calcular totales para resumen
+    let sumaTotal = 0;
+    conceptos.forEach(c => { sumaTotal += Math.round(c.cantidad * c.precio_unitario); });
+    const totalFinal = esExenta() ? sumaTotal : sumaTotal + Math.round(sumaTotal * 0.19);
+    const receptorTexto = $('#receptorSelect option:selected').text() || '-';
+
+    const tipoTextos = {
+        'FACTURA ELECTRONICA': 'Factura Electrónica',
+        'FACTURA EXENTA': 'Factura Exenta',
+        'NOTA DE CREDITO': 'Nota de Crédito',
+        'GUIA': 'Guía de Despacho Electrónica'
+    };
+
+    // Construir HTML de conceptos para resumen
+    let conceptosHTML = '';
+    conceptos.forEach((c, i) => {
+        conceptosHTML += `<tr>
+            <td class="text-center">${i+1}</td>
+            <td>${c.descripcion}</td>
+            <td class="text-center">${c.cantidad}</td>
+            <td class="text-center">${c.unidad}</td>
+            <td class="text-end">${formatCLP(c.precio_unitario)}</td>
+            <td class="text-end fw-bold">${formatCLP(Math.round(c.cantidad * c.precio_unitario))}</td>
+        </tr>`;
+    });
+
+    Swal.fire({
+        title: '<i class="bi bi-shield-check me-2"></i>Confirmar Emisión',
+        html: `
+            <div style="text-align:left;">
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white py-2">
+                        <strong><i class="bi bi-file-earmark-text me-1"></i>Documento</strong>
+                    </div>
+                    <div class="card-body py-2 small">
+                        <p class="mb-1"><strong>Tipo:</strong> ${tipoTextos[selectedTipoDocumento]}</p>
+                        <p class="mb-1"><strong>Receptor:</strong> ${receptorTexto}</p>
+                        <p class="mb-0"><strong>Fecha:</strong> ${document.getElementById('fechaEmision').value}</p>
+                    </div>
+                </div>
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white py-2 d-flex justify-content-between">
+                        <strong><i class="bi bi-list-check me-1"></i>Detalle</strong>
+                        <span class="badge bg-light text-success">${conceptos.length} líneas</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div style="max-height:200px; overflow-y:auto;">
+                            <table class="table table-sm mb-0" style="font-size:0.82rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th><th>Concepto</th><th class="text-center">Cant.</th><th class="text-center">Unid.</th><th class="text-end">P.Unit.</th><th class="text-end">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${conceptosHTML}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-light">
+                        <div class="text-end">
+                            <h5 class="mb-0 text-success"><strong>Total: ${formatCLP(totalFinal)}</strong></h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-warning mb-0 small">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    <strong>Al confirmar</strong> se generará el documento tributario electrónico.
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-send-fill me-1"></i>Confirmar Emisión',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#00D4AA',
+        width: '650px',
+        customClass: { popup: 'swal-wide' }
+    }).then(result => {
+        if (result.isConfirmed) {
+            procesarEmision(conceptos);
+        }
+    });
+});
+
+function procesarEmision(conceptos) {
+    showLoading();
+
+    const data = {
+        tipo_documento: selectedTipoDocumento,
+        receptor_id: document.getElementById('receptorSelect').value,
+        fecha_emision: document.getElementById('fechaEmision').value,
+        forma_pago: document.getElementById('formaPago').value,
+        dias_credito: parseInt(document.getElementById('diasCredito').value) || 0,
+        observaciones: document.getElementById('observacionesFinales').value.trim(),
+        detalle_conceptos: conceptos
+    };
+
+    if (esNotaCredito()) {
+        data.referencia = {
+            tipo_documento: document.getElementById('tipoDocRef').value,
+            folio: document.getElementById('folioRef').value,
+            fecha: document.getElementById('fechaRef').value,
+            razon: document.getElementById('razonRef').value
+        };
+    }
+
+    $.ajax({
+        url: '/app/emitir_dte_concepto/',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        data: JSON.stringify(data),
+        success: function(response) {
+            hideLoading();
+            if (response.success) {
+                descargarTXTAcepta(response.dte_id, selectedTipoDocumento, response.numero_documento);
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error al emitir DTE',
+                    text: response.error || 'Ocurrió un error inesperado',
+                    confirmButtonText: 'Reintentar'
+                });
+            }
+        },
+        error: function(xhr) {
+            hideLoading();
+            let msg = 'Error de conexión al emitir DTE';
+            if (xhr.responseJSON && xhr.responseJSON.error) msg = xhr.responseJSON.error;
+            Swal.fire('Error', msg, 'error');
+        }
+    });
+}
+
+// ========== DESCARGA TXT ACEPTA ==========
+async function descargarTXTAcepta(dteId, tipo, numeroDocumento) {
+    try {
+        const response = await fetch('/app/documentos/generar-txt-desde-dte/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ dte_id: dteId })
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const contentDisposition = response.headers.get('Content-Disposition');
+            const filename = contentDisposition
+                ? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
+                : `dte_concepto_${numeroDocumento}.txt`;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'DTE Emitido y TXT Generado',
+                html: `
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill"></i> <strong>Documento guardado exitosamente</strong>
+                    </div>
+                    <p><strong>N° Documento:</strong> ${numeroDocumento}</p>
+                    <p><strong>Total:</strong> ${document.getElementById('finalMontoTotal').textContent}</p>
+                    <hr>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-file-earmark-arrow-down"></i> <strong>Archivo TXT descargado:</strong><br>
+                        <small>${filename}</small>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>Siguiente paso:</strong><br>
+                        Suba el archivo TXT a Acepta para generar XML y PDF
+                    </div>
+                `,
+                confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Entendido',
+                allowOutsideClick: false,
+                timer: 10000,
+                timerProgressBar: true
+            }).then(() => { location.reload(); });
+        } else {
+            const error = await response.json();
+            Swal.fire({
+                icon: 'warning',
+                title: 'DTE guardado pero error en TXT',
+                html: `
+                    <p>El documento se guardó correctamente</p>
+                    <p><strong>N° Documento:</strong> ${numeroDocumento}</p>
+                    <hr>
+                    <p class="text-danger">Error al generar TXT: ${error.error}</p>
+                    <p class="text-muted"><small>Puede generar el TXT manualmente después</small></p>
+                `,
+                confirmButtonText: 'Cerrar'
+            }).then(() => { location.reload(); });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({
+            icon: 'warning',
+            title: 'DTE guardado',
+            html: `
+                <p>El documento se guardó correctamente</p>
+                <p><strong>N° Documento:</strong> ${numeroDocumento}</p>
+                <hr>
+                <p class="text-warning">No se pudo generar el TXT automáticamente</p>
+            `,
+            confirmButtonText: 'Cerrar'
+        }).then(() => { location.reload(); });
+    }
+}
+
+// ========== CREAR EMPRESA RÁPIDA ==========
+document.getElementById('btnNuevaEmpresa').addEventListener('click', function() {
+    document.getElementById('formNuevaEmpresa').reset();
+    new bootstrap.Modal(document.getElementById('modalNuevaEmpresa')).show();
+});
+
+document.getElementById('btnGuardarEmpresa').addEventListener('click', function() {
+    const rut = document.getElementById('empRut').value.trim();
+    const razonSocial = document.getElementById('empRazonSocial').value.trim();
+    const giro = document.getElementById('empGiro').value.trim();
+    const direccion = document.getElementById('empDireccion').value.trim();
+    const comuna = document.getElementById('empComuna').value.trim();
+    const ciudad = document.getElementById('empCiudad').value.trim();
+
+    if (!rut || !razonSocial || !giro || !direccion || !comuna || !ciudad) {
+        Swal.fire('Campos obligatorios', 'Complete RUT, Razón Social, Giro, Dirección, Comuna y Ciudad.', 'warning');
+        return;
+    }
+
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
+
+    $.ajax({
+        url: '/app/crear_empresa_rapida/',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        data: JSON.stringify({
+            rut: rut,
+            razon_social: razonSocial,
+            nombre_fantasia: document.getElementById('empNombreFantasia').value.trim() || razonSocial,
+            giro: giro,
+            direccion: direccion,
+            comuna: comuna,
+            ciudad: ciudad,
+            telefono: document.getElementById('empTelefono').value.trim(),
+            email: document.getElementById('empEmail').value.trim(),
+            acteco: document.getElementById('empActeco').value.trim()
+        }),
+        success: function(response) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Guardar y Seleccionar';
+
+            if (response.success) {
+                bootstrap.Modal.getInstance(document.getElementById('modalNuevaEmpresa')).hide();
+
+                // Recargar empresas y seleccionar la nueva
+                const newId = response.empresa_id;
+                $.ajax({
+                    url: '/app/empresas_clientes/',
+                    method: 'GET',
+                    success: function(data) {
+                        const empresas = Array.isArray(data) ? data : (data.empresas || []);
+                        const sel = $('#receptorSelect');
+                        sel.empty().append('<option value="">Seleccionar empresa...</option>');
+                        empresas.forEach(e => {
+                            const nombre = e.razon_social || e.nombre || 'Sin nombre';
+                            sel.append(`<option value="${e.id}" data-rut="${e.rut}">${nombre} (${e.rut})</option>`);
+                        });
+                        sel.val(newId).trigger('change');
+                        validarPaso1();
+
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Empresa creada',
+                            text: `${razonSocial} fue creada y seleccionada correctamente.`,
+                            timer: 2500,
+                            showConfirmButton: false
+                        });
+                    }
+                });
+            } else {
+                Swal.fire('Error', response.error || 'No se pudo crear la empresa.', 'error');
+            }
+        },
+        error: function(xhr) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Guardar y Seleccionar';
+            let msg = 'Error de conexión';
+            if (xhr.responseJSON && xhr.responseJSON.error) msg = xhr.responseJSON.error;
+            Swal.fire('Error', msg, 'error');
+        }
+    });
+});
+
+// ========== INICIALIZACIÓN ==========
+$(document).ready(function() {
+    cargarEmpresas();
+});
+</script>

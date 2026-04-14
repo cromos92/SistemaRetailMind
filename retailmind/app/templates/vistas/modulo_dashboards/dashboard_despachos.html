@@ -56,8 +56,37 @@
 .tbl-despachos td { padding:10px 12px; border-bottom:1px solid var(--doc-gray-100); font-size:.85rem; }
 .tbl-despachos tr:hover { background:var(--doc-gray-100); }
 .pct-bar { display:inline-block; height:6px; border-radius:3px; }
-@media(max-width:992px) { .doc-kpi-grid { grid-template-columns:repeat(2,1fr); } }
-@media(max-width:576px) { .doc-kpi-grid { grid-template-columns:1fr; } }
+
+/* DTEs incompletos */
+.incompletos-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+.incompleto-card {
+    border-radius:var(--doc-radius); padding:18px 16px; text-align:center;
+    transition:all .25s; cursor:pointer; position:relative; overflow:hidden;
+}
+.incompleto-card:hover { transform:translateY(-2px); box-shadow:var(--doc-shadow-md); }
+.incompleto-card .ic-count { font-size:2rem; font-weight:800; line-height:1; margin-bottom:4px; }
+.incompleto-card .ic-label { font-size:.75rem; font-weight:600; margin-bottom:6px; }
+.incompleto-card .ic-dias { font-size:.7rem; opacity:.8; }
+.incompleto-card .ic-action { font-size:.72rem; font-weight:600; margin-top:8px; display:inline-block; padding:4px 12px; border-radius:6px; background:rgba(255,255,255,.25); text-decoration:none; color:inherit; transition:background .2s; }
+.incompleto-card .ic-action:hover { background:rgba(255,255,255,.45); }
+.ic-emitido { background:linear-gradient(135deg,#4361ee,#6c8cff); color:#fff; }
+.ic-rechazado { background:linear-gradient(135deg,#ef476f,#ff7096); color:#fff; }
+.ic-parcial { background:linear-gradient(135deg,#f4a236,#ffc46b); color:#fff; }
+.ic-regularizacion { background:linear-gradient(135deg,#7c3aed,#a78bfa); color:#fff; }
+
+.badge-estado { font-size:.7rem; padding:4px 10px; border-radius:6px; font-weight:600; }
+.badge-EMITIDO { background:#eef1ff; color:#4361ee; }
+.badge-RECHAZADO { background:#fde8ed; color:#ef476f; }
+.badge-RECEPCIONADO_PARCIAL { background:#fff6e8; color:#f4a236; }
+.badge-EN_REGULARIZACION { background:#f3e8ff; color:#7c3aed; }
+
+.dias-alerta { font-weight:700; }
+.dias-ok { color:var(--doc-success); }
+.dias-warn { color:var(--doc-warning); }
+.dias-danger { color:var(--doc-danger); }
+
+@media(max-width:992px) { .doc-kpi-grid { grid-template-columns:repeat(2,1fr); } .incompletos-grid { grid-template-columns:repeat(2,1fr); } }
+@media(max-width:576px) { .doc-kpi-grid { grid-template-columns:1fr; } .incompletos-grid { grid-template-columns:1fr; } }
 </style>
 
 <div class="page-content">
@@ -187,6 +216,70 @@
     </div>
 </div>
 
+<!-- DTEs con proceso incompleto -->
+<div class="doc-section-title" style="margin-top:8px;"><i class="ri-error-warning-line" style="color:var(--doc-danger);"></i>DTEs con Proceso Incompleto <small style="font-weight:400;text-transform:none;font-size:.75rem;color:var(--doc-gray-500);margin-left:8px;">(sin filtro de fecha — muestra todo lo pendiente)</small></div>
+
+<div class="incompletos-grid" id="incompletosGrid">
+    <div class="incompleto-card ic-emitido">
+        <div class="ic-count" id="icEmitidos">-</div>
+        <div class="ic-label">Sin Recepcionar</div>
+        <div class="ic-dias" id="icEmitidosDias"></div>
+        <a href="/app/recepcion-dte/" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Ir a recepcionar</a>
+    </div>
+    <div class="incompleto-card ic-rechazado">
+        <div class="ic-count" id="icRechazados">-</div>
+        <div class="ic-label">Rechazados sin resolver</div>
+        <div class="ic-dias" id="icRechazadosDias"></div>
+        <a href="/app/recepcion-dte/" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Ver rechazados</a>
+    </div>
+    <div class="incompleto-card ic-parcial">
+        <div class="ic-count" id="icParcial">-</div>
+        <div class="ic-label">Recepcionado parcial</div>
+        <div class="ic-dias" id="icParcialDias"></div>
+        <a href="/app/regularizar-recepciones/" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Regularizar</a>
+    </div>
+    <div class="incompleto-card ic-regularizacion">
+        <div class="ic-count" id="icRegularizacion">-</div>
+        <div class="ic-label">En Regularizacion</div>
+        <div class="ic-dias" id="icRegularizacionDias"></div>
+        <a href="/app/regularizar-recepciones/" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Regularizar</a>
+    </div>
+</div>
+
+<!-- Detalle de DTEs incompletos -->
+<div class="doc-card">
+    <div class="doc-card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="doc-section-title mb-0"><i class="ri-file-search-line"></i>Detalle de DTEs Incompletos</div>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" id="filtroEstadoIncompleto" style="width:auto;font-size:.8rem;border-radius:8px;">
+                    <option value="">Todos los estados</option>
+                    <option value="EMITIDO">Sin recepcionar</option>
+                    <option value="RECHAZADO">Rechazados</option>
+                    <option value="RECEPCIONADO_PARCIAL">Recepcionado parcial</option>
+                    <option value="EN_REGULARIZACION">En regularizacion</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="tbl-despachos">
+                <thead>
+                    <tr>
+                        <th>DTE #</th>
+                        <th>Estado</th>
+                        <th>Sucursal Origen</th>
+                        <th>Fecha Emision</th>
+                        <th class="text-center">Dias Pendiente</th>
+                        <th>Motivo Rechazo</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="tblIncompletosDetalle"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 </div>
 </div>
 
@@ -215,6 +308,9 @@ function cargarDatos() {
             renderSucursales(data.por_sucursal);
             renderTendencia(data.tendencia);
             renderRegPendientes(data.regularizaciones_pendientes);
+            renderIncompletos(data.dtes_incompletos || []);
+            window._incompletosDetalle = data.dtes_incompletos_detalle || [];
+            renderIncompletosDetalle(window._incompletosDetalle);
         })
         .catch(err => console.error('Error:', err));
 }
@@ -312,6 +408,79 @@ function renderRegPendientes(data) {
         </tr>`;
     }).join('');
 }
+
+function renderIncompletos(data) {
+    const mapping = {
+        'EMITIDO': { countEl: 'icEmitidos', diasEl: 'icEmitidosDias' },
+        'RECHAZADO': { countEl: 'icRechazados', diasEl: 'icRechazadosDias' },
+        'RECEPCIONADO_PARCIAL': { countEl: 'icParcial', diasEl: 'icParcialDias' },
+        'EN_REGULARIZACION': { countEl: 'icRegularizacion', diasEl: 'icRegularizacionDias' },
+    };
+
+    Object.keys(mapping).forEach(estado => {
+        const el = mapping[estado];
+        document.getElementById(el.countEl).textContent = '0';
+        document.getElementById(el.diasEl).textContent = '';
+    });
+
+    data.forEach(item => {
+        const el = mapping[item.estado];
+        if (!el) return;
+        document.getElementById(el.countEl).textContent = item.cantidad;
+        if (item.dias_max > 0) {
+            const diasClass = item.dias_max > 7 ? 'dias-danger' : item.dias_max > 3 ? 'dias-warn' : 'dias-ok';
+            document.getElementById(el.diasEl).innerHTML = `Mas antiguo: <span class="dias-alerta ${diasClass}">${item.dias_max} dias</span>`;
+        }
+    });
+}
+
+function renderIncompletosDetalle(data, filtro) {
+    const tbody = document.getElementById('tblIncompletosDetalle');
+    let items = data;
+    if (filtro) {
+        items = data.filter(d => d.estado_dte === filtro);
+    }
+
+    if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">
+            <i class="ri-checkbox-circle-line me-2" style="font-size:1.2rem;color:var(--doc-success);"></i>
+            ${filtro ? 'No hay DTEs en este estado' : 'No hay DTEs con proceso incompleto'}
+        </td></tr>`;
+        return;
+    }
+
+    const ACCION_URL = {
+        'EMITIDO': '/app/recepcion-dte/',
+        'RECHAZADO': '/app/recepcion-dte/',
+        'RECEPCIONADO_PARCIAL': '/app/regularizar-recepciones/',
+        'EN_REGULARIZACION': '/app/regularizar-recepciones/',
+    };
+    const ACCION_TEXTO = {
+        'EMITIDO': 'Recepcionar',
+        'RECHAZADO': 'Ver',
+        'RECEPCIONADO_PARCIAL': 'Regularizar',
+        'EN_REGULARIZACION': 'Regularizar',
+    };
+
+    tbody.innerHTML = items.map(d => {
+        const diasClass = d.dias_pendiente > 7 ? 'dias-danger' : d.dias_pendiente > 3 ? 'dias-warn' : 'dias-ok';
+        const url = ACCION_URL[d.estado_dte] || '#';
+        const textoAccion = ACCION_TEXTO[d.estado_dte] || 'Ver';
+        return `<tr>
+            <td><strong>#${d.numero_documento}</strong></td>
+            <td><span class="badge-estado badge-${d.estado_dte}">${d.estado_label}</span></td>
+            <td>${d.sucursal__alias || '-'}</td>
+            <td>${d.fecha_emision || '-'}</td>
+            <td class="text-center"><span class="dias-alerta ${diasClass}">${d.dias_pendiente} dias</span></td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${d.motivo_rechazo || ''}">${d.motivo_rechazo || '<span class="text-muted">-</span>'}</td>
+            <td><a href="${url}" class="btn btn-sm btn-outline-primary" style="font-size:.75rem;border-radius:6px;"><i class="ri-arrow-right-line me-1"></i>${textoAccion}</a></td>
+        </tr>`;
+    }).join('');
+}
+
+document.getElementById('filtroEstadoIncompleto').addEventListener('change', function() {
+    renderIncompletosDetalle(window._incompletosDetalle || [], this.value);
+});
 </script>
 
 {% include 'layout/footer.html' %}

@@ -3488,7 +3488,7 @@ function loadTallasDisponibles(product) {
                 </td>
                 <td class="text-end subtotal-cell" style="font-size:0.82rem;">$0</td>
                 <td class="text-center">
-                    <button class="btn btn-success btn-sm px-2 py-1" 
+                    <button class="btn btn-success btn-sm px-2 py-1" tabindex="-1"
                             onclick="agregarTallaIndividual(${talla.id || index})"
                             ${disponibleParaAgregar === 0 ? 'disabled title="Sin stock"' : 'title="Agregar esta talla"'}>
                         <i class="bi bi-plus-lg"></i>

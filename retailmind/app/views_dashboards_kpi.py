@@ -565,6 +565,79 @@ def api_dashboard_despachos(request):
             r['dias_pendiente'] = 0
         r['dte__fecha_emision'] = str(fecha_emi) if fecha_emi else ''
 
+    # --- DTEs con proceso incompleto (sin filtro de fecha - muestra TODO lo pendiente) ---
+    dtes_incompletos_qs = Dte.objects.filter(
+        descartado=False,
+        tipo_transaccion='TRASPASO',
+    )
+    if emp_id:
+        dtes_incompletos_qs = dtes_incompletos_qs.filter(
+            Q(emisor_id=emp_id) | Q(receptor_id=emp_id)
+        )
+    if suc_id:
+        dtes_incompletos_qs = dtes_incompletos_qs.filter(
+            Q(sucursal_id=suc_id) | Q(dte_movimientos__sucursal_destino_id=suc_id)
+        ).distinct()
+
+    estados_incompletos = ['EMITIDO', 'RECHAZADO', 'RECEPCIONADO_PARCIAL', 'EN_REGULARIZACION']
+    from django.db.models import Min
+    dtes_pendientes_raw = (
+        dtes_incompletos_qs
+        .filter(estado_dte__in=estados_incompletos)
+        .values('estado_dte')
+        .annotate(
+            cantidad=Count('id'),
+            fecha_mas_antigua=Min('fecha_emision'),
+        )
+        .order_by('estado_dte')
+    )
+
+    ESTADO_LABELS = {
+        'EMITIDO': 'Sin recepcionar',
+        'RECHAZADO': 'Rechazado (sin resolver)',
+        'RECEPCIONADO_PARCIAL': 'Recepcionado parcial',
+        'EN_REGULARIZACION': 'En regularización',
+    }
+    ESTADO_ACCIONES = {
+        'EMITIDO': {'texto': 'Ir a recepcionar', 'url': '/app/recepcion-dte/'},
+        'RECHAZADO': {'texto': 'Ver rechazados', 'url': '/app/recepcion-dte/'},
+        'RECEPCIONADO_PARCIAL': {'texto': 'Regularizar', 'url': '/app/regularizar-recepciones/'},
+        'EN_REGULARIZACION': {'texto': 'Regularizar', 'url': '/app/regularizar-recepciones/'},
+    }
+
+    hoy_incompletos = timezone.now().date()
+    dtes_incompletos = []
+    for row in dtes_pendientes_raw:
+        estado = row['estado_dte']
+        fecha_antigua = row['fecha_mas_antigua']
+        dias = (hoy_incompletos - fecha_antigua).days if fecha_antigua else 0
+        dtes_incompletos.append({
+            'estado': estado,
+            'label': ESTADO_LABELS.get(estado, estado),
+            'cantidad': row['cantidad'],
+            'dias_max': dias,
+            'accion': ESTADO_ACCIONES.get(estado, {}),
+        })
+
+    # Detalle: lista de los DTEs incompletos más antiguos (top 30)
+    dtes_incompletos_detalle = list(
+        dtes_incompletos_qs
+        .filter(estado_dte__in=estados_incompletos)
+        .select_related('sucursal')
+        .values(
+            'id', 'numero_documento', 'estado_dte',
+            'fecha_emision', 'sucursal__alias',
+            'motivo_rechazo',
+        )
+        .order_by('fecha_emision')[:30]
+    )
+    hoy = timezone.now().date()
+    for d in dtes_incompletos_detalle:
+        fecha = d['fecha_emision']
+        d['dias_pendiente'] = (hoy - fecha).days if fecha else 0
+        d['fecha_emision'] = str(fecha) if fecha else ''
+        d['estado_label'] = ESTADO_LABELS.get(d['estado_dte'], d['estado_dte'])
+
     return JsonResponse({
         'kpis': {
             'total_traspasos': total_traspasos,
@@ -581,5 +654,7 @@ def api_dashboard_despachos(request):
         'por_sucursal': por_sucursal,
         'tendencia': tendencia,
         'regularizaciones_pendientes': reg_pendientes,
+        'dtes_incompletos': dtes_incompletos,
+        'dtes_incompletos_detalle': dtes_incompletos_detalle,
         'periodo': {'inicio': str(inicio), 'fin': str(fin)},
     })

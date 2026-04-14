@@ -24,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 
-from app.models import Producto_Talla, Producto, GuiaTalla, GuiaTallaItem
+from app.models import Producto_Talla, Producto, GuiaTalla, GuiaTallaItem, Sucursal
 
 from .authentication import ApiKeyAuthentication, ApiKeyPermission
 from .serializers import ProductoExternalSerializer, agrupar_por_producto
@@ -209,6 +209,77 @@ class StockMovimientosView(APIView):
 
 
 # ──────────────────────────────────────────────
+# Endpoint 3b — Stock filtrado por SKUs (con sucursal_id)
+# GET /api/stock/por-skus/?rut_empresa=XX-X&skus=A,B,C
+# ──────────────────────────────────────────────
+
+class StockPorSkusView(APIView):
+    """
+    Retorna stock por SKU × sucursal incluyendo `sucursal_id`. Filtrable por
+    una lista de SKUs para evitar overfetch. Usado por AllConnected cuando
+    resuelve dinámicamente a qué sucursal enviar un pedido.
+
+    Respuesta:
+    {
+      "success": true,
+      "data": [
+        {
+          "sku": "4810070",
+          "sucursales": [
+            {"id": 12, "alias": "PAO1", "stock": 5},
+            {"id": 13, "alias": "PAO2", "stock": 2}
+          ]
+        }
+      ],
+      "total": 1
+    }
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    def get(self, request):
+        rut = request.query_params.get('rut_empresa', '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'El parámetro rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        skus_raw = request.query_params.get('skus', '').strip()
+        skus_list: list[str] = [s.strip() for s in skus_raw.split(',') if s.strip()]
+
+        qs = Producto_Talla.objects.filter(
+            producto__sucursal__empresa__rut=rut,
+        )
+        if skus_list:
+            qs = qs.filter(sku__in=skus_list)
+
+        rows = list(qs.values(
+            'sku', 'stock',
+            'producto__sucursal__id',
+            'producto__sucursal__alias',
+        ))
+
+        grupos: dict = {}
+        for row in rows:
+            k = str(row['sku'])
+            if k not in grupos:
+                grupos[k] = {'sku': k, 'sucursales': []}
+            grupos[k]['sucursales'].append({
+                'id': row.get('producto__sucursal__id'),
+                'alias': row.get('producto__sucursal__alias', '') or '',
+                'stock': int(row.get('stock', 0) or 0),
+            })
+
+        data = list(grupos.values())
+        logger.info(
+            f"[external/stock/por-skus] rut={rut} skus={len(skus_list)} → {len(data)} SKUs"
+        )
+        return Response({'success': True, 'data': data, 'total': len(data), 'error': None})
+
+
+# ──────────────────────────────────────────────
 # Endpoint 4 — Health check (sin auth)
 # GET /api/health/
 # ──────────────────────────────────────────────
@@ -219,6 +290,63 @@ class HealthCheckExternalView(APIView):
 
     def get(self, request):
         return Response({'status': 'ok'})
+
+
+# ──────────────────────────────────────────────
+# Endpoint 6 — Sucursales por empresa
+# GET /api/sucursales/?rut_empresa=XXXXXXXX-X
+# ──────────────────────────────────────────────
+
+def _normalizar_rut(rut: str) -> str:
+    return (rut or '').replace('.', '').replace(' ', '').upper().strip()
+
+
+class SucursalesPorEmpresaView(APIView):
+    """
+    Lista las sucursales activas de la empresa indicada por rut_empresa.
+
+    Usado por VicentAllEcommercesConected para que el operador elija
+    a qué sucursal enviar los pedidos de cada Canal, garantizando que
+    la sucursal elegida pertenezca a la empresa del canal.
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    def get(self, request):
+        rut = _normalizar_rut(request.query_params.get('rut_empresa', ''))
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'El parámetro rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.info(f"[external/sucursales] rut={rut}")
+        sucursales = (
+            Sucursal.objects
+            .filter(empresa__rut__isnull=False, activa=True)
+            .select_related('empresa')
+        )
+        data = [
+            {
+                'id': s.id,
+                'alias': s.alias,
+                'nombre': s.nombre,
+                'tipo_sucursal': getattr(s, 'tipo_sucursal', '') or '',
+                'direccion': s.direccion or '',
+                'empresa_rut': s.empresa.rut,
+                'empresa_nombre': s.empresa.nombre,
+            }
+            for s in sucursales
+            if _normalizar_rut(s.empresa.rut) == rut
+        ]
+        logger.info(f"[external/sucursales] rut={rut} → {len(data)} sucursales")
+        return Response({
+            'success': True,
+            'data': data,
+            'total': len(data),
+            'error': None,
+        })
 
 
 # ──────────────────────────────────────────────

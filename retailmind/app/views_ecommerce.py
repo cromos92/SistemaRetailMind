@@ -259,9 +259,23 @@ def api_recibir_pedido_ecommerce(request):
         return JsonResponse({'ok': False, 'error': 'cliente_nombre es obligatorio'}, status=400)
 
     try:
-        sucursal = Sucursal.objects.get(id=sucursal_id)
+        sucursal = Sucursal.objects.select_related('empresa').get(id=sucursal_id)
     except Sucursal.DoesNotExist:
         return JsonResponse({'ok': False, 'error': f'Sucursal {sucursal_id} no encontrada'}, status=400)
+
+    # Validar que la sucursal pertenezca a la empresa del payload (si se provee)
+    rut_payload = (data.get('rut_empresa') or '').replace('.', '').replace(' ', '').upper().strip()
+    if rut_payload:
+        try:
+            rut_sucursal = (sucursal.empresa.rut or '').replace('.', '').replace(' ', '').upper().strip()
+        except Exception:
+            rut_sucursal = ''
+        if not rut_sucursal or rut_sucursal != rut_payload:
+            return JsonResponse(
+                {'ok': False,
+                 'error': f'Sucursal {sucursal_id} no pertenece a la empresa {data.get("rut_empresa")}'},
+                status=400,
+            )
 
     # Verificar si ya existe un pedido para este canal+número (idempotente)
     existente = PedidoEcommerce.objects.filter(
