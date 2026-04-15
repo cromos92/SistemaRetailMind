@@ -6,9 +6,6 @@
 {% csrf_token %}
 
 <!-- Extra CSS -->
-<link href="{% static 'libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
-<link href="{% static 'libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
-<link href="{% static 'libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
 <link href="{% static 'libs/sweetalert2/sweetalert2.min.css' %}" rel="stylesheet" type="text/css" />
 <style>
     /* ========== NEXO DESIGN SYSTEM - VARIABLES ========== */
@@ -87,33 +84,38 @@
         min-height: 100vh;
     }
 
+    .page-content > .container-fluid {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
     /* ========== PAGE HEADER ========== */
     .page-header-nexo {
         background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
-        border-radius: var(--nexo-radius-xl);
-        padding: 2rem;
-        margin-bottom: 1.5rem;
+        border-radius: var(--nexo-radius-lg);
+        padding: 0.75rem 1.25rem;
+        margin-bottom: 0.75rem;
         color: var(--nexo-white);
-        box-shadow: var(--nexo-shadow-lg);
+        box-shadow: var(--nexo-shadow-md);
     }
 
     .page-header-nexo h1 {
         font-weight: 700;
-        font-size: 1.75rem;
-        margin-bottom: 0.5rem;
+        font-size: 1.3rem;
+        margin-bottom: 0.15rem;
         display: flex;
         align-items: center;
-        gap: 0.75rem;
+        gap: 0.5rem;
     }
 
     .page-header-nexo h1 i {
         color: var(--nexo-accent);
-        font-size: 2rem;
+        font-size: 1.5rem;
     }
 
     .page-header-nexo .sucursal-info {
         color: var(--nexo-gray-300);
-        font-size: 0.95rem;
+        font-size: 0.82rem;
     }
 
     .page-header-nexo .sucursal-info strong {
@@ -137,12 +139,12 @@
     }
 
     .card-stats-nexo .card-body {
-        padding: 0.65rem 0.9rem;
+        padding: 0.5rem 0.75rem;
     }
 
     .card-stats-nexo .stat-icon {
-        width: 36px;
-        height: 36px;
+        width: 34px;
+        height: 34px;
         border-radius: var(--nexo-radius-sm);
         display: flex;
         align-items: center;
@@ -160,18 +162,18 @@
 
     .card-stats-nexo .stat-label {
         color: var(--nexo-gray-500);
-        font-size: 0.72rem;
+        font-size: 0.7rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.4px;
         margin-bottom: 0;
-        line-height: 1.2;
+        line-height: 1.1;
     }
 
     .card-stats-nexo .stat-value {
         color: var(--nexo-secondary);
-        font-size: 1.25rem;
-        font-weight: 700;
+        font-size: 1.4rem;
+        font-weight: 800;
         line-height: 1.1;
     }
 
@@ -211,9 +213,9 @@
     /* ========== SEARCH/FILTER SECTION ========== */
     .search-section {
         background: var(--nexo-white);
-        border-radius: var(--nexo-radius-lg);
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
+        border-radius: var(--nexo-radius-md);
+        padding: 0.65rem 1rem;
+        margin-bottom: 0.5rem;
         border: 1px solid var(--nexo-gray-300);
         box-shadow: var(--nexo-shadow-sm);
     }
@@ -221,15 +223,16 @@
     .search-section .form-label {
         color: var(--nexo-gray-700);
         font-weight: 600;
-        font-size: 0.85rem;
-        margin-bottom: 0.5rem;
+        font-size: 0.78rem;
+        margin-bottom: 0.25rem;
     }
 
     .search-section .form-control,
     .search-section .form-select {
         border: 1px solid var(--nexo-gray-300);
         border-radius: var(--nexo-radius-md);
-        padding: 0.625rem 1rem;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.88rem;
         transition: all var(--nexo-transition-fast);
     }
 
@@ -243,9 +246,9 @@
     .ticket-info {
         background: var(--nexo-white);
         border: 2px solid var(--nexo-accent);
-        border-radius: var(--nexo-radius-lg);
-        padding: 1.5rem;
-        margin: 1.5rem 0;
+        border-radius: var(--nexo-radius-md);
+        padding: 0.65rem 1rem;
+        margin: 0.5rem 0;
         box-shadow: var(--nexo-shadow-md);
         position: relative;
     }
@@ -264,10 +267,10 @@
     /* ========== PRODUCTOS SECTION ========== */
     .productos-section {
         background: var(--nexo-white);
-        border-radius: var(--nexo-radius-lg);
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: var(--nexo-shadow-md);
+        border-radius: var(--nexo-radius-md);
+        padding: 0.65rem;
+        margin-bottom: 0.65rem;
+        box-shadow: var(--nexo-shadow-sm);
         border: 1px solid var(--nexo-gray-300);
     }
 
@@ -364,10 +367,10 @@
     .total-section {
         background: var(--nexo-white);
         border: 2px solid var(--nexo-gray-300);
-        border-radius: var(--nexo-radius-lg);
-        padding: 1.5rem;
+        border-radius: var(--nexo-radius-md);
+        padding: 0.75rem;
         text-align: center;
-        margin: 1rem 0;
+        margin: 0.5rem 0;
         box-shadow: var(--nexo-shadow-sm);
     }
     
@@ -506,21 +509,22 @@
     }
 
     .btn-action {
-        margin: 2px;
-        padding: 6px 12px;
-        font-size: 12px;
-        border-radius: var(--nexo-radius-md);
+        margin: 1px;
+        padding: 4px 10px;
+        font-size: 11px;
+        border-radius: var(--nexo-radius-sm);
+        min-height: 28px;
     }
 
     /* ========== WIZARD STEPPER NEXO ========== */
     .wizard-stepper {
         display: flex;
         justify-content: space-between;
-        gap: 0.5rem;
-        margin-bottom: 0.6rem;
-        padding: 0.4rem 0.75rem;
+        gap: 0.4rem;
+        margin-bottom: 0.4rem;
+        padding: 0.3rem 0.6rem;
         background: var(--nexo-white);
-        border-radius: var(--nexo-radius-md);
+        border-radius: var(--nexo-radius-sm);
         box-shadow: var(--nexo-shadow-sm);
     }
 
@@ -603,18 +607,21 @@
     /* ========== NAV TABS POS ========== */
     .nav-tabs-pos {
         border-bottom: 2px solid var(--nexo-gray-300);
-        gap: 0.25rem;
+        gap: 0.15rem;
+        flex-wrap: nowrap;
+        overflow-x: auto;
     }
     .nav-tabs-pos .nav-item .nav-link {
         border: 1px solid var(--nexo-gray-300);
         border-bottom: none;
-        border-radius: var(--nexo-radius-md) var(--nexo-radius-md) 0 0;
+        border-radius: var(--nexo-radius-sm) var(--nexo-radius-sm) 0 0;
         color: var(--nexo-gray-700);
         font-weight: 600;
-        font-size: 0.9rem;
-        padding: 0.55rem 1rem;
+        font-size: 0.78rem;
+        padding: 0.4rem 0.65rem;
         transition: all var(--nexo-transition-fast);
         background: var(--nexo-gray-100);
+        white-space: nowrap;
     }
     .nav-tabs-pos .nav-item .nav-link:hover {
         background: var(--nexo-white);
@@ -626,12 +633,16 @@
         border-color: var(--nexo-primary) var(--nexo-primary) var(--nexo-white);
         border-top-width: 3px;
     }
+    .nav-tabs-pos .nav-item .nav-link .badge {
+        font-size: 0.65rem;
+        padding: 0.2em 0.45em;
+    }
 
     /* ========== RESUMEN CARD NEXO ========== */
     .resumen-card {
         background: var(--nexo-white);
         border: 1px solid var(--nexo-gray-300);
-        border-radius: var(--nexo-radius-xl);
+        border-radius: var(--nexo-radius-lg);
         box-shadow: var(--nexo-shadow-md);
         overflow: hidden;
     }
@@ -640,12 +651,13 @@
         background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
         color: var(--nexo-white);
         border: none;
-        padding: 1rem 1.5rem;
+        padding: 0.6rem 1rem;
     }
 
     .resumen-card .card-header h6 {
         color: var(--nexo-white);
         font-weight: 700;
+        font-size: 0.85rem;
     }
 
     .resumen-card .card-header h6 i {
@@ -653,32 +665,33 @@
     }
 
     .resumen-card.position-sticky {
-        top: 88px;
+        top: 70px;
     }
 
     .resumen-card .card-body {
-        padding: 1.5rem;
+        padding: 0.75rem;
     }
 
     .resumen-metric {
-        padding: 1rem;
+        padding: 0.6rem 0.75rem;
         background: var(--nexo-gray-100);
         border-radius: var(--nexo-radius-md);
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
     }
 
     .resumen-metric small {
         color: var(--nexo-gray-500);
         font-weight: 600;
         text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.5px;
+        font-size: 0.68rem;
+        letter-spacing: 0.4px;
     }
 
     .resumen-metric h4, .resumen-metric h3 {
-        font-weight: 700;
+        font-weight: 800;
         color: var(--nexo-secondary);
-        margin: 0.25rem 0 0;
+        margin: 0.15rem 0 0;
+        font-size: 1.3rem;
     }
 
     .resumen-chips .badge {
@@ -710,10 +723,10 @@
         background: var(--nexo-secondary);
         color: var(--nexo-white);
         font-weight: 600;
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 1rem;
+        letter-spacing: 0.4px;
+        padding: 0.5rem 0.65rem;
         border: none;
     }
 
@@ -735,9 +748,10 @@
     }
 
     .table-nexo tbody td {
-        padding: 1rem;
+        padding: 0.45rem 0.65rem;
         border-bottom: 1px solid var(--nexo-gray-300);
         vertical-align: middle;
+        font-size: 0.85rem;
     }
 
     .table-glow {
@@ -808,7 +822,7 @@
         display: flex;
         flex-direction: column;
         gap: 2px;
-        font-size: 0.82rem;
+        font-size: 0.88rem;
     }
     .montos-stack .monto-line {
         display: flex;
@@ -816,14 +830,18 @@
         align-items: center;
         gap: 6px;
     }
+    .montos-stack .monto-line strong,
+    .montos-stack .monto-line .fw-bold {
+        font-size: 0.95rem;
+    }
     .montos-stack .monto-label {
         color: var(--nexo-gray-500);
-        font-size: 0.72rem;
+        font-size: 0.68rem;
         font-weight: 500;
     }
     .montos-stack .monto-diff {
-        font-size: 0.95rem;
-        font-weight: 700;
+        font-size: 1.1rem;
+        font-weight: 800;
         padding-top: 2px;
         border-top: 1px solid var(--nexo-gray-300);
         margin-top: 2px;
@@ -907,8 +925,9 @@
     .card-nexo .card-header {
         background: var(--nexo-gray-100);
         border-bottom: 1px solid var(--nexo-gray-300);
-        padding: 1rem 1.5rem;
+        padding: 0.5rem 1rem;
         font-weight: 700;
+        font-size: 0.88rem;
         color: var(--nexo-secondary);
     }
 
@@ -919,13 +938,17 @@
     /* ========== MODAL STYLES NEXO ========== */
     .modal-content {
         border: none;
-        border-radius: var(--nexo-radius-xl);
-        box-shadow: 0 25px 50px rgba(26, 26, 46, 0.25);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: 0 20px 40px rgba(26, 26, 46, 0.3);
     }
 
     .modal-header {
         border-bottom: 1px solid var(--nexo-gray-300);
-        padding: 1.25rem 1.5rem;
+        padding: 0.6rem 1rem;
+    }
+
+    .modal-header .modal-title {
+        font-size: 0.95rem;
     }
 
     .modal-header.bg-nexo-primary {
@@ -945,32 +968,36 @@
 
     .modal-footer {
         border-top: 1px solid var(--nexo-gray-300);
-        padding: 1rem 1.5rem;
+        padding: 0.5rem 1rem;
     }
 
     /* ========== MODAL NUEVO CAMBIO - EXTRA GRANDE ========== */
     #modalNuevoCambio .modal-dialog {
         max-width: 95vw;
         width: 95vw;
-        margin: 1rem auto;
+        margin: 0.75rem auto;
+        height: calc(100vh - 1.5rem);
     }
     
     #modalNuevoCambio .modal-content {
-        height: calc(100vh - 2rem);
+        height: 100%;
+        max-height: 100%;
         display: flex;
         flex-direction: column;
         overflow: hidden;
     }
     
-    #modalNuevoCambio .modal-body {
-        flex: 1;
-        overflow-y: auto;
-        padding: 1rem 1.5rem;
+    #modalNuevoCambio .modal-header {
+        flex-shrink: 0;
+        padding: 0.5rem 1rem;
     }
     
-    #modalNuevoCambio .modal-header {
-        padding: 0.75rem 1.5rem;
-        flex-shrink: 0;
+    #modalNuevoCambio .modal-body {
+        flex: 1 1 0%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0;
+        padding: 0.75rem 1rem;
     }
     
     /* Compactar alerts en el modal */
@@ -1007,145 +1034,146 @@
         font-size: 0.85rem;
     }
     
-    /* ── Modal Nuevo Cambio: compactado ── */
+    /* ── Modal Nuevo Cambio: compactado POS 15" ── */
     #modalNuevoCambio .modal-body {
-        padding: 0.75rem !important;
+        padding: 0.6rem 0.85rem;
         background: var(--nexo-gray-100);
     }
 
     #modalNuevoCambio .modal-header {
-        padding: 0.5rem 0.9rem;
+        padding: 0.45rem 0.9rem;
     }
 
     #modalNuevoCambio .modal-title {
-        font-size: 1rem;
+        font-size: 0.95rem;
     }
 
     #modalNuevoCambio .wizard-stepper {
-        margin-bottom: 0.5rem;
-        padding: 0.3rem 0.6rem;
+        margin-bottom: 0.35rem;
+        padding: 0.25rem 0.5rem;
         border-radius: var(--nexo-radius-sm);
     }
 
     #modalNuevoCambio .wizard-step {
-        font-size: 0.72rem;
+        font-size: 0.7rem;
     }
 
     #modalNuevoCambio .wizard-step .wizard-circle {
-        width: 26px;
-        height: 26px;
-        font-size: 0.75rem;
-        margin-bottom: 0.2rem;
+        width: 24px;
+        height: 24px;
+        font-size: 0.72rem;
+        margin-bottom: 0.15rem;
     }
 
     #modalNuevoCambio .wizard-step:not(:last-child)::after {
-        top: 0.8rem;
+        top: 0.75rem;
     }
 
     #modalNuevoCambio .wizard-step .wizard-label {
-        font-size: 0.68rem;
+        font-size: 0.65rem;
         line-height: 1.1;
     }
 
     /* Bloque tipo documento */
     #modalNuevoCambio .card-nexo .card-header {
-        padding: 0.35rem 0.75rem;
-        font-size: 0.82rem;
+        padding: 0.3rem 0.65rem;
+        font-size: 0.8rem;
     }
 
     #modalNuevoCambio .card-nexo .card-body {
-        padding: 0.5rem 0.75rem;
+        padding: 0.4rem 0.65rem;
     }
 
     #modalNuevoCambio .doc-type-option {
-        padding: 0.35rem 0.5rem;
-        min-width: 100px;
+        padding: 0.3rem 0.4rem;
+        min-width: 90px;
     }
 
     #modalNuevoCambio .doc-type-option i {
-        font-size: 1rem;
-        margin-bottom: 0.15rem;
+        font-size: 0.95rem;
+        margin-bottom: 0.1rem;
     }
 
     #modalNuevoCambio .doc-type-option .doc-label {
-        font-size: 0.78rem;
+        font-size: 0.75rem;
     }
 
     #modalNuevoCambio .doc-type-option small {
-        font-size: 0.65rem;
+        font-size: 0.62rem;
     }
 
     /* Alert info paso 1 */
     #modalNuevoCambio .alert {
-        padding: 0.4rem 0.7rem;
-        font-size: 0.8rem;
-        margin-bottom: 0.5rem !important;
+        padding: 0.3rem 0.6rem;
+        font-size: 0.78rem;
+        margin-bottom: 0.4rem !important;
     }
 
     /* Bloque MOTIVO compactado */
     #modalNuevoCambio .card.border-warning .card-body {
-        padding: 0.5rem 0.75rem !important;
+        padding: 0.4rem 0.65rem !important;
     }
 
     #modalNuevoCambio .card.border-warning .col-auto > div {
-        width: 34px !important;
-        height: 34px !important;
-        border-radius: 8px !important;
+        width: 30px !important;
+        height: 30px !important;
+        border-radius: 6px !important;
     }
 
     #modalNuevoCambio .card.border-warning .col-auto > div i {
-        font-size: 18px !important;
+        font-size: 16px !important;
     }
 
     #modalNuevoCambio .card.border-warning label.form-label {
-        font-size: 0.82rem !important;
-        margin-bottom: 0.2rem !important;
+        font-size: 0.78rem !important;
+        margin-bottom: 0.15rem !important;
     }
 
     #modalNuevoCambio #select-motivo-principal {
         font-size: 0.88rem !important;
-        padding: 0.35rem 0.6rem !important;
+        padding: 0.3rem 0.5rem !important;
     }
 
     #modalNuevoCambio .card.border-warning small {
-        font-size: 0.7rem;
+        font-size: 0.68rem;
     }
 
     /* Ticket info más compacta */
     #modalNuevoCambio .ticket-info {
-        padding: 0.5rem 0.75rem;
-        margin-bottom: 0.6rem;
+        padding: 0.4rem 0.65rem;
+        margin-bottom: 0.5rem;
     }
 
     #modalNuevoCambio .ticket-cambio-badge {
-        padding: 0.25rem 0.6rem;
-        font-size: 0.72rem;
+        padding: 0.2rem 0.5rem;
+        font-size: 0.7rem;
     }
 
     /* Panel resumen */
     #modalNuevoCambio .resumen-card .card-header {
-        padding: 0.4rem 0.65rem;
+        padding: 0.35rem 0.6rem;
     }
 
     #modalNuevoCambio .resumen-card .card-body {
-        padding: 0.6rem;
+        padding: 0.5rem;
     }
 
     #modalNuevoCambio .resumen-metric {
-        margin-bottom: 0.4rem !important;
+        margin-bottom: 0.35rem !important;
+        padding: 0.5rem 0.75rem;
     }
 
     #modalNuevoCambio .resumen-metric h4 {
-        font-size: 1.1rem;
+        font-size: 1.15rem;
     }
 
-    /* Paso 3 */
+    /* Paso 3 - Precios grandes para revisión POS */
     #modalNuevoCambio #paso-resumen .card .card-body {
-        padding: 0.65rem !important;
+        padding: 0.5rem !important;
     }
 
     #modalNuevoCambio #paso-resumen h3 {
-        font-size: 1.3rem;
+        font-size: 1.4rem;
     }
 
     /* ========== INPUT GROUP NEXO ========== */
@@ -1233,30 +1261,48 @@
     .ticket-cambio-badge {
         background: linear-gradient(135deg, var(--nexo-warning) 0%, #E59B00 100%);
         color: var(--nexo-secondary);
-        padding: 0.5rem 1rem;
+        padding: 0.3rem 0.7rem;
         border-radius: var(--nexo-radius-full);
         font-weight: 700;
-        font-size: 0.85rem;
+        font-size: 0.78rem;
         display: inline-flex;
         align-items: center;
-        gap: 0.5rem;
-        box-shadow: 0 2px 8px rgba(255, 176, 32, 0.3);
+        gap: 0.35rem;
+        box-shadow: 0 2px 6px rgba(255, 176, 32, 0.3);
     }
 
     .ticket-cambio-badge i {
-        font-size: 1rem;
+        font-size: 0.88rem;
     }
     
     /* ========== MODAL DETALLE COMPACTO POS ========== */
+    #modalDetalleCambio .modal-dialog {
+        max-width: 1100px;
+        margin: 0.35rem auto;
+    }
     #modalDetalleCambio .modal-content {
         box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        max-height: calc(100vh - 0.7rem);
+        display: flex;
+        flex-direction: column;
+    }
+    #modalDetalleCambio .modal-body {
+        overflow-y: auto;
+        flex: 1;
+        padding: 0;
     }
     #modalDetalleCambio .badge {
         font-weight: 500;
-        padding: 0.3em 0.6em;
+        padding: 0.25em 0.5em;
     }
     #modalDetalleCambio .progress {
-        border-radius: 8px;
+        border-radius: 6px;
+    }
+    #modalDetalleCambio .modal-header {
+        padding: 0.4rem 0.75rem;
+    }
+    #modalDetalleCambio .modal-footer {
+        padding: 0.4rem 0.75rem;
     }
     
     #detalle-historial {
@@ -1276,25 +1322,14 @@
         border-radius: 4px;
     }
     
-    /* ========== MODAL NUEVO CAMBIO - NAV BAR STICKY ========== */
-    #modalNuevoCambio .modal-body {
-        padding-bottom: 0 !important;
-    }
+    /* ========== MODAL NUEVO CAMBIO - NAV BAR FIJO (flex item) ========== */
     #modal-nav-bar {
-        position: sticky;
-        bottom: 0;
+        flex-shrink: 0;
+        flex-grow: 0;
         z-index: 20;
         background: var(--nexo-white);
         border-top: 2px solid var(--nexo-primary);
-        margin: 0.5rem -0.75rem 0 -0.75rem;
-        pointer-events: auto;
-    }
-    #modal-nav-bar button,
-    #modal-nav-bar .btn {
-        pointer-events: auto !important;
-        cursor: pointer !important;
-        position: relative;
-        z-index: 21;
+        width: 100%;
     }
     #modal-nav-bar .mnb-resumen {
         display: flex;
@@ -1504,7 +1539,7 @@
         margin-bottom: 2px;
     }
     .ticket-info .info-chip .chip-value {
-        font-size: 0.95rem;
+        font-size: 1rem;
         font-weight: 700;
         color: var(--nexo-secondary);
         display: block;
@@ -1515,7 +1550,8 @@
     }
     .ticket-info .info-chip.chip-total .chip-value {
         color: #16a34a;
-        font-size: 1.05rem;
+        font-size: 1.2rem;
+        font-weight: 800;
     }
 
     /* ========== OBSERVACIONES ACORDEÓN ========== */
@@ -1555,7 +1591,7 @@
         text-align: center;
     }
     #paso-resumen .resumen-monto-card .monto-label {
-        font-size: 0.7rem;
+        font-size: 0.68rem;
         color: var(--nexo-gray-500);
         text-transform: uppercase;
         font-weight: 600;
@@ -1564,8 +1600,8 @@
         margin-bottom: 2px;
     }
     #paso-resumen .resumen-monto-card .monto-valor {
-        font-size: 1.3rem;
-        font-weight: 700;
+        font-size: 1.5rem;
+        font-weight: 800;
         line-height: 1.1;
     }
     /* Resumen de productos involucrados */
@@ -1655,50 +1691,118 @@
         color: #dc2626;
     }
 
-    /* ========== MEDIA QUERY POS 15" ========== */
+    /* ========== MEDIA QUERY POS 15" (1024x768 / 1366x768) ========== */
     @media screen and (max-height: 800px) {
-        #modalNuevoCambio .modal-body {
-            padding: 0.5rem 0.75rem !important;
+        /* ── Page Level ── */
+        .container-fluid { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .page-header-nexo {
+            padding: 0.5rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: var(--nexo-radius-md);
         }
-        #modalNuevoCambio .wizard-stepper {
-            padding: 0.25rem 0.5rem;
-            margin-bottom: 0.4rem;
+        .page-header-nexo h1 { font-size: 1.1rem; gap: 0.4rem; margin-bottom: 0.1rem; }
+        .page-header-nexo h1 i { font-size: 1.25rem; }
+        .page-header-nexo .sucursal-info { font-size: 0.75rem; }
+        .page-header-nexo .btn-lg {
+            font-size: 0.82rem !important;
+            padding: 0.4rem 0.85rem !important;
         }
-        #modalNuevoCambio .card-nexo .card-header {
-            padding: 0.3rem 0.65rem;
-            font-size: 0.8rem;
-        }
-        #modalNuevoCambio .card-nexo .card-body {
-            padding: 0.4rem 0.65rem;
-        }
-        .motivo-inline-bar {
-            padding: 0.35rem 0.6rem;
-        }
+
+        /* ── Stat Cards ── */
+        .card-stats-nexo .card-body { padding: 0.35rem 0.6rem; }
+        .card-stats-nexo .stat-icon { width: 30px; height: 30px; font-size: 0.88rem; }
+        .card-stats-nexo .stat-label { font-size: 0.62rem; }
+        .card-stats-nexo .stat-value { font-size: 1.25rem; }
+
+        /* ── Filters ── */
+        .search-section { padding: 0.4rem 0.75rem; margin-bottom: 0.35rem; }
+        .search-section .form-label { font-size: 0.72rem; margin-bottom: 0.15rem; }
+        .search-section .form-control,
+        .search-section .form-select { padding: 0.3rem 0.6rem; font-size: 0.82rem; }
+
+        /* ── Tabs ── */
+        .nav-tabs-pos .nav-item .nav-link { font-size: 0.72rem; padding: 0.3rem 0.5rem; }
+        .nav-tabs-pos .nav-item .nav-link .badge { font-size: 0.6rem; }
+
+        /* ── Main Table ── */
+        .table-nexo thead th { padding: 0.35rem 0.5rem; font-size: 0.7rem; }
+        .table-nexo tbody td { padding: 0.35rem 0.5rem; font-size: 0.82rem; }
+        .montos-stack .monto-diff { font-size: 1rem; }
+        .montos-stack .monto-label { font-size: 0.62rem; }
+        .status-badge { padding: 4px 10px; font-size: 11px; }
+        .tipo-badge { padding: 3px 8px; font-size: 10px; }
+        .time-ago { font-size: 0.72rem; }
+        .productos-mini .prod-line { font-size: 0.72rem; }
+        .card-nexo .card-header { padding: 0.4rem 0.75rem; font-size: 0.82rem; }
+
+        /* ── Tickets Pendientes Card ── */
+        #card-tickets-pendientes .card-header { padding: 0.35rem 0.75rem !important; }
+        #card-tickets-pendientes .card-header h6 { font-size: 0.82rem; }
+        #card-tickets-pendientes .table td,
+        #card-tickets-pendientes .table th { padding: 0.3rem 0.5rem; font-size: 0.8rem; }
+
+        /* ── Admin actions ── */
+        #acciones-admin .btn { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
+
+        /* ── Modal Nuevo Cambio ── */
+        #modalNuevoCambio .modal-dialog { margin: 0.2rem auto; max-width: 97vw; width: 97vw; height: calc(100vh - 0.4rem); }
+        #modalNuevoCambio .modal-body { padding: 0.4rem 0.65rem !important; }
+        #modalNuevoCambio .modal-header { padding: 0.3rem 0.75rem; }
+        #modalNuevoCambio .modal-title { font-size: 0.88rem; }
+        #modalNuevoCambio .wizard-stepper { padding: 0.2rem 0.4rem; margin-bottom: 0.3rem; }
+        #modalNuevoCambio .wizard-step { font-size: 0.65rem; }
+        #modalNuevoCambio .wizard-step .wizard-circle { width: 22px; height: 22px; font-size: 0.68rem; }
+        #modalNuevoCambio .wizard-step .wizard-label { font-size: 0.6rem; }
+        #modalNuevoCambio .card-nexo .card-header { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
+        #modalNuevoCambio .card-nexo .card-body { padding: 0.35rem 0.55rem; }
+        #modalNuevoCambio .alert { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .motivo-inline-bar { padding: 0.3rem 0.5rem; margin-bottom: 0.35rem; }
+        .motivo-inline-bar .motivo-label { font-size: 0.72rem; }
+        .motivo-inline-bar select { font-size: 0.82rem; height: 32px; }
+        #modalNuevoCambio .productos-section { padding: 0.5rem; margin-bottom: 0.5rem; }
         #modalNuevoCambio .table-sm td,
-        #modalNuevoCambio .table-sm th {
-            padding: 0.25rem 0.4rem;
-            font-size: 0.8rem;
-        }
-        #modal-nav-bar .mnb-nav { padding: 6px 10px; }
-        #modal-nav-bar .mnb-resumen { padding: 4px 10px; }
-        #modal-nav-bar .btn {
-            min-height: 28px;
-            font-size: 0.75rem;
-            padding: 0.2rem 0.5rem;
-        }
-        .fr-chip { font-size: 0.72rem; padding: 0 4px; }
-        .fr-lbl { font-size: 0.58rem; }
-        #footer-paso-label { font-size: 0.72rem !important; }
-        #footer-paso-desc { font-size: 0.62rem !important; }
-        .footer-paso-dot { width: 8px; height: 8px; }
-        #paso-resumen .resumen-monto-card .monto-valor {
-            font-size: 1.15rem;
-        }
-        .resumen-prod-card { padding: 0.35rem 0.5rem; }
-        .resumen-prod-item { font-size: 0.75rem; padding: 0.2rem 0; }
-        .resumen-prod-card .rp-header { font-size: 0.6rem; margin-bottom: 0.2rem; }
-        .resumen-flujo { gap: 0.35rem; }
-        .resumen-flujo-arrow { font-size: 1rem; width: 22px; }
+        #modalNuevoCambio .table-sm th { padding: 0.2rem 0.35rem; font-size: 0.78rem; }
+        #modalNuevoCambio .ticket-info { padding: 0.35rem 0.55rem; margin-bottom: 0.4rem; }
+        #modalNuevoCambio .ticket-info .info-chip { padding: 0.2rem 0.4rem; }
+        #modalNuevoCambio .ticket-info .info-chip .chip-label { font-size: 0.58rem; }
+        #modalNuevoCambio .ticket-info .info-chip .chip-value { font-size: 0.88rem; }
+        #modalNuevoCambio .ticket-info .info-chip.chip-total .chip-value { font-size: 1.05rem; }
+
+        /* ── Modal Nav Bar ── */
+        #modal-nav-bar .mnb-nav { padding: 5px 8px; }
+        #modal-nav-bar .mnb-resumen { padding: 3px 8px; }
+        #modal-nav-bar .btn { min-height: 28px; font-size: 0.72rem; padding: 0.18rem 0.45rem; }
+        .fr-chip { font-size: 0.7rem; padding: 0 3px; }
+        .fr-lbl { font-size: 0.55rem; }
+        #footer-paso-label { font-size: 0.68rem !important; }
+        #footer-paso-desc { font-size: 0.58rem !important; }
+        .footer-paso-dot { width: 7px; height: 7px; }
+
+        /* ── Paso 3 Resumen ── */
+        #paso-resumen .resumen-monto-card { padding: 0.4rem 0.6rem; }
+        #paso-resumen .resumen-monto-card .monto-valor { font-size: 1.3rem; }
+        #paso-resumen .resumen-monto-card .monto-label { font-size: 0.62rem; }
+        .resumen-prod-card { padding: 0.3rem 0.45rem; }
+        .resumen-prod-item { font-size: 0.72rem; padding: 0.15rem 0; }
+        .resumen-prod-item .rpi-precio { font-size: 0.82rem; font-weight: 800; }
+        .resumen-prod-card .rp-header { font-size: 0.58rem; margin-bottom: 0.15rem; }
+        .resumen-flujo { gap: 0.3rem; }
+        .resumen-flujo-arrow { font-size: 0.95rem; width: 20px; }
+
+        /* ── Modal Detalle ── */
+        #modalDetalleCambio .modal-dialog { margin: 0.2rem auto; max-width: 1060px; }
+        #modalDetalleCambio .modal-content { max-height: calc(100vh - 0.4rem); }
+        #modalDetalleCambio .modal-header { padding: 0.3rem 0.6rem; }
+        #modalDetalleCambio .modal-footer { padding: 0.3rem 0.6rem; }
+
+        /* ── Modal Aprobar ── */
+        #modalAprobarCambio .modal-dialog { margin: 0.35rem auto; }
+        #modalAprobarCambio .modal-header { padding: 0.35rem 0.75rem; }
+        #modalAprobarCambio .modal-body { padding: 0.5rem 0.75rem; }
+        #modalAprobarCambio .modal-footer { padding: 0.35rem 0.75rem; }
+
+        /* ── Paginación ── */
+        .pagination-sm .page-link { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
     }
 
     @media (max-width: 768px) {
@@ -1713,6 +1817,47 @@
         .cambio-detail { font-size: 0.813rem; }
         .btn-accion-cambio { width: 100%; }
     }
+
+    /* ========== POS GLOBAL: PRECIOS Y MONTOS DESTACADOS ========== */
+    #detalle-monto-original,
+    #detalle-monto-nuevo {
+        font-size: 1.1rem !important;
+    }
+    #detalle-diferencia {
+        font-size: 1.25rem !important;
+    }
+    #aprobar-total-devuelto,
+    #aprobar-total-nuevo {
+        font-size: 0.95rem;
+    }
+    #aprobar-diferencia {
+        font-size: 1.15rem !important;
+    }
+    #detalle-total-salientes,
+    #detalle-total-entrantes {
+        font-size: 1rem !important;
+    }
+
+    /* Mejor contraste de precios en tablas del detalle modal */
+    #detalle-productos-salientes td:nth-child(4),
+    #detalle-productos-salientes td:nth-child(5),
+    #detalle-productos-entrantes td:nth-child(5),
+    #detalle-productos-entrantes td:nth-child(6) {
+        font-weight: 700;
+        font-size: 0.88rem;
+    }
+
+    /* Botones de acción en tabla principal - más tappables */
+    #tabla-cambios .btn-action {
+        min-width: 32px;
+        min-height: 30px;
+    }
+
+    /* Scrollbar sutil global para modales POS */
+    .modal-body::-webkit-scrollbar { width: 5px; }
+    .modal-body::-webkit-scrollbar-track { background: transparent; }
+    .modal-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+    .modal-body::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 </style>
 
 <!-- ============================================================== -->
@@ -1723,18 +1868,18 @@
         <div class="container-fluid">
     
     <!-- Header NEXO -->
-    <div class="page-header-nexo mb-4">
+    <div class="page-header-nexo mb-2">
         <div class="row align-items-center">
             <div class="col">
-                <h1><i class="ri-exchange-line"></i> Gestión de Cambios y Devoluciones</h1>
+                <h1><i class="ri-exchange-line"></i> Cambios y Devoluciones</h1>
                 <p class="sucursal-info mb-0">
-                    <i class="ri-store-2-line me-1"></i> Sucursal: <strong>{{ sucursal_actual.alias }}</strong>
+                    <i class="ri-store-2-line me-1"></i> <strong>{{ sucursal_actual.alias }}</strong>
                 </p>
             </div>
             <div class="col-auto">
-                <button class="btn btn-nexo-success btn-lg" onclick="mostrarFormularioNuevoCambio()" title="Atajo: F2">
-                    <i class="ri-add-line me-1"></i> Nuevo Cambio/Devolución
-                    <small class="ms-2 opacity-75 d-none d-xl-inline" style="font-size:0.75rem;">[F2]</small>
+                <button class="btn btn-nexo-success" onclick="mostrarFormularioNuevoCambio()" title="Atajo: F2" style="font-size:0.88rem; padding:0.45rem 1rem;">
+                    <i class="ri-add-line me-1"></i> Nuevo Cambio/Dev.
+                    <small class="ms-1 opacity-75 d-none d-xl-inline" style="font-size:0.7rem;">[F2]</small>
                 </button>
             </div>
         </div>
@@ -1834,14 +1979,14 @@
 
     <!-- ✅ SECCIÓN: Tickets de Cambio Pendientes de Cobro/Devolución -->
     {% if tickets_cambio_pendientes %}
-    <div class="card shadow-sm mb-3 border-warning border-2" id="card-tickets-pendientes">
-        <div class="card-header bg-warning text-dark py-2" style="cursor:pointer;" 
+    <div class="card shadow-sm mb-2 border-warning border-2" id="card-tickets-pendientes">
+        <div class="card-header bg-warning text-dark py-1 px-3" style="cursor:pointer;" 
              data-bs-toggle="collapse" data-bs-target="#collapse-tickets-pendientes" aria-expanded="true">
             <div class="d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold">
-                    <i class="ri-alert-fill me-2"></i>
-                    Tickets de Cambio Pendientes de Cobro/Devolución
-                    <span class="badge bg-danger ms-2">{{ total_tickets_pendientes }}</span>
+                <h6 class="mb-0 fw-bold" style="font-size:0.85rem;">
+                    <i class="ri-alert-fill me-1"></i>
+                    Tickets Pendientes Cobro/Devolución
+                    <span class="badge bg-danger ms-1">{{ total_tickets_pendientes }}</span>
                 </h6>
                 <div class="d-flex gap-2 align-items-center">
                     <a href="{% url 'pos_dashboard' %}" class="btn btn-sm btn-dark" onclick="event.stopPropagation()">
@@ -1854,42 +1999,42 @@
         <div class="collapse show" id="collapse-tickets-pendientes">
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover table-striped mb-0">
+                <table class="table table-hover table-striped table-sm mb-0">
                     <thead class="table-dark">
-                        <tr>
-                            <th width="100"># Ticket</th>
+                        <tr style="font-size:0.75rem;">
+                            <th width="90"># Ticket</th>
                             <th>Cliente</th>
-                            <th width="120" class="text-center">Tipo</th>
-                            <th width="120" class="text-end">Monto</th>
-                            <th width="150">Vendedor</th>
-                            <th width="120">Fecha/Hora</th>
-                            <th width="120" class="text-center">Acciones</th>
+                            <th width="100" class="text-center">Tipo</th>
+                            <th width="110" class="text-end">Monto</th>
+                            <th width="120">Vendedor</th>
+                            <th width="100">Fecha</th>
+                            <th width="100" class="text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for ticket in tickets_cambio_pendientes %}
                         <tr>
                             <td>
-                                <span class="fw-bold fs-5 text-primary">#{{ ticket.correlativo }}</span>
+                                <span class="fw-bold text-primary" style="font-size:1.05rem;">#{{ ticket.correlativo }}</span>
                             </td>
                             <td>
-                                <div class="fw-semibold">{{ ticket.cliente_nombre }}</div>
+                                <div class="fw-semibold" style="font-size:0.85rem;">{{ ticket.cliente_nombre }}</div>
                                 {% if ticket.cliente_rut %}
-                                <small class="text-muted">{{ ticket.cliente_rut }}</small>
+                                <small class="text-muted" style="font-size:0.72rem;">{{ ticket.cliente_rut }}</small>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <span class="badge bg-{{ ticket.clase }} fs-6">
+                                <span class="badge bg-{{ ticket.clase }}" style="font-size:0.78rem;">
                                     {{ ticket.icono }} {{ ticket.texto }}
                                 </span>
                             </td>
                             <td class="text-end">
-                                <span class="fw-bold fs-5 text-{{ ticket.clase }}">${{ ticket.total|floatformat:0 }}</span>
+                                <span class="fw-bold text-{{ ticket.clase }}" style="font-size:1.15rem;">${{ ticket.total|floatformat:0 }}</span>
                             </td>
-                            <td>{{ ticket.vendedor }}</td>
+                            <td style="font-size:0.82rem;">{{ ticket.vendedor }}</td>
                             <td>
-                                <small>{{ ticket.fecha }}</small><br>
-                                <small class="text-muted">{{ ticket.hora }}</small>
+                                <small style="font-size:0.75rem;">{{ ticket.fecha }}</small><br>
+                                <small class="text-muted" style="font-size:0.7rem;">{{ ticket.hora }}</small>
                             </td>
                             <td class="text-center">
                                 <a href="{% url 'pos_dashboard' %}?ticket={{ ticket.correlativo }}" 
@@ -1915,43 +2060,40 @@
     {% endif %}
 
     <!-- Filtros NEXO -->
-    <div class="search-section mb-3">
+    <div class="search-section mb-2">
         <div class="row g-2 align-items-end">
-            <div class="col-lg-2 col-md-4">
-                <label class="form-label small mb-1"><i class="ri-calendar-line me-1"></i> Fecha Desde</label>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label small mb-1"><i class="ri-calendar-line me-1"></i> Desde</label>
                 <input type="date" class="form-control form-control-sm" id="filtro-fecha-desde">
             </div>
-            <div class="col-lg-2 col-md-4">
-                <label class="form-label small mb-1"><i class="ri-calendar-check-line me-1"></i> Fecha Hasta</label>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label small mb-1"><i class="ri-calendar-check-line me-1"></i> Hasta</label>
                 <input type="date" class="form-control form-control-sm" id="filtro-fecha-hasta">
             </div>
-            <div class="col-lg-2 col-md-4">
-                <label class="form-label small mb-1"><i class="ri-file-list-3-line me-1"></i> Tipo Operación</label>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label small mb-1"><i class="ri-file-list-3-line me-1"></i> Tipo</label>
                 <select class="form-select form-select-sm" id="filtro-tipo-operacion">
-                    <option value="">Todos los tipos</option>
+                    <option value="">Todos</option>
                     {% for value, display in tipo_operacion_choices %}
                     <option value="{{ value }}">{{ display }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-lg-3 col-md-6">
+            <div class="col-lg-4 col-md-5">
                 <label class="form-label small mb-1"><i class="ri-search-line me-1"></i> Buscar</label>
                 <div class="input-group input-group-sm input-group-nexo">
                     <span class="input-group-text"><i class="ri-search-2-line"></i></span>
-                    <input type="text" class="form-control" id="filtro-buscar" placeholder="Nº Operación, Ticket, Cliente, RUT...">
+                    <input type="text" class="form-control" id="filtro-buscar" placeholder="Nº Op, Ticket, Cliente, RUT...">
+                    <button class="btn btn-nexo-primary" onclick="aplicarFiltros()">
+                        <i class="ri-search-line"></i>
+                    </button>
                 </div>
-            </div>
-            <div class="col-lg-1 col-md-2">
-                <label class="form-label small mb-1">&nbsp;</label>
-                <button class="btn btn-nexo-primary btn-sm w-100 d-block" onclick="aplicarFiltros()">
-                    <i class="ri-search-line"></i>
-                </button>
             </div>
         </div>
     </div>
 
     <!-- Tabs de filtro rápido -->
-    <div class="mb-3">
+    <div class="mb-2">
         <input type="hidden" id="filtro-estado-tab-activo" value="">
         <ul class="nav nav-tabs nav-tabs-pos" id="tabs-estado-cambio" role="tablist">
             <li class="nav-item" role="presentation">
@@ -2014,13 +2156,13 @@
                 <table class="table table-nexo mb-0" id="tabla-cambios">
                     <thead>
                         <tr>
-                            <th width="155">Operación</th>
+                            <th width="140">Operación</th>
                             <th>Cliente</th>
-                            <th width="115">Tipo / Estado</th>
-                            <th width="140">Productos</th>
-                            <th class="text-end" width="145">Montos</th>
-                            <th width="80" class="text-center">Tiempo</th>
-                            <th class="text-center" width="170">Acciones</th>
+                            <th width="110">Tipo / Estado</th>
+                            <th width="125">Productos</th>
+                            <th class="text-end" width="155">Montos</th>
+                            <th width="70" class="text-center">Tiempo</th>
+                            <th class="text-center" width="155">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-cambios">
@@ -2037,9 +2179,9 @@
             </div>
             
             <!-- Paginación NEXO -->
-            <div class="d-flex justify-content-between align-items-center p-3 border-top">
+            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
                 <div class="text-muted">
-                    <small id="info-paginacion">Mostrando 0 de 0 registros</small>
+                    <small id="info-paginacion" style="font-size:0.78rem;">Mostrando 0 de 0 registros</small>
                 </div>
                 <nav>
                     <ul class="pagination pagination-sm mb-0" id="paginacion">
@@ -2055,7 +2197,7 @@
 
 <!-- Modal: Nuevo Cambio/Devolución NEXO -->
 <div class="modal fade" id="modalNuevoCambio" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-nexo-secondary">
                 <h5 class="modal-title text-white">
@@ -2516,67 +2658,67 @@
                     </div>
                 </div>
 
-                <!-- NAV BAR FIJO: sticky al fondo del modal-body -->
-                <div id="modal-nav-bar">
-                    <!-- Resumen financiero — visible solo en paso 3 -->
-                    <div id="footer-resumen" class="mnb-resumen" style="display:none;">
-                        <span class="fr-chip">
-                            <i class="ri-arrow-left-up-line text-primary me-1" style="font-size:0.68rem;"></i>
-                            <span class="fr-lbl">Devuelve</span>
-                            <strong class="text-primary ms-1" id="footer-monto-original">$0</strong>
-                        </span>
-                        <span class="fr-arrow">&rarr;</span>
-                        <span class="fr-chip">
-                            <i class="ri-arrow-right-down-line text-success me-1" style="font-size:0.68rem;"></i>
-                            <span class="fr-lbl">Recibe</span>
-                            <strong class="text-success ms-1" id="footer-monto-nuevo">$0</strong>
-                        </span>
-                        <span class="fr-arrow">=</span>
-                        <span class="fr-chip" id="footer-diferencia-container">
-                            <strong id="footer-diferencia">$0</strong>
-                        </span>
-                        <span class="badge ms-1 bg-secondary" id="footer-tipo-badge" style="font-size:0.6rem; padding:2px 6px;">-</span>
-                    </div>
 
-                    <!-- Navegación principal -->
-                    <div class="mnb-nav d-flex align-items-center justify-content-between">
-                        <div class="d-flex gap-1 align-items-center">
-                            <button type="button" class="btn btn-outline-danger btn-sm"
-                                    onclick="cerrarModalNuevoCambio(event)">
-                                <i class="ri-close-line"></i><span class="d-none d-md-inline ms-1">Cancelar</span>
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm"
-                                    id="btn-anterior" onclick="pasoAnterior(event)" style="display:none;">
-                                <i class="ri-arrow-left-line"></i><span class="d-none d-md-inline ms-1">Anterior</span>
-                            </button>
-                        </div>
-
-                        <div class="d-flex align-items-center gap-1 mnb-steps">
-                            <span class="footer-paso-dot" id="fdot-1" title="Paso 1"></span>
-                            <span class="footer-paso-sep">&middot;</span>
-                            <span class="footer-paso-dot" id="fdot-2" title="Paso 2"></span>
-                            <span class="footer-paso-sep">&middot;</span>
-                            <span class="footer-paso-dot" id="fdot-3" title="Paso 3"></span>
-                            <div class="ms-1 lh-1">
-                                <span id="footer-paso-label" class="fw-semibold d-block" style="font-size:0.72rem; color:var(--nexo-primary); line-height:1.1;">Paso 1 de 3</span>
-                                <span id="footer-paso-desc" class="text-muted" style="font-size:0.62rem;">Buscar documento</span>
-                            </div>
-                        </div>
-
-                        <div class="d-flex gap-1 align-items-center">
-                            <span id="footer-hint" class="text-muted fst-italic d-none d-lg-inline" style="font-size:0.72rem;">Busca un documento</span>
-                            <button type="button" class="btn btn-primary btn-sm"
-                                    id="btn-siguiente" onclick="siguientePaso(event)" disabled>
-                                Continuar <i class="ri-arrow-right-line ms-1"></i>
-                            </button>
-                            <button type="button" class="btn btn-success btn-sm"
-                                    id="btn-crear-cambio" onclick="crearCambioDevolucion(event)" style="display:none;">
-                                <i class="ri-check-double-line me-1"></i>Crear Solicitud
-                            </button>
-                        </div>
-                    </div>
+            </div>
+            <!-- NAV BAR FIJO: fuera del modal-body, flex-shrink:0 siempre visible -->
+            <div id="modal-nav-bar">
+                <!-- Resumen financiero — visible solo en paso 3 -->
+                <div id="footer-resumen" class="mnb-resumen" style="display:none;">
+                    <span class="fr-chip">
+                        <i class="ri-arrow-left-up-line text-primary me-1" style="font-size:0.68rem;"></i>
+                        <span class="fr-lbl">Devuelve</span>
+                        <strong class="text-primary ms-1" id="footer-monto-original">$0</strong>
+                    </span>
+                    <span class="fr-arrow">&rarr;</span>
+                    <span class="fr-chip">
+                        <i class="ri-arrow-right-down-line text-success me-1" style="font-size:0.68rem;"></i>
+                        <span class="fr-lbl">Recibe</span>
+                        <strong class="text-success ms-1" id="footer-monto-nuevo">$0</strong>
+                    </span>
+                    <span class="fr-arrow">=</span>
+                    <span class="fr-chip" id="footer-diferencia-container">
+                        <strong id="footer-diferencia">$0</strong>
+                    </span>
+                    <span class="badge ms-1 bg-secondary" id="footer-tipo-badge" style="font-size:0.6rem; padding:2px 6px;">-</span>
                 </div>
 
+                <!-- Navegación principal -->
+                <div class="mnb-nav d-flex align-items-center justify-content-between">
+                    <div class="d-flex gap-1 align-items-center">
+                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                onclick="cerrarModalNuevoCambio(event)">
+                            <i class="ri-close-line"></i><span class="d-none d-md-inline ms-1">Cancelar</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                id="btn-anterior" onclick="pasoAnterior(event)" style="display:none;">
+                            <i class="ri-arrow-left-line"></i><span class="d-none d-md-inline ms-1">Anterior</span>
+                        </button>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-1 mnb-steps">
+                        <span class="footer-paso-dot" id="fdot-1" title="Paso 1"></span>
+                        <span class="footer-paso-sep">&middot;</span>
+                        <span class="footer-paso-dot" id="fdot-2" title="Paso 2"></span>
+                        <span class="footer-paso-sep">&middot;</span>
+                        <span class="footer-paso-dot" id="fdot-3" title="Paso 3"></span>
+                        <div class="ms-1 lh-1">
+                            <span id="footer-paso-label" class="fw-semibold d-block" style="font-size:0.72rem; color:var(--nexo-primary); line-height:1.1;">Paso 1 de 3</span>
+                            <span id="footer-paso-desc" class="text-muted" style="font-size:0.62rem;">Buscar documento</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-1 align-items-center">
+                        <span id="footer-hint" class="text-muted fst-italic d-none d-lg-inline" style="font-size:0.72rem;">Busca un documento</span>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                id="btn-siguiente" onclick="siguientePaso(event)" disabled>
+                            Continuar <i class="ri-arrow-right-line ms-1"></i>
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm"
+                                id="btn-crear-cambio" onclick="crearCambioDevolucion(event)" style="display:none;">
+                            <i class="ri-check-double-line me-1"></i>Crear Solicitud
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -2584,7 +2726,7 @@
 
 <!-- Modal: Detalle de Cambio -->
 <div class="modal fade" id="modalDetalleCambio" tabindex="-1">
-    <div class="modal-dialog modal-xl" style="max-width: 1180px;">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content border-0 overflow-hidden">
 
             <!-- HEADER OSCURO POS -->
@@ -2748,7 +2890,7 @@
                         </span>
                         <span class="badge bg-secondary" id="detalle-historial-count">0 eventos</span>
                     </div>
-                    <div style="max-height:200px; overflow-y:auto; padding:10px 14px;" id="detalle-historial-scroll">
+                    <div style="max-height:150px; overflow-y:auto; padding:8px 12px;" id="detalle-historial-scroll">
                         <div id="detalle-historial"></div>
                     </div>
                 </div>
@@ -2807,14 +2949,14 @@
                             <div class="bg-danger text-white py-1 px-2 d-flex align-items-center" style="font-size:.78rem;">
                                 <i class="ri-arrow-left-line me-1"></i><strong>Devueltos</strong>
                             </div>
-                            <div class="table-responsive" style="max-height:185px; overflow-y:auto;">
+                            <div class="table-responsive" style="max-height:155px; overflow-y:auto;">
                                 <table class="table table-sm mb-0" style="font-size:.78rem;">
                                     <thead class="table-light sticky-top">
                                         <tr>
                                             <th class="py-1">Artículo</th>
                                             <th class="py-1" width="50">Talla</th>
                                             <th class="py-1 text-center" width="35">Qty</th>
-                                            <th class="py-1 text-end" width="70">Subtotal</th>
+                                            <th class="py-1 text-end fw-bold" width="75">Subtotal</th>
                                         </tr>
                                     </thead>
                                     <tbody id="aprobar-productos-devueltos">
@@ -2829,14 +2971,14 @@
                             <div class="bg-success text-white py-1 px-2 d-flex align-items-center" style="font-size:.78rem;">
                                 <i class="ri-arrow-right-line me-1"></i><strong>Nuevos</strong>
                             </div>
-                            <div class="table-responsive" style="max-height:185px; overflow-y:auto;">
+                            <div class="table-responsive" style="max-height:155px; overflow-y:auto;">
                                 <table class="table table-sm mb-0" style="font-size:.78rem;">
                                     <thead class="table-light sticky-top">
                                         <tr>
                                             <th class="py-1">Artículo</th>
                                             <th class="py-1" width="50">Talla</th>
                                             <th class="py-1 text-center" width="35">Qty</th>
-                                            <th class="py-1 text-end" width="70">Subtotal</th>
+                                            <th class="py-1 text-end fw-bold" width="75">Subtotal</th>
                                         </tr>
                                     </thead>
                                     <tbody id="aprobar-productos-nuevos">
@@ -3069,18 +3211,18 @@
                     <div class="d-flex gap-2">
                         <div class="flex-fill">
                             <input type="radio" class="btn-check" name="metodoDevolucionNC" id="nc-metodo-efectivo" value="EFECTIVO_CAJA" checked>
-                            <label class="btn btn-outline-success w-100 py-3 text-start" for="nc-metodo-efectivo" style="font-size:0.82rem;">
-                                <i class="ri-money-dollar-circle-fill d-block mb-1" style="font-size:1.3rem;"></i>
+                            <label class="btn btn-outline-success w-100 py-2 text-start" for="nc-metodo-efectivo" style="font-size:0.82rem;">
+                                <i class="ri-money-dollar-circle-fill d-block mb-1" style="font-size:1.2rem;"></i>
                                 <strong>Efectivo en Caja</strong>
-                                <div style="font-size:0.68rem; opacity:0.8;">Afecta cuadratura de caja</div>
+                                <div style="font-size:0.65rem; opacity:0.8;">Afecta cuadratura de caja</div>
                             </label>
                         </div>
                         <div class="flex-fill">
                             <input type="radio" class="btn-check" name="metodoDevolucionNC" id="nc-metodo-transferencia" value="TRANSFERENCIA_BANCARIA">
-                            <label class="btn btn-outline-info w-100 py-3 text-start" for="nc-metodo-transferencia" style="font-size:0.82rem;">
-                                <i class="ri-bank-line d-block mb-1" style="font-size:1.3rem;"></i>
-                                <strong>Transferencia Bancaria</strong>
-                                <div style="font-size:0.68rem; opacity:0.8;">No afecta caja (solo venta total)</div>
+                            <label class="btn btn-outline-info w-100 py-2 text-start" for="nc-metodo-transferencia" style="font-size:0.82rem;">
+                                <i class="ri-bank-line d-block mb-1" style="font-size:1.2rem;"></i>
+                                <strong>Transferencia</strong>
+                                <div style="font-size:0.65rem; opacity:0.8;">No afecta caja</div>
                             </label>
                         </div>
                     </div>
@@ -3118,12 +3260,6 @@
 </div>
 
 <!-- Extra JS -->
-<script src="{% static 'libs/datatables.net/js/jquery.dataTables.min.js' %}"></script>
-<script src="{% static 'libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js' %}"></script>
-<script src="{% static 'libs/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
-<script src="{% static 'libs/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js' %}"></script>
-<script src="{% static 'libs/datatables.net-buttons/js/dataTables.buttons.min.js' %}"></script>
-<script src="{% static 'libs/datatables.net-buttons-bs5/js/buttons.bootstrap5.min.js' %}"></script>
 <script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 
 <script>

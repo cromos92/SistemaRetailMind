@@ -75,19 +75,18 @@
                                 <input type="text"
                                        id="dashboardQuickStart"
                                        class="form-control"
-                                       placeholder="Nº de ticket para buscar · Enter vacío = Nueva Venta · o tipea para buscar ticket…"
+                                       placeholder="Ingresa Nº de ticket para buscar…"
                                        autocomplete="off"
                                        spellcheck="false">
-                                <button class="btn btn-success fw-bold px-4" onclick="dashboardIniciarOBuscar()">
-                                    <i class="ri-add-circle-line me-1"></i> NUEVA VENTA
+                                <button class="btn btn-outline-primary fw-bold px-3" onclick="dashboardBuscarTicket()">
+                                    <i class="ri-search-line me-1"></i> BUSCAR
                                 </button>
                                 <button class="btn btn-warning px-3" onclick="abrirModalCotizaciones()" title="Cargar cotización">
                                     <i class="ri-file-list-3-line"></i>
                                 </button>
                             </div>
                             <div class="qs-hints d-flex gap-3 mt-1 px-1 flex-wrap">
-                                <span><kbd>Enter</kbd> vacío → nueva venta</span>
-                                <span><kbd>Enter</kbd> con número → buscar ticket</span>
+                                <span><kbd>Enter</kbd> → buscar ticket</span>
                                 <span>Cualquier tecla te enfoca aquí automáticamente</span>
                             </div>
                         </div>
@@ -3456,11 +3455,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Auto-enfoque al cargar (con pequeño delay para que el DOM esté listo)
         setTimeout(() => qs.focus(), 300);
 
-        // Enter → nueva venta o buscar ticket
+        // Enter → buscar ticket
         qs.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                dashboardIniciarOBuscar();
+                dashboardBuscarTicket();
             }
         });
 
@@ -3479,19 +3478,41 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    window.dashboardIniciarOBuscar = function() {
+    window.dashboardBuscarTicket = function() {
         const qs = document.getElementById('dashboardQuickStart');
         const val = (qs ? qs.value.trim() : '');
         if (!val) {
-            if (qs) qs.value = '';
-            iniciarNuevaVenta();
-        } else {
-            mostrarVista('wizard');
-            reiniciarWizard();
-            document.getElementById('inputTicket').value = val;
-            if (qs) qs.value = '';
-            buscarTicketPorNumero();
+            mostrarNotificacion('Ingrese un número de ticket para buscar', 'warning');
+            if (qs) qs.focus();
+            return;
         }
+
+        fetch(apiUrls.buscarTicket, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({ correlativo: val }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                if (qs) qs.value = '';
+                mostrarVista('wizard');
+                reiniciarWizard();
+                cargarTicket(data.ticket);
+                mostrarNotificacion('Ticket cargado correctamente', 'success');
+                irAPaso(2);
+            } else {
+                mostrarNotificacion(data.error || 'Ticket no encontrado', 'error');
+                if (qs) qs.select();
+            }
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            mostrarNotificacion('Error de conexión al buscar ticket', 'error');
+        });
     };
 
     function establecerFechaActual() {
@@ -5584,6 +5605,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validarDatosCliente() {
+        if (!ticketActual || !ticketActual.productos || ticketActual.productos.length === 0) {
+            mostrarNotificacion('Debe agregar al menos un producto al ticket antes de continuar', 'warning');
+            return false;
+        }
+
         const tipoDocumento = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'BOLETA_ELECTRONICA';
         const nombre = document.getElementById('clienteNombre').value.trim();
         const rut = document.getElementById('clienteRut').value.trim();
@@ -7516,6 +7542,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function finalizarVenta() {
         if (!ticketActual) {
             mostrarNotificacion('No hay ticket seleccionado', 'error');
+            return;
+        }
+
+        if (!ticketActual.productos || ticketActual.productos.length === 0) {
+            mostrarNotificacion('No se puede finalizar una venta sin productos', 'error');
             return;
         }
 

@@ -24,6 +24,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 
+from django.utils import timezone
+
 from app.models import Producto_Talla, Producto, GuiaTalla, GuiaTallaItem, Sucursal
 
 from .authentication import ApiKeyAuthentication, ApiKeyPermission
@@ -439,5 +441,157 @@ class GuiasTallaExternalView(APIView):
             'success': True,
             'data': data,
             'total': len(data),
+            'error': None,
+        })
+
+
+# ──────────────────────────────────────────────
+# Endpoint 7 — Precios actuales por empresa
+# GET /api/precios-actuales/?rut_empresa=XXXXXXXX-X
+# ──────────────────────────────────────────────
+
+class PreciosActualesView(APIView):
+    """
+    Retorna precios y costos actuales de todos los SKUs de la empresa.
+    Formato ligero optimizado para que AllConnected detecte cambios de precio
+    sin necesidad de traer el catálogo completo.
+
+    Respuesta:
+    {
+        "success": true,
+        "data": [
+            {
+                "codigo_sku": "4810070",
+                "articulo": "ART001",
+                "precio_venta": 59990,
+                "precio_costo": 25000,
+                "precio_sugerido": 64990,
+                "sucursal": "PAO1"
+            }
+        ],
+        "total": 123,
+        "timestamp": "2026-04-15T12:00:00Z"
+    }
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    def get(self, request):
+        rut = request.query_params.get('rut_empresa', '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'El parámetro rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.info(f"[external/precios-actuales] rut={rut}")
+        rows = list(
+            Producto_Talla.objects
+            .filter(producto__sucursal__empresa__rut=rut)
+            .values(
+                'sku',
+                'producto__articulo',
+                'producto__costo',
+                'producto__precioventa',
+                'producto__precioSugerido',
+                'producto__sucursal__alias',
+            )
+        )
+
+        data = []
+        for row in rows:
+            data.append({
+                'codigo_sku': str(row['sku']),
+                'articulo': row.get('producto__articulo', ''),
+                'precio_venta': int(row.get('producto__precioventa', 0) or 0),
+                'precio_costo': int(row.get('producto__costo', 0) or 0),
+                'precio_sugerido': int(row.get('producto__precioSugerido', 0) or 0),
+                'sucursal': row.get('producto__sucursal__alias', '') or '',
+            })
+
+        logger.info(f"[external/precios-actuales] rut={rut} → {len(data)} SKUs")
+        return Response({
+            'success': True,
+            'data': data,
+            'total': len(data),
+            'timestamp': timezone.now().isoformat(),
+            'error': None,
+        })
+
+
+# ──────────────────────────────────────────────
+# Endpoint 8 — Novedades (productos nuevos)
+# GET /api/novedades/?rut_empresa=XXXXXXXX-X&desde=YYYY-MM-DD
+# ──────────────────────────────────────────────
+
+class NovedadesView(APIView):
+    """
+    Retorna productos/SKUs creados o modificados recientemente.
+    Usado por AllConnected para detectar nueva mercadería sin un full sync.
+
+    Si `desde` se omite, devuelve los últimos 7 días.
+    Filtra por Producto.fecha_creacion cuando existe, o hace fallback
+    a los productos actuales.
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    def get(self, request):
+        from datetime import timedelta
+
+        rut = request.query_params.get('rut_empresa', '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'El parámetro rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        desde_str = request.query_params.get('desde', '').strip()
+        if desde_str:
+            try:
+                from datetime import datetime
+                desde = datetime.strptime(desde_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response(
+                    {'success': False, 'data': [], 'total': 0,
+                     'error': 'Formato de fecha inválido. Use YYYY-MM-DD.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            desde = (timezone.now() - timedelta(days=7)).date()
+
+        logger.info(f"[external/novedades] rut={rut} desde={desde}")
+
+        qs = Producto.objects.filter(sucursal__empresa__rut=rut)
+        if hasattr(Producto, 'fecha_creacion'):
+            qs = qs.filter(fecha_creacion__date__gte=desde)
+
+        rows = list(
+            Producto_Talla.objects
+            .filter(producto__in=qs)
+            .values(
+                'sku', 'talla', 'stock',
+                'producto__articulo',
+                'producto__descripcion',
+                'producto__atributo1__valor',
+                'producto__atributo2__valor',
+                'producto__costo',
+                'producto__precioventa',
+                'producto__sucursal__alias',
+            )
+        )
+
+        productos = agrupar_por_producto(rows)
+        serializer = ProductoExternalSerializer(productos, many=True)
+
+        logger.info(f"[external/novedades] rut={rut} desde={desde} → {len(productos)} productos")
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'total': len(productos),
+            'desde': str(desde),
+            'timestamp': timezone.now().isoformat(),
             'error': None,
         })

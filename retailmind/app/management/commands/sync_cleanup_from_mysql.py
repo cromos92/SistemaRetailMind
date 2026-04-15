@@ -84,7 +84,7 @@ class Command(BaseCommand):
 
         # Banner de advertencia
         self.stdout.write('\n' + '='*70)
-        self.stdout.write(self.style.WARNING('⚠️  SYNC CLEANUP - ELIMINAR DATOS QUE NO EXISTEN EN MYSQL'))
+        self.stdout.write(self.style.WARNING('  SYNC CLEANUP - ELIMINAR DATOS QUE NO EXISTEN EN MYSQL'))
         self.stdout.write('='*70)
         
         if self.dry_run:
@@ -100,9 +100,9 @@ class Command(BaseCommand):
         # Conectar a MySQL
         try:
             self.mysql_conn = self.connect_mysql()
-            self.stdout.write(self.style.SUCCESS('✓ Conexión MySQL establecida'))
+            self.stdout.write(self.style.SUCCESS('[OK] Conexion MySQL establecida'))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'✗ Error MySQL: {e}'))
+            self.stdout.write(self.style.ERROR(f'[ERROR] MySQL: {e}'))
             return
 
         # Orden de limpieza (inverso a la creación - primero dependientes)
@@ -125,7 +125,7 @@ class Command(BaseCommand):
             ]
 
         # Primera pasada: Analizar qué se eliminaría
-        self.stdout.write('\n📊 ANÁLISIS DE DATOS A ELIMINAR:')
+        self.stdout.write('\nANALISIS DE DATOS A ELIMINAR:')
         self.stdout.write('-'*70)
         
         total_a_eliminar = 0
@@ -144,18 +144,18 @@ class Command(BaseCommand):
         self.stdout.write('')
 
         if total_a_eliminar == 0:
-            self.stdout.write(self.style.SUCCESS('✓ No hay datos para eliminar. Base de datos sincronizada.'))
+            self.stdout.write(self.style.SUCCESS('[OK] No hay datos para eliminar. Base de datos sincronizada.'))
             self.mysql_conn.close()
             return
 
         if self.dry_run:
-            self.stdout.write(self.style.SUCCESS('\n[DRY-RUN] Simulación completada. Ejecuta sin --dry-run para eliminar.'))
+            self.stdout.write(self.style.SUCCESS('\n[DRY-RUN] Simulacion completada. Ejecuta sin --dry-run para eliminar.'))
             self.mysql_conn.close()
             return
 
         # Pedir confirmación
         if not self.auto_confirm:
-            self.stdout.write(self.style.ERROR(f'\n⚠️  Se eliminarán {total_a_eliminar:,} registros de PostgreSQL'))
+            self.stdout.write(self.style.ERROR(f'\n  Se eliminaran {total_a_eliminar:,} registros de PostgreSQL'))
             confirm = input('¿Continuar? Escribe "SI" para confirmar: ')
             if confirm.upper() != 'SI':
                 self.stdout.write(self.style.WARNING('Operación cancelada.'))
@@ -163,7 +163,7 @@ class Command(BaseCommand):
                 return
 
         # Ejecutar limpieza
-        self.stdout.write('\n🗑️  EJECUTANDO LIMPIEZA:')
+        self.stdout.write('\nEJECUTANDO LIMPIEZA:')
         self.stdout.write('-'*70)
         
         try:
@@ -172,7 +172,7 @@ class Command(BaseCommand):
                     count = cleanup_func(analyze_only=False)
                     self.stats[f'{table_name}_eliminados'] = count
                     if count > 0:
-                        self.stdout.write(self.style.SUCCESS(f'  ✓ {table_name:25s}: {count:>8,} eliminados'))
+                        self.stdout.write(self.style.SUCCESS(f'  [OK] {table_name:25s}: {count:>8,} eliminados'))
 
             self.show_statistics()
 
@@ -454,7 +454,7 @@ class Command(BaseCommand):
         elapsed = datetime.now() - self.start_time
         
         self.stdout.write('\n' + '='*70)
-        self.stdout.write(self.style.SUCCESS('✓ LIMPIEZA COMPLETADA'))
+        self.stdout.write(self.style.SUCCESS('[OK] LIMPIEZA COMPLETADA'))
         self.stdout.write('='*70)
         
         total_eliminados = sum(

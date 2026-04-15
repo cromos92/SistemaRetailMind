@@ -7,6 +7,8 @@ from .views import (
     HealthCheckExternalView,
     GuiasTallaExternalView,
     SucursalesPorEmpresaView,
+    PreciosActualesView,
+    NovedadesView,
 )
 
 urlpatterns = [
@@ -17,5 +19,7 @@ urlpatterns = [
     path('stock/por-skus/', StockPorSkusView.as_view(), name='external-stock-por-skus'),
     path('guias-talla/', GuiasTallaExternalView.as_view(), name='external-guias-talla'),
     path('sucursales/', SucursalesPorEmpresaView.as_view(), name='external-sucursales'),
+    path('precios-actuales/', PreciosActualesView.as_view(), name='external-precios-actuales'),
+    path('novedades/', NovedadesView.as_view(), name='external-novedades'),
     path('health/', HealthCheckExternalView.as_view(), name='external-health'),
 ]

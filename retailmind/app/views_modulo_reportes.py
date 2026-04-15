@@ -1186,14 +1186,16 @@ def obtener_ventas_por_vendedor_reporte(request):
                 ventas_acumuladas[vid]['descuentos'] += int(item['total_descuentos'] or 0)
                 ventas_acumuladas[vid]['documentos'] += item['total_documentos'] or 0
         
-        # ========== DTEs (Documentos migrados) ==========
-        # Incluir estados: EMITIDO (nuevo), PAGADO (migrados de Laravel)
+        # ========== DTEs (solo ventas al público, sin facturas entre sucursales) ==========
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio,
             fecha_emision__lte=fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin,
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            tipo_transaccion='VENTA_PUBLICO',
         ).exclude(
             estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
+        ).exclude(
+            receptor__isnull=False,
+            receptor_id=F('emisor_id')
         ).select_related('vendedor', 'sucursal')
 
         # Filtrar por sucursal según selección o permisos
@@ -1388,13 +1390,16 @@ def obtener_ventas_por_sucursal_reporte(request):
                     vendedores_por_sucursal[sid] = set()
                 vendedores_por_sucursal[sid].add(vid)
         
-        # ========== DTEs (Documentos migrados) ==========
+        # ========== DTEs (solo ventas al público, sin facturas entre sucursales) ==========
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio,
             fecha_emision__lte=fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin,
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            tipo_transaccion='VENTA_PUBLICO',
         ).exclude(
             estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
+        ).exclude(
+            receptor__isnull=False,
+            receptor_id=F('emisor_id')
         ).select_related('sucursal', 'vendedor')
 
         # Filtrar por sucursal según selección o permisos
@@ -1555,10 +1560,13 @@ def obtener_vendedores_reporte(request):
                 sucursal_id=sucursal_id
             ).values_list('vendedor_id', flat=True).distinct())
             
-            # IDs de vendedores con DTEs en esta sucursal
+            # IDs de vendedores con DTEs de venta al público en esta sucursal
             vendedores_dtes = set(Dte.objects.filter(
                 sucursal_id=sucursal_id,
-                tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+                tipo_transaccion='VENTA_PUBLICO',
+            ).exclude(
+                receptor__isnull=False,
+                receptor_id=F('emisor_id')
             ).values_list('vendedor_id', flat=True).distinct())
             
             # Unir ambos conjuntos
@@ -1655,13 +1663,16 @@ def obtener_documentos_vendedor_reporte(request):
 
         documentos = []
 
-        # ---- DTEs ----
+        # ---- DTEs (solo ventas al público, sin facturas entre sucursales) ----
         qs_dtes = Dte.objects.filter(
             vendedor_id=vendedor_id,
             fecha_emision__gte=fecha_inicio,
             fecha_emision__lte=fecha_fin,
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            tipo_transaccion='VENTA_PUBLICO',
             estado_dte__in=['EMITIDO', 'PAGADO'],
+        ).exclude(
+            receptor__isnull=False,
+            receptor_id=F('emisor_id')
         ).select_related('sucursal', 'receptor')
 
         qs_dtes = filtrar_queryset_por_sucursal(qs_dtes, request.user, request)
@@ -1721,24 +1732,22 @@ def obtener_documentos_vendedor_reporte(request):
 def obtener_comparativa_mensual(request):
     """API para obtener datos de comparativa mensual de sucursales (últimos 6 meses)"""
     try:
-        sucursal_id = request.GET.get('sucursal_id')
-        
-        # Calcular últimos 6 meses
         fecha_fin = timezone.now()
-        fecha_inicio = fecha_fin - timedelta(days=180)  # Aproximadamente 6 meses
-        
-        # Construir queryset
-        queryset = Ticket.objects.filter(
+        fecha_inicio = fecha_fin - timedelta(days=180)
+
+        sucursales_dict = {}
+        meses_set = set()
+
+        # ========== TICKETS (POS nuevo) ==========
+        queryset_tickets = Ticket.objects.filter(
             created_at__gte=fecha_inicio,
             estado='PAGADO',
             modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'],
         ).select_related('sucursal')
-        
-        # Filtrar por sucursal según permisos
-        queryset = filtrar_queryset_por_sucursal(queryset, request.user, request)
 
-        # Agrupar por mes y sucursal
-        ventas_mensuales = queryset.annotate(
+        queryset_tickets = filtrar_queryset_por_sucursal(queryset_tickets, request.user, request)
+
+        tickets_mensuales = queryset_tickets.annotate(
             mes=TruncMonth('created_at')
         ).values(
             'mes',
@@ -1746,24 +1755,74 @@ def obtener_comparativa_mensual(request):
         ).annotate(
             total_ventas=Sum('total')
         ).order_by('mes', 'sucursal__alias')
-        
-        # Organizar datos por sucursal
-        sucursales_dict = {}
-        meses_set = set()
-        
-        for item in ventas_mensuales:
+
+        for item in tickets_mensuales:
             sucursal_nombre = item['sucursal__alias']
             mes_str = item['mes'].strftime('%Y-%m')
             meses_set.add(mes_str)
-            
             if sucursal_nombre not in sucursales_dict:
                 sucursales_dict[sucursal_nombre] = {}
-            
-            sucursales_dict[sucursal_nombre][mes_str] = int(item['total_ventas'])
-        
+            sucursales_dict[sucursal_nombre][mes_str] = \
+                sucursales_dict[sucursal_nombre].get(mes_str, 0) + int(item['total_ventas'] or 0)
+
+        # ========== DTEs (ventas al público, sin facturas entre sucursales) ==========
+        queryset_dtes = Dte.objects.filter(
+            fecha_emision__gte=fecha_inicio.date(),
+            tipo_transaccion='VENTA_PUBLICO',
+        ).exclude(
+            estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
+        ).exclude(
+            receptor__isnull=False,
+            receptor_id=F('emisor_id')
+        ).select_related('sucursal')
+
+        queryset_dtes = filtrar_queryset_por_sucursal(queryset_dtes, request.user, request)
+
+        # Ventas DTE (excluir Notas de Crédito)
+        dtes_mensuales = queryset_dtes.exclude(
+            tipo_documento='NOTA DE CREDITO'
+        ).annotate(
+            mes=TruncMonth('fecha_emision')
+        ).values(
+            'mes',
+            'sucursal__alias'
+        ).annotate(
+            total_ventas=Sum('monto_con_iva')
+        ).order_by('mes', 'sucursal__alias')
+
+        for item in dtes_mensuales:
+            sucursal_nombre = item['sucursal__alias']
+            mes_str = item['mes'].strftime('%Y-%m')
+            meses_set.add(mes_str)
+            if sucursal_nombre not in sucursales_dict:
+                sucursales_dict[sucursal_nombre] = {}
+            sucursales_dict[sucursal_nombre][mes_str] = \
+                sucursales_dict[sucursal_nombre].get(mes_str, 0) + int(item['total_ventas'] or 0)
+
+        # Restar Notas de Crédito (devoluciones)
+        nc_mensuales = queryset_dtes.filter(
+            tipo_documento='NOTA DE CREDITO'
+        ).annotate(
+            mes=TruncMonth('fecha_emision')
+        ).values(
+            'mes',
+            'sucursal__alias'
+        ).annotate(
+            total_nc=Sum('monto_con_iva')
+        ).order_by('mes', 'sucursal__alias')
+
+        for item in nc_mensuales:
+            sucursal_nombre = item['sucursal__alias']
+            mes_str = item['mes'].strftime('%Y-%m')
+            meses_set.add(mes_str)
+            if sucursal_nombre not in sucursales_dict:
+                sucursales_dict[sucursal_nombre] = {}
+            sucursales_dict[sucursal_nombre][mes_str] = \
+                sucursales_dict[sucursal_nombre].get(mes_str, 0) - int(item['total_nc'] or 0)
+
         # Ordenar meses
         meses_ordenados = sorted(list(meses_set))
-        
+
         # Formatear datos para el gráfico
         series_data = []
         for sucursal, ventas_por_mes in sucursales_dict.items():
@@ -1772,16 +1831,15 @@ def obtener_comparativa_mensual(request):
                 'name': sucursal,
                 'data': data
             })
-        
-        # Formatear etiquetas de meses
+
         meses_labels = [datetime.strptime(m, '%Y-%m').strftime('%b %Y') for m in meses_ordenados]
-        
+
         return JsonResponse({
             'success': True,
             'series': series_data,
             'categories': meses_labels
         })
-        
+
     except Exception as e:
         return JsonResponse({
             'success': False,
