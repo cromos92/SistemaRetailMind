@@ -4519,67 +4519,67 @@ function updateResumenDocumento() {
 }
 
 function clearAll() {
+    // Detectar si hay productos cargados para ajustar el mensaje del diálogo
+    const hayProductos = $('#detalleBody tr:not(#emptyRow)').length > 0;
+    const textoConfirmacion = hayProductos
+        ? 'Se reiniciará la configuración (método, tipo de documento, receptor, sucursal destino) y volverás al paso 1. Los productos seleccionados se mantendrán en el detalle.'
+        : 'Se reiniciará la configuración y volverás al paso 1.';
+
     Swal.fire({
-        title: '¿Reiniciar proceso?',
-        text: 'Se perderán todos los datos ingresados y volverás al paso 1',
+        title: '¿Reiniciar configuración?',
+        text: textoConfirmacion,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Sí, reiniciar',
         cancelButtonText: 'Cancelar'
     }).then((result) => {
-        if (result.isConfirmed) {
-            // Reiniciar variables
-            selectedMethod = '';
-            selectedConcept = '';
-            selectedProducts = [];
-            currentStep = 1;
-            maxStepReached = 1;
-            
-            // Limpiar formularios
-            $('.method-selector').removeClass('active');
-            $('#receptorSelect').val('');
-            $('#sucursalDestinoSelect').val('');
-            $('#fechaEmision').val(new Date().toISOString().split('T')[0]);
-            
-            // Reiniciar badges de selección
-            $('#badgeMetodoDespacho, #badgeMetodoDespachoVisible').removeClass('bg-success').addClass('bg-danger').text('Pendiente');
-            $('#badgeTipoDocumento').removeClass('bg-success').addClass('bg-danger').text('Pendiente');
-            
-            // Ocultar contenedores dinámicos
-            $('#sucursalDestinoContainer').hide();
-            $('#receptorExternoContainer').hide();
-            $('#infoDespachoInterno').hide();
-            $('#infoDespachoExterno').hide();
-            $('#resumenSeleccion').hide();
-            $('#resumenStock').html('-');
-            $('#resumenMetodo').html('-');
-            $('#resumenDocumento').html('-');
-            $('#detalleBody').empty().append(`
-                <tr id="emptyRow">
-                    <td colspan="7" class="text-center text-muted py-4">
-                        <i class="bi bi-inbox display-4 d-block mb-2"></i>
-                        No hay productos seleccionados
-                    </td>
-                </tr>
-            `);
-            
-            // Reiniciar totales
-            $('#subtotalNeto, #montoIva, #montoTotal').text('$0');
-            $('#totalUnidades').text('0');
-            
-            // Volver al paso 1
-            $('.step-content').hide();
-            $('#step-1').show();
-            updateWizardIndicator();
-            
-            Swal.fire({
-                icon: 'success',
-                title: 'Proceso reiniciado',
-                text: 'Puedes comenzar nuevamente',
-                timer: 2000,
-                showConfirmButton: false
-            });
+        if (!result.isConfirmed) return;
+
+        // Reiniciar SOLO variables de configuración; se conservan los productos
+        selectedMethod = '';
+        selectedConcept = '';
+        currentStep = 1;
+
+        // Limpiar selectores del paso 1
+        $('.method-selector').removeClass('active');
+        $('#receptorSelect').val('');
+        $('#sucursalDestinoSelect').val('');
+        $('#fechaEmision').val(new Date().toISOString().split('T')[0]);
+
+        // Reiniciar badges de selección del paso 1
+        $('#badgeMetodoDespacho, #badgeMetodoDespachoVisible').removeClass('bg-success').addClass('bg-danger').text('Pendiente');
+        $('#badgeTipoDocumento').removeClass('bg-success').addClass('bg-danger').text('Pendiente');
+
+        // Ocultar contenedores dinámicos del paso 1
+        $('#sucursalDestinoContainer').hide();
+        $('#receptorExternoContainer').hide();
+        $('#infoDespachoInterno').hide();
+        $('#infoDespachoExterno').hide();
+        $('#resumenSeleccion').hide();
+        $('#resumenStock').html('-');
+        $('#resumenMetodo').html('-');
+        $('#resumenDocumento').html('-');
+
+        // NO se vacía #detalleBody: los productos y sus tallas permanecen intactos.
+        // Recalcular totales a partir de las filas que siguen en el DOM para dejarlos consistentes.
+        if (typeof updateTotales === 'function') {
+            updateTotales();
         }
+
+        // Volver al paso 1 sin recargar la página
+        $('.step-content').hide();
+        $('#step-1').show();
+        updateWizardIndicator();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Configuración reiniciada',
+            text: hayProductos
+                ? 'Los productos se conservaron en el detalle'
+                : 'Puedes comenzar nuevamente',
+            timer: 2000,
+            showConfirmButton: false
+        });
     });
 }
 

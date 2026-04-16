@@ -1,0 +1,809 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <!-- Header -->
+        <div class="row mb-3">
+            <div class="col">
+                <h1 class="display-6 mb-1 fw-bold">
+                    <i class="ri-bar-chart-2-line text-primary"></i> Comparativo de Ventas
+                </h1>
+                <p class="text-muted mb-0">
+                    Comparación entre el periodo actual y el periodo anterior equivalente.
+                    Incluye separación de ventas Internet (E-commerce) vs Presencial y ranking de vendedores.
+                </p>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label for="tipoFlujo" class="form-label fw-semibold">
+                                    Tipo de comparación
+                                    <i class="ri-information-line text-primary" data-bs-toggle="tooltip"
+                                       title="Cada comparación responde una pregunta distinta. Lee la descripción debajo."></i>
+                                </label>
+                                <select class="form-select" id="tipoFlujo">
+                                    <optgroup label="— Operación diaria (momentum reciente) —">
+                                        <option value="hoy">Hoy vs Ayer</option>
+                                        <option value="semana">Esta semana vs Semana pasada</option>
+                                        <option value="ultimos_7">Últimos 7 días vs 7 días previos</option>
+                                        <option value="ultimos_30">Últimos 30 días vs 30 días previos</option>
+                                    </optgroup>
+                                    <optgroup label="— Mes a mes (tendencia corto plazo) —">
+                                        <option value="mes_mtd">Mes a la fecha vs Mes pasado (MTD)</option>
+                                        <option value="mes_full" selected>Mes actual completo vs Mes pasado completo</option>
+                                    </optgroup>
+                                    <optgroup label="— Año contra año (sin estacionalidad) ★ —">
+                                        <option value="yoy">YoY · Este mes vs Mismo mes año pasado</option>
+                                        <option value="trimestre_yoy">YoY · Trimestre actual vs Mismo trimestre año pasado</option>
+                                        <option value="anio_ytd">YoY · Año actual a la fecha vs Año pasado a la misma fecha</option>
+                                        <option value="anio_full">Año calendario pasado vs Año antepasado (completos)</option>
+                                    </optgroup>
+                                    <optgroup label="— Personalizado —">
+                                        <option value="custom">Rango personalizado</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-none" id="contFechaInicio">
+                                <label class="form-label fw-semibold">Desde</label>
+                                <input type="date" class="form-control" id="fechaInicio">
+                            </div>
+                            <div class="col-md-2 d-none" id="contFechaFin">
+                                <label class="form-label fw-semibold">Hasta</label>
+                                <input type="date" class="form-control" id="fechaFin">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold">Sucursal</label>
+                                <select class="form-select" id="filtroSucursal">
+                                    <option value="">Todas las sucursales</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-primary w-100" id="btnConsultar">
+                                    <i class="ri-search-line"></i> Consultar
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Descripción contextual del comparativo seleccionado -->
+                        <div class="alert alert-info py-2 px-3 mb-2 mt-3 small d-flex align-items-start" id="boxQueMide" role="alert">
+                            <i class="ri-lightbulb-line me-2 mt-1"></i>
+                            <div>
+                                <strong id="tituloQueMide">¿Qué mide este comparativo?</strong>
+                                <div id="descripcionQueMide" class="text-muted">
+                                    Selecciona un tipo de comparación.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="small text-muted" id="infoPeriodo">
+                            <i class="ri-calendar-line"></i> Selecciona una comparación y presiona Consultar.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-money-dollar-circle-line text-primary"></i> Ventas Netas</div>
+                        <div class="kpi-main" id="kpiVentasActual">$0</div>
+                        <div class="kpi-sub">Anterior: <span id="kpiVentasAnterior">$0</span></div>
+                        <div class="kpi-var" id="kpiVentasVar"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-global-line text-info"></i> % Internet</div>
+                        <div class="kpi-main" id="kpiInternetActual">0%</div>
+                        <div class="kpi-sub">Anterior: <span id="kpiInternetAnterior">0%</span></div>
+                        <div class="kpi-var" id="kpiInternetVar"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-calculator-line text-success"></i> Ticket Promedio</div>
+                        <div class="kpi-main" id="kpiTicketActual">$0</div>
+                        <div class="kpi-sub">Anterior: <span id="kpiTicketAnterior">$0</span></div>
+                        <div class="kpi-var" id="kpiTicketVar"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-file-list-3-line text-warning"></i> Documentos</div>
+                        <div class="kpi-main" id="kpiDocsActual">0</div>
+                        <div class="kpi-sub">Anterior: <span id="kpiDocsAnterior">0</span></div>
+                        <div class="kpi-var" id="kpiDocsVar"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-arrow-go-back-line text-danger"></i> Tasa Devolución</div>
+                        <div class="kpi-main" id="kpiDevActual">0%</div>
+                        <div class="kpi-sub">Anterior: <span id="kpiDevAnterior">0%</span></div>
+                        <div class="kpi-var" id="kpiDevVar"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-shopping-bag-line text-secondary"></i> Unidades Vendidas</div>
+                        <div class="kpi-main" id="kpiUnidadesActual">0</div>
+                        <div class="kpi-sub">Anterior: <span id="kpiUnidadesAnterior">0</span></div>
+                        <div class="kpi-var" id="kpiUnidadesVar"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-trophy-line text-primary"></i> Top Sucursal (crecimiento)</div>
+                        <div class="kpi-main fs-5" id="kpiTopSucursal">-</div>
+                        <div class="kpi-sub" id="kpiTopSucursalVar">&nbsp;</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-user-star-line text-primary"></i> Top Vendedor (crecimiento)</div>
+                        <div class="kpi-main fs-5" id="kpiTopVendedor">-</div>
+                        <div class="kpi-sub" id="kpiTopVendedorVar">&nbsp;</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <ul class="nav nav-tabs nav-tabs-custom card-header-tabs border-bottom-0" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#tabSucursales" role="tab">
+                                    <i class="ri-store-2-line"></i> Por Tienda
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabVendedores" role="tab">
+                                    <i class="ri-user-line"></i> Ranking Vendedores
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabCanales" role="tab">
+                                    <i class="ri-global-line"></i> Internet vs Presencial
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content">
+
+                            <!-- Tab Sucursales -->
+                            <div class="tab-pane fade show active" id="tabSucursales" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-lg-7 mb-3">
+                                        <div class="card border shadow-sm h-100">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-bar-chart-grouped-line text-primary"></i>
+                                                    Ventas por Sucursal (Actual vs Anterior)
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartSucursales" style="min-height:320px"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-5 mb-3">
+                                        <div class="card border shadow-sm h-100">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-pie-chart-line text-success"></i>
+                                                    Internet vs Presencial (Global)
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartCanalDonut" style="min-height:320px"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-table-line text-info"></i> Detalle por Sucursal
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-hover table-striped align-middle mb-0" id="tablaSucursales">
+                                                        <thead class="table-primary">
+                                                            <tr>
+                                                                <th>#</th>
+                                                                <th>Sucursal</th>
+                                                                <th class="text-end">Actual</th>
+                                                                <th class="text-end">Anterior</th>
+                                                                <th class="text-end">Δ $</th>
+                                                                <th class="text-center">Δ %</th>
+                                                                <th class="text-center">% Internet Act.</th>
+                                                                <th class="text-center">% Internet Ant.</th>
+                                                                <th class="text-center">Docs</th>
+                                                                <th class="text-end">Ticket Prom.</th>
+                                                                <th class="text-end">Devol.</th>
+                                                                <th class="text-center">% Partic.</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody></tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Vendedores -->
+                            <div class="tab-pane fade" id="tabVendedores" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-12 mb-3">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-bar-chart-horizontal-line text-success"></i>
+                                                    Top 10 Vendedores por Crecimiento ($)
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartTopCrecimiento" style="min-height:320px"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-table-line text-info"></i> Ranking Vendedores
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-hover table-striped align-middle mb-0" id="tablaVendedores">
+                                                        <thead class="table-primary">
+                                                            <tr>
+                                                                <th>#</th>
+                                                                <th>Vendedor</th>
+                                                                <th>Código</th>
+                                                                <th>Sucursal</th>
+                                                                <th class="text-end">Actual</th>
+                                                                <th class="text-end">Anterior</th>
+                                                                <th class="text-end">Δ $</th>
+                                                                <th class="text-center">Δ %</th>
+                                                                <th class="text-center">Docs Act.</th>
+                                                                <th class="text-center">Docs Ant.</th>
+                                                                <th class="text-end">Ticket Prom.</th>
+                                                                <th class="text-center">Tendencia</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody></tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Canales -->
+                            <div class="tab-pane fade" id="tabCanales" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-12 mb-3">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-bar-chart-2-line text-primary"></i>
+                                                    Comparativo por Canal (Actual vs Anterior)
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartCanales" style="min-height:320px"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-table-line text-info"></i> Detalle por Canal
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-hover table-striped align-middle mb-0" id="tablaCanales">
+                                                        <thead class="table-primary">
+                                                            <tr>
+                                                                <th>Canal</th>
+                                                                <th class="text-end">Actual</th>
+                                                                <th class="text-end">Anterior</th>
+                                                                <th class="text-center">Δ %</th>
+                                                                <th class="text-center">% Partic. Act.</th>
+                                                                <th class="text-center">% Partic. Ant.</th>
+                                                                <th class="text-center">Docs Act.</th>
+                                                                <th class="text-center">Docs Ant.</th>
+                                                                <th class="text-center">Unid. Act.</th>
+                                                                <th class="text-center">Unid. Ant.</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody></tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<style>
+.kpi-card { transition: transform .15s; }
+.kpi-card:hover { transform: translateY(-2px); }
+.kpi-label { font-size: .7rem; color: #6c757d; text-transform: uppercase; font-weight: 600; letter-spacing: .3px; }
+.kpi-main { font-size: 1.5rem; font-weight: 700; line-height: 1.2; margin-top: .2rem; }
+.kpi-sub { font-size: .72rem; color: #878a99; margin-top: .1rem; }
+.kpi-var { font-size: .78rem; font-weight: 600; margin-top: .25rem; }
+.var-up { color: #0e8a55; }
+.var-down { color: #c0274b; }
+.var-neutral { color: #6c757d; }
+.badge-var-up { background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-weight: 600; }
+.badge-var-down { background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-weight: 600; }
+.badge-var-neutral { background: #e2e3e5; color: #383d41; padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-weight: 600; }
+.nav-tabs-custom .nav-link { border: none; color: #6c757d; font-weight: 500; }
+.nav-tabs-custom .nav-link.active { color: #4154f1; border-bottom: 3px solid #4154f1; }
+#tablaSucursales td, #tablaVendedores td, #tablaCanales td { font-size: .82rem; }
+
+@media (max-width: 768px) {
+    .kpi-main { font-size: 1.1rem; }
+    .kpi-label { font-size: .62rem; }
+    #chartSucursales, #chartCanalDonut, #chartTopCrecimiento, #chartCanales { min-height: 260px !important; }
+}
+@media (max-width: 576px) {
+    .display-6 { font-size: 1.1rem; }
+    .kpi-main { font-size: 1rem; }
+    #tablaSucursales, #tablaVendedores, #tablaCanales { font-size: .72rem; }
+    #chartSucursales, #chartCanalDonut, #chartTopCrecimiento, #chartCanales { min-height: 220px !important; }
+}
+</style>
+
+<script>
+(function() {
+    const esSuperuser = {{ puede_ver_todas_sucursales|yesno:"true,false" }};
+    const sucursalActivaId = '{{ sucursal_activa_id|default:"" }}';
+
+    let chartSucursales, chartCanalDonut, chartTopCrecimiento, chartCanales;
+
+    const fmtMoney = n => '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0));
+    const fmtNum = n => new Intl.NumberFormat('es-CL').format(Math.round(n || 0));
+    const fmtPct = n => (n === null || n === undefined) ? '-' : (Number(n).toFixed(1) + '%');
+
+    function badgeVar(v, isPP = false) {
+        if (v === null || v === undefined) return '<span class="badge-var-neutral">-</span>';
+        const suffix = isPP ? ' pp' : '%';
+        if (v > 0) return `<span class="badge-var-up"><i class="ri-arrow-up-s-line"></i>${v}${suffix}</span>`;
+        if (v < 0) return `<span class="badge-var-down"><i class="ri-arrow-down-s-line"></i>${v}${suffix}</span>`;
+        return `<span class="badge-var-neutral">0${suffix}</span>`;
+    }
+
+    function textVar(v, isPP = false) {
+        if (v === null || v === undefined) return '<span class="var-neutral">-</span>';
+        const suffix = isPP ? ' pp' : '%';
+        if (v > 0) return `<span class="var-up"><i class="ri-arrow-up-s-line"></i>${v}${suffix}</span>`;
+        if (v < 0) return `<span class="var-down"><i class="ri-arrow-down-s-line"></i>${v}${suffix}</span>`;
+        return `<span class="var-neutral">0${suffix}</span>`;
+    }
+
+    // Descripciones en lenguaje claro de qué mide cada flujo
+    const DESCRIPCIONES_FLUJO = {
+        hoy: {
+            titulo: 'Momentum del día de hoy',
+            desc: 'Responde: ¿hoy estamos vendiendo más o menos que ayer? Útil para detectar días anómalos o el efecto de una promoción puntual. Ojo: un día vs otro tiene mucho ruido (festivos, clima, feriados).',
+            estilo: 'info',
+        },
+        semana: {
+            titulo: 'Semana corriente vs semana pasada',
+            desc: 'Responde: ¿cómo viene la semana vs la anterior? Buen indicador para planificar la semana (turnos, reposición). Incluye el mismo día de la semana para no sesgar el resultado.',
+            estilo: 'info',
+        },
+        ultimos_7: {
+            titulo: 'Últimos 7 días vs 7 días previos',
+            desc: 'Similar a "semana" pero en ventana móvil desde hoy. Útil cuando quieres una medición más estable que el día puntual pero más fresca que el mes.',
+            estilo: 'info',
+        },
+        ultimos_30: {
+            titulo: 'Últimos 30 días vs 30 días previos',
+            desc: 'Ventana móvil mensual. Suaviza el ruido del día y la semana. Bueno para ver la tendencia reciente real del negocio.',
+            estilo: 'info',
+        },
+        mes_mtd: {
+            titulo: 'Mes a la fecha (MTD) vs mismo rango del mes pasado',
+            desc: 'Responde: ¿a la misma altura del mes pasado, íbamos mejor o peor? Justo durante el mes activo, es la comparación más honesta porque compara ventanas del MISMO tamaño.',
+            estilo: 'info',
+        },
+        mes_full: {
+            titulo: 'Mes actual completo vs Mes pasado completo',
+            desc: 'Responde: ¿este mes vendemos más que el anterior? Cuidado: en retail hay estacionalidad fuerte (navidad vs enero, verano vs invierno). Una caída puede ser estacionalidad, no mal desempeño.',
+            estilo: 'warning',
+        },
+        yoy: {
+            titulo: 'YoY · Este mes vs Mismo mes del año pasado',
+            desc: 'Recomendado en retail. Elimina la estacionalidad: abril-2026 se compara con abril-2025. Si hay crecimiento aquí, es crecimiento real del negocio, no temporada.',
+            estilo: 'success',
+        },
+        trimestre_yoy: {
+            titulo: 'YoY · Trimestre actual vs Mismo trimestre año pasado',
+            desc: 'Igual que YoY pero agrupado por trimestre (Q1=ene-mar, Q2=abr-jun, etc). Ideal para reportes ejecutivos y comités trimestrales. Suaviza meses atípicos.',
+            estilo: 'success',
+        },
+        anio_ytd: {
+            titulo: 'YTD YoY · Año actual a la fecha vs Año pasado a la misma fecha',
+            desc: 'Acumulado del 1 de enero hasta hoy comparado con el mismo rango del año anterior. KPI clave para saber si el año va mejor o peor que el anterior.',
+            estilo: 'success',
+        },
+        anio_full: {
+            titulo: 'Año calendario pasado vs Año antepasado (completos)',
+            desc: 'Comparación de años cerrados. No incluye el año en curso porque aún está incompleto. Útil para cerrar balances y proyectar presupuestos.',
+            estilo: 'success',
+        },
+        custom: {
+            titulo: 'Rango personalizado',
+            desc: 'Tú eliges el rango. El periodo anterior se calcula automáticamente con el MISMO largo de días, justo antes del periodo seleccionado.',
+            estilo: 'secondary',
+        },
+    };
+
+    function actualizarDescripcion(flujo) {
+        const info = DESCRIPCIONES_FLUJO[flujo] || DESCRIPCIONES_FLUJO.custom;
+        const box = document.getElementById('boxQueMide');
+        // Limpiar estilos previos
+        box.classList.remove('alert-info', 'alert-warning', 'alert-success', 'alert-secondary');
+        box.classList.add('alert-' + info.estilo);
+        document.getElementById('tituloQueMide').textContent = info.titulo;
+        document.getElementById('descripcionQueMide').textContent = info.desc;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Activar tooltips de Bootstrap si están disponibles
+        if (window.bootstrap && bootstrap.Tooltip) {
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+        }
+
+        actualizarDescripcion(document.getElementById('tipoFlujo').value);
+        cargarSucursales().then(() => consultar());
+
+        document.getElementById('btnConsultar').addEventListener('click', consultar);
+        document.getElementById('filtroSucursal').addEventListener('change', consultar);
+        document.getElementById('tipoFlujo').addEventListener('change', function() {
+            const flujo = this.value;
+            actualizarDescripcion(flujo);
+            const custom = flujo === 'custom';
+            document.getElementById('contFechaInicio').classList.toggle('d-none', !custom);
+            document.getElementById('contFechaFin').classList.toggle('d-none', !custom);
+            if (custom) {
+                const hoy = new Date().toISOString().slice(0, 10);
+                if (!document.getElementById('fechaInicio').value) {
+                    document.getElementById('fechaInicio').value = hoy;
+                    document.getElementById('fechaFin').value = hoy;
+                }
+            } else {
+                consultar();
+            }
+        });
+    });
+
+    function cargarSucursales() {
+        return fetch('/app/api/reportes/sucursales/')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const sel = document.getElementById('filtroSucursal');
+                sel.innerHTML = esSuperuser ? '<option value="" selected>Todas las sucursales</option>' : '';
+                (data.sucursales || []).forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.nombre;
+                    // Para usuarios NO admin, preseleccionar su sucursal activa.
+                    // Para admin, mantenemos "Todas" seleccionado (reporte global por defecto).
+                    if (!esSuperuser && sucursalActivaId && String(s.id) === String(sucursalActivaId)) {
+                        opt.selected = true;
+                    }
+                    sel.appendChild(opt);
+                });
+                if (!esSuperuser && !sucursalActivaId && data.sucursales && data.sucursales.length) {
+                    sel.value = data.sucursales[0].id;
+                }
+            })
+            .catch(err => console.error('Error cargando sucursales', err));
+    }
+
+    function consultar() {
+        const tipo = document.getElementById('tipoFlujo').value;
+        const sucursal = document.getElementById('filtroSucursal').value;
+
+        let params = `tipo_flujo=${encodeURIComponent(tipo)}`;
+        if (tipo === 'custom') {
+            const fi = document.getElementById('fechaInicio').value;
+            const ff = document.getElementById('fechaFin').value;
+            if (!fi || !ff) {
+                Swal.fire({ icon: 'warning', title: 'Rango requerido', text: 'Selecciona fecha inicio y fin.' });
+                return;
+            }
+            params += `&fecha_inicio=${fi}&fecha_fin=${ff}`;
+        }
+        if (sucursal) params += `&sucursal_id=${sucursal}`;
+
+        document.getElementById('infoPeriodo').innerHTML =
+            '<div class="spinner-border spinner-border-sm text-primary me-2"></div> Cargando datos...';
+
+        fetch(`/app/api/reportes/ventas-comparativo/?${params}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) {
+                    Swal.fire({ icon: 'error', title: 'Error', text: data.error || 'Error al cargar datos' });
+                    return;
+                }
+                renderPeriodo(data.periodo);
+                renderKPIs(data.kpis);
+                renderTablaSucursales(data.sucursales);
+                renderTablaVendedores(data.vendedores);
+                renderTablaCanales(data.canales);
+                renderChartSucursales(data.sucursales);
+                renderChartCanalDonut(data.canales);
+                renderChartTopCrecimiento(data.vendedores);
+                renderChartCanales(data.canales);
+            })
+            .catch(err => {
+                console.error(err);
+                Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo cargar el reporte.' });
+            });
+    }
+
+    function renderPeriodo(p) {
+        document.getElementById('infoPeriodo').innerHTML =
+            `<i class="ri-calendar-line"></i> <strong>Actual:</strong> ${p.actual.inicio} al ${p.actual.fin}
+             &nbsp;·&nbsp; <strong>Anterior:</strong> ${p.anterior.inicio} al ${p.anterior.fin}`;
+    }
+
+    function renderKPIs(k) {
+        document.getElementById('kpiVentasActual').textContent = fmtMoney(k.ventas_actual);
+        document.getElementById('kpiVentasAnterior').textContent = fmtMoney(k.ventas_anterior);
+        document.getElementById('kpiVentasVar').innerHTML = textVar(k.variacion_pct);
+
+        document.getElementById('kpiInternetActual').textContent = fmtPct(k.pct_internet_actual);
+        document.getElementById('kpiInternetAnterior').textContent = fmtPct(k.pct_internet_anterior);
+        document.getElementById('kpiInternetVar').innerHTML = textVar(k.delta_internet_pp, true);
+
+        document.getElementById('kpiTicketActual').textContent = fmtMoney(k.ticket_promedio_actual);
+        document.getElementById('kpiTicketAnterior').textContent = fmtMoney(k.ticket_promedio_anterior);
+        document.getElementById('kpiTicketVar').innerHTML = textVar(k.variacion_ticket_pct);
+
+        document.getElementById('kpiDocsActual').textContent = fmtNum(k.documentos_actual);
+        document.getElementById('kpiDocsAnterior').textContent = fmtNum(k.documentos_anterior);
+        document.getElementById('kpiDocsVar').innerHTML = textVar(k.variacion_documentos_pct);
+
+        document.getElementById('kpiDevActual').textContent = fmtPct(k.tasa_devolucion_actual);
+        document.getElementById('kpiDevAnterior').textContent = fmtPct(k.tasa_devolucion_anterior);
+        // Delta de tasa: menos devoluciones es bueno → invertimos el color
+        const d = k.delta_tasa_devolucion_pp;
+        if (d > 0) document.getElementById('kpiDevVar').innerHTML = `<span class="var-down"><i class="ri-arrow-up-s-line"></i>${d} pp</span>`;
+        else if (d < 0) document.getElementById('kpiDevVar').innerHTML = `<span class="var-up"><i class="ri-arrow-down-s-line"></i>${d} pp</span>`;
+        else document.getElementById('kpiDevVar').innerHTML = `<span class="var-neutral">0 pp</span>`;
+
+        document.getElementById('kpiUnidadesActual').textContent = fmtNum(k.unidades_actual);
+        document.getElementById('kpiUnidadesAnterior').textContent = fmtNum(k.unidades_anterior);
+        document.getElementById('kpiUnidadesVar').innerHTML = textVar(k.variacion_unidades_pct);
+
+        const ts = k.top_sucursal_crecimiento;
+        document.getElementById('kpiTopSucursal').textContent = ts ? ts.nombre : '-';
+        document.getElementById('kpiTopSucursalVar').innerHTML = ts ? textVar(ts.variacion) : '&nbsp;';
+
+        const tv = k.top_vendedor_crecimiento;
+        document.getElementById('kpiTopVendedor').textContent = tv ? tv.nombre : '-';
+        document.getElementById('kpiTopVendedorVar').innerHTML = tv ? textVar(tv.variacion) : '&nbsp;';
+    }
+
+    function renderTablaSucursales(rows) {
+        const tb = document.querySelector('#tablaSucursales tbody');
+        if (!rows || !rows.length) {
+            tb.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Sin datos en este periodo</td></tr>';
+            return;
+        }
+        tb.innerHTML = rows.map((r, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td><strong>${r.nombre}</strong></td>
+                <td class="text-end fw-semibold">${fmtMoney(r.ventas_actual)}</td>
+                <td class="text-end text-muted">${fmtMoney(r.ventas_anterior)}</td>
+                <td class="text-end ${r.variacion_abs >= 0 ? 'text-success' : 'text-danger'}">${r.variacion_abs >= 0 ? '+' : ''}${fmtMoney(r.variacion_abs)}</td>
+                <td class="text-center">${badgeVar(r.variacion_pct)}</td>
+                <td class="text-center">${fmtPct(r.pct_internet_actual)}</td>
+                <td class="text-center text-muted">${fmtPct(r.pct_internet_anterior)}</td>
+                <td class="text-center">${fmtNum(r.documentos_actual)}</td>
+                <td class="text-end">${fmtMoney(r.ticket_promedio_actual)}</td>
+                <td class="text-end ${r.devoluciones_actual > 0 ? 'text-danger' : ''}">${r.devoluciones_actual > 0 ? '-' + fmtMoney(r.devoluciones_actual) : '-'}</td>
+                <td class="text-center"><span class="badge bg-primary">${fmtPct(r.participacion)}</span></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderTablaVendedores(rows) {
+        const tb = document.querySelector('#tablaVendedores tbody');
+        if (!rows || !rows.length) {
+            tb.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Sin datos en este periodo</td></tr>';
+            return;
+        }
+        tb.innerHTML = rows.map((r, i) => {
+            const tendencia = r.variacion_pct > 0
+                ? '<i class="ri-arrow-up-s-fill text-success fs-4"></i>'
+                : r.variacion_pct < 0
+                    ? '<i class="ri-arrow-down-s-fill text-danger fs-4"></i>'
+                    : '<i class="ri-subtract-line text-muted fs-5"></i>';
+            return `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td><strong>${r.nombre}</strong></td>
+                    <td>${r.codigo || '-'}</td>
+                    <td>${r.sucursal || '-'}</td>
+                    <td class="text-end fw-semibold">${fmtMoney(r.ventas_actual)}</td>
+                    <td class="text-end text-muted">${fmtMoney(r.ventas_anterior)}</td>
+                    <td class="text-end ${r.variacion_abs >= 0 ? 'text-success' : 'text-danger'}">${r.variacion_abs >= 0 ? '+' : ''}${fmtMoney(r.variacion_abs)}</td>
+                    <td class="text-center">${badgeVar(r.variacion_pct)}</td>
+                    <td class="text-center">${fmtNum(r.documentos_actual)}</td>
+                    <td class="text-center text-muted">${fmtNum(r.documentos_anterior)}</td>
+                    <td class="text-end">${fmtMoney(r.ticket_promedio_actual)}</td>
+                    <td class="text-center">${tendencia}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderTablaCanales(rows) {
+        const tb = document.querySelector('#tablaCanales tbody');
+        if (!rows || !rows.length) {
+            tb.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Sin datos</td></tr>';
+            return;
+        }
+        tb.innerHTML = rows.map(r => `
+            <tr>
+                <td><strong>${r.nombre}</strong></td>
+                <td class="text-end fw-semibold">${fmtMoney(r.ventas_actual)}</td>
+                <td class="text-end text-muted">${fmtMoney(r.ventas_anterior)}</td>
+                <td class="text-center">${badgeVar(r.variacion_pct)}</td>
+                <td class="text-center">${fmtPct(r.participacion_actual)}</td>
+                <td class="text-center text-muted">${fmtPct(r.participacion_anterior)}</td>
+                <td class="text-center">${fmtNum(r.documentos_actual)}</td>
+                <td class="text-center text-muted">${fmtNum(r.documentos_anterior)}</td>
+                <td class="text-center">${fmtNum(r.unidades_actual)}</td>
+                <td class="text-center text-muted">${fmtNum(r.unidades_anterior)}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderChartSucursales(rows) {
+        const top = (rows || []).slice(0, 12);
+        const options = {
+            series: [
+                { name: 'Actual', data: top.map(r => r.ventas_actual) },
+                { name: 'Anterior', data: top.map(r => r.ventas_anterior) },
+            ],
+            chart: { type: 'bar', height: 320, toolbar: { show: true } },
+            plotOptions: { bar: { horizontal: false, columnWidth: '60%', borderRadius: 4 } },
+            xaxis: { categories: top.map(r => r.nombre), labels: { rotate: -30, style: { fontSize: '10px' } } },
+            yaxis: { labels: { formatter: v => '$' + (v / 1e6).toFixed(1) + 'M' } },
+            dataLabels: { enabled: false },
+            colors: ['#4154f1', '#b0bbf5'],
+            legend: { position: 'top' },
+            tooltip: { y: { formatter: v => fmtMoney(v) } },
+        };
+        if (chartSucursales) chartSucursales.destroy();
+        chartSucursales = new ApexCharts(document.querySelector('#chartSucursales'), options);
+        chartSucursales.render();
+    }
+
+    function renderChartCanalDonut(canales) {
+        const ecom = canales.find(c => c.canal === 'ECOMMERCE') || { ventas_actual: 0 };
+        const pos = canales.find(c => c.canal === 'POS') || { ventas_actual: 0 };
+        const dte = canales.find(c => c.canal === 'DTE') || { ventas_actual: 0 };
+        const options = {
+            series: [ecom.ventas_actual, pos.ventas_actual, dte.ventas_actual],
+            chart: { type: 'donut', height: 320 },
+            labels: ['Internet (E-commerce)', 'Presencial (POS)', 'DTE (Boletas/Facturas)'],
+            colors: ['#0ab39c', '#f1c21b', '#4154f1'],
+            legend: { position: 'bottom' },
+            dataLabels: { formatter: v => v.toFixed(1) + '%' },
+            tooltip: { y: { formatter: v => fmtMoney(v) } },
+        };
+        if (chartCanalDonut) chartCanalDonut.destroy();
+        chartCanalDonut = new ApexCharts(document.querySelector('#chartCanalDonut'), options);
+        chartCanalDonut.render();
+    }
+
+    function renderChartTopCrecimiento(rows) {
+        const top = [...(rows || [])]
+            .filter(r => r.ventas_actual > 0 || r.ventas_anterior > 0)
+            .sort((a, b) => b.variacion_abs - a.variacion_abs)
+            .slice(0, 10);
+        const options = {
+            series: [{ name: 'Δ Ventas', data: top.map(r => r.variacion_abs) }],
+            chart: { type: 'bar', height: 320, toolbar: { show: true } },
+            plotOptions: {
+                bar: {
+                    horizontal: true,
+                    borderRadius: 4,
+                    colors: {
+                        ranges: [
+                            { from: -1e12, to: -0.01, color: '#f1416c' },
+                            { from: 0, to: 1e12, color: '#0ab39c' },
+                        ],
+                    },
+                },
+            },
+            xaxis: { categories: top.map(r => r.nombre), labels: { formatter: v => '$' + (v / 1e6).toFixed(1) + 'M' } },
+            dataLabels: { enabled: true, formatter: v => (v >= 0 ? '+' : '') + fmtMoney(v) },
+            tooltip: { y: { formatter: v => (v >= 0 ? '+' : '') + fmtMoney(v) } },
+            legend: { show: false },
+        };
+        if (chartTopCrecimiento) chartTopCrecimiento.destroy();
+        chartTopCrecimiento = new ApexCharts(document.querySelector('#chartTopCrecimiento'), options);
+        chartTopCrecimiento.render();
+    }
+
+    function renderChartCanales(canales) {
+        const options = {
+            series: [
+                { name: 'Actual', data: canales.map(c => c.ventas_actual) },
+                { name: 'Anterior', data: canales.map(c => c.ventas_anterior) },
+            ],
+            chart: { type: 'bar', height: 320, toolbar: { show: true } },
+            plotOptions: { bar: { horizontal: false, columnWidth: '50%', borderRadius: 6 } },
+            xaxis: { categories: canales.map(c => c.nombre) },
+            yaxis: { labels: { formatter: v => '$' + (v / 1e6).toFixed(1) + 'M' } },
+            colors: ['#0ab39c', '#c8e6df'],
+            dataLabels: { enabled: true, formatter: v => '$' + (v / 1e6).toFixed(1) + 'M', offsetY: -20 },
+            legend: { position: 'top' },
+            tooltip: { y: { formatter: v => fmtMoney(v) } },
+        };
+        if (chartCanales) chartCanales.destroy();
+        chartCanales = new ApexCharts(document.querySelector('#chartCanales'), options);
+        chartCanales.render();
+    }
+})();
+</script>

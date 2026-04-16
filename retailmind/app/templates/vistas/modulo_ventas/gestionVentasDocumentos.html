@@ -83,7 +83,10 @@
                         </div>
                     </div>
                     <div class="col-md-4 text-end">
-                        <button class="btn btn-success btn-sm" onclick="exportarDocumentos()">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="copiarTablaParaExcel()" title="Copiar todos los datos al portapapeles (pegar en Excel)">
+                            <i class="ri-file-copy-line"></i> Copiar Tabla
+                        </button>
+                        <button class="btn btn-success btn-sm ms-1" onclick="exportarDocumentos()">
                             <i class="ri-file-excel-2-line"></i> Excel
                         </button>
                         <button class="btn btn-info btn-sm ms-1" onclick="actualizarListado()">
@@ -1423,6 +1426,59 @@ document.addEventListener('DOMContentLoaded', function() {
         window.open(apiUrls.exportarExcel + '?' + new URLSearchParams(filtros));
     };
 
+    window.copiarTablaParaExcel = function() {
+        const filtros = obtenerFiltros();
+        filtros.page = 1;
+        filtros.per_page = 99999;
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ title: 'Cargando datos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        }
+
+        fetch(apiUrls.listarDocumentos + '?' + new URLSearchParams(filtros))
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success || !data.documentos || data.documentos.length === 0) {
+                    Swal.fire('Sin datos', 'No hay documentos para copiar', 'warning');
+                    return;
+                }
+
+                const docs = data.documentos;
+                const headers = ['Tipo', 'N Documento', 'Fecha', 'Cliente', 'RUT', 'Vendedor', 'Items', 'Metodo Pago', 'Subtotal', 'Descuento', 'Total'];
+                const rows = docs.map(doc => [
+                    doc.tipo || '',
+                    doc.numero || '',
+                    doc.fecha || '',
+                    (doc.cliente_nombre || 'Sin nombre').replace(/\t/g, ' '),
+                    doc.cliente_rut || '',
+                    (doc.vendedor_nombre || '').replace(/\t/g, ' '),
+                    doc.total_productos || 0,
+                    (doc.metodos_pago_str || '').replace(/\t/g, ' '),
+                    doc.subtotal_bruto || doc.total || 0,
+                    doc.descuento || 0,
+                    doc.total || 0
+                ]);
+
+                const tsv = [headers.join('\t'), ...rows.map(r => r.join('\t'))].join('\n');
+
+                navigator.clipboard.writeText(tsv).then(() => {
+                    Swal.fire({ icon: 'success', title: 'Copiado', text: `${docs.length} documentos copiados. Pega en Excel con Ctrl+V`, timer: 2500, showConfirmButton: false });
+                }).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = tsv;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    Swal.fire({ icon: 'success', title: 'Copiado', text: `${docs.length} documentos copiados. Pega en Excel con Ctrl+V`, timer: 2500, showConfirmButton: false });
+                });
+            })
+            .catch(() => {
+                Swal.fire('Error', 'No se pudieron cargar los datos', 'error');
+            });
+    };
 
     // === FUNCIÓN PRINCIPAL PARA VER DETALLE COMPLETO ===
     

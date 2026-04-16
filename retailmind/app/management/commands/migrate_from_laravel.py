@@ -425,12 +425,12 @@ class Command(BaseCommand):
             ('movimientos', self.migrate_movimientos),
             ('dtes', self.migrate_dtes),
             ('dte_productos', self.migrate_dte_productos),
-            ('crear_dtes_faltantes', self.crear_dtes_faltantes),
             ('fix_dtes_duplicados', self.fix_dtes_duplicados),
             ('corregir_descuentos_dte', self.corregir_descuentos_dte),
             ('corregir_fechas_dte', self.corregir_fechas_dte),
             ('corregir_sucursales_dte', self.corregir_sucursales_dte),
             ('corregir_tipo_transaccion', self.corregir_tipo_transaccion_dte),
+            ('crear_dtes_faltantes', self.crear_dtes_faltantes),
             ('ventas_pagos', self.migrate_ventas_pagos),
             ('asignar_vendedores_dte', self.asignar_vendedores_a_dtes),
             ('creditos_personal', self.migrate_creditos_personal),
@@ -1740,16 +1740,27 @@ class Command(BaseCommand):
             
             # Determinar tipo de transacción
             rut_emisor = row['rut_emisor'] or ''
+            rut_cliente = row['rut_cliente'] or ''
             es_emisor_propio = rut_emisor in RUTS_EMPRESAS_PROPIAS
+            es_receptor_propio = rut_cliente in RUTS_EMPRESAS_PROPIAS
 
             bodega_dest = row['bodega_destino'] or ''
-            es_traspaso_real = (
+            es_guia_o_despacho = tipo_documento in ('DESPACHO ELECTRONICO', 'GUIA')
+            es_traspaso_guia = (
                 row['bodega_inicio'] and bodega_dest
                 and bodega_dest != '0' and bodega_dest != row['bodega_inicio']
-                and tipo_documento in ('DESPACHO ELECTRONICO', 'GUIA')
+                and es_guia_o_despacho
+            )
+            es_despacho_sin_destino = (
+                es_guia_o_despacho
+                and (not bodega_dest or bodega_dest == '0' or bodega_dest == row['bodega_inicio'])
+            )
+            es_traspaso_factura = (
+                es_emisor_propio and es_receptor_propio
+                and tipo_documento == 'FACTURA ELECTRONICA'
             )
 
-            if es_traspaso_real:
+            if es_traspaso_guia or es_traspaso_factura or es_despacho_sin_destino:
                 tipo_transaccion = 'TRASPASO'
             elif 'BOLETA' in tipo_doc_mysql.upper() or tipo_documento in ('BOLETA ELECTRONICA', 'BOLETA PAPEL'):
                 tipo_transaccion = 'VENTA_PUBLICO'
@@ -2077,22 +2088,11 @@ class Command(BaseCommand):
         cache_suc_por_dir = {}
         cache_suc_por_alias = {}
         cache_suc_empresa = {}  # sucursal_id → empresa_id
-        cache_suc_obj = {}      # sucursal_id → Sucursal object (para crear DTE on-the-fly)
         for suc in Sucursal.objects.select_related('empresa').all():
             if suc.direccion:
                 cache_suc_por_dir[suc.direccion] = suc.id
             cache_suc_por_alias[suc.alias] = suc.id
             cache_suc_empresa[suc.id] = suc.empresa_id
-            cache_suc_obj[suc.id] = suc
-
-        # Emisor por defecto para crear DTEs on-the-fly cuando no hay sucursal
-        emisor_pagos_default = None
-        for rut in ['78503140-7', '76104936-4', '76337843-8', '7397811-4']:
-            emisor_pagos_default = self.cache_empresas_rut.get(rut)
-            if emisor_pagos_default:
-                break
-        if not emisor_pagos_default:
-            emisor_pagos_default = Empresa.objects.first()
 
         # Mapa tipo documento MySQL → Django
         TIPO_DOC_MAP_PAGOS = {
@@ -2107,8 +2107,6 @@ class Command(BaseCommand):
             'FACTURA ELECTRONICA': 'VENTA',
             'NOTA DE CREDITO': 'NOTA_CREDITO',
         }
-
-        dtes_creados_otf = 0  # on-the-fly
 
         # Cache de fechas por dte_id para validar compatibilidad en todos los pasos
         cache_dte_fechas = {}
@@ -2305,52 +2303,8 @@ class Command(BaseCommand):
                             pass  # si hay error comparando fechas, no asignar
 
             if not dte_id:
-                # 5) Crear DTE on-the-fly para esta venta huerfana
-                if not self.dry_run and n_doc and row.get('tipo_documento'):
-                    try:
-                        tipo_mysql = row['tipo_documento'] or 'Boleta Electronica'
-                        tipo_pg = TIPO_DOC_MAP_PAGOS.get(tipo_mysql, 'BOLETA ELECTRONICA')
-                        tipo_transaccion = TIPO_TRANSACCION_MAP_PAGOS.get(tipo_pg, 'VENTA_PUBLICO')
-
-                        suc_obj = cache_suc_obj.get(suc_id) if suc_id else None
-                        emisor_otf = suc_obj.empresa if suc_obj else emisor_pagos_default
-                        if not emisor_otf:
-                            dte_no_encontrado += 1
-                            continue
-
-                        sub_total_otf = self.safe_int(row.get('sub_total')) or 0
-                        nuevo_dte = Dte.objects.create(
-                            numero_documento=n_doc,
-                            tipo_documento=tipo_pg,
-                            tipo_transaccion=tipo_transaccion,
-                            monto_con_iva=sub_total_otf,
-                            monto_neto=int(sub_total_otf / 1.19),
-                            sucursal=suc_obj,
-                            emisor=emisor_otf,
-                            fecha_emision=row.get('fecha'),
-                            fecha_vencimiento=row.get('fecha'),
-                            estado_dte='EMITIDO',
-                            estado_pago='PAGADO',
-                            bultos=0,
-                            unidades_productos=0,
-                            diasCredito=0,
-                        )
-                        dte_id = nuevo_dte.id
-                        # Actualizar caches para filas futuras de esta misma venta
-                        cache_dtes_num[n_doc] = (dte_id, nuevo_dte.fecha_emision)
-                        if suc_id:
-                            cache_dtes_num_suc[(n_doc, suc_id)] = dte_id
-                            empresa_id_suc = cache_suc_empresa.get(suc_id)
-                            if empresa_id_suc:
-                                cache_dtes_num_empresa[(n_doc, empresa_id_suc)] = dte_id
-                        dtes_creados_otf += 1
-                    except Exception as e:
-                        self.log_error(f'Error creando DTE OTF n_doc={n_doc}: {e}')
-                        dte_no_encontrado += 1
-                        continue
-                else:
-                    dte_no_encontrado += 1
-                    continue
+                dte_no_encontrado += 1
+                continue
 
             # Mapear método de pago
             metodo_mysql = row['metodo_pago'] or 'Efectivo'
@@ -2414,10 +2368,9 @@ class Command(BaseCommand):
         self.stats['ventas_pagos'] = count
         self.stats['ventas_pagos_duplicados'] = duplicados
         self.stats['ventas_pagos_dte_no_encontrado'] = dte_no_encontrado
-        self.stats['ventas_pagos_dtes_creados_otf'] = dtes_creados_otf
         self.stdout.write('\n' + self.style.SUCCESS(
-            f'  [OK] {count:,} pagos migrados ({dtes_creados_otf:,} DTEs creados on-the-fly, '
-            f'{dte_no_encontrado:,} sin DTE, {duplicados:,} duplicados)'
+            f'  [OK] {count:,} pagos migrados '
+            f'({dte_no_encontrado:,} sin DTE, {duplicados:,} duplicados)'
         ))
 
     def asignar_vendedores_a_dtes(self):
@@ -2640,16 +2593,8 @@ class Command(BaseCommand):
             if suc_id and (n_doc, tipo_pg, suc_id) in dtes_existentes_full:
                 continue
             # Guard 2: ya existe DTE con mismo folio + tipo en CUALQUIER sucursal → skip
-            # (evita crear DTEs fantasma por registros ventas con fechas incorrectas)
             if (n_doc, tipo_pg) in dtes_existentes_num_tipo:
                 continue
-            # Guard 3: el folio ya fue superado en esta misma sucursal+tipo → el registro es un
-            # artefacto histórico con fecha incorrecta en MySQL (ej: folio 4731 para PAO1 en 2026
-            # cuando PAO1 ya está en folio 410349) → skip
-            if suc_id:
-                max_conocido = max_folio_suc_tipo.get((suc_id, tipo_pg), 0)
-                if max_conocido > 0 and n_doc < max_conocido:
-                    continue
 
             emisor_dte = sucursal.empresa if sucursal else emisor_default
 
@@ -3058,14 +3003,26 @@ class Command(BaseCommand):
         self.stdout.write(f'  Boletas -> VENTA_PUBLICO: {boletas_mal:,}')
         total += boletas_mal
 
-        # 2) Facturas propias como COMPRA o TRASPASO → VENTA
+        # 2) Facturas propias como COMPRA → VENTA (excluir traspasos internos)
         facturas_mal = Dte.objects.filter(
             emisor_id__in=ids_propias,
-            tipo_transaccion__in=['COMPRA', 'TRASPASO'],
+            tipo_transaccion='COMPRA',
             tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'FACTURA']
+        ).exclude(
+            receptor_id__in=ids_propias
         ).update(tipo_transaccion='VENTA')
         self.stdout.write(f'  Facturas -> VENTA: {facturas_mal:,}')
         total += facturas_mal
+
+        # 2b) Facturas entre empresas propias (emisor Y receptor propios) → TRASPASO
+        facturas_internas = Dte.objects.filter(
+            emisor_id__in=ids_propias,
+            receptor_id__in=ids_propias,
+            tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'FACTURA'],
+            tipo_transaccion__in=['VENTA', 'COMPRA'],
+        ).update(tipo_transaccion='TRASPASO')
+        self.stdout.write(f'  Facturas internas -> TRASPASO: {facturas_internas:,}')
+        total += facturas_internas
 
         # 3) NC propias como COMPRA o TRASPASO → NOTA_CREDITO
         nc_mal = Dte.objects.filter(
@@ -3075,6 +3032,15 @@ class Command(BaseCommand):
         ).update(tipo_transaccion='NOTA_CREDITO')
         self.stdout.write(f'  NC -> NOTA_CREDITO: {nc_mal:,}')
         total += nc_mal
+
+        # 4) Guías/Despachos clasificados como VENTA o VENTA_PUBLICO → TRASPASO
+        guias_mal = Dte.objects.filter(
+            emisor_id__in=ids_propias,
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            tipo_documento__in=['GUIA', 'DESPACHO ELECTRONICO']
+        ).update(tipo_transaccion='TRASPASO')
+        self.stdout.write(f'  Guias/Despachos -> TRASPASO: {guias_mal:,}')
+        total += guias_mal
 
         self.stats['tipo_transaccion_corregidos'] = total
         self.stdout.write(self.style.SUCCESS(f'  ✓ {total:,} DTEs corregidos'))
@@ -3637,7 +3603,6 @@ class Command(BaseCommand):
             ('Movimientos', self.stats.get('movimientos', 0)),
             ('DTEs', self.stats.get('dtes', 0)),
             ('DTE Productos', self.stats.get('dte_productos', 0)),
-            ('DTEs faltantes creados', self.stats.get('dtes_faltantes', 0)),
             ('DTEs duplicados eliminados', self.stats.get('dtes_duplicados_eliminados', 0)),
             ('Descuentos DTEs corregidos', self.stats.get('descuentos_corregidos', 0)),
             ('Fechas DTEs corregidas', self.stats.get('fechas_corregidas', 0)),

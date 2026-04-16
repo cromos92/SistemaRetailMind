@@ -163,8 +163,9 @@ class TallasPorArticuloView(APIView):
 class StockMovimientosView(APIView):
     """
     Retorna stock actual por SKU×sucursal (formato plano minimal).
-    'fecha_desde' se acepta por contrato pero se ignora porque Producto_Talla
-    no tiene updated_at; siempre devuelve el snapshot completo actual.
+    Si 'fecha_desde' se envía y Producto_Talla tiene updated_at, filtra
+    solo los SKUs modificados desde esa fecha; caso contrario devuelve
+    el snapshot completo actual.
 
     Este endpoint no necesita la agrupación por producto —
     AllConnected solo necesita {sku, sucursales} para actualizar stock.
@@ -182,18 +183,20 @@ class StockMovimientosView(APIView):
             )
 
         fecha_desde = request.query_params.get('fecha_desde', '')
-        if fecha_desde:
-            logger.warning(
-                f"[external/stock/movimientos] fecha_desde={fecha_desde} recibido pero ignorado "
-                f"(Producto_Talla no tiene updated_at). Se devuelve snapshot completo."
-            )
 
-        logger.info(f"[external/stock/movimientos] rut={rut}")
-        rows = list(
-            Producto_Talla.objects
-            .filter(producto__sucursal__empresa__rut=rut)
-            .values('sku', 'stock', 'producto__sucursal__alias')
-        )
+        logger.info(f"[external/stock/movimientos] rut={rut} fecha_desde={fecha_desde or 'N/A'}")
+        qs = Producto_Talla.objects.filter(producto__sucursal__empresa__rut=rut)
+
+        if fecha_desde and hasattr(Producto_Talla, 'updated_at'):
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(fecha_desde, '%Y-%m-%d')
+                qs = qs.filter(updated_at__date__gte=dt.date())
+                logger.info(f"[external/stock/movimientos] filtrando por updated_at >= {fecha_desde}")
+            except (ValueError, TypeError):
+                logger.warning(f"[external/stock/movimientos] fecha_desde inválida: {fecha_desde}, devolviendo snapshot completo")
+
+        rows = list(qs.values('sku', 'stock', 'producto__sucursal__alias'))
 
         grupos: dict = {}
         for row in rows:

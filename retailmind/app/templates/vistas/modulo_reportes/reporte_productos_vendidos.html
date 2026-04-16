@@ -1,0 +1,867 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <!-- Header -->
+        <div class="row mb-3">
+            <div class="col">
+                <h1 class="display-6 mb-1 fw-bold">
+                    <i class="ri-shopping-bag-line text-primary"></i> Productos Vendidos
+                </h1>
+                <p class="text-muted mb-0">
+                    Análisis de productos vendidos por sucursal con filtros por marca, categoría, sexo, género,
+                    temporada y rango de precio. Incluye unidades, monto, margen y heatmap.
+                </p>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold small">Periodo</label>
+                                <select class="form-select form-select-sm" id="tipoFlujo">
+                                    <optgroup label="— Operación diaria —">
+                                        <option value="hoy">Hoy</option>
+                                        <option value="semana">Esta semana</option>
+                                        <option value="ultimos_7">Últimos 7 días</option>
+                                        <option value="ultimos_30">Últimos 30 días</option>
+                                    </optgroup>
+                                    <optgroup label="— Mensual —">
+                                        <option value="mes_mtd">Mes a la fecha</option>
+                                        <option value="mes_full" selected>Mes actual completo</option>
+                                    </optgroup>
+                                    <optgroup label="— Anual —">
+                                        <option value="yoy">Este mes (YoY)</option>
+                                        <option value="trimestre_yoy">Trimestre actual</option>
+                                        <option value="anio_ytd">Año a la fecha</option>
+                                        <option value="anio_full">Año pasado completo</option>
+                                    </optgroup>
+                                    <optgroup label="— Personalizado —">
+                                        <option value="custom">Rango personalizado</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-none" id="contFechaInicio">
+                                <label class="form-label fw-semibold small">Desde</label>
+                                <input type="date" class="form-control form-control-sm" id="fechaInicio">
+                            </div>
+                            <div class="col-md-2 d-none" id="contFechaFin">
+                                <label class="form-label fw-semibold small">Hasta</label>
+                                <input type="date" class="form-control form-control-sm" id="fechaFin">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold small">Sucursal</label>
+                                <select class="form-select form-select-sm" id="filtroSucursal">
+                                    <option value="">Todas las sucursales</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold small">Buscar producto</label>
+                                <input type="text" class="form-control form-control-sm" id="filtroBusqueda"
+                                       placeholder="Artículo o descripción...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold small">Marca</label>
+                                <select class="form-select form-select-sm" id="filtroMarca">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold small">Categoría</label>
+                                <select class="form-select form-select-sm" id="filtroCategoria">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold small">Sexo</label>
+                                <select class="form-select form-select-sm" id="filtroSexo">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold small">Género</label>
+                                <select class="form-select form-select-sm" id="filtroGenero">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold small">Temporada</label>
+                                <select class="form-select form-select-sm" id="filtroTemporada">
+                                    <option value="">Todas</option>
+                                    <option value="verano">Verano</option>
+                                    <option value="invierno">Invierno</option>
+                                    <option value="transicion">Transición</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold small">Rango de precio</label>
+                                <select class="form-select form-select-sm" id="filtroRangoPrecio">
+                                    <option value="">Todos</option>
+                                    <option value="economico">Económico</option>
+                                    <option value="medio">Medio</option>
+                                    <option value="alto">Alto</option>
+                                    <option value="premium">Premium</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold small">Ordenar por</label>
+                                <select class="form-select form-select-sm" id="filtroOrden">
+                                    <option value="unidades_desc" selected>Unidades (mayor)</option>
+                                    <option value="monto_desc">Monto $ (mayor)</option>
+                                    <option value="margen_desc">Margen $ (mayor)</option>
+                                    <option value="margen_pct_desc">Margen % (mayor)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary btn-sm w-100" id="btnConsultar">
+                                    <i class="ri-search-line"></i> Consultar
+                                </button>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="btnLimpiar">
+                                    <i class="ri-refresh-line"></i> Limpiar filtros
+                                </button>
+                            </div>
+                            <div class="col-12 mt-1">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="incluirExcluidos">
+                                    <label class="form-check-label small" for="incluirExcluidos">
+                                        <i class="ri-eye-off-line text-warning"></i>
+                                        Incluir productos excluidos de análisis
+                                        <span class="text-muted">(exhibición, consignación, retirados — por defecto NO se muestran)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="small text-muted mt-2" id="infoPeriodo">
+                            <i class="ri-calendar-line"></i> Selecciona un periodo y presiona Consultar.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-shopping-bag-line text-primary"></i> Unidades</div>
+                        <div class="kpi-main" id="kpiUnidades">0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-money-dollar-circle-line text-success"></i> Monto total</div>
+                        <div class="kpi-main" id="kpiMonto">$0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-coins-line text-warning"></i> Margen</div>
+                        <div class="kpi-main" id="kpiMargen">$0</div>
+                        <div class="kpi-sub">Margen %: <span id="kpiMargenPct">0%</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-price-tag-3-line text-info"></i> SKUs únicos</div>
+                        <div class="kpi-main" id="kpiSkus">0</div>
+                        <div class="kpi-sub">Precio prom/u: <span id="kpiPrecioPromedio">$0</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-trophy-line text-primary"></i> Top Producto</div>
+                        <div class="kpi-main fs-6" id="kpiTopProducto">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-medal-line text-warning"></i> Top Marca</div>
+                        <div class="kpi-main fs-6" id="kpiTopMarca">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card kpi-card border-0 shadow-sm h-100">
+                    <div class="card-body py-3">
+                        <div class="kpi-label"><i class="ri-stack-line text-success"></i> Top Categoría</div>
+                        <div class="kpi-main fs-6" id="kpiTopCategoria">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <ul class="nav nav-tabs nav-tabs-custom card-header-tabs border-bottom-0" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#tabProductos" role="tab">
+                                    <i class="ri-list-check"></i> Top Productos
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabMarca" role="tab">
+                                    <i class="ri-medal-line"></i> Por Marca
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabCategoria" role="tab">
+                                    <i class="ri-stack-line"></i> Por Categoría
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabSexo" role="tab">
+                                    <i class="ri-user-line"></i> Sexo / Género
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabHeatmap" role="tab">
+                                    <i class="ri-grid-line"></i> Heatmap Sucursal × Categoría
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content">
+
+                            <!-- Tab Productos -->
+                            <div class="tab-pane fade show active" id="tabProductos" role="tabpanel">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <small class="text-muted">
+                                        Mostrando <strong id="countProductos">0</strong> de
+                                        <strong id="countProductosTotal">0</strong> productos únicos
+                                    </small>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-striped align-middle mb-0 table-sm" id="tablaProductos">
+                                        <thead class="table-primary">
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Artículo</th>
+                                                <th>Descripción</th>
+                                                <th>Marca</th>
+                                                <th>Categoría</th>
+                                                <th>Sexo</th>
+                                                <th>Género</th>
+                                                <th class="text-end">Unidades</th>
+                                                <th class="text-end">Monto</th>
+                                                <th class="text-end">Margen $</th>
+                                                <th class="text-center">Margen %</th>
+                                                <th class="text-center">Docs</th>
+                                                <th class="text-center">Sucs.</th>
+                                                <th class="text-center">% Partic.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Tab Marca -->
+                            <div class="tab-pane fade" id="tabMarca" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-lg-7 mb-3">
+                                        <div class="card border shadow-sm h-100">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-bar-chart-horizontal-line text-primary"></i>
+                                                    Top 15 Marcas por Unidades
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartMarcas" style="min-height:380px"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-5 mb-3">
+                                        <div class="card border shadow-sm h-100">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-table-line text-info"></i> Ranking de Marcas
+                                                </h6>
+                                            </div>
+                                            <div class="card-body p-0">
+                                                <div class="table-responsive" style="max-height:400px">
+                                                    <table class="table table-sm table-hover align-middle mb-0" id="tablaMarcas">
+                                                        <thead class="table-light sticky-top">
+                                                            <tr>
+                                                                <th>#</th>
+                                                                <th>Marca</th>
+                                                                <th class="text-end">Unid.</th>
+                                                                <th class="text-end">Monto</th>
+                                                                <th class="text-center">Margen%</th>
+                                                                <th class="text-center">SKUs</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody></tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Categoría -->
+                            <div class="tab-pane fade" id="tabCategoria" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-lg-7 mb-3">
+                                        <div class="card border shadow-sm h-100">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-bar-chart-2-line text-success"></i>
+                                                    Top 15 Categorías por Unidades
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartCategorias" style="min-height:380px"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-5 mb-3">
+                                        <div class="card border shadow-sm h-100">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-table-line text-info"></i> Ranking de Categorías
+                                                </h6>
+                                            </div>
+                                            <div class="card-body p-0">
+                                                <div class="table-responsive" style="max-height:400px">
+                                                    <table class="table table-sm table-hover align-middle mb-0" id="tablaCategorias">
+                                                        <thead class="table-light sticky-top">
+                                                            <tr>
+                                                                <th>#</th>
+                                                                <th>Categoría</th>
+                                                                <th class="text-end">Unid.</th>
+                                                                <th class="text-end">Monto</th>
+                                                                <th class="text-center">Margen%</th>
+                                                                <th class="text-center">SKUs</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody></tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Sexo / Género -->
+                            <div class="tab-pane fade" id="tabSexo" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card border shadow-sm h-100">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-pie-chart-line text-primary"></i> Por Sexo
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartSexo" style="min-height:300px"></div>
+                                                <div class="table-responsive mt-3">
+                                                    <table class="table table-sm mb-0" id="tablaSexo">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th>Sexo</th>
+                                                                <th class="text-end">Unid.</th>
+                                                                <th class="text-end">Monto</th>
+                                                                <th class="text-center">%</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody></tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card border shadow-sm h-100">
+                                            <div class="card-header bg-light">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="ri-pie-chart-2-line text-success"></i> Por Género
+                                                </h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartGenero" style="min-height:300px"></div>
+                                                <div class="table-responsive mt-3">
+                                                    <table class="table table-sm mb-0" id="tablaGenero">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th>Género</th>
+                                                                <th class="text-end">Unid.</th>
+                                                                <th class="text-end">Monto</th>
+                                                                <th class="text-center">%</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody></tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Heatmap -->
+                            <div class="tab-pane fade" id="tabHeatmap" role="tabpanel">
+                                <div class="card border shadow-sm">
+                                    <div class="card-header bg-light">
+                                        <h6 class="card-title mb-0">
+                                            <i class="ri-grid-line text-primary"></i>
+                                            Unidades vendidas por Sucursal y Categoría
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive" id="heatmapContainer">
+                                            <div class="text-center text-muted py-5">
+                                                <i class="ri-grid-line fs-1"></i>
+                                                <p class="mt-2">Los datos del heatmap aparecerán al consultar.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<style>
+.kpi-card { transition: transform .15s; }
+.kpi-card:hover { transform: translateY(-2px); }
+.kpi-label { font-size: .7rem; color: #6c757d; text-transform: uppercase; font-weight: 600; letter-spacing: .3px; }
+.kpi-main { font-size: 1.35rem; font-weight: 700; line-height: 1.2; margin-top: .2rem; }
+.kpi-sub { font-size: .72rem; color: #878a99; margin-top: .1rem; }
+.nav-tabs-custom .nav-link { border: none; color: #6c757d; font-weight: 500; }
+.nav-tabs-custom .nav-link.active { color: #4154f1; border-bottom: 3px solid #4154f1; }
+#tablaProductos td, #tablaMarcas td, #tablaCategorias td { font-size: .78rem; }
+#tablaProductos th { font-size: .75rem; white-space: nowrap; }
+
+/* Heatmap cells */
+.heatmap-table { font-size: .75rem; }
+.heatmap-table th { background: #f8f9fa; text-align: center; padding: .4rem .3rem; font-weight: 600; white-space: nowrap; }
+.heatmap-table td { text-align: center; padding: .4rem .3rem; font-weight: 500; }
+.heatmap-table td.row-label { text-align: left; font-weight: 600; background: #f8f9fa; white-space: nowrap; }
+.hm-0 { background: #f8f9fa; color: #adb5bd; }
+.hm-1 { background: #e3f2fd; color: #1976d2; }
+.hm-2 { background: #bbdefb; color: #1565c0; }
+.hm-3 { background: #90caf9; color: #0d47a1; }
+.hm-4 { background: #64b5f6; color: #0d47a1; }
+.hm-5 { background: #42a5f5; color: #fff; }
+.hm-6 { background: #1e88e5; color: #fff; font-weight: 700; }
+
+@media (max-width: 768px) {
+    .kpi-main { font-size: 1rem; }
+    .kpi-label { font-size: .6rem; }
+    #chartMarcas, #chartCategorias, #chartSexo, #chartGenero { min-height: 260px !important; }
+    #tablaProductos, #tablaMarcas, #tablaCategorias { font-size: .68rem; }
+}
+</style>
+
+<script>
+(function() {
+    const esSuperuser = {{ puede_ver_todas_sucursales|yesno:"true,false" }};
+    const sucursalActivaId = '{{ sucursal_activa_id|default:"" }}';
+    let chartMarcas, chartCategorias, chartSexo, chartGenero;
+
+    const fmtMoney = n => '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0));
+    const fmtNum = n => new Intl.NumberFormat('es-CL').format(Math.round(n || 0));
+    const fmtPct = n => (Number(n || 0)).toFixed(1) + '%';
+
+    document.addEventListener('DOMContentLoaded', function() {
+        Promise.all([
+            cargarSucursales(),
+            cargarOpciones('marca', 'filtroMarca'),
+            cargarOpciones('categoria', 'filtroCategoria'),
+            cargarOpciones('sexo', 'filtroSexo'),
+            cargarOpciones('genero', 'filtroGenero'),
+        ]).then(() => consultar());
+
+        document.getElementById('btnConsultar').addEventListener('click', consultar);
+        document.getElementById('btnLimpiar').addEventListener('click', limpiarFiltros);
+        ['filtroSucursal','filtroMarca','filtroCategoria','filtroSexo','filtroGenero',
+         'filtroTemporada','filtroRangoPrecio','filtroOrden','incluirExcluidos'].forEach(id => {
+            document.getElementById(id).addEventListener('change', consultar);
+        });
+        document.getElementById('filtroBusqueda').addEventListener('keypress', e => {
+            if (e.key === 'Enter') consultar();
+        });
+
+        document.getElementById('tipoFlujo').addEventListener('change', function() {
+            const custom = this.value === 'custom';
+            document.getElementById('contFechaInicio').classList.toggle('d-none', !custom);
+            document.getElementById('contFechaFin').classList.toggle('d-none', !custom);
+            if (custom) {
+                const hoy = new Date().toISOString().slice(0, 10);
+                if (!document.getElementById('fechaInicio').value) {
+                    document.getElementById('fechaInicio').value = hoy;
+                    document.getElementById('fechaFin').value = hoy;
+                }
+            } else {
+                consultar();
+            }
+        });
+    });
+
+    function cargarSucursales() {
+        return fetch('/app/api/reportes/sucursales/')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const sel = document.getElementById('filtroSucursal');
+                sel.innerHTML = esSuperuser ? '<option value="" selected>Todas las sucursales</option>' : '';
+                (data.sucursales || []).forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.nombre;
+                    if (!esSuperuser && sucursalActivaId && String(s.id) === String(sucursalActivaId)) {
+                        opt.selected = true;
+                    }
+                    sel.appendChild(opt);
+                });
+                if (!esSuperuser && !sucursalActivaId && data.sucursales && data.sucursales.length) {
+                    sel.value = data.sucursales[0].id;
+                }
+            });
+    }
+
+    function cargarOpciones(tipo, selectId) {
+        return fetch(`/app/api/reportes/atributo-opciones/?tipo=${tipo}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const sel = document.getElementById(selectId);
+                const placeholder = sel.options[0].outerHTML;
+                sel.innerHTML = placeholder;
+                (data.opciones || []).forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.id;
+                    opt.textContent = o.nombre;
+                    sel.appendChild(opt);
+                });
+            });
+    }
+
+    function limpiarFiltros() {
+        document.getElementById('filtroBusqueda').value = '';
+        ['filtroMarca','filtroCategoria','filtroSexo','filtroGenero',
+         'filtroTemporada','filtroRangoPrecio'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('filtroOrden').value = 'unidades_desc';
+        document.getElementById('tipoFlujo').value = 'mes_full';
+        document.getElementById('contFechaInicio').classList.add('d-none');
+        document.getElementById('contFechaFin').classList.add('d-none');
+        document.getElementById('incluirExcluidos').checked = false;
+        if (esSuperuser) document.getElementById('filtroSucursal').value = '';
+        consultar();
+    }
+
+    function construirQuery() {
+        const p = new URLSearchParams();
+        p.append('tipo_flujo', document.getElementById('tipoFlujo').value);
+        if (document.getElementById('tipoFlujo').value === 'custom') {
+            const fi = document.getElementById('fechaInicio').value;
+            const ff = document.getElementById('fechaFin').value;
+            if (fi && ff) { p.append('fecha_inicio', fi); p.append('fecha_fin', ff); }
+        }
+        const campos = {
+            sucursal_id: 'filtroSucursal',
+            marca_id: 'filtroMarca',
+            categoria_id: 'filtroCategoria',
+            sexo_id: 'filtroSexo',
+            genero_id: 'filtroGenero',
+            temporada: 'filtroTemporada',
+            rango_precio: 'filtroRangoPrecio',
+            orden: 'filtroOrden',
+        };
+        for (const [key, id] of Object.entries(campos)) {
+            const val = document.getElementById(id).value;
+            if (val) p.append(key, val);
+        }
+        const busq = document.getElementById('filtroBusqueda').value.trim();
+        if (busq) p.append('busqueda', busq);
+        if (document.getElementById('incluirExcluidos').checked) {
+            p.append('incluir_excluidos', '1');
+        }
+        p.append('top_n', 100);
+        return p.toString();
+    }
+
+    function consultar() {
+        document.getElementById('infoPeriodo').innerHTML =
+            '<div class="spinner-border spinner-border-sm text-primary me-2"></div> Consultando...';
+        fetch('/app/api/reportes/productos-vendidos/?' + construirQuery())
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) {
+                    Swal.fire({ icon: 'error', title: 'Error', text: data.error || 'Error al cargar' });
+                    return;
+                }
+                renderPeriodo(data.periodo);
+                renderKPIs(data.kpis);
+                renderProductos(data.productos, data.productos_total);
+                renderMarca(data.por_marca);
+                renderCategoria(data.por_categoria);
+                renderSexoGenero(data.por_sexo, data.por_genero);
+                renderHeatmap(data.heatmap);
+            })
+            .catch(err => {
+                console.error(err);
+                Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo cargar el reporte.' });
+            });
+    }
+
+    function renderPeriodo(p) {
+        document.getElementById('infoPeriodo').innerHTML =
+            `<i class="ri-calendar-line"></i> Periodo: <strong>${p.inicio}</strong> al <strong>${p.fin}</strong>`;
+    }
+
+    function renderKPIs(k) {
+        document.getElementById('kpiUnidades').textContent = fmtNum(k.total_unidades);
+        document.getElementById('kpiMonto').textContent = fmtMoney(k.total_monto);
+        document.getElementById('kpiMargen').textContent = fmtMoney(k.total_margen);
+        document.getElementById('kpiMargenPct').textContent = fmtPct(k.total_margen_pct);
+        document.getElementById('kpiSkus').textContent = fmtNum(k.total_skus);
+        document.getElementById('kpiPrecioPromedio').textContent = fmtMoney(k.ticket_promedio_unid);
+        document.getElementById('kpiTopProducto').textContent = k.top_producto || '-';
+        document.getElementById('kpiTopMarca').textContent = k.top_marca || '-';
+        document.getElementById('kpiTopCategoria').textContent = k.top_categoria || '-';
+    }
+
+    function renderProductos(rows, total) {
+        document.getElementById('countProductos').textContent = (rows || []).length;
+        document.getElementById('countProductosTotal').textContent = total || 0;
+        const tb = document.querySelector('#tablaProductos tbody');
+        if (!rows || !rows.length) {
+            tb.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Sin productos para los filtros seleccionados</td></tr>';
+            return;
+        }
+        tb.innerHTML = rows.map((r, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td><code>${escapeHtml(r.articulo)}</code></td>
+                <td title="${escapeHtml(r.descripcion || '')}">${truncar(r.descripcion, 40)}</td>
+                <td>${escapeHtml(r.marca)}</td>
+                <td>${escapeHtml(r.categoria)}</td>
+                <td>${escapeHtml(r.sexo)}</td>
+                <td>${escapeHtml(r.genero)}</td>
+                <td class="text-end fw-semibold">${fmtNum(r.unidades)}</td>
+                <td class="text-end">${fmtMoney(r.monto)}</td>
+                <td class="text-end ${r.margen >= 0 ? 'text-success' : 'text-danger'}">${fmtMoney(r.margen)}</td>
+                <td class="text-center">${badgePct(r.margen_pct)}</td>
+                <td class="text-center">${fmtNum(r.docs)}</td>
+                <td class="text-center">${r.sucursales_count}</td>
+                <td class="text-center"><span class="badge bg-primary">${fmtPct(r.participacion)}</span></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderMarca(rows) {
+        const tb = document.querySelector('#tablaMarcas tbody');
+        if (!rows || !rows.length) {
+            tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Sin datos</td></tr>';
+            if (chartMarcas) chartMarcas.destroy();
+            return;
+        }
+        tb.innerHTML = rows.map((r, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td><strong>${escapeHtml(r.nombre)}</strong></td>
+                <td class="text-end">${fmtNum(r.unidades)}</td>
+                <td class="text-end">${fmtMoney(r.monto)}</td>
+                <td class="text-center">${badgePct(r.margen_pct)}</td>
+                <td class="text-center">${r.skus}</td>
+            </tr>
+        `).join('');
+
+        const top = rows.slice(0, 15).reverse();
+        const options = {
+            series: [{ name: 'Unidades', data: top.map(r => r.unidades) }],
+            chart: { type: 'bar', height: 380, toolbar: { show: true } },
+            plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+            xaxis: { categories: top.map(r => r.nombre) },
+            dataLabels: { enabled: true, formatter: v => fmtNum(v) },
+            colors: ['#4154f1'],
+            tooltip: { y: { formatter: v => fmtNum(v) + ' unid' } },
+        };
+        if (chartMarcas) chartMarcas.destroy();
+        chartMarcas = new ApexCharts(document.querySelector('#chartMarcas'), options);
+        chartMarcas.render();
+    }
+
+    function renderCategoria(rows) {
+        const tb = document.querySelector('#tablaCategorias tbody');
+        if (!rows || !rows.length) {
+            tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Sin datos</td></tr>';
+            if (chartCategorias) chartCategorias.destroy();
+            return;
+        }
+        tb.innerHTML = rows.map((r, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td><strong>${escapeHtml(r.nombre)}</strong></td>
+                <td class="text-end">${fmtNum(r.unidades)}</td>
+                <td class="text-end">${fmtMoney(r.monto)}</td>
+                <td class="text-center">${badgePct(r.margen_pct)}</td>
+                <td class="text-center">${r.skus}</td>
+            </tr>
+        `).join('');
+
+        const top = rows.slice(0, 15).reverse();
+        const options = {
+            series: [{ name: 'Unidades', data: top.map(r => r.unidades) }],
+            chart: { type: 'bar', height: 380, toolbar: { show: true } },
+            plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+            xaxis: { categories: top.map(r => r.nombre) },
+            dataLabels: { enabled: true, formatter: v => fmtNum(v) },
+            colors: ['#0ab39c'],
+            tooltip: { y: { formatter: v => fmtNum(v) + ' unid' } },
+        };
+        if (chartCategorias) chartCategorias.destroy();
+        chartCategorias = new ApexCharts(document.querySelector('#chartCategorias'), options);
+        chartCategorias.render();
+    }
+
+    function renderSexoGenero(sexos, generos) {
+        renderDonutTabla(sexos, 'chartSexo', 'tablaSexo');
+        renderDonutTabla(generos, 'chartGenero', 'tablaGenero');
+    }
+
+    function renderDonutTabla(rows, chartId, tablaId) {
+        const tb = document.querySelector(`#${tablaId} tbody`);
+        if (!rows || !rows.length) {
+            tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Sin datos</td></tr>';
+            return;
+        }
+        tb.innerHTML = rows.map(r => `
+            <tr>
+                <td><strong>${escapeHtml(r.nombre)}</strong></td>
+                <td class="text-end">${fmtNum(r.unidades)}</td>
+                <td class="text-end">${fmtMoney(r.monto)}</td>
+                <td class="text-center">${fmtPct(r.participacion)}</td>
+            </tr>
+        `).join('');
+
+        const options = {
+            series: rows.map(r => r.unidades),
+            chart: { type: 'donut', height: 300 },
+            labels: rows.map(r => r.nombre),
+            colors: ['#4154f1', '#0ab39c', '#f1c21b', '#ff771d', '#f1416c', '#7239ea', '#50cd89'],
+            legend: { position: 'bottom', fontSize: '11px' },
+            dataLabels: { formatter: v => v.toFixed(1) + '%' },
+            tooltip: { y: { formatter: v => fmtNum(v) + ' unid' } },
+        };
+        if (chartId === 'chartSexo') {
+            if (chartSexo) chartSexo.destroy();
+            chartSexo = new ApexCharts(document.querySelector(`#${chartId}`), options);
+            chartSexo.render();
+        } else {
+            if (chartGenero) chartGenero.destroy();
+            chartGenero = new ApexCharts(document.querySelector(`#${chartId}`), options);
+            chartGenero.render();
+        }
+    }
+
+    function renderHeatmap(rows) {
+        const cont = document.getElementById('heatmapContainer');
+        if (!rows || !rows.length) {
+            cont.innerHTML = '<div class="text-center text-muted py-4">Sin datos para el heatmap</div>';
+            return;
+        }
+        // Pivot: sucursal (rows) x categoría (cols)
+        const sucMap = {}, catSet = new Set();
+        rows.forEach(r => {
+            sucMap[r.sucursal] = sucMap[r.sucursal] || {};
+            sucMap[r.sucursal][r.categoria] = r.unidades;
+            catSet.add(r.categoria);
+        });
+        // Top 15 categorías por unidades totales
+        const catTotales = {};
+        rows.forEach(r => { catTotales[r.categoria] = (catTotales[r.categoria] || 0) + r.unidades; });
+        const categorias = [...catSet].sort((a, b) => (catTotales[b] || 0) - (catTotales[a] || 0)).slice(0, 15);
+        const sucursales = Object.keys(sucMap).sort();
+
+        // Calcular max para escalar colores
+        const max = Math.max(...rows.map(r => r.unidades));
+        const escala = v => {
+            if (!v || v <= 0) return 'hm-0';
+            const pct = v / max;
+            if (pct >= 0.85) return 'hm-6';
+            if (pct >= 0.6) return 'hm-5';
+            if (pct >= 0.4) return 'hm-4';
+            if (pct >= 0.25) return 'hm-3';
+            if (pct >= 0.1) return 'hm-2';
+            return 'hm-1';
+        };
+
+        let html = '<table class="table table-bordered heatmap-table mb-0"><thead><tr><th>Sucursal \\ Categoría</th>';
+        categorias.forEach(c => { html += `<th>${escapeHtml(c)}</th>`; });
+        html += '<th class="table-primary">TOTAL</th></tr></thead><tbody>';
+        sucursales.forEach(s => {
+            html += `<tr><td class="row-label">${escapeHtml(s)}</td>`;
+            let totalRow = 0;
+            categorias.forEach(c => {
+                const v = (sucMap[s] || {})[c] || 0;
+                totalRow += v;
+                html += `<td class="${escala(v)}">${v > 0 ? fmtNum(v) : '-'}</td>`;
+            });
+            html += `<td class="table-primary fw-bold">${fmtNum(totalRow)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        cont.innerHTML = html;
+    }
+
+    function badgePct(v) {
+        const n = Number(v || 0);
+        if (n >= 30) return `<span class="badge bg-success">${n.toFixed(1)}%</span>`;
+        if (n >= 10) return `<span class="badge bg-primary">${n.toFixed(1)}%</span>`;
+        if (n >= 0) return `<span class="badge bg-warning text-dark">${n.toFixed(1)}%</span>`;
+        return `<span class="badge bg-danger">${n.toFixed(1)}%</span>`;
+    }
+
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    function truncar(s, n) {
+        if (!s) return '';
+        const str = String(s);
+        return str.length > n ? escapeHtml(str.slice(0, n)) + '…' : escapeHtml(str);
+    }
+})();
+</script>

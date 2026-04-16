@@ -24,7 +24,8 @@ from .models import (
     Dte, Dte_Productos, Dte_Detalle_Pago, Ticket, Ticket_Productos,
     Producto, Producto_Talla, Movimientos_Producto, Sucursal, EmpresaUser,
     Empresa, Vendedor, LoteProducto, Traspaso, AjusteInventario,
-    TicketDetallePago, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES
+    TicketDetallePago, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
+    Categoria, AtributoOpcion, Productos_Atributos,
 )
 from .utils_permisos import (
     obtener_sucursales_usuario,
@@ -1186,11 +1187,11 @@ def obtener_ventas_por_vendedor_reporte(request):
                 ventas_acumuladas[vid]['descuentos'] += int(item['total_descuentos'] or 0)
                 ventas_acumuladas[vid]['documentos'] += item['total_documentos'] or 0
         
-        # ========== DTEs (solo ventas al público, sin facturas entre sucursales) ==========
+        # ========== DTEs (ventas a público: boletas + facturas a clientes externos) ==========
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio,
             fecha_emision__lte=fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin,
-            tipo_transaccion='VENTA_PUBLICO',
+            tipo_transaccion__in=['VENTA_PUBLICO', 'VENTA'],
         ).exclude(
             estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
         ).exclude(
@@ -1390,11 +1391,11 @@ def obtener_ventas_por_sucursal_reporte(request):
                     vendedores_por_sucursal[sid] = set()
                 vendedores_por_sucursal[sid].add(vid)
         
-        # ========== DTEs (solo ventas al público, sin facturas entre sucursales) ==========
+        # ========== DTEs (ventas a público: boletas + facturas a clientes externos) ==========
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio,
             fecha_emision__lte=fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin,
-            tipo_transaccion='VENTA_PUBLICO',
+            tipo_transaccion__in=['VENTA_PUBLICO', 'VENTA'],
         ).exclude(
             estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
         ).exclude(
@@ -5990,6 +5991,1117 @@ def obtener_ventas_global_por_empresa(request):
             }
         })
 
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== REPORTE COMPARATIVO DE VENTAS ==========
+
+def _calcular_rangos_comparativo(tipo_flujo, fecha_inicio_param=None, fecha_fin_param=None):
+    """
+    Calcula el rango (fi_act, ff_act) del periodo actual y (fi_ant, ff_ant) del
+    periodo anterior equivalente, según el tipo de flujo temporal.
+
+    Devuelve 4 objetos datetime.date.
+    Flujos soportados:
+      - 'hoy'           : hoy vs ayer
+      - 'semana'        : lunes-hoy vs lunes-domingo semana anterior
+      - 'mes_mtd'       : mes-a-la-fecha vs mismo rango mes anterior
+      - 'mes_full'      : mes actual completo vs mes anterior completo
+      - 'ultimos_7'     : últimos 7 días vs 7 días previos
+      - 'ultimos_30'    : últimos 30 días vs 30 días previos
+      - 'yoy'           : mes actual vs mismo mes año anterior (elimina estacionalidad)
+      - 'trimestre_yoy' : trimestre actual vs mismo trimestre año anterior
+      - 'anio_ytd'      : año a la fecha (ene-hoy) vs mismo rango año anterior
+      - 'anio_full'     : año calendario anterior completo vs año antepasado completo
+      - 'custom'        : usa fecha_inicio_param/fecha_fin_param y desplaza el mismo largo
+    """
+    hoy = timezone.localdate()
+
+    def _restar_meses(d, meses):
+        y = d.year
+        m = d.month - meses
+        while m <= 0:
+            m += 12
+            y -= 1
+        from calendar import monthrange
+        dia = min(d.day, monthrange(y, m)[1])
+        return d.replace(year=y, month=m, day=dia)
+
+    if tipo_flujo == 'hoy':
+        fi_act = ff_act = hoy
+        fi_ant = ff_ant = hoy - timedelta(days=1)
+
+    elif tipo_flujo == 'semana':
+        dia_semana = hoy.weekday()
+        fi_act = hoy - timedelta(days=dia_semana)
+        ff_act = hoy
+        fi_ant = fi_act - timedelta(days=7)
+        ff_ant = fi_ant + timedelta(days=dia_semana)
+
+    elif tipo_flujo == 'mes_mtd':
+        fi_act = hoy.replace(day=1)
+        ff_act = hoy
+        fi_ant = _restar_meses(fi_act, 1)
+        dia_actual = hoy.day
+        from calendar import monthrange
+        ultimo_dia_mes_ant = monthrange(fi_ant.year, fi_ant.month)[1]
+        ff_ant = fi_ant.replace(day=min(dia_actual, ultimo_dia_mes_ant))
+
+    elif tipo_flujo == 'mes_full':
+        fi_act = hoy.replace(day=1)
+        from calendar import monthrange
+        ultimo_dia = monthrange(hoy.year, hoy.month)[1]
+        ff_act = hoy.replace(day=ultimo_dia)
+        fi_ant = _restar_meses(fi_act, 1)
+        ultimo_dia_ant = monthrange(fi_ant.year, fi_ant.month)[1]
+        ff_ant = fi_ant.replace(day=ultimo_dia_ant)
+
+    elif tipo_flujo == 'ultimos_7':
+        ff_act = hoy
+        fi_act = hoy - timedelta(days=6)
+        ff_ant = fi_act - timedelta(days=1)
+        fi_ant = ff_ant - timedelta(days=6)
+
+    elif tipo_flujo == 'ultimos_30':
+        ff_act = hoy
+        fi_act = hoy - timedelta(days=29)
+        ff_ant = fi_act - timedelta(days=1)
+        fi_ant = ff_ant - timedelta(days=29)
+
+    elif tipo_flujo == 'yoy':
+        fi_act = hoy.replace(day=1)
+        from calendar import monthrange
+        ultimo_dia = monthrange(hoy.year, hoy.month)[1]
+        ff_act = hoy.replace(day=ultimo_dia)
+        try:
+            fi_ant = fi_act.replace(year=fi_act.year - 1)
+        except ValueError:
+            fi_ant = fi_act.replace(year=fi_act.year - 1, day=28)
+        ultimo_dia_ant = monthrange(fi_ant.year, fi_ant.month)[1]
+        ff_ant = fi_ant.replace(day=ultimo_dia_ant)
+
+    elif tipo_flujo == 'trimestre_yoy':
+        from calendar import monthrange
+        trimestre = (hoy.month - 1) // 3 + 1
+        mes_inicio_q = (trimestre - 1) * 3 + 1
+        mes_fin_q = mes_inicio_q + 2
+        fi_act = hoy.replace(month=mes_inicio_q, day=1)
+        ff_act = hoy.replace(
+            month=mes_fin_q,
+            day=monthrange(hoy.year, mes_fin_q)[1],
+        )
+        fi_ant = fi_act.replace(year=fi_act.year - 1)
+        ff_ant = fi_ant.replace(
+            day=monthrange(fi_ant.year, fi_ant.month)[1],
+        )
+        # Ajustar día final por si cambia último día del mes entre años
+        ff_ant = ff_ant.replace(
+            month=mes_fin_q,
+            day=monthrange(ff_ant.year, mes_fin_q)[1],
+        )
+
+    elif tipo_flujo == 'anio_ytd':
+        fi_act = hoy.replace(month=1, day=1)
+        ff_act = hoy
+        fi_ant = fi_act.replace(year=fi_act.year - 1)
+        try:
+            ff_ant = hoy.replace(year=hoy.year - 1)
+        except ValueError:
+            ff_ant = hoy.replace(year=hoy.year - 1, day=28)
+
+    elif tipo_flujo == 'anio_full':
+        from calendar import monthrange
+        anio_act = hoy.year - 1
+        anio_ant = hoy.year - 2
+        fi_act = hoy.replace(year=anio_act, month=1, day=1)
+        ff_act = hoy.replace(
+            year=anio_act, month=12,
+            day=monthrange(anio_act, 12)[1],
+        )
+        fi_ant = hoy.replace(year=anio_ant, month=1, day=1)
+        ff_ant = hoy.replace(
+            year=anio_ant, month=12,
+            day=monthrange(anio_ant, 12)[1],
+        )
+
+    else:  # 'custom' o default
+        if fecha_inicio_param and fecha_fin_param:
+            fi_act = datetime.strptime(fecha_inicio_param, '%Y-%m-%d').date()
+            ff_act = datetime.strptime(fecha_fin_param, '%Y-%m-%d').date()
+        else:
+            fi_act = hoy.replace(day=1)
+            ff_act = hoy
+        delta_dias = (ff_act - fi_act).days + 1
+        ff_ant = fi_act - timedelta(days=1)
+        fi_ant = ff_ant - timedelta(days=delta_dias - 1)
+
+    return fi_act, ff_act, fi_ant, ff_ant
+
+
+def _sumar_ventas_comparativo(fi, ff, user, request):
+    """
+    Suma ventas de Tickets + DTEs para el rango (fi, ff), con breakdown por
+    sucursal, vendedor y canal, **evitando el doble contado** entre Ticket y Dte.
+
+    Regla anti-doble contado (clave):
+      - Un Ticket con `dte_generado=True` ya está representado en la tabla Dte
+        como su boleta/factura electrónica. Para NO contarlo dos veces:
+          * Total ventas brutas = sum(DTEs) + sum(Tickets con dte_generado=False)
+      - ECOMMERCE se calcula INDEPENDIENTE desde Ticket.modulo_origen='ECOMMERCE'
+        (da igual si tiene DTE o no; el monto es el del ticket).
+      - "POS presencial" (canal 'POS') = Tickets POS/VENTA_PUBLICO sin DTE.
+      - Canal 'DTE' = DTEs MENOS los tickets ECOMMERCE que ya generaron DTE
+        (para no duplicar ventas de internet dentro de 'presencial').
+
+    Devuelve dict:
+    {
+      'total_ventas_netas', 'total_ventas_brutas', 'total_documentos',
+      'total_descuentos', 'total_devoluciones', 'cantidad_devoluciones',
+      'total_unidades',
+      'canal': {
+          'ECOMMERCE':  {'ventas', 'documentos', 'unidades'},
+          'POS':        {'ventas', 'documentos', 'unidades'},
+          'DTE':        {'ventas', 'documentos', 'unidades'},
+      },
+      'sucursales': { sid: {...} },
+      'vendedores': { vid: {...} },
+    }
+    """
+    resultado = {
+        'total_ventas_netas': 0,
+        'total_ventas_brutas': 0,
+        'total_documentos': 0,
+        'total_descuentos': 0,
+        'total_devoluciones': 0,
+        'cantidad_devoluciones': 0,
+        'total_unidades': 0,
+        'canal': {
+            'ECOMMERCE': {'ventas': 0, 'documentos': 0, 'unidades': 0},
+            'POS':       {'ventas': 0, 'documentos': 0, 'unidades': 0},
+            'DTE':       {'ventas': 0, 'documentos': 0, 'unidades': 0},
+        },
+        'sucursales': {},
+        'vendedores': {},
+    }
+
+    def _suc_row(sid, nombre):
+        return resultado['sucursales'].setdefault(sid, {
+            'nombre': nombre or '-',
+            'ventas_brutas': 0, 'devoluciones': 0, 'documentos': 0,
+            'descuentos': 0, 'unidades': 0,
+            'ventas_ecommerce': 0, 'ventas_presencial': 0,
+        })
+
+    def _vend_row(vid, nombre, codigo, sucursal):
+        return resultado['vendedores'].setdefault(vid, {
+            'nombre': nombre or '-',
+            'codigo': codigo or '',
+            'sucursal': sucursal or '-',
+            'ventas_brutas': 0, 'devoluciones': 0, 'documentos': 0,
+        })
+
+    # ========== TICKETS (base común) ==========
+    qs_tickets = Ticket.objects.filter(
+        created_at__date__gte=fi,
+        created_at__date__lte=ff,
+        estado='PAGADO',
+        modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'],
+    ).select_related('sucursal', 'vendedor')
+    qs_tickets = filtrar_queryset_por_sucursal(qs_tickets, user, request)
+
+    # --- Canal ECOMMERCE: TODOS los tickets ECOMMERCE (aunque tengan DTE) ---
+    # El monto real de la venta está siempre en el Ticket. Se suma aquí y
+    # luego se RESTA del canal DTE para no contarlo dos veces.
+    qs_ecom = qs_tickets.filter(modulo_origen='ECOMMERCE')
+    for r in qs_ecom.values('sucursal_id', 'sucursal__alias').annotate(
+        total=Sum('total'), dcto=Sum('descuento'), docs=Count('id'),
+    ):
+        sid = r['sucursal_id']
+        total = int(r['total'] or 0)
+        docs = int(r['docs'] or 0)
+        dcto = int(r['dcto'] or 0)
+        resultado['canal']['ECOMMERCE']['ventas'] += total
+        resultado['canal']['ECOMMERCE']['documentos'] += docs
+        # OJO: los tickets ECOMMERCE con dte_generado=True YA están en DTEs.
+        # NO sumamos al total_ventas_brutas aquí para esos. Solo sumamos los
+        # ECOMMERCE SIN DTE (caso raro, pero existe).
+        if sid:
+            s = _suc_row(sid, r['sucursal__alias'])
+            s['ventas_ecommerce'] += total
+
+    # Los tickets ECOMMERCE sin DTE sí se suman al total bruto (no están en DTE)
+    for r in qs_ecom.filter(dte_generado=False).values(
+        'sucursal_id', 'sucursal__alias'
+    ).annotate(total=Sum('total'), dcto=Sum('descuento'), docs=Count('id')):
+        sid = r['sucursal_id']
+        total = int(r['total'] or 0)
+        docs = int(r['docs'] or 0)
+        dcto = int(r['dcto'] or 0)
+        resultado['total_ventas_brutas'] += total
+        resultado['total_documentos'] += docs
+        resultado['total_descuentos'] += dcto
+        if sid:
+            s = _suc_row(sid, r['sucursal__alias'])
+            s['ventas_brutas'] += total
+            s['documentos'] += docs
+            s['descuentos'] += dcto
+
+    # --- Canal POS presencial: tickets POS/VENTA_PUBLICO sin DTE ---
+    qs_pos_solo = qs_tickets.filter(
+        modulo_origen__in=['POS', 'VENTA_PUBLICO'],
+        dte_generado=False,
+    )
+    for r in qs_pos_solo.values('sucursal_id', 'sucursal__alias').annotate(
+        total=Sum('total'), dcto=Sum('descuento'), docs=Count('id'),
+    ):
+        sid = r['sucursal_id']
+        total = int(r['total'] or 0)
+        docs = int(r['docs'] or 0)
+        dcto = int(r['dcto'] or 0)
+        resultado['canal']['POS']['ventas'] += total
+        resultado['canal']['POS']['documentos'] += docs
+        resultado['total_ventas_brutas'] += total
+        resultado['total_documentos'] += docs
+        resultado['total_descuentos'] += dcto
+        if sid:
+            s = _suc_row(sid, r['sucursal__alias'])
+            s['ventas_brutas'] += total
+            s['documentos'] += docs
+            s['descuentos'] += dcto
+            s['ventas_presencial'] += total
+
+    # --- Unidades de tickets ECOMMERCE + POS-sin-DTE ---
+    tickets_unidades = Ticket_Productos.objects.filter(
+        idTicket__in=qs_ecom
+    ).values(
+        'idTicket__sucursal_id'
+    ).annotate(u=Sum('stock'))
+    for r in tickets_unidades:
+        u = int(r['u'] or 0)
+        resultado['canal']['ECOMMERCE']['unidades'] += u
+        sid = r['idTicket__sucursal_id']
+        # No sumamos al total_unidades aquí; se suma desde DTEs + tickets sin DTE
+        if sid and sid in resultado['sucursales']:
+            # sólo contar para la sucursal si el ticket NO tiene DTE (evitar doble)
+            pass
+
+    # Unidades solo de tickets sin DTE (se suman al total)
+    unid_tick_sin_dte = Ticket_Productos.objects.filter(
+        idTicket__in=qs_tickets.filter(dte_generado=False)
+    ).values(
+        'idTicket__sucursal_id', 'idTicket__modulo_origen'
+    ).annotate(u=Sum('stock'))
+    for r in unid_tick_sin_dte:
+        u = int(r['u'] or 0)
+        resultado['total_unidades'] += u
+        sid = r['idTicket__sucursal_id']
+        canal = 'ECOMMERCE' if r['idTicket__modulo_origen'] == 'ECOMMERCE' else 'POS'
+        # ECOMMERCE ya sumó unidades arriba; solo sumamos POS sin DTE al canal POS
+        if canal == 'POS':
+            resultado['canal']['POS']['unidades'] += u
+        if sid and sid in resultado['sucursales']:
+            resultado['sucursales'][sid]['unidades'] += u
+
+    # --- Tickets por vendedor (solo los sin DTE, para no duplicar con DTE) ---
+    for r in qs_tickets.filter(dte_generado=False).values(
+        'vendedor_id', 'vendedor__nombre', 'vendedor__codigo_vendedor',
+        'sucursal__alias',
+    ).annotate(total=Sum('total'), docs=Count('id')):
+        vid = r['vendedor_id']
+        if not vid:
+            continue
+        v = _vend_row(vid, r['vendedor__nombre'],
+                      r['vendedor__codigo_vendedor'], r['sucursal__alias'])
+        v['ventas_brutas'] += int(r['total'] or 0)
+        v['documentos'] += int(r['docs'] or 0)
+
+    # Identificar ID de tickets ECOMMERCE con DTE (para restar luego del canal DTE)
+    ecom_con_dte_por_suc = {}  # {sid: monto_a_restar}
+    for r in qs_ecom.filter(dte_generado=True).values(
+        'sucursal_id'
+    ).annotate(total=Sum('total'), docs=Count('id')):
+        sid = r['sucursal_id']
+        ecom_con_dte_por_suc[sid] = {
+            'total': int(r['total'] or 0),
+            'docs': int(r['docs'] or 0),
+        }
+
+    # ========== DTEs ==========
+    qs_dtes_base = Dte.objects.filter(
+        fecha_emision__gte=fi,
+        fecha_emision__lte=ff,
+        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+    ).exclude(
+        estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
+    ).exclude(
+        receptor__isnull=False,
+        receptor_id=F('emisor_id')
+    ).select_related('sucursal', 'vendedor')
+    qs_dtes_base = filtrar_queryset_por_sucursal(qs_dtes_base, user, request)
+
+    # DTEs de venta (excluyendo NC)
+    qs_dte_ventas = qs_dtes_base.exclude(tipo_documento='NOTA DE CREDITO')
+    for r in qs_dte_ventas.values('sucursal_id', 'sucursal__alias').annotate(
+        total=Sum('monto_con_iva'),
+        dcto=Sum('descuento'),
+        docs=Count('id'),
+        unidades=Sum('unidades_productos'),
+    ):
+        sid = r['sucursal_id']
+        total = int(r['total'] or 0)
+        docs = int(r['docs'] or 0)
+        dcto = int(r['dcto'] or 0)
+        unidades = int(r['unidades'] or 0)
+
+        # Restar los tickets ECOMMERCE que YA fueron contados arriba (viven
+        # en la tabla Dte como boletas electrónicas)
+        ecom_info = ecom_con_dte_por_suc.get(sid, {'total': 0, 'docs': 0})
+        dte_neto = total - ecom_info['total']
+        dte_docs_neto = max(docs - ecom_info['docs'], 0)
+
+        resultado['canal']['DTE']['ventas'] += dte_neto
+        resultado['canal']['DTE']['documentos'] += dte_docs_neto
+        resultado['canal']['DTE']['unidades'] += unidades
+
+        # Al total general sí sumamos TODOS los DTEs (incluyen a los ECOMMERCE
+        # que se convirtieron en boleta). Por eso NO sumamos arriba los tickets
+        # ECOMMERCE con DTE al total: ya están representados acá.
+        resultado['total_ventas_brutas'] += total
+        resultado['total_documentos'] += docs
+        resultado['total_descuentos'] += dcto
+        resultado['total_unidades'] += unidades
+
+        if sid:
+            s = _suc_row(sid, r['sucursal__alias'])
+            s['ventas_brutas'] += total
+            s['documentos'] += docs
+            s['descuentos'] += dcto
+            s['unidades'] += unidades
+            # Presencial a nivel sucursal = DTEs totales - parte ECOMMERCE
+            s['ventas_presencial'] += dte_neto
+
+    # DTEs por vendedor
+    for r in qs_dte_ventas.values(
+        'vendedor_id', 'vendedor__nombre', 'vendedor__codigo_vendedor',
+        'sucursal__alias'
+    ).annotate(total=Sum('monto_con_iva'), docs=Count('id')):
+        vid = r['vendedor_id']
+        if not vid:
+            continue
+        v = _vend_row(vid, r['vendedor__nombre'],
+                      r['vendedor__codigo_vendedor'], r['sucursal__alias'])
+        v['ventas_brutas'] += int(r['total'] or 0)
+        v['documentos'] += int(r['docs'] or 0)
+
+    # NC (devoluciones) por sucursal
+    qs_nc = qs_dtes_base.filter(tipo_documento='NOTA DE CREDITO')
+    for r in qs_nc.values('sucursal_id').annotate(
+        total=Sum('monto_con_iva'), cant=Count('id')
+    ):
+        sid = r['sucursal_id']
+        total_nc = int(r['total'] or 0)
+        cant_nc = int(r['cant'] or 0)
+        resultado['total_devoluciones'] += total_nc
+        resultado['cantidad_devoluciones'] += cant_nc
+        if sid and sid in resultado['sucursales']:
+            resultado['sucursales'][sid]['devoluciones'] += total_nc
+
+    # NC por vendedor
+    for r in qs_nc.values('vendedor_id').annotate(total=Sum('monto_con_iva')):
+        vid = r['vendedor_id']
+        if vid and vid in resultado['vendedores']:
+            resultado['vendedores'][vid]['devoluciones'] += int(r['total'] or 0)
+
+    resultado['total_ventas_netas'] = (
+        resultado['total_ventas_brutas'] - resultado['total_devoluciones']
+    )
+    return resultado
+
+
+@login_required
+def ver_reporte_ventas_comparativo(request):
+    """Vista principal del reporte comparativo de ventas (actual vs periodo anterior)."""
+    context = obtener_contexto_sucursales(request.user, request)
+    return render(request, 'vistas/modulo_reportes/reporte_ventas_comparativo.html', context)
+
+
+@require_GET
+@login_required
+def obtener_ventas_comparativo(request):
+    """API: datos comparativos de ventas entre periodo actual y periodo anterior equivalente.
+
+    Parámetros:
+      - tipo_flujo: hoy | semana | mes_mtd | mes_full | ultimos_7 | ultimos_30 | yoy | custom
+      - fecha_inicio, fecha_fin: requeridos si tipo_flujo=custom
+      - sucursal_id: opcional (filtra por una sucursal; respeta permisos)
+    """
+    try:
+        tipo_flujo = request.GET.get('tipo_flujo', 'mes_full')
+        fi_param = request.GET.get('fecha_inicio')
+        ff_param = request.GET.get('fecha_fin')
+
+        fi_act, ff_act, fi_ant, ff_ant = _calcular_rangos_comparativo(
+            tipo_flujo, fi_param, ff_param
+        )
+
+        actual = _sumar_ventas_comparativo(fi_act, ff_act, request.user, request)
+        anterior = _sumar_ventas_comparativo(fi_ant, ff_ant, request.user, request)
+
+        def _var_pct(act, ant):
+            if ant > 0:
+                return round((act - ant) / ant * 100, 1)
+            return 100.0 if act > 0 else 0.0
+
+        def _pct(num, den):
+            return round(num / den * 100, 1) if den > 0 else 0.0
+
+        # ---------- KPIs globales ----------
+        ventas_act = actual['total_ventas_netas']
+        ventas_ant = anterior['total_ventas_netas']
+        docs_act = actual['total_documentos']
+        docs_ant = anterior['total_documentos']
+        ticket_act = (ventas_act / docs_act) if docs_act > 0 else 0
+        ticket_ant = (ventas_ant / docs_ant) if docs_ant > 0 else 0
+
+        pct_internet_act = _pct(
+            actual['canal']['ECOMMERCE']['ventas'], actual['total_ventas_brutas']
+        )
+        pct_internet_ant = _pct(
+            anterior['canal']['ECOMMERCE']['ventas'], anterior['total_ventas_brutas']
+        )
+
+        tasa_dev_act = _pct(actual['total_devoluciones'], actual['total_ventas_brutas'])
+        tasa_dev_ant = _pct(anterior['total_devoluciones'], anterior['total_ventas_brutas'])
+
+        kpis = {
+            'ventas_actual': ventas_act,
+            'ventas_anterior': ventas_ant,
+            'variacion_pct': _var_pct(ventas_act, ventas_ant),
+            'variacion_abs': ventas_act - ventas_ant,
+
+            'pct_internet_actual': pct_internet_act,
+            'pct_internet_anterior': pct_internet_ant,
+            'delta_internet_pp': round(pct_internet_act - pct_internet_ant, 1),
+            'ventas_internet_actual': actual['canal']['ECOMMERCE']['ventas'],
+            'ventas_internet_anterior': anterior['canal']['ECOMMERCE']['ventas'],
+
+            'ticket_promedio_actual': int(ticket_act),
+            'ticket_promedio_anterior': int(ticket_ant),
+            'variacion_ticket_pct': _var_pct(ticket_act, ticket_ant),
+
+            'documentos_actual': docs_act,
+            'documentos_anterior': docs_ant,
+            'variacion_documentos_pct': _var_pct(docs_act, docs_ant),
+
+            'tasa_devolucion_actual': tasa_dev_act,
+            'tasa_devolucion_anterior': tasa_dev_ant,
+            'delta_tasa_devolucion_pp': round(tasa_dev_act - tasa_dev_ant, 1),
+
+            'unidades_actual': actual['total_unidades'],
+            'unidades_anterior': anterior['total_unidades'],
+            'variacion_unidades_pct': _var_pct(actual['total_unidades'], anterior['total_unidades']),
+
+            'descuentos_actual': actual['total_descuentos'],
+            'descuentos_anterior': anterior['total_descuentos'],
+        }
+
+        # ---------- Por sucursal ----------
+        sucursales_rows = []
+        todas_sids = set(actual['sucursales'].keys()) | set(anterior['sucursales'].keys())
+        for sid in todas_sids:
+            a = actual['sucursales'].get(sid, {})
+            b = anterior['sucursales'].get(sid, {})
+            nombre = a.get('nombre') or b.get('nombre') or '-'
+            v_brutas_a = a.get('ventas_brutas', 0)
+            v_brutas_b = b.get('ventas_brutas', 0)
+            dev_a = a.get('devoluciones', 0)
+            dev_b = b.get('devoluciones', 0)
+            netas_a = v_brutas_a - dev_a
+            netas_b = v_brutas_b - dev_b
+            docs_a = a.get('documentos', 0)
+            docs_b = b.get('documentos', 0)
+            tp_a = int(netas_a / docs_a) if docs_a > 0 else 0
+            ecom_a = a.get('ventas_ecommerce', 0)
+            ecom_b = b.get('ventas_ecommerce', 0)
+            pct_int_a = _pct(ecom_a, v_brutas_a)
+            pct_int_b = _pct(ecom_b, v_brutas_b)
+
+            sucursales_rows.append({
+                'id': sid,
+                'nombre': nombre,
+                'ventas_actual': netas_a,
+                'ventas_anterior': netas_b,
+                'variacion_pct': _var_pct(netas_a, netas_b),
+                'variacion_abs': netas_a - netas_b,
+                'pct_internet_actual': pct_int_a,
+                'pct_internet_anterior': pct_int_b,
+                'ventas_internet_actual': ecom_a,
+                'documentos_actual': docs_a,
+                'documentos_anterior': docs_b,
+                'ticket_promedio_actual': tp_a,
+                'devoluciones_actual': dev_a,
+                'unidades_actual': a.get('unidades', 0),
+                'participacion': _pct(netas_a, ventas_act),
+            })
+        sucursales_rows.sort(key=lambda x: x['ventas_actual'], reverse=True)
+
+        # ---------- Por vendedor ----------
+        vendedores_rows = []
+        todas_vids = set(actual['vendedores'].keys()) | set(anterior['vendedores'].keys())
+        for vid in todas_vids:
+            a = actual['vendedores'].get(vid, {})
+            b = anterior['vendedores'].get(vid, {})
+            nombre = a.get('nombre') or b.get('nombre') or '-'
+            codigo = a.get('codigo') or b.get('codigo') or ''
+            sucursal = a.get('sucursal') or b.get('sucursal') or '-'
+            v_brutas_a = a.get('ventas_brutas', 0)
+            v_brutas_b = b.get('ventas_brutas', 0)
+            dev_a = a.get('devoluciones', 0)
+            dev_b = b.get('devoluciones', 0)
+            netas_a = v_brutas_a - dev_a
+            netas_b = v_brutas_b - dev_b
+            docs_a = a.get('documentos', 0)
+            docs_b = b.get('documentos', 0)
+            tp_a = int(netas_a / docs_a) if docs_a > 0 else 0
+
+            vendedores_rows.append({
+                'id': vid,
+                'nombre': nombre,
+                'codigo': codigo,
+                'sucursal': sucursal,
+                'ventas_actual': netas_a,
+                'ventas_anterior': netas_b,
+                'variacion_pct': _var_pct(netas_a, netas_b),
+                'variacion_abs': netas_a - netas_b,
+                'documentos_actual': docs_a,
+                'documentos_anterior': docs_b,
+                'ticket_promedio_actual': tp_a,
+                'participacion': _pct(netas_a, ventas_act),
+            })
+        vendedores_rows.sort(key=lambda x: x['ventas_actual'], reverse=True)
+
+        # ---------- Por canal ----------
+        canales_rows = []
+        etiquetas_canal = {
+            'ECOMMERCE': 'Internet (E-commerce)',
+            'POS': 'Presencial (POS/Tickets)',
+            'DTE': 'Documentos Tributarios (DTE)',
+        }
+        for key in ['ECOMMERCE', 'POS', 'DTE']:
+            a = actual['canal'][key]
+            b = anterior['canal'][key]
+            canales_rows.append({
+                'canal': key,
+                'nombre': etiquetas_canal[key],
+                'ventas_actual': a['ventas'],
+                'ventas_anterior': b['ventas'],
+                'variacion_pct': _var_pct(a['ventas'], b['ventas']),
+                'documentos_actual': a['documentos'],
+                'documentos_anterior': b['documentos'],
+                'unidades_actual': a['unidades'],
+                'unidades_anterior': b['unidades'],
+                'participacion_actual': _pct(a['ventas'], actual['total_ventas_brutas']),
+                'participacion_anterior': _pct(b['ventas'], anterior['total_ventas_brutas']),
+            })
+
+        # ---------- Top crecimiento ----------
+        top_suc = max(sucursales_rows, key=lambda x: x['variacion_pct'], default=None)
+        top_vend = max(vendedores_rows, key=lambda x: x['variacion_pct'], default=None)
+        kpis['top_sucursal_crecimiento'] = (
+            {'nombre': top_suc['nombre'], 'variacion': top_suc['variacion_pct']}
+            if top_suc and top_suc['ventas_actual'] > 0 else None
+        )
+        kpis['top_vendedor_crecimiento'] = (
+            {'nombre': top_vend['nombre'], 'variacion': top_vend['variacion_pct']}
+            if top_vend and top_vend['ventas_actual'] > 0 else None
+        )
+
+        return JsonResponse({
+            'success': True,
+            'tipo_flujo': tipo_flujo,
+            'periodo': {
+                'actual': {
+                    'inicio': fi_act.strftime('%Y-%m-%d'),
+                    'fin': ff_act.strftime('%Y-%m-%d'),
+                },
+                'anterior': {
+                    'inicio': fi_ant.strftime('%Y-%m-%d'),
+                    'fin': ff_ant.strftime('%Y-%m-%d'),
+                },
+            },
+            'kpis': kpis,
+            'sucursales': sucursales_rows,
+            'vendedores': vendedores_rows,
+            'canales': canales_rows,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== REPORTE DE PRODUCTOS VENDIDOS ==========
+
+def _aplicar_filtros_producto(qs, prefix, filtros):
+    """Aplica filtros de atributo/categoría/temporada a un queryset de líneas de venta.
+    'prefix' es el prefijo relacional al Producto, por ejemplo:
+      - 'ProductoTalla__producto' para Ticket_Productos
+      - 'productoTalla__producto' para Dte_Productos
+
+    Por defecto excluye productos con Producto.excluir_de_analitica=True
+    (productos marcados desde Gestión de Productos como no-analíticos:
+    exhibición, consignación, catálogo retirado, etc.).
+    Pasar filtros['incluir_excluidos']=True para incluirlos (auditoría).
+    """
+    # Exclusión por defecto de productos marcados como no-analíticos
+    if not filtros.get('incluir_excluidos'):
+        qs = qs.filter(**{f'{prefix}__excluir_de_analitica': False})
+
+    if filtros.get('marca_id'):
+        qs = qs.filter(**{f'{prefix}__atributo1_id': filtros['marca_id']})
+    if filtros.get('color_id'):
+        qs = qs.filter(**{f'{prefix}__atributo2_id': filtros['color_id']})
+    if filtros.get('sexo_id'):
+        qs = qs.filter(**{f'{prefix}__atributo3_id': filtros['sexo_id']})
+    if filtros.get('genero_id'):
+        qs = qs.filter(**{f'{prefix}__atributo4_id': filtros['genero_id']})
+    if filtros.get('categoria_id'):
+        qs = qs.filter(**{f'{prefix}__categoria_id': filtros['categoria_id']})
+    if filtros.get('temporada'):
+        qs = qs.filter(**{f'{prefix}__temporada': filtros['temporada']})
+    if filtros.get('anio_temporada'):
+        qs = qs.filter(**{f'{prefix}__anio_temporada': filtros['anio_temporada']})
+    if filtros.get('rango_precio'):
+        qs = qs.filter(**{f'{prefix}__rango_precio': filtros['rango_precio']})
+    if filtros.get('busqueda'):
+        q = filtros['busqueda']
+        qs = qs.filter(
+            Q(**{f'{prefix}__articulo__icontains': q}) |
+            Q(**{f'{prefix}__descripcion__icontains': q})
+        )
+    return qs
+
+
+def _agregar_productos_vendidos(fi, ff, filtros, user, request):
+    """Agrega ventas a nivel producto desde Ticket_Productos + Dte_Productos
+    aplicando la regla anti-doble-contado:
+      - Tickets: solo los que NO generaron DTE (`dte_generado=False`).
+      - DTEs: todos los de venta no-anulados/no-NC (incluyen boletas de tickets).
+
+    Métricas calculadas por producto:
+      - unidades, monto, costo, margen, margen_pct
+      - docs (cantidad de ventas), sucursales_count
+
+    Devuelve dict con:
+      {
+        'productos': [{producto_id, articulo, descripcion, marca, categoria,
+                       sexo, genero, unidades, monto, costo, margen, margen_pct, docs}],
+        'por_marca': [...], 'por_categoria': [...], 'por_sexo': [...],
+        'por_genero': [...], 'por_sucursal_categoria': [{sucursal, categoria, unidades, monto}],
+        'kpis': {...}
+      }
+    """
+    # ---------- TICKET_PRODUCTOS (solo tickets sin DTE) ----------
+    qs_tp = Ticket_Productos.objects.filter(
+        idTicket__created_at__date__gte=fi,
+        idTicket__created_at__date__lte=ff,
+        idTicket__estado='PAGADO',
+        idTicket__modulo_origen__in=['VENTA_PUBLICO', 'POS', 'ECOMMERCE'],
+        idTicket__dte_generado=False,
+        ProductoTalla__isnull=False,
+    )
+    # Permisos / sucursal (aplica al ticket padre)
+    qs_tp = filtrar_queryset_por_sucursal(
+        qs_tp, user, request, campo_sucursal='idTicket__sucursal_id'
+    )
+    qs_tp = _aplicar_filtros_producto(qs_tp, 'ProductoTalla__producto', filtros)
+
+    # ---------- DTE_PRODUCTOS ----------
+    qs_dp = Dte_Productos.objects.filter(
+        dte__fecha_emision__gte=fi,
+        dte__fecha_emision__lte=ff,
+        dte__tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+        productoTalla__isnull=False,
+    ).exclude(
+        dte__estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
+    ).exclude(
+        dte__tipo_documento='NOTA DE CREDITO'
+    ).exclude(
+        dte__receptor__isnull=False,
+        dte__receptor_id=F('dte__emisor_id'),
+    )
+    qs_dp = filtrar_queryset_por_sucursal(
+        qs_dp, user, request, campo_sucursal='dte__sucursal_id'
+    )
+    qs_dp = _aplicar_filtros_producto(qs_dp, 'productoTalla__producto', filtros)
+
+    # ---------- Agregación por producto ----------
+    productos_acum = {}  # {producto_id: dict}
+    sucursales_por_producto = {}  # {producto_id: set(sucursal_id)}
+
+    def _get_prod(pid, data_row):
+        return productos_acum.setdefault(pid, {
+            'producto_id': pid,
+            'articulo': data_row.get('prod_articulo') or '-',
+            'descripcion': data_row.get('prod_descripcion') or '',
+            'marca': data_row.get('prod_marca') or '-',
+            'marca_id': data_row.get('prod_marca_id'),
+            'categoria': data_row.get('prod_categoria') or '-',
+            'categoria_id': data_row.get('prod_categoria_id'),
+            'sexo': data_row.get('prod_sexo') or '-',
+            'sexo_id': data_row.get('prod_sexo_id'),
+            'genero': data_row.get('prod_genero') or '-',
+            'genero_id': data_row.get('prod_genero_id'),
+            'unidades': 0, 'monto': 0, 'costo': 0, 'docs': 0,
+        })
+
+    # --- Tickets ---
+    agg_tp = qs_tp.values(
+        'ProductoTalla__producto_id',
+        prod_articulo=F('ProductoTalla__producto__articulo'),
+        prod_descripcion=F('ProductoTalla__producto__descripcion'),
+        prod_marca=F('ProductoTalla__producto__atributo1__valor'),
+        prod_marca_id=F('ProductoTalla__producto__atributo1_id'),
+        prod_categoria=F('ProductoTalla__producto__categoria__nombre'),
+        prod_categoria_id=F('ProductoTalla__producto__categoria_id'),
+        prod_sexo=F('ProductoTalla__producto__atributo3__valor'),
+        prod_sexo_id=F('ProductoTalla__producto__atributo3_id'),
+        prod_genero=F('ProductoTalla__producto__atributo4__valor'),
+        prod_genero_id=F('ProductoTalla__producto__atributo4_id'),
+    ).annotate(
+        unid=Sum('stock'),
+        monto=Sum('subtotal'),
+        # costo FIFO total = costo_fifo * cantidad
+        costo_total=Sum(ExpressionWrapper(
+            F('costo_fifo') * F('stock'), output_field=DecimalField()
+        )),
+        docs=Count('idTicket', distinct=True),
+    )
+    for r in agg_tp:
+        pid = r['ProductoTalla__producto_id']
+        if not pid:
+            continue
+        p = _get_prod(pid, r)
+        p['unidades'] += int(r['unid'] or 0)
+        p['monto'] += int(r['monto'] or 0)
+        p['costo'] += int(r['costo_total'] or 0)
+        p['docs'] += int(r['docs'] or 0)
+
+    # Sucursales por producto (Tickets)
+    for r in qs_tp.values('ProductoTalla__producto_id', 'idTicket__sucursal_id').distinct():
+        pid = r['ProductoTalla__producto_id']
+        sid = r['idTicket__sucursal_id']
+        if pid and sid:
+            sucursales_por_producto.setdefault(pid, set()).add(sid)
+
+    # --- DTEs ---
+    # monto por línea: preferir monto_item si > 0, si no usar precio * stock
+    agg_dp = qs_dp.values(
+        'productoTalla__producto_id',
+        prod_articulo=F('productoTalla__producto__articulo'),
+        prod_descripcion=F('productoTalla__producto__descripcion'),
+        prod_marca=F('productoTalla__producto__atributo1__valor'),
+        prod_marca_id=F('productoTalla__producto__atributo1_id'),
+        prod_categoria=F('productoTalla__producto__categoria__nombre'),
+        prod_categoria_id=F('productoTalla__producto__categoria_id'),
+        prod_sexo=F('productoTalla__producto__atributo3__valor'),
+        prod_sexo_id=F('productoTalla__producto__atributo3_id'),
+        prod_genero=F('productoTalla__producto__atributo4__valor'),
+        prod_genero_id=F('productoTalla__producto__atributo4_id'),
+    ).annotate(
+        unid=Sum('stock'),
+        monto_item_total=Sum('monto_item'),
+        monto_precio_total=Sum(ExpressionWrapper(
+            F('precio') * F('stock'), output_field=DecimalField()
+        )),
+        costo_total=Sum(ExpressionWrapper(
+            F('costo') * F('stock'), output_field=DecimalField()
+        )),
+        docs=Count('dte', distinct=True),
+    )
+    for r in agg_dp:
+        pid = r['productoTalla__producto_id']
+        if not pid:
+            continue
+        p = _get_prod(pid, r)
+        p['unidades'] += int(r['unid'] or 0)
+        # Fallback: si monto_item está vacío (0), usar precio * stock
+        monto = int(r['monto_item_total'] or 0)
+        if monto <= 0:
+            monto = int(r['monto_precio_total'] or 0)
+        p['monto'] += monto
+        p['costo'] += int(r['costo_total'] or 0)
+        p['docs'] += int(r['docs'] or 0)
+
+    # Sucursales por producto (DTEs)
+    for r in qs_dp.values('productoTalla__producto_id', 'dte__sucursal_id').distinct():
+        pid = r['productoTalla__producto_id']
+        sid = r['dte__sucursal_id']
+        if pid and sid:
+            sucursales_por_producto.setdefault(pid, set()).add(sid)
+
+    # ---------- Calcular margen por producto + totales ----------
+    productos = []
+    tot_unid = 0
+    tot_monto = 0
+    tot_costo = 0
+    for pid, p in productos_acum.items():
+        margen = p['monto'] - p['costo']
+        margen_pct = (margen / p['monto'] * 100) if p['monto'] > 0 else 0
+        sucs = len(sucursales_por_producto.get(pid, set()))
+        productos.append({
+            **p,
+            'margen': margen,
+            'margen_pct': round(margen_pct, 1),
+            'sucursales_count': sucs,
+        })
+        tot_unid += p['unidades']
+        tot_monto += p['monto']
+        tot_costo += p['costo']
+
+    tot_margen = tot_monto - tot_costo
+    tot_margen_pct = (tot_margen / tot_monto * 100) if tot_monto > 0 else 0
+
+    # Orden según parámetro
+    orden = filtros.get('orden', 'unidades_desc')
+    key_map = {
+        'unidades_desc': lambda x: x['unidades'],
+        'monto_desc':    lambda x: x['monto'],
+        'margen_desc':   lambda x: x['margen'],
+        'margen_pct_desc': lambda x: x['margen_pct'],
+    }
+    productos.sort(key=key_map.get(orden, key_map['unidades_desc']), reverse=True)
+
+    # Participación % (en unidades)
+    for p in productos:
+        p['participacion'] = round(p['unidades'] / tot_unid * 100, 1) if tot_unid > 0 else 0
+
+    # ---------- Agregaciones por dimensión ----------
+    def _agrupar_por(campo_key, campo_nombre):
+        acc = {}
+        for p in productos:
+            key = p.get(campo_key) or None
+            nombre = p.get(campo_nombre) or 'Sin clasificar'
+            slot = acc.setdefault(key, {
+                'id': key,
+                'nombre': nombre,
+                'unidades': 0, 'monto': 0, 'costo': 0,
+                'skus': 0,
+            })
+            slot['unidades'] += p['unidades']
+            slot['monto'] += p['monto']
+            slot['costo'] += p['costo']
+            slot['skus'] += 1
+        filas = []
+        for s in acc.values():
+            m = s['monto'] - s['costo']
+            filas.append({
+                **s,
+                'margen': m,
+                'margen_pct': round((m / s['monto'] * 100), 1) if s['monto'] > 0 else 0,
+                'participacion': round(s['unidades'] / tot_unid * 100, 1) if tot_unid > 0 else 0,
+            })
+        filas.sort(key=lambda x: x['unidades'], reverse=True)
+        return filas
+
+    por_marca = _agrupar_por('marca_id', 'marca')
+    por_categoria = _agrupar_por('categoria_id', 'categoria')
+    por_sexo = _agrupar_por('sexo_id', 'sexo')
+    por_genero = _agrupar_por('genero_id', 'genero')
+
+    # ---------- Heatmap Sucursal × Categoría ----------
+    # Recalcular directo en DB para mejor precisión (evitar perder unidades por producto sin categoría)
+    heat = {}  # {(sid, cat_nombre): {unidades, monto}}
+
+    for r in qs_tp.values(
+        'idTicket__sucursal_id',
+        suc_nombre=F('idTicket__sucursal__alias'),
+        cat_nombre=F('ProductoTalla__producto__categoria__nombre'),
+    ).annotate(unid=Sum('stock'), monto=Sum('subtotal')):
+        sid = r['idTicket__sucursal_id']
+        suc = r['suc_nombre'] or '-'
+        cat = r['cat_nombre'] or 'Sin clasificar'
+        key = (sid, cat)
+        h = heat.setdefault(key, {'sucursal_id': sid, 'sucursal': suc,
+                                   'categoria': cat, 'unidades': 0, 'monto': 0})
+        h['unidades'] += int(r['unid'] or 0)
+        h['monto'] += int(r['monto'] or 0)
+
+    for r in qs_dp.values(
+        'dte__sucursal_id',
+        suc_nombre=F('dte__sucursal__alias'),
+        cat_nombre=F('productoTalla__producto__categoria__nombre'),
+    ).annotate(unid=Sum('stock'),
+               monto_item_total=Sum('monto_item'),
+               monto_precio_total=Sum(ExpressionWrapper(
+                   F('precio') * F('stock'), output_field=DecimalField()))):
+        sid = r['dte__sucursal_id']
+        suc = r['suc_nombre'] or '-'
+        cat = r['cat_nombre'] or 'Sin clasificar'
+        key = (sid, cat)
+        monto = int(r['monto_item_total'] or 0)
+        if monto <= 0:
+            monto = int(r['monto_precio_total'] or 0)
+        h = heat.setdefault(key, {'sucursal_id': sid, 'sucursal': suc,
+                                   'categoria': cat, 'unidades': 0, 'monto': 0})
+        h['unidades'] += int(r['unid'] or 0)
+        h['monto'] += monto
+
+    heatmap = sorted(
+        heat.values(),
+        key=lambda x: (x['sucursal'], -x['unidades']),
+    )
+
+    # ---------- KPIs ----------
+    top_marca = por_marca[0]['nombre'] if por_marca else '-'
+    top_categoria = por_categoria[0]['nombre'] if por_categoria else '-'
+    top_producto = productos[0]['articulo'] if productos else '-'
+
+    kpis = {
+        'total_unidades': tot_unid,
+        'total_monto': tot_monto,
+        'total_costo': tot_costo,
+        'total_margen': tot_margen,
+        'total_margen_pct': round(tot_margen_pct, 1),
+        'total_skus': len(productos),
+        'ticket_promedio_unid': round(tot_monto / tot_unid, 0) if tot_unid > 0 else 0,
+        'top_marca': top_marca,
+        'top_categoria': top_categoria,
+        'top_producto': top_producto,
+    }
+
+    return {
+        'productos': productos,
+        'por_marca': por_marca,
+        'por_categoria': por_categoria,
+        'por_sexo': por_sexo,
+        'por_genero': por_genero,
+        'heatmap': heatmap,
+        'kpis': kpis,
+    }
+
+
+@login_required
+def ver_reporte_productos_vendidos(request):
+    """Vista principal del reporte de productos vendidos."""
+    context = obtener_contexto_sucursales(request.user, request)
+    return render(request, 'vistas/modulo_reportes/reporte_productos_vendidos.html', context)
+
+
+@require_GET
+@login_required
+def obtener_productos_vendidos(request):
+    """API: productos vendidos con agregaciones por marca/categoría/sexo/género y heatmap.
+
+    Parámetros (todos opcionales):
+      - tipo_flujo / fecha_inicio / fecha_fin
+      - sucursal_id
+      - marca_id, color_id, sexo_id, genero_id, categoria_id
+      - temporada, anio_temporada, rango_precio
+      - busqueda (texto libre)
+      - orden: unidades_desc | monto_desc | margen_desc | margen_pct_desc
+      - top_n (default 50) — limita sólo la tabla de productos, no las agregaciones
+    """
+    try:
+        tipo_flujo = request.GET.get('tipo_flujo', 'mes_full')
+        fi_param = request.GET.get('fecha_inicio')
+        ff_param = request.GET.get('fecha_fin')
+
+        # Reusar helper de rangos del reporte comparativo
+        fi, ff, _fi_ant, _ff_ant = _calcular_rangos_comparativo(
+            tipo_flujo, fi_param, ff_param
+        )
+
+        filtros = {
+            'marca_id': request.GET.get('marca_id') or None,
+            'color_id': request.GET.get('color_id') or None,
+            'sexo_id': request.GET.get('sexo_id') or None,
+            'genero_id': request.GET.get('genero_id') or None,
+            'categoria_id': request.GET.get('categoria_id') or None,
+            'temporada': request.GET.get('temporada') or None,
+            'anio_temporada': request.GET.get('anio_temporada') or None,
+            'rango_precio': request.GET.get('rango_precio') or None,
+            'busqueda': (request.GET.get('busqueda') or '').strip() or None,
+            'orden': request.GET.get('orden', 'unidades_desc'),
+            # Por defecto excluye productos marcados como no-analíticos
+            # (exhibición, consignación, etc.) — misma lógica que verGestionProducto
+            'incluir_excluidos': request.GET.get('incluir_excluidos') in ('1', 'true', 'True'),
+        }
+
+        try:
+            top_n = int(request.GET.get('top_n', 50))
+        except (TypeError, ValueError):
+            top_n = 50
+        top_n = max(1, min(top_n, 500))
+
+        data = _agregar_productos_vendidos(fi, ff, filtros, request.user, request)
+
+        return JsonResponse({
+            'success': True,
+            'tipo_flujo': tipo_flujo,
+            'periodo': {
+                'inicio': fi.strftime('%Y-%m-%d'),
+                'fin': ff.strftime('%Y-%m-%d'),
+            },
+            'kpis': data['kpis'],
+            'productos': data['productos'][:top_n],
+            'productos_total': len(data['productos']),
+            'por_marca': data['por_marca'][:100],
+            'por_categoria': data['por_categoria'][:100],
+            'por_sexo': data['por_sexo'],
+            'por_genero': data['por_genero'],
+            'heatmap': data['heatmap'],
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_GET
+@login_required
+def obtener_atributo_opciones(request):
+    """API: lista de opciones de un atributo (marca, color, sexo, género) o categorías.
+
+    Parámetro:
+      - tipo: 'marca' | 'color' | 'sexo' | 'genero' | 'categoria'
+    """
+    try:
+        tipo = (request.GET.get('tipo') or '').lower()
+        mapping = {
+            'marca': 'Marca',
+            'color': 'Color',
+            'sexo': 'Sexo',
+            'genero': 'Género',
+        }
+
+        if tipo == 'categoria':
+            qs = Categoria.objects.order_by('nombre').values('id', 'nombre')
+            return JsonResponse({
+                'success': True,
+                'opciones': [{'id': x['id'], 'nombre': x['nombre']} for x in qs],
+            })
+
+        nombre_atributo = mapping.get(tipo)
+        if not nombre_atributo:
+            return JsonResponse({
+                'success': False,
+                'error': "Parametro 'tipo' invalido. Use: marca | color | sexo | genero | categoria",
+            })
+
+        qs = AtributoOpcion.objects.filter(
+            atributo__nombre=nombre_atributo
+        ).order_by('valor').values('id', 'valor')
+
+        return JsonResponse({
+            'success': True,
+            'opciones': [{'id': x['id'], 'nombre': x['valor']} for x in qs],
+        })
     except Exception as e:
         import traceback
         traceback.print_exc()

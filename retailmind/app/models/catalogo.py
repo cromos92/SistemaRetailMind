@@ -141,6 +141,8 @@ class Producto(models.Model):
     rango_precio = models.CharField(max_length=50, blank=True, null=True,
         verbose_name='Rango de precio',
         help_text='economico / medio / alto / premium — calculado desde precioventa')
+    fecha_creacion = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True, null=True, blank=True)
     excluir_de_analitica = models.BooleanField(
         default=False,
         verbose_name='Excluir de analitica',
@@ -157,7 +159,8 @@ class Producto_Talla(models.Model):
     sku = models.BigIntegerField()  # Cambiado a BigIntegerField para soportar codigo_asociado de MySQL
     stock =   models.IntegerField( )
     talla =   models.CharField(max_length=50)
-  
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
     def __str__(self):
         return f"Producto_Talla {self.sku} - {self.stock}"
     

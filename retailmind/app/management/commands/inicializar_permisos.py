@@ -1,5 +1,5 @@
 """
-Comando de Django para inicializar módulos, opciones y permisos del sistema
+Comando de Django para inicializar m?dulos, opciones y permisos del sistema
 python manage.py inicializar_permisos
 """
 from django.core.management.base import BaseCommand
@@ -7,12 +7,12 @@ from app.models import ModuloSistema, OpcionMenu, PermisoRol
 
 
 class Command(BaseCommand):
-    help = 'Inicializa los módulos, opciones del menú y permisos por defecto del sistema'
+    help = 'Inicializa los m?dulos, opciones del men? y permisos por defecto del sistema'
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('>> Iniciando configuracion de permisos...'))
         
-        # Crear módulos y sus opciones
+        # Crear m?dulos y sus opciones
         self.crear_modulo_dashboard()
         self.crear_modulo_ventas()
         self.crear_modulo_documentos()
@@ -22,10 +22,10 @@ class Command(BaseCommand):
         self.crear_modulo_reportes()
         self.crear_modulo_configuracion()
         self.crear_modulo_ecommerce()
-        self.crear_modulo_usuario()  # Nuevo módulo para opciones de usuario
+        self.crear_modulo_usuario()  # Nuevo m?dulo para opciones de usuario
         
         # Crear permisos por defecto para cada rol
-        # Nota: is_superuser de Django tiene acceso total automáticamente
+        # Nota: is_superuser de Django tiene acceso total autom?ticamente
         self.crear_permisos_administrador()
         self.crear_permisos_jefe_local()
         self.crear_permisos_cajero()
@@ -34,12 +34,12 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('>> Permisos inicializados correctamente!'))
 
     def crear_modulo_dashboard(self):
-        """Crear módulo Dashboard y sus opciones"""
+        """Crear m?dulo Dashboard y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='dashboard',
             defaults={
                 'nombre': 'Dashboard',
-                'descripcion': 'Tableros de control y métricas',
+                'descripcion': 'Tableros de control y m?tricas',
                 'icono': 'ri-pie-chart-line',
                 'orden': 1
             }
@@ -72,12 +72,12 @@ class Command(BaseCommand):
         self.stdout.write('[Dashboard] Modulo Dashboard creado')
 
     def crear_modulo_ventas(self):
-        """Crear módulo Ventas y sus opciones"""
+        """Crear m?dulo Ventas y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='ventas',
             defaults={
-                'nombre': 'Módulo Ventas',
-                'descripcion': 'Gestión de ventas y punto de venta',
+                'nombre': 'M?dulo Ventas',
+                'descripcion': 'Gesti?n de ventas y punto de venta',
                 'icono': 'ri-money-cny-circle-line',
                 'orden': 2
             }
@@ -90,7 +90,7 @@ class Command(BaseCommand):
             ('gestion_documentos_ventas', 'Consulta Documentos', 'gestion_ventas_documentos', 'ri-file-search-line', 4),
             ('cuadratura_caja', 'Cuadratura y Arqueo', 'cuadratura_caja', 'ri-calculator-line', 5),
             ('pos_transbank', 'POS Transbank', 'gestion_transbank_pos_sdk', 'ri-bank-card-line', 6),
-            ('revision_arqueos', 'Revisión Arqueos y Depósitos', 'revision_arqueos', 'ri-shield-check-line', 7),
+            ('revision_arqueos', 'Revisi?n Arqueos y Dep?sitos', 'revision_arqueos', 'ri-shield-check-line', 7),
         ]
         
         for codigo, nombre, url_name, icono, orden in opciones:
@@ -108,25 +108,25 @@ class Command(BaseCommand):
         self.stdout.write('[Ventas] Modulo Ventas creado')
 
     def crear_modulo_documentos(self):
-        """Crear módulo Documentos y sus opciones"""
+        """Crear m?dulo Documentos y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='documentos',
             defaults={
-                'nombre': 'Módulo Documentos',
-                'descripcion': 'Gestión de documentos tributarios',
+                'nombre': 'M?dulo Documentos',
+                'descripcion': 'Gesti?n de documentos tributarios',
                 'icono': 'ri-file-list-line',
                 'orden': 3
             }
         )
         
         opciones = [
-            ('emision_dte', 'Emisión DTE', None, '/app/emisionDTE/', 'bi-file-earmark-plus', 1),
-            ('gestion_dte', 'Gestión DTE', None, '/app/documentos/gestion-dte/', 'bi-file-earmark-text', 2),
-            ('recepcion_dte', 'Recepción Documentos', 'recepcion_dte', None, 'bi-box-arrow-in-down', 3),
+            ('emision_dte', 'Emisi?n DTE', None, '/app/emisionDTE/', 'bi-file-earmark-plus', 1),
+            ('gestion_dte', 'Gesti?n DTE', None, '/app/documentos/gestion-dte/', 'bi-file-earmark-text', 2),
+            ('recepcion_dte', 'Recepci?n Documentos', 'recepcion_dte', None, 'bi-box-arrow-in-down', 3),
             ('regularizar_recepciones', 'Regularizar Recepciones', 'regularizar_recepciones', None, 'ri-settings-3-line', 4),
-            ('gestion_cotizaciones', 'Gestión Cotizaciones', 'gestion_cotizaciones', None, 'ri-file-text-line', 5),
-            ('gestion_correlativos', 'Gestión Correlativos', None, '/app/documentos/gestion-correlativos/', 'ri-file-list-3-line', 6),
-            ('gestion_creditos', 'Gestión Créditos', None, '/app/documentos/gestion-creditos/', 'ri-bank-card-line', 7),
+            ('gestion_cotizaciones', 'Gesti?n Cotizaciones', 'gestion_cotizaciones', None, 'ri-file-text-line', 5),
+            ('gestion_correlativos', 'Gesti?n Correlativos', None, '/app/documentos/gestion-correlativos/', 'ri-file-list-3-line', 6),
+            ('gestion_creditos', 'Gesti?n Cr?ditos', None, '/app/documentos/gestion-creditos/', 'ri-bank-card-line', 7),
         ]
         
         for item in opciones:
@@ -151,24 +151,24 @@ class Command(BaseCommand):
         self.stdout.write('[Documentos] Modulo Documentos creado')
 
     def crear_modulo_existencias(self):
-        """Crear módulo Existencias y sus opciones"""
+        """Crear m?dulo Existencias y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='existencias',
             defaults={
-                'nombre': 'Módulo Existencias',
-                'descripcion': 'Gestión de inventario y productos',
+                'nombre': 'M?dulo Existencias',
+                'descripcion': 'Gesti?n de inventario y productos',
                 'icono': 'ri-store-3-line',
                 'orden': 4
             }
         )
         
         opciones = [
-            ('gestion_producto', 'Gestión Producto', None, '/app/verGestionProducto/', 'ri-archive-line', 1),
-            ('edicion_rapida_precios', 'Gestión de Precios', 'edicion_rapida_precios', None, 'ri-price-tag-3-line', 2),
+            ('gestion_producto', 'Gesti?n Producto', None, '/app/verGestionProducto/', 'ri-archive-line', 1),
+            ('edicion_rapida_precios', 'Gesti?n de Precios', 'edicion_rapida_precios', None, 'ri-price-tag-3-line', 2),
             ('revisar_cambios_precios', 'Alertas de Precios', 'revisar_cambios_precios', None, 'ri-notification-badge-line', 3),
             ('movimientos_producto', 'Movimientos Por Sucursal', None, '/app/verMovimientosProducto/', 'ri-arrow-left-right-line', 4),
-            ('gestion_inventarios', 'Gestión de Inventarios', 'gestion_inventarios', None, 'ri-clipboard-line', 5),
-            ('gestion_etiquetas_zebra', 'Impresión Etiquetas Zebra', 'gestion_etiquetas_zebra', None, 'ri-printer-line', 6),
+            ('gestion_inventarios', 'Gesti?n de Inventarios', 'gestion_inventarios', None, 'ri-clipboard-line', 5),
+            ('gestion_etiquetas_zebra', 'Impresi?n Etiquetas Zebra', 'gestion_etiquetas_zebra', None, 'ri-printer-line', 6),
             ('buscar_productos_sucursal', 'Buscar Producto Sucursal', 'buscar_productos_sucursal', None, 'ri-search-line', 7),
         ]
         
@@ -188,21 +188,21 @@ class Command(BaseCommand):
         self.stdout.write('[Existencias] Modulo Existencias creado')
 
     def crear_modulo_compras(self):
-        """Crear módulo Compras y sus opciones"""
+        """Crear m?dulo Compras y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='compras',
             defaults={
-                'nombre': 'Módulo Compras',
-                'descripcion': 'Gestión de compras y proveedores',
+                'nombre': 'M?dulo Compras',
+                'descripcion': 'Gesti?n de compras y proveedores',
                 'icono': 'ri-shopping-bag-line',
                 'orden': 5
             }
         )
         
         opciones = [
-            ('gestion_compras', 'Gestión Compras', None, '/app/verGestionCompras/', 'ri-shopping-bag-line', 1),
-            ('gestion_dte_compras', 'Gestión Documentos Compras', None, '/app/verGestionDteCompras/', 'ri-file-list-line', 2),
-            ('prediccion_compras', 'Predicción de Compras', None, '/app/prediccion/', 'ri-line-chart-line', 3),
+            ('gestion_compras', 'Gesti?n Compras', None, '/app/verGestionCompras/', 'ri-shopping-bag-line', 1),
+            ('gestion_dte_compras', 'Gesti?n Documentos Compras', None, '/app/verGestionDteCompras/', 'ri-file-list-line', 2),
+            ('prediccion_compras', 'Predicci?n de Compras', None, '/app/prediccion/', 'ri-line-chart-line', 3),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -221,12 +221,12 @@ class Command(BaseCommand):
         self.stdout.write('[Compras] Modulo Compras creado')
 
     def crear_modulo_requerimientos(self):
-        """Crear módulo Requerimientos y sus opciones"""
+        """Crear m?dulo Requerimientos y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='requerimientos',
             defaults={
-                'nombre': 'Módulo Requerimientos',
-                'descripcion': 'Gestión de garantías y servicios',
+                'nombre': 'M?dulo Requerimientos',
+                'descripcion': 'Gesti?n de garant?as y servicios',
                 'icono': 'ri-customer-service-2-line',
                 'orden': 6
             }
@@ -254,12 +254,12 @@ class Command(BaseCommand):
         self.stdout.write('[Requerimientos] Modulo Requerimientos creado')
 
     def crear_modulo_reportes(self):
-        """Crear módulo Reportes y sus opciones"""
+        """Crear m?dulo Reportes y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='reportes',
             defaults={
-                'nombre': 'Módulo Reportes',
-                'descripcion': 'Reportes y análisis de datos',
+                'nombre': 'M?dulo Reportes',
+                'descripcion': 'Reportes y an?lisis de datos',
                 'icono': 'ri-bar-chart-grouped-line',
                 'orden': 7
             }
@@ -268,7 +268,9 @@ class Command(BaseCommand):
         opciones = [
             # Reportes Ventas
             ('reporte_ventas_sucursal', 'Ventas por Sucursal', None, '/app/reportes/ventas-sucursal/', 'ri-store-2-line', 1),
-            ('reporte_documentos_emitidos', 'Documentos Emitidos', None, '/app/reportes/documentos-emitidos/', 'ri-file-list-3-line', 2),
+            ('reporte_ventas_comparativo', 'Comparativo de Ventas', None, '/app/reportes/ventas-comparativo/', 'ri-bar-chart-2-line', 2),
+            ('reporte_productos_vendidos', 'Productos Vendidos', None, '/app/reportes/productos-vendidos/', 'ri-shopping-bag-line', 3),
+            ('reporte_documentos_emitidos', 'Documentos Emitidos', None, '/app/reportes/documentos-emitidos/', 'ri-file-list-3-line', 4),
             # Reportes Existencias
             ('reporte_existencias', 'Reporte de Existencias', 'ver_reporte_existencias', None, 'ri-file-list-3-line', 3),
             ('reporte_existencias_marca', 'Existencias por Marca', 'ver_reporte_existencias_marca', None, 'ri-price-tag-3-line', 4),
@@ -297,24 +299,24 @@ class Command(BaseCommand):
         self.stdout.write('[Reportes] Modulo Reportes creado')
 
     def crear_modulo_configuracion(self):
-        """Crear módulo Configuración y sus opciones"""
+        """Crear m?dulo Configuraci?n y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='configuracion',
             defaults={
-                'nombre': 'Configuración',
-                'descripcion': 'Configuración del sistema',
+                'nombre': 'Configuraci?n',
+                'descripcion': 'Configuraci?n del sistema',
                 'icono': 'ri-settings-4-line',
                 'orden': 8
             }
         )
         
         opciones = [
-            ('gestion_usuarios', 'Gestión Usuarios', None, '/app/gestion_usuarios/', 'bi-people-fill', 1),
-            ('gestion_sucursales', 'Gestión Sucursales', None, '/app/gestion-sucursales/', 'bi-building', 2),
-            ('gestion_empresas', 'Gestión Empresas', None, '/empresa_management/lista_empresas/', 'bi-building-fill', 3),
-            ('gestion_clientes', 'Gestión Clientes', None, '/empresa_management/lista_clientes/', 'bi-person-badge-fill', 4),
-            ('gestion_vendedores', 'Gestión Vendedores', None, '/app/gestion_vendedores/', 'bi-people', 5),
-            ('gestion_permisos', 'Gestión Permisos', 'gestion_permisos', None, 'bi-shield-lock', 6),
+            ('gestion_usuarios', 'Gesti?n Usuarios', None, '/app/gestion_usuarios/', 'bi-people-fill', 1),
+            ('gestion_sucursales', 'Gesti?n Sucursales', None, '/app/gestion-sucursales/', 'bi-building', 2),
+            ('gestion_empresas', 'Gesti?n Empresas', None, '/empresa_management/lista_empresas/', 'bi-building-fill', 3),
+            ('gestion_clientes', 'Gesti?n Clientes', None, '/empresa_management/lista_clientes/', 'bi-person-badge-fill', 4),
+            ('gestion_vendedores', 'Gesti?n Vendedores', None, '/app/gestion_vendedores/', 'bi-people', 5),
+            ('gestion_permisos', 'Gesti?n Permisos', 'gestion_permisos', None, 'bi-shield-lock', 6),
             ('interfaz_acepta', 'Interfaz Prueba Acepta', None, '/app/configuracion/interfaz-prueba-acepta/', 'ri-file-text-line', 7),
         ]
         
@@ -334,12 +336,12 @@ class Command(BaseCommand):
         self.stdout.write('[Configuracion] Modulo Configuracion creado')
 
     def crear_modulo_ecommerce(self):
-        """Crear módulo Ecommerce y sus opciones"""
+        """Crear m?dulo Ecommerce y sus opciones"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='ecommerce',
             defaults={
                 'nombre': 'Ecommerce',
-                'descripcion': 'Gestión de pedidos de comercio electrónico',
+                'descripcion': 'Gesti?n de pedidos de comercio electr?nico',
                 'icono': 'ri-shopping-cart-2-line',
                 'orden': 9
             }
@@ -367,12 +369,12 @@ class Command(BaseCommand):
         self.stdout.write('[Ecommerce] Modulo Ecommerce creado')
 
     def crear_modulo_usuario(self):
-        """Crear módulo Usuario con opciones de perfil y acciones rápidas"""
+        """Crear m?dulo Usuario con opciones de perfil y acciones r?pidas"""
         modulo, created = ModuloSistema.objects.get_or_create(
             codigo='usuario',
             defaults={
                 'nombre': 'Mi Cuenta',
-                'descripcion': 'Opciones de perfil de usuario y acciones rápidas',
+                'descripcion': 'Opciones de perfil de usuario y acciones r?pidas',
                 'icono': 'ri-user-settings-line',
                 'orden': 10
             }
@@ -424,7 +426,7 @@ class Command(BaseCommand):
         """Crear permisos para el rol Jefe Local"""
         self.stdout.write('[JEFE] Creando permisos para Jefe Local...')
         
-        # Códigos que el jefe local puede ver
+        # C?digos que el jefe local puede ver
         codigos_permitidos = [
             # Dashboard
             'dashboard_general', 'dashboard_ventas', 'dashboard_productos', 'dashboard_fifo',
@@ -446,11 +448,11 @@ class Command(BaseCommand):
             # Requerimientos
             'lista_requerimientos', 'crear_requerimiento', 'gestionar_requerimientos',
             # Reportes
-            'reporte_ventas_sucursal', 'reporte_documentos_emitidos', 'reporte_existencias',
+            'reporte_ventas_sucursal', 'reporte_ventas_comparativo', 'reporte_productos_vendidos', 'reporte_documentos_emitidos', 'reporte_existencias',
             'reporte_existencias_marca', 'reporte_existencias_sucursal', 'reporte_despachos_proveedor',
             'resumen_existencias', 'reporte_movimientos_sucursal', 'reporte_compras',
             'reporte_rendimiento_proveedor',
-            # Configuración
+            # Configuraci?n
             'gestion_clientes', 'gestion_vendedores',
             # Mi Cuenta
             'mi_perfil', 'ajuste_stock_rapido', 'cambiar_empresa',
@@ -477,7 +479,7 @@ class Command(BaseCommand):
         """Crear permisos para el rol Cajero"""
         self.stdout.write('[CAJERO] Creando permisos para Cajero...')
         
-        # Códigos que el cajero puede ver
+        # C?digos que el cajero puede ver
         codigos_permitidos = [
             # Dashboard
             'dashboard_general',
@@ -494,7 +496,7 @@ class Command(BaseCommand):
         
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)
         for opcion in opciones:
-            # Determinar permisos según la opción
+            # Determinar permisos seg?n la opci?n
             puede_crear = opcion.codigo in ['ticket_venta', 'pos_dashboard', 'crear_requerimiento']
             puede_editar = opcion.codigo in ['cuadratura_caja']
             puede_aprobar = False
@@ -518,7 +520,7 @@ class Command(BaseCommand):
         """Crear permisos para el rol Vendedor"""
         self.stdout.write('[VENDEDOR] Creando permisos para Vendedor...')
         
-        # Códigos que el vendedor puede ver
+        # C?digos que el vendedor puede ver
         codigos_permitidos = [
             # Dashboard
             'dashboard_general',
