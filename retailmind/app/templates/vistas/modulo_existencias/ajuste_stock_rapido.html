@@ -5,71 +5,69 @@
 {% csrf_token %}
 
 <style>
+    :root {
+        --aj-primary: #1A1A2E;
+        --aj-primary-2: #2a2a4e;
+        --aj-ok: #047857;
+        --aj-ok-bg: #ecfdf5;
+        --aj-ok-br: #a7f3d0;
+        --aj-warn: #9a3412;
+        --aj-warn-bg: #fff7ed;
+        --aj-warn-br: #fed7aa;
+        --aj-err: #991b1b;
+        --aj-err-bg: #fef2f2;
+        --aj-err-br: #fecaca;
+    }
+
     .ajuste-card {
         border-radius: 16px;
         overflow: hidden;
         box-shadow: 0 12px 28px rgba(26, 26, 46, 0.12);
     }
     .ajuste-header {
-        background: linear-gradient(135deg, #1A1A2E 0%, #2a2a4e 100%);
+        background: linear-gradient(135deg, var(--aj-primary) 0%, var(--aj-primary-2) 100%);
         color: #fff;
-        padding: 1.2rem 1.5rem;
+        padding: 1rem 1.25rem;
+        position: relative;
     }
-    .ajuste-header h5 { margin: 0; font-weight: 600; }
-
-    /* Stepper visual */
-    .ajuste-steps {
-        display: flex;
-        justify-content: space-between;
-        gap: 8px;
-        margin: 0 0 1.25rem 0;
-        padding: 0;
-        list-style: none;
+    .ajuste-header h5 { margin: 0; font-weight: 600; font-size: 1.05rem; }
+    .ajuste-header .ajuste-progress {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 3px;
+        background: rgba(255,255,255,0.12);
     }
-    .ajuste-steps li {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        background: #f5f5f7;
-        border-radius: 10px;
-        color: #6c757d;
-        font-size: 0.85rem;
-        font-weight: 500;
-        border: 1px solid transparent;
-    }
-    .ajuste-steps li.is-active {
-        background: #eef2ff;
-        color: #1A1A2E;
-        border-color: #c7d2fe;
-    }
-    .ajuste-steps li.is-done {
-        background: #ecfdf5;
-        color: #047857;
-        border-color: #a7f3d0;
-    }
-    .ajuste-steps .step-num {
-        width: 24px; height: 24px;
-        display: inline-flex;
-        align-items: center; justify-content: center;
-        border-radius: 50%;
-        background: #fff;
-        font-weight: 700;
+    .ajuste-header .ajuste-progress > span {
+        display: block;
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #4ade80, #22d3ee);
+        transition: width .25s ease;
     }
 
-    /* Panel de producto (SKU lookup) */
+    .ajuste-card .card-body {
+        padding: 1rem 1.25rem 1.25rem;
+    }
+
+    /* Inputs grandes y amigables al dedo */
+    .ajuste-input {
+        min-height: 48px;
+        font-size: 16px !important; /* evita zoom en iOS */
+    }
+    .form-label { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.35rem; }
+
+    /* Panel SKU */
     .sku-panel {
         border-radius: 12px;
-        padding: 14px 16px;
+        padding: 12px 14px;
         margin-top: 10px;
         display: none;
+        font-size: 0.92rem;
     }
-    .sku-panel.is-ok   { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
-    .sku-panel.is-warn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }
-    .sku-panel.is-err  { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .sku-panel.is-ok   { background: var(--aj-ok-bg);   border: 1px solid var(--aj-ok-br);   color: var(--aj-ok); }
+    .sku-panel.is-warn { background: var(--aj-warn-bg); border: 1px solid var(--aj-warn-br); color: var(--aj-warn); }
+    .sku-panel.is-err  { background: var(--aj-err-bg);  border: 1px solid var(--aj-err-br);  color: var(--aj-err); }
     .sku-panel .titulo { font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-    .sku-panel .detalle { font-size: 0.92rem; }
     .sku-panel .stock-pill {
         display: inline-block;
         padding: 2px 10px;
@@ -77,56 +75,155 @@
         font-weight: 700;
         margin-left: 4px;
         background: #fff;
-        color: #1A1A2E;
+        color: var(--aj-primary);
         border: 1px solid rgba(0,0,0,.08);
     }
 
-    /* Concepto con badge Ingreso/Egreso */
+    /* Chips rápidos de concepto */
+    .concepto-chips {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .concepto-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 10px 6px;
+        min-height: 60px;
+        border-radius: 12px;
+        background: #f5f5f7;
+        border: 2px solid transparent;
+        color: #374151;
+        cursor: pointer;
+        text-align: center;
+        transition: all .15s ease;
+        font-weight: 600;
+        font-size: 0.85rem;
+        line-height: 1.1;
+    }
+    .concepto-chip i { font-size: 1.2rem; }
+    .concepto-chip.is-ingreso i { color: var(--aj-ok); }
+    .concepto-chip.is-egreso  i { color: #b91c1c; }
+    .concepto-chip:hover { background: #e5e7eb; }
+    .concepto-chip.is-selected.is-ingreso {
+        background: var(--aj-ok-bg);
+        border-color: var(--aj-ok-br);
+        color: var(--aj-ok);
+    }
+    .concepto-chip.is-selected.is-egreso {
+        background: var(--aj-err-bg);
+        border-color: var(--aj-err-br);
+        color: var(--aj-err);
+    }
+    .concepto-chip.is-more {
+        background: #eef2ff;
+        color: #4338ca;
+        border-style: dashed;
+        border-color: #c7d2fe;
+    }
+
+    .concepto-select-wrap { display: none; margin-top: 8px; }
+    .concepto-select-wrap.is-visible { display: block; }
+
     .concepto-hint {
         display: inline-block;
         padding: 2px 10px;
         border-radius: 999px;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 700;
-        margin-left: 8px;
+        margin-left: 6px;
         vertical-align: middle;
     }
-    .concepto-hint.ingreso { background: #d1fae5; color: #065f46; }
-    .concepto-hint.egreso  { background: #fee2e2; color: #991b1b; }
+    .concepto-hint.ingreso { background: #d1fae5; color: var(--aj-ok); }
+    .concepto-hint.egreso  { background: #fee2e2; color: var(--aj-err); }
 
-    /* Preview del resultado */
-    .preview-box {
+    /* Observaciones colapsables */
+    .obs-toggle {
+        color: #4338ca;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .obs-toggle:hover { text-decoration: underline; }
+    .obs-wrap { display: none; margin-top: 8px; }
+    .obs-wrap.is-visible { display: block; }
+
+    /* Preview inline sobre submit */
+    .preview-inline {
         background: #f8fafc;
         border: 1px dashed #cbd5e1;
         border-radius: 12px;
-        padding: 14px 16px;
+        padding: 10px 12px;
         margin-top: 12px;
+        display: none;
+        font-size: 0.95rem;
     }
-    .preview-box .flecha { font-size: 1.4rem; color: #64748b; margin: 0 10px; }
-    .preview-box .valor  {
-        font-size: 1.4rem; font-weight: 700;
-        display: inline-block; min-width: 42px; text-align: center;
+    .preview-inline.is-visible { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .preview-inline .actual { color: #64748b; }
+    .preview-inline .arrow  { color: #94a3b8; font-size: 1.2rem; }
+    .preview-inline .final  { font-size: 1.25rem; font-weight: 700; color: var(--aj-primary); }
+    .preview-inline .delta  { font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+    .preview-inline .delta.ingreso { background: var(--aj-ok-bg);  color: var(--aj-ok); }
+    .preview-inline .delta.egreso  { background: var(--aj-err-bg); color: var(--aj-err); }
+    .preview-inline.is-err {
+        background: var(--aj-err-bg);
+        border-color: var(--aj-err-br);
     }
-    .preview-box .valor.ingreso { color: #047857; }
-    .preview-box .valor.egreso  { color: #b91c1c; }
-    .preview-box .valor.actual  { color: #1A1A2E; }
-    .preview-box.is-err {
-        background: #fef2f2; border-color: #fca5a5; color: #991b1b;
+    .preview-inline .msg-err {
+        flex: 1 1 100%;
+        color: var(--aj-err);
+        font-size: 0.85rem;
+        font-weight: 500;
     }
 
-    .ajuste-actions .btn { min-height: 44px; }
+    /* Botones */
+    .ajuste-actions .btn { min-height: 48px; font-size: 0.95rem; }
 
+    /* ===== MOBILE ===== */
     @media (max-width: 768px) {
-        .page-title-box { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
-        .ajuste-header { padding: 1rem; }
-        .ajuste-actions { flex-direction: column; width: 100%; }
-        .ajuste-actions .btn, .ajuste-actions a { width: 100%; }
-        .ajuste-form .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
-        .ajuste-steps li { font-size: 0.75rem; padding: 6px 8px; }
+        .page-content { padding-bottom: 90px; } /* espacio para sticky */
+        .page-title-box {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+        .page-title-box h4 { font-size: 1.1rem; margin-bottom: 0 !important; }
+        .ajuste-card .card-body { padding: 0.85rem; }
+        .ajuste-header { padding: 0.85rem 1rem; }
+
+        .concepto-chips { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+        .concepto-chip  { min-height: 56px; font-size: 0.82rem; padding: 8px 4px; }
+        .concepto-chip i { font-size: 1.1rem; }
+
+        /* Sticky submit */
+        .ajuste-actions {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.98);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+            box-shadow: 0 -6px 18px rgba(0,0,0,0.08);
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+            margin-top: 0 !important;
+        }
+        .ajuste-actions .btn { flex: 1; }
+        .ajuste-actions .btn-volver { flex: 0 0 auto; padding-left: 14px; padding-right: 14px; }
+
+        .alert-mobile-hide { display: none; }
     }
-    @media (max-width: 576px) {
-        .ajuste-card { padding: 0.75rem; }
-        .ajuste-input { min-height: 44px; font-size: 16px !important; }
+
+    @media (max-width: 420px) {
+        .concepto-chip { font-size: 0.78rem; min-height: 52px; }
+        .preview-inline .final { font-size: 1.1rem; }
     }
 </style>
 
@@ -136,7 +233,7 @@
             <div class="col-12">
                 <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                     <h4 class="mb-sm-0">Ajuste de Stock Rápido</h4>
-                    <div class="page-title-right">
+                    <div class="page-title-right d-none d-md-block">
                         <ol class="breadcrumb m-0">
                             <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
                             <li class="breadcrumb-item active">Ajuste Stock</li>
@@ -147,134 +244,131 @@
         </div>
 
         <div class="row justify-content-center">
-            <div class="col-xl-8 col-lg-10">
+            <div class="col-xl-7 col-lg-9 col-md-11">
                 <div class="card ajuste-card">
                     <div class="ajuste-header">
                         <h5 class="card-title mb-0">
                             <i class="ri-stock-line me-2"></i>Registrar Ajuste
                         </h5>
+                        <div class="ajuste-progress"><span id="ajusteProgress"></span></div>
                     </div>
                     <div class="card-body">
 
-                        <ul class="ajuste-steps" id="ajusteSteps">
-                            <li class="is-active" data-step="1">
-                                <span class="step-num">1</span> Buscar SKU
-                            </li>
-                            <li data-step="2">
-                                <span class="step-num">2</span> Elegir concepto
-                            </li>
-                            <li data-step="3">
-                                <span class="step-num">3</span> Confirmar
-                            </li>
-                        </ul>
-
-                        <form id="form-ajuste-stock" class="ajuste-form" novalidate>
+                        <form id="form-ajuste-stock" novalidate>
                             {% csrf_token %}
 
+                            <!-- SKU + Cantidad -->
                             <div class="row g-3">
-                                <!-- PASO 1: SKU -->
-                                <div class="col-md-6">
-                                    <label for="sku" class="form-label">
-                                        SKU <span class="text-danger">*</span>
-                                    </label>
+                                <div class="col-12 col-md-7">
+                                    <label for="sku" class="form-label">SKU <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <input type="text" inputmode="numeric" pattern="[0-9]*"
                                                class="form-control ajuste-input" id="sku" name="sku"
-                                               placeholder="Ej: 12345678" autocomplete="off" required>
+                                               placeholder="Ingresa el SKU" autocomplete="off" required>
                                         <button type="button" class="btn btn-outline-secondary" id="btnBuscarSku"
-                                                title="Consultar producto">
+                                                title="Consultar" aria-label="Consultar SKU">
                                             <i class="ri-search-line"></i>
                                         </button>
                                     </div>
-                                    <div class="form-text">Ingresa el SKU y presiona Enter o Tab.</div>
                                     <div id="skuPanel" class="sku-panel"></div>
                                 </div>
 
-                                <!-- Cantidad -->
-                                <div class="col-md-6">
-                                    <label for="cantidad" class="form-label">
-                                        Cantidad <span class="text-danger">*</span>
-                                    </label>
+                                <div class="col-12 col-md-5">
+                                    <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
                                     <input type="number" class="form-control ajuste-input"
                                            id="cantidad" name="cantidad" min="1" step="1"
-                                           placeholder="Unidades" required>
-                                    <div class="form-text">
-                                        Siempre positiva. El <b>concepto</b> define si suma o resta.
-                                    </div>
+                                           inputmode="numeric" placeholder="Unidades" required>
+                                </div>
+                            </div>
+
+                            <!-- Concepto: chips rápidos + select ampliado -->
+                            <div class="mt-3">
+                                <label class="form-label d-flex align-items-center flex-wrap">
+                                    <span>Concepto <span class="text-danger">*</span></span>
+                                    <span id="conceptoHint"></span>
+                                </label>
+
+                                <div class="concepto-chips" id="conceptoChips">
+                                    <button type="button" class="concepto-chip is-ingreso" data-value="AJUSTE_POSITIVO">
+                                        <i class="ri-add-circle-line"></i><span>Sobrante</span>
+                                    </button>
+                                    <button type="button" class="concepto-chip is-egreso" data-value="AJUSTE_NEGATIVO">
+                                        <i class="ri-indeterminate-circle-line"></i><span>Faltante</span>
+                                    </button>
+                                    <button type="button" class="concepto-chip is-egreso" data-value="PERDIDA_ROBO">
+                                        <i class="ri-shield-cross-line"></i><span>Robo</span>
+                                    </button>
+                                    <button type="button" class="concepto-chip is-egreso" data-value="PERDIDA_DETERIORO">
+                                        <i class="ri-error-warning-line"></i><span>Deterioro</span>
+                                    </button>
+                                    <button type="button" class="concepto-chip is-ingreso" data-value="DEVOLUCION_CLIENTE">
+                                        <i class="ri-user-received-line"></i><span>Dev. cliente</span>
+                                    </button>
+                                    <button type="button" class="concepto-chip is-more" id="btnMasConceptos">
+                                        <i class="ri-more-2-line"></i><span>Otro concepto</span>
+                                    </button>
                                 </div>
 
-                                <!-- PASO 2: Concepto -->
-                                <div class="col-12">
-                                    <label for="concepto" class="form-label">
-                                        Concepto <span class="text-danger">*</span>
-                                        <span id="conceptoHint"></span>
-                                    </label>
-                                    <select class="form-select ajuste-input" id="concepto" name="concepto" required>
+                                <div class="concepto-select-wrap" id="conceptoSelectWrap">
+                                    <select class="form-select ajuste-input mt-2" id="concepto" name="concepto">
                                         <option value="">Seleccione un concepto...</option>
                                         {% if conceptos_ingreso %}
-                                        <optgroup label="Ingresos  (+ suman stock)">
+                                        <optgroup label="Ingresos (+)">
                                             {% for concepto in conceptos_ingreso %}
                                             <option value="{{ concepto.0 }}" data-tipo="ingreso">{{ concepto.1 }}</option>
                                             {% endfor %}
                                         </optgroup>
                                         {% endif %}
                                         {% if conceptos_egreso %}
-                                        <optgroup label="Egresos  (− restan stock)">
+                                        <optgroup label="Egresos (−)">
                                             {% for concepto in conceptos_egreso %}
                                             <option value="{{ concepto.0 }}" data-tipo="egreso">{{ concepto.1 }}</option>
                                             {% endfor %}
                                         </optgroup>
                                         {% endif %}
                                     </select>
-                                    <div class="form-text">
-                                        El tipo de movimiento (ingreso o egreso) se determina automáticamente por el concepto.
-                                    </div>
-                                </div>
-
-                                <!-- Observaciones -->
-                                <div class="col-12">
-                                    <label for="observaciones" class="form-label">Observaciones</label>
-                                    <textarea class="form-control" id="observaciones" name="observaciones" rows="2"
-                                              placeholder="Motivo o detalle del ajuste (opcional)"></textarea>
-                                </div>
-
-                                <!-- Preview -->
-                                <div class="col-12">
-                                    <div id="previewBox" class="preview-box" style="display:none;">
-                                        <div class="d-flex align-items-center flex-wrap">
-                                            <div>
-                                                <div class="text-muted small">Stock actual</div>
-                                                <span class="valor actual" id="previewStockActual">0</span>
-                                            </div>
-                                            <div class="flecha"><i class="ri-arrow-right-line"></i></div>
-                                            <div>
-                                                <div class="text-muted small" id="previewLabelCambio">Cambio</div>
-                                                <span class="valor" id="previewCambio">0</span>
-                                            </div>
-                                            <div class="flecha"><i class="ri-arrow-right-line"></i></div>
-                                            <div>
-                                                <div class="text-muted small">Stock resultante</div>
-                                                <span class="valor" id="previewStockFinal">0</span>
-                                            </div>
-                                        </div>
-                                        <div id="previewMsg" class="mt-2 small"></div>
-                                    </div>
                                 </div>
                             </div>
 
+                            <!-- Observaciones (colapsable) -->
+                            <div class="mt-3">
+                                <span class="obs-toggle" id="obsToggle">
+                                    <i class="ri-add-line"></i> Agregar observación
+                                </span>
+                                <div class="obs-wrap" id="obsWrap">
+                                    <textarea class="form-control mt-1" id="observaciones" name="observaciones"
+                                              rows="2" placeholder="Motivo o detalle del ajuste (opcional)"></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Preview inline -->
+                            <div id="previewBox" class="preview-inline">
+                                <div>
+                                    <span class="actual">Actual: <b id="previewStockActual">0</b></span>
+                                    <span class="arrow mx-1"><i class="ri-arrow-right-line"></i></span>
+                                    <span class="delta" id="previewDelta">0</span>
+                                </div>
+                                <div>
+                                    <span class="actual me-1">Resultante:</span>
+                                    <span class="final" id="previewStockFinal">0</span>
+                                </div>
+                                <div id="previewMsg" class="msg-err" style="display:none;"></div>
+                            </div>
+
                             <div class="mt-4 d-flex gap-2 ajuste-actions">
+                                <a href="{% url 'verHome' %}" class="btn btn-soft-secondary btn-volver" aria-label="Volver">
+                                    <i class="ri-arrow-left-line"></i>
+                                    <span class="d-none d-md-inline ms-1">Volver</span>
+                                </a>
                                 <button type="submit" class="btn btn-success" id="btnSubmit" disabled>
                                     <i class="ri-check-line me-1"></i> Registrar ajuste
                                 </button>
-                                <a href="{% url 'verHome' %}" class="btn btn-soft-secondary">
-                                    <i class="ri-arrow-left-line me-1"></i> Volver
-                                </a>
                             </div>
                         </form>
                     </div>
                 </div>
 
-                <div class="alert alert-info mt-3 mb-0">
+                <div class="alert alert-info mt-3 mb-0 alert-mobile-hide">
                     <i class="ri-information-line me-1"></i>
                     Usa este ajuste cuando el stock físico no coincida con el sistema.
                     El concepto determina automáticamente si suma o resta.
@@ -291,31 +385,35 @@
     const cantidadInput = document.getElementById('cantidad');
     const conceptoSel   = document.getElementById('concepto');
     const conceptoHint  = document.getElementById('conceptoHint');
+    const conceptoChips = document.querySelectorAll('.concepto-chip[data-value]');
+    const btnMas        = document.getElementById('btnMasConceptos');
+    const conceptoWrap  = document.getElementById('conceptoSelectWrap');
     const skuPanel      = document.getElementById('skuPanel');
     const btnBuscarSku  = document.getElementById('btnBuscarSku');
     const btnSubmit     = document.getElementById('btnSubmit');
     const previewBox    = document.getElementById('previewBox');
     const previewStockActual = document.getElementById('previewStockActual');
-    const previewCambio      = document.getElementById('previewCambio');
+    const previewDelta       = document.getElementById('previewDelta');
     const previewStockFinal  = document.getElementById('previewStockFinal');
-    const previewLabel       = document.getElementById('previewLabelCambio');
     const previewMsg         = document.getElementById('previewMsg');
-    const steps         = document.querySelectorAll('#ajusteSteps li');
+    const progressBar   = document.getElementById('ajusteProgress');
+    const obsToggle     = document.getElementById('obsToggle');
+    const obsWrap       = document.getElementById('obsWrap');
 
     const LOOKUP_URL = "{% url 'ajuste_stock_rapido' %}";
     const SUBMIT_URL = "{% url 'ajuste_stock_rapido' %}";
     const csrfToken  = document.querySelector('#form-ajuste-stock [name=csrfmiddlewaretoken]').value;
 
-    let productoActual = null;   // info del producto encontrado
-    let skuEnSucursal  = false;  // true si el SKU está en la sucursal activa
+    let productoActual = null;
+    let skuEnSucursal  = false;
+    let skuTimer       = null;
 
-    function setStep(step) {
-        steps.forEach(li => {
-            const n = parseInt(li.dataset.step, 10);
-            li.classList.remove('is-active', 'is-done');
-            if (n < step) li.classList.add('is-done');
-            else if (n === step) li.classList.add('is-active');
-        });
+    function setProgress() {
+        let pct = 0;
+        if (skuEnSucursal) pct += 33;
+        if (parseInt(cantidadInput.value, 10) > 0) pct += 33;
+        if (conceptoSel.value) pct += 34;
+        progressBar.style.width = pct + '%';
     }
 
     function mostrarPanel(tipo, html) {
@@ -326,13 +424,6 @@
     function ocultarPanel() {
         skuPanel.style.display = 'none';
         skuPanel.innerHTML = '';
-    }
-
-    function actualizarBotonSubmit() {
-        const tieneProducto = productoActual && skuEnSucursal;
-        const cantidad      = parseInt(cantidadInput.value, 10);
-        const concepto      = conceptoSel.value;
-        btnSubmit.disabled = !(tieneProducto && cantidad > 0 && concepto);
     }
 
     function tipoConceptoSeleccionado() {
@@ -350,15 +441,30 @@
         }
     }
 
+    function sincronizarChipActivo() {
+        const v = conceptoSel.value;
+        conceptoChips.forEach(c => {
+            c.classList.toggle('is-selected', c.dataset.value === v);
+        });
+    }
+
+    function actualizarBotonSubmit() {
+        const tieneProducto = productoActual && skuEnSucursal;
+        const cantidad      = parseInt(cantidadInput.value, 10);
+        const concepto      = conceptoSel.value;
+        btnSubmit.disabled = !(tieneProducto && cantidad > 0 && concepto);
+        setProgress();
+    }
+
     function actualizarPreview() {
         if (!productoActual || !skuEnSucursal) {
-            previewBox.style.display = 'none';
+            previewBox.classList.remove('is-visible');
             return;
         }
         const cantidad = parseInt(cantidadInput.value, 10);
         const tipo     = tipoConceptoSeleccionado();
         if (!cantidad || cantidad <= 0 || !tipo) {
-            previewBox.style.display = 'none';
+            previewBox.classList.remove('is-visible');
             return;
         }
 
@@ -369,21 +475,18 @@
 
         previewBox.classList.remove('is-err');
         previewStockActual.textContent = stockActual;
-        previewCambio.textContent      = (cambio > 0 ? '+' : '') + cambio;
+        previewDelta.textContent       = (cambio > 0 ? '+' : '') + cambio;
+        previewDelta.className         = 'delta ' + (tipo === 'egreso' ? 'egreso' : 'ingreso');
         previewStockFinal.textContent  = stockFinal;
-        previewLabel.textContent       = (tipo === 'egreso') ? 'Restar' : 'Sumar';
 
-        previewCambio.className = 'valor ' + (tipo === 'egreso' ? 'egreso' : 'ingreso');
-        previewStockFinal.className = 'valor actual';
-
-        previewMsg.textContent = '';
+        previewMsg.style.display = 'none';
+        previewMsg.textContent   = '';
         if (tipo === 'egreso' && stockFinal < 0) {
             previewBox.classList.add('is-err');
+            previewMsg.style.display = 'block';
             previewMsg.innerHTML = '<i class="ri-error-warning-line"></i> Stock insuficiente. Solo puedes restar hasta ' + stockActual + '.';
         }
-
-        previewBox.style.display = 'block';
-        setStep(cantidad && tipo ? 3 : 2);
+        previewBox.classList.add('is-visible');
     }
 
     function buscarSku() {
@@ -392,13 +495,12 @@
             ocultarPanel();
             productoActual = null;
             skuEnSucursal = false;
-            setStep(1);
             actualizarBotonSubmit();
             actualizarPreview();
             return;
         }
 
-        mostrarPanel('warn', '<i class="ri-loader-4-line spin"></i> Buscando SKU ' + sku + '...');
+        mostrarPanel('warn', '<div class="titulo"><i class="ri-loader-4-line"></i> Buscando SKU ' + sku + '...</div>');
 
         fetch(LOOKUP_URL + '?sku=' + encodeURIComponent(sku), {
             method: 'GET',
@@ -412,35 +514,34 @@
                 skuEnSucursal = false;
                 mostrarPanel('err',
                     '<div class="titulo"><i class="ri-close-circle-line"></i> SKU no encontrado</div>' +
-                    '<div class="detalle">' + (data.error || 'No existe ningún producto con ese SKU.') + '</div>'
+                    '<div>' + (data.error || 'No existe ningún producto con ese SKU.') + '</div>'
                 );
-                setStep(1);
             } else if (data.en_sucursal_actual === false) {
                 productoActual = data.producto;
                 skuEnSucursal = false;
                 const sucursales = (data.otras_sucursales || [])
-                    .map(s => (s.sucursal_alias || 'Sucursal ' + s.sucursal_id) + ' (stock: ' + s.stock + ')')
+                    .map(s => (s.sucursal_alias || 'Sucursal ' + s.sucursal_id) + ' (stock ' + s.stock + ')')
                     .join(', ');
                 mostrarPanel('warn',
-                    '<div class="titulo"><i class="ri-alert-line"></i> SKU existe pero no en esta sucursal</div>' +
-                    '<div class="detalle"><b>' + data.producto.articulo + '</b>' +
-                        (data.producto.talla ? ' · Talla ' + data.producto.talla : '') +
-                    '</div>' +
-                    '<div class="detalle mt-1">Se encuentra en: <b>' + (sucursales || 'otras sucursales') + '</b></div>' +
-                    '<div class="detalle mt-1">Para ajustar stock aquí, primero debes crear el producto en esta sucursal.</div>'
+                    '<div class="titulo"><i class="ri-alert-line"></i> SKU no está en esta sucursal</div>' +
+                    '<div><b>' + data.producto.articulo + '</b>' +
+                        (data.producto.talla ? ' · Talla ' + data.producto.talla : '') + '</div>' +
+                    '<div class="mt-1">Disponible en: <b>' + (sucursales || 'otras sucursales') + '</b></div>'
                 );
-                setStep(1);
             } else {
                 productoActual = data.producto;
                 skuEnSucursal = true;
                 mostrarPanel('ok',
                     '<div class="titulo"><i class="ri-checkbox-circle-line"></i> ' + data.producto.articulo + '</div>' +
-                    '<div class="detalle">' +
-                        (data.producto.talla ? 'Talla: <b>' + data.producto.talla + '</b> · ' : '') +
+                    '<div>' +
+                        (data.producto.talla ? 'Talla <b>' + data.producto.talla + '</b> · ' : '') +
                         'Stock actual: <span class="stock-pill">' + data.producto.stock_actual + '</span>' +
                     '</div>'
                 );
-                setStep(2);
+                // Auto-foco a cantidad para ir más rápido
+                if (!cantidadInput.value) {
+                    setTimeout(() => cantidadInput.focus(), 100);
+                }
             }
             actualizarBotonSubmit();
             actualizarPreview();
@@ -449,14 +550,13 @@
             productoActual = null;
             skuEnSucursal = false;
             mostrarPanel('err',
-                '<div class="titulo"><i class="ri-close-circle-line"></i> Error de conexión</div>' +
-                '<div class="detalle">No se pudo consultar el SKU.</div>'
+                '<div class="titulo"><i class="ri-close-circle-line"></i> Error de conexión</div>'
             );
             actualizarBotonSubmit();
         });
     }
 
-    // Eventos
+    // SKU events (con debounce al escribir)
     btnBuscarSku.addEventListener('click', buscarSku);
     skuInput.addEventListener('blur', buscarSku);
     skuInput.addEventListener('keydown', function (e) {
@@ -468,15 +568,62 @@
         ocultarPanel();
         actualizarBotonSubmit();
         actualizarPreview();
+        // debounce lookup automático si la longitud es razonable
+        clearTimeout(skuTimer);
+        if (skuInput.value.trim().length >= 4) {
+            skuTimer = setTimeout(buscarSku, 500);
+        }
+    });
+
+    // Chips de concepto
+    conceptoChips.forEach(chip => {
+        chip.addEventListener('click', function () {
+            conceptoSel.value = this.dataset.value;
+            sincronizarChipActivo();
+            actualizarHintConcepto();
+            actualizarBotonSubmit();
+            actualizarPreview();
+        });
+    });
+
+    // Mostrar select completo
+    btnMas.addEventListener('click', function () {
+        conceptoWrap.classList.toggle('is-visible');
+        if (conceptoWrap.classList.contains('is-visible')) {
+            setTimeout(() => conceptoSel.focus(), 50);
+        }
     });
     conceptoSel.addEventListener('change', function () {
+        sincronizarChipActivo();
         actualizarHintConcepto();
         actualizarBotonSubmit();
         actualizarPreview();
     });
+
     cantidadInput.addEventListener('input', function () {
         actualizarBotonSubmit();
         actualizarPreview();
+    });
+    // Enter en cantidad abre foco en concepto (si nada seleccionado) o envía
+    cantidadInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (!conceptoSel.value) {
+                // hacer scroll a los chips
+                document.getElementById('conceptoChips').scrollIntoView({behavior: 'smooth', block: 'center'});
+            } else if (!btnSubmit.disabled) {
+                form.requestSubmit();
+            }
+        }
+    });
+
+    // Observaciones toggle
+    obsToggle.addEventListener('click', function () {
+        const open = obsWrap.classList.toggle('is-visible');
+        obsToggle.innerHTML = open
+            ? '<i class="ri-subtract-line"></i> Ocultar observación'
+            : '<i class="ri-add-line"></i> Agregar observación';
+        if (open) setTimeout(() => document.getElementById('observaciones').focus(), 50);
     });
 
     // Submit
@@ -502,8 +649,7 @@
         const tipo = tipoConceptoSeleccionado();
         if (tipo === 'egreso' && cantidad > (productoActual.stock_actual || 0)) {
             Swal.fire('Stock insuficiente',
-                'Solo puedes restar hasta ' + productoActual.stock_actual + ' unidades.',
-                'error');
+                'Solo puedes restar hasta ' + productoActual.stock_actual + ' unidades.', 'error');
             return;
         }
 
@@ -540,18 +686,22 @@
                     '<div class="text-start">' +
                     '<div><b>' + data.producto + '</b>' + (data.talla ? ' · Talla ' + data.talla : '') + '</div>' +
                     '<div class="mt-1">SKU: ' + data.sku + '</div>' +
-                    '<div class="mt-1">Tipo: <b>' + (data.tipo === 'EGRESO' ? 'Egreso (-)' : 'Ingreso (+)') + '</b>' +
+                    '<div class="mt-1">Tipo: <b>' + (data.tipo === 'EGRESO' ? 'Egreso (−)' : 'Ingreso (+)') + '</b>' +
                     ' · Cantidad: <b>' + data.cantidad + '</b></div>' +
                     '<div class="mt-2">Nuevo stock: <b>' + data.nuevo_stock + '</b></div>' +
-                    '</div>'
+                    '</div>',
+                timer: 3000,
+                timerProgressBar: true
             }).then(() => {
-                // Reset parcial: conservar SKU para ajustes consecutivos
                 cantidadInput.value = '';
                 document.getElementById('observaciones').value = '';
+                obsWrap.classList.remove('is-visible');
+                obsToggle.innerHTML = '<i class="ri-add-line"></i> Agregar observación';
                 conceptoSel.value = '';
+                sincronizarChipActivo();
                 actualizarHintConcepto();
-                // refrescar lookup para actualizar stock
                 buscarSku();
+                setTimeout(() => cantidadInput.focus(), 200);
             });
         })
         .catch(() => {
@@ -561,7 +711,8 @@
         });
     });
 
-    // Estado inicial
+    // Estado inicial: foco en SKU
+    setTimeout(() => skuInput.focus(), 100);
     actualizarHintConcepto();
     actualizarBotonSubmit();
 })();
