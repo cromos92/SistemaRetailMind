@@ -3357,50 +3357,69 @@
                         </button>
                     </div>
 
-                    <!-- Panel analítica colapsable -->
+                    <!-- Panel analítica colapsable - SIMPLIFICADO -->
                     <div class="collapse mb-3" id="panelAnaliticaCollapse">
                         <div class="border rounded-3 p-3" style="background:#f8f9fa;">
-                            <div class="d-flex flex-wrap gap-3 align-items-start">
-                                <!-- Acciones bodega seleccionada -->
-                                <div id="panelAccionSucursal" style="display:none; min-width:240px;">
-                                    <div class="border rounded-3 p-2" style="background:#fff3cd; border-color:#ffc107!important;">
-                                        <div class="small fw-bold text-warning-emphasis mb-1">
-                                            <i class="bi bi-building-check me-1"></i><span id="lblNombreSucursalPanel">esta bodega</span>
+
+                            <!-- Explicación de qué significa "excluir de analítica" -->
+                            <div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-start gap-2" style="font-size:.82rem;">
+                                <i class="bi bi-info-circle fs-6 mt-1"></i>
+                                <div>
+                                    <strong>¿Qué es "excluir de analítica"?</strong>
+                                    Los productos excluidos <u>siguen vendiéndose y comprándose normalmente</u>,
+                                    pero <strong>no se contabilizan en dashboards, reportes ni KPIs</strong>.
+                                    Útil para muestras, obsequios o productos de prueba que no deben afectar tus métricas.
+                                </div>
+                            </div>
+
+                            <!-- Dos formas de excluir/incluir (las únicas disponibles) -->
+                            <div class="row g-3">
+
+                                <!-- Forma 1: Uno por uno desde la fila del producto -->
+                                <div class="col-md-5">
+                                    <div class="border rounded-3 p-3 h-100" style="background:#ffffff;">
+                                        <div class="fw-semibold small mb-2">
+                                            <i class="bi bi-hand-index-thumb me-1 text-primary"></i>Opción A &mdash; Producto por producto
                                         </div>
-                                        <div class="d-flex gap-1">
-                                            <button class="btn btn-sm btn-outline-danger flex-grow-1" id="btnExcluirSucursal">
-                                                <i class="bi bi-eye-slash me-1"></i>Excluir
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-success flex-grow-1" id="btnIncluirSucursal">
-                                                <i class="bi bi-eye me-1"></i>Incluir
-                                            </button>
-                                        </div>
-                                        <div class="text-muted mt-1" style="font-size:.68rem;">
-                                            <i class="bi bi-info-circle me-1"></i>Solo productos de <strong><span id="lblNombreSucursalPanel2">esta bodega</span></strong>
-                                        </div>
+                                        <p class="text-muted mb-1" style="font-size:.78rem;">
+                                            Usa el icono <i class="bi bi-bar-chart-line mx-1"></i> (o <i class="bi bi-eye-slash mx-1"></i>) a la derecha de cada producto para cambiar su estado.
+                                        </p>
+                                        <p class="mb-0" style="font-size:.72rem;">
+                                            <span class="badge bg-primary-subtle text-primary-emphasis border">
+                                                <i class="bi bi-globe2 me-1"></i>Siempre aplica a todas las bodegas
+                                            </span>
+                                        </p>
                                     </div>
                                 </div>
-                                <!-- Propagación -->
-                                <div class="border rounded-3 p-2 flex-grow-1" style="background:#e8f4fd; min-width:220px;">
-                                    <div class="form-check mb-0">
-                                        <input class="form-check-input" type="checkbox" id="chkPropagar">
-                                        <label class="form-check-label small fw-semibold" for="chkPropagar" style="cursor:pointer;">
-                                            <i class="bi bi-arrow-repeat text-primary me-1"></i>Propagar a <strong>todas las bodegas</strong>
-                                        </label>
-                                    </div>
-                                </div>
-                                <!-- Acción global -->
-                                <div class="border rounded-3 p-2" style="min-width:200px;">
-                                    <div class="small fw-bold text-secondary mb-1">
-                                        <i class="bi bi-exclamation-triangle text-danger me-1"></i>Acción global
-                                    </div>
-                                    <div class="d-flex gap-1">
-                                        <button class="btn btn-sm btn-danger flex-grow-1" id="btnExcluirTodasAnalitica" style="font-size:.75rem;">
-                                            <i class="bi bi-eye-slash me-1"></i>Excluir todo
-                                        </button>
-                                        <button class="btn btn-sm btn-success flex-grow-1" id="btnIncluirTodasAnalitica" style="font-size:.75rem;">
-                                            <i class="bi bi-eye me-1"></i>Incluir todo
-                                        </button>
+
+                                <!-- Forma 2: En lote, desde los checkboxes -->
+                                <div class="col-md-7">
+                                    <div class="border rounded-3 p-3 h-100" style="background:#ffffff;">
+                                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2 flex-wrap">
+                                            <div class="fw-semibold small">
+                                                <i class="bi bi-check2-square me-1 text-primary"></i>Opción B &mdash; En lote (marcar con checkbox)
+                                            </div>
+                                            <span class="badge bg-light text-secondary border" id="scopeSeleccionadosCount" style="font-size:.72rem;">
+                                                Sin selección
+                                            </span>
+                                        </div>
+                                        <p class="text-muted mb-2" style="font-size:.78rem;">
+                                            Marca los productos en la lista y aplica la acción de una sola vez.
+                                        </p>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="chkPropagar" checked>
+                                            <label class="form-check-label" for="chkPropagar" style="font-size:.76rem; cursor:pointer;">
+                                                Aplicar también a las mismas referencias <strong>en otras bodegas</strong>
+                                            </label>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-sm btn-danger flex-grow-1" id="btnExcluirAnalitica">
+                                                <i class="bi bi-eye-slash me-1"></i>Excluir seleccionados
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success flex-grow-1" id="btnIncluirAnalitica">
+                                                <i class="bi bi-eye me-1"></i>Incluir seleccionados
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -3412,19 +3431,16 @@
                         <i class="bi bi-check2-square fs-5"></i>
                         <div>
                             <strong id="textoProductosSeleccionados">0 seleccionados</strong>
-                            <div id="hintPropagar" class="small text-primary-emphasis" style="font-size:.76rem;">
-                                <i class="bi bi-arrow-repeat me-1"></i>Se aplicará a todas las sucursales
+                            <div class="small text-primary-emphasis" style="font-size:.76rem;">
+                                <i class="bi bi-bar-chart me-1"></i>Para excluir/incluir en analítica usa el panel <strong>Analítica</strong> de arriba
                             </div>
                         </div>
                         <div class="ms-auto d-flex gap-2">
                             <button class="btn btn-sm btn-warning rounded-pill" id="btnEdicionMasiva" title="Editar campos en lote">
                                 <i class="bi bi-pencil-square me-1"></i>Edición Masiva
                             </button>
-                            <button class="btn btn-sm btn-danger rounded-pill" id="btnExcluirSeleccionados">
-                                <i class="bi bi-eye-slash me-1"></i>Excluir
-                            </button>
-                            <button class="btn btn-sm btn-success rounded-pill" id="btnIncluirSeleccionados">
-                                <i class="bi bi-eye me-1"></i>Incluir
+                            <button class="btn btn-sm btn-outline-primary rounded-pill" id="btnIrAAnalitica" title="Abrir panel de Analítica con los seleccionados">
+                                <i class="bi bi-bar-chart me-1"></i>Analítica
                             </button>
                             <button class="btn btn-sm btn-outline-secondary rounded-pill" id="btnDeseleccionarTodo">
                                 <i class="bi bi-x me-1"></i>Desmarcar
@@ -11842,6 +11858,50 @@ $('#btnConfirmarActualizacion').on('click', function() {
         cargarSucursalesEnFiltroEditar();
     });
 
+    // ── Cierre defensivo del modal "Gestión de Productos" ─────────────────
+    // Asegura que la X, el botón "Cerrar" y ESC funcionen siempre, incluso
+    // si algún otro script interfiere con el comportamiento de Bootstrap.
+    function cerrarModalGestionProductos() {
+        const el = document.getElementById('modalBusquedaEdicionProductos');
+        if (!el) return;
+        // Si hay un Swal abierto, ciérralo antes para desbloquear el focus
+        if (window.Swal && typeof Swal.isVisible === 'function' && Swal.isVisible()) {
+            Swal.close();
+        }
+        let inst = bootstrap.Modal.getInstance(el);
+        if (!inst) {
+            inst = new bootstrap.Modal(el);
+        }
+        inst.hide();
+        // Limpieza adicional por si el backdrop queda huérfano
+        setTimeout(() => {
+            if ($('.modal.show').length === 0) {
+                $('.modal-backdrop').remove();
+                $('body').removeClass('modal-open').css('padding-right', '').css('overflow', '');
+                $('html').css('overflow', '');
+            }
+        }, 350);
+    }
+
+    // Delegación que fuerza el cierre desde cualquier elemento marcado con
+    // data-bs-dismiss="modal" dentro de este modal específico.
+    $(document).on('click',
+        '#modalBusquedaEdicionProductos [data-bs-dismiss="modal"], ' +
+        '#modalBusquedaEdicionProductos .btn-close',
+        function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            cerrarModalGestionProductos();
+        }
+    );
+
+    // ESC dentro del modal (además del default de Bootstrap)
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape' && $('#modalBusquedaEdicionProductos').hasClass('show')) {
+            cerrarModalGestionProductos();
+        }
+    });
+
     // Buscar productos
     $('#btnBuscarProductoEditar').on('click', function() {
         buscarProductosParaEditar();
@@ -11954,55 +12014,59 @@ $('#btnConfirmarActualizacion').on('click', function() {
         });
     }
 
-    // Al cambiar sucursal: mostrar/ocultar botones y auto-buscar
+    // Al cambiar sucursal: actualizar texto del scope y auto-buscar
     $('#filtroSucursalEditar').on('change', function() {
         const val = $(this).val();
         const nombreSucursal = $(this).find(':selected').text().trim();
         if (val === 'todas') {
-            $('#panelAccionSucursal').hide();
             $('#txtScopeActual').text('Mostrando productos de todas las bodegas');
         } else {
-            $('#panelAccionSucursal').show();
-            $('#lblNombreSucursalPanel, #lblNombreSucursalPanel2').text(nombreSucursal);
             $('#txtScopeActual').text(`Filtrando por bodega: ${nombreSucursal}`);
         }
         resetearSeleccion();
         buscarProductosParaEditar();
     });
 
-    // ── Acciones masivas por sucursal ──────────────────────────────────────
-    $(document).on('click', '#btnExcluirSucursal', function() {
-        const suc = $('#filtroSucursalEditar');
-        ejecutarAccionAnalitica({ sucursal_id: suc.val() }, true, `Excluir todos los productos de <strong>${suc.find(':selected').text()}</strong> de la analítica`);
-    });
-    $(document).on('click', '#btnIncluirSucursal', function() {
-        const suc = $('#filtroSucursalEditar');
-        ejecutarAccionAnalitica({ sucursal_id: suc.val() }, false, `Incluir todos los productos de <strong>${suc.find(':selected').text()}</strong> en la analítica`);
-    });
-    $(document).on('click', '#btnExcluirTodasAnalitica', function() {
-        ejecutarAccionAnalitica({ sucursal_id: 'todas' }, true, 'Excluir <strong>TODOS los productos de TODAS las sucursales</strong> de la analítica');
-    });
-    $(document).on('click', '#btnIncluirTodasAnalitica', function() {
-        ejecutarAccionAnalitica({ sucursal_id: 'todas' }, false, 'Incluir <strong>TODOS los productos de TODAS las sucursales</strong> en la analítica');
+    // ── Acción Excluir / Incluir sobre productos marcados con checkbox ────
+    $(document).on('click', '#btnExcluirAnalitica, #btnIncluirAnalitica', function() {
+        const excluir = $(this).attr('id') === 'btnExcluirAnalitica';
+        const verbo = excluir ? 'Excluir' : 'Incluir';
+        const preposicion = excluir ? 'de' : 'en';
+
+        const ids = obtenerIdsSeleccionados();
+        if (!ids.length) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin productos seleccionados',
+                html: 'Marca uno o más productos con el <i class="bi bi-check2-square mx-1"></i> en la lista, ' +
+                      'o usa el icono de analítica <i class="bi bi-bar-chart-line mx-1"></i> en cada fila para hacerlo uno por uno.'
+            });
+            return;
+        }
+
+        const propagar = $('#chkPropagar').is(':checked');
+        const sufijoScope = propagar
+            ? ' <small class="text-muted">(en todas las bodegas donde aparezcan)</small>'
+            : ' <small class="text-muted">(solo las filas exactas seleccionadas)</small>';
+        ejecutarAccionAnalitica(
+            { producto_ids: ids, propagar: propagar },
+            excluir,
+            `${verbo} <strong>${ids.length} producto(s)</strong> ${preposicion} la analítica${sufijoScope}`
+        );
     });
 
-    // ── Acciones masivas sobre selección de checkboxes ────────────────────
-    $(document).on('click', '#btnExcluirSeleccionados', function() {
-        const ids = obtenerIdsSeleccionados();
-        if (!ids.length) return;
-        const propagar = $('#chkPropagar').is(':checked');
-        const sufijo = propagar ? ' <small class="text-muted">(todas las sucursales del artículo)</small>' : '';
-        ejecutarAccionAnalitica({ producto_ids: ids, propagar: propagar }, true,
-            `Excluir <strong>${ids.length} producto(s)</strong> de la analítica${sufijo}`);
+    // ── Botón "Analítica" desde la barra de selección masiva ──────────────
+    $(document).on('click', '#btnIrAAnalitica', function() {
+        const $panel = $('#panelAnaliticaCollapse');
+        if (!$panel.hasClass('show')) {
+            $panel.collapse('show');
+        }
+        setTimeout(() => {
+            const scrollEl = document.getElementById('panelAnaliticaCollapse');
+            if (scrollEl) scrollEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 250);
     });
-    $(document).on('click', '#btnIncluirSeleccionados', function() {
-        const ids = obtenerIdsSeleccionados();
-        if (!ids.length) return;
-        const propagar = $('#chkPropagar').is(':checked');
-        const sufijo = propagar ? ' <small class="text-muted">(todas las sucursales del artículo)</small>' : '';
-        ejecutarAccionAnalitica({ producto_ids: ids, propagar: propagar }, false,
-            `Incluir <strong>${ids.length} producto(s)</strong> en la analítica${sufijo}`);
-    });
+
     $(document).on('click', '#btnDeseleccionarTodo', function() {
         resetearSeleccion();
     });
@@ -12185,13 +12249,15 @@ $('#btnConfirmarActualizacion').on('click', function() {
         });
     });
 
-    // ── Toggle individual por fila ─────────────────────────────────────────
+    // ── Toggle individual por fila (SIEMPRE propaga a todas las bodegas) ──
     $(document).on('click', '.btn-toggle-analitica', function() {
         const $btn = $(this);
         const productoId = $btn.data('producto-id');
         const excluido = $btn.data('excluido') === true || $btn.data('excluido') === 'true';
         const nuevoEstado = !excluido;
-        const propagar = $('#chkPropagar').is(':checked');
+        // El botón por fila SIEMPRE actúa sobre el producto en todas las bodegas:
+        // es más intuitivo y coherente con "excluir este producto de la analítica".
+        const propagar = true;
         $btn.prop('disabled', true);
         $.ajax({
             url: '/app/productos/excluir-analitica-masivo/',
@@ -12201,23 +12267,13 @@ $('#btnConfirmarActualizacion').on('click', function() {
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function(response) {
                 if (response.success) {
-                    if (propagar) {
-                        // Actualizar TODOS los toggles de filas con el mismo artículo visibles
-                        buscarProductosParaEditar();
-                    } else {
-                        $btn.data('excluido', nuevoEstado);
-                        $btn.attr('title', nuevoEstado ? 'Click para incluir en analítica' : 'Click para excluir de analítica');
-                        $btn.html(nuevoEstado
-                            ? '<span class="badge bg-warning text-dark" style="cursor:pointer;"><i class="bi bi-eye-slash me-1"></i>Excluido</span>'
-                            : '<span class="badge bg-success" style="cursor:pointer;"><i class="bi bi-eye me-1"></i>Incluido</span>'
-                        );
-                        $btn.prop('disabled', false);
-                    }
-                    // Mostrar toast rápido
-                    const msg = propagar
-                        ? `${response.cantidad} registros actualizados (todas las sucursales)`
-                        : (nuevoEstado ? 'Excluido de analítica' : 'Incluido en analítica');
-                    mostrarToastAnalitica(nuevoEstado, msg);
+                    // Al propagar, refrescamos la lista para que todos los toggles del mismo
+                    // artículo (en distintas bodegas) queden consistentes.
+                    buscarProductosParaEditar();
+                    mostrarToastAnalitica(
+                        nuevoEstado,
+                        `${response.cantidad} registros actualizados en todas las bodegas`
+                    );
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error', text: response.error, timer: 2000 });
                     $btn.prop('disabled', false);
@@ -12250,28 +12306,32 @@ $('#btnConfirmarActualizacion').on('click', function() {
 
     function actualizarBarraSeleccion() {
         const n = $('.chk-producto:checked').length;
-        const propagar = $('#chkPropagar').is(':checked');
+        const $scopeCount = $('#scopeSeleccionadosCount');
         if (n > 0) {
-            $('#textoProductosSeleccionados').text(n + ' producto' + (n > 1 ? 's' : '') + ' seleccionado' + (n > 1 ? 's' : ''));
-            $('#hintPropagar').toggle(propagar);
+            const txt = n + ' producto' + (n > 1 ? 's' : '') + ' seleccionado' + (n > 1 ? 's' : '');
+            $('#textoProductosSeleccionados').text(txt);
             $('#barraSeleccionMasiva').css('display', 'flex');
+            $scopeCount
+                .removeClass('bg-light text-secondary')
+                .addClass('bg-primary-subtle text-primary-emphasis')
+                .html(`<i class="bi bi-check2-square me-1"></i><strong>${n}</strong> marcado${n > 1 ? 's' : ''}`);
         } else {
             $('#barraSeleccionMasiva').css('display', 'none');
+            $scopeCount
+                .removeClass('bg-primary-subtle text-primary-emphasis')
+                .addClass('bg-light text-secondary')
+                .text('Sin selección');
         }
     }
-
-    // Actualizar hint cuando cambia el checkbox de propagación
-    $('#chkPropagar').on('change', function() {
-        const n = $('.chk-producto:checked').length;
-        if (n > 0) {
-            $('#hintPropagar').toggle($(this).is(':checked'));
-        }
-    });
 
     function resetearSeleccion() {
         $('.chk-producto').prop('checked', false);
         $('#selectAllProductos').prop('checked', false).prop('indeterminate', false);
         $('#barraSeleccionMasiva').css('display', 'none');
+        $('#scopeSeleccionadosCount')
+            .removeClass('bg-primary-subtle text-primary-emphasis')
+            .addClass('bg-light text-secondary')
+            .text('Sin selección');
     }
 
     // ── Función central para ejecutar acciones sobre analítica ─────────────
@@ -12502,7 +12562,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     <button class="btn-action-busq analitica btn-toggle-analitica"
                             data-producto-id="${producto.producto_id}"
                             data-excluido="${producto.excluir_de_analitica}"
-                            title="${producto.excluir_de_analitica ? 'Incluir en analítica' : 'Excluir de analítica'}">
+                            title="${producto.excluir_de_analitica ? 'Incluir este producto en analítica (en todas las bodegas)' : 'Excluir este producto de analítica (en todas las bodegas)'}">
                         <i class="bi bi-${producto.excluir_de_analitica ? 'eye-slash' : 'bar-chart-line'}"></i>
                     </button>
                 </div>

@@ -5115,42 +5115,122 @@ def crear_ajuste_inventario(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+CONCEPTOS_AJUSTE_RAPIDO_INGRESO = [
+    'INGRESO_INICIAL',
+    'DEVOLUCION_CLIENTE',
+    'REGULARIZACION_TRASPASO',
+    'AJUSTE_POSITIVO',
+    'DONACION_RECIBIDA',
+    'CAMBIO_PRODUCTO_ENTRADA',
+]
+
+CONCEPTOS_AJUSTE_RAPIDO_EGRESO = [
+    'AJUSTE_NEGATIVO',
+    'PERDIDA_ROBO',
+    'PERDIDA_DETERIORO',
+    'DONACION_ENTREGADA',
+    'DEVOLUCION_PROVEEDOR',
+    'CAMBIO_PRODUCTO_SALIDA',
+]
+
+
+def _lookup_producto_talla_ajuste(sku, sucursal_id):
+    """
+    Busca un Producto_Talla por SKU en la sucursal indicada y devuelve:
+      (producto_en_sucursal, productos_otras_sucursales)
+    donde el primer elemento puede ser None si no existe en la sucursal actual.
+    """
+    from .models import Producto_Talla
+
+    qs = Producto_Talla.objects.select_related('producto', 'producto__sucursal').filter(sku=sku)
+    en_sucursal = None
+    otras = []
+    for pt in qs:
+        if sucursal_id and pt.producto and pt.producto.sucursal_id == int(sucursal_id):
+            en_sucursal = pt
+        else:
+            otras.append(pt)
+    return en_sucursal, otras
+
+
+def _serializar_producto_talla_ajuste(producto_talla, sucursal_id):
+    producto = producto_talla.producto
+    sucursal_producto = getattr(producto, 'sucursal', None)
+    return {
+        'id': producto_talla.id,
+        'sku': producto_talla.sku,
+        'articulo': producto.articulo,
+        'descripcion': producto.descripcion or '',
+        'talla': producto_talla.talla or 'Sin talla',
+        'stock_actual': producto_talla.stock_sucursal(sucursal_id) if sucursal_id else (producto_talla.stock or 0),
+        'stock_total': producto_talla.stock_total(),
+        'sucursal_id': sucursal_producto.id if sucursal_producto else None,
+        'sucursal_alias': sucursal_producto.alias if sucursal_producto else '',
+    }
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def ajuste_stock_rapido(request):
     """
     Ajuste rápido de stock por SKU y concepto.
     Útil para corregir stock cuando hay stock físico pero no en sistema.
+
+    GET sin parámetros → renderiza el formulario.
+    GET ?sku=XXX       → devuelve JSON con la información del producto y su stock
+                         en la sucursal activa (y en cuáles otras existe si no está
+                         en la actual).
+    POST               → registra el movimiento de ajuste.
     """
     from .models import Producto_Talla, CONCEPTO_MOVIMIENTO_CHOICES
 
-    conceptos_permitidos = [
-        'INGRESO_INICIAL',
-        'DEVOLUCION_CLIENTE',
-        'DEVOLUCION_PROVEEDOR',
-        'REGULARIZACION_TRASPASO',
-        'AJUSTE_POSITIVO',
-        'AJUSTE_NEGATIVO',
-        'PERDIDA_ROBO',
-        'PERDIDA_DETERIORO',
-        'DONACION_RECIBIDA',
-        'DONACION_ENTREGADA',
-        'CAMBIO_PRODUCTO_ENTRADA',
-        'CAMBIO_PRODUCTO_SALIDA',
-    ]
-    conceptos_egreso = {
-        'AJUSTE_NEGATIVO',
-        'PERDIDA_ROBO',
-        'PERDIDA_DETERIORO',
-        'DONACION_ENTREGADA',
-        'DEVOLUCION_PROVEEDOR',
-        'CAMBIO_PRODUCTO_SALIDA',
-    }
+    conceptos_permitidos = CONCEPTOS_AJUSTE_RAPIDO_INGRESO + CONCEPTOS_AJUSTE_RAPIDO_EGRESO
+    conceptos_egreso = set(CONCEPTOS_AJUSTE_RAPIDO_EGRESO)
 
     if request.method == "GET":
-        conceptos_form = [c for c in CONCEPTO_MOVIMIENTO_CHOICES if c[0] in conceptos_permitidos]
+        sku_param = (request.GET.get('sku') or '').strip()
+        sucursal_id = request.session.get('idSucursalActual')
+
+        if sku_param:
+            try:
+                sku = int(sku_param)
+            except ValueError:
+                return JsonResponse({'success': False, 'error': 'SKU inválido'}, status=400)
+
+            en_sucursal, otras = _lookup_producto_talla_ajuste(sku, sucursal_id)
+
+            if en_sucursal:
+                return JsonResponse({
+                    'success': True,
+                    'en_sucursal_actual': True,
+                    'producto': _serializar_producto_talla_ajuste(en_sucursal, sucursal_id),
+                })
+
+            if otras:
+                return JsonResponse({
+                    'success': True,
+                    'en_sucursal_actual': False,
+                    'mensaje': 'El SKU existe pero no en la sucursal activa',
+                    'producto': _serializar_producto_talla_ajuste(otras[0], sucursal_id),
+                    'otras_sucursales': [
+                        {
+                            'sucursal_id': pt.producto.sucursal_id,
+                            'sucursal_alias': pt.producto.sucursal.alias if pt.producto.sucursal else '',
+                            'stock': pt.stock or 0,
+                        } for pt in otras
+                    ],
+                }, status=200)
+
+            return JsonResponse({
+                'success': False,
+                'error': f'No se encontró ningún producto con SKU {sku}',
+            }, status=404)
+
+        ingreso_conceptos = [c for c in CONCEPTO_MOVIMIENTO_CHOICES if c[0] in CONCEPTOS_AJUSTE_RAPIDO_INGRESO]
+        egreso_conceptos = [c for c in CONCEPTO_MOVIMIENTO_CHOICES if c[0] in CONCEPTOS_AJUSTE_RAPIDO_EGRESO]
         return render(request, 'vistas/modulo_existencias/ajuste_stock_rapido.html', {
-            'conceptos': conceptos_form
+            'conceptos_ingreso': ingreso_conceptos,
+            'conceptos_egreso': egreso_conceptos,
         })
 
     try:
@@ -5166,6 +5246,7 @@ def ajuste_stock_rapido(request):
         cantidad = int(data.get('cantidad', 0))
     except (TypeError, ValueError):
         cantidad = 0
+    cantidad = abs(cantidad)
 
     if not sku_raw:
         return JsonResponse({'success': False, 'error': 'Debe ingresar un SKU'}, status=400)
@@ -5173,8 +5254,6 @@ def ajuste_stock_rapido(request):
         return JsonResponse({'success': False, 'error': 'Seleccione un concepto válido'}, status=400)
     if cantidad <= 0:
         return JsonResponse({'success': False, 'error': 'La cantidad debe ser mayor a 0'}, status=400)
-    if observaciones is None:
-        observaciones = ''
 
     try:
         sku = int(sku_raw)
@@ -5183,13 +5262,32 @@ def ajuste_stock_rapido(request):
 
     sucursal_id = request.session.get('idSucursalActual')
     if sucursal_id:
-        producto_talla = Producto_Talla.objects.select_related('producto', 'producto__sucursal').filter(
-            sku=sku,
-            producto__sucursal_id=sucursal_id
-        ).first()
-        if not producto_talla:
-            return JsonResponse({'success': False, 'error': f'No se encontró SKU {sku} en la sucursal actual'}, status=404)
-        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        en_sucursal, otras = _lookup_producto_talla_ajuste(sku, sucursal_id)
+        if en_sucursal:
+            producto_talla = en_sucursal
+            sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        else:
+            if otras:
+                alias_otras = ', '.join(
+                    pt.producto.sucursal.alias for pt in otras if pt.producto and pt.producto.sucursal
+                ) or 'otras sucursales'
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'El SKU {sku} no pertenece a la sucursal activa. '
+                        f'Se encuentra en: {alias_otras}. '
+                        'Debes crear el producto en esta sucursal antes de ajustar stock.'
+                    ),
+                    'en_sucursal_actual': False,
+                    'otras_sucursales': [
+                        {
+                            'sucursal_id': pt.producto.sucursal_id,
+                            'sucursal_alias': pt.producto.sucursal.alias if pt.producto.sucursal else '',
+                            'stock': pt.stock or 0,
+                        } for pt in otras
+                    ],
+                }, status=400)
+            return JsonResponse({'success': False, 'error': f'No se encontró SKU {sku}'}, status=404)
     else:
         producto_talla = Producto_Talla.objects.select_related('producto', 'producto__sucursal').filter(sku=sku).first()
         if not producto_talla:
@@ -5204,7 +5302,7 @@ def ajuste_stock_rapido(request):
         if stock_disponible < cantidad:
             return JsonResponse({
                 'success': False,
-                'error': f'Stock insuficiente. Disponible: {stock_disponible}'
+                'error': f'Stock insuficiente. Disponible: {stock_disponible}, intentaste restar {cantidad}.'
             }, status=400)
 
     responsable = request.user.get_full_name() or request.user.username
@@ -5225,6 +5323,9 @@ def ajuste_stock_rapido(request):
         'movimiento_id': movimiento.id,
         'sku': producto_talla.sku,
         'producto': producto_talla.producto.articulo,
+        'talla': producto_talla.talla or 'Sin talla',
+        'tipo': 'EGRESO' if es_egreso else 'INGRESO',
+        'cantidad': cantidad,
         'nuevo_stock': producto_talla.stock_sucursal(sucursal.id)
     })
 

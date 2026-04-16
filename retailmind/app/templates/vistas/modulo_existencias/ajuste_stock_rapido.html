@@ -15,44 +15,114 @@
         color: #fff;
         padding: 1.2rem 1.5rem;
     }
-    .ajuste-header h5 {
-        margin: 0;
-        font-weight: 600;
-    }
-    .ajuste-actions .btn {
-        min-height: 44px;
-    }
-    .tipo-ajuste {
+    .ajuste-header h5 { margin: 0; font-weight: 600; }
+
+    /* Stepper visual */
+    .ajuste-steps {
         display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 0 0 1.25rem 0;
+        padding: 0;
+        list-style: none;
     }
-    .tipo-ajuste .form-check {
-        background: #f5f5f7;
-        border-radius: 12px;
-        padding: 10px 14px;
+    .ajuste-steps li {
+        flex: 1;
         display: flex;
         align-items: center;
         gap: 8px;
+        padding: 8px 12px;
+        background: #f5f5f7;
+        border-radius: 10px;
+        color: #6c757d;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border: 1px solid transparent;
     }
+    .ajuste-steps li.is-active {
+        background: #eef2ff;
+        color: #1A1A2E;
+        border-color: #c7d2fe;
+    }
+    .ajuste-steps li.is-done {
+        background: #ecfdf5;
+        color: #047857;
+        border-color: #a7f3d0;
+    }
+    .ajuste-steps .step-num {
+        width: 24px; height: 24px;
+        display: inline-flex;
+        align-items: center; justify-content: center;
+        border-radius: 50%;
+        background: #fff;
+        font-weight: 700;
+    }
+
+    /* Panel de producto (SKU lookup) */
+    .sku-panel {
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-top: 10px;
+        display: none;
+    }
+    .sku-panel.is-ok   { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+    .sku-panel.is-warn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }
+    .sku-panel.is-err  { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .sku-panel .titulo { font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .sku-panel .detalle { font-size: 0.92rem; }
+    .sku-panel .stock-pill {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-weight: 700;
+        margin-left: 4px;
+        background: #fff;
+        color: #1A1A2E;
+        border: 1px solid rgba(0,0,0,.08);
+    }
+
+    /* Concepto con badge Ingreso/Egreso */
+    .concepto-hint {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        margin-left: 8px;
+        vertical-align: middle;
+    }
+    .concepto-hint.ingreso { background: #d1fae5; color: #065f46; }
+    .concepto-hint.egreso  { background: #fee2e2; color: #991b1b; }
+
+    /* Preview del resultado */
+    .preview-box {
+        background: #f8fafc;
+        border: 1px dashed #cbd5e1;
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-top: 12px;
+    }
+    .preview-box .flecha { font-size: 1.4rem; color: #64748b; margin: 0 10px; }
+    .preview-box .valor  {
+        font-size: 1.4rem; font-weight: 700;
+        display: inline-block; min-width: 42px; text-align: center;
+    }
+    .preview-box .valor.ingreso { color: #047857; }
+    .preview-box .valor.egreso  { color: #b91c1c; }
+    .preview-box .valor.actual  { color: #1A1A2E; }
+    .preview-box.is-err {
+        background: #fef2f2; border-color: #fca5a5; color: #991b1b;
+    }
+
+    .ajuste-actions .btn { min-height: 44px; }
+
     @media (max-width: 768px) {
-        .page-title-box {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.75rem;
-        }
-        .ajuste-header {
-            padding: 1rem;
-        }
-        .ajuste-actions {
-            flex-direction: column;
-            width: 100%;
-        }
-        .ajuste-actions .btn,
-        .ajuste-actions a {
-            width: 100%;
-        }
+        .page-title-box { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+        .ajuste-header { padding: 1rem; }
+        .ajuste-actions { flex-direction: column; width: 100%; }
+        .ajuste-actions .btn, .ajuste-actions a { width: 100%; }
         .ajuste-form .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
+        .ajuste-steps li { font-size: 0.75rem; padding: 6px 8px; }
     }
     @media (max-width: 576px) {
         .ajuste-card { padding: 0.75rem; }
@@ -85,54 +155,115 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <form id="form-ajuste-stock">
+
+                        <ul class="ajuste-steps" id="ajusteSteps">
+                            <li class="is-active" data-step="1">
+                                <span class="step-num">1</span> Buscar SKU
+                            </li>
+                            <li data-step="2">
+                                <span class="step-num">2</span> Elegir concepto
+                            </li>
+                            <li data-step="3">
+                                <span class="step-num">3</span> Confirmar
+                            </li>
+                        </ul>
+
+                        <form id="form-ajuste-stock" class="ajuste-form" novalidate>
                             {% csrf_token %}
+
                             <div class="row g-3">
+                                <!-- PASO 1: SKU -->
                                 <div class="col-md-6">
-                                    <label for="sku" class="form-label">SKU <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="sku" name="sku"
-                                           placeholder="Ingrese el SKU" required>
-                                    <div class="form-text">SKU exacto del producto.</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
-                                    <input type="number" class="form-control" id="cantidad" name="cantidad"
-                                           min="1" step="1" required>
-                                    <div class="form-text">Ingrese cantidad positiva.</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Tipo de ajuste <span class="text-danger">*</span></label>
-                                    <div class="tipo-ajuste">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="tipo_ajuste" id="ajusteSumar" value="sumar" checked>
-                                            <label class="form-check-label" for="ajusteSumar">Sumar stock</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="tipo_ajuste" id="ajusteRestar" value="restar">
-                                            <label class="form-check-label" for="ajusteRestar">Restar stock</label>
-                                        </div>
+                                    <label for="sku" class="form-label">
+                                        SKU <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="text" inputmode="numeric" pattern="[0-9]*"
+                                               class="form-control ajuste-input" id="sku" name="sku"
+                                               placeholder="Ej: 12345678" autocomplete="off" required>
+                                        <button type="button" class="btn btn-outline-secondary" id="btnBuscarSku"
+                                                title="Consultar producto">
+                                            <i class="ri-search-line"></i>
+                                        </button>
                                     </div>
-                                    <div class="form-text">Define si es entrada o salida.</div>
+                                    <div class="form-text">Ingresa el SKU y presiona Enter o Tab.</div>
+                                    <div id="skuPanel" class="sku-panel"></div>
                                 </div>
+
+                                <!-- Cantidad -->
                                 <div class="col-md-6">
-                                    <label for="concepto" class="form-label">Concepto <span class="text-danger">*</span></label>
-                                    <select class="form-select" id="concepto" name="concepto" required>
-                                        <option value="">Seleccione...</option>
-                                        {% for concepto in conceptos %}
-                                        <option value="{{ concepto.0 }}">{{ concepto.1 }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <div class="form-text">Define si es entrada o salida.</div>
+                                    <label for="cantidad" class="form-label">
+                                        Cantidad <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="number" class="form-control ajuste-input"
+                                           id="cantidad" name="cantidad" min="1" step="1"
+                                           placeholder="Unidades" required>
+                                    <div class="form-text">
+                                        Siempre positiva. El <b>concepto</b> define si suma o resta.
+                                    </div>
                                 </div>
+
+                                <!-- PASO 2: Concepto -->
+                                <div class="col-12">
+                                    <label for="concepto" class="form-label">
+                                        Concepto <span class="text-danger">*</span>
+                                        <span id="conceptoHint"></span>
+                                    </label>
+                                    <select class="form-select ajuste-input" id="concepto" name="concepto" required>
+                                        <option value="">Seleccione un concepto...</option>
+                                        {% if conceptos_ingreso %}
+                                        <optgroup label="Ingresos  (+ suman stock)">
+                                            {% for concepto in conceptos_ingreso %}
+                                            <option value="{{ concepto.0 }}" data-tipo="ingreso">{{ concepto.1 }}</option>
+                                            {% endfor %}
+                                        </optgroup>
+                                        {% endif %}
+                                        {% if conceptos_egreso %}
+                                        <optgroup label="Egresos  (− restan stock)">
+                                            {% for concepto in conceptos_egreso %}
+                                            <option value="{{ concepto.0 }}" data-tipo="egreso">{{ concepto.1 }}</option>
+                                            {% endfor %}
+                                        </optgroup>
+                                        {% endif %}
+                                    </select>
+                                    <div class="form-text">
+                                        El tipo de movimiento (ingreso o egreso) se determina automáticamente por el concepto.
+                                    </div>
+                                </div>
+
+                                <!-- Observaciones -->
                                 <div class="col-12">
                                     <label for="observaciones" class="form-label">Observaciones</label>
-                                    <textarea class="form-control" id="observaciones" name="observaciones" rows="3"
-                                              placeholder="Motivo del ajuste (opcional)"></textarea>
+                                    <textarea class="form-control" id="observaciones" name="observaciones" rows="2"
+                                              placeholder="Motivo o detalle del ajuste (opcional)"></textarea>
+                                </div>
+
+                                <!-- Preview -->
+                                <div class="col-12">
+                                    <div id="previewBox" class="preview-box" style="display:none;">
+                                        <div class="d-flex align-items-center flex-wrap">
+                                            <div>
+                                                <div class="text-muted small">Stock actual</div>
+                                                <span class="valor actual" id="previewStockActual">0</span>
+                                            </div>
+                                            <div class="flecha"><i class="ri-arrow-right-line"></i></div>
+                                            <div>
+                                                <div class="text-muted small" id="previewLabelCambio">Cambio</div>
+                                                <span class="valor" id="previewCambio">0</span>
+                                            </div>
+                                            <div class="flecha"><i class="ri-arrow-right-line"></i></div>
+                                            <div>
+                                                <div class="text-muted small">Stock resultante</div>
+                                                <span class="valor" id="previewStockFinal">0</span>
+                                            </div>
+                                        </div>
+                                        <div id="previewMsg" class="mt-2 small"></div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div class="mt-4 d-flex gap-2 ajuste-actions">
-                                <button type="submit" class="btn btn-success">
+                                <button type="submit" class="btn btn-success" id="btnSubmit" disabled>
                                     <i class="ri-check-line me-1"></i> Registrar ajuste
                                 </button>
                                 <a href="{% url 'verHome' %}" class="btn btn-soft-secondary">
@@ -143,9 +274,10 @@
                     </div>
                 </div>
 
-        <div class="alert alert-info mt-3">
+                <div class="alert alert-info mt-3 mb-0">
                     <i class="ri-information-line me-1"></i>
                     Usa este ajuste cuando el stock físico no coincida con el sistema.
+                    El concepto determina automáticamente si suma o resta.
                 </div>
             </div>
         </div>
@@ -153,49 +285,286 @@
 </div>
 
 <script>
-document.getElementById('form-ajuste-stock').addEventListener('submit', function (event) {
-    event.preventDefault();
-    const csrfToken = document.querySelector('#form-ajuste-stock [name=csrfmiddlewaretoken]').value;
+(function () {
+    const form          = document.getElementById('form-ajuste-stock');
+    const skuInput      = document.getElementById('sku');
+    const cantidadInput = document.getElementById('cantidad');
+    const conceptoSel   = document.getElementById('concepto');
+    const conceptoHint  = document.getElementById('conceptoHint');
+    const skuPanel      = document.getElementById('skuPanel');
+    const btnBuscarSku  = document.getElementById('btnBuscarSku');
+    const btnSubmit     = document.getElementById('btnSubmit');
+    const previewBox    = document.getElementById('previewBox');
+    const previewStockActual = document.getElementById('previewStockActual');
+    const previewCambio      = document.getElementById('previewCambio');
+    const previewStockFinal  = document.getElementById('previewStockFinal');
+    const previewLabel       = document.getElementById('previewLabelCambio');
+    const previewMsg         = document.getElementById('previewMsg');
+    const steps         = document.querySelectorAll('#ajusteSteps li');
 
-    const tipoAjuste = document.querySelector('input[name="tipo_ajuste"]:checked')?.value || 'sumar';
-    let cantidad = parseInt(document.getElementById('cantidad').value, 10);
-    if (tipoAjuste === 'restar') {
-        cantidad = -Math.abs(cantidad);
+    const LOOKUP_URL = "{% url 'ajuste_stock_rapido' %}";
+    const SUBMIT_URL = "{% url 'ajuste_stock_rapido' %}";
+    const csrfToken  = document.querySelector('#form-ajuste-stock [name=csrfmiddlewaretoken]').value;
+
+    let productoActual = null;   // info del producto encontrado
+    let skuEnSucursal  = false;  // true si el SKU está en la sucursal activa
+
+    function setStep(step) {
+        steps.forEach(li => {
+            const n = parseInt(li.dataset.step, 10);
+            li.classList.remove('is-active', 'is-done');
+            if (n < step) li.classList.add('is-done');
+            else if (n === step) li.classList.add('is-active');
+        });
     }
 
-    const payload = {
-        sku: document.getElementById('sku').value.trim(),
-        cantidad: cantidad,
-        concepto: document.getElementById('concepto').value,
-        observaciones: document.getElementById('observaciones').value.trim()
-    };
+    function mostrarPanel(tipo, html) {
+        skuPanel.className = 'sku-panel is-' + tipo;
+        skuPanel.style.display = 'block';
+        skuPanel.innerHTML = html;
+    }
+    function ocultarPanel() {
+        skuPanel.style.display = 'none';
+        skuPanel.innerHTML = '';
+    }
 
-    fetch("{% url 'ajuste_stock_rapido' %}", {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify(payload)
-    })
-    .then(response => response.json().then(data => ({ ok: response.ok, data })))
-    .then(({ ok, data }) => {
-        if (!ok || !data.success) {
-            const msg = data.error || 'No se pudo registrar el ajuste';
-            Swal.fire('Error', msg, 'error');
+    function actualizarBotonSubmit() {
+        const tieneProducto = productoActual && skuEnSucursal;
+        const cantidad      = parseInt(cantidadInput.value, 10);
+        const concepto      = conceptoSel.value;
+        btnSubmit.disabled = !(tieneProducto && cantidad > 0 && concepto);
+    }
+
+    function tipoConceptoSeleccionado() {
+        const opt = conceptoSel.options[conceptoSel.selectedIndex];
+        return opt ? (opt.dataset.tipo || '') : '';
+    }
+
+    function actualizarHintConcepto() {
+        const tipo = tipoConceptoSeleccionado();
+        conceptoHint.innerHTML = '';
+        if (tipo === 'ingreso') {
+            conceptoHint.innerHTML = '<span class="concepto-hint ingreso"><i class="ri-add-line"></i> Suma stock</span>';
+        } else if (tipo === 'egreso') {
+            conceptoHint.innerHTML = '<span class="concepto-hint egreso"><i class="ri-subtract-line"></i> Resta stock</span>';
+        }
+    }
+
+    function actualizarPreview() {
+        if (!productoActual || !skuEnSucursal) {
+            previewBox.style.display = 'none';
             return;
         }
-        Swal.fire(
-            'Ajuste registrado',
-            `SKU ${data.sku} - ${data.producto}. Nuevo stock: ${data.nuevo_stock}`,
-            'success'
-        );
-        document.getElementById('form-ajuste-stock').reset();
-    })
-    .catch(() => {
-        Swal.fire('Error', 'Error de conexión', 'error');
+        const cantidad = parseInt(cantidadInput.value, 10);
+        const tipo     = tipoConceptoSeleccionado();
+        if (!cantidad || cantidad <= 0 || !tipo) {
+            previewBox.style.display = 'none';
+            return;
+        }
+
+        const stockActual = productoActual.stock_actual || 0;
+        const signo       = (tipo === 'egreso') ? -1 : 1;
+        const cambio      = signo * cantidad;
+        const stockFinal  = stockActual + cambio;
+
+        previewBox.classList.remove('is-err');
+        previewStockActual.textContent = stockActual;
+        previewCambio.textContent      = (cambio > 0 ? '+' : '') + cambio;
+        previewStockFinal.textContent  = stockFinal;
+        previewLabel.textContent       = (tipo === 'egreso') ? 'Restar' : 'Sumar';
+
+        previewCambio.className = 'valor ' + (tipo === 'egreso' ? 'egreso' : 'ingreso');
+        previewStockFinal.className = 'valor actual';
+
+        previewMsg.textContent = '';
+        if (tipo === 'egreso' && stockFinal < 0) {
+            previewBox.classList.add('is-err');
+            previewMsg.innerHTML = '<i class="ri-error-warning-line"></i> Stock insuficiente. Solo puedes restar hasta ' + stockActual + '.';
+        }
+
+        previewBox.style.display = 'block';
+        setStep(cantidad && tipo ? 3 : 2);
+    }
+
+    function buscarSku() {
+        const sku = skuInput.value.trim();
+        if (!sku) {
+            ocultarPanel();
+            productoActual = null;
+            skuEnSucursal = false;
+            setStep(1);
+            actualizarBotonSubmit();
+            actualizarPreview();
+            return;
+        }
+
+        mostrarPanel('warn', '<i class="ri-loader-4-line spin"></i> Buscando SKU ' + sku + '...');
+
+        fetch(LOOKUP_URL + '?sku=' + encodeURIComponent(sku), {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(r => r.json().then(d => ({ ok: r.ok, status: r.status, data: d })))
+        .then(({ ok, status, data }) => {
+            if (status === 404 || (!data.success && !data.producto)) {
+                productoActual = null;
+                skuEnSucursal = false;
+                mostrarPanel('err',
+                    '<div class="titulo"><i class="ri-close-circle-line"></i> SKU no encontrado</div>' +
+                    '<div class="detalle">' + (data.error || 'No existe ningún producto con ese SKU.') + '</div>'
+                );
+                setStep(1);
+            } else if (data.en_sucursal_actual === false) {
+                productoActual = data.producto;
+                skuEnSucursal = false;
+                const sucursales = (data.otras_sucursales || [])
+                    .map(s => (s.sucursal_alias || 'Sucursal ' + s.sucursal_id) + ' (stock: ' + s.stock + ')')
+                    .join(', ');
+                mostrarPanel('warn',
+                    '<div class="titulo"><i class="ri-alert-line"></i> SKU existe pero no en esta sucursal</div>' +
+                    '<div class="detalle"><b>' + data.producto.articulo + '</b>' +
+                        (data.producto.talla ? ' · Talla ' + data.producto.talla : '') +
+                    '</div>' +
+                    '<div class="detalle mt-1">Se encuentra en: <b>' + (sucursales || 'otras sucursales') + '</b></div>' +
+                    '<div class="detalle mt-1">Para ajustar stock aquí, primero debes crear el producto en esta sucursal.</div>'
+                );
+                setStep(1);
+            } else {
+                productoActual = data.producto;
+                skuEnSucursal = true;
+                mostrarPanel('ok',
+                    '<div class="titulo"><i class="ri-checkbox-circle-line"></i> ' + data.producto.articulo + '</div>' +
+                    '<div class="detalle">' +
+                        (data.producto.talla ? 'Talla: <b>' + data.producto.talla + '</b> · ' : '') +
+                        'Stock actual: <span class="stock-pill">' + data.producto.stock_actual + '</span>' +
+                    '</div>'
+                );
+                setStep(2);
+            }
+            actualizarBotonSubmit();
+            actualizarPreview();
+        })
+        .catch(() => {
+            productoActual = null;
+            skuEnSucursal = false;
+            mostrarPanel('err',
+                '<div class="titulo"><i class="ri-close-circle-line"></i> Error de conexión</div>' +
+                '<div class="detalle">No se pudo consultar el SKU.</div>'
+            );
+            actualizarBotonSubmit();
+        });
+    }
+
+    // Eventos
+    btnBuscarSku.addEventListener('click', buscarSku);
+    skuInput.addEventListener('blur', buscarSku);
+    skuInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); buscarSku(); }
     });
-});
+    skuInput.addEventListener('input', function () {
+        productoActual = null;
+        skuEnSucursal = false;
+        ocultarPanel();
+        actualizarBotonSubmit();
+        actualizarPreview();
+    });
+    conceptoSel.addEventListener('change', function () {
+        actualizarHintConcepto();
+        actualizarBotonSubmit();
+        actualizarPreview();
+    });
+    cantidadInput.addEventListener('input', function () {
+        actualizarBotonSubmit();
+        actualizarPreview();
+    });
+
+    // Submit
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        if (!productoActual || !skuEnSucursal) {
+            Swal.fire('SKU no válido', 'Primero busca un SKU que exista en la sucursal activa.', 'warning');
+            return;
+        }
+
+        const cantidad = Math.abs(parseInt(cantidadInput.value, 10) || 0);
+        const concepto = conceptoSel.value;
+        if (cantidad <= 0) {
+            Swal.fire('Cantidad inválida', 'La cantidad debe ser mayor a 0.', 'warning');
+            return;
+        }
+        if (!concepto) {
+            Swal.fire('Concepto requerido', 'Selecciona un concepto para el ajuste.', 'warning');
+            return;
+        }
+
+        const tipo = tipoConceptoSeleccionado();
+        if (tipo === 'egreso' && cantidad > (productoActual.stock_actual || 0)) {
+            Swal.fire('Stock insuficiente',
+                'Solo puedes restar hasta ' + productoActual.stock_actual + ' unidades.',
+                'error');
+            return;
+        }
+
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<i class="ri-loader-4-line"></i> Registrando...';
+
+        fetch(SUBMIT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                sku: skuInput.value.trim(),
+                cantidad: cantidad,
+                concepto: concepto,
+                observaciones: document.getElementById('observaciones').value.trim()
+            })
+        })
+        .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+        .then(({ ok, data }) => {
+            btnSubmit.innerHTML = '<i class="ri-check-line me-1"></i> Registrar ajuste';
+            if (!ok || !data.success) {
+                Swal.fire('Error', data.error || 'No se pudo registrar el ajuste', 'error');
+                actualizarBotonSubmit();
+                return;
+            }
+            Swal.fire({
+                icon: 'success',
+                title: 'Ajuste registrado',
+                html:
+                    '<div class="text-start">' +
+                    '<div><b>' + data.producto + '</b>' + (data.talla ? ' · Talla ' + data.talla : '') + '</div>' +
+                    '<div class="mt-1">SKU: ' + data.sku + '</div>' +
+                    '<div class="mt-1">Tipo: <b>' + (data.tipo === 'EGRESO' ? 'Egreso (-)' : 'Ingreso (+)') + '</b>' +
+                    ' · Cantidad: <b>' + data.cantidad + '</b></div>' +
+                    '<div class="mt-2">Nuevo stock: <b>' + data.nuevo_stock + '</b></div>' +
+                    '</div>'
+            }).then(() => {
+                // Reset parcial: conservar SKU para ajustes consecutivos
+                cantidadInput.value = '';
+                document.getElementById('observaciones').value = '';
+                conceptoSel.value = '';
+                actualizarHintConcepto();
+                // refrescar lookup para actualizar stock
+                buscarSku();
+            });
+        })
+        .catch(() => {
+            btnSubmit.innerHTML = '<i class="ri-check-line me-1"></i> Registrar ajuste';
+            actualizarBotonSubmit();
+            Swal.fire('Error', 'Error de conexión con el servidor', 'error');
+        });
+    });
+
+    // Estado inicial
+    actualizarHintConcepto();
+    actualizarBotonSubmit();
+})();
 </script>
 
 {% include '../../layout/footer.html' %}
