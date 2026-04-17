@@ -133,7 +133,7 @@ def bienvenida(request):
 
     context = {
         'sucursal_actual': sucursal_actual,
-        'fecha_actual': timezone.now().date(),
+        'fecha_actual': timezone.localdate(),
         'modulos_con_opciones': modulos_con_opciones,
         'accesos_destacados': accesos_destacados,
         'total_accesos': total_accesos,
@@ -172,7 +172,7 @@ def dashboard_home(request):
             sucursal_actual = Sucursal.objects.filter(id=sucursal_id).first()
         
         # Fechas para filtros
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         inicio_semana = hoy - timedelta(days=hoy.weekday())  # Lunes de esta semana
         inicio_mes = hoy.replace(day=1)
         mes_pasado_inicio = (inicio_mes - timedelta(days=1)).replace(day=1)
@@ -258,7 +258,7 @@ def dashboard_home(request):
             },
             'precios': {'total_pendientes': 0, 'urgentes': 0, 'impacto_estimado': 0},
             'alertas': [],
-            'fecha_actual': timezone.now().date(),
+            'fecha_actual': timezone.localdate(),
         })
 
 
@@ -388,7 +388,7 @@ def calcular_kpis_stock(sucursal_id, empresa_id):
     
     # Rotación de inventario (simplificada)
     # Ventas del mes / Inventario promedio
-    inicio_mes = timezone.now().date().replace(day=1)
+    inicio_mes = timezone.localdate().replace(day=1)
     ventas_mes_query = Ticket_Productos.objects.filter(
         idTicket__fecha__gte=inicio_mes,
         idTicket__estado='PAGADO'
@@ -805,7 +805,7 @@ def obtener_top_productos(sucursal_id, inicio_mes, hoy):
 
 def obtener_productos_sin_movimiento(sucursal_id, dias=30):
     """Obtiene productos sin ventas en los últimos X días"""
-    fecha_limite = timezone.now().date() - timedelta(days=dias)
+    fecha_limite = timezone.localdate() - timedelta(days=dias)
     
     # SKUs que SÍ tuvieron ventas en el período
     skus_con_ventas = Ticket_Productos.objects.filter(
@@ -850,7 +850,7 @@ def api_dashboard_ventas_tiempo_real(request):
     """API para obtener datos de ventas en tiempo real"""
     try:
         sucursal_id = request.session.get('idSucursalActual')
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         
         # Ventas de hoy actualizadas
         tickets_hoy = Ticket.objects.filter(fecha=hoy, estado='PAGADO')

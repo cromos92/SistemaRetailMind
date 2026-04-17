@@ -1017,8 +1017,8 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
                     responsable=responsable,
                     observaciones=f'Venta ecommerce {pedido.canal_origen} #{pedido.numero_pedido_canal} — FIFO no disponible',
                     referencia_externa=f'RM_{pedido.numero_ticket_rm}',
-                    fecha=timezone.now().date(),
-                    hora=timezone.now().time(),
+                    fecha=timezone.localdate(),
+                    hora=timezone.localtime().time(),
                 )
                 producto_talla.stock = max(0, producto_talla.stock - cantidad)
                 producto_talla.save(update_fields=['stock'])

@@ -215,7 +215,7 @@ def recepciones_pendientes_api(request):
                 'observaciones': movimiento_origen.observaciones or '',
             })
 
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         recibidos_hoy = Dte.objects.filter(
             tipo_transaccion='TRASPASO',
             sucursal_id=sucursal_destino_id,
@@ -4383,8 +4383,8 @@ def generar_nota_credito_automatica(dte_original, productos_afectados, usuario, 
         estado_pago='PENDIENTE',
         estado_dte='EMITIDO',
         responsable=usuario,
-        fecha_emision=timezone.now().date(),
-        fecha_vencimiento=timezone.now().date(),
+        fecha_emision=timezone.localdate(),
+        fecha_vencimiento=timezone.localdate(),
         diasCredito=0,
         bultos=1,
         unidades_productos=total_unidades,
@@ -4626,7 +4626,7 @@ def obtener_siguiente_correlativo(sucursal, tipo):
         # Si el correlativo está agotado, crear uno nuevo automáticamente
         correlativo.inicio = correlativo.termino + 1
         correlativo.termino = correlativo.termino + 100000
-        correlativo.fecha_actualizacion = timezone.now().date()
+        correlativo.fecha_actualizacion = timezone.localdate()
         correlativo.save()
         
         return correlativo.obtener_siguiente_numero()
@@ -4960,7 +4960,7 @@ def aprobar_traspaso(request):
         # Actualizar traspaso
         traspaso.estado = 'APROBADO'
         traspaso.aprobador = aprobador
-        traspaso.fecha_aprobacion = timezone.now().date()
+        traspaso.fecha_aprobacion = timezone.localdate()
         traspaso.observaciones_aprobacion = data.get('observaciones', '')
         traspaso.save()
         
@@ -5009,7 +5009,7 @@ def recibir_traspaso(request):
         # Actualizar traspaso
         traspaso.estado = 'RECIBIDO'
         traspaso.receptor = receptor
-        traspaso.fecha_recepcion = timezone.now().date()
+        traspaso.fecha_recepcion = timezone.localdate()
         traspaso.observaciones_recepcion = data.get('observaciones', '')
         traspaso.save()
         
@@ -5607,7 +5607,7 @@ def verHome(request):
         empresa_id = request.session.get('idEmpresaActual')
         
         # Fechas para filtros
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         inicio_mes = hoy.replace(day=1)
         mes_pasado = (inicio_mes - timedelta(days=1)).replace(day=1)
         
@@ -5958,8 +5958,8 @@ def verHome(request):
             'regularizaciones_por_tipo': [],
             'tendencia_cambios': 0,
             'tendencia_cambios_abs': 0,
-            'fecha_actual': timezone.now().date(),
-            'inicio_mes': timezone.now().date().replace(day=1),
+            'fecha_actual': timezone.localdate(),
+            'inicio_mes': timezone.localdate().replace(day=1),
         })
 @login_required
 def verGestionCompras(request):
@@ -6153,7 +6153,7 @@ Equipo NEXO
         
         <!-- Footer -->
         <p style="text-align: center; color: #8A8A9A; font-size: 12px; margin-top: 25px;">
-            © {__import__('datetime').datetime.now().year} NEXO · <a href="https://webappsolutions.cl" style="color: #0066FF; text-decoration: none;">WebAppSolutions</a><br>
+            © {timezone.localdate().year} NEXO · <a href="https://webappsolutions.cl" style="color: #0066FF; text-decoration: none;">WebAppSolutions</a><br>
             Este es un correo automático, no responder.
         </p>
     </div>
@@ -6527,7 +6527,7 @@ def obtener_compras_por_anio(request):
     )[offset:offset + page_size]
 
     # Calcular días restantes y formatear datos
-    hoy = date.today()
+    hoy = timezone.localdate()
     data = []
     
     for compra in compras:
@@ -7540,7 +7540,7 @@ def cargarDteCompra(request):
 
             # Aplicar filtro de vencimiento si se especifica
             if filtro_vencimiento:
-                hoy = date.today()
+                hoy = timezone.localdate()
                 
                 # Solo aplicar a pendientes
                 dtes_query = dtes_query.filter(Q(estado_pago='Pendiente') | Q(estado_pago='Parcial'))
@@ -7567,7 +7567,7 @@ def cargarDteCompra(request):
             offset = (page - 1) * page_size
             dtes = dtes_query[offset:offset + page_size]
 
-            hoy = date.today()
+            hoy = timezone.localdate()
             resultado = []
 
             for d in dtes:
@@ -11225,7 +11225,7 @@ def facturas_pendientes(request):
         return JsonResponse([], safe=False)
     
     ESTADOS_EXCLUIDOS = ['ANULADO', 'CANCELADO', 'RECHAZADO']
-    fecha_corte = date.today() - timedelta(days=meses * 30)
+    fecha_corte = timezone.localdate() - timedelta(days=meses * 30)
     
     # Buscar DTEs de COMPRA de TODAS las sucursales/empresas del usuario
     facturas = Dte.objects.filter(
@@ -11351,7 +11351,7 @@ def obtener_movimientos_producto(request):
     
     # ✅ OPTIMIZACIÓN: Fecha por defecto (últimos 30 días) si no hay filtros de fecha
     # Esto evita cargar todo el historial en la carga inicial
-    hoy = timezone.now().date()
+    hoy = timezone.localdate()
     usar_fecha_defecto = not fecha_inicio and not fecha_fin
     if usar_fecha_defecto:
         fecha_inicio_dt = hoy - timedelta(days=30)
@@ -13428,7 +13428,7 @@ def exportar_dashboard_fifo(request):
         from io import StringIO
         
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = f'attachment; filename="dashboard_fifo_{sucursal_id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+        response['Content-Disposition'] = f'attachment; filename="dashboard_fifo_{sucursal_id}_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.csv"'
         
         if datos_exportacion:
             writer = csv.DictWriter(response, fieldnames=datos_exportacion[0].keys())
@@ -13562,7 +13562,7 @@ def dashboard_compras_estrategico(request):
     Calcula todos los indicadores clave de rendimiento
     """
     try:
-        anio = request.GET.get('anio', datetime.now().year)
+        anio = request.GET.get('anio', timezone.localdate().year)
         temporada = request.GET.get('temporada', '')
         proveedor_id = request.GET.get('proveedor', '')
         responsable = request.GET.get('responsable', '')
@@ -13980,7 +13980,7 @@ def exportar_dashboard_compras(request):
     Exportar reporte del dashboard en Excel
     """
     try:
-        anio = request.GET.get('anio', datetime.now().year)
+        anio = request.GET.get('anio', timezone.localdate().year)
         temporada = request.GET.get('temporada', '')
         proveedor_id = request.GET.get('proveedor', '')
         responsable = request.GET.get('responsable', '')
@@ -14673,7 +14673,7 @@ def obtener_datos_dashboard_productos(request):
         )
         
         # ========== PRODUCTOS PRÓXIMOS A VENCIMIENTO (30 días) ==========
-        fecha_vencimiento_limite = timezone.now().date() + timedelta(days=30)
+        fecha_vencimiento_limite = timezone.localdate() + timedelta(days=30)
         lotes_proximos_vencer = LoteProducto.objects.filter(
             fecha_vencimiento__lte=fecha_vencimiento_limite,
             fecha_vencimiento__isnull=False,
@@ -18905,8 +18905,8 @@ def anular_factura_dte(request):
             monto_neto=monto_neto_nc,
             monto_con_iva=monto_con_iva_nc,
             descuento=descuento_nc,
-            fecha_emision=date.today(),
-            fecha_vencimiento=date.today(),
+            fecha_emision=timezone.localdate(),
+            fecha_vencimiento=timezone.localdate(),
             bultos=dte.bultos or 0,
             unidades_productos=dte.unidades_productos or 0,
             diasCredito=0,
@@ -18918,7 +18918,7 @@ def anular_factura_dte(request):
             es_nota_credito=True,
             documento_afectado=dte,
             motivo_nc=motivo_nc_texto,
-            hora=timezone.now().time(),
+            hora=timezone.localtime().time(),
             referencias=_json.dumps([{
                 'tipo_documento': tipo_sii_original,
                 'folio': dte.numero_documento,
@@ -19279,7 +19279,7 @@ def cargar_dte_ventas(request):
             # Calcular días de crédito restantes
             dias_credito_restantes = 0
             if dte.estado_pago != 'PAGADO' and dte.fecha_vencimiento:
-                diferencia = dte.fecha_vencimiento - date.today()
+                diferencia = dte.fecha_vencimiento - timezone.localdate()
                 dias_credito_restantes = diferencia.days
             
             # Obtener total de pagos realizados
@@ -19480,34 +19480,46 @@ def gestion_correlativos(request):
                 correlativo.responsable = 'Sistema'
                 updated = True
             if not correlativo.fecha_actualizacion:
-                correlativo.fecha_actualizacion = timezone.now().date()
+                correlativo.fecha_actualizacion = timezone.localdate()
                 updated = True
             
-            # Normalizar tipos antiguos
-            tipo_normalizado = None
-            if correlativo.tipo_dte == 'Compra':
-                tipo_normalizado = 'COMPRA'
-            elif correlativo.tipo_dte == 'Ticket':
-                tipo_normalizado = 'TICKET'
-            elif correlativo.tipo_dte == 'Traspaso':
-                tipo_normalizado = 'TRASPASO'
-            elif correlativo.tipo_dte == 'Ajuste':
-                tipo_normalizado = 'AJUSTE'
-            
+            # Normalizar tipos antiguos (capitalización o uso de guion bajo)
+            NORMALIZACIONES_TIPO = {
+                'Compra': 'COMPRA',
+                'Ticket': 'TICKET',
+                'Traspaso': 'TRASPASO',
+                'Ajuste': 'AJUSTE',
+                # Tipos provenientes de la migración desde Laravel (con guion bajo)
+                'BOLETA_ELECTRONICA': 'BOLETA ELECTRONICA',
+                'FACTURA_ELECTRONICA': 'FACTURA ELECTRONICA',
+                'BOLETA_PAPEL': 'BOLETA PAPEL',
+                'FACTURA_EXENTA': 'FACTURA EXENTA',
+                'NOTA_CREDITO': 'NOTA DE CREDITO',
+                'NOTA_DEBITO': 'NOTA DE DEBITO',
+                'NOTA_DE_PEDIDO': 'NOTA DE PEDIDO',
+                'TICKET_CAMBIO': 'TICKET CAMBIO',
+                'GUIA_DESPACHO': 'GUIA',
+            }
+            tipo_normalizado = NORMALIZACIONES_TIPO.get(correlativo.tipo_dte)
+
             if tipo_normalizado:
                 # Verificar si ya existe un correlativo con el tipo normalizado
                 existe_normalizado = Correlativo.objects.filter(
                     sucursal_id=correlativo.sucursal_id,
                     tipo_dte=tipo_normalizado
                 ).exclude(id=correlativo.id).exists()
-                
+
                 if existe_normalizado:
-                    # Ya existe uno normalizado, eliminar este duplicado
-                    print(f"Eliminando duplicado: ID {correlativo.id}, Tipo: {tipo_original} (ya existe {tipo_normalizado})")
-                    correlativo.delete()
-                    continue
+                    # Ya existe otro correlativo con el tipo normalizado: NO auto-eliminar
+                    # para no perder datos (ej. migración con consumo real). Se deja el
+                    # duplicado visible para que el usuario decida manualmente con el
+                    # botón "Eliminar" qué correlativo conservar.
+                    print(
+                        f"Duplicado detectado (no auto-eliminado): ID {correlativo.id}, "
+                        f"Tipo: {tipo_original} coexiste con {tipo_normalizado}"
+                    )
                 else:
-                    # No existe, normalizar
+                    # No existe, renombrar al tipo normalizado
                     correlativo.tipo_dte = tipo_normalizado
                     updated = True
             
@@ -19640,7 +19652,7 @@ def crear_correlativos_faltantes(request):
             'creados': 0
         })
 
-    fecha_actual = timezone.now().date()
+    fecha_actual = timezone.localdate()
     with transaction.atomic():
         for correlativo_data in faltantes:
             alias_personalizado = detalles_por_tipo.get(correlativo_data['tipo_dte'], {}).get('alias')
@@ -19731,7 +19743,7 @@ def guardar_correlativo(request):
                 correlativo.termino = termino
                 correlativo.alias = alias
                 correlativo.responsable = responsable
-                correlativo.fecha_actualizacion = timezone.now().date()
+                correlativo.fecha_actualizacion = timezone.localdate()
                 correlativo.save()
                 mensaje = 'Correlativo actualizado exitosamente'
             else:
@@ -19742,7 +19754,7 @@ def guardar_correlativo(request):
                     termino=termino,
                     alias=alias,
                     responsable=responsable,
-                    fecha_actualizacion=timezone.now().date()
+                    fecha_actualizacion=timezone.localdate()
                 )
                 mensaje = 'Correlativo creado exitosamente'
             
@@ -19824,7 +19836,7 @@ def renovar_correlativo(request):
         # Actualizar correlativo
         correlativo.inicio = nuevo_inicio
         correlativo.termino = nuevo_termino
-        correlativo.fecha_actualizacion = timezone.now().date()
+        correlativo.fecha_actualizacion = timezone.localdate()
         correlativo.save()
         
         return JsonResponse({
@@ -19900,6 +19912,54 @@ def historial_correlativo(request, correlativo_id):
             'success': False,
             'message': f'Error al obtener historial: {str(e)}'
         })
+
+
+@login_required
+@require_POST
+def eliminar_correlativo(request, correlativo_id):
+    """
+    Elimina un correlativo. Por seguridad bloquea la eliminación cuando
+    el correlativo ya registra consumo (inicio > 1), salvo que el usuario
+    confirme explícitamente mediante el parámetro ``forzar=true``.
+    """
+    try:
+        correlativo = get_object_or_404(Correlativo, id=correlativo_id)
+
+        forzar = str(request.POST.get('forzar', '')).lower() in ('1', 'true', 'yes', 'si', 's')
+        consumidos = max(0, correlativo.inicio - 1)
+
+        if consumidos > 0 and not forzar:
+            return JsonResponse({
+                'success': False,
+                'requiere_confirmacion': True,
+                'message': (
+                    f'Este correlativo ya registra {consumidos} documento(s) emitido(s). '
+                    f'Confirma la eliminación para continuar.'
+                ),
+                'consumidos': consumidos,
+                'tipo_dte': correlativo.tipo_dte,
+                'sucursal': correlativo.sucursal.alias,
+            }, status=409)
+
+        info = {
+            'id': correlativo.id,
+            'tipo_dte': correlativo.tipo_dte,
+            'sucursal': correlativo.sucursal.alias,
+            'consumidos': consumidos,
+        }
+        correlativo.delete()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Correlativo {info["tipo_dte"]} de {info["sucursal"]} eliminado correctamente',
+            'correlativo': info,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al eliminar correlativo: {str(e)}'
+        }, status=500)
 
 
 # ========== MÓDULO DE REPORTE DE EXISTENCIAS ==========
@@ -20405,7 +20465,7 @@ def exportar_existencias_excel(request):
         # Título
         ws_resumen.cell(row=1, column=1).value = "RESUMEN DE EXISTENCIAS"
         ws_resumen.cell(row=1, column=1).font = Font(bold=True, size=14)
-        ws_resumen.cell(row=2, column=1).value = f"Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        ws_resumen.cell(row=2, column=1).value = f"Generado el {timezone.localtime().strftime('%d/%m/%Y %H:%M')}"
         
         # Métricas generales
         total_productos = productos_talla.count()
@@ -20463,7 +20523,7 @@ def exportar_existencias_excel(request):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = timezone.localtime().strftime('%Y%m%d_%H%M%S')
         response['Content-Disposition'] = f'attachment; filename="reporte_existencias_{timestamp}.xlsx"'
         
         wb.save(response)
@@ -20689,7 +20749,7 @@ def obtener_dtes_pendientes_recibir(request):
         # Lista de DTEs (máximo 20)
         lista_dtes = []
         for dte in dtes_query[:20]:
-            hoy = timezone.now().date()
+            hoy = timezone.localdate()
             dias_desde_emision = (hoy - dte.fecha_emision).days if dte.fecha_emision else 0
             
             lista_dtes.append({
@@ -20822,7 +20882,7 @@ def obtener_dtes_pendientes_regularizar(request):
         # Lista de DTEs (máximo 20)
         lista_dtes = []
         for dte in dtes_query[:20]:
-            hoy = timezone.now().date()
+            hoy = timezone.localdate()
             dias_desde_recepcion = (hoy - dte.fecha_recepcion).days if dte.fecha_recepcion else 0
             
             # Obtener destino del traspaso

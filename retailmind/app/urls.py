@@ -237,6 +237,7 @@ from .views_edicion_productos import (
     eliminar_variacion,
     obtener_producto_desde_talla,
     excluir_analitica_masivo,
+    listar_productos_excluidos,
     obtener_impacto_recategorizacion,
     actualizar_productos_masivo,
     preview_edicion_masiva,
@@ -472,6 +473,7 @@ urlpatterns = [
     path('productos/variacion/historial/<int:variacion_id>/', obtener_historial_movimientos, name='obtener_historial_movimientos'),
     path('productos/variacion/eliminar/<int:variacion_id>/', eliminar_variacion, name='eliminar_variacion'),
     path('productos/excluir-analitica-masivo/', excluir_analitica_masivo, name='excluir_analitica_masivo'),
+    path('productos/listar-excluidos/', listar_productos_excluidos, name='listar_productos_excluidos'),
     path('productos/impacto-recategorizacion/<int:producto_id>/', obtener_impacto_recategorizacion, name='obtener_impacto_recategorizacion'),
     path('productos/actualizar-masivo/', actualizar_productos_masivo, name='actualizar_productos_masivo'),
     path('productos/preview-edicion-masiva/', preview_edicion_masiva, name='preview_edicion_masiva'),
@@ -712,6 +714,7 @@ urlpatterns = [
     path('correlativos/obtener/<int:correlativo_id>/', views.obtener_correlativo, name='obtener_correlativo'),
     path('correlativos/renovar/', views.renovar_correlativo, name='renovar_correlativo'),
     path('correlativos/historial/<int:correlativo_id>/', views.historial_correlativo, name='historial_correlativo'),
+    path('correlativos/eliminar/<int:correlativo_id>/', views.eliminar_correlativo, name='eliminar_correlativo'),
     path('correlativos/faltantes/', views.obtener_correlativos_faltantes, name='obtener_correlativos_faltantes'),
     path('correlativos/crear-faltantes/', views.crear_correlativos_faltantes, name='crear_correlativos_faltantes'),
     

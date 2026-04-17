@@ -274,7 +274,7 @@ class Command(BaseCommand):
                 fecha_venc = _add_months(fecha, 3)
             else:
                 fecha_dt = timezone.now()
-                fecha_venc = _add_months(timezone.now().date(), 3)
+                fecha_venc = _add_months(timezone.localdate(), 3)
 
             # --- Buscar o crear Cliente ---
             cliente_id = clientes_by_rut.get(rut_norm) if rut_norm else None

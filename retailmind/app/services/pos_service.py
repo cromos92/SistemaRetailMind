@@ -646,7 +646,7 @@ class POSIntegrationService:
         conectadas = configuraciones.filter(estado_conexion='CONECTADO').count()
         
         # Transacciones del día
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         inicio_dia = timezone.datetime.combine(hoy, timezone.datetime.min.time())
         fin_dia = timezone.datetime.combine(hoy, timezone.datetime.max.time())
         

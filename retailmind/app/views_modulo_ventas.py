@@ -1404,7 +1404,7 @@ def dashboard_stats(request):
 
         # Fecha de hoy con timezone aware
         from datetime import datetime, time
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         inicio_dia = timezone.make_aware(datetime.combine(hoy, time.min))
         fin_dia = timezone.make_aware(datetime.combine(hoy, time.max))
 
@@ -3240,8 +3240,8 @@ def registrar_pagos_ticket(request, correlativo):
                         responsable=request.user.username,
                         observaciones=f'Venta ticket #{ticket.correlativo} - Consumo manual (FIFO no disponible)',
                         referencia_externa=referencia,
-                        fecha=timezone.now().date(),
-                        hora=timezone.now().time()
+                        fecha=timezone.localdate(),
+                        hora=timezone.localtime().time()
                     )
                     # Actualizar stock manualmente
                     tp.ProductoTalla.stock -= tp.stock
@@ -3265,8 +3265,8 @@ def registrar_pagos_ticket(request, correlativo):
                         responsable=request.user.username,
                         observaciones=f'Venta ticket #{ticket.correlativo} - Movimiento de registro (FIFO parcial)',
                         referencia_externa=referencia,
-                        fecha=timezone.now().date(),
-                        hora=timezone.now().time()
+                        fecha=timezone.localdate(),
+                        hora=timezone.localtime().time()
                     )
                     print(f"✓ Movimiento de registro creado sin descuento adicional")
     elif ticket_se_pago and ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
@@ -4143,8 +4143,8 @@ def convertir_ticket_a_factura(request):
                 estado_pago='PAGADO',
                 estado_dte='EMITIDO',
                 responsable=request.user.username,
-                fecha_emision=data.get('fecha_emision', timezone.now().date()),
-                fecha_vencimiento=data.get('fecha_emision', timezone.now().date()),
+                fecha_emision=data.get('fecha_emision', timezone.localdate()),
+                fecha_vencimiento=data.get('fecha_emision', timezone.localdate()),
                 diasCredito=0,
                 bultos=1,
                 unidades_productos=ticket.ticket_productos.aggregate(
@@ -5223,7 +5223,7 @@ def listar_cuadraturas(request):
             arqueos = arqueos.filter(fecha_arqueo=fecha_obj)
         else:
             # Por defecto, mostrar TODO el mes actual
-            hoy = timezone.now().date()
+            hoy = timezone.localdate()
             primer_dia_mes = hoy.replace(day=1)
             arqueos = arqueos.filter(
                 fecha_arqueo__gte=primer_dia_mes,
@@ -6713,7 +6713,7 @@ def listar_arqueos(request):
         print(f"📅 Filtros recibidos: fecha_desde={fecha_desde}, fecha_hasta={fecha_hasta}, estado={estado}")
         
         # ========== CALCULAR INDICADORES MENSUALES ==========
-        hoy = date.today()
+        hoy = timezone.localdate()
         primer_dia_mes = date(hoy.year, hoy.month, 1)
         ultimo_dia_mes = date(hoy.year, hoy.month, monthrange(hoy.year, hoy.month)[1])
         
@@ -6992,7 +6992,7 @@ def crear_arqueo(request):
         # Validar que la fecha no sea futura y esté dentro del rango permitido por rol
         from datetime import datetime, date as dt_date
         fecha_obj = datetime.strptime(fecha_arqueo, '%Y-%m-%d').date()
-        hoy = dt_date.today()
+        hoy = dt_timezone.localdate()
 
         if fecha_obj > hoy:
             return JsonResponse({
@@ -8050,7 +8050,7 @@ def reabrir_arqueo(request):
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
 
         # Verificar permisos y tolerancia de días
-        dias_desde_arqueo = (dt_date.today() - fecha_obj).days
+        dias_desde_arqueo = (dt_timezone.localdate() - fecha_obj).days
 
         if rol_usuario == 'administrador':
             param = ParametroGlobal.objects.filter(nombre='DIAS_TOLERANCIA_REAPERTURA_ADMIN').first()
@@ -10004,7 +10004,7 @@ def crear_cambio_devolucion(request):
             fecha_base_plazo = ticket_original.fecha
 
         fecha_limite = fecha_base_plazo + timedelta(days=30)
-        fuera_de_plazo = timezone.now().date() > fecha_limite
+        fuera_de_plazo = timezone.localdate() > fecha_limite
         
         # Permitir cambios fuera de plazo SOLO con autorización de supervisor
         supervisor_username = data.get('supervisor_username', '').strip()
@@ -10017,7 +10017,7 @@ def crear_cambio_devolucion(request):
         dias_fuera = 0
 
         if fuera_de_plazo:
-            dias_fuera = (timezone.now().date() - fecha_limite).days
+            dias_fuera = (timezone.localdate() - fecha_limite).days
 
             if not supervisor_password:
                 return JsonResponse({
@@ -10026,7 +10026,7 @@ def crear_cambio_devolucion(request):
                     'requiere_autorizacion': True,
                     'fecha_limite': fecha_limite.strftime('%d/%m/%Y'),
                     'fecha_compra': fecha_base_plazo.strftime('%d/%m/%Y'),
-                    'dias_transcurridos': (timezone.now().date() - fecha_base_plazo).days,
+                    'dias_transcurridos': (timezone.localdate() - fecha_base_plazo).days,
                     'dias_fuera_de_plazo': dias_fuera,
                 })
 
@@ -12165,7 +12165,7 @@ def buscar_documento_cambio(request):
             # Crear o buscar ticket de referencia para el DTE
             from datetime import timedelta
             fecha_limite = dte.fecha_emision + timedelta(days=30)
-            dentro_del_plazo = timezone.now().date() <= fecha_limite
+            dentro_del_plazo = timezone.localdate() <= fecha_limite
             
             # Intentar encontrar el ticket ORIGINAL del POS (fuente con descuentos correctos)
             ticket_original_pos = None
@@ -12347,7 +12347,7 @@ def buscar_documento_cambio(request):
                     'cliente_rut': dte.receptor.rut if dte.receptor else '',
                     'fecha_limite_cambio': fecha_limite.strftime('%d/%m/%Y'),
                     'dentro_del_plazo': dentro_del_plazo,
-                    'dias_transcurridos': (timezone.now().date() - dte.fecha_emision).days,
+                    'dias_transcurridos': (timezone.localdate() - dte.fecha_emision).days,
                     'productos': productos_data,
                     'productos_disponibles': productos_disponibles_count,
                     'puede_cambiar': productos_disponibles_count > 0,
@@ -12476,8 +12476,8 @@ def buscar_documento_cambio(request):
                 })
 
             from datetime import timedelta
-            fecha_limite = ticket.fecha + timedelta(days=30) if ticket.fecha else timezone.now().date() + timedelta(days=30)
-            dentro_del_plazo = timezone.now().date() <= fecha_limite
+            fecha_limite = ticket.fecha + timedelta(days=30) if ticket.fecha else timezone.localdate() + timedelta(days=30)
+            dentro_del_plazo = timezone.localdate() <= fecha_limite
 
             # Obtener productos disponibles
             # Filtrar precio > 0 para excluir ítems de devolución (precio negativo) de cambios anteriores
@@ -12549,7 +12549,7 @@ def buscar_documento_cambio(request):
                     'cliente_rut': ticket.cliente_rut or '',
                     'fecha_limite_cambio': fecha_limite.strftime('%d/%m/%Y'),
                     'dentro_del_plazo': dentro_del_plazo,
-                    'dias_transcurridos': (timezone.now().date() - ticket.fecha).days,
+                    'dias_transcurridos': (timezone.localdate() - ticket.fecha).days,
                     'productos': productos_data,
                     'productos_disponibles': productos_disponibles_count,
                     'cambios_anteriores': cambios_anteriores,
@@ -12636,7 +12636,7 @@ def buscar_ticket_para_cambio_response(ticket, request):
     # Verificar plazo
     from datetime import timedelta
     fecha_limite = ticket.fecha + timedelta(days=30)
-    dentro_del_plazo = timezone.now().date() <= fecha_limite
+    dentro_del_plazo = timezone.localdate() <= fecha_limite
     
     # Obtener productos del ticket
     # ✅ CORREGIDO: Mostrar TODOS los productos, incluyendo los ya cambiados
@@ -12715,7 +12715,7 @@ def buscar_ticket_para_cambio_response(ticket, request):
         'observaciones': ticket.observaciones or '',
         'fecha_limite_cambio': fecha_limite.strftime('%d/%m/%Y'),
         'dentro_del_plazo': dentro_del_plazo,
-        'dias_transcurridos': (timezone.now().date() - ticket.fecha).days,
+        'dias_transcurridos': (timezone.localdate() - ticket.fecha).days,
         'productos': productos_data,
         'productos_disponibles': productos_disponibles_count,
         'cambios_anteriores': cambios_anteriores,
@@ -13026,7 +13026,7 @@ def obtener_indicadores_globales_ventas(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             try:
@@ -13213,7 +13213,7 @@ def obtener_ventas_por_vendedor(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             try:
@@ -13362,7 +13362,7 @@ def obtener_ventas_por_sucursal(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             try:
@@ -13434,7 +13434,7 @@ def obtener_ventas_por_metodo_pago(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             try:
@@ -13522,7 +13522,7 @@ def obtener_analisis_cambios_devoluciones(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -13655,7 +13655,7 @@ def obtener_analisis_fraude_cambios(request):
             fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
             fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
         else:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
 
         vendedores = detectar_vendedores_alto_retorno(sucursal_id, fecha_inicio, fecha_fin)
@@ -13710,7 +13710,7 @@ def obtener_analisis_cambios_avanzado(request):
             fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
             fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
         else:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
 
         analisis = obtener_analisis_avanzado(sucursal_id, fecha_inicio, fecha_fin)
@@ -14053,7 +14053,7 @@ def obtener_estado_cuadraturas(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -14144,7 +14144,7 @@ def obtener_productos_mas_vendidos(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             try:
@@ -14242,7 +14242,7 @@ def obtener_tendencias_ventas(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             try:
@@ -14315,7 +14315,7 @@ def obtener_indicadores_avanzados_ventas(request):
         estado = request.GET.get('estado', '')
 
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -14420,7 +14420,7 @@ def obtener_estado_operacional_ventas(request):
         sucursal_id = request.GET.get('sucursal_id')
 
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -14624,7 +14624,7 @@ def exportar_dashboard_ventas_excel(request):
         
         # Validar fechas
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = timezone.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -14900,7 +14900,7 @@ def generar_nc_devolucion(request):
     # Determinar tipo SII del documento original para la referencia
     tipo_sii_original = 39  # boleta por defecto
     folio_original = ''
-    fecha_original = date.today().strftime('%Y-%m-%d')
+    fecha_original = timezone.localdate().strftime('%Y-%m-%d')
 
     if dte_original:
         if 'FACTURA' in dte_original.tipo_documento:
@@ -14929,8 +14929,8 @@ def generar_nc_devolucion(request):
         monto_neto=monto_neto,
         monto_con_iva=monto_con_iva,
         descuento=0,
-        fecha_emision=date.today(),
-        fecha_vencimiento=date.today(),
+        fecha_emision=timezone.localdate(),
+        fecha_vencimiento=timezone.localdate(),
         diasCredito=0,
         bultos=0,
         unidades_productos=sum(d.cantidad_original for d in detalles if d.cantidad_original > 0),
@@ -14939,7 +14939,7 @@ def generar_nc_devolucion(request):
         tipo_transaccion='DEVOLUCION',
         responsable=request.user.username,
         sucursal=cambio.sucursal,
-        hora=timezone.now().time(),
+        hora=timezone.localtime().time(),
         es_nota_credito=True,
         documento_afectado=dte_original,
         motivo_nc=f"Devolución {cambio.get_tipo_operacion_display()} - {cambio.numero_operacion}. Motivo: {cambio.get_motivo_principal_display()}",

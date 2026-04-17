@@ -653,17 +653,15 @@ class CambioDevolucion(models.Model):
     @property
     def dias_desde_venta(self):
         """Días transcurridos desde la venta original"""
-        from django.utils import timezone
         if self.ticket_original:
-            delta = timezone.now().date() - self.ticket_original.fecha
+            delta = timezone.localdate() - self.ticket_original.fecha
             return delta.days
         return 0
     
     @property
     def dentro_del_plazo(self):
         """Verifica si está dentro del plazo para cambios"""
-        from django.utils import timezone
-        return timezone.now().date() <= self.fecha_limite_cambio
+        return timezone.localdate() <= self.fecha_limite_cambio
     
     @property
     def puede_ejecutar(self):

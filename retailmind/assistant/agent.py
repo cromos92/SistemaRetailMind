@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from django.conf import settings
+from django.utils import timezone
 
 # Anthropic SDK
 try:
@@ -59,7 +60,7 @@ class AssistantAgent:
             session_id: ID de sesión para mantener contexto
         """
         self.user = user
-        self.session_id = session_id or f"session_{user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        self.session_id = session_id or f"session_{user.id}_{timezone.localtime().strftime('%Y%m%d%H%M%S')}"
         
         # Inicializar tools
         self.tools = AssistantTools(user)

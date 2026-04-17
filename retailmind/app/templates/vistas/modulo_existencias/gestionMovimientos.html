@@ -1527,9 +1527,24 @@ $(document).ready(function() {
     cargarProductosKardexAgrupado();
     
     // Eventos de filtros para movimientos
-    $('#filtroFechaInicio, #filtroFechaFin, #filtroTipo').on('change', function() {
+    $('#filtroTipo').on('change', function() {
         currentPageMovimientos = 1;
         cargarMovimientos();
+    });
+
+    // Tempus Dominus v6 dispara 'change.td' como CustomEvent nativo (no lo capta jQuery .on('change'))
+    ['filtroFechaInicio', 'filtroFechaFin'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change.td', function() {
+            currentPageMovimientos = 1;
+            cargarMovimientos();
+        });
+        // Fallback para cuando el usuario escribe la fecha manualmente
+        el.addEventListener('change', function() {
+            currentPageMovimientos = 1;
+            cargarMovimientos();
+        });
     });
     
     $('#filtroConcepto, #filtroArticulo, #filtroResponsable').on('input', function() {
@@ -1568,8 +1583,15 @@ $(document).ready(function() {
         cargarKardex(1);
     });
     
-    $('#selectProductoKardex, #filtroFechaInicioKardex, #filtroFechaFinKardex').on('change', function() {
+    $('#selectProductoKardex').on('change', function() {
         cargarKardex(1);
+    });
+
+    ['filtroFechaInicioKardex', 'filtroFechaFinKardex'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change.td', function() { cargarKardex(1); });
+        el.addEventListener('change', function() { cargarKardex(1); });
     });
     
     // Paginación Kardex
@@ -1592,8 +1614,15 @@ $(document).ready(function() {
         cargarKardexAgrupado(1);
     });
     
-    $('#selectProductoKardexAgrupado, #filtroFechaInicioKardexAgrupado, #filtroFechaFinKardexAgrupado').on('change', function() {
+    $('#selectProductoKardexAgrupado').on('change', function() {
         cargarKardexAgrupado(1);
+    });
+
+    ['filtroFechaInicioKardexAgrupado', 'filtroFechaFinKardexAgrupado'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change.td', function() { cargarKardexAgrupado(1); });
+        el.addEventListener('change', function() { cargarKardexAgrupado(1); });
     });
     
     // Paginación Kardex Agrupado

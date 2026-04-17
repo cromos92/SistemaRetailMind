@@ -722,7 +722,7 @@ def exportar_empresas(request):
     
     # Crear respuesta CSV
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
-    response['Content-Disposition'] = f'attachment; filename="empresas_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    response['Content-Disposition'] = f'attachment; filename="empresas_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.csv"'
     
     writer = csv.writer(response)
     
@@ -767,7 +767,7 @@ def exportar_empresas_con_sucursales(request):
     
     # Crear respuesta CSV
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
-    response['Content-Disposition'] = f'attachment; filename="empresas_con_sucursales_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    response['Content-Disposition'] = f'attachment; filename="empresas_con_sucursales_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.csv"'
     
     writer = csv.writer(response)
     
@@ -997,7 +997,7 @@ def dashboard_empresas(request):
     ).order_by('tipo_empresa')
     
     # Empresas creadas en los últimos 30 días
-    fecha_limite = timezone.now().date() - timedelta(days=30)
+    fecha_limite = timezone.localdate() - timedelta(days=30)
     empresas_recientes = Empresa.objects.filter(
         created_at__date__gte=fecha_limite
     ).count()

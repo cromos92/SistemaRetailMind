@@ -613,6 +613,67 @@ def ajustar_stock(request, variacion_id):
         }, status=500)
 
 
+# ========== LISTAR PRODUCTOS EXCLUIDOS DE ANALÍTICA ==========
+
+@require_GET
+@login_required
+def listar_productos_excluidos(request):
+    """
+    Devuelve todos los productos con `excluir_de_analitica=True`,
+    agrupados por artículo para evitar duplicados entre sucursales.
+
+    Parámetros opcionales:
+      - q: texto de búsqueda (coincide con articulo, descripcion o SKU).
+    """
+    try:
+        q = (request.GET.get('q') or '').strip()
+
+        qs = Producto.objects.filter(excluir_de_analitica=True).select_related(
+            'sucursal', 'categoria', 'atributo1', 'atributo2', 'atributo3'
+        )
+
+        if q:
+            filtro = Q(articulo__icontains=q) | Q(descripcion__icontains=q)
+            if q.isdigit():
+                filtro |= Q(producto_talla__sku=int(q))
+            qs = qs.filter(filtro).distinct()
+
+        agrupados = {}
+        for prod in qs.order_by('articulo', 'sucursal__alias'):
+            key = prod.articulo
+            if key not in agrupados:
+                agrupados[key] = {
+                    'articulo': prod.articulo,
+                    'descripcion': prod.descripcion or '',
+                    'categoria': prod.categoria.nombre if prod.categoria else '',
+                    'marca': prod.atributo1.valor if prod.atributo1 else '',
+                    'color': prod.atributo2.valor if prod.atributo2 else '',
+                    'genero': prod.atributo3.valor if prod.atributo3 else '',
+                    'precioventa': prod.precioventa,
+                    'producto_ids': [],
+                    'sucursales': [],
+                }
+            agrupados[key]['producto_ids'].append(prod.id)
+            if prod.sucursal:
+                alias = prod.sucursal.alias
+                if alias not in agrupados[key]['sucursales']:
+                    agrupados[key]['sucursales'].append(alias)
+
+        data = sorted(agrupados.values(), key=lambda x: x['articulo'].lower())
+
+        return JsonResponse({
+            'success': True,
+            'total': len(data),
+            'productos': data,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al listar excluidos: {str(e)}'
+        }, status=500)
+
+
 # ========== EXCLUIR/INCLUIR MASIVAMENTE DE ANALÍTICA POR SUCURSAL ==========
 
 @require_POST

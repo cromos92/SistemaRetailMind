@@ -522,7 +522,7 @@ def api_prediccion_aprobar_sugerencia(request):
             id__in=ids, aprobada=False,
         ).update(
             aprobada=True,
-            fecha_aprobacion=date.today(),
+            fecha_aprobacion=timezone.localdate(),
             aprobada_por=request.user.username,
         )
         return JsonResponse({'aprobadas': updated})
@@ -572,7 +572,7 @@ def api_prediccion_graficos(request):
     q_prod_alerta = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
 
     from datetime import timedelta as _td
-    fecha_12sem = date.today() - _td(weeks=12)
+    fecha_12sem = timezone.localdate() - _td(weeks=12)
     ventas_sem = (
         Movimientos_Producto.objects.filter(
             q_prod,
@@ -725,7 +725,7 @@ def _prediccion_default_temporada_anio():
         n=Count('id')).order_by('-n').first()
     if row:
         return row['temporada'], row['anio']
-    return 'verano', date.today().year
+    return 'verano', timezone.localdate().year
 
 
 def _resolver_categoria_nombre(categoria_param):

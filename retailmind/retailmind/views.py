@@ -43,7 +43,7 @@ def _obtener_codigo_2fa(usuario):
     modo_pin = getattr(settings, 'PIN_2FA_MODE', 'session')
     if modo_pin == 'daily':
         if usuario.codigo_2fa and usuario.fecha_codigo_2fa:
-            if usuario.fecha_codigo_2fa.date() == timezone.now().date():
+            if usuario.fecha_codigo_2fa.date() == timezone.localdate():
                 return usuario.codigo_2fa
 
     return usuario.generar_codigo_2fa()

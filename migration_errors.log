@@ -1,5 +1,12 @@
 === LOG DE ERRORES - MIGRACIÓN OPTIMIZADA ===
-Fecha: 2026-04-16 16:58:51.106148
+Fecha: 2026-04-17 09:31:20.804714
 DB Destino: retail
 ======================================================================
 
+[2026-04-17 09:33:28] SKU no encontrado (error #1000): 4424076 alias:EDEL
+[2026-04-17 09:33:30] SKU no encontrado (error #2000): 4765636 alias:EDEL
+
+======================================================================
+RESUMEN DE ERRORES (2 total):
+         1x  SKU no encontrado (error #1000)
+         1x  SKU no encontrado (error #2000)

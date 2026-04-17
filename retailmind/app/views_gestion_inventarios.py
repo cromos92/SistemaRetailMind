@@ -2024,8 +2024,8 @@ def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsabl
         observaciones=observaciones or '',
         referencia_externa=referencia_externa or '',
         estado='COMPLETADO',
-        fecha=timezone.now().date(),
-        hora=timezone.now().time()
+        fecha=timezone.localdate(),
+        hora=timezone.localtime().time()
     )
     
     return movimiento

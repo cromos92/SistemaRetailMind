@@ -498,7 +498,7 @@ def exportar_clientes(request):
     
     # Crear respuesta CSV
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
-    response['Content-Disposition'] = f'attachment; filename="clientes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    response['Content-Disposition'] = f'attachment; filename="clientes_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.csv"'
     
     writer = csv.writer(response)
     
@@ -548,7 +548,7 @@ def dashboard_clientes(request):
     ).order_by('tipo_cliente')
     
     # Clientes creados en los últimos 30 días
-    fecha_limite = timezone.now().date() - timedelta(days=30)
+    fecha_limite = timezone.localdate() - timedelta(days=30)
     clientes_recientes = Cliente.objects.filter(
         created_at__date__gte=fecha_limite
     ).count()
@@ -612,7 +612,7 @@ def reporte_clientes_empresa(request, empresa_id):
     ).exclude(genero='').order_by('genero')
     
     # Clientes recientes (últimos 30 días)
-    fecha_limite = timezone.now().date() - timedelta(days=30)
+    fecha_limite = timezone.localdate() - timedelta(days=30)
     clientes_recientes = clientes.filter(
         created_at__date__gte=fecha_limite
     ).count()

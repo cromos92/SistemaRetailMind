@@ -3361,15 +3361,25 @@
                     <div class="collapse mb-3" id="panelAnaliticaCollapse">
                         <div class="border rounded-3 p-3" style="background:#f8f9fa;">
 
-                            <!-- Explicación de qué significa "excluir de analítica" -->
-                            <div class="alert alert-info py-2 px-3 mb-3 d-flex align-items-start gap-2" style="font-size:.82rem;">
-                                <i class="bi bi-info-circle fs-6 mt-1"></i>
-                                <div>
-                                    <strong>¿Qué es "excluir de analítica"?</strong>
-                                    Los productos excluidos <u>siguen vendiéndose y comprándose normalmente</u>,
-                                    pero <strong>no se contabilizan en dashboards, reportes ni KPIs</strong>.
-                                    Útil para muestras, obsequios o productos de prueba que no deben afectar tus métricas.
+                            <!-- Explicación + acceso directo a excluidos -->
+                            <div class="d-flex align-items-start gap-2 mb-3 flex-wrap">
+                                <div class="alert alert-info py-2 px-3 mb-0 d-flex align-items-start gap-2 flex-grow-1" style="font-size:.82rem; min-width: 260px;">
+                                    <i class="bi bi-info-circle fs-6 mt-1"></i>
+                                    <div>
+                                        <strong>¿Qué es "excluir de analítica"?</strong>
+                                        Los productos excluidos <u>siguen vendiéndose y comprándose normalmente</u>,
+                                        pero <strong>no se contabilizan en dashboards, reportes ni KPIs</strong>.
+                                        Útil para muestras, obsequios o productos de prueba que no deben afectar tus métricas.
+                                    </div>
                                 </div>
+                                <button type="button" class="btn btn-warning d-flex align-items-center gap-2"
+                                        id="btnAbrirModalExcluidos"
+                                        data-bs-toggle="modal" data-bs-target="#modalProductosExcluidos"
+                                        style="font-size:.82rem; white-space: nowrap;">
+                                    <i class="bi bi-eye-slash"></i>
+                                    <span>Ver excluidos</span>
+                                    <span class="badge bg-white text-warning border border-warning" id="badgeCountExcluidos" style="display:none;">0</span>
+                                </button>
                             </div>
 
                             <!-- Dos formas de excluir/incluir (las únicas disponibles) -->
@@ -11268,6 +11278,434 @@ $('#btnConfirmarActualizacion').on('click', function() {
 
 <!-- ========== INCLUIR MODALES DE EDICIÓN DE PRODUCTOS ========== -->
 {% include 'vistas/modulo_existencias/modales_edicion_producto.html' %}
+
+<!-- ========== MODAL: PRODUCTOS EXCLUIDOS DE ANALÍTICA ========== -->
+<div class="modal fade" id="modalProductosExcluidos" tabindex="-1" aria-labelledby="modalProductosExcluidosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%); border-bottom: 1px solid #fed7aa;">
+                <div class="d-flex align-items-center gap-2">
+                    <div style="width:38px; height:38px; border-radius:10px; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(180, 83, 9, .2);">
+                        <i class="bi bi-eye-slash fs-5 text-warning"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="modalProductosExcluidosLabel">Productos excluidos de analítica</h5>
+                        <div class="small text-muted" id="excluidosResumen">Cargando...</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="alert alert-info py-2 px-3 mb-3 small d-flex align-items-start gap-2">
+                    <i class="bi bi-info-circle mt-1"></i>
+                    <div>
+                        Estos productos <strong>no aparecen en dashboards, reportes ni KPIs</strong>.
+                        Púlsalos <b>"Incluir"</b> para volver a contabilizarlos (aplica en todas las bodegas).
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+                    <div class="input-group" style="max-width: 360px;">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="inputBuscarExcluido"
+                               placeholder="Buscar por nombre, descripción o SKU..." autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" id="btnLimpiarBuscarExcluido" title="Limpiar">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnRefrescarExcluidos" title="Refrescar lista">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refrescar
+                    </button>
+                    <div class="ms-auto d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="btnIncluirTodosExcluidos" disabled>
+                            <i class="bi bi-check2-all me-1"></i>Incluir todos los visibles
+                        </button>
+                    </div>
+                </div>
+
+                <div id="listaExcluidosContainer">
+                    <div class="text-center py-5 text-muted" id="excluidosLoading">
+                        <div class="spinner-border text-warning mb-2" role="status"></div>
+                        <div>Cargando productos excluidos...</div>
+                    </div>
+                    <div id="excluidosEmpty" class="text-center py-5" style="display:none;">
+                        <div style="width:72px;height:72px;margin:0 auto 12px;background:#ecfdf5;border-radius:18px;display:flex;align-items:center;justify-content:center;">
+                            <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+                        </div>
+                        <h6 class="fw-semibold mb-1">No hay productos excluidos</h6>
+                        <p class="text-muted small mb-0">Todos tus productos se contabilizan en analítica.</p>
+                    </div>
+                    <div id="excluidosNoMatch" class="text-center py-4 text-muted" style="display:none;">
+                        <i class="bi bi-search fs-3 d-block mb-2"></i>
+                        <div>No se encontraron productos con ese término.</div>
+                    </div>
+                    <div id="excluidosList" class="d-flex flex-column gap-2"></div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.excluido-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+    transition: background .15s ease;
+}
+.excluido-row:hover { background: #fafafa; }
+.excluido-row .info { flex: 1 1 auto; min-width: 0; }
+.excluido-row .info .nombre {
+    font-weight: 600;
+    color: #1A1A2E;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.excluido-row .info .meta {
+    font-size: .78rem;
+    color: #6c757d;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+.excluido-row .info .meta .tag {
+    background: #f3f4f6;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: .72rem;
+}
+.excluido-row .sucursales-tag {
+    background: #eef2ff;
+    color: #4338ca;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 500;
+}
+.excluido-row .btn-incluir { flex-shrink: 0; min-width: 110px; }
+
+@media (max-width: 576px) {
+    .excluido-row { flex-direction: column; align-items: stretch; }
+    .excluido-row .btn-incluir { width: 100%; min-width: 0; }
+    #modalProductosExcluidos .modal-body { padding: 0.85rem; }
+    #modalProductosExcluidos .d-flex.gap-2.mb-3.flex-wrap > * { flex: 1 1 100%; }
+    #modalProductosExcluidos .input-group { max-width: 100% !important; }
+}
+</style>
+
+<script>
+(function () {
+    const modalEl       = document.getElementById('modalProductosExcluidos');
+    if (!modalEl) return;
+
+    const inputBuscar   = document.getElementById('inputBuscarExcluido');
+    const btnLimpiar    = document.getElementById('btnLimpiarBuscarExcluido');
+    const btnRefrescar  = document.getElementById('btnRefrescarExcluidos');
+    const btnIncluirAll = document.getElementById('btnIncluirTodosExcluidos');
+    const listEl        = document.getElementById('excluidosList');
+    const loadingEl     = document.getElementById('excluidosLoading');
+    const emptyEl       = document.getElementById('excluidosEmpty');
+    const noMatchEl     = document.getElementById('excluidosNoMatch');
+    const resumenEl     = document.getElementById('excluidosResumen');
+    const badgeCount    = document.getElementById('badgeCountExcluidos');
+
+    const URL_LISTAR = "{% url 'listar_productos_excluidos' %}";
+    const URL_INCLUIR = "{% url 'excluir_analitica_masivo' %}";
+    const csrfToken = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+
+    let cacheProductos = [];
+    let searchTimer = null;
+
+    function mostrarEstado(estado) {
+        loadingEl.style.display  = (estado === 'loading') ? 'block' : 'none';
+        emptyEl.style.display    = (estado === 'empty')   ? 'block' : 'none';
+        noMatchEl.style.display  = (estado === 'nomatch') ? 'block' : 'none';
+        listEl.style.display     = (estado === 'list')    ? 'flex'  : 'none';
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function actualizarBadgeHeader(total) {
+        if (!badgeCount) return;
+        if (total > 0) {
+            badgeCount.textContent = total;
+            badgeCount.style.display = '';
+        } else {
+            badgeCount.style.display = 'none';
+        }
+    }
+
+    function renderLista(productos) {
+        if (!productos || productos.length === 0) {
+            if (cacheProductos.length === 0) mostrarEstado('empty');
+            else mostrarEstado('nomatch');
+            btnIncluirAll.disabled = true;
+            return;
+        }
+
+        const html = productos.map(p => {
+            const sucursalesTag = (p.sucursales && p.sucursales.length)
+                ? `<span class="sucursales-tag" title="${esc(p.sucursales.join(', '))}"><i class="bi bi-shop me-1"></i>${p.sucursales.length} bodega${p.sucursales.length > 1 ? 's' : ''}</span>`
+                : '';
+            const metaChips = [
+                p.categoria ? `<span class="tag"><i class="bi bi-tag me-1"></i>${esc(p.categoria)}</span>` : '',
+                p.marca     ? `<span class="tag">${esc(p.marca)}</span>` : '',
+                p.color     ? `<span class="tag">${esc(p.color)}</span>` : '',
+                p.genero    ? `<span class="tag">${esc(p.genero)}</span>` : '',
+            ].filter(Boolean).join('');
+
+            return `
+                <div class="excluido-row" data-ids='${esc(JSON.stringify(p.producto_ids))}' data-articulo="${esc(p.articulo)}">
+                    <div class="info">
+                        <div class="nombre">${esc(p.articulo)}</div>
+                        <div class="meta">
+                            ${metaChips}
+                            ${sucursalesTag}
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success btn-incluir">
+                        <i class="bi bi-check2-circle me-1"></i>Incluir
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        listEl.innerHTML = html;
+        btnIncluirAll.disabled = false;
+        mostrarEstado('list');
+    }
+
+    function filtrarLocal(q) {
+        q = (q || '').trim().toLowerCase();
+        if (!q) return cacheProductos;
+        return cacheProductos.filter(p => {
+            return (p.articulo || '').toLowerCase().includes(q) ||
+                   (p.descripcion || '').toLowerCase().includes(q) ||
+                   (p.categoria || '').toLowerCase().includes(q) ||
+                   (p.marca || '').toLowerCase().includes(q);
+        });
+    }
+
+    function cargarExcluidos(q) {
+        mostrarEstado('loading');
+        btnIncluirAll.disabled = true;
+
+        const url = q ? (URL_LISTAR + '?q=' + encodeURIComponent(q)) : URL_LISTAR;
+
+        fetch(url, {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                resumenEl.textContent = 'Error al cargar';
+                mostrarEstado('empty');
+                return;
+            }
+            cacheProductos = data.productos || [];
+            const total = data.total || 0;
+            resumenEl.textContent = total === 0
+                ? 'Ningún producto excluido'
+                : `${total} ${total === 1 ? 'producto excluido' : 'productos excluidos'}`;
+            actualizarBadgeHeader(total);
+            renderLista(cacheProductos);
+        })
+        .catch(() => {
+            resumenEl.textContent = 'Error de conexión';
+            mostrarEstado('empty');
+        });
+    }
+
+    function incluirProductos(ids, nombreOpcional) {
+        if (!ids || ids.length === 0) return Promise.resolve();
+        return fetch(URL_INCLUIR, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                producto_ids: ids,
+                excluir: false,
+                propagar: true
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) throw new Error(data.error || 'Error al incluir');
+            return data;
+        });
+    }
+
+    // Abrir: cargar al mostrar
+    modalEl.addEventListener('shown.bs.modal', function () {
+        inputBuscar.value = '';
+        cargarExcluidos('');
+        setTimeout(() => inputBuscar.focus(), 100);
+    });
+
+    // Búsqueda con debounce (filtra local si ya hay cache)
+    inputBuscar.addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        const q = inputBuscar.value;
+        searchTimer = setTimeout(() => {
+            const filtrados = filtrarLocal(q);
+            renderLista(filtrados);
+        }, 150);
+    });
+    btnLimpiar.addEventListener('click', function () {
+        inputBuscar.value = '';
+        renderLista(cacheProductos);
+        inputBuscar.focus();
+    });
+    btnRefrescar.addEventListener('click', function () {
+        cargarExcluidos(inputBuscar.value.trim());
+    });
+
+    // Incluir uno (delegación)
+    listEl.addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-incluir');
+        if (!btn) return;
+        const row = btn.closest('.excluido-row');
+        if (!row) return;
+
+        let ids = [];
+        try { ids = JSON.parse(row.dataset.ids || '[]'); } catch (_) {}
+        const articulo = row.dataset.articulo || '';
+        if (!ids.length) return;
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i>';
+
+        incluirProductos(ids, articulo)
+            .then(() => {
+                row.style.transition = 'opacity .2s, transform .2s';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(12px)';
+                setTimeout(() => {
+                    row.remove();
+                    cacheProductos = cacheProductos.filter(p => p.articulo !== articulo);
+                    actualizarBadgeHeader(cacheProductos.length);
+                    resumenEl.textContent = cacheProductos.length === 0
+                        ? 'Ningún producto excluido'
+                        : `${cacheProductos.length} producto${cacheProductos.length > 1 ? 's' : ''} excluido${cacheProductos.length > 1 ? 's' : ''}`;
+                    if (cacheProductos.length === 0) mostrarEstado('empty');
+                    // Refrescar la grilla principal si existe
+                    if (typeof window.actualizarListaProductos === 'function') {
+                        try { window.actualizarListaProductos(); } catch (_) {}
+                    } else if (typeof window.buscarProductos === 'function') {
+                        try { window.buscarProductos(); } catch (_) {}
+                    }
+                }, 220);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        toast: true, position: 'top-end', icon: 'success',
+                        title: articulo ? `"${articulo}" incluido en analítica` : 'Producto incluido',
+                        showConfirmButton: false, timer: 2200, timerProgressBar: true
+                    });
+                }
+            })
+            .catch((err) => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Incluir';
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Error', err.message || 'No se pudo incluir el producto', 'error');
+                }
+            });
+    });
+
+    // Incluir todos los visibles (filtrados)
+    btnIncluirAll.addEventListener('click', function () {
+        const visibles = Array.from(listEl.querySelectorAll('.excluido-row'));
+        if (!visibles.length) return;
+
+        const allIds = [];
+        visibles.forEach(r => {
+            try { allIds.push(...JSON.parse(r.dataset.ids || '[]')); } catch (_) {}
+        });
+        if (!allIds.length) return;
+
+        const msg = `Se incluirán <b>${visibles.length}</b> producto${visibles.length > 1 ? 's' : ''} en analítica (todas las bodegas). ¿Confirmar?`;
+
+        const confirmar = (typeof Swal !== 'undefined')
+            ? Swal.fire({
+                title: 'Incluir todos los visibles',
+                html: msg,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<i class="bi bi-check2-all me-1"></i>Sí, incluir todos',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0ab39c'
+              }).then(r => r.isConfirmed)
+            : Promise.resolve(confirm('¿Incluir ' + visibles.length + ' producto(s) en analítica?'));
+
+        confirmar.then(ok => {
+            if (!ok) return;
+            btnIncluirAll.disabled = true;
+            btnIncluirAll.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Incluyendo...';
+            incluirProductos(allIds)
+                .then(() => {
+                    cargarExcluidos(inputBuscar.value.trim());
+                    if (typeof window.actualizarListaProductos === 'function') {
+                        try { window.actualizarListaProductos(); } catch (_) {}
+                    } else if (typeof window.buscarProductos === 'function') {
+                        try { window.buscarProductos(); } catch (_) {}
+                    }
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            toast: true, position: 'top-end', icon: 'success',
+                            title: `${visibles.length} producto(s) incluido(s)`,
+                            showConfirmButton: false, timer: 2500, timerProgressBar: true
+                        });
+                    }
+                    btnIncluirAll.innerHTML = '<i class="bi bi-check2-all me-1"></i>Incluir todos los visibles';
+                })
+                .catch((err) => {
+                    btnIncluirAll.disabled = false;
+                    btnIncluirAll.innerHTML = '<i class="bi bi-check2-all me-1"></i>Incluir todos los visibles';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', err.message || 'No se pudieron incluir los productos', 'error');
+                    }
+                });
+        });
+    });
+
+    // Precargar contador inicial (no bloquear UI): solo count
+    function precargarContador() {
+        fetch(URL_LISTAR, {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success) actualizarBadgeHeader(data.total || 0);
+        })
+        .catch(() => {});
+    }
+    precargarContador();
+})();
+</script>
 
 <!-- ========== SCRIPT DE EDICIÓN DE PRODUCTOS ========== -->
 <script src="{% static 'js/edicion_productos.js' %}?v=202501231500"></script>

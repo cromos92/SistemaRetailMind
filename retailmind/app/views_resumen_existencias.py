@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET
 from decimal import Decimal
 from datetime import datetime, date
 from django.db.models import Sum, Q
+from django.utils import timezone
 import json
 
 from .models import Sucursal, Producto, Producto_Talla, Movimientos_Producto, Categoria, EmpresaUser
@@ -45,7 +46,7 @@ def calcular_stock_historico(talla, sucursal_id, fecha_corte):
     stock_actual = talla.stock
     
     # Si es la fecha de hoy, retornar stock actual
-    if fecha_corte >= date.today():
+    if fecha_corte >= timezone.localdate():
         return max(0, stock_actual)
     
     # Calcular movimientos DESPUÉS de la fecha de corte
@@ -95,7 +96,7 @@ def obtener_resumen_existencias(request):
         if fecha_corte_str:
             try:
                 fecha_corte = datetime.strptime(fecha_corte_str, '%Y-%m-%d').date()
-                es_historico = fecha_corte < date.today()
+                es_historico = fecha_corte < timezone.localdate()
             except ValueError:
                 pass
         

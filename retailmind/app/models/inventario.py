@@ -11,11 +11,11 @@ from .dte import Dte
 
 
 def django_date_today():
-    return timezone.now().date()
+    return timezone.localdate()
 
 
 def django_time_now():
-    return timezone.now().time()
+    return timezone.localtime().time()
 
 
 class Traspaso(models.Model):
@@ -218,11 +218,11 @@ class Movimientos_Producto(models.Model):
         # Auto-asignar fecha y hora si no están presentes
         if not self.fecha:
             from django.utils import timezone
-            self.fecha = timezone.now().date()
+            self.fecha = timezone.localdate()
         
         if not self.hora:
             from django.utils import timezone
-            self.hora = timezone.now().time()
+            self.hora = timezone.localtime().time()
         
         super().save(*args, **kwargs)
 
@@ -494,8 +494,7 @@ class TomaInventario(models.Model):
     @classmethod
     def generar_numero_inventario(cls, sucursal):
         """Genera un número único de inventario"""
-        from datetime import datetime
-        fecha = datetime.now().strftime('%Y%m%d')
+        fecha = timezone.localdate().strftime('%Y%m%d')
         count = cls.objects.filter(
             numero_inventario__startswith=f"INV-{sucursal.id}-{fecha}"
         ).count() + 1

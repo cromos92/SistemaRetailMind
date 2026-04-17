@@ -8,7 +8,8 @@ from django.http import JsonResponse, Http404, HttpResponseBadRequest, HttpRespo
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Max
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Max, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 from django.db.models.functions import TruncMonth, TruncWeek, TruncDate
 from django.core.paginator import Paginator
 from django.utils import timezone
@@ -50,7 +51,7 @@ def reporte_despachos_por_proveedor(request):
         
         # Fechas por defecto (último mes)
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -400,7 +401,7 @@ def reporte_ventas_por_periodo(request):
         
         # Fechas por defecto (último mes)
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -494,7 +495,7 @@ def reporte_productos_mas_vendidos(request):
         limite        = int(request.GET.get('limite', 20))
 
         if not fecha_inicio or not fecha_fin:
-            fecha_fin    = timezone.now().date()
+            fecha_fin    = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -584,7 +585,7 @@ def reporte_vendedores_performance(request):
         
         # Fechas por defecto (último mes)
         if not fecha_inicio or not fecha_fin:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_inicio = fecha_fin - timedelta(days=30)
         else:
             fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -772,7 +773,7 @@ def reporte_rotacion_inventario(request):
         sucursal_id  = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
         categoria_id = request.GET.get('categoria_id')
 
-        fecha_inicio = timezone.now().date() - timedelta(days=periodo_dias)
+        fecha_inicio = timezone.localdate() - timedelta(days=periodo_dias)
 
         # Base: productos de la sucursal activa
         queryset = Producto.objects.select_related(
@@ -1016,7 +1017,7 @@ def obtener_resumen_reportes(request):
     """Obtener resumen general para el dashboard de reportes"""
     try:
         # Período de análisis (último mes)
-        fecha_fin = timezone.now().date()
+        fecha_fin = timezone.localdate()
         fecha_inicio = fecha_fin - timedelta(days=30)
         
         # Métricas de ventas
@@ -1188,6 +1189,8 @@ def obtener_ventas_por_vendedor_reporte(request):
                 ventas_acumuladas[vid]['documentos'] += item['total_documentos'] or 0
         
         # ========== DTEs (ventas a público: boletas + facturas a clientes externos) ==========
+        # Excluye: anulados, autoventas, centros de distribución,
+        # facturas exentas (servicios) y facturas sin receptor (servicios internos)
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio,
             fecha_emision__lte=fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin,
@@ -1197,6 +1200,13 @@ def obtener_ventas_por_vendedor_reporte(request):
         ).exclude(
             receptor__isnull=False,
             receptor_id=F('emisor_id')
+        ).exclude(
+            sucursal__tipo_sucursal='CENTRO_DISTRIBUCION'
+        ).exclude(
+            tipo_documento='FACTURA EXENTA'
+        ).exclude(
+            tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA'],
+            receptor__isnull=True,
         ).select_related('vendedor', 'sucursal')
 
         # Filtrar por sucursal según selección o permisos
@@ -1206,12 +1216,20 @@ def obtener_ventas_por_vendedor_reporte(request):
             queryset_dtes = queryset_dtes.filter(vendedor_id=vendedor_id)
 
         # Agrupar DTEs de VENTA (excluir NCs)
-        dtes_por_vendedor = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO').values(
+        # total_ventas = suma de pagos efectivos (cuadra con MySQL monto_pagado)
+        from app.models import Dte_Detalle_Pago as _DDP
+        pagos_subq = _DDP.objects.filter(dte=OuterRef('pk')).values('dte').annotate(
+            s=Sum('monto')).values('s')
+        queryset_dtes_anot = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO').annotate(
+            pagos_total=Coalesce(Subquery(pagos_subq, output_field=DecimalField(max_digits=12, decimal_places=2)), 0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+        )
+
+        dtes_por_vendedor = queryset_dtes_anot.values(
             'vendedor__id',
             'vendedor__nombre',
             'vendedor__codigo_vendedor'
         ).annotate(
-            total_ventas=Sum('monto_con_iva'),
+            total_ventas=Sum('pagos_total'),
             total_documentos=Count('id')
         )
 
@@ -1392,6 +1410,8 @@ def obtener_ventas_por_sucursal_reporte(request):
                 vendedores_por_sucursal[sid].add(vid)
         
         # ========== DTEs (ventas a público: boletas + facturas a clientes externos) ==========
+        # Excluye: anulados, autoventas (emisor=receptor), centros de distribución,
+        # facturas exentas (servicios) y facturas sin receptor (servicios internos)
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio,
             fecha_emision__lte=fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin,
@@ -1401,19 +1421,39 @@ def obtener_ventas_por_sucursal_reporte(request):
         ).exclude(
             receptor__isnull=False,
             receptor_id=F('emisor_id')
+        ).exclude(
+            sucursal__tipo_sucursal='CENTRO_DISTRIBUCION'
+        ).exclude(
+            tipo_documento='FACTURA EXENTA'
         ).select_related('sucursal', 'vendedor')
+
+        # Excluir facturas sin receptor (servicios/comisiones internas)
+        queryset_dtes = queryset_dtes.exclude(
+            tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA'],
+            receptor__isnull=True,
+        )
 
         # Filtrar por sucursal según selección o permisos
         queryset_dtes = filtrar_queryset_por_sucursal(queryset_dtes, request.user, request)
 
         # Agrupar DTEs de VENTA (excluir NCs)
+        # total_ventas = suma de pagos efectivos (cuadra con MySQL monto_pagado)
+        # Si no hay pagos, fallback a monto_con_iva - descuento
         queryset_ventas = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO')
-        dtes_por_sucursal = queryset_ventas.values(
+
+        from app.models import Dte_Detalle_Pago as _DDP
+        pagos_subq = _DDP.objects.filter(dte=OuterRef('pk')).values('dte').annotate(
+            s=Sum('monto')).values('s')
+        queryset_ventas_anot = queryset_ventas.annotate(
+            pagos_total=Coalesce(Subquery(pagos_subq, output_field=DecimalField(max_digits=12, decimal_places=2)), 0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+        )
+
+        dtes_por_sucursal = queryset_ventas_anot.values(
             'sucursal__id',
             'sucursal__alias',
             'sucursal__direccion'
         ).annotate(
-            total_ventas=Sum('monto_con_iva'),
+            total_ventas=Sum('pagos_total'),
             subtotal_ventas=Sum('monto_neto'),
             total_descuentos=Sum('descuento'),
             total_documentos=Count('id')
@@ -1875,7 +1915,7 @@ def obtener_documentos_emitidos(request):
         
         # Si no se proporcionan fechas, usar el día actual
         if not fecha_desde or not fecha_hasta:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_desde = fecha_fin
             fecha_hasta = fecha_fin
         else:
@@ -2192,7 +2232,7 @@ def exportar_documentos_emitidos_excel(request):
 
         # Si no se proporcionan fechas, usar el día actual
         if not fecha_desde or not fecha_hasta:
-            fecha_fin = timezone.now().date()
+            fecha_fin = timezone.localdate()
             fecha_desde = fecha_fin
             fecha_hasta = fecha_fin
         else:
@@ -2995,7 +3035,7 @@ def exportar_existencias_sucursal_excel(request):
         # Fila 2: Fecha
         ws.merge_cells('A2:M2')
         from datetime import date as _date
-        ws['A2'].value = f"Generado: {_date.today().strftime('%d/%m/%Y')}   |   Total registros: {resumen.get('total_productos', 0)}   |   Stock total: {resumen.get('stock_total', 0):,}"
+        ws['A2'].value = f"Generado: {timezone.localdate().strftime('%d/%m/%Y')}   |   Total registros: {resumen.get('total_productos', 0)}   |   Stock total: {resumen.get('stock_total', 0):,}"
         ws['A2'].font = Font(italic=True, size=10, color="444444")
         ws['A2'].alignment = Alignment(horizontal='center')
 
@@ -3114,7 +3154,7 @@ def exportar_existencias_sucursal_pdf(request):
         from datetime import date as _date
         elements.append(Paragraph(f"Reporte de Existencias — {nombre_sucursal}", title_style))
         elements.append(Paragraph(
-            f"Generado: {_date.today().strftime('%d/%m/%Y')}  |  "
+            f"Generado: {timezone.localdate().strftime('%d/%m/%Y')}  |  "
             f"Total SKUs: {resumen.get('total_productos', 0):,}  |  "
             f"Stock total: {resumen.get('stock_total', 0):,}  |  "
             f"Valor inventario: ${resumen.get('valor_inventario', 0):,.0f}",
@@ -3174,7 +3214,7 @@ def exportar_existencias_sucursal_pdf(request):
             canvas.saveState()
             canvas.setFont('Helvetica', 7)
             canvas.setFillColor(colors.grey)
-            canvas.drawString(1.5*cm, 1*cm, f"RetailMind — {nombre_sucursal} — {_date.today().strftime('%d/%m/%Y')}")
+            canvas.drawString(1.5*cm, 1*cm, f"RetailMind — {nombre_sucursal} — {timezone.localdate().strftime('%d/%m/%Y')}")
             canvas.drawRightString(landscape(A4)[0] - 1.5*cm, 1*cm, f"Página {doc.page}")
             canvas.restoreState()
 
@@ -3218,7 +3258,7 @@ def api_reporte_compras(request):
         )
         
         # Parámetros de filtro
-        anio = int(request.GET.get('anio', datetime.now().year))
+        anio = int(request.GET.get('anio', timezone.localdate().year))
         periodo = request.GET.get('periodo', 'anual')
         proveedor_id = request.GET.get('proveedor', '')
         temporada = request.GET.get('temporada', '')
@@ -3247,7 +3287,7 @@ def api_reporte_compras(request):
         # ── fin detección ─────────────────────────────────────────────────
         
         # Calcular rango de fechas según período
-        hoy = datetime.now()
+        hoy = timezone.localtime()
         if periodo == 'mes':
             fecha_inicio = hoy - timedelta(days=30)
         elif periodo == 'trimestre':
@@ -3929,19 +3969,19 @@ def calcular_estado_pagos_compras(anio, proveedor_id, temporada, modo_ctx=None):
     
     pendientes = dtes_query.filter(
         Q(estado_pago='PENDIENTE') | Q(estado_pago='Pendiente'),
-        fecha_vencimiento__gte=datetime.now().date()
+        fecha_vencimiento__gte=timezone.localdate()
     ).aggregate(total=Sum('monto_con_iva'))['total'] or 0
     
     vencidos = dtes_query.filter(
         Q(estado_pago='PENDIENTE') | Q(estado_pago='Pendiente'),
-        fecha_vencimiento__lt=datetime.now().date()
+        fecha_vencimiento__lt=timezone.localdate()
     ).aggregate(total=Sum('monto_con_iva'))['total'] or 0
     
     # Vencen esta semana
-    prox_semana = datetime.now().date() + timedelta(days=7)
+    prox_semana = timezone.localdate() + timedelta(days=7)
     vencen_semana = dtes_query.filter(
         Q(estado_pago='PENDIENTE') | Q(estado_pago='Pendiente'),
-        fecha_vencimiento__range=[datetime.now().date(), prox_semana]
+        fecha_vencimiento__range=[timezone.localdate(), prox_semana]
     ).aggregate(total=Sum('monto_con_iva'))['total'] or 0
     
     return {
@@ -3956,7 +3996,7 @@ def calcular_vencimientos_compras():
     """Calcula los vencimientos próximos agrupados por período"""
     from .models import Dte
     
-    hoy = datetime.now().date()
+    hoy = timezone.localdate()
     
     periodos = [
         {'nombre': 'Vencidos', 'desde': None, 'hasta': hoy - timedelta(days=1), 'dias': -1},
@@ -3998,7 +4038,7 @@ def obtener_pagos_pendientes_compras():
     """Obtiene la lista de pagos pendientes"""
     from .models import Dte
     
-    hoy = datetime.now().date()
+    hoy = timezone.localdate()
     
     dtes = Dte.objects.filter(
         tipo_transaccion='COMPRA'
@@ -4133,7 +4173,7 @@ def exportar_reporte_compras_excel(request):
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         
         # Obtener datos
-        anio = int(request.GET.get('anio', datetime.now().year))
+        anio = int(request.GET.get('anio', timezone.localdate().year))
         proveedor_id = request.GET.get('proveedor', '')
         temporada = request.GET.get('temporada', '')
         
@@ -4530,7 +4570,7 @@ def api_rendimiento_compras(request):
         return round((a - b) / abs(b) * 100, 1)
 
     try:
-        anio = int(request.GET.get('anio', datetime.now().year))
+        anio = int(request.GET.get('anio', timezone.localdate().year))
         sucursal_id = request.GET.get('sucursal', '') or None
         comparar = request.GET.get('comparar', '0') == '1'
 
@@ -4567,7 +4607,7 @@ def api_rendimiento_compras(request):
         ), key=lambda d: d.year, reverse=True)
         anios_disponibles = [d.year for d in anios_dte]
         # Asegurar que el año actual también aparezca
-        anio_actual = datetime.now().year
+        anio_actual = timezone.localdate().year
         if anio_actual not in anios_disponibles:
             anios_disponibles.insert(0, anio_actual)
 
@@ -5412,7 +5452,7 @@ def api_reporte_recepciones_detallado(request):
         sucursal_id = request.GET.get('sucursal_id')
 
         if not fecha_inicio or not fecha_fin:
-            fecha_fin_dt = timezone.now().date()
+            fecha_fin_dt = timezone.localdate()
             fecha_inicio_dt = fecha_fin_dt - timedelta(days=30)
         else:
             fecha_inicio_dt = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -5554,7 +5594,7 @@ def api_reporte_despachos_detallado(request):
         proveedor_id = request.GET.get('proveedor_id')
 
         if not fecha_inicio or not fecha_fin:
-            fecha_fin_dt = timezone.now().date()
+            fecha_fin_dt = timezone.localdate()
             fecha_inicio_dt = fecha_fin_dt - timedelta(days=30)
         else:
             fecha_inicio_dt = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
@@ -5655,7 +5695,7 @@ def ver_reporte_rendimiento_proveedor(request):
 def api_reporte_rendimiento_proveedor(request):
     """Metricas de rendimiento: comprados, recepcionados, vendidos a publico por proveedor."""
     try:
-        anio = int(request.GET.get('anio', datetime.now().year))
+        anio = int(request.GET.get('anio', timezone.localdate().year))
         proveedor_id = request.GET.get('proveedor_id')
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
@@ -5788,7 +5828,7 @@ def exportar_rendimiento_proveedor_excel(request):
             ws.column_dimensions[col[0].column_letter].width = min(max(len(str(c.value or '')) for c in col) + 3, 25)
 
         resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        resp['Content-Disposition'] = f'attachment; filename=rendimiento_proveedor_{request.GET.get("anio", datetime.now().year)}.xlsx'
+        resp['Content-Disposition'] = f'attachment; filename=rendimiento_proveedor_{request.GET.get("anio", timezone.localdate().year)}.xlsx'
         wb.save(resp)
         return resp
     except Exception as e:

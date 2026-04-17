@@ -388,7 +388,7 @@ class Command(BaseCommand):
 
     def safe_date(self, value):
         if value is None:
-            return timezone.now().date()
+            return timezone.localdate()
         if isinstance(value, datetime):
             return value.date()
         return value

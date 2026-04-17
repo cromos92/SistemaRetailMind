@@ -1,0 +1,48 @@
+---
+description: Manejo de fechas/horas en zona horaria de Chile (USE_TZ=True, TIME_ZONE=America/Santiago)
+globs: **/*.py
+alwaysApply: true
+---
+
+# Zona horaria — Chile
+
+El proyecto usa `USE_TZ=True` y `TIME_ZONE='America/Santiago'`. El servidor
+en producción corre en UTC, por eso **nunca** se debe sacar "hoy" / "ahora"
+desde llamadas naive ni desde `timezone.now().date()`.
+
+## Reglas
+
+| Necesito… | Usa | NO uses |
+|---|---|---|
+| Fecha de hoy en Chile | `timezone.localdate()` | `date.today()`, `datetime.now().date()`, `timezone.now().date()` |
+| Datetime "ahora" en Chile | `timezone.localtime()` | `datetime.now()`, `timezone.now()` (cuando luego sacas `.date()`/`.time()`) |
+| Hora actual en Chile | `timezone.localtime().time()` | `timezone.now().time()`, `datetime.now().time()` |
+| Asignar a `DateTimeField` | `timezone.now()` (aware UTC) ✅ | `datetime.now()` (naive) |
+| Medir duración de un proceso | `datetime.now()` (start) y `datetime.now() - start` | — |
+| Año/mes/día actual | `timezone.localdate().year` | `datetime.now().year` |
+
+```python
+# ❌ MAL — devuelve fecha UTC; en la noche chilena salta al día siguiente
+from datetime import date, datetime
+hoy = date.today()
+ahora = datetime.now()
+hoy = timezone.now().date()
+hora = timezone.now().time()
+
+# ✅ BIEN
+from django.utils import timezone
+hoy = timezone.localdate()
+ahora = timezone.localtime()
+hora = timezone.localtime().time()
+```
+
+## Atajo opcional
+
+Para legibilidad existe `app/utils_tz.py` con `hoy()`, `ahora_local()`,
+`hora_actual()`. No es obligatorio, pero si se usa debe ser consistente.
+
+## Excepción
+
+`datetime.now()` está OK exclusivamente para **medir duraciones** dentro de
+un mismo proceso (start/end de un comando, perfilado), porque solo se resta
+consigo mismo y no se persiste como dato de negocio.

@@ -102,7 +102,7 @@ class AssistantTools:
             return {"error": "No tienes una sucursal asignada"}
         
         # Parsear fechas
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         if fecha_desde:
             try:
                 fecha_desde = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
@@ -253,7 +253,7 @@ class AssistantTools:
         if not self.sucursal:
             return {"error": "No tienes una sucursal asignada"}
         
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         
         # Determinar rango de fechas
         if periodo == "hoy":
@@ -355,7 +355,7 @@ class AssistantTools:
         if not self.sucursal:
             return {"error": "No tienes una sucursal asignada"}
         
-        fecha_desde = timezone.now().date() - timedelta(days=dias)
+        fecha_desde = timezone.localdate() - timedelta(days=dias)
         
         # Productos más vendidos
         productos = Ticket_Productos.objects.filter(
@@ -566,7 +566,7 @@ class AssistantTools:
         if not self.sucursal:
             return {"error": "No tienes una sucursal asignada"}
         
-        fecha_desde = timezone.now().date() - timedelta(days=dias)
+        fecha_desde = timezone.localdate() - timedelta(days=dias)
         
         queryset = Movimientos_Producto.objects.filter(
             fecha__gte=fecha_desde
@@ -640,7 +640,7 @@ class AssistantTools:
         lista = []
         vencidos = 0
         por_vencer = 0
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         
         for dte in dtes:
             dias_vencimiento = (dte.fecha_vencimiento - hoy).days if dte.fecha_vencimiento else 0
@@ -685,7 +685,7 @@ class AssistantTools:
         if not self.empresa:
             return {"error": "No tienes una empresa asignada"}
         
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         
         dtes = Dte.objects.filter(
             receptor=self.empresa,
@@ -852,9 +852,9 @@ class AssistantTools:
             try:
                 fecha_consulta = datetime.strptime(fecha, "%Y-%m-%d").date()
             except:
-                fecha_consulta = timezone.now().date()
+                fecha_consulta = timezone.localdate()
         else:
-            fecha_consulta = timezone.now().date()
+            fecha_consulta = timezone.localdate()
         
         try:
             arqueo = ArqueoCaja.objects.get(
@@ -1195,7 +1195,7 @@ class AssistantTools:
         if not self.sucursal:
             return {"error": "No tienes una sucursal asignada"}
         
-        fecha_desde = timezone.now().date() - timedelta(days=dias)
+        fecha_desde = timezone.localdate() - timedelta(days=dias)
         
         queryset = CambioDevolucion.objects.filter(
             sucursal=self.sucursal,
@@ -1297,9 +1297,9 @@ class AssistantTools:
             try:
                 fecha_consulta = datetime.strptime(fecha, "%Y-%m-%d").date()
             except:
-                fecha_consulta = timezone.now().date()
+                fecha_consulta = timezone.localdate()
         else:
-            fecha_consulta = timezone.now().date()
+            fecha_consulta = timezone.localdate()
         
         # Ventas del día
         tickets = Ticket.objects.filter(
@@ -1373,7 +1373,7 @@ class AssistantTools:
         if not self.sucursal:
             return {"error": "No tienes una sucursal asignada"}
         
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         fecha_desde = hoy - timedelta(days=dias-1)
         
         # Ventas por día

@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# Zona horaria del contenedor (defensa en profundidad: si algún punto del
+# código todavía usa datetime.now()/date.today() naive, retorne hora Chile).
+ENV TZ=America/Santiago
+
 WORKDIR /app
 
 # Install system dependencies

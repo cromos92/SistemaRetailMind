@@ -285,7 +285,7 @@ class Correlativo(models.Model):
             raise ValueError(f"Correlativo agotado para {self.tipo_dte} en {self.sucursal.alias}")
         numero_actual = self.inicio
         self.inicio += 1
-        self.fecha_actualizacion = timezone.now().date()
+        self.fecha_actualizacion = timezone.localdate()
         self.save()
         return numero_actual
 

@@ -13,7 +13,7 @@ class AnalisisFraudeCaja:
     def analizar_cajero(self, usuario_id, sucursal_id=None, meses=3):
         from app.models.caja import ArqueoCaja
 
-        fecha_desde = date.today() - timedelta(days=meses * 30)
+        fecha_desde = timezone.localdate() - timedelta(days=meses * 30)
         qs = ArqueoCaja.objects.filter(
             usuario_responsable_id=usuario_id,
             fecha_arqueo__gte=fecha_desde,
@@ -49,7 +49,7 @@ class AnalisisFraudeCaja:
         from django.contrib.auth import get_user_model
         Usuario = get_user_model()
 
-        fecha_desde = date.today() - timedelta(days=meses * 30)
+        fecha_desde = timezone.localdate() - timedelta(days=meses * 30)
 
         # Obtener cajeros que han hecho arqueos en esta sucursal
         cajeros_ids = ArqueoCaja.objects.filter(

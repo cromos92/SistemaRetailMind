@@ -722,7 +722,7 @@ class Command(BaseCommand):
     def safe_date_only(self, value):
         """Extrae solo la fecha (date) de un datetime"""
         if value is None:
-            return timezone.now().date()
+            return timezone.localdate()
         # Si ya es un date, devolverlo
         if isinstance(value, date) and not isinstance(value, datetime):
             return value
@@ -734,17 +734,17 @@ class Command(BaseCommand):
             try:
                 from django.utils.dateparse import parse_date
                 parsed = parse_date(value)
-                return parsed if parsed else timezone.now().date()
+                return parsed if parsed else timezone.localdate()
             except:
-                return timezone.now().date()
-        return timezone.now().date()
+                return timezone.localdate()
+        return timezone.localdate()
 
     def safe_time_only(self, value):
         """Extrae solo la hora (time) de un datetime"""
         from datetime import timedelta
         
         if value is None:
-            return timezone.now().time()
+            return timezone.localtime().time()
         # Si ya es un time, devolverlo
         if isinstance(value, time) and not isinstance(value, datetime):
             return value
@@ -763,14 +763,14 @@ class Command(BaseCommand):
             try:
                 from django.utils.dateparse import parse_time
                 parsed = parse_time(value)
-                return parsed if parsed else timezone.now().time()
+                return parsed if parsed else timezone.localtime().time()
             except:
-                return timezone.now().time()
+                return timezone.localtime().time()
         # Último intento: convertir a string y parsear
         try:
             return time.fromisoformat(str(value))
         except:
-            return timezone.now().time()
+            return timezone.localtime().time()
 
     # ========================================================================
     # FAST MODE - Optimizaciones PostgreSQL

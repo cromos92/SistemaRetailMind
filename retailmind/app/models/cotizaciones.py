@@ -202,8 +202,7 @@ class Cotizacion_Empresa(models.Model):
         
         # Actualizar estado según validez
         if self.fecha_validez and not self.facturada and self.estado == self.ESTADO_VIGENTE:
-            from datetime import date
-            if self.fecha_validez < date.today():
+            if self.fecha_validez < timezone.localdate():
                 self.estado = self.ESTADO_VENCIDA
         
         super().save(*args, **kwargs)
@@ -211,28 +210,25 @@ class Cotizacion_Empresa(models.Model):
     @property
     def esta_vigente(self):
         """Verifica si la cotización está vigente"""
-        from datetime import date
         return (
             self.estado == self.ESTADO_VIGENTE and 
-            self.fecha_validez >= date.today() and 
+            self.fecha_validez >= timezone.localdate() and 
             not self.facturada
         )
     
     @property
     def dias_restantes(self):
         """Calcula los días restantes de validez"""
-        from datetime import date
         if self.fecha_validez:
-            delta = self.fecha_validez - date.today()
+            delta = self.fecha_validez - timezone.localdate()
             return delta.days
         return 0
     
     @property
     def porcentaje_vigencia(self):
         """Calcula el porcentaje de vigencia restante"""
-        from datetime import date
         if self.dias_validez > 0:
-            dias_transcurridos = (date.today() - self.fecha_emision).days
+            dias_transcurridos = (timezone.localdate() - self.fecha_emision).days
             return max(0, min(100, ((self.dias_validez - dias_transcurridos) / self.dias_validez) * 100))
         return 0
     

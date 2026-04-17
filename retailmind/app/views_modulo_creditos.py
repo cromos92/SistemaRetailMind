@@ -1618,7 +1618,7 @@ def usar_credito_en_venta(request):
             pago = PagoCreditoTrabajador.objects.create(
                 credito=credito,
                 monto_pago=monto_usado,
-                fecha_pago=timezone.now().date(),
+                fecha_pago=timezone.localdate(),
                 metodo_pago='CREDITO_TRABAJADOR',
                 referencia_pago=referencia,
                 sucursal_cobro=sucursal_cobro,

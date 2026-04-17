@@ -1452,7 +1452,7 @@ def obtener_datos_dashboard_fifo(request):
         )['total'] or 0
         
         # Lotes próximos a vencer (30 días)
-        fecha_limite = timezone.now().date() + timezone.timedelta(days=30)
+        fecha_limite = timezone.localdate() + timezone.timedelta(days=30)
         lotes_por_vencer = LoteProducto.objects.filter(
             activo=True,
             cantidad_disponible__gt=0,
@@ -1584,7 +1584,7 @@ def reporte_fifo_general(request):
                 'costo_unitario': float(lote.costo_unitario),
                 'valor_total': float(lote.cantidad_disponible * lote.costo_unitario),
                 'fecha_creacion': lote.fecha_creacion.strftime('%d/%m/%Y'),
-                'dias_inventario': (timezone.now().date() - lote.fecha_creacion.date()).days
+                'dias_inventario': (timezone.localdate() - lote.fecha_creacion.date()).days
             })
         
         return JsonResponse({

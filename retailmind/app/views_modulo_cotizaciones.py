@@ -415,7 +415,7 @@ def crear_cotizacion(request):
         fecha_emision_str = data.get('fecha_emision')
         dias_validez = int(data.get('dias_validez', 30))
         
-        fecha_emision = datetime.strptime(fecha_emision_str, '%Y-%m-%d').date() if fecha_emision_str else date.today()
+        fecha_emision = datetime.strptime(fecha_emision_str, '%Y-%m-%d').date() if fecha_emision_str else timezone.localdate()
         fecha_validez = fecha_emision + timedelta(days=dias_validez)
         
         # Crear cotización
@@ -1095,8 +1095,8 @@ def asignar_sku_pendiente(request):
                 responsable=request.user.get_full_name() or request.user.username,
                 referencia_externa=cotizacion.numero_cotizacion,
                 observaciones=f'Despacho diferido cotización {cotizacion.numero_cotizacion} - {detalle.descripcion[:80]}',
-                fecha=timezone.now().date(),
-                hora=timezone.now().time(),
+                fecha=timezone.localdate(),
+                hora=timezone.localtime().time(),
             )
 
             # 5. Registrar historial
@@ -1326,7 +1326,7 @@ def generar_numero_cotizacion(sucursal):
     """
     Genera un número único de cotización
     """
-    fecha_actual = date.today()
+    fecha_actual = timezone.localdate()
     prefijo = f"COT-{fecha_actual.year}{fecha_actual.month:02d}"
     
     # Buscar el último número de cotización con este prefijo
@@ -1808,7 +1808,7 @@ def enviar_cotizacion_correo(request, cotizacion_id):
             """
         
         # Calcular días restantes de validez
-        dias_restantes = (cotizacion.fecha_validez - date.today()).days
+        dias_restantes = (cotizacion.fecha_validez - timezone.localdate()).days
         validez_color = "#22c55e" if dias_restantes >= 0 else "#ef4444"
         validez_texto = f"{dias_restantes} días restantes" if dias_restantes >= 0 else f"Vencida hace {abs(dias_restantes)} días"
         

@@ -489,7 +489,7 @@ class SyncStatusDetailView(APIView):
         from django.db.models import Count
         from datetime import timedelta
         
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         
         tickets_hoy = Ticket.objects.filter(
             sucursal=sucursal,

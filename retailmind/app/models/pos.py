@@ -217,10 +217,10 @@ class TransaccionPOS(models.Model):
         # Generar ticket_pos si no existe
         if not self.ticket_pos:
             from django.utils import timezone
-            timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+            timestamp = timezone.localtime().strftime('%Y%m%d%H%M%S')
             ultimo_numero = TransaccionPOS.objects.filter(
                 configuracion_pos=self.configuracion_pos,
-                fecha_inicio__date=timezone.now().date()
+                fecha_inicio__date=timezone.localdate()
             ).count()
             self.ticket_pos = f"POS-{self.configuracion_pos.sucursal.id}-{timestamp}-{ultimo_numero + 1:03d}"
         

@@ -88,7 +88,7 @@ def registrar_ingreso_stock(sender, instance, created, **kwargs):
             temporada=producto.temporada,
             anio=producto.anio_temporada,
             defaults={
-                'fecha_primer_ingreso': instance.fecha or timezone.now().date(),
+                'fecha_primer_ingreso': instance.fecha or timezone.localdate(),
                 'stock_inicial': instance.cantidad,
                 'stock_total_ingresado': instance.cantidad,
             }

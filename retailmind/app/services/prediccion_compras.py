@@ -218,7 +218,7 @@ def calcular_clasificacion_abc_xyz(temporada=None, anio=None, sucursal_id=None):
     Solo considera productos de sucursales vendedoras/mixtas.
     """
     config = ConfiguracionPrediccion.get_config()
-    fecha_inicio = date.today() - timedelta(days=config.dias_historico_analisis)
+    fecha_inicio = timezone.localdate() - timedelta(days=config.dias_historico_analisis)
 
     filtros_mov = Q(
         concepto__in=CONCEPTOS_VENTA,
@@ -265,7 +265,7 @@ def calcular_clasificacion_abc_xyz(temporada=None, anio=None, sucursal_id=None):
         return 0
 
     temp = temporada or ''
-    yr = anio or date.today().year
+    yr = anio or timezone.localdate().year
 
     acumulado = 0
     clasificaciones = []
@@ -315,7 +315,7 @@ def calcular_clasificacion_abc_xyz(temporada=None, anio=None, sucursal_id=None):
         ).first()
         semanas_activo = 0
         if sit:
-            semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, date.today()))
+            semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, timezone.localdate()))
 
         demanda_corr, factor, censurada = corregir_demanda_censurada(producto, semanas_activo)
 
@@ -468,7 +468,7 @@ def calcular_velocidades_historicas():
         if not sit or not sit.stock_inicial:
             continue
 
-        semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, date.today()))
+        semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, timezone.localdate()))
         if semanas_activo < 1:
             continue
 
@@ -524,7 +524,7 @@ def calcular_velocidades_historicas():
 def calcular_curvas_talles():
     """Distribución % de ventas por talle para cada grupo (solo vendedoras)."""
     config = ConfiguracionPrediccion.get_config()
-    fecha_inicio = date.today() - timedelta(days=config.dias_historico_analisis)
+    fecha_inicio = timezone.localdate() - timedelta(days=config.dias_historico_analisis)
 
     ventas = Movimientos_Producto.objects.filter(
         concepto__in=CONCEPTOS_VENTA,
@@ -768,8 +768,8 @@ def calcular_predicciones_demanda(temporada=None, anio=None):
     """
     config = ConfiguracionPrediccion.get_config()
     temp = temporada or ''
-    yr = anio or date.today().year
-    fecha_inicio_hist = date.today() - timedelta(days=config.dias_historico_analisis)
+    yr = anio or timezone.localdate().year
+    fecha_inicio_hist = timezone.localdate() - timedelta(days=config.dias_historico_analisis)
 
     productos = Producto.objects.filter(
         temporada__isnull=False,
@@ -790,7 +790,7 @@ def calcular_predicciones_demanda(temporada=None, anio=None):
 
         semanas_activo = 0
         if sit and sit.fecha_primer_ingreso:
-            semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, date.today()))
+            semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, timezone.localdate()))
 
         semanas_restantes = max(1, semanas_temp - semanas_activo)
         demanda_corr = 0
@@ -1044,7 +1044,7 @@ def evaluar_alertas_velocidad(producto_ids=None):
 
     for sit in sits:
         producto = sit.producto
-        semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, date.today()))
+        semanas_activo = float(_semanas_entre(sit.fecha_primer_ingreso, timezone.localdate()))
 
         if semanas_activo < float(config.semanas_minimas_para_alerta):
             continue
@@ -1118,7 +1118,7 @@ def evaluar_alertas_velocidad(producto_ids=None):
         alertas.append(AlertaVelocidad(
             articulo=producto,
             temporada=producto.temporada or '',
-            anio=producto.anio_temporada or date.today().year,
+            anio=producto.anio_temporada or timezone.localdate().year,
             stock_inicial=sit.stock_inicial,
             ventas_acumuladas=ventas_acum,
             stock_restante=stock_restante,
@@ -1206,7 +1206,7 @@ def detectar_quiebres_talle(producto_ids=None):
         ).first()
         velocidad_total = 0
         if sit and sit.fecha_primer_ingreso:
-            semanas = float(_semanas_entre(sit.fecha_primer_ingreso, date.today()))
+            semanas = float(_semanas_entre(sit.fecha_primer_ingreso, timezone.localdate()))
             ventas_tot = _obtener_ventas_producto(producto)
             velocidad_total = ventas_tot / semanas if semanas > 0 else 0
 
@@ -1223,7 +1223,7 @@ def detectar_quiebres_talle(producto_ids=None):
         alertas.append(AlertaQuiebreTalle(
             articulo=producto,
             temporada=producto.temporada or '',
-            anio=producto.anio_temporada or date.today().year,
+            anio=producto.anio_temporada or timezone.localdate().year,
             talles_agotados=agotados,
             talles_con_stock=con_stock,
             talles_agotados_criticos=criticos,

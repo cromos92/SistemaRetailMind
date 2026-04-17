@@ -18,7 +18,7 @@ def detectar_vendedores_alto_retorno(sucursal_id=None, fecha_inicio=None, fecha_
     from app.models import CambioDevolucion, Ticket
 
     if not fecha_inicio:
-        fecha_fin = timezone.now().date()
+        fecha_fin = timezone.localdate()
         fecha_inicio = fecha_fin - timedelta(days=30)
 
     # Cambios por vendedor del ticket original
@@ -80,7 +80,7 @@ def detectar_productos_multiples_cambios(sucursal_id=None, fecha_inicio=None, fe
     from app.models import CambioDevolucionDetalle
 
     if not fecha_inicio:
-        fecha_fin = timezone.now().date()
+        fecha_fin = timezone.localdate()
         fecha_inicio = fecha_fin - timedelta(days=30)
 
     qs = CambioDevolucionDetalle.objects.filter(
@@ -125,7 +125,7 @@ def detectar_perdidas_no_apto(sucursal_id=None, fecha_inicio=None, fecha_fin=Non
     from app.models import CambioDevolucionDetalle
 
     if not fecha_inicio:
-        fecha_fin = timezone.now().date()
+        fecha_fin = timezone.localdate()
         fecha_inicio = fecha_fin - timedelta(days=30)
 
     qs = CambioDevolucionDetalle.objects.filter(
@@ -174,7 +174,7 @@ def detectar_cambios_fuera_plazo(sucursal_id=None, fecha_inicio=None, fecha_fin=
     from app.models import CambioDevolucion
 
     if not fecha_inicio:
-        fecha_fin = timezone.now().date()
+        fecha_fin = timezone.localdate()
         fecha_inicio = fecha_fin - timedelta(days=30)
 
     qs = CambioDevolucion.objects.filter(
@@ -228,7 +228,7 @@ def detectar_patrones_cross_branch(fecha_inicio=None, fecha_fin=None):
     from app.models import RegistroAutorizacion
 
     if not fecha_inicio:
-        fecha_fin = timezone.now().date()
+        fecha_fin = timezone.localdate()
         fecha_inicio = fecha_fin - timedelta(days=30)
 
     qs = RegistroAutorizacion.objects.filter(
@@ -322,7 +322,7 @@ def generar_score_riesgo(cambio):
         if det.producto_original and det.producto_original.ProductoTalla:
             repeticiones = CambioDevolucionDetalle.objects.filter(
                 producto_original__ProductoTalla=det.producto_original.ProductoTalla,
-                cambio_devolucion__fecha_solicitud__date__gte=timezone.now().date() - timedelta(days=90),
+                cambio_devolucion__fecha_solicitud__date__gte=timezone.localdate() - timedelta(days=90),
             ).values('cambio_devolucion').distinct().count()
             if repeticiones >= 3:
                 score += 15
@@ -331,7 +331,7 @@ def generar_score_riesgo(cambio):
     # Vendedor con alta tasa: +15
     if cambio.ticket_original and cambio.ticket_original.vendedor:
         vendedor_id = cambio.ticket_original.vendedor.id
-        fecha_30d = timezone.now().date() - timedelta(days=30)
+        fecha_30d = timezone.localdate() - timedelta(days=30)
         from app.models import Ticket
         cambios_vendedor = CambioDevolucion.objects.filter(
             ticket_original__vendedor_id=vendedor_id,
@@ -356,7 +356,7 @@ def obtener_analisis_avanzado(sucursal_id=None, fecha_inicio=None, fecha_fin=Non
     from app.models.ventas import MOTIVO_CAMBIO_CHOICES, TIPO_OPERACION_CAMBIO_CHOICES, ESTADO_CAMBIO_CHOICES
 
     if not fecha_inicio:
-        fecha_fin = timezone.now().date()
+        fecha_fin = timezone.localdate()
         fecha_inicio = fecha_fin - timedelta(days=30)
 
     # Base queryset

@@ -37,7 +37,7 @@ def chat_view(request):
     # Obtener o crear sesión
     session_id = request.session.get('assistant_session_id')
     if not session_id:
-        session_id = f"session_{request.user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        session_id = f"session_{request.user.id}_{timezone.localtime().strftime('%Y%m%d%H%M%S')}"
         request.session['assistant_session_id'] = session_id
     
     context = {
@@ -344,7 +344,7 @@ def api_new_conversation(request):
     """
     try:
         # Generar nuevo session_id
-        new_session_id = f"session_{request.user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        new_session_id = f"session_{request.user.id}_{timezone.localtime().strftime('%Y%m%d%H%M%S')}"
         
         # Limpiar sesión anterior del cache
         old_session_id = request.session.get('assistant_session_id')
@@ -396,7 +396,7 @@ def api_stats(request):
         
         # Estadísticas de los últimos 7 días
         from datetime import timedelta
-        hace_7_dias = timezone.now().date() - timedelta(days=7)
+        hace_7_dias = timezone.localdate() - timedelta(days=7)
         
         stats_semana = EstadisticasAsistente.objects.filter(
             fecha__gte=hace_7_dias

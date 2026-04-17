@@ -39,7 +39,7 @@ def _get_sucursal_empresa(request):
 
 
 def _parse_date_range(request):
-    hoy = timezone.now().date()
+    hoy = timezone.localdate()
     inicio = request.GET.get('fecha_inicio')
     fin = request.GET.get('fecha_fin')
     try:
@@ -560,7 +560,7 @@ def api_dashboard_despachos(request):
     for r in reg_pendientes:
         fecha_emi = r['dte__fecha_emision']
         if fecha_emi:
-            r['dias_pendiente'] = (timezone.now().date() - fecha_emi).days
+            r['dias_pendiente'] = (timezone.localdate() - fecha_emi).days
         else:
             r['dias_pendiente'] = 0
         r['dte__fecha_emision'] = str(fecha_emi) if fecha_emi else ''
@@ -605,7 +605,7 @@ def api_dashboard_despachos(request):
         'EN_REGULARIZACION': {'texto': 'Regularizar', 'url': '/app/regularizar-recepciones/'},
     }
 
-    hoy_incompletos = timezone.now().date()
+    hoy_incompletos = timezone.localdate()
     dtes_incompletos = []
     for row in dtes_pendientes_raw:
         estado = row['estado_dte']
@@ -631,7 +631,7 @@ def api_dashboard_despachos(request):
         )
         .order_by('fecha_emision')[:30]
     )
-    hoy = timezone.now().date()
+    hoy = timezone.localdate()
     for d in dtes_incompletos_detalle:
         fecha = d['fecha_emision']
         d['dias_pendiente'] = (hoy - fecha).days if fecha else 0

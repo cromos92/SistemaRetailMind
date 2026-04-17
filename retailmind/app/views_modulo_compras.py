@@ -472,7 +472,7 @@ def crearDteCompras(request):
                     numero_dte=numero_dte,
                     tipo_documento=tipo_documento,
                     tipo_transaccion='COMPRA',
-                    fecha_emision=data.get('fecha_emision', timezone.now().date()),
+                    fecha_emision=data.get('fecha_emision', timezone.localdate()),
                     emisor_id=emisor_id,
                     receptor_id=data.get('receptor_id'),
                     subtotal=subtotal,
@@ -969,7 +969,7 @@ def dashboard_compras_estrategico(request):
         from django.db.models.functions import TruncMonth
         
         # Parámetros de filtro
-        anio = int(request.GET.get('anio', datetime.now().year))
+        anio = int(request.GET.get('anio', timezone.localdate().year))
         temporada = request.GET.get('temporada', '')
         proveedor_id = request.GET.get('proveedor', '')
         responsable = request.GET.get('responsable', '')
@@ -1491,12 +1491,10 @@ def obtenerDetalleComprasPorParametros(request):
 def obtener_resumen_pendientes_anio(request):
     """Obtener resumen de DTEs pendientes del año actual con KPIs de vencimiento"""
     try:
-        from datetime import datetime, date
-        
         # Obtener año actual
-        ahora = datetime.now()
+        ahora = timezone.localtime()
         anio_actual = ahora.year
-        hoy = date.today()
+        hoy = timezone.localdate()
         empresa_actual_id = request.session.get('idEmpresaActual')
         
         # Query para DTEs de compra del año actual
@@ -2440,10 +2438,10 @@ def importar_dtes_csv(request):
                                     fecha_emision = datetime.strptime(fecha_emision_str, '%d-%m-%Y').date()
                                     print(f"✅ Fecha parseada (DD-MM-YYYY): {fecha_emision}")
                                 except:
-                                    fecha_emision = timezone.now().date()
+                                    fecha_emision = timezone.localdate()
                                     print(f"⚠️ Fecha no se pudo parsear, usando hoy: {fecha_emision}")
                     else:
-                        fecha_emision = timezone.now().date()
+                        fecha_emision = timezone.localdate()
                         print(f"⚠️ Sin fecha en CSV, usando hoy: {fecha_emision}")
                     
                     dias_credito_str = str(fila.get('dias_credito', '30') or '30').strip()
@@ -2817,13 +2815,13 @@ def dashboard_compras_mejorado_api(request):
         from django.db.models.functions import TruncMonth, ExtractMonth
         
         # Parámetros de filtro
-        anio = int(request.GET.get('anio', datetime.now().year))
+        anio = int(request.GET.get('anio', timezone.localdate().year))
         periodo = request.GET.get('periodo', 'anual')
         temporada = request.GET.get('temporada', '')
         proveedor_id = request.GET.get('proveedor', '')
         
         # Calcular rango de fechas según período
-        hoy = datetime.now()
+        hoy = timezone.localtime()
         if periodo == 'mes':
             fecha_inicio = hoy - timedelta(days=30)
         elif periodo == 'trimestre':

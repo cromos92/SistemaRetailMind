@@ -295,7 +295,7 @@ class EstadisticasAsistente(models.Model):
         """Actualiza las estadísticas del día actual"""
         from django.db.models import Avg, Count
         
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         
         # Obtener o crear registro de hoy
         stats, created = cls.objects.get_or_create(fecha=hoy)

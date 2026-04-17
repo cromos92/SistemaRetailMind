@@ -220,6 +220,16 @@
         color: var(--nexo-white);
     }
 
+    .btn-action-delete {
+        background-color: rgba(255, 77, 77, 0.1);
+        color: var(--nexo-error);
+    }
+
+    .btn-action-delete:hover {
+        background-color: var(--nexo-error);
+        color: var(--nexo-white);
+    }
+
     /* ========== BADGES ========== */
     .badge-nexo {
         padding: 0.35rem 0.75rem;
@@ -287,11 +297,11 @@
     }
 
     .table-nexo thead th {
-        padding: 1rem 0.75rem;
+        padding: 0.55rem 0.5rem;
         font-weight: 600;
-        font-size: 0.8125rem;
+        font-size: 0.7rem;
         text-transform: uppercase;
-        letter-spacing: 0.025em;
+        letter-spacing: 0.02em;
         border: none;
         white-space: nowrap;
     }
@@ -306,14 +316,57 @@
     }
 
     .table-nexo tbody td {
-        padding: 1rem 0.75rem;
+        padding: 0.55rem 0.5rem;
         vertical-align: middle;
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
         color: var(--nexo-gray-700);
+        line-height: 1.3;
     }
 
     .table-nexo .fw-semibold {
         color: var(--nexo-gray-900);
+    }
+
+    /* Celda de consumo compacta: rango + progreso en una sola columna */
+    .consumo-cell {
+        min-width: 170px;
+    }
+
+    .consumo-cell .consumo-numeros {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        margin-bottom: 2px;
+    }
+
+    .consumo-cell .consumo-numeros strong {
+        color: var(--nexo-gray-900);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .consumo-cell .consumo-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.6875rem;
+        color: var(--nexo-gray-500);
+        margin-top: 2px;
+    }
+
+    .consumo-cell .progress-nexo {
+        height: 5px;
+    }
+
+    /* Botones de acción más compactos */
+    .acciones-cell .btn-action {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8125rem;
+    }
+
+    .acciones-cell {
+        min-width: 140px;
     }
 
     /* ========== FORM ELEMENTS ========== */
@@ -672,18 +725,15 @@
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive">
-                                <table class="table table-nexo" id="tablaCorrelativos">
+                                <table class="table table-nexo table-sm" id="tablaCorrelativos">
                                     <thead>
                                         <tr>
                                             <th>Sucursal</th>
                                             <th>Tipo Documento</th>
                                             <th>Rango</th>
-                                            <th>Actual</th>
-                                            <th>Disponibles</th>
                                             <th>Consumo</th>
-                                            <th>Progreso</th>
                                             <th>Responsable</th>
-                                            <th>Última Actualización</th>
+                                            <th>Actualizado</th>
                                             <th>Estado</th>
                                             <th class="text-center">Acciones</th>
                                         </tr>
@@ -692,7 +742,7 @@
                                         {% for correlativo in correlativos %}
                                         <tr data-correlativo-id="{{ correlativo.id }}">
                                             <td>
-                                                <div class="d-flex align-items-center gap-2">
+                                                <div class="d-flex align-items-center gap-1">
                                                     <i class="ri-building-line text-nexo-primary"></i>
                                                     <span class="fw-semibold">{{ correlativo.sucursal.alias }}</span>
                                                 </div>
@@ -700,42 +750,36 @@
                                             <td>
                                                 <span class="badge-nexo badge-nexo-info">{{ correlativo.tipo_dte }}</span>
                                             </td>
-                                            <td>
-                                                <span style="color: var(--nexo-gray-500); font-size: 0.8125rem;">
-                                                    1 - {{ correlativo.termino|default:"N/A" }}
-                                                </span>
+                                            <td class="text-nowrap" style="font-variant-numeric: tabular-nums; color: var(--nexo-gray-500);">
+                                                1 – {{ correlativo.termino|default:"N/A" }}
                                             </td>
-                                            <td>
-                                                <span class="fw-semibold text-nexo-primary">{{ correlativo.inicio }}</span>
-                                            </td>
-                                            <td>
-                                                <span class="fw-semibold {% if correlativo.disponibles <= 100 %}text-nexo-error{% elif correlativo.disponibles <= 500 %}text-nexo-warning{% else %}text-nexo-success{% endif %}">
-                                                    {{ correlativo.disponibles }}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="badge-consumo {% if correlativo.porcentaje_consumo >= 90 %}badge-nexo-error{% elif correlativo.porcentaje_consumo >= 70 %}badge-nexo-warning{% else %}badge-nexo-success{% endif %}">
-                                                    {{ correlativo.consumidos }}/{{ correlativo.total_rango }}
-                                                </span>
-                                            </td>
-                                            <td style="min-width: 120px;">
-                                                <div class="progress progress-nexo mb-1">
-                                                    <div class="progress-bar {% if correlativo.porcentaje_consumo >= 90 %}progress-bar-error{% elif correlativo.porcentaje_consumo >= 70 %}progress-bar-warning{% else %}progress-bar-success{% endif %}" 
+                                            <td class="consumo-cell">
+                                                <div class="consumo-numeros">
+                                                    <strong>{{ correlativo.consumidos }} / {{ correlativo.total_rango }}</strong>
+                                                    <span class="{% if correlativo.porcentaje_consumo >= 90 %}text-nexo-error{% elif correlativo.porcentaje_consumo >= 70 %}text-nexo-warning{% else %}text-nexo-success{% endif %} fw-semibold">
+                                                        {{ correlativo.porcentaje_consumo|floatformat:1 }}%
+                                                    </span>
+                                                </div>
+                                                <div class="progress progress-nexo">
+                                                    <div class="progress-bar {% if correlativo.porcentaje_consumo >= 90 %}progress-bar-error{% elif correlativo.porcentaje_consumo >= 70 %}progress-bar-warning{% else %}progress-bar-success{% endif %}"
                                                          style="width: {{ correlativo.porcentaje_consumo }}%"></div>
                                                 </div>
-                                                <small style="color: var(--nexo-gray-500);">{{ correlativo.porcentaje_consumo|floatformat:1 }}%</small>
+                                                <div class="consumo-meta">
+                                                    <span>Actual: <strong class="text-nexo-primary">{{ correlativo.inicio }}</strong></span>
+                                                    <span class="{% if correlativo.disponibles <= 100 %}text-nexo-error{% elif correlativo.disponibles <= 500 %}text-nexo-warning{% else %}text-nexo-success{% endif %}">
+                                                        {{ correlativo.disponibles }} disp.
+                                                    </span>
+                                                </div>
                                             </td>
-                                            <td>
-                                                <small style="color: var(--nexo-gray-500);">{{ correlativo.responsable }}</small>
+                                            <td class="text-nowrap" style="color: var(--nexo-gray-500); font-size: 0.75rem;">
+                                                {{ correlativo.responsable }}
                                             </td>
-                                            <td>
-                                                <small style="color: var(--nexo-gray-500);">
-                                                    {% if correlativo.fecha_actualizacion %}
-                                                        {{ correlativo.fecha_actualizacion|date:"d/m/Y" }}
-                                                    {% else %}
-                                                        Sin actualizar
-                                                    {% endif %}
-                                                </small>
+                                            <td class="text-nowrap" style="color: var(--nexo-gray-500); font-size: 0.75rem;">
+                                                {% if correlativo.fecha_actualizacion %}
+                                                    {{ correlativo.fecha_actualizacion|date:"d/m/y" }}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
                                             </td>
                                             <td>
                                                 {% if correlativo.estado == 'agotado' %}
@@ -746,7 +790,7 @@
                                                     <span class="badge-nexo badge-nexo-success">Activo</span>
                                                 {% endif %}
                                             </td>
-                                            <td class="text-center">
+                                            <td class="text-center acciones-cell">
                                                 <div class="d-flex gap-1 justify-content-center">
                                                     <button class="btn btn-action btn-action-edit" 
                                                             onclick="editarCorrelativo({{ correlativo.id }})"
@@ -766,12 +810,18 @@
                                                             data-bs-toggle="tooltip">
                                                         <i class="ri-history-line"></i>
                                                     </button>
+                                                    <button class="btn btn-action btn-action-delete"
+                                                            onclick="eliminarCorrelativo({{ correlativo.id }}, '{{ correlativo.sucursal.alias|escapejs }}', '{{ correlativo.tipo_dte|escapejs }}', {{ correlativo.consumidos }})"
+                                                            title="Eliminar correlativo"
+                                                            data-bs-toggle="tooltip">
+                                                        <i class="ri-delete-bin-line"></i>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
                                         {% empty %}
                                         <tr>
-                                            <td colspan="11" class="text-center py-5">
+                                            <td colspan="8" class="text-center py-5">
                                                 <div class="empty-state">
                                                     <i class="ri-inbox-line d-block mb-3"></i>
                                                     <p>No hay correlativos registrados</p>
@@ -1047,8 +1097,8 @@
                 pageLength: 25,
                 order: [[0, 'asc'], [1, 'asc']],
                 columnDefs: [
-                    { orderable: false, targets: [10] }, // Columna de acciones no ordenable
-                    { className: 'text-center', targets: [10] }
+                    { orderable: false, targets: [7] }, // Columna de acciones no ordenable
+                    { className: 'text-center', targets: [7] }
                 ],
                 responsive: true,
                 autoWidth: false,
@@ -1334,7 +1384,23 @@
                 // Llenar formulario
                 document.getElementById('correlativoId').value = correlativo.id || '';
                 document.getElementById('sucursal').value = correlativo.sucursal_id || '';
-                document.getElementById('tipoDocumento').value = correlativo.tipo_dte || '';
+
+                // Si el tipo actual no está en el select (ej. BOLETA_ELECTRONICA, tipos legacy),
+                // inyectarlo como opción para poder editarlo sin perder el valor original.
+                const selectTipo = document.getElementById('tipoDocumento');
+                const tipoActual = correlativo.tipo_dte || '';
+                if (tipoActual) {
+                    const yaExiste = Array.from(selectTipo.options).some(opt => opt.value === tipoActual);
+                    if (!yaExiste) {
+                        const opt = document.createElement('option');
+                        opt.value = tipoActual;
+                        opt.textContent = `${tipoActual} (legacy)`;
+                        opt.dataset.legacy = 'true';
+                        selectTipo.appendChild(opt);
+                    }
+                }
+                selectTipo.value = tipoActual;
+
                 document.getElementById('inicio').value = correlativo.inicio || '';
                 document.getElementById('termino').value = correlativo.termino || '';
                 document.getElementById('alias').value = correlativo.alias || '';
@@ -1580,6 +1646,138 @@
         });
     }
 
+    // Función para eliminar correlativo
+    function eliminarCorrelativo(id, sucursalAlias, tipoDte, consumidos) {
+        const totalConsumidos = Number.isFinite(consumidos) ? consumidos : 0;
+        const tieneConsumo = totalConsumidos > 0;
+
+        const htmlDetalle = `
+            <div class="text-start">
+                <p class="mb-2"><strong>Sucursal:</strong> ${sucursalAlias}</p>
+                <p class="mb-2"><strong>Tipo de documento:</strong> ${tipoDte}</p>
+                <p class="mb-0"><strong>Documentos consumidos:</strong> ${totalConsumidos.toLocaleString('es-CL')}</p>
+            </div>
+            ${tieneConsumo ? `
+                <div class="alert alert-nexo alert-nexo-warning mt-3 mb-0 text-start">
+                    <i class="ri-error-warning-line me-2"></i>
+                    <strong>Atención:</strong> este correlativo ya tiene ${totalConsumidos.toLocaleString('es-CL')} documento(s) emitido(s).
+                    Si lo eliminas, perderás el seguimiento del rango usado. Asegúrate de que no esté en uso.
+                </div>
+            ` : ''}
+        `;
+
+        Swal.fire({
+            icon: tieneConsumo ? 'warning' : 'question',
+            title: tieneConsumo ? '¿Eliminar correlativo con consumo?' : '¿Eliminar correlativo?',
+            html: htmlDetalle,
+            showCancelButton: true,
+            confirmButtonText: tieneConsumo ? 'Sí, eliminar de todas formas' : 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#FF4D4D',
+            cancelButtonColor: '#8A8A9A',
+            reverseButtons: true,
+            focusCancel: true
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+
+            Swal.fire({
+                title: 'Eliminando...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            const formData = new FormData();
+            if (tieneConsumo) {
+                formData.append('forzar', 'true');
+            }
+
+            fetch(`/app/correlativos/eliminar/${id}/`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(async response => {
+                const data = await response.json().catch(() => ({}));
+                return { ok: response.ok, status: response.status, data };
+            })
+            .then(({ ok, status, data }) => {
+                // Si el backend pide confirmación explícita (409), reintentar con forzar
+                if (status === 409 && data && data.requiere_confirmacion) {
+                    return reintentarEliminacionForzada(id, data);
+                }
+
+                if (ok && data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Correlativo eliminado',
+                        text: data.message || 'Correlativo eliminado correctamente',
+                        confirmButtonColor: '#0066FF'
+                    }).then(() => location.reload());
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: (data && data.message) || 'No se pudo eliminar el correlativo',
+                        confirmButtonColor: '#0066FF'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error al eliminar correlativo:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error de conexión al eliminar el correlativo',
+                    confirmButtonColor: '#0066FF'
+                });
+            });
+        });
+    }
+
+    function reintentarEliminacionForzada(id, info) {
+        return Swal.fire({
+            icon: 'warning',
+            title: 'Confirmación adicional requerida',
+            text: info.message || 'El correlativo tiene consumo registrado, ¿confirmas eliminarlo?',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#FF4D4D',
+            cancelButtonColor: '#8A8A9A',
+            reverseButtons: true
+        }).then((r) => {
+            if (!r.isConfirmed) return;
+
+            const fd = new FormData();
+            fd.append('forzar', 'true');
+            return fetch(`/app/correlativos/eliminar/${id}/`, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            })
+            .then(r2 => r2.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Correlativo eliminado',
+                        text: data.message || 'Correlativo eliminado correctamente',
+                        confirmButtonColor: '#0066FF'
+                    }).then(() => location.reload());
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'No se pudo eliminar',
+                        confirmButtonColor: '#0066FF'
+                    });
+                }
+            });
+        });
+    }
+
     // Función para obtener el token CSRF
     function getCookie(name) {
         let cookieValue = null;
@@ -1610,5 +1808,10 @@
         document.getElementById('formCorrelativo').reset();
         document.getElementById('correlativoId').value = '';
         document.getElementById('tituloModal').textContent = 'Nuevo Correlativo';
+
+        // Remover opciones legacy inyectadas dinámicamente al editar correlativos
+        // cuyo tipo_dte no está en los TIPO_DOCUMENTO_CHOICES oficiales.
+        const selectTipo = document.getElementById('tipoDocumento');
+        Array.from(selectTipo.querySelectorAll('option[data-legacy="true"]')).forEach(opt => opt.remove());
     });
 </script>

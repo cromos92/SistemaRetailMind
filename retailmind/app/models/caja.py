@@ -306,10 +306,9 @@ class ArqueoCaja(models.Model):
     @property
     def dias_sin_revision(self):
         """Días desde el arqueo sin ser revisado"""
-        from datetime import date
         if self.estado == 'REVISADO':
             return 0
-        return (date.today() - self.fecha_arqueo).days
+        return (timezone.localdate() - self.fecha_arqueo).days
 
     @property
     def requiere_revision_urgente(self):
@@ -855,19 +854,17 @@ class CreditoTrabajador(models.Model):
     @property
     def esta_vencido(self):
         """Verifica si el crédito está vencido"""
-        from django.utils import timezone
         return (
             self.estado in ['ACTIVO', 'APROBADO'] and 
-            self.fecha_vencimiento < timezone.now().date() and
+            self.fecha_vencimiento < timezone.localdate() and
             self.saldo_pendiente > 0
         )
     
     @property
     def dias_para_vencimiento(self):
         """Días restantes para el vencimiento"""
-        from django.utils import timezone
         if self.fecha_vencimiento:
-            delta = self.fecha_vencimiento - timezone.now().date()
+            delta = self.fecha_vencimiento - timezone.localdate()
             return delta.days
         return None
     

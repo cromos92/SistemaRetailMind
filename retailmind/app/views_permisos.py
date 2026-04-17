@@ -13,6 +13,7 @@ from .decorators import solo_administrador
 from .utils_permisos import obtener_sucursales_usuario
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
+from django.utils import timezone
 import json
 
 
@@ -993,7 +994,7 @@ def exportar_permisos_rol(request):
         export_data = {
             'version': '1.0',
             'tipo': 'permisos_rol',
-            'fecha_exportacion': datetime.now().isoformat(),
+            'fecha_exportacion': timezone.localtime().isoformat(),
             'rol': rol,
             'rol_nombre': dict(PermisoRol.ROLES_CHOICES).get(rol, rol),
             'limite_descuento': limite_descuento,
@@ -1006,7 +1007,7 @@ def exportar_permisos_rol(request):
             json.dumps(export_data, indent=2, ensure_ascii=False),
             content_type='application/json'
         )
-        filename = f'permisos_{rol}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        filename = f'permisos_{rol}_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.json'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         return response
@@ -1063,7 +1064,7 @@ def exportar_todos_permisos(request):
         export_data = {
             'version': '1.0',
             'tipo': 'permisos_completos',
-            'fecha_exportacion': datetime.now().isoformat(),
+            'fecha_exportacion': timezone.localtime().isoformat(),
             'total_roles': len(roles_data),
             'roles': roles_data
         }
@@ -1073,7 +1074,7 @@ def exportar_todos_permisos(request):
             json.dumps(export_data, indent=2, ensure_ascii=False),
             content_type='application/json'
         )
-        filename = f'permisos_completos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        filename = f'permisos_completos_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.json'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         return response
@@ -1285,7 +1286,7 @@ def exportar_permisos_sucursal(request):
         export_data = {
             'version': '1.0',
             'tipo': 'permisos_sucursal',
-            'fecha_exportacion': datetime.now().isoformat(),
+            'fecha_exportacion': timezone.localtime().isoformat(),
             'sucursal': {
                 'id': sucursal.id,
                 'alias': sucursal.alias,
@@ -1300,7 +1301,7 @@ def exportar_permisos_sucursal(request):
             json.dumps(export_data, indent=2, ensure_ascii=False),
             content_type='application/json'
         )
-        filename = f'permisos_sucursal_{sucursal.alias.replace(" ", "_")}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        filename = f'permisos_sucursal_{sucursal.alias.replace(" ", "_")}_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.json'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         return response

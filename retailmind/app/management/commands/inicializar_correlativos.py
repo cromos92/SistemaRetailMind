@@ -76,7 +76,7 @@ class Command(BaseCommand):
                     correlativo_existente.termino = termino
                     correlativo_existente.alias = f'{tipo_documento}_{sucursal.alias}'
                     correlativo_existente.responsable = 'Sistema'
-                    correlativo_existente.fecha_actualizacion = timezone.now().date()
+                    correlativo_existente.fecha_actualizacion = timezone.localdate()
                     correlativo_existente.save()
                     
                     self.stdout.write(
@@ -90,7 +90,7 @@ class Command(BaseCommand):
                         termino=termino,
                         alias=f'{tipo_documento}_{sucursal.alias}',
                         responsable='Sistema',
-                        fecha_actualizacion=timezone.now().date()
+                        fecha_actualizacion=timezone.localdate()
                     )
                     
                     self.stdout.write(

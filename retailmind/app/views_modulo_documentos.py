@@ -2318,7 +2318,7 @@ def generar_txt_acepta_api(request):
         # Crear nombre del archivo
         tipo_doc = datos['documento'].get('tipo_documento', 'XX')
         folio = datos['documento'].get('folio', '0000')
-        fecha = formatear_fecha(datos['documento'].get('fecha_emision', timezone.now().date()))
+        fecha = formatear_fecha(datos['documento'].get('fecha_emision', timezone.localdate()))
         nombre_archivo = f"dte_{tipo_doc}_{folio}_{fecha.replace('-', '')}.txt"
         
         # Retornar como archivo descargable
