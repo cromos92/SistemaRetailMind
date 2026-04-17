@@ -1,12 +1,13 @@
 /**
  * Funciones auxiliares para integración Transbank en RetailMind
+ *
+ * NOTA IMPORTANTE: las funciones se declaran al TOP-LEVEL del archivo,
+ * NO dentro de un bloque if/else. En Chrome/Edge antiguos (presentes en
+ * muchos PCs de tienda), `async function` declarada dentro de bloques
+ * queda block-scoped aunque el archivo esté en modo sloppy, y los
+ * `onclick="autoconectarPOS()"` de la página fallan con "not defined".
+ * El guard de doble carga se aplica solo al listener de auto-conexión.
  */
-
-// Guard contra doble carga del archivo (evita duplicar listeners y carrera de auto-conexión)
-if (window.__TBK_HELPERS_LOADED__) {
-    console.warn('⚠️ transbank-helpers.js ya estaba cargado; se ignora la segunda carga.');
-} else {
-    window.__TBK_HELPERS_LOADED__ = true;
 
 // ==================== FUNCIONES DE CONEXIÓN ====================
 
@@ -475,5 +476,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 console.log('✅ Funciones auxiliares Transbank cargadas');
-
-} // fin guard __TBK_HELPERS_LOADED__
