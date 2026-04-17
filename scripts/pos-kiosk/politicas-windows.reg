@@ -1,0 +1,60 @@
+Windows Registry Editor Version 5.00
+
+; ===========================================================================
+; Políticas Windows para POS kiosko.
+; Importar con: reg import politicas-windows.reg  (requiere admin)
+; Reinicia para que surtan efecto.
+; ===========================================================================
+
+; --- Deshabilitar tecla Windows (evita abrir menú inicio con el dedo) ---
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Keyboard Layout]
+"Scancode Map"=hex:00,00,00,00,00,00,00,00,03,00,00,00,00,00,5B,E0,00,00,5C,E0,00,00,00,00
+
+; --- Explorer: limitar atajos y elementos de UI ---
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer]
+"NoWinKeys"=dword:00000001
+"NoRun"=dword:00000001
+"NoControlPanel"=dword:00000001
+"NoSetTaskbar"=dword:00000001
+"NoTrayContextMenu"=dword:00000001
+"TaskbarNoNotification"=dword:00000001
+"NoChangeStartMenu"=dword:00000001
+"NoClose"=dword:00000000
+
+; --- Deshabilitar Ctrl+Alt+Del → Administrador de tareas (HKLM y HKCU) ---
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\System]
+"DisableTaskMgr"=dword:00000001
+"DisableLockWorkstation"=dword:00000001
+"DisableChangePassword"=dword:00000001
+
+; --- Chrome: políticas para kiosko (requiere Chrome en modo managed) ---
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome]
+"PrintingEnabled"=dword:00000001
+"DefaultPopupsSetting"=dword:00000001
+"FullscreenAllowed"=dword:00000001
+"DeveloperToolsAvailability"=dword:00000002
+"IncognitoModeAvailability"=dword:00000000
+"BackgroundModeEnabled"=dword:00000000
+"MetricsReportingEnabled"=dword:00000000
+"PasswordManagerEnabled"=dword:00000000
+"TranslateEnabled"=dword:00000000
+"AutofillAddressEnabled"=dword:00000000
+"AutofillCreditCardEnabled"=dword:00000000
+
+; --- Chrome: URL allowlist (solo el host del POS) ---
+; Ajusta el dominio si usas otro.
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\URLAllowlist]
+"1"="https://retail.webappsolutions.cl/*"
+"2"="chrome://print/*"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\URLBlocklist]
+"1"="file://*"
+"2"="chrome-extension://*"
+
+; --- Deshabilitar Reporte de Errores de Windows (consume RAM) ---
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting]
+"Disabled"=dword:00000001
+
+; --- Notificaciones de acción desactivadas ---
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\PushNotifications]
+"ToastEnabled"=dword:00000000

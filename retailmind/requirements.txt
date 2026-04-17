@@ -88,3 +88,6 @@ dj-database-url==2.1.0
 anthropic>=0.40.0
 langfuse>=2.0.0
 statsmodels>=0.14
+django-redis>=6.0.0
+redis>=5.0.0
+django-silk>=5.0.0

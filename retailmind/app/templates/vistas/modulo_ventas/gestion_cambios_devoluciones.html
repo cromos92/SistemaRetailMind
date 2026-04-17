@@ -1326,10 +1326,72 @@
     #modal-nav-bar {
         flex-shrink: 0;
         flex-grow: 0;
+        position: relative;
         z-index: 20;
-        background: var(--nexo-white);
-        border-top: 2px solid var(--nexo-primary);
+        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+        border-top: 3px solid var(--nexo-primary);
+        box-shadow: 0 -6px 18px rgba(13, 110, 253, 0.12);
         width: 100%;
+    }
+    #modal-nav-bar .mnb-nav {
+        min-height: 58px;
+        padding: 10px 16px;
+    }
+    #modal-nav-bar #btn-siguiente,
+    #modal-nav-bar #btn-crear-cambio {
+        min-height: 40px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        padding: 0.45rem 1.2rem;
+        letter-spacing: 0.2px;
+    }
+    #modal-nav-bar #btn-siguiente:not(:disabled) {
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        border: none;
+        box-shadow: 0 3px 10px rgba(13, 110, 253, 0.3);
+    }
+    #modal-nav-bar #btn-siguiente:not(:disabled):hover {
+        transform: translateY(-1px);
+        box-shadow: 0 5px 14px rgba(13, 110, 253, 0.45);
+    }
+    #modal-nav-bar #btn-siguiente:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+
+    /* CTA inline dentro del panel info-ticket (réplica visual del footer) */
+    .info-ticket-cta {
+        border-top: 1px dashed var(--nexo-gray-300);
+        padding-top: 10px;
+        margin-top: 8px;
+    }
+    #btn-continuar-inline {
+        min-height: 40px;
+        padding: 0.5rem 1.25rem;
+        font-size: 0.92rem;
+        letter-spacing: 0.2px;
+        box-shadow: 0 3px 10px rgba(13, 110, 253, 0.35);
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        border: none;
+    }
+    #btn-continuar-inline:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(13, 110, 253, 0.5);
+    }
+    #btn-continuar-inline:active {
+        transform: translateY(0);
+    }
+
+    /* Realzar el panel de documento encontrado cuando está visible */
+    #modalNuevoCambio #info-ticket.ticket-info {
+        border: 2px solid var(--nexo-primary);
+        background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 50%);
+        box-shadow: 0 4px 16px rgba(13, 110, 253, 0.12);
+        animation: ticketInfoFadeIn 0.4s ease-out;
+    }
+    @keyframes ticketInfoFadeIn {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     #modal-nav-bar .mnb-resumen {
         display: flex;
@@ -2369,7 +2431,19 @@
                                 <span class="chip-value" id="ticket-fecha-limite">-</span>
                             </div>
                         </div>
-                        <!-- Continuar: ahora solo en el footer del modal -->
+                        <!-- CTA inline: Continuar al paso 2 (replicado del footer para visibilidad) -->
+                        <div class="info-ticket-cta d-flex align-items-center justify-content-end gap-2 mt-2">
+                            <small class="text-muted fst-italic d-none d-md-inline">
+                                <i class="ri-arrow-right-double-line me-1 text-primary"></i>
+                                Documento cargado. Continúe al paso 2 para seleccionar los productos.
+                            </small>
+                            <button type="button"
+                                    id="btn-continuar-inline"
+                                    class="btn btn-primary btn-sm fw-semibold px-3 show-animated"
+                                    onclick="siguientePaso(event)">
+                                Continuar al paso 2 <i class="ri-arrow-right-line ms-1"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -4346,6 +4420,7 @@ function resetearFormularioNuevoCambio() {
     $('#paso-resumen').hide();
     $('#footer-resumen').hide();
     $('#btn-siguiente').show().prop('disabled', true).html('Continuar <i class="ri-arrow-right-line ms-1"></i>');
+    $('#btn-continuar-inline').removeClass('show-animated').hide();
     $('#btn-crear-cambio').hide();
     $('#btn-anterior').hide();
     $('#footer-hint').show();
@@ -4519,9 +4594,15 @@ function buscarDocumentoParaCambio(event) {
                     console.log('✅ DEBUG - Mostrando botón SIGUIENTE');
                     $('#btn-siguiente').prop('disabled', false).removeClass('btn-outline-secondary').addClass('btn-primary');
                     $('#footer-hint').hide();
+                    $('#btn-continuar-inline').show().addClass('show-animated');
                     setTimeout(() => {
                         $('#btn-siguiente').addClass('show-animated');
-                    }, 100);
+                        // Llevar el foco al botón del footer para que el usuario lo vea y pueda presionar Enter
+                        const navBar = document.getElementById('modal-nav-bar');
+                        if (navBar && navBar.scrollIntoView) {
+                            navBar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    }, 150);
                     
                     if (fueraDePlazo) {
                         ticketActual._fuera_de_plazo = true;
@@ -4773,6 +4854,7 @@ function limpiarBusqueda() {
     
     $('#paso-seleccionar-productos').hide();
     $('#btn-siguiente').prop('disabled', true).removeClass('show-animated').html('Continuar <i class="ri-arrow-right-line ms-1"></i>');
+    $('#btn-continuar-inline').removeClass('show-animated').hide();
     $('#footer-hint').show();
     ticketActual = null;
     productosOriginales = [];
@@ -4907,6 +4989,7 @@ function siguientePaso(event) {
         // Ir al paso 2
         pasoActual = 2;
         $('#paso-seleccionar-productos').show();
+        $('#btn-continuar-inline').removeClass('show-animated').hide();
         cargarProductosOriginales();
         setTimeout(() => $('#input-escanear-sku').focus(), 200);
         $('#btn-siguiente').prop('disabled', false).removeClass('show-animated')
@@ -4968,6 +5051,12 @@ function pasoAnterior(event) {
             .html('Continuar <i class="ri-arrow-right-line ms-1"></i>');
         $('#btn-anterior').hide();
         $('#footer-hint').toggle(!ticketActual);
+        // Re-mostrar el CTA inline si todavía hay un documento cargado
+        if (ticketActual) {
+            $('#btn-continuar-inline').show().addClass('show-animated');
+        } else {
+            $('#btn-continuar-inline').removeClass('show-animated').hide();
+        }
         resetResumenLateral();
         actualizarStepper();
         actualizarFooterPaso();
@@ -8220,6 +8309,23 @@ function mostrarInfo(mensaje) {
             if (e.key === 'F5') {
                 e.preventDefault();
                 cargarCambiosDevoluciones(1);
+            }
+            // Enter global en paso 1 del modal → avanza si hay documento cargado
+            // Solo si el modal Nuevo Cambio está abierto, estamos en paso 1, hay ticketActual
+            // y no estamos dentro de un input editable (evita interferir con otros campos).
+            if (e.key === 'Enter') {
+                const modalNuevo = document.getElementById('modalNuevoCambio');
+                const modalVisible = modalNuevo && modalNuevo.classList.contains('show');
+                const swalOpen = document.querySelector('.swal2-container');
+                const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+                const esEditable = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+                                   (e.target && e.target.isContentEditable);
+                if (modalVisible && !swalOpen && !esEditable &&
+                    typeof pasoActual !== 'undefined' && pasoActual === 1 &&
+                    typeof ticketActual !== 'undefined' && ticketActual) {
+                    e.preventDefault();
+                    siguientePaso(e);
+                }
             }
         });
         

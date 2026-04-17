@@ -11,7 +11,11 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg
+from django.db.models import (
+    Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg,
+    Case, When, IntegerField, Value, Exists, OuterRef, Prefetch,
+)
+from django.db.models.functions import TruncDate
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -22,6 +26,20 @@ from datetime import timedelta
 
 # Importar funciones necesarias desde views.py
 from .views import obtener_siguiente_correlativo, obtener_correlativo_existente, consumir_stock_fifo
+
+# Helpers compartidos del módulo ventas (métodos de pago, agrupación, only() estándar)
+from .utils_ventas import (
+    obtener_nombre_metodo_pago,
+    agrupar_metodos_pago,
+    formatear_metodos_pago_str,
+    get_sucursal_id,
+    ONLY_DTE_PRODUCTO,
+    ONLY_DTE_PAGO,
+    ONLY_TICKET_PRODUCTO_POS,
+)
+
+# Caching del módulo ventas (Redis / LocMem, ver app.cache_utils)
+from .cache_utils import cache_ventas_json
 
 # Importar servicios de Transbank
 from .services.transbank_sdk_service import (
@@ -630,102 +648,79 @@ def buscar_producto_por_sku(request):
 @login_required
 def buscar_productos_pos_avanzado(request):
     """
-    Búsqueda avanzada de productos para POS
-    Permite buscar por SKU, marca, artículo, color, etc.
-    Solo retorna productos con stock disponible en la sucursal actual
+    Búsqueda avanzada de productos para POS.
+
+    Optimización:
+    - Filtra `stock__gt=0` directamente en DB (antes: recorría hasta 200
+      candidatos en memoria para encontrar 30 con stock).
+    - Reduce columnas con `only()`.
     """
-    sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-    
+    sucursal_id = get_sucursal_id(request)
+
     if not sucursal_id:
         return JsonResponse({
             'success': False,
             'error': 'No hay sucursal activa'
         })
-    
-    # Parámetros de búsqueda
+
     search_term = request.GET.get('search', '').strip()
-    
     if not search_term or len(search_term) < 2:
         return JsonResponse({
             'success': False,
             'error': 'Ingrese al menos 2 caracteres para buscar'
         })
-    
+
     try:
-        # Buscar productos en la sucursal actual
-        productos_query = Producto_Talla.objects.filter(
-            producto__sucursal_id=sucursal_id
-        ).select_related(
-            'producto',
-            'producto__categoria',
-            'producto__atributo1',
-            'producto__atributo2',
-            'producto__atributo3',
-            'producto__atributo4'
+        productos_query = (
+            Producto_Talla.objects
+            .filter(producto__sucursal_id=sucursal_id, stock__gt=0)
+            .select_related(
+                'producto',
+                'producto__categoria',
+                'producto__atributo1',
+                'producto__atributo2',
+                'producto__atributo3',
+                'producto__atributo4',
+            )
         )
 
-        # Separar el término en palabras para búsqueda multi-palabra
-        palabras = search_term.split()
-
-        if len(palabras) > 1:
-            # Búsqueda multi-palabra: cada palabra debe coincidir en algún campo
-            for palabra in palabras:
-                palabra = palabra.strip()
-                if not palabra:
-                    continue
-                productos_query = productos_query.filter(
-                    Q(sku__icontains=palabra) |
-                    Q(producto__articulo__icontains=palabra) |
-                    Q(producto__atributo1__valor__icontains=palabra) |
-                    Q(producto__atributo2__valor__icontains=palabra) |
-                    Q(producto__atributo3__valor__icontains=palabra) |
-                    Q(producto__atributo4__valor__icontains=palabra) |
-                    Q(producto__categoria__nombre__icontains=palabra) |
-                    Q(talla__icontains=palabra)
-                )
-        else:
-            # Búsqueda de un solo término
+        palabras = [p for p in search_term.split() if p.strip()]
+        for palabra in palabras:
             productos_query = productos_query.filter(
-                Q(sku__icontains=search_term) |
-                Q(producto__articulo__icontains=search_term) |
-                Q(producto__atributo1__valor__icontains=search_term) |
-                Q(producto__atributo2__valor__icontains=search_term) |
-                Q(producto__atributo3__valor__icontains=search_term) |
-                Q(producto__atributo4__valor__icontains=search_term) |
-                Q(producto__categoria__nombre__icontains=search_term) |
-                Q(talla__icontains=search_term)
+                Q(sku__icontains=palabra) |
+                Q(producto__articulo__icontains=palabra) |
+                Q(producto__atributo1__valor__icontains=palabra) |
+                Q(producto__atributo2__valor__icontains=palabra) |
+                Q(producto__atributo3__valor__icontains=palabra) |
+                Q(producto__atributo4__valor__icontains=palabra) |
+                Q(producto__categoria__nombre__icontains=palabra) |
+                Q(talla__icontains=palabra)
             )
 
-        # Filtrar solo productos con stock > 0
-        # Iterar hasta conseguir 30 con stock, revisando hasta 200 candidatos
         productos_con_stock = []
-        for pt in productos_query[:200]:
-            stock_actual = pt.stock_sucursal(sucursal_id)
-            if stock_actual > 0:
-                productos_con_stock.append({
-                    'id': pt.id,
-                    'sku': pt.sku,
-                    'articulo': pt.producto.articulo,
-                    'descripcion': pt.producto.descripcion or '',
-                    'marca': pt.producto.atributo1.valor if pt.producto.atributo1 else '',
-                    'color': pt.producto.atributo2.valor if pt.producto.atributo2 else '',
-                    'material': pt.producto.atributo3.valor if pt.producto.atributo3 else '',
-                    'talla': pt.talla if pt.talla else 'Sin talla',
-                    'stock': stock_actual,
-                    'precio_venta': float(pt.producto.precioventa),
-                    'categoria': pt.producto.categoria.nombre if pt.producto.categoria else ''
-                })
-                if len(productos_con_stock) >= 30:
-                    break
+        for pt in productos_query[:30]:
+            prod = pt.producto
+            productos_con_stock.append({
+                'id': pt.id,
+                'sku': pt.sku,
+                'articulo': prod.articulo,
+                'descripcion': prod.descripcion or '',
+                'marca': prod.atributo1.valor if prod.atributo1 else '',
+                'color': prod.atributo2.valor if prod.atributo2 else '',
+                'material': prod.atributo3.valor if prod.atributo3 else '',
+                'talla': pt.talla if pt.talla else 'Sin talla',
+                'stock': max(0, pt.stock or 0),
+                'precio_venta': float(prod.precioventa),
+                'categoria': prod.categoria.nombre if prod.categoria else '',
+            })
 
         return JsonResponse({
             'success': True,
             'productos': productos_con_stock,
-            'total': len(productos_con_stock)
+            'total': len(productos_con_stock),
         })
-        
+
     except Exception as e:
-        print(f"Error en búsqueda avanzada: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': f'Error al buscar productos: {str(e)}'
@@ -733,56 +728,68 @@ def buscar_productos_pos_avanzado(request):
 
 
 def buscar_productos_bodega(request):
-    """Buscar productos en bodega para ticket de venta"""
+    """Buscar productos en bodega para ticket de venta.
+
+    Optimización:
+    - Filtra `stock__gt=0` en DB (antes: recorría 20 resultados en memoria).
+    - Arreglo de relaciones rotas (`producto__marca__nombre` → `atributo1`,
+      `pt.precio_venta` → `pt.producto.precioventa`).
+    - Restringe a la sucursal activa (antes devolvía productos de cualquier sucursal).
+    """
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Método no permitido'})
-    
+
     try:
         data = json.loads(request.body)
         termino = data.get('termino', '').strip()
-        sucursal_id = request.session.get('idSucursalActual')
-        
+        sucursal_id = get_sucursal_id(request)
+
         if not termino:
             return JsonResponse({
                 'success': False,
                 'error': 'Término de búsqueda requerido'
             })
-        
+
         if not sucursal_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal activa'
             })
-        
-        # Buscar productos
-        productos_query = Producto_Talla.objects.select_related(
-            'producto', 'talla', 'producto__marca', 'producto__categoria'
-        ).filter(
-            Q(sku__icontains=termino) |
-            Q(producto__nombre__icontains=termino) |
-            Q(producto__marca__nombre__icontains=termino)
+
+        productos_query = (
+            Producto_Talla.objects
+            .filter(producto__sucursal_id=sucursal_id, stock__gt=0)
+            .select_related(
+                'producto',
+                'producto__categoria',
+                'producto__atributo1',
+            )
+            .filter(
+                Q(sku__icontains=termino) |
+                Q(producto__articulo__icontains=termino) |
+                Q(producto__atributo1__valor__icontains=termino)
+            )
         )
-        
+
         productos_data = []
-        for pt in productos_query[:20]:  # Limitar a 20 resultados
-            stock = pt.stock_sucursal(sucursal_id)
-            if stock > 0:  # Solo productos con stock
-                productos_data.append({
-                    'id': pt.id,
-                    'sku': pt.sku,
-                    'nombre': pt.producto.articulo,
-                    'talla': pt.talla if pt.talla else 'Sin talla',
-                    'precio_venta': float(pt.precio_venta),
-                    'stock': stock,
-                    'marca': pt.producto.atributo1.valor if pt.producto.atributo1 else '',
-                    'categoria': pt.producto.categoria.nombre if pt.producto.categoria else ''
-                })
-        
+        for pt in productos_query[:20]:
+            prod = pt.producto
+            productos_data.append({
+                'id': pt.id,
+                'sku': pt.sku,
+                'nombre': prod.articulo,
+                'talla': pt.talla if pt.talla else 'Sin talla',
+                'precio_venta': float(prod.precioventa),
+                'stock': max(0, pt.stock or 0),
+                'marca': prod.atributo1.valor if prod.atributo1 else '',
+                'categoria': prod.categoria.nombre if prod.categoria else '',
+            })
+
         return JsonResponse({
             'success': True,
             'productos': productos_data
         })
-        
+
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
@@ -1271,6 +1278,7 @@ def pos_dashboard(request):
 
 @login_required
 @require_GET
+@cache_ventas_json('correlativos_disp', timeout=30)
 def verificar_correlativos_disponibles(request):
     """API para verificar correlativos disponibles por tipo de documento"""
     try:
@@ -1366,20 +1374,25 @@ def _check_stock_ticket(ticket, sucursal_id):
     """
     Revisa si algún producto del ticket tiene stock insuficiente en la sucursal.
     Retorna dict con 'tiene_stock_insuf' y 'productos_stock_insuf'.
-    Asume que ticket_productos, ProductoTalla y producto ya están prefetch_related.
+
+    IMPORTANTE: depende de que `ticket_productos__ProductoTalla__producto`
+    estén prefetch_related. No gatilla queries adicionales a la DB.
     """
+    sucursal_id_int = int(sucursal_id) if sucursal_id is not None else None
     problemas = []
     for tp in ticket.ticket_productos.all():
         pt = tp.ProductoTalla
-        if not pt:
+        if not pt or not pt.producto:
             continue
-        stock_real = pt.stock_sucursal(sucursal_id)
+        # Solo comparar stock si el producto pertenece a la sucursal actual
+        if sucursal_id_int is None or pt.producto.sucursal_id != sucursal_id_int:
+            continue
+        stock_real = max(0, pt.stock or 0)
         cantidad_pedida = tp.stock  # campo 'stock' en Ticket_Productos = cantidad
         if stock_real < cantidad_pedida:
-            articulo = pt.producto.articulo if pt.producto else 'Sin nombre'
             problemas.append({
                 'sku': str(pt.sku),
-                'articulo': articulo,
+                'articulo': pt.producto.articulo or 'Sin nombre',
                 'talla': str(pt.talla or ''),
                 'stock_real': stock_real,
                 'cantidad_pedida': int(cantidad_pedida),
@@ -1392,52 +1405,48 @@ def _check_stock_ticket(ticket, sucursal_id):
 
 @login_required
 def dashboard_stats(request):
-    """API para obtener estadísticas del dashboard"""
+    """API para obtener estadísticas del dashboard POS.
+
+    Optimización clave:
+    - Un solo `aggregate` condicional para ventas/cantidades (antes: 3 queries).
+    - `_check_stock_ticket` usa únicamente datos prefetch (sin gatillar queries).
+    - `ticket_productos.count()` evita la relación rota `ticket.productos`.
+    - Nombre de sucursal leído con `get()` explícito, no con lambda opaca.
+    """
     try:
-        # Obtener sucursal actual del usuario
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        sucursal_id = get_sucursal_id(request)
         if not sucursal_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal seleccionada'
             })
 
-        # Fecha de hoy con timezone aware
         from datetime import datetime, time
         hoy = timezone.localdate()
         inicio_dia = timezone.make_aware(datetime.combine(hoy, time.min))
         fin_dia = timezone.make_aware(datetime.combine(hoy, time.max))
 
-        # Filtro base por sucursal y fecha
-        base_filter = Q(sucursal_id=sucursal_id, created_at__range=[inicio_dia, fin_dia])
-
-        # Estadísticas del día
-        tickets_hoy = Ticket.objects.filter(base_filter)
-        
-        # Separar tickets de venta normal vs tickets de cambio/devolución
+        tickets_hoy = Ticket.objects.filter(
+            sucursal_id=sucursal_id,
+            created_at__range=[inicio_dia, fin_dia],
+        )
         tickets_venta = tickets_hoy.exclude(modulo_origen='CAMBIO_DEVOLUCION')
-        tickets_cambio_dia = tickets_hoy.filter(modulo_origen='CAMBIO_DEVOLUCION')
-        
-        # Ventas del día (solo tickets de venta normal pagados)
-        ventas_hoy = tickets_venta.filter(estado='PAGADO').aggregate(
-            total=Sum('total')
-        )['total'] or 0
 
-        # Contadores por estado (solo tickets de venta normal)
-        tickets_pendientes = tickets_venta.filter(estado='PENDIENTE').count()
-        tickets_pagados = tickets_venta.filter(estado='PAGADO').count()
-        
-        # Promedio de venta (solo tickets de venta normal)
-        promedio_venta = 0
-        if tickets_pagados > 0:
-            promedio_venta = ventas_hoy / tickets_pagados
+        # Un solo aggregate para todos los contadores/sumas del día
+        agg = tickets_venta.aggregate(
+            ventas_hoy=Sum('total', filter=Q(estado='PAGADO')),
+            tickets_pendientes=Count('id', filter=Q(estado='PENDIENTE')),
+            tickets_pagados=Count('id', filter=Q(estado='PAGADO')),
+        )
+        ventas_hoy = agg['ventas_hoy'] or 0
+        tickets_pendientes = agg['tickets_pendientes'] or 0
+        tickets_pagados = agg['tickets_pagados'] or 0
+        promedio_venta = (ventas_hoy / tickets_pagados) if tickets_pagados > 0 else 0
 
-        # Solo tickets PENDIENTES del día (últimos 20) - INCLUYENDO AMBOS TIPOS
+        # Tickets pendientes del día (últimos 20) - INCLUYENDO AMBOS TIPOS
         tickets_recientes = tickets_hoy.filter(estado='PENDIENTE').select_related(
             'vendedor', 'sucursal'
         ).prefetch_related(
-            'ticket_productos',
-            'ticket_productos__ProductoTalla',
             'ticket_productos__ProductoTalla__producto',
         ).order_by('-created_at')[:20]
         
@@ -1475,9 +1484,9 @@ def dashboard_stats(request):
             })
 
         # Tickets pendientes para el wizard (con más detalles)
-        tickets_pendientes_query = tickets_hoy.filter(estado='PENDIENTE').select_related('vendedor').prefetch_related(
-            'ticket_productos',
-            'ticket_productos__ProductoTalla',
+        tickets_pendientes_query = tickets_hoy.filter(estado='PENDIENTE').select_related(
+            'vendedor'
+        ).prefetch_related(
             'ticket_productos__ProductoTalla__producto',
         )[:10]
         tickets_pendientes_data = []
@@ -1489,7 +1498,10 @@ def dashboard_stats(request):
             else:
                 tipo_ticket = 'Venta'
                 tipo_ticket_class = 'primary'
-            
+
+            # productos prefetch → len() sobre la lista cacheada (0 queries)
+            productos_count = len(ticket.ticket_productos.all())
+
             tickets_pendientes_data.append({
                 'correlativo': ticket.correlativo,
                 'cliente_nombre': ticket.cliente_nombre or 'Sin nombre',
@@ -1497,7 +1509,7 @@ def dashboard_stats(request):
                 'vendedor_nombre': f"{ticket.vendedor.codigo_vendedor} - {ticket.vendedor.nombre}" if ticket.vendedor else 'Sin vendedor',
                 'total': int(ticket.total or 0),
                 'hora': ticket.created_at.strftime('%H:%M'),
-                'productos_count': ticket.productos.count() if hasattr(ticket, 'productos') else 0,
+                'productos_count': productos_count,
                 'tipo_ticket': tipo_ticket,
                 'tipo_ticket_class': tipo_ticket_class,
                 'modulo_origen': ticket.modulo_origen,
@@ -1535,6 +1547,11 @@ def dashboard_stats(request):
                 'hora': ticket.created_at.strftime('%H:%M'),
             })
 
+        sucursal_row = Sucursal.objects.filter(id=sucursal_id).values('alias', 'nombre').first()
+        sucursal_nombre = ''
+        if sucursal_row:
+            sucursal_nombre = sucursal_row.get('alias') or sucursal_row.get('nombre') or ''
+
         return JsonResponse({
             'success': True,
             'stats': {
@@ -1543,7 +1560,7 @@ def dashboard_stats(request):
                 'tickets_pagados': tickets_pagados,
                 'promedio_venta': int(promedio_venta),
                 'tickets_cambio_pendientes': len(tickets_cambio_data),
-                'sucursal_nombre': (lambda s: s['alias'] or s['nombre'] if s else '')(Sucursal.objects.filter(id=sucursal_id).values('alias', 'nombre').first()),
+                'sucursal_nombre': sucursal_nombre,
             },
             'tickets': tickets_data,
             'tickets_pendientes': tickets_pendientes_data,
@@ -3475,68 +3492,16 @@ def gestion_ventas_documentos(request):
 @login_required
 @require_GET
 def listar_documentos_ventas(request):
-    """API para listar documentos de ventas (tickets, boletas, facturas)"""
+    """API para listar documentos de ventas (tickets, boletas, facturas).
+
+    Optimizaciones clave:
+    - Paginación y ordenamiento se realizan en la DB (Paginator + order_by).
+    - Estadísticas globales se obtienen en un solo `aggregate` condicional.
+    - Prefetch con `only()` para reducir columnas traídas.
+    - Totales por DTE (total_pagos / subtotal_bruto) calculados via annotate con Subquery.
+    """
     try:
-        # Función helper para convertir códigos de método de pago a nombres legibles
-        def obtener_nombre_metodo_pago(codigo):
-            """Convierte el código del método de pago a un nombre legible"""
-            nombres_metodos = {
-                'EFECTIVO': 'Efectivo',
-                'TARJETA_DEBITO': 'Tarjeta Débito',
-                'TARJETA_CREDITO': 'Tarjeta Crédito',
-                'TRANSFERENCIA': 'Transferencia',
-                'CHEQUE': 'Cheque',
-                'OTRO': 'Otro',
-                'TBK_POS_INTEGRADO': 'Transbank POS',
-                'TBK_MANUAL': 'Transbank Manual',
-                'TBK_DEBITO_POS': 'TBK Débito POS',
-                'TBK_CREDITO_POS': 'TBK Crédito POS',
-                'TBK_PREPAGO_POS': 'TBK Prepago POS',
-                'TARJETA_COMERCIAL': 'Tarjeta Comercial',
-                'VENTA_INTERNET': 'Venta por Internet',
-                'ORDEN_COMPRA': 'Orden de Compra',
-                'CREDITO_TRABAJADOR': 'Crédito Trabajador',
-                'CREDITO_EXTERNO': 'Crédito Externo',
-            }
-            return nombres_metodos.get(codigo, codigo)
-
-        def agrupar_metodos_pago(pagos):
-            """Agrupa pagos por método y suma montos."""
-            agrupados = {}
-            for pago in pagos:
-                metodo = pago.get('metodo') or ''
-                metodo_display = pago.get('metodo_display') or metodo
-                tipo_tarjeta = pago.get('tipo_tarjeta') or ''
-                key = (metodo, metodo_display, tipo_tarjeta)
-                if key not in agrupados:
-                    agrupados[key] = {
-                        'metodo': metodo,
-                        'metodo_display': metodo_display,
-                        'monto': 0,
-                        'voucher': '',
-                        'tipo_tarjeta': tipo_tarjeta,
-                        'notas': '',
-                        '_vouchers': set(),
-                        '_notas': set(),
-                    }
-                agrupados[key]['monto'] += pago.get('monto') or 0
-                if pago.get('voucher'):
-                    agrupados[key]['_vouchers'].add(str(pago['voucher']))
-                if pago.get('notas'):
-                    agrupados[key]['_notas'].add(str(pago['notas']))
-
-            resultado = []
-            for item in agrupados.values():
-                if item['_vouchers']:
-                    item['voucher'] = ', '.join(sorted(item['_vouchers']))
-                if item['_notas']:
-                    item['notas'] = ' | '.join(sorted(item['_notas']))
-                item.pop('_vouchers', None)
-                item.pop('_notas', None)
-                resultado.append(item)
-            return resultado
-        
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        sucursal_id = get_sucursal_id(request)
         if not sucursal_id:
             return JsonResponse({
                 'success': False,
@@ -3557,55 +3522,49 @@ def listar_documentos_ventas(request):
         monto_min = int(monto_min_raw) if monto_min_raw.isdigit() else None
         monto_max = int(monto_max_raw) if monto_max_raw.isdigit() else None
 
-        documentos_data = []
-
         # === SOLO DTEs (Facturas/Boletas Electrónicas) ===
-        dtes_query = Dte.objects.select_related(
-            'vendedor', 
-            'receptor'
-        ).prefetch_related(
-            'dte_asociado',
-            'dte_productos__productoTalla__producto'
-        ).filter(
-            sucursal_id=sucursal_id,
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+        dtes_filtrados = (
+            Dte.objects
+            .filter(
+                sucursal_id=sucursal_id,
+                tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            )
+            .select_related('vendedor', 'receptor')
         )
 
         # Aplicar filtros de fecha
         if fecha_desde:
-            dtes_query = dtes_query.filter(fecha_emision__gte=fecha_desde)
+            dtes_filtrados = dtes_filtrados.filter(fecha_emision__gte=fecha_desde)
         if fecha_hasta:
-            dtes_query = dtes_query.filter(fecha_emision__lte=fecha_hasta)
+            dtes_filtrados = dtes_filtrados.filter(fecha_emision__lte=fecha_hasta)
 
         # Aplicar filtros por tipo de DTE
-        dtes_filtrados = dtes_query
-        
         if tipo_documento:
-            if tipo_documento == 'BOLETA_ELECTRONICA':
-                dtes_filtrados = dtes_filtrados.filter(tipo_documento='BOLETA ELECTRONICA')
-            elif tipo_documento == 'BOLETA_PAPEL':
-                dtes_filtrados = dtes_filtrados.filter(tipo_documento='BOLETA PAPEL')
-            elif tipo_documento == 'FACTURA_ELECTRONICA':
-                dtes_filtrados = dtes_filtrados.filter(tipo_documento='FACTURA ELECTRONICA')
-            elif tipo_documento == 'FACTURA_EXENTA':
-                dtes_filtrados = dtes_filtrados.filter(tipo_documento='FACTURA EXENTA')
-            
+            tipo_db_map = {
+                'BOLETA_ELECTRONICA': 'BOLETA ELECTRONICA',
+                'BOLETA_PAPEL': 'BOLETA PAPEL',
+                'FACTURA_ELECTRONICA': 'FACTURA ELECTRONICA',
+                'FACTURA_EXENTA': 'FACTURA EXENTA',
+            }
+            tipo_db = tipo_db_map.get(tipo_documento)
+            if tipo_db:
+                dtes_filtrados = dtes_filtrados.filter(tipo_documento=tipo_db)
+
             if estado:
-                # Mapear estados de DTE a estados de ticket
                 estado_dte_map = {
                     'PENDIENTE': 'PENDIENTE',
                     'PAGADO': 'EMITIDO',
-                    'ANULADO': 'ANULADO'
+                    'ANULADO': 'ANULADO',
                 }
                 if estado in estado_dte_map:
                     dtes_filtrados = dtes_filtrados.filter(estado_dte=estado_dte_map[estado])
-            
-            # Filtrar por método de pago
+
             if metodo_pago:
-                dtes_filtrados = dtes_filtrados.filter(dte_asociado__metodo_pago=metodo_pago).distinct()
-            
+                dtes_filtrados = dtes_filtrados.filter(
+                    dte_asociado__metodo_pago=metodo_pago
+                ).distinct()
+
         if buscar:
-            # Búsqueda avanzada en múltiples campos
             dtes_filtrados = dtes_filtrados.filter(
                 Q(numero_documento__icontains=buscar) |
                 Q(receptor__nombre__icontains=buscar) |
@@ -3614,26 +3573,93 @@ def listar_documentos_ventas(request):
                 Q(dte_productos__productoTalla__sku__icontains=buscar) |
                 Q(dte_productos__productoTalla__producto__articulo__icontains=buscar)
             ).distinct()
-        
-        # Filtro por rango de monto
+
         if monto_min is not None:
             dtes_filtrados = dtes_filtrados.filter(monto_con_iva__gte=monto_min)
         if monto_max is not None:
             dtes_filtrados = dtes_filtrados.filter(monto_con_iva__lte=monto_max)
-        
-        # Procesar DTEs filtrados
-        for dte in dtes_filtrados:
-            # Obtener productos del DTE
+
+        # --- Orden en DB ---
+        orden_campo = request.GET.get('orden_campo', 'fecha')
+        orden_direccion = request.GET.get('orden_direccion', 'desc')
+        orden_db_map = {
+            'fecha': 'fecha_emision',
+            'tipo_documento': 'tipo_documento',
+            'numero_documento': 'numero_documento',
+            'cliente_nombre': 'receptor__nombre',
+            'vendedor_nombre': 'vendedor__nombre',
+            'total': 'monto_con_iva',
+            'estado': 'estado_dte',
+        }
+        campo_db = orden_db_map.get(orden_campo, 'fecha_emision')
+        prefix = '-' if orden_direccion == 'desc' else ''
+        dtes_filtrados = dtes_filtrados.order_by(f'{prefix}{campo_db}', '-id')
+
+        # --- Estadísticas globales en UN solo aggregate ---
+        stats = dtes_filtrados.aggregate(
+            total_documentos=Count('id', distinct=True),
+            total_ventas=Sum('monto_con_iva'),
+            total_pendientes=Count('id', filter=Q(estado_dte='PENDIENTE'), distinct=True),
+            total_facturas=Count(
+                'id',
+                filter=Q(tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA']),
+                distinct=True,
+            ),
+            total_boletas=Count(
+                'id',
+                filter=Q(tipo_documento__in=['BOLETA ELECTRONICA', 'BOLETA PAPEL']),
+                distinct=True,
+            ),
+            total_boletas_electronicas=Count(
+                'id', filter=Q(tipo_documento='BOLETA ELECTRONICA'), distinct=True,
+            ),
+            total_boletas_papel=Count(
+                'id', filter=Q(tipo_documento='BOLETA PAPEL'), distinct=True,
+            ),
+        )
+
+        total_documentos = stats['total_documentos'] or 0
+
+        # --- Paginación en DB, prefetch solo de la página visible ---
+        paginator = Paginator(dtes_filtrados, per_page)
+        page_obj = paginator.get_page(page)
+
+        pk_pagina = [dte.pk for dte in page_obj.object_list]
+
+        # Traemos sólo los DTE paginados con sus productos y pagos via Prefetch
+        pagos_qs = Dte_Detalle_Pago.objects.only(*ONLY_DTE_PAGO)
+        productos_qs = (
+            Dte_Productos.objects
+            .select_related('productoTalla__producto')
+            .only(*ONLY_DTE_PRODUCTO)
+        )
+        dtes_pagina = (
+            Dte.objects
+            .filter(pk__in=pk_pagina)
+            .select_related('vendedor', 'receptor')
+            .prefetch_related(
+                Prefetch('dte_asociado', queryset=pagos_qs),
+                Prefetch('dte_productos', queryset=productos_qs),
+            )
+            .order_by(f'{prefix}{campo_db}', '-id')
+        )
+
+        from datetime import time as dt_time
+        documentos_paginados = []
+        for dte in dtes_pagina:
             productos = []
             subtotal_bruto = 0
             for dp in dte.dte_productos.all():
-                linea_subtotal = dp.precio * dp.stock
+                linea_subtotal = (dp.precio or 0) * (dp.stock or 0)
                 subtotal_bruto += linea_subtotal
                 dcto_monto = int(dp.descuento_monto or 0)
+                pt = dp.productoTalla
                 productos.append({
-                    'sku': dp.productoTalla.sku if dp.productoTalla else '',
-                    'nombre': dp.productoTalla.producto.articulo if dp.productoTalla and dp.productoTalla.producto else dp.descripcion,
-                    'talla': dp.productoTalla.talla if dp.productoTalla else '',
+                    'sku': pt.sku if pt else '',
+                    'nombre': (
+                        pt.producto.articulo if (pt and pt.producto) else dp.descripcion
+                    ),
+                    'talla': pt.talla if pt else '',
                     'cantidad': dp.stock,
                     'precio_unitario': dp.precio,
                     'subtotal': linea_subtotal,
@@ -3642,8 +3668,7 @@ def listar_documentos_ventas(request):
                     'costo': dp.costo,
                     'sobreprecio': dp.sobreprecio,
                 })
-            
-            # Obtener métodos de pago y sumar lo cobrado
+
             metodos_pago_raw = []
             total_pagos = 0
             for pago in dte.dte_asociado.all():
@@ -3654,14 +3679,13 @@ def listar_documentos_ventas(request):
                     'monto': pago.monto,
                     'voucher': pago.voucher or '',
                     'tipo_tarjeta': pago.tipo_tarjeta or '',
-                    'notas': getattr(pago, 'notas', ''),
+                    'notas': getattr(pago, 'notas', '') or '',
                 })
             metodos_pago = agrupar_metodos_pago(metodos_pago_raw)
 
             monto_lista = int(dte.monto_con_iva or 0)
             total_real = total_pagos if total_pagos > 0 else monto_lista
 
-            # Descuento efectivo (prioridad: campo guardado → diferencia con pagos → diferencia con productos)
             descuento_guardado = int(dte.descuento or 0)
             if descuento_guardado > 0:
                 descuento_efectivo = descuento_guardado
@@ -3669,45 +3693,19 @@ def listar_documentos_ventas(request):
                 descuento_efectivo = monto_lista - total_pagos
             else:
                 descuento_efectivo = max(0, subtotal_bruto - monto_lista)
-            
-            # Mapear estado DTE
+
             estado_display = 'PAGADO' if dte.estado_dte == 'EMITIDO' else dte.estado_dte
-            
-            # Crear datetime con zona horaria para DTEs
-            from datetime import time as dt_time
+
             fecha_dt = timezone.datetime.combine(dte.fecha_emision, dt_time.min)
-            created_at_dte = timezone.make_aware(fecha_dt) if timezone.is_naive(fecha_dt) else fecha_dt
-            
-            # Mapear tipo de documento para mostrar correctamente
-            if dte.tipo_documento == 'BOLETA ELECTRONICA':
-                tipo_display = 'BOLETA ELECTRONICA'
-            elif dte.tipo_documento == 'BOLETA PAPEL':
-                tipo_display = 'BOLETA PAPEL'
-            elif dte.tipo_documento == 'FACTURA ELECTRONICA':
-                tipo_display = 'FACTURA ELECTRONICA'
-            elif dte.tipo_documento == 'FACTURA EXENTA':
-                tipo_display = 'FACTURA EXENTA'
-            else:
-                tipo_display = dte.tipo_documento
-            
-            # Generar string de métodos de pago con información adicional
-            metodos_pago_str_list = []
-            for p in metodos_pago:
-                texto_pago = p['metodo_display']
-                # Agregar tipo de tarjeta si existe (para tarjetas de crédito/débito o plataforma para internet)
-                if p['tipo_tarjeta']:
-                    if p['metodo'] == 'VENTA_INTERNET':
-                        texto_pago += f" ({p['tipo_tarjeta']})"
-                    elif 'TARJETA' in p['metodo']:
-                        texto_pago += f" ({p['tipo_tarjeta']})"
-                metodos_pago_str_list.append(texto_pago)
-            
-            metodos_pago_str = ', '.join(metodos_pago_str_list) if metodos_pago_str_list else 'Sin pagos'
-            
-            documentos_data.append({
+            created_at_dte = (
+                timezone.make_aware(fecha_dt)
+                if timezone.is_naive(fecha_dt) else fecha_dt
+            )
+
+            documentos_paginados.append({
                 'id': dte.id,
-                'tipo': tipo_display,
-                'tipo_documento': dte.tipo_documento,  # Campo adicional con el valor original
+                'tipo': dte.tipo_documento,
+                'tipo_documento': dte.tipo_documento,
                 'numero': dte.numero_documento,
                 'fecha': dte.fecha_emision,
                 'cliente_nombre': dte.receptor.nombre if dte.receptor else 'Sin nombre',
@@ -3716,7 +3714,10 @@ def listar_documentos_ventas(request):
                 'cliente_email': dte.receptor.correoVendedor if dte.receptor else '',
                 'cliente_direccion': dte.receptor.direccion if dte.receptor else '',
                 'cliente_comuna': dte.receptor.comuna if dte.receptor else '',
-                'vendedor_nombre': f"{dte.vendedor.codigo_vendedor} - {dte.vendedor.nombre}" if dte.vendedor else 'Sin vendedor',
+                'vendedor_nombre': (
+                    f"{dte.vendedor.codigo_vendedor} - {dte.vendedor.nombre}"
+                    if dte.vendedor else 'Sin vendedor'
+                ),
                 'total': total_real,
                 'subtotal_bruto': subtotal_bruto,
                 'monto_neto': int(dte.monto_neto or 0),
@@ -3726,74 +3727,29 @@ def listar_documentos_ventas(request):
                 'productos': productos,
                 'metodos_pago': metodos_pago,
                 'total_productos': len(productos),
-                'metodos_pago_str': metodos_pago_str,
+                'metodos_pago_str': formatear_metodos_pago_str(metodos_pago),
             })
-
-        # Obtener parámetros de ordenamiento
-        orden_campo = request.GET.get('orden_campo', 'fecha')
-        orden_direccion = request.GET.get('orden_direccion', 'desc')
-        reverse_order = (orden_direccion == 'desc')
-        
-        # Mapeo de campos de ordenamiento
-        orden_map = {
-            'fecha': 'created_at',
-            'tipo_documento': 'tipo',
-            'numero_documento': 'numero',
-            'cliente_nombre': 'cliente_nombre',
-            'vendedor_nombre': 'vendedor_nombre',
-            'total': 'total',
-            'estado': 'estado',
-        }
-        
-        campo_ordenar = orden_map.get(orden_campo, 'created_at')
-        
-        # Ordenar documentos
-        try:
-            if campo_ordenar == 'total':
-                documentos_data.sort(key=lambda x: x.get(campo_ordenar, 0) or 0, reverse=reverse_order)
-            elif campo_ordenar == 'numero':
-                documentos_data.sort(key=lambda x: int(x.get(campo_ordenar, 0) or 0), reverse=reverse_order)
-            else:
-                documentos_data.sort(key=lambda x: str(x.get(campo_ordenar, '') or '').lower(), reverse=reverse_order)
-        except (TypeError, ValueError) as e:
-            # Si hay problemas de comparación, ordenar por fecha como fallback
-            print(f"Error al ordenar por {campo_ordenar}: {e}")
-            documentos_data.sort(key=lambda x: x['created_at'], reverse=True)
-
-        # Paginación manual
-        total_documentos = len(documentos_data)
-        inicio = (page - 1) * per_page
-        fin = inicio + per_page
-        documentos_paginados = documentos_data[inicio:fin]
-
-        # Calcular estadísticas (solo DTEs)
-        total_ventas = sum(doc['total'] for doc in documentos_data)
-        total_pendientes = len([doc for doc in documentos_data if doc['estado'] == 'PENDIENTE'])
-        total_facturas = len([doc for doc in documentos_data if 'FACTURA' in doc['tipo']])
-        total_boletas = len([doc for doc in documentos_data if 'BOLETA' in doc['tipo']])
-        total_boletas_electronicas = len([doc for doc in documentos_data if doc['tipo'] == 'BOLETA ELECTRONICA'])
-        total_boletas_papel = len([doc for doc in documentos_data if doc['tipo'] == 'BOLETA PAPEL'])
 
         return JsonResponse({
             'success': True,
             'documentos': documentos_paginados,
             'total': total_documentos,
             'pagination': {
-                'current_page': page,
+                'current_page': page_obj.number,
                 'per_page': per_page,
-                'total_pages': (total_documentos + per_page - 1) // per_page,
+                'total_pages': paginator.num_pages,
                 'total_items': total_documentos,
-                'has_previous': page > 1,
-                'has_next': fin < total_documentos
+                'has_previous': page_obj.has_previous(),
+                'has_next': page_obj.has_next(),
             },
             'estadisticas': {
                 'total_documentos': total_documentos,
-                'total_ventas': total_ventas,
-                'total_pendientes': total_pendientes,
-                'total_facturas': total_facturas,
-                'total_boletas': total_boletas,
-                'total_boletas_electronicas': total_boletas_electronicas,
-                'total_boletas_papel': total_boletas_papel,
+                'total_ventas': int(stats['total_ventas'] or 0),
+                'total_pendientes': stats['total_pendientes'] or 0,
+                'total_facturas': stats['total_facturas'] or 0,
+                'total_boletas': stats['total_boletas'] or 0,
+                'total_boletas_electronicas': stats['total_boletas_electronicas'] or 0,
+                'total_boletas_papel': stats['total_boletas_papel'] or 0,
             }
         })
 
@@ -5035,13 +4991,12 @@ def generar_cuadratura_caja(request):
         # Usar la función helper para calcular los datos
         cuadratura_data = _calcular_cuadratura_data(sucursal, fecha_cuadratura)
 
-        # Ocultar efectivo teórico para cajeros (anti-fraude: conteo ciego)
+        # Anti-fraude: mantener la bandera de conteo ciego para ocultar los
+        # teóricos dentro del modal de Arqueo (cajeros/vendedores), pero dejar
+        # visible el efectivo en el Resumen de Caja para evitar el mensaje
+        # "Pendiente de conteo" que resulta confuso en ese contexto.
         rol_usuario = getattr(request.user, 'rol', None)
-        if rol_usuario in ('cajero', 'vendedor'):
-            cuadratura_data['total_efectivo'] = None
-            cuadratura_data['modo_conteo_ciego'] = True
-        else:
-            cuadratura_data['modo_conteo_ciego'] = False
+        cuadratura_data['modo_conteo_ciego'] = rol_usuario in ('cajero', 'vendedor')
 
         return JsonResponse({
             'success': True,
@@ -5339,182 +5294,194 @@ def obtener_sucursales(request):
 @login_required
 @require_GET
 def listar_cuadraturas(request):
-    """Listar cuadraturas/arqueos con filtros"""
-    try:
-        # Obtener filtros
-        fecha_filtro = request.GET.get('fecha')
-        sucursal_actual_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        sucursal_filtro = request.GET.get('sucursal')  # Se ignora, solo se usa para depuración
+    """Listar cuadraturas/arqueos con filtros.
 
+    Optimización clave:
+    - Paginación server-side (por defecto 20 items / página).
+    - Precomputa pagos por (fecha, método) en 2 queries (tickets + DTEs)
+      usando `TruncDate` + `values(...).annotate(Sum)` y luego mapea en memoria.
+      Antes se hacía un query por cada arqueo + un query por cada ticket (N×M).
+    - `total_depositos` y `cantidad_depositos` se resuelven con `annotate`
+      en lugar de properties que gatillan queries.
+    """
+    try:
+        from datetime import datetime
+
+        fecha_filtro = request.GET.get('fecha')
+        page = int(request.GET.get('page', 1))
+        per_page = int(request.GET.get('per_page', 20))
+
+        sucursal_actual_id = get_sucursal_id(request)
         if not sucursal_actual_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay una sucursal activa en la sesión'
             }, status=400)
-        
-        if sucursal_filtro and str(sucursal_filtro) != str(sucursal_actual_id):
-            print(f"⚠️ Ignorando filtro de sucursal ({sucursal_filtro}); se usa la sucursal de la sesión ({sucursal_actual_id})")
-        
-        # Query base — siempre restringida a la sucursal de la sesión
-        arqueos = (
+
+        # Query base — siempre restringida a la sucursal de la sesión + annotate
+        arqueos_qs = (
             ArqueoCaja.objects
             .filter(sucursal_id=sucursal_actual_id)
             .select_related('usuario_responsable', 'sucursal')
-            .prefetch_related('depositos')
+            .annotate(
+                ann_total_depositos=Sum('depositos__monto'),
+                ann_cantidad_depositos=Count('depositos'),
+            )
+            .order_by('-fecha_arqueo')
         )
-        
-        # Aplicar filtro de fecha si existe
+
+        # Rango de fechas a evaluar para precomputar pagos
         if fecha_filtro:
-            from datetime import datetime
             fecha_obj = datetime.strptime(fecha_filtro, '%Y-%m-%d').date()
-            arqueos = arqueos.filter(fecha_arqueo=fecha_obj)
+            arqueos_qs = arqueos_qs.filter(fecha_arqueo=fecha_obj)
+            rango_inicio = rango_fin = fecha_obj
         else:
-            # Por defecto, mostrar TODO el mes actual
             hoy = timezone.localdate()
             primer_dia_mes = hoy.replace(day=1)
-            arqueos = arqueos.filter(
+            arqueos_qs = arqueos_qs.filter(
                 fecha_arqueo__gte=primer_dia_mes,
-                fecha_arqueo__lte=hoy
+                fecha_arqueo__lte=hoy,
             )
-        
-        # Ordenar por fecha descendente (de más reciente a más antigua)
-        arqueos = arqueos.order_by('-fecha_arqueo')
-        
-        # Serializar datos
-        from datetime import datetime, time as dt_time
-        
+            rango_inicio = primer_dia_mes
+            rango_fin = hoy
+
+        paginator = Paginator(arqueos_qs, per_page)
+        arqueos_page = paginator.get_page(page)
+
+        # Fechas únicas de arqueos de la página actual (para precomputar pagos)
+        fechas_arqueo = sorted({a.fecha_arqueo for a in arqueos_page.object_list})
+        if not fechas_arqueo:
+            return JsonResponse({
+                'success': True,
+                'arqueos': [],
+                'pagination': {
+                    'current_page': arqueos_page.number,
+                    'total_pages': paginator.num_pages,
+                    'total_items': paginator.count,
+                    'has_next': arqueos_page.has_next(),
+                    'has_previous': arqueos_page.has_previous(),
+                }
+            })
+
+        # --- Pagos de tickets por fecha y método (1 query) ---
+        from datetime import time as dt_time
+        inicio_rango = timezone.make_aware(
+            datetime.combine(fechas_arqueo[0], dt_time.min)
+        )
+        fin_rango = timezone.make_aware(
+            datetime.combine(fechas_arqueo[-1], dt_time.max)
+        )
+
+        pagos_ticket_qs = (
+            TicketDetallePago.objects
+            .filter(
+                ticket__sucursal_id=sucursal_actual_id,
+                ticket__created_at__gte=inicio_rango,
+                ticket__created_at__lte=fin_rango,
+                ticket__estado__in=['PENDIENTE_PAGO', 'PAGADO', 'PARCIALMENTE_PAGADO'],
+            )
+            .exclude(ticket__estado='ANULADO')
+            .annotate(fecha=TruncDate('ticket__created_at'))
+            .values('fecha', 'metodo_pago')
+            .annotate(total=Sum('monto'))
+        )
+
+        # --- Pagos de DTEs por fecha y método (1 query) ---
+        pagos_dte_qs = (
+            Dte_Detalle_Pago.objects
+            .filter(
+                dte__sucursal_id=sucursal_actual_id,
+                dte__fecha_emision__gte=fechas_arqueo[0],
+                dte__fecha_emision__lte=fechas_arqueo[-1],
+            )
+            .exclude(dte__estado_dte='ANULADO')
+            .values('dte__fecha_emision', 'metodo_pago')
+            .annotate(total=Sum('monto'))
+        )
+
+        # Acumular en diccionarios: { fecha: { 'EFECTIVO': 123, 'TARJETA_DEBITO': 456, ... } }
+        pagos_por_fecha: dict = {}
+        for row in pagos_ticket_qs:
+            f = row['fecha']
+            pagos_por_fecha.setdefault(f, {})
+            pagos_por_fecha[f][row['metodo_pago']] = (
+                pagos_por_fecha[f].get(row['metodo_pago'], 0) + (row['total'] or 0)
+            )
+        for row in pagos_dte_qs:
+            f = row['dte__fecha_emision']
+            pagos_por_fecha.setdefault(f, {})
+            pagos_por_fecha[f][row['metodo_pago']] = (
+                pagos_por_fecha[f].get(row['metodo_pago'], 0) + (row['total'] or 0)
+            )
+
+        METODOS_TRANSBANK = {'TARJETA_DEBITO', 'TARJETA_CREDITO', 'TARJETA'}
+
         datos = []
-        for arqueo in arqueos:
-            # RECALCULAR TEÓRICOS EN TIEMPO REAL
-            fecha_obj = arqueo.fecha_arqueo
-            inicio_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.min))
-            fin_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.max))
-            
-            # Recalcular efectivo teórico del día
-            tickets_dia = Ticket.objects.filter(
-                sucursal_id=sucursal_actual_id,
-                created_at__gte=inicio_dia,
-                created_at__lte=fin_dia,
-                estado__in=['PENDIENTE_PAGO', 'PAGADO', 'PARCIALMENTE_PAGADO']
-            ).exclude(estado='ANULADO')
-            
-            efectivo_teorico_actualizado = 0
-            transbank_teorico_actualizado = 0
-            convenio_teorico_actualizado = 0
-            credito_trabajador_teorico_actualizado = 0
-            credito_externo_teorico_actualizado = 0
-            
-            for ticket in tickets_dia:
-                pagos = TicketDetallePago.objects.filter(ticket=ticket)
-                for pago in pagos:
-                    monto = pago.monto or 0
-                    if pago.metodo_pago == 'EFECTIVO':
-                        efectivo_teorico_actualizado += monto
-                    elif pago.metodo_pago in ['TARJETA_DEBITO', 'TARJETA_CREDITO', 'TARJETA']:
-                        transbank_teorico_actualizado += monto
-                    elif pago.metodo_pago == 'CONVENIO':
-                        convenio_teorico_actualizado += monto
-                    elif pago.metodo_pago == 'CREDITO_TRABAJADOR':
-                        credito_trabajador_teorico_actualizado += monto
-                    elif pago.metodo_pago == 'CREDITO_EXTERNO':
-                        credito_externo_teorico_actualizado += monto
-            
-            # DTEs del día
-            dtes_dia = Dte.objects.filter(
-                sucursal_id=sucursal_actual_id,
-                fecha_emision=fecha_obj
-            ).exclude(estado_dte='ANULADO')
-            
-            for dte in dtes_dia:
-                # Obtener los pagos asociados al DTE
-                pagos_dte = dte.dte_asociado.all()
-                for pago in pagos_dte:
-                    monto = pago.monto or 0
-                    if pago.metodo_pago == 'EFECTIVO':
-                        efectivo_teorico_actualizado += monto
-                    elif pago.metodo_pago in ['TARJETA_DEBITO', 'TARJETA_CREDITO', 'TARJETA']:
-                        transbank_teorico_actualizado += monto
-                    elif pago.metodo_pago == 'CONVENIO':
-                        convenio_teorico_actualizado += monto
-                    elif pago.metodo_pago == 'CREDITO_TRABAJADOR':
-                        credito_trabajador_teorico_actualizado += monto
-                    elif pago.metodo_pago == 'CREDITO_EXTERNO':
-                        credito_externo_teorico_actualizado += monto
-            
-            # Usar properties del modelo para cálculos correctos
-            total_depositos = arqueo.total_depositos
-            efectivo_fisico = arqueo.total_efectivo_fisico
-            
-            # LÓGICA CORRECTA:
-            # - Físico es lo que declaró la cajera (para control interno)
-            # - Depósitos es lo que está en el banco (realidad)
-            # - La diferencia real es: (Físico + Depósitos) - Teórico
+        for arqueo in arqueos_page.object_list:
+            por_metodo = pagos_por_fecha.get(arqueo.fecha_arqueo, {})
+
+            efectivo_teo = por_metodo.get('EFECTIVO', 0)
+            transbank_teo = sum(
+                por_metodo.get(m, 0) for m in METODOS_TRANSBANK
+            )
+            convenio_teo = por_metodo.get('CONVENIO', 0)
+            credito_trab_teo = por_metodo.get('CREDITO_TRABAJADOR', 0)
+            credito_ext_teo = por_metodo.get('CREDITO_EXTERNO', 0)
+
+            total_depositos = arqueo.ann_total_depositos or 0
+            efectivo_fisico = arqueo.total_efectivo_fisico or 0
             total_efectivo_real = efectivo_fisico + total_depositos
-            
-            # Considerar fondo fijo de caja chica
-            fondo_fijo = arqueo.fondo_fijo_snapshot
+            fondo_fijo = arqueo.fondo_fijo_snapshot or 0
 
-            # Diferencia de efectivo: Lo que realmente hay (físico + depósitos) vs lo teórico + fondo fijo
-            diferencia_efectivo_actualizada = total_efectivo_real - (efectivo_teorico_actualizado + fondo_fijo)
+            diferencia_efectivo = total_efectivo_real - (efectivo_teo + fondo_fijo)
+            diferencia_cajero = efectivo_fisico - (efectivo_teo + fondo_fijo)
+            diferencia_transbank = (arqueo.cierre_pos_fisico or 0) - transbank_teo
+            diferencia_total = diferencia_efectivo + diferencia_transbank
 
-            # Diferencia de cajero (solo informativa): Físico vs (Teórico + Fondo Fijo)
-            diferencia_cajero = efectivo_fisico - (efectivo_teorico_actualizado + fondo_fijo)
-            
-            # Diferencia Transbank
-            diferencia_transbank_actualizada = arqueo.cierre_pos_fisico - transbank_teorico_actualizado
-            
-            # Diferencia total
-            diferencia_total_actualizada = diferencia_efectivo_actualizada + diferencia_transbank_actualizada
-            
-            arqueo_data = {
+            datos.append({
                 'id': arqueo.id,
                 'fecha_arqueo': arqueo.fecha_arqueo.strftime('%d/%m/%Y'),
                 'sucursal': arqueo.sucursal.alias if arqueo.sucursal else 'N/A',
                 'sucursal_id': arqueo.sucursal.id if arqueo.sucursal else None,
-                'usuario': arqueo.usuario_responsable.get_full_name() or arqueo.usuario_responsable.username,
-                'efectivo_teorico': efectivo_teorico_actualizado,  # ACTUALIZADO EN TIEMPO REAL
-                'efectivo_fisico': efectivo_fisico,  # Lo que declaró la cajera
-                'total_depositos': total_depositos,  # Lo que se depositó en el banco
-                'total_efectivo_real': total_efectivo_real,  # Físico + Depósitos
-                'diferencia_efectivo': diferencia_efectivo_actualizada,  # Diferencia real: (Físico + Depósitos) - Teórico
-                'diferencia_efectivo_real': diferencia_efectivo_actualizada,  # Mismo valor
-                'diferencia_cajero': diferencia_cajero,  # Solo informativa: Físico - Teórico
-                'total_transbank_teorico': transbank_teorico_actualizado,  # ACTUALIZADO EN TIEMPO REAL
-                'total_convenio_teorico': convenio_teorico_actualizado,
-                'total_credito_trabajador_teorico': credito_trabajador_teorico_actualizado,
-                'total_credito_externo_teorico': credito_externo_teorico_actualizado,
-                'cierre_pos_fisico': arqueo.cierre_pos_fisico,  # NO CAMBIA (lo que ingresó)
+                'usuario': (
+                    arqueo.usuario_responsable.get_full_name()
+                    or arqueo.usuario_responsable.username
+                ),
+                'efectivo_teorico': efectivo_teo,
+                'efectivo_fisico': efectivo_fisico,
+                'total_depositos': total_depositos,
+                'total_efectivo_real': total_efectivo_real,
+                'diferencia_efectivo': diferencia_efectivo,
+                'diferencia_efectivo_real': diferencia_efectivo,
+                'diferencia_cajero': diferencia_cajero,
+                'total_transbank_teorico': transbank_teo,
+                'total_convenio_teorico': convenio_teo,
+                'total_credito_trabajador_teorico': credito_trab_teo,
+                'total_credito_externo_teorico': credito_ext_teo,
+                'cierre_pos_fisico': arqueo.cierre_pos_fisico,
                 'numero_lote_pos': arqueo.numero_lote_pos or '',
-                'diferencia_transbank': diferencia_transbank_actualizada,  # RECALCULADA
-                'diferencia_total_real': diferencia_total_actualizada,  # RECALCULADA
+                'diferencia_transbank': diferencia_transbank,
+                'diferencia_total_real': diferencia_total,
                 'estado': arqueo.get_estado_display(),
                 'estado_codigo': arqueo.estado,
                 'observaciones': arqueo.observaciones,
-                'cantidad_depositos': arqueo.depositos.count(),
+                'cantidad_depositos': arqueo.ann_cantidad_depositos or 0,
                 'fondo_fijo': fondo_fijo,
-            }
-            
-            # Debug del primer arqueo
-            if len(datos) == 0:
-                print(f"📋 Primer arqueo en listar_cuadraturas ID={arqueo.id}:")
-                print(f"   - Efectivo teórico GUARDADO: {arqueo.total_efectivo_teorico}")
-                print(f"   - Efectivo teórico ACTUALIZADO: {efectivo_teorico_actualizado}")
-                print(f"   - Efectivo físico: {arqueo.total_efectivo_fisico}")
-                print(f"   - Cierre POS físico: {arqueo.cierre_pos_fisico}")
-                print(f"   - Transbank teórico GUARDADO: {arqueo.total_transbank_teorico}")
-                print(f"   - Transbank teórico ACTUALIZADO: {transbank_teorico_actualizado}")
-            
-            datos.append(arqueo_data)
-        
+            })
+
         return JsonResponse({
             'success': True,
-            'arqueos': datos
+            'arqueos': datos,
+            'pagination': {
+                'current_page': arqueos_page.number,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+                'has_next': arqueos_page.has_next(),
+                'has_previous': arqueos_page.has_previous(),
+            }
         })
-        
+
     except Exception as e:
-        import traceback
-        print(f"Error al listar cuadraturas: {e}")
-        print(traceback.format_exc())
         return JsonResponse({
             'success': False,
             'error': f'Error: {str(e)}'
@@ -6827,126 +6794,153 @@ def obtener_transacciones_dia(request):
 @login_required
 @require_GET
 def listar_arqueos(request):
-    """API para listar arqueos históricos con indicadores mensuales"""
+    """API para listar arqueos históricos con indicadores mensuales.
+
+    Optimización clave:
+    - Indicadores mensuales en UN solo `aggregate` condicional (antes: 8+ queries).
+    - Totales de depósitos por arqueo se calculan con `annotate(filter=Q(...))`
+      evitando N+1 (antes: 10-12 queries por arqueo × 20 arqueos por página).
+    - Se eliminaron los `print()` de debug del endpoint productivo.
+    """
     try:
-        from datetime import datetime, date, timedelta
+        from datetime import date, timedelta as _td
         from calendar import monthrange
-        
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        
+
+        sucursal_id = get_sucursal_id(request)
+
         # Supervisores pueden consultar otra sucursal via query param
         sucursal_override = request.GET.get('sucursal_id')
         rol_usuario = getattr(request.user, 'rol', None)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         if sucursal_override and es_supervisor:
             sucursal_id = sucursal_override
-        
-        print(f"🏢 Sucursal ID desde sesión: {sucursal_id}")
-        print(f"🔑 Claves de sesión disponibles: {list(request.session.keys())}")
-        
+
         if not sucursal_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal seleccionada'
             })
-        
+
         # Parámetros de filtro
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         estado = request.GET.get('estado')
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 20))
-        
-        print(f"📅 Filtros recibidos: fecha_desde={fecha_desde}, fecha_hasta={fecha_hasta}, estado={estado}")
-        
-        # ========== CALCULAR INDICADORES MENSUALES ==========
+
+        # ========== INDICADORES MENSUALES (1 aggregate + 1 select distinct) ==========
         hoy = timezone.localdate()
         primer_dia_mes = date(hoy.year, hoy.month, 1)
         ultimo_dia_mes = date(hoy.year, hoy.month, monthrange(hoy.year, hoy.month)[1])
-        
-        # Días hábiles del mes (lunes a sábado = 0-5)
+
+        # Días hábiles del mes (lunes a sábado = 0-5) hasta hoy
         dias_habiles = []
         dia_actual = primer_dia_mes
         while dia_actual <= min(hoy, ultimo_dia_mes):
-            if dia_actual.weekday() < 6:  # Lunes a Sábado
+            if dia_actual.weekday() < 6:
                 dias_habiles.append(dia_actual)
-            dia_actual += timedelta(days=1)
-        
+            dia_actual += _td(days=1)
         total_dias_habiles = len(dias_habiles)
-        
-        # Arqueos del mes actual
-        arqueos_mes = ArqueoCaja.objects.filter(
+
+        arqueos_mes_qs = ArqueoCaja.objects.filter(
             sucursal_id=sucursal_id,
             fecha_arqueo__gte=primer_dia_mes,
-            fecha_arqueo__lte=hoy
+            fecha_arqueo__lte=hoy,
         )
-        
-        fechas_con_arqueo = set(arqueos_mes.values_list('fecha_arqueo', flat=True))
-        
-        # Calcular indicadores
+
+        # Único aggregate para todos los contadores y sumas del mes
+        indic = arqueos_mes_qs.aggregate(
+            arqueos_pendientes=Count('id', filter=Q(estado='ABIERTO')),
+            arqueos_con_diferencias=Count('id', filter=Q(estado='CON_DIFERENCIAS')),
+            arqueos_cerrados=Count('id', filter=Q(estado='CERRADO')),
+            arqueos_revisados=Count('id', filter=Q(estado='REVISADO')),
+            arqueos_sin_revision=Count(
+                'id', filter=~Q(estado__in=['ABIERTO', 'REVISADO'])
+            ),
+            total_diferencia_efectivo=Sum(
+                F('total_efectivo_fisico') - F('total_efectivo_teorico'),
+                output_field=IntegerField(),
+            ),
+            total_diferencia_transbank=Sum(
+                F('cierre_pos_fisico') - F('total_transbank_teorico'),
+                output_field=IntegerField(),
+            ),
+            total_teorico_efectivo_mes=Sum('total_efectivo_teorico'),
+        )
+
+        fechas_con_arqueo = set(
+            arqueos_mes_qs.values_list('fecha_arqueo', flat=True).distinct()
+        )
         arqueos_realizados = len(fechas_con_arqueo)
-        arqueos_pendientes = arqueos_mes.filter(estado='ABIERTO').count()
-        arqueos_con_diferencias = arqueos_mes.filter(estado='CON_DIFERENCIAS').count()
-        arqueos_cerrados = arqueos_mes.filter(estado='CERRADO').count()
-        
-        # Días faltantes (días hábiles sin arqueo)
         dias_faltantes = [d for d in dias_habiles if d not in fechas_con_arqueo]
         arqueos_faltantes = len(dias_faltantes)
-        
-        # Totales de diferencias del mes
-        total_diferencia_efectivo = sum(a.diferencia_efectivo for a in arqueos_mes)
-        total_diferencia_transbank = sum(a.diferencia_transbank for a in arqueos_mes)
-        
-        # Indicadores adicionales para control de depósitos y revisión
-        arqueos_revisados = arqueos_mes.filter(estado='REVISADO').count()
-        arqueos_sin_revision = arqueos_mes.exclude(estado__in=['ABIERTO', 'REVISADO']).count()
-        depositos_pendientes_conf = DepositoBancario.objects.filter(
-            arqueo__sucursal_id=sucursal_id,
-            arqueo__fecha_arqueo__gte=primer_dia_mes,
-            verificado=False,
-            monto_declarado__gt=0
-        ).count()
-        # Total depositado vs teórico del mes (control real)
-        from django.db.models import Sum
-        total_depositado_mes = DepositoBancario.objects.filter(
+
+        dep_mes_agg = DepositoBancario.objects.filter(
             arqueo__sucursal_id=sucursal_id,
             arqueo__fecha_arqueo__gte=primer_dia_mes,
             arqueo__fecha_arqueo__lte=hoy,
-            verificado=True,
-        ).aggregate(total=Sum('monto_confirmado'))['total'] or 0
-        total_teorico_efectivo_mes = sum(a.total_efectivo_teorico for a in arqueos_mes)
+        ).aggregate(
+            depositos_pendientes_conf=Count(
+                'id', filter=Q(verificado=False, monto_declarado__gt=0)
+            ),
+            total_depositado_mes=Sum(
+                'monto_confirmado', filter=Q(verificado=True)
+            ),
+        )
+
+        total_depositado_mes = dep_mes_agg['total_depositado_mes'] or 0
+        total_teorico_efectivo_mes = indic['total_teorico_efectivo_mes'] or 0
+        arqueos_revisados = indic['arqueos_revisados'] or 0
 
         indicadores_mensuales = {
             'mes_actual': hoy.strftime('%B %Y'),
             'dias_habiles': total_dias_habiles,
             'arqueos_realizados': arqueos_realizados,
             'arqueos_faltantes': arqueos_faltantes,
-            'arqueos_pendientes': arqueos_pendientes,
-            'arqueos_con_diferencias': arqueos_con_diferencias,
-            'arqueos_cerrados': arqueos_cerrados,
-            'porcentaje_cumplimiento': round((arqueos_realizados / total_dias_habiles * 100) if total_dias_habiles > 0 else 0, 1),
+            'arqueos_pendientes': indic['arqueos_pendientes'] or 0,
+            'arqueos_con_diferencias': indic['arqueos_con_diferencias'] or 0,
+            'arqueos_cerrados': indic['arqueos_cerrados'] or 0,
+            'porcentaje_cumplimiento': round(
+                (arqueos_realizados / total_dias_habiles * 100)
+                if total_dias_habiles > 0 else 0, 1
+            ),
             'dias_faltantes': [d.strftime('%Y-%m-%d') for d in dias_faltantes[:10]],
-            'total_diferencia_efectivo': total_diferencia_efectivo,
-            'total_diferencia_transbank': total_diferencia_transbank,
-            # Nuevos indicadores
+            'total_diferencia_efectivo': indic['total_diferencia_efectivo'] or 0,
+            'total_diferencia_transbank': indic['total_diferencia_transbank'] or 0,
             'arqueos_revisados': arqueos_revisados,
-            'arqueos_sin_revision': arqueos_sin_revision,
-            'porcentaje_revisados': round((arqueos_revisados / arqueos_realizados * 100) if arqueos_realizados > 0 else 0, 1),
-            'depositos_pendientes_confirmacion': depositos_pendientes_conf,
+            'arqueos_sin_revision': indic['arqueos_sin_revision'] or 0,
+            'porcentaje_revisados': round(
+                (arqueos_revisados / arqueos_realizados * 100)
+                if arqueos_realizados > 0 else 0, 1
+            ),
+            'depositos_pendientes_confirmacion': dep_mes_agg['depositos_pendientes_conf'] or 0,
             'total_depositado_mes': total_depositado_mes,
             'total_teorico_efectivo_mes': total_teorico_efectivo_mes,
             'diferencia_depositos_mes': total_depositado_mes - total_teorico_efectivo_mes,
         }
-        
-        print(f"📊 Indicadores mes: {indicadores_mensuales}")
-        
-        # ========== CONSTRUIR QUERYSET PRINCIPAL ==========
-        queryset = ArqueoCaja.objects.filter(sucursal_id=sucursal_id).select_related(
-            'usuario_responsable', 'supervisor_revision'
+
+        # ========== QUERYSET PRINCIPAL ==========
+        # Los campos `cache_*` de ArqueoCaja vienen denormalizados via signal
+        # post_save/post_delete de DepositoBancario, evitando JOINs aquí.
+        # Solo anotamos lo que no se puede denormalizar trivialmente:
+        # existencia de comprobante y conteos de relaciones externas.
+        queryset = (
+            ArqueoCaja.objects
+            .filter(sucursal_id=sucursal_id)
+            .select_related('usuario_responsable', 'supervisor_revision')
+            .annotate(
+                ann_tiene_comprobante=Exists(
+                    DepositoBancario.objects.filter(
+                        arqueo_id=OuterRef('pk'),
+                        verificado=True,
+                    ).exclude(numero_comprobante='')
+                ),
+                ann_reaperturas=Count('historial_reaperturas', distinct=True),
+                ann_bitacora_count=Count('bitacora', distinct=True),
+            )
+            .order_by('-fecha_arqueo', '-id')
         )
-        
-        print(f"📊 Total de arqueos en sucursal {sucursal_id}: {queryset.count()}")
-        
+
         # Aplicar filtros
         if fecha_desde:
             queryset = queryset.filter(fecha_arqueo__gte=fecha_desde)
@@ -6954,18 +6948,32 @@ def listar_arqueos(request):
             queryset = queryset.filter(fecha_arqueo__lte=fecha_hasta)
         if estado:
             queryset = queryset.filter(estado=estado)
-        
-        # Paginación
-        from django.core.paginator import Paginator
+
         paginator = Paginator(queryset, per_page)
         arqueos_page = paginator.get_page(page)
-        
-        # Serializar datos
+
+        resultado_revision_dict = dict(RESULTADO_REVISION_CHOICES)
         arqueos_data = []
         for arqueo in arqueos_page:
-            # Debug para verificar valores
-            print(f"📊 Arqueo ID {arqueo.id}: Teórico={arqueo.total_efectivo_teorico}, Físico={arqueo.total_efectivo_fisico}, Diferencia={arqueo.diferencia_efectivo}")
-            
+            # Leer desde campos denormalizados (actualizados por signal)
+            depositos_declarados = arqueo.cache_depositos_declarados or 0
+            total_dep_efectivo = arqueo.cache_total_dep_efectivo_verif or 0
+            total_dep_cheque = arqueo.cache_total_dep_cheque_verif or 0
+            total_dep_verif_all = arqueo.cache_total_dep_verificado or 0
+
+            teorico_ef = arqueo.total_efectivo_teorico or 0
+            teorico_ch = arqueo.total_cheque_teorico or 0
+            dif_dep_vs_teorico = total_dep_efectivo - teorico_ef
+            dif_cheques_vs_teorico = total_dep_cheque - teorico_ch
+
+            esperado_total = teorico_ef + teorico_ch
+            if esperado_total == 0 or total_dep_verif_all == 0:
+                estado_deposito = 'SIN_DEPOSITO'
+            elif abs(total_dep_verif_all - esperado_total) <= 1000:
+                estado_deposito = 'COMPLETO'
+            else:
+                estado_deposito = 'PARCIAL'
+
             arqueos_data.append({
                 'id': arqueo.id,
                 'fecha_arqueo': arqueo.fecha_arqueo.strftime('%Y-%m-%d'),
@@ -6981,7 +6989,6 @@ def listar_arqueos(request):
                 'porcentaje_diferencia': round(arqueo.porcentaje_diferencia, 2),
                 'requiere_supervision': arqueo.requiere_supervision,
                 'venta_total': arqueo.venta_total_teorica,
-                # Transbank
                 'transbank_teorico': arqueo.total_transbank_teorico,
                 'transbank_fisico': arqueo.cierre_pos_fisico,
                 'diferencia_transbank': arqueo.diferencia_transbank,
@@ -6992,42 +6999,37 @@ def listar_arqueos(request):
                 'credito_fisico': arqueo.cierre_credito_fisico,
                 'diferencia_credito': arqueo.diferencia_credito,
                 'numero_lote': arqueo.numero_lote_pos or '',
-                # Otros
                 'observaciones': arqueo.observaciones or '',
                 'supervisor': arqueo.supervisor_revision.username if arqueo.supervisor_revision else '',
                 'fecha_cierre': arqueo.fecha_cierre.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_cierre else '',
-                'tiene_comprobante': arqueo.depositos.filter(verificado=True, numero_comprobante__gt='').exists(),
-                'total_depositado_verificado': sum(d.monto for d in arqueo.depositos.filter(verificado=True)),
-                # Resumen de depósitos para workflow visual
-                'depositos_declarados': arqueo.depositos.filter(monto_declarado__gt=0).count(),
-                'depositos_confirmados': arqueo.depositos.filter(verificado=True).count(),
-                'depositos_pendientes': arqueo.depositos.filter(verificado=False, monto_declarado__gt=0).count(),
-                'tiene_depositos': arqueo.depositos.filter(monto_declarado__gt=0).exists(),
-                'reaperturas': arqueo.historial_reaperturas.count(),
-                # === CONTROL POR DEPÓSITO BANCARIO (control real) ===
-                'total_deposito_efectivo': arqueo.total_depositado_efectivo_verificado,
-                'total_deposito_cheque': arqueo.total_depositado_cheque_verificado,
-                'diferencia_deposito_vs_teorico': arqueo.diferencia_deposito_vs_teorico,
-                'diferencia_cheques_vs_teorico': arqueo.diferencia_cheques_vs_teorico,
-                'estado_deposito': arqueo.estado_deposito,
-                # === REVISIÓN Y URGENCIA ===
+                'tiene_comprobante': bool(arqueo.ann_tiene_comprobante),
+                'total_depositado_verificado': arqueo.cache_total_depositos or 0,
+                'depositos_declarados': depositos_declarados,
+                'depositos_confirmados': arqueo.cache_depositos_confirmados or 0,
+                'depositos_pendientes': arqueo.cache_depositos_pendientes or 0,
+                'tiene_depositos': depositos_declarados > 0,
+                'reaperturas': arqueo.ann_reaperturas or 0,
+                'total_deposito_efectivo': total_dep_efectivo,
+                'total_deposito_cheque': total_dep_cheque,
+                'diferencia_deposito_vs_teorico': dif_dep_vs_teorico,
+                'diferencia_cheques_vs_teorico': dif_cheques_vs_teorico,
+                'estado_deposito': estado_deposito,
                 'dias_sin_revision': arqueo.dias_sin_revision,
                 'requiere_revision_urgente': arqueo.requiere_revision_urgente,
-                # === METADATA CONTEO ===
                 'modo_conteo': arqueo.modo_conteo,
                 'requiere_revision_express': arqueo.requiere_revision_express,
                 'fondo_fijo': arqueo.fondo_fijo_snapshot,
-                # === OBSERVACIONES ===
                 'observaciones_diferencia': arqueo.observaciones_diferencia or '',
                 'categoria_diferencia': arqueo.categoria_diferencia or '',
                 'observaciones_supervisor': arqueo.observaciones_supervisor or '',
-                # === RESULTADO REVISIÓN ===
                 'resultado_revision': getattr(arqueo, 'resultado_revision', 'PENDIENTE'),
-                'resultado_revision_display': dict(RESULTADO_REVISION_CHOICES).get(getattr(arqueo, 'resultado_revision', 'PENDIENTE'), 'Pendiente'),
-                'cantidad_observaciones': arqueo.bitacora.count() if hasattr(arqueo, 'bitacora') else 0,
+                'resultado_revision_display': resultado_revision_dict.get(
+                    getattr(arqueo, 'resultado_revision', 'PENDIENTE'), 'Pendiente'
+                ),
+                'cantidad_observaciones': arqueo.ann_bitacora_count or 0,
                 'ultima_obs_supervisor': '',
             })
-        
+
         return JsonResponse({
             'success': True,
             'arqueos': arqueos_data,
@@ -7040,7 +7042,7 @@ def listar_arqueos(request):
                 'has_previous': arqueos_page.has_previous(),
             }
         })
-        
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -9760,7 +9762,7 @@ def gestion_cambios_devoluciones(request):
 def listar_cambios_devoluciones(request):
     """API para listar cambios y devoluciones con filtros"""
     try:
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        sucursal_id = get_sucursal_id(request)
         if not sucursal_id:
             return JsonResponse({
                 'success': False,
@@ -9776,25 +9778,18 @@ def listar_cambios_devoluciones(request):
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 20))
 
-        # Construir queryset base
-        queryset = CambioDevolucion.objects.select_related(
-            'ticket_original', 'ticket_nuevo', 'sucursal', 'solicitado_por', 'aprobado_por',
-            'autorizado_por_usuario', 'revisado_por_gerencia', 'nota_credito',
-        ).prefetch_related(
-            'detalles__producto_original__ProductoTalla__producto',
-            'detalles__producto_nuevo__producto',
-            'pagos'
-        ).filter(sucursal_id=sucursal_id)
+        # Base filter (sin estado) — reutilizado para el aggregate y el filtrado
+        base_qs = CambioDevolucion.objects.filter(sucursal_id=sucursal_id)
 
         # Aplicar filtros (fecha, tipo, búsqueda — sin estado todavía)
         if fecha_desde:
-            queryset = queryset.filter(fecha_solicitud__date__gte=fecha_desde)
+            base_qs = base_qs.filter(fecha_solicitud__date__gte=fecha_desde)
         if fecha_hasta:
-            queryset = queryset.filter(fecha_solicitud__date__lte=fecha_hasta)
+            base_qs = base_qs.filter(fecha_solicitud__date__lte=fecha_hasta)
         if tipo_operacion:
-            queryset = queryset.filter(tipo_operacion=tipo_operacion)
+            base_qs = base_qs.filter(tipo_operacion=tipo_operacion)
         if buscar:
-            queryset = queryset.filter(
+            base_qs = base_qs.filter(
                 Q(numero_operacion__icontains=buscar) |
                 Q(ticket_original__correlativo__icontains=buscar) |
                 Q(ticket_original__cliente_nombre__icontains=buscar) |
@@ -9803,33 +9798,71 @@ def listar_cambios_devoluciones(request):
                 Q(observaciones_vendedor__icontains=buscar)
             )
 
-        # Conteos por estado (antes de aplicar filtro de estado del tab)
+        # --- 1 sola query: todos los conteos de tabs + estadísticas adicionales ---
+        agg = base_qs.aggregate(
+            todos=Count('id', distinct=True),
+            solicitados=Count('id', filter=Q(estado='SOLICITADO'), distinct=True),
+            aprobados=Count('id', filter=Q(estado='APROBADO'), distinct=True),
+            por_cobrar=Count(
+                'id',
+                filter=Q(estado__in=[
+                    'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE',
+                ]),
+                distinct=True,
+            ),
+            completados=Count('id', filter=Q(estado='COMPLETADO'), distinct=True),
+            cancelados=Count(
+                'id',
+                filter=Q(estado__in=['CANCELADO', 'RECHAZADO', 'REVERTIDO']),
+                distinct=True,
+            ),
+            total_diferencia=Sum('diferencia_monto'),
+            cambios_fuera_plazo=Count('id', filter=Q(es_fuera_de_plazo=True), distinct=True),
+            cambios_cross_branch=Count(
+                'id', filter=Q(es_autorizacion_cross_branch=True), distinct=True
+            ),
+            cambios_revision_pendiente=Count(
+                'id',
+                filter=Q(requiere_revision_gerencial=True, revisado_por_gerencia__isnull=True),
+                distinct=True,
+            ),
+        )
+
         conteos_tab = {
-            'todos': queryset.count(),
-            'solicitados': queryset.filter(estado='SOLICITADO').count(),
-            'aprobados': queryset.filter(estado='APROBADO').count(),
-            'por_cobrar': queryset.filter(estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']).count(),
-            'completados': queryset.filter(estado='COMPLETADO').count(),
-            'cancelados': queryset.filter(estado__in=['CANCELADO', 'RECHAZADO', 'REVERTIDO']).count(),
+            'todos': agg['todos'] or 0,
+            'solicitados': agg['solicitados'] or 0,
+            'aprobados': agg['aprobados'] or 0,
+            'por_cobrar': agg['por_cobrar'] or 0,
+            'completados': agg['completados'] or 0,
+            'cancelados': agg['cancelados'] or 0,
         }
 
-        # Ahora aplicar filtro de estado del tab activo
+        # --- Queryset filtrado por estado (tab activo) con prefetch ---
+        queryset = base_qs.select_related(
+            'ticket_original', 'ticket_nuevo', 'sucursal', 'solicitado_por', 'aprobado_por',
+            'autorizado_por_usuario', 'revisado_por_gerencia', 'nota_credito',
+        ).prefetch_related(
+            'detalles__producto_original__ProductoTalla__producto',
+            'detalles__producto_nuevo__producto',
+            'pagos',
+        )
+
         if estado:
             if estado == 'CANCELADO':
                 queryset = queryset.filter(estado__in=['CANCELADO', 'RECHAZADO', 'REVERTIDO'])
             elif estado == 'EJECUTADO_COBRO_PENDIENTE':
-                queryset = queryset.filter(estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE'])
+                queryset = queryset.filter(
+                    estado__in=['EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']
+                )
             else:
                 queryset = queryset.filter(estado=estado)
 
-        # Paginación
         paginator = Paginator(queryset, per_page)
         cambios_page = paginator.get_page(page)
 
-        # Serializar datos
         cambios_data = []
         for cambio in cambios_page:
-            detalles = cambio.detalles.all()
+            detalles = list(cambio.detalles.all())
             total_productos_devueltos = sum(1 for d in detalles if d.producto_original_id)
             total_productos_nuevos = sum(1 for d in detalles if d.producto_nuevo_id)
             cant_devueltos = sum(d.cantidad_original for d in detalles if d.producto_original_id)
@@ -9922,17 +9955,6 @@ def listar_cambios_devoluciones(request):
                 'nota_credito_numero': cambio.nota_credito.numero_documento if cambio.nota_credito_id else None,
             })
 
-        total_diferencia = queryset.aggregate(
-            total=Sum('diferencia_monto')
-        )['total'] or 0
-
-        cambios_fuera_plazo = queryset.filter(es_fuera_de_plazo=True).count()
-        cambios_cross_branch = queryset.filter(es_autorizacion_cross_branch=True).count()
-        cambios_revision_pendiente = queryset.filter(
-            requiere_revision_gerencial=True,
-            revisado_por_gerencia__isnull=True,
-        ).count()
-
         return JsonResponse({
             'success': True,
             'cambios': cambios_data,
@@ -9950,10 +9972,10 @@ def listar_cambios_devoluciones(request):
                 'cambios_aprobados': conteos_tab['aprobados'],
                 'cambios_por_cobrar': conteos_tab['por_cobrar'],
                 'cambios_completados': conteos_tab['completados'],
-                'total_diferencia': float(total_diferencia),
-                'cambios_fuera_plazo': cambios_fuera_plazo,
-                'cambios_cross_branch': cambios_cross_branch,
-                'cambios_revision_pendiente': cambios_revision_pendiente,
+                'total_diferencia': float(agg['total_diferencia'] or 0),
+                'cambios_fuera_plazo': agg['cambios_fuera_plazo'] or 0,
+                'cambios_cross_branch': agg['cambios_cross_branch'] or 0,
+                'cambios_revision_pendiente': agg['cambios_revision_pendiente'] or 0,
             }
         })
 
@@ -13156,6 +13178,7 @@ def dashboard_ventas_mejorado(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('ind_globales', timeout=60)
 def obtener_indicadores_globales_ventas(request):
     """
     API para obtener indicadores globales de ventas
@@ -13185,39 +13208,41 @@ def obtener_indicadores_globales_ventas(request):
                     'error': 'Formato de fecha inválido. Use YYYY-MM-DD'
                 }, status=400)
         
-        # Construir queryset base
-        queryset = Ticket.objects.filter(
-            fecha__gte=fecha_inicio,
-            fecha__lte=fecha_fin
+        def build_queryset(f_inicio, f_fin):
+            qs = Ticket.objects.filter(fecha__gte=f_inicio, fecha__lte=f_fin)
+            if estado:
+                qs = qs.filter(estado=estado)
+            else:
+                qs = qs.filter(estado='PAGADO')
+            if sucursal_id:
+                qs = qs.filter(sucursal_id=sucursal_id)
+            if vendedor_id:
+                qs = qs.filter(vendedor_id=vendedor_id)
+            if metodo_pago:
+                qs = qs.filter(pagos__metodo_pago=metodo_pago).distinct()
+            return qs
+
+        queryset = build_queryset(fecha_inicio, fecha_fin)
+
+        # --- Un solo aggregate para todas las métricas del período actual ---
+        agg = queryset.aggregate(
+            ventas_totales=Sum('total'),
+            cantidad_ventas=Count('id', distinct=True),
+            ventas_con_factura=Count(
+                'id',
+                filter=Q(tipo_dte__in=['FACTURA_ELECTRONICA', 'FACTURA_EXENTA']),
+                distinct=True,
+            ),
+            ventas_con_boleta=Count(
+                'id', filter=Q(tipo_dte='BOLETA_ELECTRONICA'), distinct=True,
+            ),
+            tickets_offline=Count('id', filter=Q(created_offline=True), distinct=True),
         )
-        
-        # Aplicar filtro de estado - por defecto solo tickets PAGADOS
-        if estado:
-            queryset = queryset.filter(estado=estado)
-        else:
-            queryset = queryset.filter(estado='PAGADO')
-        
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
-        
-        if vendedor_id:
-            queryset = queryset.filter(vendedor_id=vendedor_id)
-        
-        if metodo_pago:
-            # Filtrar por método de pago desde TicketDetallePago
-            tickets_con_metodo = TicketDetallePago.objects.filter(
-                metodo_pago=metodo_pago,
-                ticket__fecha__gte=fecha_inicio,
-                ticket__fecha__lte=fecha_fin
-            ).values_list('ticket_id', flat=True).distinct()
-            queryset = queryset.filter(id__in=tickets_con_metodo)
-        
-        # Calcular métricas del período actual
-        ventas_totales = queryset.aggregate(total=Sum('total'))['total'] or 0
-        cantidad_ventas = queryset.count()
+        ventas_totales = agg['ventas_totales'] or 0
+        cantidad_ventas = agg['cantidad_ventas'] or 0
         ticket_promedio = ventas_totales / cantidad_ventas if cantidad_ventas > 0 else 0
-        
-        # Calcular métricas del período de comparación
+
+        # --- Período de comparación ---
         if periodo_comparacion == 'mes_anterior':
             dias_diferencia = (fecha_fin - fecha_inicio).days
             fecha_comp_fin = fecha_inicio - timedelta(days=1)
@@ -13228,89 +13253,67 @@ def obtener_indicadores_globales_ventas(request):
         else:  # semana_anterior
             fecha_comp_fin = fecha_inicio - timedelta(days=1)
             fecha_comp_inicio = fecha_comp_fin - timedelta(days=6)
-        
-        # Queryset de comparación
-        queryset_comp = Ticket.objects.filter(
-            fecha__gte=fecha_comp_inicio,
-            fecha__lte=fecha_comp_fin
+
+        agg_comp = build_queryset(fecha_comp_inicio, fecha_comp_fin).aggregate(
+            ventas_comp=Sum('total'),
+            cantidad_comp=Count('id', distinct=True),
         )
-        
-        if estado:
-            queryset_comp = queryset_comp.filter(estado=estado)
-        if sucursal_id:
-            queryset_comp = queryset_comp.filter(sucursal_id=sucursal_id)
-        if vendedor_id:
-            queryset_comp = queryset_comp.filter(vendedor_id=vendedor_id)
-        if metodo_pago:
-            tickets_comp_metodo = TicketDetallePago.objects.filter(
-                metodo_pago=metodo_pago,
-                ticket__fecha__gte=fecha_comp_inicio,
-                ticket__fecha__lte=fecha_comp_fin
-            ).values_list('ticket_id', flat=True).distinct()
-            queryset_comp = queryset_comp.filter(id__in=tickets_comp_metodo)
-        
-        ventas_comp = queryset_comp.aggregate(total=Sum('total'))['total'] or 0
-        cantidad_comp = queryset_comp.count()
+        ventas_comp = agg_comp['ventas_comp'] or 0
+        cantidad_comp = agg_comp['cantidad_comp'] or 0
         ticket_comp = ventas_comp / cantidad_comp if cantidad_comp > 0 else 0
-        
-        # Calcular crecimientos
+
         crecimiento_ventas = ((ventas_totales - ventas_comp) / ventas_comp * 100) if ventas_comp > 0 else 0
         crecimiento_cantidad = ((cantidad_ventas - cantidad_comp) / cantidad_comp * 100) if cantidad_comp > 0 else 0
         crecimiento_ticket = ((ticket_promedio - ticket_comp) / ticket_comp * 100) if ticket_comp > 0 else 0
-        
+
         # Cambios y devoluciones
-        cambios = CambioDevolucion.objects.filter(
+        cambios_qs = CambioDevolucion.objects.filter(
             fecha_solicitud__date__gte=fecha_inicio,
-            fecha_solicitud__date__lte=fecha_fin
+            fecha_solicitud__date__lte=fecha_fin,
         )
-        
         if sucursal_id:
-            cambios = cambios.filter(sucursal_id=sucursal_id)
-        
-        cantidad_cambios = cambios.count()
+            cambios_qs = cambios_qs.filter(sucursal_id=sucursal_id)
+        cantidad_cambios = cambios_qs.count()
         ratio_cambios = (cantidad_cambios / cantidad_ventas * 100) if cantidad_ventas > 0 else 0
-        
+
         # Descuentos aplicados en el periodo
-        ticket_ids_list = queryset.values_list('id', flat=True)
-        lineas_qs = Ticket_Productos.objects.filter(idTicket_id__in=ticket_ids_list)
-        desc_agg = lineas_qs.aggregate(
-            descuento_total=Sum(ExpressionWrapper(F('stock') * F('descuento_unitario'), output_field=DecimalField())),
+        desc_agg = Ticket_Productos.objects.filter(idTicket__in=queryset).aggregate(
+            descuento_total=Sum(
+                ExpressionWrapper(
+                    F('stock') * F('descuento_unitario'),
+                    output_field=DecimalField(),
+                )
+            ),
             descuento_prom_pct=Avg('porcentaje_descuento'),
         )
         descuento_total = float(desc_agg['descuento_total'] or 0)
         descuento_prom_pct = float(desc_agg['descuento_prom_pct'] or 0)
-        
-        # Ventas por tipo de documento
-        ventas_con_factura = queryset.filter(tipo_dte__in=['FACTURA_ELECTRONICA', 'FACTURA_EXENTA']).count()
-        ventas_con_boleta = queryset.filter(tipo_dte='BOLETA_ELECTRONICA').count()
-        tickets_offline = queryset.filter(created_offline=True).count()
-        
-        # Evolución diaria de ventas - Asegurar que haya datos para todos los días del período
+
+        ventas_con_factura = agg['ventas_con_factura'] or 0
+        ventas_con_boleta = agg['ventas_con_boleta'] or 0
+        tickets_offline = agg['tickets_offline'] or 0
+
+        # Evolución diaria de ventas — un solo values+annotate y fill en memoria
         evolucion_diaria = queryset.values('fecha').annotate(
             total=Sum('total'),
-            cantidad=Count('id')
+            cantidad=Count('id'),
         ).order_by('fecha')
-        
-        # Crear diccionario con todas las fechas del período
-        fecha_actual = fecha_inicio
+
         todas_fechas = {}
+        fecha_actual = fecha_inicio
         while fecha_actual <= fecha_fin:
             todas_fechas[fecha_actual] = {'total': 0, 'cantidad': 0}
             fecha_actual += timedelta(days=1)
-        
-        # Llenar con datos reales
         for item in evolucion_diaria:
             todas_fechas[item['fecha']] = {
                 'total': float(item['total'] or 0),
-                'cantidad': item['cantidad']
+                'cantidad': item['cantidad'],
             }
-        
-        # Convertir a lista ordenada
         evolucion_data = [
             {
                 'fecha': fecha.strftime('%d/%m'),
                 'total': datos['total'],
-                'cantidad': datos['cantidad']
+                'cantidad': datos['cantidad'],
             }
             for fecha, datos in sorted(todas_fechas.items())
         ]
@@ -13346,6 +13349,7 @@ def obtener_indicadores_globales_ventas(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('ventas_vendedor', timeout=60)
 def obtener_ventas_por_vendedor(request):
     """
     API para obtener ventas por vendedor con métricas individuales
@@ -13457,6 +13461,7 @@ def obtener_ventas_por_vendedor(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('suc_dashboard', timeout=300, vary_on_session=True)
 def obtener_sucursales_dashboard(request):
     """
     API para obtener lista de sucursales para filtros del dashboard.
@@ -13497,6 +13502,7 @@ def obtener_sucursales_dashboard(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('ventas_sucursal', timeout=60)
 def obtener_ventas_por_sucursal(request):
     """
     API para obtener análisis comparativo de ventas por sucursal
@@ -13568,6 +13574,7 @@ def obtener_ventas_por_sucursal(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('ventas_metodo_pago', timeout=60)
 def obtener_ventas_por_metodo_pago(request):
     """
     API para obtener distribución de ventas por método de pago
@@ -13656,6 +13663,7 @@ def obtener_ventas_por_metodo_pago(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('analisis_cambios', timeout=120)
 def obtener_analisis_cambios_devoluciones(request):
     """
     API para obtener análisis de cambios y devoluciones
@@ -14187,6 +14195,7 @@ def exportar_cambios_devoluciones(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('estado_cuadraturas', timeout=120)
 def obtener_estado_cuadraturas(request):
     """
     API para obtener estado de cuadraturas de caja
@@ -14276,6 +14285,7 @@ def obtener_estado_cuadraturas(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('prod_mas_vendidos', timeout=120)
 def obtener_productos_mas_vendidos(request):
     """
     API para obtener los productos más vendidos
@@ -14375,6 +14385,7 @@ def obtener_productos_mas_vendidos(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('tendencias_ventas', timeout=120)
 def obtener_tendencias_ventas(request):
     """
     API para obtener tendencias de ventas
@@ -14449,6 +14460,7 @@ def obtener_tendencias_ventas(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('ind_avanzados', timeout=120)
 def obtener_indicadores_avanzados_ventas(request):
     """
     API para obtener indicadores avanzados de retail con datos reales.
@@ -14555,6 +14567,7 @@ def obtener_indicadores_avanzados_ventas(request):
 
 @require_GET
 @login_required
+@cache_ventas_json('estado_operacional', timeout=60)
 def obtener_estado_operacional_ventas(request):
     """
     API para obtener el estado operacional completo del modulo de ventas.

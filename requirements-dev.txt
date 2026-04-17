@@ -1,0 +1,18 @@
+# Dependencias solo usadas en desarrollo / migración / diagnóstico.
+# NO son necesarias en el servidor de producción.
+#
+# Uso:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# Notas:
+#   - mysql-connector-python: se usó sólo para migrar datos desde el sistema
+#     Laravel legacy vía management commands (migrate_from_laravel.py, etc).
+#     Una vez migrado no se necesita en runtime.
+#   - statsmodels / scipy / numpy: solo para el módulo de predicción de
+#     compras (batch offline). Si el servidor de producción sirve el POS,
+#     puedes omitirlos y correr la predicción en otro worker.
+
+mysql-connector-python==9.5.0
+statsmodels>=0.14
+# numpy y scipy entran como dependencia transitiva de statsmodels, no hace
+# falta fijarlas aquí.

@@ -1,0 +1,152 @@
+# -*- coding: utf-8 -*-
+"""
+Helpers compartidos del módulo ventas.
+
+Centraliza lógica repetida en vistas de listado/POS:
+- Obtención de sucursal desde sesión.
+- Normalización de nombres de métodos de pago.
+- Agrupación de pagos por método.
+- Campos `only()` estandarizados para prefetch.
+"""
+from __future__ import annotations
+
+from typing import Iterable
+
+
+# ========== NOMBRES DE MÉTODOS DE PAGO ==========
+
+NOMBRES_METODOS_PAGO = {
+    'EFECTIVO': 'Efectivo',
+    'TARJETA_DEBITO': 'Tarjeta Débito',
+    'TARJETA_CREDITO': 'Tarjeta Crédito',
+    'TRANSFERENCIA': 'Transferencia',
+    'CHEQUE': 'Cheque',
+    'OTRO': 'Otro',
+    'TBK_POS_INTEGRADO': 'Transbank POS',
+    'TBK_MANUAL': 'Transbank Manual',
+    'TBK_DEBITO_POS': 'TBK Débito POS',
+    'TBK_CREDITO_POS': 'TBK Crédito POS',
+    'TBK_PREPAGO_POS': 'TBK Prepago POS',
+    'TARJETA_COMERCIAL': 'Tarjeta Comercial',
+    'VENTA_INTERNET': 'Venta por Internet',
+    'ORDEN_COMPRA': 'Orden de Compra',
+    'CREDITO_TRABAJADOR': 'Crédito Trabajador',
+    'CREDITO_EXTERNO': 'Crédito Externo',
+    'CONVENIO': 'Convenio',
+}
+
+
+def obtener_nombre_metodo_pago(codigo: str | None) -> str:
+    """Convierte un código de método de pago en su nombre legible."""
+    if not codigo:
+        return ''
+    return NOMBRES_METODOS_PAGO.get(codigo, codigo)
+
+
+# ========== SUCURSAL ACTIVA ==========
+
+def get_sucursal_id(request):
+    """Obtiene el id de sucursal activa desde la sesión (acepta ambas claves legacy)."""
+    return (
+        request.session.get('idSucursalActual')
+        or request.session.get('sucursalActual')
+    )
+
+
+# ========== AGRUPACIÓN DE PAGOS ==========
+
+def agrupar_metodos_pago(pagos: Iterable[dict]) -> list[dict]:
+    """
+    Agrupa pagos por (metodo, metodo_display, tipo_tarjeta) sumando montos
+    y concatenando vouchers/notas únicos.
+    """
+    agrupados: dict[tuple, dict] = {}
+    for pago in pagos:
+        metodo = pago.get('metodo') or ''
+        metodo_display = pago.get('metodo_display') or metodo
+        tipo_tarjeta = pago.get('tipo_tarjeta') or ''
+        key = (metodo, metodo_display, tipo_tarjeta)
+        if key not in agrupados:
+            agrupados[key] = {
+                'metodo': metodo,
+                'metodo_display': metodo_display,
+                'monto': 0,
+                'voucher': '',
+                'tipo_tarjeta': tipo_tarjeta,
+                'notas': '',
+                '_vouchers': set(),
+                '_notas': set(),
+            }
+        agrupados[key]['monto'] += pago.get('monto') or 0
+        if pago.get('voucher'):
+            agrupados[key]['_vouchers'].add(str(pago['voucher']))
+        if pago.get('notas'):
+            agrupados[key]['_notas'].add(str(pago['notas']))
+
+    resultado: list[dict] = []
+    for item in agrupados.values():
+        if item['_vouchers']:
+            item['voucher'] = ', '.join(sorted(item['_vouchers']))
+        if item['_notas']:
+            item['notas'] = ' | '.join(sorted(item['_notas']))
+        item.pop('_vouchers', None)
+        item.pop('_notas', None)
+        resultado.append(item)
+    return resultado
+
+
+def formatear_metodos_pago_str(metodos_pago: Iterable[dict]) -> str:
+    """
+    Genera un string concatenado con los métodos de pago ya agrupados.
+    Añade el `tipo_tarjeta` entre paréntesis para tarjetas y venta por internet.
+    """
+    partes: list[str] = []
+    for p in metodos_pago:
+        texto = p.get('metodo_display') or p.get('metodo') or ''
+        tipo = p.get('tipo_tarjeta') or ''
+        metodo = p.get('metodo') or ''
+        if tipo and (metodo == 'VENTA_INTERNET' or 'TARJETA' in metodo):
+            texto += f" ({tipo})"
+        if texto:
+            partes.append(texto)
+    return ', '.join(partes) if partes else 'Sin pagos'
+
+
+# ========== CAMPOS `only()` ESTANDARIZADOS ==========
+
+# DTE (listado principal)
+ONLY_DTE_LISTA = (
+    'id', 'numero_documento', 'fecha_emision', 'tipo_documento',
+    'tipo_transaccion', 'estado_dte', 'descuento', 'monto_neto',
+    'monto_con_iva', 'sucursal_id',
+    'vendedor_id', 'vendedor__nombre', 'vendedor__codigo_vendedor',
+    'receptor_id', 'receptor__nombre', 'receptor__rut', 'receptor__giro',
+    'receptor__correoVendedor', 'receptor__direccion', 'receptor__comuna',
+)
+
+ONLY_DTE_PRODUCTO = (
+    'id', 'dte_id', 'stock', 'precio', 'descuento_monto', 'monto_item',
+    'costo', 'sobreprecio', 'descripcion',
+    'productoTalla_id', 'productoTalla__sku', 'productoTalla__talla',
+    'productoTalla__producto_id', 'productoTalla__producto__articulo',
+)
+
+ONLY_DTE_PAGO = (
+    'id', 'dte_id', 'metodo_pago', 'monto', 'voucher', 'tipo_tarjeta',
+)
+
+# Ticket (dashboard POS)
+ONLY_TICKET_POS = (
+    'id', 'correlativo', 'estado', 'total', 'metodo_pago',
+    'modulo_origen', 'observaciones', 'created_at', 'fecha',
+    'cliente_nombre', 'cliente_rut',
+    'sucursal_id', 'vendedor_id',
+    'vendedor__codigo_vendedor', 'vendedor__nombre',
+)
+
+ONLY_TICKET_PRODUCTO_POS = (
+    'id', 'idTicket_id', 'stock',
+    'ProductoTalla_id', 'ProductoTalla__sku', 'ProductoTalla__talla',
+    'ProductoTalla__stock', 'ProductoTalla__producto_id',
+    'ProductoTalla__producto__articulo', 'ProductoTalla__producto__sucursal_id',
+)

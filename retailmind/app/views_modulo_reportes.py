@@ -1912,7 +1912,8 @@ def obtener_documentos_emitidos(request):
         fecha_hasta = request.GET.get('fecha_hasta')
         tipo_documento = request.GET.get('tipo_documento')
         metodo_pago_filtro = request.GET.get('metodo_pago')
-        
+        sucursal_param = (request.GET.get('sucursal_id') or '').strip()
+
         # Si no se proporcionan fechas, usar el día actual
         if not fecha_desde or not fecha_hasta:
             fecha_fin = timezone.localdate()
@@ -1921,10 +1922,12 @@ def obtener_documentos_emitidos(request):
         else:
             fecha_desde = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
             fecha_hasta = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
-        
+
         # Consultar DTEs (Boletas y Facturas Electrónicas)
+        # NOTA: Incluimos facturas entre sucursales (receptor=emisor) para coincidir
+        # con el comportamiento de /app/ventas/documentos/.
         queryset = Dte.objects.select_related(
-            'vendedor', 
+            'vendedor',
             'receptor',
             'sucursal'
         ).prefetch_related(
@@ -1933,14 +1936,58 @@ def obtener_documentos_emitidos(request):
             tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
             fecha_emision__gte=fecha_desde,
             fecha_emision__lte=fecha_hasta
-        ).exclude(
-            # Excluir facturas entre sucursales de la misma empresa
-            receptor__isnull=False,
-            receptor_id=F('emisor_id')
         )
-        
-        # Filtrar por sucursal según permisos del usuario
-        queryset = filtrar_queryset_por_sucursal(queryset, request.user, request)
+
+        # --- Filtro de sucursal con semántica explícita ---
+        # Reglas:
+        #   - sucursal_param == 'all'  → sin filtro (traer todas las sucursales accesibles)
+        #   - sucursal_param == '<id>' → filtrar por esa sucursal (si tiene permiso)
+        #   - sucursal_param vacío     → usar sucursal activa de la sesión (default seguro
+        #                                que coincide con /app/ventas/documentos/)
+        sucursal_sesion_id = (
+            request.session.get('idSucursalActual')
+            or request.session.get('sucursalActual')
+        )
+        filtro_sucursal_desc = ''
+        sucursal_ids_permitidas = list(
+            obtener_sucursales_usuario(request.user).values_list('id', flat=True)
+        )
+
+        if sucursal_param == 'all':
+            if usuario_puede_ver_todas_sucursales(request.user):
+                queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                    if sucursal_ids_permitidas else queryset.none()
+                filtro_sucursal_desc = 'Todas las sucursales accesibles'
+            else:
+                # Usuario no puede ver todas → se restringe a las asignadas
+                queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                    if sucursal_ids_permitidas else queryset.none()
+                filtro_sucursal_desc = 'Sucursales asignadas al usuario'
+        elif sucursal_param:
+            # Validar permiso sobre esa sucursal específica
+            if puede_ver_sucursal(request.user, sucursal_param):
+                queryset = queryset.filter(sucursal_id=sucursal_param)
+                filtro_sucursal_desc = f'Sucursal específica (id={sucursal_param})'
+            else:
+                # Fallback: sucursal de sesión si la tiene
+                if sucursal_sesion_id:
+                    queryset = queryset.filter(sucursal_id=sucursal_sesion_id)
+                    filtro_sucursal_desc = (
+                        f'Sin permiso para id={sucursal_param}, se usó sucursal de sesión'
+                    )
+                else:
+                    queryset = queryset.none()
+                    filtro_sucursal_desc = 'Sin permiso y sin sucursal de sesión'
+        else:
+            # Default: sucursal activa de la sesión
+            if sucursal_sesion_id:
+                queryset = queryset.filter(sucursal_id=sucursal_sesion_id)
+                filtro_sucursal_desc = f'Sucursal activa de sesión (id={sucursal_sesion_id})'
+            else:
+                # Si no hay sesión, restringir a las sucursales del usuario
+                queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                    if sucursal_ids_permitidas else queryset.none()
+                filtro_sucursal_desc = 'Sin sucursal de sesión, se usaron las accesibles'
 
         # Aplicar filtros
         if tipo_documento:
@@ -2102,108 +2149,180 @@ def obtener_documentos_emitidos(request):
             'total_global': 0     # ventas_brutas - notas_credito - descuentos
         }
         
+        # --- Helper: clasifica un método de pago en la categoría del resumen ---
+        # Importante: el orden de verificación evita colisiones (ej. CREDITO_TRABAJADOR
+        # debe detectarse ANTES que CREDITO genérico de tarjeta).
+        def clasificar_metodo(metodo_raw):
+            m = (metodo_raw or '').upper()
+            if not m:
+                return 'otros'
+            # Específicos primero
+            if 'TRABAJADOR' in m:
+                return 'credito_trabajador'
+            if 'INTERNET' in m or 'WEB' in m:
+                return 'venta_internet'
+            if 'TRANSFERENCIA' in m:
+                return 'transferencia'
+            if 'CONVENIO' in m:
+                return 'convenio'
+            if 'COMERCIAL' in m or 'PARIS' in m or 'RIPLEY' in m or 'FALABELLA' in m:
+                return 'tarjeta_comercial'
+            if 'EFECTIVO' in m:
+                return 'efectivo'
+            # Tarjetas TBK/bancarias
+            if 'DEBITO' in m or 'REDCOMPRA' in m:
+                return 'tbk_debito'
+            if ('CREDITO' in m or 'VISA' in m or 'MASTERCARD' in m
+                    or 'AMEX' in m or 'DINER' in m):
+                return 'tbk_credito'
+            # Otros (CHEQUE, OTRO, ORDEN_COMPRA, TBK_MANUAL, TBK_PREPAGO_POS,
+            # CREDITO_EXTERNO sin TRABAJADOR, etc.)
+            return 'otros'
+
+        # --- Diagnóstico: contadores para cuadrar con /app/ventas/documentos/ ---
+        diag_conteo_por_tipo = {}
+        diag_sucursales = {}          # {sucursal_id: {'alias': ..., 'cantidad': N, 'monto': $}}
+        diag_cant_dtes = 0            # DTEs "normales" (no NC) que aportan a ventas brutas
+        diag_cant_nc = 0              # Notas de crédito
+        diag_sin_pagos = 0            # DTEs sin registros en dte_asociado
+
         # Calcular totales por método de pago desde Dte_Detalle_Pago
         for dte in queryset:
-            total = int(dte.monto_con_iva)
+            total = int(dte.monto_con_iva or 0)
             descuento_db = int(dte.descuento) if dte.descuento else 0
             tipo_doc_upper = dte.tipo_documento.upper() if dte.tipo_documento else ''
+
+            # --- Diagnóstico: conteos por tipo y sucursal ---
+            tipo_key = dte.tipo_documento or 'SIN_TIPO'
+            if tipo_key not in diag_conteo_por_tipo:
+                diag_conteo_por_tipo[tipo_key] = {'cantidad': 0, 'monto': 0}
+            diag_conteo_por_tipo[tipo_key]['cantidad'] += 1
+            diag_conteo_por_tipo[tipo_key]['monto'] += total
+
+            suc_id = dte.sucursal_id
+            if suc_id not in diag_sucursales:
+                suc_alias = getattr(dte.sucursal, 'alias', None) or getattr(dte.sucursal, 'nombreSucursal', '') or f'ID {suc_id}'
+                diag_sucursales[suc_id] = {
+                    'id': suc_id,
+                    'alias': suc_alias,
+                    'cantidad': 0,
+                    'monto': 0,
+                }
+            diag_sucursales[suc_id]['cantidad'] += 1
+            diag_sucursales[suc_id]['monto'] += total
 
             # Las Notas de Crédito se acumulan aparte y se restan del total
             if 'NOTA' in tipo_doc_upper and 'CREDITO' in tipo_doc_upper:
                 resumen['notas_credito'] += total
+                diag_cant_nc += 1
                 continue
+
+            diag_cant_dtes += 1
 
             # Obtener métodos de pago del DTE usando la relación inversa
             detalles_pago = dte.dte_asociado.all()
-            metodo_procesado = False
             pagado_sum = 0
-            
+
             if detalles_pago.exists():
                 for detalle in detalles_pago:
-                    metodo = detalle.metodo_pago.upper()
-                    monto = int(detalle.monto)
+                    monto = int(detalle.monto or 0)
                     pagado_sum += monto
-                    metodo_procesado = True
-                    
-                    if 'EFECTIVO' in metodo:
-                        resumen['efectivo'] += monto
-                    elif ('CREDITO' in metodo or 'VISA' in metodo or 'MASTERCARD' in metodo or 'AMEX' in metodo or 'DINER' in metodo) and 'DEBITO' not in metodo:
-                        resumen['tbk_credito'] += monto
-                    elif 'DEBITO' in metodo or 'REDCOMPRA' in metodo:
-                        resumen['tbk_debito'] += monto
-                    elif 'COMERCIAL' in metodo or 'PARIS' in metodo or 'RIPLEY' in metodo or 'FALABELLA' in metodo:
-                        resumen['tarjeta_comercial'] += monto
-                    elif 'CONVENIO' in metodo:
-                        resumen['convenio'] += monto
-                    elif 'INTERNET' in metodo or 'WEB' in metodo:
-                        resumen['venta_internet'] += monto
-                    elif 'TRANSFERENCIA' in metodo:
-                        resumen['transferencia'] += monto
-                    elif 'CREDITO' in metodo and 'TRABAJADOR' in metodo:
-                        resumen['credito_trabajador'] += monto
-                    else:
-                        resumen['otros'] += monto
-
-            # Calcular descuento real: usar dte.descuento si existe,
-            # sino inferirlo de la diferencia total - pagado
-            if pagado_sum > 0 and descuento_db == 0:
-                descuento = max(0, total - pagado_sum)
+                    categoria = clasificar_metodo(detalle.metodo_pago)
+                    resumen[categoria] = resumen.get(categoria, 0) + monto
             else:
+                diag_sin_pagos += 1
+
+            # --- Cálculo de descuento unificado con /app/ventas/documentos/ ---
+            # Prioridad:
+            #   1) dte.descuento si existe y es coherente
+            #   2) diferencia entre monto_con_iva y pagos (si hay pagos y son menores)
+            # Esto evita sobreestimar descuentos cuando los pagos ya reflejan el neto.
+            if descuento_db > 0:
                 descuento = descuento_db
+            elif pagado_sum > 0 and pagado_sum < total:
+                descuento = total - pagado_sum
+            else:
+                descuento = 0
 
             resumen['descuentos'] += descuento
             resumen['ventas_brutas'] += total
-            
-            # Si no se procesó método de pago, buscar en ticket relacionado
-            if not metodo_procesado:
+
+            # Si no se procesó método de pago (no había registros en dte_asociado),
+            # buscar en el ticket relacionado como fallback.
+            if not detalles_pago.exists():
                 ticket_relacionado = Ticket.objects.filter(
                     correlativo=dte.numero_documento,
                     sucursal=dte.sucursal
                 ).first()
-                
+
                 if ticket_relacionado:
                     metodo_ticket = ticket_relacionado.metodo_pago
-                    
-                    # Clasificar método de pago del ticket
-                    if metodo_ticket == 'EFECTIVO':
-                        resumen['efectivo'] += total
-                    elif metodo_ticket in ['TBK_CREDITO_POS', 'TARJETA_CREDITO']:
-                        resumen['tbk_credito'] += total
-                    elif metodo_ticket in ['TBK_DEBITO_POS', 'TARJETA_DEBITO']:
-                        resumen['tbk_debito'] += total
-                    elif metodo_ticket == 'TARJETA_COMERCIAL':
-                        resumen['tarjeta_comercial'] += total
-                    elif metodo_ticket == 'CONVENIO':
-                        resumen['convenio'] += total
-                    elif metodo_ticket == 'VENTA_INTERNET':
-                        resumen['venta_internet'] += total
-                    elif metodo_ticket == 'TRANSFERENCIA':
-                        resumen['transferencia'] += total
-                    elif metodo_ticket == 'CREDITO_TRABAJADOR':
-                        resumen['credito_trabajador'] += total
-                    elif metodo_ticket == 'TBK_POS_INTEGRADO':
+
+                    if metodo_ticket == 'TBK_POS_INTEGRADO':
                         # Verificar tipo de tarjeta en detalles
-                        pago_ticket = TicketDetallePago.objects.filter(ticket=ticket_relacionado).first()
-                        if pago_ticket and pago_ticket.tipo_tarjeta:
-                            if 'DEBITO' in pago_ticket.tipo_tarjeta.upper():
-                                resumen['tbk_debito'] += total
-                            else:
-                                resumen['tbk_credito'] += total
+                        pago_ticket = TicketDetallePago.objects.filter(
+                            ticket=ticket_relacionado
+                        ).first()
+                        if pago_ticket and pago_ticket.tipo_tarjeta and \
+                                'DEBITO' in pago_ticket.tipo_tarjeta.upper():
+                            resumen['tbk_debito'] += total
+                        elif pago_ticket and pago_ticket.tipo_tarjeta:
+                            resumen['tbk_credito'] += total
                         else:
-                            resumen['tbk_debito'] += total  # Default débito
+                            resumen['tbk_debito'] += total  # default
                     else:
-                        resumen['otros'] += total
+                        categoria = clasificar_metodo(metodo_ticket)
+                        resumen[categoria] = resumen.get(categoria, 0) + total
                 else:
                     # Si no hay ticket ni detalle de pago, asumir efectivo
                     resumen['efectivo'] += total
-        
+
         # Total neto = ventas brutas - notas de crédito - descuentos
         resumen['total_global'] = resumen['ventas_brutas'] - resumen['notas_credito'] - resumen['descuentos']
+
+        # --- Bloque de diagnóstico (para cuadrar con /app/ventas/documentos/) ---
+        # Permite identificar rápidamente discrepancias: universo de sucursales,
+        # tipos de documento incluidos, DTEs sin pagos registrados, etc.
+        sucursales_incluidas = sorted(
+            diag_sucursales.values(),
+            key=lambda s: s.get('monto', 0),
+            reverse=True,
+        )
+        conteo_por_tipo = [
+            {'tipo': t, 'cantidad': v['cantidad'], 'monto': v['monto']}
+            for t, v in sorted(
+                diag_conteo_por_tipo.items(),
+                key=lambda kv: kv[1]['monto'],
+                reverse=True,
+            )
+        ]
+        # Equivalente al 'total_ventas' que muestra /app/ventas/documentos/:
+        # ventas brutas - descuentos (sin restar NC, tal como lo hace ventas).
+        total_equivalente_ventas_doc = resumen['ventas_brutas'] - resumen['descuentos']
+
+        diagnostico = {
+            'filtro_sucursal_aplicado': filtro_sucursal_desc,
+            'sucursal_param_recibido': sucursal_param or '(vacío)',
+            'sucursal_sesion_id': sucursal_sesion_id,
+            'fecha_desde': str(fecha_desde),
+            'fecha_hasta': str(fecha_hasta),
+            'sucursales_incluidas': sucursales_incluidas,
+            'cantidad_sucursales_incluidas': len(sucursales_incluidas),
+            'conteo_por_tipo': conteo_por_tipo,
+            'cantidad_dtes': diag_cant_dtes,
+            'cantidad_notas_credito': diag_cant_nc,
+            'dtes_sin_pagos_registrados': diag_sin_pagos,
+            # Totales útiles para cuadrar entre vistas
+            'total_bruto_sin_descuento': resumen['ventas_brutas'],
+            'total_equivalente_ventas_documentos': total_equivalente_ventas_doc,
+            'total_neto': resumen['total_global'],
+        }
 
         return JsonResponse({
             'success': True,
             'documentos': documentos_data,
             'resumen': resumen,
+            'diagnostico': diagnostico,
             'total_registros': len(documentos_data),
             'total_real': total_real,
         })
@@ -2229,6 +2348,7 @@ def exportar_documentos_emitidos_excel(request):
         fecha_hasta = request.GET.get('fecha_hasta')
         tipo_documento = request.GET.get('tipo_documento')
         metodo_pago_filtro = request.GET.get('metodo_pago')
+        sucursal_param = (request.GET.get('sucursal_id') or '').strip()
 
         # Si no se proporcionan fechas, usar el día actual
         if not fecha_desde or not fecha_hasta:
@@ -2240,6 +2360,8 @@ def exportar_documentos_emitidos_excel(request):
             fecha_hasta = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
 
         # Consultar DTEs (Boletas y Facturas Electrónicas)
+        # NOTA: Sin exclusión de facturas internas (receptor=emisor) para que el
+        # Excel coincida con /app/ventas/documentos/ y con la vista en pantalla.
         queryset = Dte.objects.select_related(
             'vendedor',
             'receptor',
@@ -2250,13 +2372,34 @@ def exportar_documentos_emitidos_excel(request):
             tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
             fecha_emision__gte=fecha_desde,
             fecha_emision__lte=fecha_hasta
-        ).exclude(
-            receptor__isnull=False,
-            receptor_id=F('emisor_id')
         )
 
-        # Filtrar por sucursal: superuser puede ver todas, usuario normal solo la suya
-        queryset = filtrar_queryset_por_sucursal(queryset, request.user, request)
+        # Filtro de sucursal con la misma semántica que obtener_documentos_emitidos:
+        #   'all' = todas, vacío = sucursal de sesión, id = específica.
+        sucursal_sesion_id = (
+            request.session.get('idSucursalActual')
+            or request.session.get('sucursalActual')
+        )
+        sucursal_ids_permitidas = list(
+            obtener_sucursales_usuario(request.user).values_list('id', flat=True)
+        )
+
+        if sucursal_param == 'all':
+            queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                if sucursal_ids_permitidas else queryset.none()
+        elif sucursal_param:
+            if puede_ver_sucursal(request.user, sucursal_param):
+                queryset = queryset.filter(sucursal_id=sucursal_param)
+            elif sucursal_sesion_id:
+                queryset = queryset.filter(sucursal_id=sucursal_sesion_id)
+            else:
+                queryset = queryset.none()
+        else:
+            if sucursal_sesion_id:
+                queryset = queryset.filter(sucursal_id=sucursal_sesion_id)
+            else:
+                queryset = queryset.filter(sucursal_id__in=sucursal_ids_permitidas) \
+                    if sucursal_ids_permitidas else queryset.none()
 
         # Aplicar filtros
         if tipo_documento:

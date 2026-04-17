@@ -157,6 +157,70 @@ class CheckSessionAPITest(TestCase):
         self.assertFalse(data['authenticated'])
 
 
+class CheckLoginMethodAPITest(TestCase):
+    """Tests del endpoint que decide si el usuario ingresa con PIN o clave."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user_clave = crear_usuario(
+            username='soloclave',
+            password='Pass123!',
+            email='soloclave@test.com',
+        )
+        self.user_pin = crear_usuario(
+            username='conpin',
+            password='Pass123!',
+            email='conpin@test.com',
+            requiere_2fa=True,
+        )
+
+    def test_email_inexistente_retorna_error(self):
+        response = self.client.post(reverse('check_login_method'), {
+            'email': 'noexiste@test.com',
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data['ok'])
+        self.assertFalse(data.get('exists', True))
+        self.assertIn('No existe', data['error'])
+
+    def test_usuario_con_clave(self):
+        response = self.client.post(reverse('check_login_method'), {
+            'email': 'soloclave@test.com',
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['ok'])
+        self.assertFalse(data['requiere_pin'])
+
+    def test_usuario_con_pin_activado(self):
+        response = self.client.post(reverse('check_login_method'), {
+            'email': 'conpin@test.com',
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['ok'])
+        self.assertTrue(data['requiere_pin'])
+
+    def test_email_vacio_retorna_400(self):
+        response = self.client.post(reverse('check_login_method'), {'email': ''})
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['ok'])
+
+    def test_solo_post_permitido(self):
+        response = self.client.get(reverse('check_login_method'))
+        self.assertEqual(response.status_code, 405)
+
+    def test_email_normaliza_a_minusculas(self):
+        response = self.client.post(reverse('check_login_method'), {
+            'email': 'SoloClave@Test.Com',
+        })
+        data = response.json()
+        self.assertTrue(data['ok'])
+        self.assertFalse(data['requiere_pin'])
+
+
 @override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
 class CambioPasswordObligatorioTest(TestCase):
     def setUp(self):

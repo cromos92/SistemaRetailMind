@@ -1,0 +1,734 @@
+/* ==========================================================================
+   POS KIOSK · RetailMind
+   --------------------------------------------------------------------------
+   Se carga SOLO cuando <body> tiene la clase `pos-kiosk` (seteada por la
+   vista del flujo POS o por el querystring `?kiosk=1`).
+
+   Hardware destino: Intel Celeron J1900 · 4 GB · 1920x1080 TÁCTIL · Chrome.
+
+   Reglas de diseño:
+     - Targets de acción >= 48px (WCAG 2.5.5); primarios 56-64px.
+     - Tipografía base 16-18px, monto/totales 20-24px.
+     - Sin :hover colgado en touch: se duplica con :active/:focus-visible.
+     - Unidades en rem para acompañar el DPI scaling de Windows.
+     - Transitions cortas, sin transforms pesados (GPU Intel HD Graphics).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   0. Base
+   -------------------------------------------------------------------------- */
+body.pos-kiosk {
+    /* Tipografía base POS: 17px ≈ 1.0625rem */
+    font-size: 1.0625rem;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+}
+
+body.pos-kiosk,
+body.pos-kiosk .page-content,
+body.pos-kiosk .main-content {
+    background: var(--nexo-gray-100, #F5F5F7) !important;
+}
+
+body.pos-kiosk * {
+    /* Corta el delay de 300ms de Chrome en los touch */
+    touch-action: manipulation;
+}
+
+/* Títulos más grandes, más legibles a 1m de distancia de caja */
+body.pos-kiosk h1 { font-size: 1.75rem; font-weight: 700; }
+body.pos-kiosk h2 { font-size: 1.5rem;  font-weight: 700; }
+body.pos-kiosk h3 { font-size: 1.375rem; font-weight: 600; }
+body.pos-kiosk h4,
+body.pos-kiosk .page-title-box h4 {
+    font-size: 1.25rem !important;
+    font-weight: 600;
+}
+body.pos-kiosk h5 { font-size: 1.125rem; font-weight: 600; }
+body.pos-kiosk small,
+body.pos-kiosk .small { font-size: 0.875rem !important; }
+
+/* Evita que el usuario seleccione texto accidentalmente con el dedo */
+body.pos-kiosk .btn,
+body.pos-kiosk .nav-link,
+body.pos-kiosk .card-header,
+body.pos-kiosk .vendedor-card,
+body.pos-kiosk .nexo-card,
+body.pos-kiosk .pos-card,
+body.pos-kiosk .tipo-card,
+body.pos-kiosk .method-option,
+body.pos-kiosk .dispatch-type-card,
+body.pos-kiosk .tipo-doc-btn,
+body.pos-kiosk .doc-type-option,
+body.pos-kiosk .step-indicator,
+body.pos-kiosk label,
+body.pos-kiosk th {
+    user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Inputs numéricos SÍ deben permitir seleccionar y pegar */
+body.pos-kiosk input,
+body.pos-kiosk textarea,
+body.pos-kiosk [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* --------------------------------------------------------------------------
+   1. Botones (target mínimo 48px, primarios 56-64px)
+   -------------------------------------------------------------------------- */
+body.pos-kiosk .btn,
+body.pos-kiosk button {
+    min-height: 3rem;           /* 48px */
+    padding: 0.625rem 1.125rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 0.625rem;
+    letter-spacing: 0.01em;
+}
+
+body.pos-kiosk .btn-sm,
+body.pos-kiosk .btn-xs {
+    min-height: 2.75rem;        /* 44px mínimo WCAG */
+    padding: 0.5rem 0.875rem;
+    font-size: 0.9375rem;
+}
+
+body.pos-kiosk .btn-lg,
+body.pos-kiosk .pos-action-primary {
+    min-height: 3.5rem;         /* 56px */
+    padding: 0.875rem 1.5rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+body.pos-kiosk .pos-action-primary-xl,
+body.pos-kiosk .btn-cobrar,
+body.pos-kiosk .btn-confirmar-pago,
+body.pos-kiosk .btn-imprimir {
+    min-height: 4rem;           /* 64px */
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border-radius: 0.75rem;
+}
+
+/* Feedback táctil inmediato (no lag) */
+body.pos-kiosk .btn:active,
+body.pos-kiosk button:active,
+body.pos-kiosk .vendedor-card:active,
+body.pos-kiosk .pos-card:active,
+body.pos-kiosk .tipo-card:active,
+body.pos-kiosk .method-option:active,
+body.pos-kiosk .dispatch-type-card:active,
+body.pos-kiosk .tipo-doc-btn:active,
+body.pos-kiosk .doc-type-option:active {
+    transform: scale(0.98);
+    transition: transform 60ms ease-out !important;
+}
+
+/* focus visible grueso para accesibilidad (también ayuda cuando se ocultan cursor) */
+body.pos-kiosk .btn:focus-visible,
+body.pos-kiosk button:focus-visible,
+body.pos-kiosk input:focus-visible,
+body.pos-kiosk select:focus-visible,
+body.pos-kiosk textarea:focus-visible,
+body.pos-kiosk .nexo-form-control:focus-visible {
+    outline: 3px solid var(--nexo-primary, #0066FF);
+    outline-offset: 2px;
+}
+
+/* Separación mínima 8px entre botones contiguos */
+body.pos-kiosk .btn + .btn,
+body.pos-kiosk .btn-group > .btn + .btn {
+    margin-left: 0.5rem;
+}
+body.pos-kiosk .d-grid > .btn + .btn,
+body.pos-kiosk .vstack > .btn + .btn {
+    margin-left: 0;
+    margin-top: 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   2. Inputs / Selects / Forms
+   -------------------------------------------------------------------------- */
+body.pos-kiosk .form-control,
+body.pos-kiosk .form-select,
+body.pos-kiosk .nexo-form-control,
+body.pos-kiosk .nexo-form-select,
+body.pos-kiosk input[type="text"],
+body.pos-kiosk input[type="email"],
+body.pos-kiosk input[type="password"],
+body.pos-kiosk input[type="number"],
+body.pos-kiosk input[type="search"],
+body.pos-kiosk input[type="tel"],
+body.pos-kiosk textarea,
+body.pos-kiosk select {
+    min-height: 3rem;           /* 48px */
+    font-size: 1rem !important; /* evita zoom de iOS y se lee a distancia */
+    padding: 0.625rem 0.875rem;
+    border-radius: 0.5rem;
+    border-width: 2px;          /* más visible al tocar */
+}
+
+body.pos-kiosk .form-control-lg,
+body.pos-kiosk .input-pos-xl {
+    min-height: 3.5rem;
+    font-size: 1.125rem !important;
+}
+
+body.pos-kiosk .form-label,
+body.pos-kiosk label {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    margin-bottom: 0.375rem;
+}
+
+/* Los badges OBLIGATORIO/OPCIONAL en labels no pueden ir en font-size 9px */
+body.pos-kiosk .form-label .badge,
+body.pos-kiosk label .badge {
+    font-size: 0.75rem !important;   /* 12px */
+    padding: 0.25rem 0.5rem !important;
+    vertical-align: middle;
+}
+
+/* Checkboxes y radios más grandes */
+body.pos-kiosk .form-check-input {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-top: 0.25rem;
+    cursor: pointer;
+}
+
+body.pos-kiosk .form-check-label {
+    padding-left: 0.5rem;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+body.pos-kiosk .input-group-text {
+    min-height: 3rem;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.9375rem;
+}
+
+/* Select2 en POS */
+body.pos-kiosk .select2-container .select2-selection--single,
+body.pos-kiosk .select2-container .select2-selection--multiple {
+    min-height: 3rem !important;
+    border-width: 2px !important;
+}
+body.pos-kiosk .select2-container .select2-selection--single .select2-selection__rendered {
+    line-height: 2.75rem !important;
+    font-size: 1rem !important;
+    padding-left: 0.875rem !important;
+}
+body.pos-kiosk .select2-container .select2-selection--single .select2-selection__arrow {
+    height: 2.75rem !important;
+    width: 2.75rem !important;
+}
+body.pos-kiosk .select2-results__option {
+    padding: 0.75rem 1rem !important;
+    min-height: 3rem;
+    font-size: 1rem !important;
+    display: flex;
+    align-items: center;
+}
+body.pos-kiosk .select2-search--dropdown .select2-search__field {
+    min-height: 3rem;
+    font-size: 1rem !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Overrides específicos de templates POS
+   (px hardcodeados detectados en Fase 0)
+   -------------------------------------------------------------------------- */
+
+/* ticket_venta.html */
+body.pos-kiosk .pos-input-precio,
+body.pos-kiosk .pos-input-cantidad,
+body.pos-kiosk .pos-input-stock {
+    height: auto !important;
+    min-height: 3rem !important;
+    font-size: 1rem !important;
+}
+
+body.pos-kiosk .pos-print-btn {
+    height: auto !important;
+    min-height: 3.5rem !important;   /* 56px, es principal */
+    font-size: 1.125rem !important;
+    font-weight: 700;
+}
+
+/* vendedor-card: quitar el :hover con translateY que queda pegado en touch.
+   Usamos .selected en JS + :active como feedback táctil. */
+body.pos-kiosk .vendedor-card {
+    transition: box-shadow 120ms ease, border-color 120ms ease !important;
+}
+body.pos-kiosk .vendedor-card:hover {
+    /* Neutralizamos el translateY(-6px) del CSS inline del template */
+    transform: none !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important;
+    border-color: transparent !important;
+}
+body.pos-kiosk .vendedor-card:active,
+body.pos-kiosk .vendedor-card.selected {
+    transform: scale(0.98) !important;
+    border-color: var(--nexo-primary, #0066FF) !important;
+}
+body.pos-kiosk .vendedor-card .vendedor-avatar {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.375rem;
+}
+
+/* Montos y totales en líneas de ticket: subir de 10-12px a legibles */
+body.pos-kiosk .ticket-linea,
+body.pos-kiosk .ticket-item,
+body.pos-kiosk .pos-cart-item,
+body.pos-kiosk .carrito-item {
+    font-size: 1rem !important;
+    min-height: 3rem;
+    padding: 0.625rem 0.75rem;
+}
+body.pos-kiosk .ticket-total,
+body.pos-kiosk .pos-total,
+body.pos-kiosk .carrito-total,
+body.pos-kiosk .monto-total {
+    font-size: 1.5rem !important;
+    font-weight: 700;
+}
+
+/* generacionVentas.html: step counter/wizard */
+body.pos-kiosk .step-counter,
+body.pos-kiosk .step-number {
+    width: 3rem !important;
+    height: 3rem !important;
+    font-size: 1rem !important;
+    font-weight: 700;
+}
+body.pos-kiosk .step-name,
+body.pos-kiosk .step-label {
+    font-size: 0.9375rem !important;
+    font-weight: 600;
+}
+
+body.pos-kiosk .stock-badge {
+    padding: 0.25rem 0.625rem !important;
+    font-size: 0.8125rem !important;
+    min-height: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* cuadraturaCaja.html: inputs de denominación */
+body.pos-kiosk .denominacion-table input,
+body.pos-kiosk .denominaciones input[type="number"] {
+    min-height: 3rem !important;
+    font-size: 1.125rem !important;
+    font-weight: 600;
+    text-align: right;
+    width: 7rem !important;
+    padding: 0.5rem 0.75rem;
+}
+body.pos-kiosk .btn-arqueo {
+    min-height: 3.5rem !important;
+    font-size: 1.0625rem !important;
+}
+
+/* gestion_cambios_devoluciones.html */
+body.pos-kiosk .nav-tabs-pos .nav-item .nav-link,
+body.pos-kiosk .nav-tabs .nav-link {
+    min-height: 3rem !important;
+    padding: 0.625rem 1rem !important;
+    font-size: 0.9375rem !important;
+}
+body.pos-kiosk .tipo-doc-btn,
+body.pos-kiosk .doc-type-option {
+    min-height: 3rem !important;
+    padding: 0.75rem 1rem !important;
+}
+
+/* emisionDTE.html */
+body.pos-kiosk .method-selector .method-option,
+body.pos-kiosk .dispatch-type-card,
+body.pos-kiosk .tipo-card,
+body.pos-kiosk .dte-section {
+    min-height: 3.5rem;
+    padding: 1rem !important;
+}
+body.pos-kiosk .talla-selector {
+    min-height: 3rem;
+    padding: 0.5rem 0.875rem;
+}
+
+/* --------------------------------------------------------------------------
+   4. Tablas: filas más altas, tocables
+   -------------------------------------------------------------------------- */
+body.pos-kiosk .table > :not(caption) > * > *,
+body.pos-kiosk .table-nexo th,
+body.pos-kiosk .table-nexo td,
+body.pos-kiosk .nexo-table th,
+body.pos-kiosk .nexo-table td {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.9375rem;
+    vertical-align: middle;
+}
+
+body.pos-kiosk .table th {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* tr clickeables se comportan como botón */
+body.pos-kiosk tr[role="button"],
+body.pos-kiosk tr.clickable,
+body.pos-kiosk .deposito-pendiente-row {
+    cursor: pointer;
+}
+body.pos-kiosk tr[role="button"]:active,
+body.pos-kiosk tr.clickable:active,
+body.pos-kiosk .deposito-pendiente-row:active,
+body.pos-kiosk .table-hover tbody tr:active {
+    background: var(--nexo-primary-light, #E6F0FF) !important;
+}
+
+/* DataTables paginación táctil */
+body.pos-kiosk .dataTables_wrapper .dataTables_paginate .paginate_button {
+    min-width: 3rem;
+    min-height: 3rem;
+    line-height: 3rem;
+    font-size: 1rem !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. Modales
+   -------------------------------------------------------------------------- */
+body.pos-kiosk .modal-header {
+    padding: 1rem 1.25rem;
+}
+body.pos-kiosk .modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+body.pos-kiosk .modal-body {
+    padding: 1.25rem;
+    font-size: 1rem;
+}
+body.pos-kiosk .modal-footer {
+    padding: 0.875rem 1.25rem;
+    gap: 0.5rem;
+}
+body.pos-kiosk .modal-footer .btn {
+    min-height: 3rem;
+    font-size: 1rem;
+}
+body.pos-kiosk .btn-close {
+    width: 3rem;
+    height: 3rem;
+    padding: 0.875rem;
+    opacity: 0.85;
+}
+
+/* --------------------------------------------------------------------------
+   6. Cards y tarjetas
+   -------------------------------------------------------------------------- */
+body.pos-kiosk .card,
+body.pos-kiosk .card-nexo,
+body.pos-kiosk .nexo-card {
+    border-radius: 0.875rem;
+    border-width: 1px;
+}
+body.pos-kiosk .card-body,
+body.pos-kiosk .card-nexo-body {
+    padding: 1.125rem;
+}
+body.pos-kiosk .card-header,
+body.pos-kiosk .card-nexo-header {
+    padding: 0.875rem 1.125rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   7. Neutralizar :hover que no aplica en touch
+   (los que sí duplicamos con :active quedan arriba)
+   -------------------------------------------------------------------------- */
+body.pos-kiosk .btn:hover,
+body.pos-kiosk .card:hover,
+body.pos-kiosk .card-stats-nexo:hover,
+body.pos-kiosk .resumen-card:hover,
+body.pos-kiosk .pos-card:hover,
+body.pos-kiosk .tipo-card:hover,
+body.pos-kiosk .method-selector:hover,
+body.pos-kiosk .dispatch-type-card:hover,
+body.pos-kiosk .tipo-doc-btn:hover,
+body.pos-kiosk .doc-type-option:hover,
+body.pos-kiosk .dte-section:hover,
+body.pos-kiosk .product-item:hover,
+body.pos-kiosk .talla-selector:hover,
+body.pos-kiosk .table-hover tbody tr:hover,
+body.pos-kiosk .btn-nexo-primary:hover,
+body.pos-kiosk .btn-nexo-success:hover,
+body.pos-kiosk .btn-nexo-outline:hover,
+body.pos-kiosk .btn-custom:hover,
+body.pos-kiosk #select-motivo-principal:hover,
+body.pos-kiosk #btn-siguiente:hover {
+    transform: none !important;
+    /* mantenemos colores para mouse plugged-in pero sin animaciones */
+}
+
+/* Solo aplicar :hover real cuando hay mouse físico */
+@media (hover: hover) and (pointer: fine) {
+    body.pos-kiosk .btn:hover,
+    body.pos-kiosk .pos-card:hover,
+    body.pos-kiosk .tipo-card:hover {
+        filter: brightness(1.05);
+    }
+}
+
+/* --------------------------------------------------------------------------
+   8. Animaciones: cortas y baratas (GPU Intel HD Graphics)
+   -------------------------------------------------------------------------- */
+body.pos-kiosk *,
+body.pos-kiosk *::before,
+body.pos-kiosk *::after {
+    transition-duration: 120ms !important;
+    animation-duration: 200ms !important;
+}
+
+/* Desactivar animaciones pesadas clásicas */
+body.pos-kiosk .card:hover,
+body.pos-kiosk .pos-card:hover,
+body.pos-kiosk .vendedor-card:hover {
+    transform: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.pos-kiosk *,
+    body.pos-kiosk *::before,
+    body.pos-kiosk *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   9. Elementos decorativos del admin-template que no aplican en POS
+   (aplica en MODO TÁCTIL Y ESTRICTO: solo cosas inocuas de esconder)
+   -------------------------------------------------------------------------- */
+body.pos-kiosk .back-to-top,
+body.pos-kiosk #back-to-top,
+body.pos-kiosk .customizer-setting,
+body.pos-kiosk #theme-settings-btn,
+body.pos-kiosk .footer .credit-line,
+body.pos-kiosk .footer-text {
+    display: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   9.STRICT · Layout de kiosko puro: sin sidebar, sin topbar-chrome
+   Solo cuando el body tiene AMBAS clases: .pos-kiosk .pos-kiosk-strict
+   (se activa con ?kiosk=1 o desde el acceso directo del POS físico).
+
+   El admin-template Velzon usa:
+     #page-topbar   { position: fixed; right: 250px; }
+     .main-content  { margin-right: 250px; }
+     .navbar-menu   { width: 250px; position: fixed; }
+   Al ocultar el sidebar sin limpiar esos 250px, el topbar queda flotando.
+-------------------------------------------------------------------------- */
+
+/* Sidebar completo oculto (se mantiene en el DOM para layout.js/app.js) */
+body.pos-kiosk.pos-kiosk-strict #app-menu-wrapper,
+body.pos-kiosk.pos-kiosk-strict .app-menu,
+body.pos-kiosk.pos-kiosk-strict .app-menu.navbar-menu,
+body.pos-kiosk.pos-kiosk-strict .navbar-menu,
+body.pos-kiosk.pos-kiosk-strict .vertical-menu,
+body.pos-kiosk.pos-kiosk-strict .vertical-overlay,
+body.pos-kiosk.pos-kiosk-strict .sidebar-background {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Topbar full-width */
+body.pos-kiosk.pos-kiosk-strict #page-topbar {
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 1002;
+}
+
+/* Main content full-width */
+body.pos-kiosk.pos-kiosk-strict .main-content,
+body.pos-kiosk.pos-kiosk-strict #layout-wrapper,
+body.pos-kiosk.pos-kiosk-strict .layout-width {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* page-content compensa la altura del topbar fixed (70px) */
+body.pos-kiosk.pos-kiosk-strict .page-content {
+    padding: calc(70px + 0.75rem) 0.75rem 1rem 0.75rem !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Navbar-header centrado, sin espacio reservado al sidebar */
+body.pos-kiosk.pos-kiosk-strict .navbar-header {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 1rem !important;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Elementos del topbar admin-template que no aplican en kiosko puro */
+body.pos-kiosk.pos-kiosk-strict #topnav-hamburger-icon,
+body.pos-kiosk.pos-kiosk-strict .hamburger-icon,
+body.pos-kiosk.pos-kiosk-strict .topbar-hamburger-menu,
+body.pos-kiosk.pos-kiosk-strict .navbar-header .dropdown-notifications,
+body.pos-kiosk.pos-kiosk-strict .navbar-header .language-switch,
+body.pos-kiosk.pos-kiosk-strict .navbar-header .topbar-search,
+body.pos-kiosk.pos-kiosk-strict .navbar-header .layout-mode-change,
+body.pos-kiosk.pos-kiosk-strict .navbar-header .header-item.noti-icon,
+body.pos-kiosk.pos-kiosk-strict .navbar-header .dropdown.cart-dropdown,
+body.pos-kiosk.pos-kiosk-strict .topbar-head-dropdown,
+body.pos-kiosk.pos-kiosk-strict .header-item.noti-icon,
+body.pos-kiosk.pos-kiosk-strict .app-search,
+body.pos-kiosk.pos-kiosk-strict .navbar-brand-box.horizontal-logo,
+body.pos-kiosk.pos-kiosk-strict .footer,
+body.pos-kiosk.pos-kiosk-strict .page-title-box .breadcrumb,
+body.pos-kiosk.pos-kiosk-strict .layout-rightside-col {
+    display: none !important;
+}
+
+/* Logo del topbar en kiosko: más chico */
+body.pos-kiosk.pos-kiosk-strict .navbar-header .navbar-brand-box:not(.horizontal-logo) {
+    display: flex !important;
+    align-items: center;
+    padding: 0;
+    margin-right: 1rem;
+    width: auto !important;
+    background: transparent !important;
+    border: 0 !important;
+}
+
+body.pos-kiosk.pos-kiosk-strict .navbar-header .logo img {
+    height: 32px;
+    width: auto;
+}
+
+body.pos-kiosk.pos-kiosk-strict html,
+body.pos-kiosk.pos-kiosk-strict body {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow-x: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   10. Utilidades
+   -------------------------------------------------------------------------- */
+/* Disponible para rutas puramente kiosko (sin cursor) */
+body.pos-kiosk.no-cursor,
+body.pos-kiosk.no-cursor * {
+    cursor: none !important;
+}
+
+/* Prevenir menú contextual táctil prolongado en zonas POS */
+body.pos-kiosk .pos-no-contextmenu {
+    -webkit-touch-callout: none;
+}
+
+/* Contenedor genérico de numpad (cobro, PIN, etc.) */
+body.pos-kiosk .pos-numpad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+body.pos-kiosk .pos-numpad .btn {
+    min-height: 4rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+/* Oculta cursor de texto parpadeante cuando se usa teclado virtual dedicado */
+body.pos-kiosk .pos-numeric-only {
+    caret-color: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   11. Scrollbars más anchos (tocables con el dedo)
+   -------------------------------------------------------------------------- */
+body.pos-kiosk ::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+}
+body.pos-kiosk ::-webkit-scrollbar-thumb {
+    background: var(--nexo-gray-300, #D1D1D9);
+    border-radius: 7px;
+    border: 3px solid var(--nexo-gray-100, #F5F5F7);
+}
+body.pos-kiosk ::-webkit-scrollbar-thumb:active {
+    background: var(--nexo-primary, #0066FF);
+}
+
+/* --------------------------------------------------------------------------
+   12. SweetAlert2 modales (se usan en todo el flujo POS)
+   -------------------------------------------------------------------------- */
+body.pos-kiosk .swal2-popup {
+    font-size: 1rem;
+    border-radius: 1rem;
+    padding: 1.5rem;
+}
+body.pos-kiosk .swal2-title {
+    font-size: 1.375rem;
+}
+body.pos-kiosk .swal2-html-container {
+    font-size: 1rem;
+}
+body.pos-kiosk .swal2-actions .swal2-styled {
+    min-height: 3.25rem !important;
+    font-size: 1.0625rem !important;
+    padding: 0.75rem 1.5rem !important;
+}
+body.pos-kiosk .swal2-input,
+body.pos-kiosk .swal2-file,
+body.pos-kiosk .swal2-textarea {
+    min-height: 3rem !important;
+    font-size: 1rem !important;
+}
+
+/* --------------------------------------------------------------------------
+   13. Print (se mantiene sobrio: tickets térmicos siguen su propio CSS)
+   -------------------------------------------------------------------------- */
+@media print {
+    body.pos-kiosk .navbar-header,
+    body.pos-kiosk .footer,
+    body.pos-kiosk .page-title-box,
+    body.pos-kiosk .no-print {
+        display: none !important;
+    }
+}

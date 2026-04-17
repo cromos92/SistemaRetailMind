@@ -276,6 +276,32 @@ class Dte(models.Model):
         # Solo documentos con valor monetario requieren NC
         documentos_con_valor = ['FACTURA ELECTRONICA', 'FACTURA', 'BOLETA ELECTRONICA', 'BOLETA']
         return self.tipo_documento in documentos_con_valor
+
+    class Meta:
+        ordering = ['-fecha_emision', '-id']
+        indexes = [
+            # Listado de documentos de ventas (listar_documentos_ventas)
+            models.Index(fields=['sucursal', '-fecha_emision'], name='dte_suc_fecha_idx'),
+            # Listado filtrado por tipo de transacción (VENTA / VENTA_PUBLICO)
+            models.Index(
+                fields=['sucursal', 'tipo_transaccion', '-fecha_emision'],
+                name='dte_suc_trans_fecha_idx',
+            ),
+            # Filtro por estado del DTE
+            models.Index(
+                fields=['sucursal', 'estado_dte', '-fecha_emision'],
+                name='dte_suc_estado_fecha_idx',
+            ),
+            # Búsqueda / orden por tipo de documento
+            models.Index(
+                fields=['sucursal', 'tipo_documento', '-fecha_emision'],
+                name='dte_suc_tipo_fecha_idx',
+            ),
+            # Conteos por receptor (búsqueda por cliente)
+            models.Index(fields=['receptor'], name='dte_receptor_idx'),
+        ]
+
+
 class Dte_Detalle_Pago(models.Model):
     dte = models.ForeignKey(Dte, related_name='dte_asociado', on_delete=models.PROTECT)
     metodo_pago = models.CharField(max_length=100 )

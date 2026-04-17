@@ -218,7 +218,21 @@ class Ticket(models.Model):
     class Meta:
         ordering = ['-fecha', '-hora']
         unique_together = ['sucursal', 'correlativo']
-    
+        indexes = [
+            # Listados de tickets por sucursal + fecha (dashboards / listar_tickets)
+            models.Index(fields=['sucursal', '-fecha'], name='ticket_suc_fecha_idx'),
+            models.Index(fields=['sucursal', '-created_at'], name='ticket_suc_created_idx'),
+            # Filtros por estado por sucursal (dashboard_stats / cuadraturas)
+            models.Index(fields=['sucursal', 'estado', '-fecha'], name='ticket_suc_est_fecha_idx'),
+            # Tickets de cambio/devolución pendientes
+            models.Index(
+                fields=['sucursal', 'modulo_origen', 'estado'],
+                name='ticket_suc_mod_est_idx',
+            ),
+            # Ranking / métricas por vendedor
+            models.Index(fields=['vendedor', '-fecha'], name='ticket_vend_fecha_idx'),
+        ]
+
     def __str__(self):
         return f"Ticket {self.correlativo} - {self.sucursal} - ${self.total:,}"
 
@@ -315,6 +329,12 @@ class TicketDetallePago(models.Model):
         ordering = ['creado_en']
         verbose_name = 'Detalle de Pago de Ticket'
         verbose_name_plural = 'Detalles de Pago de Tickets'
+        indexes = [
+            # Agrupaciones por método de pago del ticket
+            models.Index(fields=['ticket', 'metodo_pago'], name='ticketpago_tic_met_idx'),
+            # Filtros por método de pago en dashboards
+            models.Index(fields=['metodo_pago'], name='ticketpago_metodo_idx'),
+        ]
 
     def __str__(self):
         return f"Pago {self.get_metodo_pago_display()} - ${self.monto:,} (Ticket {self.ticket.correlativo})"

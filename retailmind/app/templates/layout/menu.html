@@ -1,7 +1,29 @@
 {% load static %}
 {% load permisos_tags %}
 
-<body>
+<body{% if pos_kiosk %} class="pos-kiosk{% if pos_kiosk_strict %} pos-kiosk-strict{% endif %}"{% endif %}{% if pos_kiosk_strict and request.GET.no_cursor %} data-cursor-hidden="1"{% endif %}>
+{% if pos_kiosk_strict %}
+<script>
+    // Modo kiosko estricto: bloqueos globales para uso táctil con dedo.
+    (function() {
+        document.addEventListener('contextmenu', function(e) {
+            if (e.target && e.target.matches && !e.target.matches('input, textarea, [contenteditable="true"]')) {
+                e.preventDefault();
+            }
+        }, {passive: false});
+        var lastTouch = 0;
+        document.addEventListener('touchend', function(e) {
+            var now = Date.now();
+            if (now - lastTouch <= 300) { e.preventDefault(); }
+            lastTouch = now;
+        }, {passive: false});
+        if (document.body.getAttribute('data-cursor-hidden') === '1') {
+            document.documentElement.classList.add('no-cursor');
+            document.body.classList.add('no-cursor');
+        }
+    })();
+</script>
+{% endif %}
 <!-- NEXO Design System - Menu Styles -->
 <style>
     /* ===== NEXO Sidebar ===== */
@@ -1857,6 +1879,8 @@
         </div>
         <!-- /.modal -->
         <!-- ========== App Menu ========== -->
+        <!-- En modo POS se oculta por CSS (pos-kiosk.css), NO se remueve del DOM
+             para que app.js del admin-template no falle con innerHTML null. -->
         <div class="app-menu navbar-menu">
             <!-- LOGO -->
             <div class="navbar-brand-box">

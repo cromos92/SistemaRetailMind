@@ -71,6 +71,11 @@ INSTALLED_APPS = [
     'assistant',  # Asistente Conversacional con Claude
 ]
 
+# django-silk: profiler de queries/tiempo SOLO en DEBUG, opt-in via env
+ENABLE_SILK = DEBUG and os.environ.get('ENABLE_SILK', 'False').lower() == 'true'
+if ENABLE_SILK:
+    INSTALLED_APPS.append('silk')
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # CORS - DEBE IR PRIMERO
     'django.middleware.security.SecurityMiddleware',
@@ -84,20 +89,50 @@ MIDDLEWARE = [
     'app.middleware_permisos.PermisosMenuMiddleware',  # Verificación de permisos de menú
 ]
 
+if ENABLE_SILK:
+    # silk debe ir lo antes posible (después de Session) para medir todo
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index('django.contrib.sessions.middleware.SessionMiddleware') + 1,
+        'silk.middleware.SilkyMiddleware',
+    )
+    SILKY_PYTHON_PROFILER = False
+    SILKY_META = True
+
 ROOT_URLCONF = 'retailmind.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS':  [BASE_DIR / 'templates'],
-        'APP_DIRS': True,
+        # En producción usamos cached.Loader (ver OPTIONS.loaders) → APP_DIRS
+        # no puede coexistir con loaders custom, lo forzamos a False ahí.
+        'APP_DIRS': DEBUG,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'app.context_processors.ecommerce_context',
+                'app.context_processors.pos_kiosk_context',
             ],
+            # En producción: cachear plantillas parseadas (evita reparsear
+            # ticket_venta.html de 165KB y generacionVentas.html de 545KB en cada
+            # request). En DEBUG usamos APP_DIRS=True arriba y sin loaders.
+            **(
+                {}
+                if DEBUG
+                else {
+                    'loaders': [
+                        (
+                            'django.template.loaders.cached.Loader',
+                            [
+                                'django.template.loaders.filesystem.Loader',
+                                'django.template.loaders.app_directories.Loader',
+                            ],
+                        ),
+                    ],
+                }
+            ),
         },
     },
 ]
@@ -184,6 +219,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SESSION_COOKIE_DOMAIN = None
 SESSION_COOKIE_NAME = 'retailmind'
 
+# ========== POS KIOSK MODE ==========
+# True  → TODO el sistema arranca en modo POS táctil (viewport 1920,
+#         pos-kiosk.css, sidebar oculto, hovers reemplazados por :active).
+#         Se puede desactivar puntualmente con `?kiosk=0` en la URL
+#         (útil para tareas de backoffice en la misma instalación).
+# False → Modo admin tradicional; el POS se activa sólo con `?kiosk=1`.
+POS_KIOSK_DEFAULT = os.environ.get('POS_KIOSK_DEFAULT', 'True').lower() == 'true'
+
 
 
 STATICFILES_DIRS = [
@@ -195,8 +238,21 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # ========== EMAIL configurado más abajo ==========
 
 # Whitenoise configuration for static files
-# CompressedStaticFilesStorage no valida referencias a .map faltantes
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+# En DEBUG usamos el storage default (runserver sirve desde STATICFILES_DIRS
+# con finders). En producción usamos CompressedManifestStaticFilesStorage
+# que añade fingerprint a los nombres para Cache-Control: immutable.
+# WHITENOISE_MANIFEST_STRICT=False tolera referencias a .map faltantes.
+# Importante: requiere `collectstatic` antes del primer deploy para generar
+# staticfiles.json; si se cambia a Manifest sin collectstatic, TODOS los
+# {% static %} fallan (jquery, select2, etc.) y la app se rompe.
+if DEBUG:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+else:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    WHITENOISE_MANIFEST_STRICT = False
+    WHITENOISE_MAX_AGE = 60 * 60 * 24 * 365   # 1 año para assets hasheados
+    WHITENOISE_USE_FINDERS = False
+WHITENOISE_AUTOREFRESH = DEBUG
 
 # CSRF Failure View - redirige al login con mensaje en lugar de mostrar 403
 CSRF_FAILURE_VIEW = 'retailmind.views.csrf_failure'
@@ -271,6 +327,10 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 #   DEFAULT_FROM_EMAIL=tu-email@gmail.com
 
 # ========== LOGGING ==========
+# En producción subimos los loggers internos a WARNING para dejar de escribir
+# a disco en cada AJAX del POS (los INFO se iban acumulando en app.log).
+_APP_LOG_LEVEL = 'DEBUG' if DEBUG else 'WARNING'
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -308,22 +368,22 @@ LOGGING = {
     'loggers': {
         'app': {
             'handlers': ['console', 'file_app', 'file_errors'],
-            'level': 'INFO',
+            'level': _APP_LOG_LEVEL,
             'propagate': False,
         },
         'users': {
             'handlers': ['console', 'file_app', 'file_errors'],
-            'level': 'INFO',
+            'level': _APP_LOG_LEVEL,
             'propagate': False,
         },
         'empresa_management': {
             'handlers': ['console', 'file_app', 'file_errors'],
-            'level': 'INFO',
+            'level': _APP_LOG_LEVEL,
             'propagate': False,
         },
         'assistant': {
             'handlers': ['console', 'file_app', 'file_errors'],
-            'level': 'INFO',
+            'level': _APP_LOG_LEVEL,
             'propagate': False,
         },
         'django': {
@@ -349,11 +409,74 @@ _logs_dir = BASE_DIR / 'logs'
 if not _logs_dir.exists():
     _os.makedirs(_logs_dir, exist_ok=True)
 
-# Configuración de seguridad
+# Configuración de seguridad / sesiones
 PASSWORD_RESET_TIMEOUT = 86400  # 24 horas
 SESSION_COOKIE_AGE = 604800     # 7 días (dev-friendly; ajustar en producción)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_SAVE_EVERY_REQUEST = True
+# SESSION_SAVE_EVERY_REQUEST=True genera un UPDATE a django_session en cada
+# AJAX del POS. Con POS táctil eso son cientos de UPDATES innecesarios por
+# turno. El SESSION_COOKIE_AGE largo se encarga del refresh automático cuando
+# se accede a la sesión (Django lo renueva al tocar request.session).
+SESSION_SAVE_EVERY_REQUEST = False
+
+# ========== CACHES ==========
+# LocMemCache por proceso: sirve para @cache_page en endpoints de catálogo
+# (productos, vendedores, sucursales) y para @vary_on_cookie. NO usar para
+# datos compartidos entre workers (para eso habría que migrar a Redis).
+#
+# El cache `ventas` usa Redis si está disponible (REDIS_URL env var),
+# permitiendo compartir caché entre workers y hacer invalidación atómica
+# por sucursal desde signals. Si no hay Redis, cae a LocMemCache.
+REDIS_URL = os.environ.get('REDIS_URL', '').strip()
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'retailmind-default',
+        'TIMEOUT': 300,   # 5 minutos por defecto
+        'OPTIONS': {
+            'MAX_ENTRIES': 2000,
+            'CULL_FREQUENCY': 4,
+        },
+    },
+    # Cache dedicado para catálogo de productos (TTL largo, invalidación manual)
+    'catalogo': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'retailmind-catalogo',
+        'TIMEOUT': 900,   # 15 minutos
+        'OPTIONS': {
+            'MAX_ENTRIES': 5000,
+            'CULL_FREQUENCY': 4,
+        },
+    },
+}
+
+# Cache `ventas`: dashboards/indicadores globales del módulo ventas.
+# TTL corto (30-120 s); la invalidación granular se maneja via signals.
+if REDIS_URL:
+    CACHES['ventas'] = {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'TIMEOUT': 60,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'IGNORE_EXCEPTIONS': True,
+        },
+        'KEY_PREFIX': 'rm:ventas',
+    }
+else:
+    CACHES['ventas'] = {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'retailmind-ventas',
+        'TIMEOUT': 60,
+        'OPTIONS': {
+            'MAX_ENTRIES': 3000,
+            'CULL_FREQUENCY': 4,
+        },
+    }
+
+# django-redis: cuando se producen excepciones de red, devolver None en vez de crashear
+DJANGO_REDIS_IGNORE_EXCEPTIONS = True
 
 # Configuración de archivos de medios
 MEDIA_URL = '/media/'

@@ -1,11 +1,16 @@
 {% load static %}
 <!doctype html>
-<html lang="es">
+<html lang="es"{% if pos_kiosk %} data-pos-kiosk="1"{% endif %}{% if pos_kiosk_strict %} data-pos-kiosk-strict="1"{% endif %}>
 
 <head>
     <meta charset="utf-8" />
     <title>NEXO - Iniciar Sesión</title>
+    {% if pos_kiosk_strict %}
+    <meta name="viewport" content="width=1920, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    {% else %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% endif %}
     <meta content="Sistema de Gestión Retail Avanzado - RetailMind" name="description" />
     <meta content="WebAppSolutions" name="author" />
 
@@ -19,6 +24,10 @@
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet" type="text/css" />
     <!-- Icons Css -->
     <link href="{% static 'css/icons.min.css' %}" rel="stylesheet" type="text/css" />
+    {% if pos_kiosk %}
+    <!-- POS Kiosk overrides -->
+    <link href="{% static 'css/pos-kiosk.css' %}" rel="stylesheet" type="text/css" />
+    {% endif %}
 
     <style>
         :root {
@@ -452,7 +461,7 @@
     </style>
 </head>
 
-<body>
+<body{% if pos_kiosk %} class="pos-kiosk{% if pos_kiosk_strict %} pos-kiosk-strict{% endif %}"{% endif %}>
     <div class="login-wrapper">
         <!-- Left Panel - Branding -->
         <div class="brand-panel">
@@ -543,18 +552,12 @@
                 {% else %}
                 <!-- Formulario de Login -->
                 <div class="form-header">
-                    <h2 id="form-title">{% if pin_mode %}Ingresar con PIN{% else %}Bienvenido de vuelta{% endif %}</h2>
-                    <p id="form-subtitle">
-                        {% if pin_mode %}
-                            Te enviaremos un código a tu correo para iniciar sesión
-                        {% else %}
-                            Ingresa tus credenciales para continuar
-                        {% endif %}
-                    </p>
+                    <h2 id="form-title">Bienvenido de vuelta</h2>
+                    <p id="form-subtitle">Ingresa tu correo para continuar</p>
                 </div>
 
                 {% if messages %}
-                <div class="alert-custom">
+                <div class="alert-custom" id="server-alert">
                     <i class="ri-error-warning-line"></i>
                     <span>
                         {% for message in messages %}
@@ -564,12 +567,17 @@
                 </div>
                 {% endif %}
 
+                <div class="alert-custom" id="client-alert" style="display:none;">
+                    <i class="ri-error-warning-line"></i>
+                    <span id="client-alert-text"></span>
+                </div>
+
                 <form method="POST" id="loginForm"
-                      action="{% if pin_mode %}{% url 'login_pin_request' %}{% else %}{% url 'login' %}{% endif %}"
-                      data-pin-mode="{% if pin_mode %}1{% else %}0{% endif %}">
+                      action="{% url 'login' %}"
+                      data-stage="email">
                     {% csrf_token %}
 
-                    <div class="form-group">
+                    <div class="form-group" id="email-group">
                         <label class="form-label">Correo electrónico</label>
                         <div class="input-wrapper">
                             <input type="email"
@@ -583,7 +591,25 @@
                         </div>
                     </div>
 
-                    <div class="form-group" id="password-group" {% if pin_mode %}style="display:none;"{% endif %}>
+                    <!-- Resumen del email validado (stage password / pin) -->
+                    <div class="form-group" id="email-summary" style="display:none;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.75rem 1rem; background:var(--gray-100); border-radius:12px;">
+                            <div style="display:flex; align-items:center; gap:0.75rem; min-width:0;">
+                                <div style="width:36px; height:36px; background:var(--primary-light); border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                    <i class="ri-user-3-line" style="color:var(--primary); font-size:1.1rem;"></i>
+                                </div>
+                                <div style="min-width:0;">
+                                    <div id="summary-name" style="font-size:0.9rem; font-weight:600; color:var(--dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                                    <div id="summary-email" style="font-size:0.8rem; color:var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                                </div>
+                            </div>
+                            <a href="#" id="change-email" class="forgot-link" style="font-size:0.8rem; white-space:nowrap;">
+                                <i class="ri-pencil-line"></i> Cambiar
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="password-group" style="display:none;">
                         <label class="form-label">Contraseña</label>
                         <div class="input-wrapper">
                             <input type="password"
@@ -591,7 +617,6 @@
                                    id="password-input"
                                    name="password-input"
                                    placeholder="Ingresa tu contraseña"
-                                   {% if not pin_mode %}required{% endif %}
                                    autocomplete="current-password"
                                    style="padding-right: 3rem;">
                             <i class="ri-lock-line input-icon"></i>
@@ -601,7 +626,20 @@
                         </div>
                     </div>
 
-                    <div class="form-options" id="form-options-row" {% if pin_mode %}style="display:none;"{% endif %}>
+                    <!-- Mensaje informativo para modo PIN -->
+                    <div id="pin-info" style="display:none; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border:1px solid #bfdbfe; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; align-items:flex-start; gap:0.75rem;">
+                            <i class="ri-mail-send-line" style="color:var(--primary); font-size:1.25rem; margin-top:1px;"></i>
+                            <div>
+                                <div style="font-size:0.9rem; font-weight:600; color:var(--dark); margin-bottom:2px;">Ingreso con PIN por correo</div>
+                                <div style="font-size:0.82rem; color:var(--gray-700); line-height:1.45;">
+                                    Este usuario tiene habilitado el ingreso passwordless. Te enviaremos un código de un solo uso a tu correo.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-options" id="form-options-row" style="display:none;">
                         <label class="remember-check">
                             <input type="checkbox" id="remember-check">
                             <span>Recordarme</span>
@@ -610,19 +648,9 @@
                     </div>
 
                     <button type="submit" class="btn-submit" id="btn-login">
-                        <span id="btn-text">{% if pin_mode %}Enviarme PIN{% else %}Iniciar Sesión{% endif %}</span>
-                        <i class="{% if pin_mode %}ri-mail-send-line{% else %}ri-arrow-right-line{% endif %}" id="btn-icon"></i>
+                        <span id="btn-text">Continuar</span>
+                        <i class="ri-arrow-right-line" id="btn-icon"></i>
                     </button>
-
-                    <div style="text-align:center; margin-top: 1.25rem;">
-                        <a href="#" id="toggle-pin-mode" class="forgot-link" style="font-weight:500;">
-                            {% if pin_mode %}
-                                <i class="ri-lock-password-line"></i> Usar contraseña
-                            {% else %}
-                                <i class="ri-key-2-line"></i> Ingresar solo con PIN (sin contraseña)
-                            {% endif %}
-                        </a>
-                    </div>
 
                     <div class="security-badge">
                         <i class="ri-shield-check-line pulse-icon"></i>
@@ -742,11 +770,42 @@
         {% endif %}
         
         {% if not session_active %}
-        // Password visibility toggle
-        const passwordToggle = document.getElementById('password-toggle');
-        const passwordInput = document.getElementById('password-input');
-        const toggleIcon = document.getElementById('toggle-icon');
-        
+        // ==========================================================
+        //  Flujo de login en 2 pasos:
+        //  1) stage = 'email'    → Pide solo el correo, valida via API
+        //  2) stage = 'password' → Usuario usa clave → muestra input password
+        //     stage = 'pin'      → Usuario usa PIN  → envía PIN directo al submit
+        // ==========================================================
+        const LOGIN_URL = "{% url 'login' %}";
+        const PIN_URL = "{% url 'login_pin_request' %}";
+        const CHECK_METHOD_URL = "{% url 'check_login_method' %}";
+
+        const loginForm       = document.getElementById('loginForm');
+        const btnLogin        = document.getElementById('btn-login');
+        const btnText         = document.getElementById('btn-text');
+        const btnIcon         = document.getElementById('btn-icon');
+        const emailGroup      = document.getElementById('email-group');
+        const emailInput      = document.getElementById('email');
+        const emailSummary    = document.getElementById('email-summary');
+        const summaryName     = document.getElementById('summary-name');
+        const summaryEmail    = document.getElementById('summary-email');
+        const changeEmailLink = document.getElementById('change-email');
+        const passwordGroup   = document.getElementById('password-group');
+        const passwordInput   = document.getElementById('password-input');
+        const passwordToggle  = document.getElementById('password-toggle');
+        const toggleIcon      = document.getElementById('toggle-icon');
+        const formOptionsRow  = document.getElementById('form-options-row');
+        const pinInfo         = document.getElementById('pin-info');
+        const formTitle       = document.getElementById('form-title');
+        const formSubtitle    = document.getElementById('form-subtitle');
+        const clientAlert     = document.getElementById('client-alert');
+        const clientAlertText = document.getElementById('client-alert-text');
+        const serverAlert     = document.getElementById('server-alert');
+        const csrfInput       = loginForm.querySelector('input[name=csrfmiddlewaretoken]');
+
+        let isSubmittingFinal = false;  // evita bucle en fetch vs submit real
+
+        // ---- Toggle visibilidad de contraseña ----
         if (passwordToggle) {
             passwordToggle.addEventListener('click', function() {
                 if (passwordInput.type === 'password') {
@@ -759,62 +818,168 @@
             });
         }
 
-        // Toggle entre modo "con contraseña" y modo "solo con PIN"
-        const LOGIN_URL = "{% url 'login' %}";
-        const PIN_URL = "{% url 'login_pin_request' %}";
-        const loginForm = document.getElementById('loginForm');
-        const btnLogin = document.getElementById('btn-login');
-        const btnText = document.getElementById('btn-text');
-        const btnIcon = document.getElementById('btn-icon');
-        const togglePinMode = document.getElementById('toggle-pin-mode');
-        const passwordGroup = document.getElementById('password-group');
-        const formOptionsRow = document.getElementById('form-options-row');
-        const formTitle = document.getElementById('form-title');
-        const formSubtitle = document.getElementById('form-subtitle');
+        // ---- Helpers de UI ----
+        function showClientAlert(msg) {
+            if (serverAlert) serverAlert.style.display = 'none';
+            clientAlertText.textContent = msg;
+            clientAlert.style.display = '';
+        }
 
-        function setPinMode(enabled) {
-            loginForm.dataset.pinMode = enabled ? '1' : '0';
-            loginForm.action = enabled ? PIN_URL : LOGIN_URL;
+        function hideClientAlert() {
+            clientAlert.style.display = 'none';
+        }
 
-            if (enabled) {
-                passwordGroup.style.display = 'none';
-                formOptionsRow.style.display = 'none';
-                passwordInput.removeAttribute('required');
-                passwordInput.value = '';
-                formTitle.textContent = 'Ingresar con PIN';
-                formSubtitle.textContent = 'Te enviaremos un código a tu correo para iniciar sesión';
-                btnText.textContent = 'Enviarme PIN';
-                btnIcon.className = 'ri-mail-send-line';
-                togglePinMode.innerHTML = '<i class="ri-lock-password-line"></i> Usar contraseña';
+        function setBtnLoading(loading, labelIfLoading) {
+            if (loading) {
+                btnLogin.disabled = true;
+                btnText.textContent = labelIfLoading || 'Procesando...';
+                btnIcon.style.display = 'none';
+                if (!document.getElementById('btn-spinner')) {
+                    const sp = document.createElement('div');
+                    sp.className = 'spinner';
+                    sp.id = 'btn-spinner';
+                    btnLogin.appendChild(sp);
+                }
             } else {
-                passwordGroup.style.display = '';
-                formOptionsRow.style.display = '';
-                passwordInput.setAttribute('required', 'required');
-                formTitle.textContent = 'Bienvenido de vuelta';
-                formSubtitle.textContent = 'Ingresa tus credenciales para continuar';
-                btnText.textContent = 'Iniciar Sesión';
-                btnIcon.className = 'ri-arrow-right-line';
-                togglePinMode.innerHTML = '<i class="ri-key-2-line"></i> Ingresar solo con PIN (sin contraseña)';
+                btnLogin.disabled = false;
+                btnIcon.style.display = '';
+                const sp = document.getElementById('btn-spinner');
+                if (sp) sp.remove();
             }
         }
 
-        if (togglePinMode) {
-            togglePinMode.addEventListener('click', function(e) {
+        function goToStageEmail() {
+            loginForm.dataset.stage = 'email';
+            loginForm.action = LOGIN_URL;
+            emailGroup.style.display = '';
+            emailInput.removeAttribute('readonly');
+            emailSummary.style.display = 'none';
+            passwordGroup.style.display = 'none';
+            formOptionsRow.style.display = 'none';
+            pinInfo.style.display = 'none';
+            passwordInput.removeAttribute('required');
+            passwordInput.value = '';
+            formTitle.textContent = 'Bienvenido de vuelta';
+            formSubtitle.textContent = 'Ingresa tu correo para continuar';
+            btnText.textContent = 'Continuar';
+            btnIcon.className = 'ri-arrow-right-line';
+            setBtnLoading(false);
+            setTimeout(() => emailInput.focus(), 50);
+        }
+
+        function goToStagePassword(info) {
+            loginForm.dataset.stage = 'password';
+            loginForm.action = LOGIN_URL;
+            emailGroup.style.display = 'none';
+            emailInput.setAttribute('readonly', 'readonly');
+            summaryName.textContent = info && info.nombre ? info.nombre : '';
+            summaryEmail.textContent = emailInput.value;
+            emailSummary.style.display = '';
+            passwordGroup.style.display = '';
+            formOptionsRow.style.display = '';
+            pinInfo.style.display = 'none';
+            passwordInput.setAttribute('required', 'required');
+            formTitle.textContent = 'Ingresa tu contraseña';
+            formSubtitle.textContent = 'Este usuario ingresa con correo y contraseña';
+            btnText.textContent = 'Iniciar Sesión';
+            btnIcon.className = 'ri-arrow-right-line';
+            setBtnLoading(false);
+            setTimeout(() => passwordInput.focus(), 50);
+        }
+
+        function goToStagePin(info) {
+            loginForm.dataset.stage = 'pin';
+            loginForm.action = PIN_URL;
+            emailGroup.style.display = 'none';
+            emailInput.setAttribute('readonly', 'readonly');
+            summaryName.textContent = info && info.nombre ? info.nombre : '';
+            summaryEmail.textContent = emailInput.value;
+            emailSummary.style.display = '';
+            passwordGroup.style.display = 'none';
+            formOptionsRow.style.display = 'none';
+            pinInfo.style.display = '';
+            passwordInput.removeAttribute('required');
+            passwordInput.value = '';
+            formTitle.textContent = 'Ingreso con PIN';
+            formSubtitle.textContent = 'Enviaremos un código de acceso a tu correo';
+            btnText.textContent = 'Enviarme PIN';
+            btnIcon.className = 'ri-mail-send-line';
+            setBtnLoading(false);
+            setTimeout(() => btnLogin.focus(), 50);
+        }
+
+        // ---- Cambiar correo (volver al stage 'email') ----
+        if (changeEmailLink) {
+            changeEmailLink.addEventListener('click', function(e) {
                 e.preventDefault();
-                const isPinMode = loginForm.dataset.pinMode === '1';
-                setPinMode(!isPinMode);
+                hideClientAlert();
+                goToStageEmail();
             });
         }
 
-        // Form submission with loading state
-        if (loginForm) {
-            loginForm.addEventListener('submit', function(e) {
-                const isPinMode = loginForm.dataset.pinMode === '1';
-                btnLogin.disabled = true;
-                btnText.textContent = isPinMode ? 'Enviando PIN...' : 'Iniciando sesión...';
-                btnIcon.outerHTML = '<div class="spinner"></div>';
+        // ---- Consulta al backend para saber si el usuario usa PIN o clave ----
+        async function checkLoginMethod(email) {
+            const formData = new FormData();
+            formData.append('email', email);
+            formData.append('csrfmiddlewaretoken', csrfInput ? csrfInput.value : '');
+
+            const response = await fetch(CHECK_METHOD_URL, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
             });
+
+            if (!response.ok && response.status !== 400) {
+                throw new Error('No se pudo validar el correo. Intenta nuevamente.');
+            }
+            return response.json();
         }
+
+        // ---- Submit principal: intercepta el stage 'email' y valida via AJAX ----
+        loginForm.addEventListener('submit', async function(e) {
+            const stage = loginForm.dataset.stage;
+
+            if (stage === 'email') {
+                e.preventDefault();
+                hideClientAlert();
+
+                const email = (emailInput.value || '').trim().toLowerCase();
+                if (!email) {
+                    showClientAlert('Debes ingresar tu correo electrónico.');
+                    emailInput.focus();
+                    return;
+                }
+
+                setBtnLoading(true, 'Validando...');
+                try {
+                    const data = await checkLoginMethod(email);
+                    if (!data.ok) {
+                        showClientAlert(data.error || 'No pudimos validar el correo.');
+                        setBtnLoading(false);
+                        emailInput.focus();
+                        return;
+                    }
+                    if (data.requiere_pin) {
+                        goToStagePin(data);
+                    } else {
+                        goToStagePassword(data);
+                    }
+                } catch (err) {
+                    showClientAlert(err.message || 'Error de conexión. Intenta nuevamente.');
+                    setBtnLoading(false);
+                }
+                return;
+            }
+
+            // Submit real a /login/ o /login-pin/
+            isSubmittingFinal = true;
+            if (stage === 'pin') {
+                setBtnLoading(true, 'Enviando PIN...');
+            } else {
+                setBtnLoading(true, 'Iniciando sesión...');
+            }
+        });
         {% endif %}
 
         if (window.history.replaceState) {

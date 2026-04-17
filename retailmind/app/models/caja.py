@@ -162,7 +162,44 @@ class ArqueoCaja(models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_cierre = models.DateTimeField(null=True, blank=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
-    
+
+    # === CACHE DENORMALIZADO DE TOTALES DE DEPÓSITOS ===
+    # Se recalcula via signal post_save/post_delete en DepositoBancario y el
+    # management command `recalcular_cache_arqueos`. Permite que `listar_arqueos`
+    # lea los totales sin JOINs adicionales (antes: 10+ queries por arqueo).
+    cache_total_depositos = models.IntegerField(
+        default=0,
+        help_text='Suma de `depositos.monto` — actualizado por signal',
+    )
+    cache_total_dep_verificado = models.IntegerField(
+        default=0,
+        help_text='Suma de `depositos.monto_confirmado` verificados',
+    )
+    cache_total_dep_efectivo_verif = models.IntegerField(
+        default=0,
+        help_text='Total depósitos efectivo verificados (monto_confirmado)',
+    )
+    cache_total_dep_cheque_verif = models.IntegerField(
+        default=0,
+        help_text='Total depósitos cheque verificados (monto_confirmado)',
+    )
+    cache_depositos_declarados = models.IntegerField(
+        default=0,
+        help_text='Cantidad de depósitos con monto_declarado > 0',
+    )
+    cache_depositos_confirmados = models.IntegerField(
+        default=0,
+        help_text='Cantidad de depósitos con verificado=True',
+    )
+    cache_depositos_pendientes = models.IntegerField(
+        default=0,
+        help_text='Cantidad de depósitos verificado=False y monto_declarado > 0',
+    )
+    cache_depositos_actualizado = models.DateTimeField(
+        null=True, blank=True,
+        help_text='Última vez que el signal recalculó los contadores',
+    )
+
     class Meta:
         ordering = ['-fecha_arqueo', '-fecha_creacion']
         unique_together = ['fecha_arqueo', 'sucursal']  # Un arqueo por día por sucursal
@@ -239,19 +276,22 @@ class ArqueoCaja(models.Model):
     
     @property
     def total_depositos(self):
-        """Calcula el total de depósitos bancarios realizados"""
-        return sum([d.monto for d in self.depositos.all()])
-    
+        """Total de depósitos bancarios realizados (lee cache denormalizado)."""
+        # Delega al cache; si nunca se recalculó cae al sum() en vivo.
+        if self.cache_depositos_actualizado is not None:
+            return self.cache_total_depositos or 0
+        return sum(d.monto for d in self.depositos.all())
+
     @property
     def efectivo_en_caja(self):
         """Calcula el efectivo que realmente queda en caja (después de depósitos y fondo fijo)"""
         return self.total_efectivo_fisico - self.total_depositos - self.fondo_fijo_snapshot
-    
+
     @property
     def diferencia_efectivo_real(self):
         """Diferencia de efectivo considerando depósitos: (Efectivo en caja - Teórico)"""
         return self.efectivo_en_caja - self.total_efectivo_teorico
-    
+
     @property
     def diferencia_total_real(self):
         """Diferencia total considerando efectivo en caja + diferencia POS"""
@@ -261,24 +301,81 @@ class ArqueoCaja(models.Model):
 
     @property
     def total_depositado_efectivo_verificado(self):
-        """Total de depósitos en efectivo verificados por supervisor"""
+        """Total de depósitos en efectivo verificados (lee cache denormalizado)."""
+        if self.cache_depositos_actualizado is not None:
+            return self.cache_total_dep_efectivo_verif or 0
         return sum(
-            d.monto_confirmado for d in self.depositos.filter(verificado=True, tipo_medio='EFECTIVO')
+            d.monto_confirmado for d in self.depositos.filter(
+                verificado=True, tipo_medio='EFECTIVO'
+            )
         )
 
     @property
     def total_depositado_cheque_verificado(self):
-        """Total de depósitos en cheque verificados por supervisor"""
+        """Total de depósitos en cheque verificados (lee cache denormalizado)."""
+        if self.cache_depositos_actualizado is not None:
+            return self.cache_total_dep_cheque_verif or 0
         return sum(
-            d.monto_confirmado for d in self.depositos.filter(verificado=True, tipo_medio='CHEQUE')
+            d.monto_confirmado for d in self.depositos.filter(
+                verificado=True, tipo_medio='CHEQUE'
+            )
         )
 
     @property
     def total_depositado_verificado(self):
-        """Total de todos los depósitos verificados"""
+        """Total de todos los depósitos verificados (lee cache denormalizado)."""
+        if self.cache_depositos_actualizado is not None:
+            return self.cache_total_dep_verificado or 0
         return sum(
             d.monto_confirmado for d in self.depositos.filter(verificado=True)
         )
+
+    def recalcular_cache_depositos(self, save: bool = True) -> None:
+        """
+        Recalcula los campos `cache_*` a partir de los depósitos actuales
+        en una sola query (aggregate con filter=Q) y los persiste.
+        Llamado desde el signal `post_save`/`post_delete` de DepositoBancario
+        y desde el management command de backfill.
+        """
+        from django.db.models import Sum as _Sum, Count as _Count, Q as _Q
+
+        agg = self.depositos.aggregate(
+            total_depositos=_Sum('monto'),
+            total_verif=_Sum('monto_confirmado', filter=_Q(verificado=True)),
+            total_efectivo_verif=_Sum(
+                'monto_confirmado',
+                filter=_Q(verificado=True, tipo_medio='EFECTIVO'),
+            ),
+            total_cheque_verif=_Sum(
+                'monto_confirmado',
+                filter=_Q(verificado=True, tipo_medio='CHEQUE'),
+            ),
+            declarados=_Count('id', filter=_Q(monto_declarado__gt=0)),
+            confirmados=_Count('id', filter=_Q(verificado=True)),
+            pendientes=_Count(
+                'id', filter=_Q(verificado=False, monto_declarado__gt=0)
+            ),
+        )
+        self.cache_total_depositos = agg['total_depositos'] or 0
+        self.cache_total_dep_verificado = agg['total_verif'] or 0
+        self.cache_total_dep_efectivo_verif = agg['total_efectivo_verif'] or 0
+        self.cache_total_dep_cheque_verif = agg['total_cheque_verif'] or 0
+        self.cache_depositos_declarados = agg['declarados'] or 0
+        self.cache_depositos_confirmados = agg['confirmados'] or 0
+        self.cache_depositos_pendientes = agg['pendientes'] or 0
+        self.cache_depositos_actualizado = timezone.now()
+        if save:
+            # Solo update_fields para no retriggerar la lógica costosa de save()
+            ArqueoCaja.objects.filter(pk=self.pk).update(
+                cache_total_depositos=self.cache_total_depositos,
+                cache_total_dep_verificado=self.cache_total_dep_verificado,
+                cache_total_dep_efectivo_verif=self.cache_total_dep_efectivo_verif,
+                cache_total_dep_cheque_verif=self.cache_total_dep_cheque_verif,
+                cache_depositos_declarados=self.cache_depositos_declarados,
+                cache_depositos_confirmados=self.cache_depositos_confirmados,
+                cache_depositos_pendientes=self.cache_depositos_pendientes,
+                cache_depositos_actualizado=self.cache_depositos_actualizado,
+            )
 
     @property
     def diferencia_deposito_vs_teorico(self):
@@ -517,7 +614,18 @@ class DepositoBancario(models.Model):
         ordering = ['-fecha_deposito']
         verbose_name = 'Depósito Bancario'
         verbose_name_plural = 'Depósitos Bancarios'
-    
+        indexes = [
+            # Agregaciones de depósitos por arqueo (listar_arqueos annotate)
+            models.Index(fields=['arqueo', 'verificado'], name='depbanc_arq_verif_idx'),
+            # Totales por tipo de medio dentro de un arqueo (efectivo / cheque)
+            models.Index(
+                fields=['arqueo', 'tipo_medio', 'verificado'],
+                name='depbanc_arq_med_ver_idx',
+            ),
+            # Confirmaciones pendientes en indicadores mensuales
+            models.Index(fields=['verificado', 'fecha_deposito'], name='depbanc_ver_fecha_idx'),
+        ]
+
     def __str__(self):
         return f"Depósito {self.fecha_deposito} - {self.get_banco_display()} - ${self.monto:,}"
 

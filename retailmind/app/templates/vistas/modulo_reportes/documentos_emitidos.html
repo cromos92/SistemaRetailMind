@@ -80,7 +80,7 @@
                 <div class="col-auto" id="contenedorFiltroSucursal">
                     <label for="filtroSucursal" class="form-label mb-1 small fw-semibold text-muted">Sucursal</label>
                     <select class="form-select form-select-sm" id="filtroSucursal" style="width:180px">
-                        <option value="">Todas las sucursales</option>
+                        <option value="all">Todas las sucursales</option>
                     </select>
                 </div>
                 <!-- Botón buscar -->
@@ -101,8 +101,32 @@
         </div>
     </div>
 
+    <!-- ── CHIP DE ÁMBITO (sucursales y conteos) ───────── -->
+    <div class="ambito-bar no-print d-flex flex-wrap align-items-center gap-2 mb-2" id="ambitoBar">
+        <span class="chip chip-scope" id="chipFiltroSucursal" title="Ámbito de sucursales aplicado">
+            <i class="ri-store-2-line"></i> <span id="chipFiltroSucursalText">Cargando…</span>
+        </span>
+        <span class="chip chip-count" id="chipCantDtes" title="Cantidad de DTEs (sin NC)">
+            <i class="ri-file-text-line"></i> DTEs: <strong id="chipCantDtesVal">0</strong>
+        </span>
+        <span class="chip chip-count chip-nc" id="chipCantNC" title="Cantidad de Notas de Crédito">
+            <i class="ri-file-reduce-line"></i> NC: <strong id="chipCantNCVal">0</strong>
+        </span>
+        <span class="chip chip-count chip-warn" id="chipSinPagos" title="DTEs sin pagos registrados (fallback a ticket/efectivo)">
+            <i class="ri-alert-line"></i> Sin pagos: <strong id="chipSinPagosVal">0</strong>
+        </span>
+        <span class="chip chip-equiv" id="chipEquivVentas" title="Total equivalente a /app/ventas/documentos/ (bruto - descuentos, sin restar NC)">
+            <i class="ri-equal-line"></i> ≈ Ventas/Doc: <strong id="chipEquivVentasVal">$0</strong>
+        </span>
+    </div>
+
     <!-- ── KPIs RESUMEN (barra compacta) ─────────────── -->
     <div class="kpi-bar mb-3 no-print" id="kpisResumen">
+        <div class="kpi-item kpi-brutas">
+            <i class="ri-stack-line kpi-ico"></i>
+            <div><div class="kpi-lbl">Ventas Brutas</div><div class="kpi-val" id="kpiBrutas">$0</div></div>
+        </div>
+        <div class="kpi-sep"></div>
         <div class="kpi-item kpi-efectivo">
             <i class="ri-money-dollar-circle-line kpi-ico"></i>
             <div><div class="kpi-lbl">Efectivo</div><div class="kpi-val" id="kpiEfectivo">$0</div></div>
@@ -136,6 +160,61 @@
         <div class="kpi-item kpi-total">
             <i class="ri-funds-line kpi-ico"></i>
             <div><div class="kpi-lbl">TOTAL NETO</div><div class="kpi-val fw-bold" id="kpiTotal">$0</div></div>
+        </div>
+    </div>
+
+    <!-- ── PANEL DE DIAGNÓSTICO (colapsable, para cuadrar con Ventas/Documentos) ── -->
+    <div class="card border-0 shadow-sm mb-3 no-print" id="panelDiagnostico" style="display:none">
+        <div class="card-header bg-light py-2 px-3 d-flex align-items-center justify-content-between"
+             style="cursor:pointer" data-bs-toggle="collapse" data-bs-target="#diagnosticoCollapse">
+            <span class="fw-semibold text-muted small">
+                <i class="ri-bug-2-line text-warning me-1"></i> Diagnóstico — Desglose por sucursal y tipo de documento
+            </span>
+            <i class="ri-arrow-down-s-line" id="iconoDiagnostico"></i>
+        </div>
+        <div class="collapse" id="diagnosticoCollapse">
+            <div class="card-body p-3">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="fw-semibold small text-muted mb-2">Sucursales incluidas</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0 diag-table">
+                                <thead>
+                                    <tr><th>Sucursal</th><th class="text-end">Docs</th><th class="text-end">Monto bruto</th></tr>
+                                </thead>
+                                <tbody id="diagSucursalesTbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-semibold small text-muted mb-2">Documentos por tipo</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0 diag-table">
+                                <thead>
+                                    <tr><th>Tipo</th><th class="text-end">Cantidad</th><th class="text-end">Monto</th></tr>
+                                </thead>
+                                <tbody id="diagTiposTbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="diag-info">
+                            <strong>Filtro aplicado:</strong> <span id="diagFiltroSucursal">—</span>
+                            &nbsp;|&nbsp;
+                            <strong>Período:</strong> <span id="diagPeriodo">—</span>
+                        </div>
+                        <div class="diag-info mt-2">
+                            <strong>Total bruto (sin descuentos ni NC):</strong> <span id="diagBruto">$0</span>
+                            &nbsp;|&nbsp;
+                            <strong>≈ Ventas/Documentos (bruto − descuentos):</strong>
+                            <span id="diagEquivVentas" class="text-primary fw-semibold">$0</span>
+                            &nbsp;|&nbsp;
+                            <strong>Total neto (− NC):</strong>
+                            <span id="diagNeto" class="text-success fw-semibold">$0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -281,11 +360,16 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success) {
                     const selectSucursal = document.getElementById('filtroSucursal');
+                    // Opción "Todas" solo disponible para usuarios con permiso.
+                    // Usamos value="all" (explícito) en lugar de "" para que el
+                    // backend distinga entre "no enviado" (→ sucursal de sesión)
+                    // y "todas explícitamente".
                     if (esSuperuser) {
-                        selectSucursal.innerHTML = '<option value="">Todas las sucursales</option>';
+                        selectSucursal.innerHTML = '<option value="all">Todas las sucursales</option>';
                     } else {
                         selectSucursal.innerHTML = '';
                     }
+                    let haySeleccion = false;
                     if (data.sucursales && data.sucursales.length > 0) {
                         data.sucursales.forEach(s => {
                             const option = document.createElement('option');
@@ -293,10 +377,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             option.textContent = s.nombre;
                             if (sucursalActivaId && s.id == sucursalActivaId) {
                                 option.selected = true;
+                                haySeleccion = true;
                             }
                             selectSucursal.appendChild(option);
                         });
-                        if (!esSuperuser && !sucursalActivaId && data.sucursales.length > 0) {
+                        // Si no hubo match con sucursal de sesión y el usuario no es admin,
+                        // seleccionar la primera sucursal accesible por defecto.
+                        if (!haySeleccion && !esSuperuser && data.sucursales.length > 0) {
                             selectSucursal.options[0].selected = true;
                         }
                     }
@@ -329,12 +416,87 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     llenarTablaDocumentos(data.documentos, data.total_real || data.total_registros);
                     actualizarResumenes(data.resumen);
+                    actualizarDiagnostico(data.diagnostico, data.resumen);
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error', text: data.error || 'Error desconocido' });
                 }
             })
             .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo conectar con el servidor' }))
             .finally(() => setLoading(false));
+    }
+
+    // Actualiza chips de ámbito + tablas de diagnóstico.
+    // El objetivo es que el usuario pueda ver en segundos POR QUÉ un total
+    // difiere del que muestra /app/ventas/documentos/.
+    function actualizarDiagnostico(diag, resumen) {
+        if (!diag) return;
+        const fmt = (v) => '$' + formatearNumero(v || 0);
+
+        // --- Chips de ámbito ---
+        const chipTxt = document.getElementById('chipFiltroSucursalText');
+        const chipSuc = document.getElementById('chipFiltroSucursal');
+        if (chipTxt) {
+            const n = diag.cantidad_sucursales_incluidas || 0;
+            const descripcion = diag.filtro_sucursal_aplicado || '';
+            if (n === 1 && diag.sucursales_incluidas && diag.sucursales_incluidas[0]) {
+                chipTxt.textContent = `Sucursal: ${diag.sucursales_incluidas[0].alias}`;
+                chipSuc.classList.remove('chip-warn');
+            } else if (n > 1) {
+                chipTxt.textContent = `${n} sucursales · ${descripcion}`;
+                chipSuc.classList.add('chip-warn');
+            } else {
+                chipTxt.textContent = descripcion || 'Sin sucursales';
+                chipSuc.classList.add('chip-warn');
+            }
+        }
+        document.getElementById('chipCantDtesVal').textContent    = diag.cantidad_dtes || 0;
+        document.getElementById('chipCantNCVal').textContent      = diag.cantidad_notas_credito || 0;
+        document.getElementById('chipSinPagosVal').textContent    = diag.dtes_sin_pagos_registrados || 0;
+        document.getElementById('chipEquivVentasVal').textContent = fmt(diag.total_equivalente_ventas_documentos);
+
+        // Resaltar el chip de "sin pagos" si hay alguno, porque podrían
+        // explicar diferencias en el desglose por método de pago.
+        const chipSinPagos = document.getElementById('chipSinPagos');
+        if (chipSinPagos) {
+            chipSinPagos.classList.toggle('chip-warn-active',
+                (diag.dtes_sin_pagos_registrados || 0) > 0);
+        }
+
+        // --- Panel de diagnóstico ---
+        const panel = document.getElementById('panelDiagnostico');
+        if (panel) panel.style.display = '';
+
+        const tbodySuc = document.getElementById('diagSucursalesTbody');
+        const sucursales = diag.sucursales_incluidas || [];
+        if (sucursales.length === 0) {
+            tbodySuc.innerHTML = '<tr><td colspan="3" class="text-center text-muted small py-2">Sin sucursales</td></tr>';
+        } else {
+            tbodySuc.innerHTML = sucursales.map(s => `
+                <tr>
+                    <td>${s.alias}</td>
+                    <td class="text-end">${s.cantidad}</td>
+                    <td class="text-end">${fmt(s.monto)}</td>
+                </tr>`).join('');
+        }
+
+        const tbodyTipo = document.getElementById('diagTiposTbody');
+        const tipos = diag.conteo_por_tipo || [];
+        if (tipos.length === 0) {
+            tbodyTipo.innerHTML = '<tr><td colspan="3" class="text-center text-muted small py-2">Sin documentos</td></tr>';
+        } else {
+            tbodyTipo.innerHTML = tipos.map(t => `
+                <tr>
+                    <td>${t.tipo}</td>
+                    <td class="text-end">${t.cantidad}</td>
+                    <td class="text-end">${fmt(t.monto)}</td>
+                </tr>`).join('');
+        }
+
+        document.getElementById('diagFiltroSucursal').textContent = diag.filtro_sucursal_aplicado || '—';
+        document.getElementById('diagPeriodo').textContent        = `${diag.fecha_desde} al ${diag.fecha_hasta}`;
+        document.getElementById('diagBruto').textContent          = fmt(diag.total_bruto_sin_descuento);
+        document.getElementById('diagEquivVentas').textContent    = fmt(diag.total_equivalente_ventas_documentos);
+        document.getElementById('diagNeto').textContent           = fmt(diag.total_neto);
     }
 
     function setLoading(activo) {
@@ -450,6 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const fmtNeg = (v) => v ? '-$' + formatearNumero(v) : '$0';
 
         // KPIs principales
+        document.getElementById('kpiBrutas').textContent    = fmt(resumen.ventas_brutas);
         document.getElementById('kpiEfectivo').textContent  = fmt(resumen.efectivo);
         document.getElementById('kpiDebito').textContent    = fmt(resumen.tbk_debito);
         document.getElementById('kpiCredito').textContent   = fmt(resumen.tbk_credito);
@@ -813,6 +976,7 @@ td{padding:2px;border-bottom:1px dotted #ccc}
     background: #adb5bd;
     margin: 0;
 }
+.kpi-brutas    { background: #f1f5f9; color: #334155; }
 .kpi-efectivo  { background: #f0fdf4; color: #166534; }
 .kpi-debito    { background: #eff6ff; color: #1e40af; }
 .kpi-credito   { background: #faf5ff; color: #6b21a8; }
@@ -822,6 +986,58 @@ td{padding:2px;border-bottom:1px dotted #ccc}
 .kpi-total     { background: #1e293b; color: #fff; flex: 1.2; }
 .kpi-total .kpi-ico { opacity: .9; }
 .kpi-total .kpi-lbl { opacity: .8; }
+
+/* ── CHIPS DE ÁMBITO (diagnóstico rápido) ─────────── */
+.ambito-bar .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11.5px;
+    color: #495057;
+    line-height: 1.4;
+}
+.ambito-bar .chip i { font-size: 13px; opacity: .8; }
+.ambito-bar .chip strong { color: #212529; }
+.ambito-bar .chip-scope { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }
+.ambito-bar .chip-scope i { color: #4f46e5; }
+.ambito-bar .chip-nc { background: #fef2f2; border-color: #fecaca; color: #7f1d1d; }
+.ambito-bar .chip-warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.ambito-bar .chip-warn-active {
+    background: #fef3c7; border-color: #f59e0b; color: #78350f;
+    animation: chipPulse 2s ease-in-out infinite;
+}
+.ambito-bar .chip-equiv { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+@keyframes chipPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,.3); }
+    50% { box-shadow: 0 0 0 4px rgba(245,158,11,0); }
+}
+
+/* ── TABLAS DE DIAGNÓSTICO ──────────────────────── */
+.diag-table thead th {
+    background: #f1f5f9;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 1px solid #cbd5e1;
+    padding: 5px 8px;
+}
+.diag-table tbody td {
+    font-size: 12px;
+    padding: 5px 8px;
+    border-bottom: 1px solid #f1f5f9;
+}
+.diag-info {
+    font-size: 11.5px;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
 
 /* RESUMEN DETALLADO */
 .resumen-item {

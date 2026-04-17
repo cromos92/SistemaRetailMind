@@ -2896,10 +2896,12 @@ function cargarDatosCuadratura(c) {
     // --- Campos individuales ---
     $('#visa').text(fmCLP(c.total_visa_mc_amex||0)); $('#debito').text(fmCLP(c.total_tarjeta_debito||0));
     $('#presto').text(fmCLP(c.total_presto||0)); $('#hites').text(fmCLP(c.total_hites||0));
-    $('#efectivo').text(fmCLP(c.total_efectivo||0)); $('#transferencia').text(fmCLP(c.total_transferencia||0));
-    // Anti-fraude: ocultar teórico para cajeros hasta después del conteo
+    $('#efectivo').text(fmCLP(c.total_efectivo||0)).css('color', '');
+    $('#transferencia').text(fmCLP(c.total_transferencia||0));
+    // Anti-fraude: ocultar SOLO los teóricos del modal de Arqueo hasta el conteo.
+    // En el Resumen de Caja mostramos el efectivo real para evitar el mensaje
+    // "Pendiente de conteo", que confundía al operador.
     if (c.modo_conteo_ciego) {
-        $('#efectivo').text('Pendiente de conteo').css('color', 'var(--nexo-gray-400)');
         $('#efectivoTeorico, #efectivoTeoricoExpress').text('***').css('color', 'var(--nexo-gray-400)');
         window._modoCiegoCuadratura = true;
     } else {

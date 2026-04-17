@@ -32,6 +32,7 @@ urlpatterns = [
     path('login-2fa/', views.login_2fa_view, name='login_2fa'),
     path('logout/', views.logout_view, name='logout'),
     path('api/check-session/', views.check_session_status, name='check_session_status'),
+    path('api/check-login-method/', views.check_login_method_view, name='check_login_method'),
     
     # === API v1 para App Desktop (POS Físico) ===
     path('api/v1/', include('app.api.urls', namespace='api_v1')),

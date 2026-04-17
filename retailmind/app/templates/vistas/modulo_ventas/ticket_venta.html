@@ -62,25 +62,6 @@ html {
     min-height: calc(100vh - 70px);
 }
 
-/* ========== PAGE TITLE BOX ========== */
-.page-title-box h4 {
-    color: var(--nexo-secondary);
-    font-weight: 700;
-    font-size: 1.5rem;
-}
-
-.page-title-box h4 i {
-    color: var(--nexo-primary);
-}
-
-.breadcrumb-item a {
-    color: var(--nexo-primary);
-}
-
-.breadcrumb-item.active {
-    color: var(--nexo-gray-500);
-}
-
 /* ========== VENDEDOR CARDS NEXO - DISEÑO MEJORADO ========== */
 .vendedores-grid {
     display: grid;
@@ -259,107 +240,6 @@ html {
 }
 
 /* ========== MEJORAS LISTADO VENDEDORES ========== */
-
-/* Header mejorado con flex */
-.vendedores-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.vendedores-count-badge {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    color: #fff;
-    border-radius: 20px;
-    padding: 0.2rem 0.7rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-/* Barra de búsqueda/filtro en tiempo real */
-.vendedores-filter-bar {
-    padding: 0.75rem 1rem 0.5rem;
-    background: #fff;
-    border-bottom: 1px solid #e9ecef;
-    border-radius: 0;
-}
-
-.vendedores-filter-wrap {
-    position: relative;
-}
-
-.vendedores-filter-wrap .filter-icon {
-    position: absolute;
-    left: 0.65rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #9ca3af;
-    font-size: 0.9rem;
-    pointer-events: none;
-}
-
-.vendedores-filter-wrap #filtroVendedor {
-    padding-left: 2.1rem;
-    border-radius: 8px;
-    border: 1.5px solid #e5e7eb;
-    font-size: 0.85rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    height: 36px;
-    background: #f9fafb;
-}
-
-.vendedores-filter-wrap #filtroVendedor:focus {
-    border-color: #6366f1;
-    background: #fff;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-    outline: none;
-}
-
-/* Contador de resultados del filtro */
-.vendedores-filter-count {
-    font-size: 0.75rem;
-    color: #9ca3af;
-    margin-top: 0.3rem;
-    min-height: 1rem;
-    padding-left: 0.1rem;
-}
-
-.vendedores-filter-count.has-filter {
-    color: #6366f1;
-    font-weight: 600;
-}
-
-/* Estado sin resultados al filtrar */
-.vendedores-no-filter-results {
-    display: none;
-    text-align: center;
-    padding: 2rem 1rem;
-}
-
-.vendedores-no-filter-results i {
-    font-size: 2.5rem;
-    color: #d1d5db;
-    margin-bottom: 0.75rem;
-    display: block;
-}
-
-.vendedores-no-filter-results p {
-    color: #6b7280;
-    font-size: 0.85rem;
-    margin: 0;
-}
-
-/* Resaltar texto que coincide con el filtro */
-.vendedor-highlight {
-    background: #fef08a;
-    border-radius: 2px;
-    padding: 0 1px;
-}
 
 /* Controles inferiores mejorados */
 .vendedores-bottom-controls {
@@ -781,15 +661,6 @@ div[style*="border: 1px solid #000"] {
     min-height: 32px;
     overflow: hidden;
 }
-.pos-topbar-info {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    flex-shrink: 1;
-    flex-wrap: nowrap;
-    min-width: 0;
-    overflow: hidden;
-}
 .pos-info-chip {
     display: inline-flex;
     align-items: center;
@@ -818,12 +689,31 @@ div[style*="border: 1px solid #000"] {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.pos-topbar-vdivider {
-    width: 1px;
-    height: 22px;
-    background: rgba(255,255,255,0.18);
-    flex-shrink: 0;
-    margin: 0 1px;
+
+/* === Info del vendedor/sucursal/fecha en la barra inferior (fondo claro) === */
+.pos-bottom-info {
+    padding: 0 8px;
+    border-left: 1px solid rgba(0,0,0,0.08);
+    border-right: 1px solid rgba(0,0,0,0.08);
+    margin: 0 4px;
+}
+.pos-bottom-info .pos-info-chip {
+    color: var(--nexo-dark, #1b1b1b);
+    border-right-color: rgba(0,0,0,0.08);
+}
+.pos-bottom-info .pos-info-chip .pos-chip-label {
+    color: rgba(0,0,0,0.45);
+}
+.pos-bottom-info .badge.js-ticket-items {
+    background-color: rgba(0,0,0,0.08) !important;
+    border-color: rgba(0,0,0,0.12) !important;
+    color: var(--nexo-dark, #1b1b1b) !important;
+}
+@media screen and (max-width: 1200px) {
+    .pos-bottom-info .pos-info-chip.pos-chip-fecha { display: none; }
+}
+@media screen and (max-width: 1050px) {
+    .pos-bottom-info .pos-info-chip.pos-chip-sucursal { display: none; }
 }
 /* Accesos sección */
 .pos-topbar-accesos {
@@ -996,17 +886,98 @@ div[style*="border: 1px solid #000"] {
 .modo-config-activo .acceso-config-icon { display: block; }
 .modo-config-activo .acceso-card { cursor: cell; }
 
-/* --- Layout 2 columnas: entrada + lista --- */
-.pos-main-layout {
+/* --- Panel unificado: entrada compacta + lista en una sola card --- */
+.pos-unified-panel .card { height: auto; }
+.pos-unified-panel .card-body { overflow: visible; padding: 0 !important; }
+
+/* Header unificado: título arriba, formulario inline debajo */
+.pos-unified-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0.5rem 0.75rem !important;
+}
+.pos-unified-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+}
+.pos-unified-title .card-title { flex-shrink: 0; }
+
+/* Formulario inline: SKU + precio + cantidad + stock + botones en una fila */
+.pos-unified-form {
     display: grid;
-    grid-template-columns: 350px 1fr;
-    gap: 0.75rem;
-    align-items: start;
+    grid-template-columns: minmax(180px, 1.6fr) 110px 90px 90px auto;
+    gap: 6px;
+    align-items: end;
+    width: 100%;
+}
+.pos-unified-form .pos-unified-sku { min-width: 0; }
+.pos-unified-form .pos-unified-sku .pos-sku-input {
+    font-size: 0.95rem !important;
+    height: 38px !important;
+}
+.pos-unified-form .pos-unified-sku .input-group-text {
+    background: var(--nexo-primary-light, #e6f0ff);
+    border-color: var(--nexo-primary, #0066ff);
+    padding: 0 8px;
+}
+.pos-unified-input {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.pos-unified-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 2px;
+    line-height: 1;
+    white-space: nowrap;
+}
+.pos-unified-form .pos-input-precio,
+.pos-unified-form .pos-input-cantidad,
+.pos-unified-form .pos-input-stock {
+    font-size: 1rem !important;
+    height: 38px !important;
+    border-width: 1.5px !important;
+    border-radius: 6px !important;
+}
+.pos-unified-actions {
+    display: flex;
+    align-items: end;
+    gap: 4px;
+}
+.pos-unified-actions .pos-add-btn {
+    height: 38px;
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    padding: 0 12px !important;
+    white-space: nowrap;
+}
+.pos-unified-actions .btn-outline-secondary {
+    height: 38px;
+    padding: 0 10px !important;
 }
 
-/* --- Panel izquierdo: entrada de producto --- */
-.pos-entry-panel .card { height: auto; }
-.pos-entry-panel .card-body { overflow: visible; }
+/* Responsive: wrap a dos filas en pantallas angostas */
+@media screen and (max-width: 1150px) {
+    .pos-unified-form {
+        grid-template-columns: minmax(180px, 1fr) 100px 80px 80px auto;
+    }
+    .pos-unified-stock { display: none; }
+}
+@media screen and (max-width: 900px) {
+    .pos-unified-form {
+        grid-template-columns: 1fr 1fr;
+    }
+    .pos-unified-form .pos-unified-sku { grid-column: 1 / -1; }
+    .pos-unified-actions { grid-column: 1 / -1; justify-content: stretch; }
+    .pos-unified-actions .pos-add-btn { flex: 1; }
+}
 
 .pos-sku-input {
     font-size: 1.1rem !important;
@@ -1059,18 +1030,6 @@ div[style*="border: 1px solid #000"] {
     background: var(--nexo-gray-100);
 }
 
-/* --- Header panel entrada: flex adaptable --- */
-.pos-entry-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: nowrap;
-    overflow: hidden;
-}
-.pos-entry-header .card-title {
-    flex-shrink: 0;
-}
-
 /* --- Barra de shortcuts adaptable --- */
 .pos-shortcuts-bar {
     display: flex;
@@ -1115,6 +1074,18 @@ div[style*="border: 1px solid #000"] {
 }
 .pos-btn-bolsa-text { margin-left: 3px; }
 
+/* Botón Cambiar Vendedor compacto (reubicado desde el topbar) */
+.pos-btn-cambiar-vendedor {
+    flex-shrink: 0;
+    font-size: 0.68rem !important;
+    white-space: nowrap;
+    padding: 2px 8px !important;
+    line-height: 1.4;
+}
+@media screen and (max-width: 1250px) {
+    .pos-btn-cambiar-text { display: none; }
+}
+
 /* En paneles < 340px de ancho: ocultar texto descriptivo, solo kbd */
 @container (max-width: 340px) {
     .pos-shortcut-text { display: none; }
@@ -1132,18 +1103,13 @@ div[style*="border: 1px solid #000"] {
     .pos-shortcuts-bar { gap: 2px; }
 }
 
-/* --- Panel izquierdo: padding compacto para POS --- */
-.pos-entry-panel .card-body {
-    padding: 0.65rem 0.85rem !important;
-    overflow: visible;
-}
-/* --- Panel derecho: tabla de productos --- */
-.pos-list-panel .card { height: 100%; }
+/* --- Panel unificado: contenedor de tabla --- */
+.pos-unified-panel .card { width: 100%; }
 
 .pos-table-wrapper {
     overflow-y: auto;
-    max-height: calc(100vh - 340px);
-    min-height: 180px;
+    max-height: calc(100vh - 300px);
+    min-height: 220px;
 }
 
 .pos-table th,
@@ -1211,12 +1177,6 @@ div[style*="border: 1px solid #000"] {
     font-weight: 700 !important;
 }
 
-/* Badge de items en info bar */
-#badgeItemCount {
-    font-size: 0.7rem;
-    padding: 3px 7px;
-}
-
 /* Vendedores: compactos en pantallas POS */
 @media screen and (max-width: 1440px) {
     .vendedores-grid {
@@ -1230,37 +1190,27 @@ div[style*="border: 1px solid #000"] {
         font-size: 1.05rem; margin-bottom: 0.45rem;
     }
     .vendedor-nombre { font-size: 0.83rem; }
-    .page-title-box h4 { font-size: 1.2rem !important; }
-    .page-title-box { padding-top: 6px !important; padding-bottom: 4px !important; }
-    .breadcrumb { margin-bottom: 0 !important; font-size: 0.82rem; }
 }
 
 /* POS 15" (1366×768): todo visible sin scroll vertical */
 @media screen and (max-height: 800px) {
-    .page-title-box { padding-top: 2px !important; padding-bottom: 2px !important; margin-bottom: 0 !important; }
-    .page-title-box h4 { font-size: 1rem !important; }
     .pos-container.mt-3 { margin-top: 0.5rem !important; }
     .pos-topbar-unified { margin-bottom: 0.35rem !important; }
     .pos-topbar-body { padding: 6px 10px !important; }
-    .pos-main-layout { gap: 0.5rem; }
-    .pos-entry-panel .card-header { padding-top: 5px !important; padding-bottom: 5px !important; }
-    .pos-entry-panel .card-body { padding: 0.5rem 0.75rem !important; }
-    .pos-input-precio, .pos-input-cantidad, .pos-input-stock { height: 46px !important; }
-    .pos-input-precio, .pos-input-cantidad { font-size: 1.35rem !important; }
-    .pos-table-wrapper { max-height: calc(100vh - 310px); min-height: 140px; }
+    .pos-unified-header { padding: 0.35rem 0.6rem !important; gap: 4px !important; }
+    .pos-unified-form .pos-input-precio,
+    .pos-unified-form .pos-input-cantidad,
+    .pos-unified-form .pos-input-stock,
+    .pos-unified-form .pos-sku-input { height: 34px !important; }
+    .pos-unified-actions .pos-add-btn,
+    .pos-unified-actions .btn-outline-secondary { height: 34px !important; }
+    .pos-table-wrapper { max-height: calc(100vh - 260px); min-height: 180px; }
     .pos-bottom-bar .card-body { padding: 6px 12px !important; }
     .pos-print-btn { height: 46px !important; }
-    .pos-add-btn { padding: 0.45rem 1rem !important; }
-}
-
-/* Ajuste en pantallas de 1200px */
-@media screen and (max-width: 1250px) {
-    .pos-main-layout { grid-template-columns: 310px 1fr; }
 }
 
 /* Stack vertical en pantallas muy pequeñas */
 @media screen and (max-width: 1024px) {
-    .pos-main-layout { grid-template-columns: 1fr; }
     .pos-table-wrapper { max-height: 320px; }
     .pos-bottom-bar { position: relative !important; }
 }
@@ -1281,7 +1231,6 @@ div[style*="border: 1px solid #000"] {
 }
 
 @media screen and (max-width: 768px) {
-    .pos-main-layout { gap: 0.5rem !important; padding: 0.5rem !important; }
     .pos-sidebar, .pos-left-panel { min-width: 0 !important; }
     .ticket-header { flex-direction: column; gap: 0.5rem; }
     .ticket-header .btn { width: 100%; }
@@ -1296,7 +1245,6 @@ div[style*="border: 1px solid #000"] {
 }
 
 @media screen and (max-width: 576px) {
-    .pos-main-layout { padding: 0.25rem !important; }
     .ticket-items { max-height: 35vh; }
     .ticket-total { font-size: 1.125rem; }
     .accesos-strip .btn { font-size: 0.75rem; padding: 0.375rem 0.5rem; }
@@ -1403,25 +1351,6 @@ div[style*="border: 1px solid #000"] {
 <div class="page-content">
     <div class="container-fluid">
             
-            <!-- start page title -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                        <h4 class="mb-sm-0">
-                            <i class="ri-receipt-line text-primary me-2"></i>
-                            Ticket de Venta
-                        </h4>
-                        <div class="page-title-right">
-                            <ol class="breadcrumb m-0">
-                                <li class="breadcrumb-item"><a href="javascript: void(0);">Ventas</a></li>
-                                <li class="breadcrumb-item active">Ticket de Venta</li>
-                            </ol>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- end page title -->
-
             <!-- Alerta de Correlativo -->
             {% if sucursal_actual and not tiene_correlativo %}
             <div class="row">
@@ -1465,43 +1394,6 @@ div[style*="border: 1px solid #000"] {
             <div id="seccionVendedores">
                 <div class="card" style="border-radius: 14px; overflow: hidden;">
 
-                    <!-- Encabezado mejorado -->
-                    <div class="card-header py-3 px-4">
-                        <div class="vendedores-card-header">
-                            <h5 class="card-title mb-0 d-flex align-items-center gap-2">
-                                <i class="ri-user-star-line text-primary"></i>
-                                Vendedores Disponibles
-                            </h5>
-                            <div class="d-flex align-items-center gap-2">
-                                {% if vendedores %}
-                                <span class="vendedores-count-badge" id="vendedoresCountBadge">
-                                    <i class="ri-team-line me-1"></i>{{ vendedores|length }} vendedor{% if vendedores|length != 1 %}es{% endif %}
-                                </span>
-                                {% endif %}
-                                <button type="button" class="btn btn-outline-info btn-sm"
-                                        onclick="window.open('/app/productos-sucursal/', '_blank')"
-                                        title="Ver stock en otra sucursal">
-                                    <i class="ri-store-2-line me-1"></i>Otra Sucursal
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {% if vendedores %}
-                    <!-- Barra de filtro en tiempo real -->
-                    <div class="vendedores-filter-bar">
-                        <div class="vendedores-filter-wrap">
-                            <i class="ri-search-line filter-icon"></i>
-                            <input type="text"
-                                   id="filtroVendedor"
-                                   class="form-control"
-                                   placeholder="Buscar por nombre o código..."
-                                   autocomplete="off">
-                        </div>
-                        <div class="vendedores-filter-count" id="vendedoresFilterCount"></div>
-                    </div>
-                    {% endif %}
-
                     <!-- Grid de vendedores -->
                     <div class="card-body p-0">
                         <div class="vendedores-container" style="border-radius: 0;">
@@ -1527,11 +1419,6 @@ div[style*="border: 1px solid #000"] {
                                     </div>
                                     {% endfor %}
                                 </div>
-                                <!-- Sin resultados al filtrar -->
-                                <div class="vendedores-no-filter-results" id="vendedoresNoResults">
-                                    <i class="ri-search-eye-line"></i>
-                                    <p>Sin resultados para <strong id="vendedoresNoResultsQuery"></strong></p>
-                                </div>
                             {% else %}
                                 <div class="vendedores-empty">
                                     <i class="ri-user-unfollow-line"></i>
@@ -1543,9 +1430,9 @@ div[style*="border: 1px solid #000"] {
                         </div>
                     </div>
 
-                    <!-- Controles inferiores mejorados -->
+                    <!-- Controles inferiores: código de vendedor + Confirmar + Otra Sucursal -->
                     <div class="vendedores-bottom-controls">
-                        <div class="d-flex align-items-center gap-2">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
                             <!-- Input de código con ícono integrado -->
                             <div class="input-group flex-grow-1" style="max-width: 340px;">
                                 <span class="input-group-text" style="border-radius: 8px 0 0 8px;">
@@ -1561,6 +1448,11 @@ div[style*="border: 1px solid #000"] {
                                     <i class="ri-check-line me-1"></i>Confirmar
                                 </button>
                             </div>
+                            <button type="button" class="btn btn-outline-info"
+                                    onclick="window.open('/app/productos-sucursal/', '_blank')"
+                                    title="Ver stock en otra sucursal">
+                                <i class="ri-store-2-line me-1"></i>Otra Sucursal
+                            </button>
                         </div>
                         <div class="vendedores-kbd-hint">
                             <kbd>Enter</kbd> para confirmar código &nbsp;·&nbsp;
@@ -1575,37 +1467,9 @@ div[style*="border: 1px solid #000"] {
             <!-- Sección Crear Ticket (oculta inicialmente) — layout POS 2 columnas -->
             <div id="seccionCrearTicket" style="display: none;" class="pos-container mt-3">
 
-                <!-- ===== BARRA UNIFICADA: info + accesos rápidos ===== -->
+                <!-- ===== BARRA UNIFICADA: accesos rápidos ===== -->
                 <div id="posTopBar" class="pos-topbar-unified mb-2">
                     <div class="pos-topbar-body">
-                        <!-- Info section — chips inline compactos -->
-                        <div class="pos-topbar-info">
-                            <span class="pos-info-chip">
-                                <span class="pos-chip-label">Vend.</span>
-                                <span class="pos-chip-val" id="ticketVendedor">-</span>
-                            </span>
-                            <span class="pos-info-chip">
-                                <span class="pos-chip-label">Cód.</span>
-                                <span class="pos-chip-val" id="ticketCodigo">-</span>
-                            </span>
-                            <span class="pos-info-chip pos-chip-sucursal">
-                                <span class="pos-chip-label">Suc.</span>
-                                <span class="pos-chip-val" id="ticketSucursal">{% if sucursal_actual %}{{ sucursal_actual.alias }}{% else %}—{% endif %}</span>
-                            </span>
-                            <span class="pos-info-chip pos-chip-fecha">
-                                <span class="pos-chip-val" id="ticketFecha">{% now "d/m/Y H:i" %}</span>
-                            </span>
-                            <span class="badge bg-dark bg-opacity-50 border border-light border-opacity-25" id="badgeItemCount" style="font-size:0.62rem;white-space:nowrap;padding:2px 6px;">
-                                <i class="ri-shopping-cart-line me-1"></i>0
-                            </span>
-                            <button type="button" class="btn btn-warning btn-sm py-0 px-1 ms-1" id="btnCambiarVendedor" style="font-size:0.65rem;" title="Cambiar vendedor">
-                                <i class="ri-arrow-left-line"></i>
-                            </button>
-                        </div>
-
-                        <!-- Divider -->
-                        <div class="pos-topbar-vdivider"></div>
-
                         <!-- Accesos Rápidos section -->
                         <div class="pos-topbar-accesos" id="panelAccesosRapidos">
                             <span class="pos-topbar-accesos-label">
@@ -1634,15 +1498,14 @@ div[style*="border: 1px solid #000"] {
                     </div>
                 </div>
 
-                <!-- Layout POS: entrada (izq) + lista (der) -->
-                <div class="pos-main-layout">
-
-                    <!-- PANEL IZQUIERDO: Entrada de producto -->
-                    <div class="pos-entry-panel">
-                        <div class="card">
-                            <div class="card-header py-2 pos-entry-header">
+                <!-- ===== PANEL UNIFICADO: entrada compacta + lista de productos ===== -->
+                <div class="pos-entry-panel pos-unified-panel">
+                    <div class="card">
+                        <!-- Header: título + formulario inline + shortcuts -->
+                        <div class="card-header py-2 pos-unified-header">
+                            <div class="pos-unified-title">
                                 <h6 class="card-title mb-0" style="font-size:0.85rem;white-space:nowrap;">
-                                    <i class="ri-barcode-line text-primary me-1"></i>Agregar Producto
+                                    <i class="ri-list-check text-primary me-2"></i>Productos del Ticket
                                 </h6>
                                 <div class="pos-shortcuts-bar" title="Enter=agrega · F3=busca · F2=bolsa · Esc=limpia">
                                     <span class="pos-shortcut-item"><kbd>↵</kbd><span class="pos-shortcut-text">agrega</span></span>
@@ -1654,133 +1517,124 @@ div[style*="border: 1px solid #000"] {
                                         title="Modo Rápido (F2): SKU + Enter = agrega de inmediato, foco vuelve al SKU">
                                     <i class="ri-flashlight-line"></i><span class="pos-btn-bolsa-text">Bolsa</span>
                                 </button>
+                                <button type="button" id="btnCambiarVendedor"
+                                        class="btn btn-sm btn-outline-warning pos-btn-cambiar-vendedor"
+                                        title="Cambiar vendedor">
+                                    <i class="ri-user-follow-line"></i><span class="pos-btn-cambiar-text ms-1">Cambiar vendedor</span>
+                                </button>
                             </div>
-                            <div class="card-body">
 
-                                <!-- SKU / código de barras -->
-                                <div class="mb-2">
-                                    <label class="form-label fw-bold mb-1" style="font-size:0.78rem;">
-                                        <i class="ri-qr-code-line me-1 text-primary"></i>SKU / Código de barras
+                            <!-- Form inline: SKU + precio + cantidad + stock + botones -->
+                            <div class="pos-unified-form">
+                                <div class="input-group input-group-sm pos-unified-sku">
+                                    <span class="input-group-text" style="font-size:0.72rem;">
+                                        <i class="ri-qr-code-line text-primary"></i>
+                                    </span>
+                                    <input type="number" class="form-control pos-sku-input"
+                                           id="skuProducto" placeholder="Escanear o ingresar SKU…" autofocus>
+                                    <button class="btn btn-info" type="button" id="btnBuscarArticulo" title="Buscar artículo [F3]">
+                                        <i class="ri-search-line"></i>
+                                        <span class="d-none d-xxl-inline ms-1">Buscar</span>
+                                    </button>
+                                </div>
+
+                                <div class="pos-unified-input">
+                                    <label class="pos-unified-label" style="color:var(--nexo-success);">
+                                        <i class="ri-price-tag-3-line"></i> Precio
                                     </label>
-                                    <div class="input-group">
-                                        <input type="number" class="form-control pos-sku-input"
-                                               id="skuProducto" placeholder="Escanear o ingresar SKU…" autofocus>
-                                        <button class="btn btn-info" type="button" id="btnBuscarArticulo" title="Buscar artículo [F3]">
-                                            <i class="ri-search-line"></i>
-                                            <span class="d-none d-xl-inline ms-1">Buscar</span>
-                                        </button>
-                                    </div>
+                                    <input type="number" class="form-control fw-bold text-center pos-input-precio"
+                                           id="precioProducto" placeholder="$0">
+                                    <input type="hidden" id="precioOriginal">
                                 </div>
 
-                                <!-- Banner: producto cargado (visible sólo cuando hay producto listo) -->
-                                <div id="productoSeleccionadoBanner" class="d-none mb-2 rounded p-2 px-3"
-                                     style="background:linear-gradient(90deg,#e6f9f4,#f0fdf9);border-left:4px solid var(--nexo-success);box-shadow:0 2px 8px rgba(0,212,170,0.13);">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="ri-checkbox-circle-fill fs-5" style="color:var(--nexo-success);flex-shrink:0;"></i>
-                                        <div style="overflow:hidden;">
-                                            <div class="fw-bold text-truncate" id="bannerNombreProducto" style="font-size:0.85rem;color:#065f46;"></div>
-                                            <div class="text-truncate" id="bannerInfoProducto" style="font-size:0.72rem;color:#047857;"></div>
-                                        </div>
-                                        <span class="badge ms-auto" style="background:var(--nexo-success);font-size:0.65rem;white-space:nowrap;">
-                                            <i class="ri-keyboard-line me-1"></i>Enter = Agregar
-                                        </span>
-                                    </div>
+                                <div class="pos-unified-input">
+                                    <label class="pos-unified-label" style="color:var(--nexo-primary);">
+                                        <i class="ri-add-line"></i> Cant.
+                                    </label>
+                                    <input type="number" class="form-control fw-bold text-center pos-input-cantidad"
+                                           id="cantidadProducto" value="1" min="1" step="1">
                                 </div>
 
-                                <!-- Info del producto (sólo lectura) -->
-                                <div class="d-flex align-items-center gap-2 mb-2 px-2 py-1 rounded border bg-light" style="min-height:40px;">
-                                    <div class="flex-grow-1 overflow-hidden">
-                                        <div id="articuloProducto" class="fw-semibold text-truncate lh-1" style="font-size:.8rem; color:var(--nexo-dark);">—</div>
-                                        <div id="descripcionProducto" class="text-muted text-truncate lh-1" style="font-size:.7rem;">—</div>
-                                    </div>
-                                    <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
-                                        <span id="marcaProducto" class="badge bg-secondary-subtle text-secondary fw-normal" style="font-size:.68rem; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</span>
-                                        <span id="tallaProducto" class="badge bg-primary-subtle text-primary fw-bold px-2" style="font-size:.72rem; min-width:36px; text-align:center;">—</span>
-                                    </div>
+                                <div class="pos-unified-input pos-unified-stock">
+                                    <label class="pos-unified-label text-muted">
+                                        <i class="ri-archive-line"></i> Stock
+                                    </label>
+                                    <input type="number" class="form-control text-center pos-input-stock"
+                                           id="stockProducto" disabled placeholder="—">
                                 </div>
 
-                                <!-- Precio · Cantidad · Stock -->
-                                <div class="row g-2 mb-2">
-                                    <div class="col-5">
-                                        <label class="form-label fw-bold mb-1" style="color:var(--nexo-success);font-size:0.78rem;">
-                                            <i class="ri-price-tag-3-line"></i> Precio
-                                        </label>
-                                        <input type="number" class="form-control fw-bold text-center pos-input-precio"
-                                               id="precioProducto" placeholder="$0">
-                                        <input type="hidden" id="precioOriginal">
-                                    </div>
-                                    <div class="col-4">
-                                        <label class="form-label fw-bold mb-1" style="color:var(--nexo-primary);font-size:0.78rem;">
-                                            <i class="ri-add-line"></i> Cantidad
-                                        </label>
-                                        <input type="number" class="form-control fw-bold text-center pos-input-cantidad"
-                                               id="cantidadProducto" value="1" min="1" step="1">
-                                    </div>
-                                    <div class="col-3">
-                                        <label class="form-label fw-semibold text-muted mb-1" style="font-size:0.78rem;">
-                                            <i class="ri-archive-line"></i> Stock
-                                        </label>
-                                        <input type="number" class="form-control text-center pos-input-stock"
-                                               id="stockProducto" disabled placeholder="—">
-                                    </div>
-                                </div>
-
-                                <!-- Botones agregar / limpiar -->
-                                <div class="d-grid gap-1">
-                                    <button type="button" class="btn btn-success pos-add-btn" id="btnAgregarProducto">
-                                        <i class="ri-add-circle-fill me-2"></i>Agregar al Ticket
+                                <div class="pos-unified-actions">
+                                    <button type="button" class="btn btn-success pos-add-btn" id="btnAgregarProducto" title="Agregar al ticket [Enter]">
+                                        <i class="ri-add-circle-fill"></i><span class="d-none d-xxl-inline ms-1">Agregar</span>
                                     </button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarFormulario" style="padding:4px 8px;font-size:0.75rem;">
-                                        <i class="ri-eraser-line me-1"></i>Limpiar
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarFormulario" title="Limpiar [Esc]">
+                                        <i class="ri-eraser-line"></i>
                                     </button>
-                                </div>
-
-                            </div>
-                        </div>
-                    </div><!-- /pos-entry-panel -->
-
-                    <!-- PANEL DERECHO: Lista de productos -->
-                    <div class="pos-list-panel">
-                        <div class="card">
-                            <div class="card-header py-2">
-                                <h6 class="card-title mb-0">
-                                    <i class="ri-list-check text-primary me-2"></i>Productos del Ticket
-                                </h6>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="pos-table-wrapper">
-                                    <div class="table-responsive">
-                                        <table class="table table-sm table-striped table-bordered mb-0 pos-table">
-                                            <thead class="table-dark" style="position:sticky;top:0;z-index:2;">
-                                                <tr>
-                                                    <th class="text-center">SKU</th>
-                                                    <th>Artículo</th>
-                                                    <th class="d-none d-xxl-table-cell">Descripción</th>
-                                                    <th class="d-none d-xl-table-cell">Marca</th>
-                                                    <th class="text-center">Talla</th>
-                                                    <th class="d-none d-xl-table-cell text-center">Stock</th>
-                                                    <th class="text-end">Precio</th>
-                                                    <th class="text-center">Cant.</th>
-                                                    <th class="text-end">Subtotal</th>
-                                                    <th class="text-center" style="width:40px;"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="tbodyTicket">
-                                                <tr>
-                                                    <td colspan="10" class="text-center text-muted py-4">
-                                                        <i class="ri-shopping-cart-line" style="font-size:2rem;display:block;opacity:0.25;margin-bottom:0.4rem;"></i>
-                                                        Sin productos — escanea o busca un artículo
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div><!-- /pos-list-panel -->
 
-                </div><!-- /pos-main-layout -->
+                        <!-- Banner + info producto + tabla -->
+                        <div class="card-body p-0">
+                            <!-- Banner: producto cargado (visible sólo cuando hay producto listo) -->
+                            <div id="productoSeleccionadoBanner" class="d-none mx-2 mt-2 rounded p-2 px-3"
+                                 style="background:linear-gradient(90deg,#e6f9f4,#f0fdf9);border-left:4px solid var(--nexo-success);box-shadow:0 2px 8px rgba(0,212,170,0.13);">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="ri-checkbox-circle-fill fs-5" style="color:var(--nexo-success);flex-shrink:0;"></i>
+                                    <div style="overflow:hidden;">
+                                        <div class="fw-bold text-truncate" id="bannerNombreProducto" style="font-size:0.85rem;color:#065f46;"></div>
+                                        <div class="text-truncate" id="bannerInfoProducto" style="font-size:0.72rem;color:#047857;"></div>
+                                    </div>
+                                    <span class="badge ms-auto" style="background:var(--nexo-success);font-size:0.65rem;white-space:nowrap;">
+                                        <i class="ri-keyboard-line me-1"></i>Enter = Agregar
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Info del producto (visible cuando hay producto cargado) -->
+                            <div id="infoProductoWrap" class="d-none mx-2 mt-2 d-flex align-items-center gap-2 px-2 py-1 rounded border bg-light" style="min-height:36px;">
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <div id="articuloProducto" class="fw-semibold text-truncate lh-1" style="font-size:.8rem; color:var(--nexo-dark);">—</div>
+                                    <div id="descripcionProducto" class="text-muted text-truncate lh-1" style="font-size:.7rem;">—</div>
+                                </div>
+                                <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                    <span id="marcaProducto" class="badge bg-secondary-subtle text-secondary fw-normal" style="font-size:.68rem; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</span>
+                                    <span id="tallaProducto" class="badge bg-primary-subtle text-primary fw-bold px-2" style="font-size:.72rem; min-width:36px; text-align:center;">—</span>
+                                </div>
+                            </div>
+
+                            <!-- Tabla de productos -->
+                            <div class="pos-table-wrapper mt-2">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped table-bordered mb-0 pos-table">
+                                        <thead class="table-dark" style="position:sticky;top:0;z-index:2;">
+                                            <tr>
+                                                <th class="text-center">SKU</th>
+                                                <th>Artículo</th>
+                                                <th class="d-none d-xxl-table-cell">Descripción</th>
+                                                <th class="d-none d-xl-table-cell">Marca</th>
+                                                <th class="text-center">Talla</th>
+                                                <th class="d-none d-xl-table-cell text-center">Stock</th>
+                                                <th class="text-end">Precio</th>
+                                                <th class="text-center">Cant.</th>
+                                                <th class="text-end">Subtotal</th>
+                                                <th class="text-center" style="width:40px;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyTicket">
+                                            <tr>
+                                                <td colspan="10" class="text-center text-muted py-4">
+                                                    <i class="ri-shopping-cart-line" style="font-size:2rem;display:block;opacity:0.25;margin-bottom:0.4rem;"></i>
+                                                    Sin productos — escanea o busca un artículo
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div><!-- /pos-unified-panel -->
 
                 <!-- Barra inferior sticky: totales + imprimir -->
                 <div class="pos-bottom-bar card mt-2">
@@ -1797,6 +1651,29 @@ div[style*="border: 1px solid #000"] {
                                 <input type="number" id="totalTicket" class="form-control form-control-sm text-center pos-total-money"
                                        value="0" disabled style="max-width:240px;font-weight:900;font-size:1.4rem;color:var(--nexo-success);border-color:var(--nexo-success);">
                             </div>
+
+                            <!-- ===== Info del vendedor/sucursal/fecha (sincronizado con topbar) ===== -->
+                            <div class="pos-bottom-info d-none d-md-flex align-items-center gap-1">
+                                <span class="pos-info-chip">
+                                    <span class="pos-chip-label">Vend.</span>
+                                    <span class="pos-chip-val js-ticket-vendedor">-</span>
+                                </span>
+                                <span class="pos-info-chip">
+                                    <span class="pos-chip-label">Cód.</span>
+                                    <span class="pos-chip-val js-ticket-codigo">-</span>
+                                </span>
+                                <span class="pos-info-chip pos-chip-sucursal">
+                                    <span class="pos-chip-label">Suc.</span>
+                                    <span class="pos-chip-val js-ticket-sucursal">{% if sucursal_actual %}{{ sucursal_actual.alias }}{% else %}—{% endif %}</span>
+                                </span>
+                                <span class="pos-info-chip pos-chip-fecha">
+                                    <span class="pos-chip-val js-ticket-fecha">{% now "d/m/Y H:i" %}</span>
+                                </span>
+                                <span class="badge bg-dark bg-opacity-50 border border-light border-opacity-25 js-ticket-items" style="font-size:0.62rem;white-space:nowrap;padding:2px 6px;">
+                                    <i class="ri-shopping-cart-line me-1"></i>0
+                                </span>
+                            </div>
+
                             <button type="button" class="btn btn-success pos-print-btn" id="btnImprimirTicket">
                                 <i class="ri-printer-fill me-2"></i>Imprimir Ticket
                             </button>
@@ -1958,6 +1835,10 @@ div[style*="border: 1px solid #000"] {
 <form id="ticketPOSForm">
 <script>
 $(document).ready(function() {
+    // Iniciar siempre desde arriba para que los accesos rápidos y shortcuts
+    // sean lo primero que vea el usuario al abrir /app/ticket-venta/
+    window.scrollTo({ top: 0, behavior: 'auto' });
+
     let vendedorSeleccionado = null;
     const tieneCorrelativo = {{ tiene_correlativo|yesno:"true,false" }};
     let marcasCache = [];
@@ -2088,20 +1969,24 @@ $(document).ready(function() {
     // Función para seleccionar vendedor
     function seleccionarVendedor(vendedor) {
         vendedorSeleccionado = vendedor;
-        
-        // Actualizar información del ticket
-        $('#ticketVendedor').text(vendedor.nombre);
-        $('#ticketCodigo').text(vendedor.codigo);
-        
+
+        // Actualizar información del ticket (sincroniza topbar + bottom bar)
+        $('.js-ticket-vendedor').text(vendedor.nombre);
+        $('.js-ticket-codigo').text(vendedor.codigo);
+
         // Ocultar sección de vendedores y mostrar sección de crear ticket
         $('#seccionVendedores').hide();
         $('#seccionCrearTicket').show();
+
+        // Scroll al tope de la página para que se vean los accesos rápidos y
+        // los shortcuts (Enter/F3/F2/Esc) apenas aparece la vista del ticket
+        window.scrollTo({ top: 0, behavior: 'smooth' });
 
         // Actualizar fecha/hora al momento de abrir el ticket
         const ahora = new Date();
         const fechaHora = ahora.toLocaleDateString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric'})
                         + ' ' + ahora.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'});
-        $('#ticketFecha').text(fechaHora);
+        $('.js-ticket-fecha').text(fechaHora);
         
         // Enfocar en el campo SKU
         setTimeout(() => {
@@ -2124,65 +2009,9 @@ $(document).ready(function() {
         });
     }
 
-    // ==================== FILTRO EN TIEMPO REAL VENDEDORES ====================
-
-    const $filtro = $('#filtroVendedor');
-    const $grid = $('#vendedoresGrid');
-    const $noResults = $('#vendedoresNoResults');
-    const $noResultsQuery = $('#vendedoresNoResultsQuery');
-    const $filterCount = $('#vendedoresFilterCount');
-    const $countBadge = $('#vendedoresCountBadge');
-    const totalVendedores = $('.vendedor-card').length;
-
-    $filtro.on('input', function() {
-        const query = $(this).val().trim().toLowerCase();
-        let visible = 0;
-
-        $('.vendedor-card').each(function() {
-            const nombre = $(this).data('vendedor-nombre') || '';
-            const codigo = String($(this).data('vendedor-codigo') || '').toLowerCase();
-            const match = !query || nombre.includes(query) || codigo.includes(query);
-            $(this).toggle(match);
-            if (match) visible++;
-        });
-
-        if (query) {
-            $noResultsQuery.text('"' + $filtro.val().trim() + '"');
-            if (visible === 0) {
-                $grid.hide();
-                $noResults.show();
-                $filterCount.text('').removeClass('has-filter');
-            } else {
-                $grid.show();
-                $noResults.hide();
-                $filterCount
-                    .text(visible + ' de ' + totalVendedores + ' vendedores')
-                    .addClass('has-filter');
-            }
-        } else {
-            $grid.show();
-            $noResults.hide();
-            $filterCount.text('').removeClass('has-filter');
-        }
-    });
-
-    // Limpiar filtro con Escape
-    $filtro.on('keydown', function(e) {
-        if (e.key === 'Escape') {
-            $(this).val('').trigger('input');
-            $('#codigoVendedor').focus();
-        }
-        // Enter en el filtro mueve foco al primer vendedor visible o al input de código
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const $firstVisible = $('.vendedor-card:visible').first();
-            if ($firstVisible.length) {
-                $firstVisible.trigger('click');
-            } else {
-                $('#codigoVendedor').focus();
-            }
-        }
-    });
+    // Nota: el buscador inline de vendedores fue eliminado del UI — el usuario
+    // ingresa el código en el input de la barra inferior (#codigoVendedor) o
+    // hace click directo en la tarjeta. La navegación por teclado sigue activa.
 
     // Navegación con teclado (↑ ↓) entre tarjetas visibles desde el campo de código
     $('#codigoVendedor').on('keydown', function(e) {
@@ -2354,7 +2183,7 @@ $(document).ready(function() {
                     $('#precioProducto').val(producto.precio_venta);
                     $('#precioOriginal').val(producto.precio_venta);
                     $('#stockProducto').val(producto.stock);
-                    // Mostrar banner de producto cargado
+                    // Mostrar banner + panel de info del producto cargado
                     $('#bannerNombreProducto').text(producto.articulo + (producto.talla ? ' — ' + producto.talla : ''));
                     $('#bannerInfoProducto').text(
                         'SKU: ' + sku +
@@ -2362,6 +2191,7 @@ $(document).ready(function() {
                         '  |  Stock: ' + (producto.stock || 0)
                     );
                     $('#productoSeleccionadoBanner').removeClass('d-none');
+                    $('#infoProductoWrap').removeClass('d-none');
 
                     if (autoAdd || modoRapido) {
                         // Modo Bolsa: agrega directo con la cantidad actual
@@ -2765,22 +2595,30 @@ $(document).ready(function() {
         
         $('#totalItems').val(totalItems);
         $('#totalTicket').val(totalTicket);
-        // Actualizar badge de items en la barra de info
-        $('#badgeItemCount').html(`<i class="ri-shopping-cart-line me-1"></i>${totalItems} item${totalItems !== 1 ? 's' : ''}`);
+        // Actualizar badge de items en las barras de info (topbar + bottom bar)
+        $('.js-ticket-items').html(`<i class="ri-shopping-cart-line me-1"></i>${totalItems} item${totalItems !== 1 ? 's' : ''}`);
     }
 
-    // Limpiar formulario de producto
+    // Limpiar formulario de producto (garantiza reset total después de cada add)
     function limpiarFormularioProducto() {
-        $('#skuProducto').val('');
-        $('#articuloProducto').text('—');
-        $('#descripcionProducto').text('—');
-        $('#marcaProducto').text('—');
-        $('#tallaProducto').text('—');
+        // Inputs del formulario de entrada
+        $('#skuProducto').val('').trigger('change');
         $('#precioProducto').val('');
         $('#precioOriginal').val('');
         $('#cantidadProducto').val(1);
         $('#stockProducto').val('');
+
+        // Info del producto (labels)
+        $('#articuloProducto').text('—');
+        $('#descripcionProducto').text('—');
+        $('#marcaProducto').text('—');
+        $('#tallaProducto').text('—');
+
+        // Banner + panel info (si están ocultos por default, los re-ocultamos)
         $('#productoSeleccionadoBanner').addClass('d-none');
+        $('#bannerNombreProducto').text('');
+        $('#bannerInfoProducto').text('');
+        $('#infoProductoWrap').addClass('d-none');
     }
 
     // Botón limpiar formulario
@@ -3496,7 +3334,7 @@ $(document).ready(function() {
         $('#stockProducto').val(producto.stock || 0);
         $('#cantidadProducto').val(1);
 
-        // Mostrar banner de producto cargado
+        // Mostrar banner + panel info de producto cargado
         $('#bannerNombreProducto').text(producto.articulo + (producto.talla ? ' — ' + producto.talla : ''));
         $('#bannerInfoProducto').text(
             'SKU: ' + (producto.sku || '—') +
@@ -3504,6 +3342,7 @@ $(document).ready(function() {
             '  |  Stock: ' + (producto.stock || 0)
         );
         $('#productoSeleccionadoBanner').removeClass('d-none');
+        $('#infoProductoWrap').removeClass('d-none');
 
         // Toast que NO roba el foco
         Swal.fire({

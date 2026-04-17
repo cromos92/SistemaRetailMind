@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.conf import settings
 from django.core.mail import send_mail
@@ -208,6 +208,56 @@ def _requiere_2fa(user):
     if getattr(settings, 'REQUIRE_2FA_FOR_ALL', False):
         return True
     return getattr(user, 'requiere_2fa', False)
+
+
+@require_POST
+def check_login_method_view(request):
+    """API JSON: recibe un email y responde si el usuario existe y si usa
+    PIN (2FA passwordless) o si debe ingresar contraseña.
+
+    Se usa para el flujo de login en 2 pasos: primero se pide el correo y,
+    según la configuración del usuario, se muestra el campo de contraseña
+    o directamente se lo envía al flujo de PIN por correo.
+    """
+    email = (request.POST.get('email') or '').strip().lower()
+    if not email:
+        return JsonResponse({
+            'ok': False,
+            'error': 'Debes ingresar tu correo electrónico.'
+        }, status=400)
+
+    User = get_user_model()
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return JsonResponse({
+            'ok': False,
+            'exists': False,
+            'error': 'No existe un usuario con ese correo electrónico.'
+        })
+
+    if not getattr(user, 'is_active', True) or not getattr(user, 'es_activo', True):
+        return JsonResponse({
+            'ok': False,
+            'exists': True,
+            'is_active': False,
+            'error': 'Tu cuenta está desactivada. Contacta al administrador.'
+        })
+
+    requiere_pin = _requiere_2fa(user)
+    if requiere_pin and not user.email:
+        return JsonResponse({
+            'ok': False,
+            'error': 'No tienes un correo registrado para recibir el PIN.'
+        })
+
+    return JsonResponse({
+        'ok': True,
+        'exists': True,
+        'is_active': True,
+        'requiere_pin': bool(requiere_pin),
+        'nombre': user.get_full_name() or user.username,
+    })
 
 
 @ensure_csrf_cookie

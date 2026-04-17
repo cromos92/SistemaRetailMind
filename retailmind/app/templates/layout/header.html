@@ -1,12 +1,19 @@
  {% load static %}
 <!doctype html>
-<html lang="en" data-layout="vertical" data-topbar="light" data-sidebar="dark" data-sidebar-size="lg" data-sidebar-image="none" data-preloader="disable">
+<html lang="es" data-layout="vertical" data-topbar="light" data-sidebar="dark" data-sidebar-size="lg" data-sidebar-image="none" data-preloader="disable"{% if pos_kiosk %} data-pos-kiosk="1"{% endif %}{% if pos_kiosk_strict %} data-pos-kiosk-strict="1"{% endif %}>
 
 <head>
 
     <meta charset="utf-8" />
-    <title>System | Webappsolutions - Plantilla de Administración y Panel de Control</title>
+    <title>{% if pos_kiosk_strict %}NEXO POS{% else %}System | Webappsolutions - Plantilla de Administración y Panel de Control{% endif %}</title>
+    {% if pos_kiosk_strict %}
+    <meta name="viewport" content="width=1920, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    {% else %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% endif %}
     <meta content="Plantilla Premium de Administración y Panel de Control Multipropósito" name="description" />
     <meta content="Webappsolutions" name="Javier Araya" />
   
@@ -44,6 +51,10 @@
     <!-- NEXO Design System + Responsive -->
     <link href="{% static 'css/nexo-design-system.css' %}" rel="stylesheet" type="text/css" />
     <link href="{% static 'css/nexo-responsive.css' %}" rel="stylesheet" type="text/css" />
+    {% if pos_kiosk %}
+    <!-- POS Kiosk overrides (targets 48-64px, fuentes 16-18px, sin :hover colgado) -->
+    <link href="{% static 'css/pos-kiosk.css' %}" rel="stylesheet" type="text/css" />
+    {% endif %}
     <link rel="shortcut icon" href="{% static 'images/favicon.ico' %}">
     <link href="{% static 'libs/sweetalert2/sweetalert2.min.css' %}" rel="stylesheet" type="text/css" />
     <!-- jsvectormap css -->
