@@ -140,11 +140,17 @@ async function ejecutarVentaPOS(monto, ticket) {
             if (resultado.hint) {
                 html += `<br><br><small>${resultado.hint}</small>`;
             }
-            // Sugerir acción concreta en código 70 (ERROR INICIALIZACIÓN)
-            if (resultado.responseCode === 70 && typeof cargarLlavesPOSConfirm === 'function') {
+            // Sugerir acción concreta según el código de rechazo.
+            // El código que realmente requiere cargar llaves es el 26 ("Debe Cargar Llaves"),
+            // no el 70 (que es "Error de formato Campo Boleta MAX 6").
+            if (resultado.responseCode === 26 && typeof cargarLlavesPOSConfirm === 'function') {
                 html += `<br><br><button type="button" class="btn btn-warning btn-sm" onclick="Swal.close(); cargarLlavesPOSConfirm();">
                             <i class="ri-key-2-line"></i> Cargar llaves ahora
                          </button>`;
+            }
+            // Para códigos que requieren cierre de día: 13, 67, 74, 76, 77
+            if ([13, 67, 74, 76, 77].includes(resultado.responseCode)) {
+                html += `<br><small class="text-muted">Ejecute "Cierre de Día" en el POS y reintente.</small>`;
             }
             showError(html);
             return resultado;

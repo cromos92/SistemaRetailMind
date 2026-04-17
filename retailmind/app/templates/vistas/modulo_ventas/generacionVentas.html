@@ -10834,10 +10834,11 @@ body {
                 
             } else {
                 // VENTA RECHAZADA
-                const esErrorInicializacion = resultadoVenta.responseCode === 70;
+                const codigo = resultadoVenta.responseCode;
+                const requiereCargarLlaves = codigo === 26;
                 const htmlRechazo = `
                     <p><strong>Motivo:</strong> ${resultadoVenta.responseMessage}</p>
-                    <p class="small text-muted">Código: ${resultadoVenta.responseCode}</p>
+                    <p class="small text-muted">Código: ${codigo}</p>
                     ${resultadoVenta.hint ? `<div class="alert alert-warning small mt-2">${resultadoVenta.hint}</div>` : ''}
                 `;
 
@@ -10848,15 +10849,15 @@ body {
                     confirmButtonText: 'OK'
                 };
 
-                // Si es ERROR INICIALIZACIÓN (70), ofrecer cargar llaves al instante
-                if (esErrorInicializacion && typeof cargarLlavesPOSConfirm === 'function') {
+                // Si el POS pide cargar llaves (código 26), ofrecer hacerlo desde aquí
+                if (requiereCargarLlaves && typeof cargarLlavesPOSConfirm === 'function') {
                     swalCfg.showDenyButton = true;
                     swalCfg.denyButtonText = '🔑 Cargar llaves ahora';
                     swalCfg.denyButtonColor = '#f0a000';
                 }
 
                 Swal.fire(swalCfg).then((result) => {
-                    if (esErrorInicializacion && result.isDenied && typeof cargarLlavesPOSConfirm === 'function') {
+                    if (requiereCargarLlaves && result.isDenied && typeof cargarLlavesPOSConfirm === 'function') {
                         cargarLlavesPOSConfirm();
                     }
                 });

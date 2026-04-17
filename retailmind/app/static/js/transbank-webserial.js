@@ -24,28 +24,86 @@
     const BAUDRATES = [115200, 9600, 19200, 38400, 57600];
     const TBKPOS_DEFAULT_BAUD = 115200;  // Preferido por defecto
 
-    // Códigos de respuesta
+    // Códigos de respuesta del POS Integrado Transbank (según SDK oficial)
+    // https://github.com/TransbankDevelopers/transbank-pos-sdk-nodejs
     const RESPONSE_CODES = {
-        0: 'APROBADA',
-        5: 'TRANSACCIÓN RECHAZADA',
-        7: 'RETENER TARJETA',
-        12: 'TRANSACCIÓN INVÁLIDA',
-        13: 'MONTO INVÁLIDO',
-        51: 'FONDOS INSUFICIENTES',
-        54: 'TARJETA VENCIDA',
-        61: 'EXCEDE LÍMITE',
-        70: 'ERROR INICIALIZACIÓN (faltan llaves en el POS)',
-        88: 'SIN CONEXIÓN TRANSBANK',
-        91: 'EMISOR NO DISPONIBLE',
-        99: 'CANCELADA POR USUARIO'
+        0:  'Aprobado',
+        1:  'Rechazado',
+        2:  'Host no responde',
+        3:  'Conexión falló',
+        4:  'Transacción ya fue anulada',
+        5:  'No existe transacción para anular',
+        6:  'Tarjeta no soportada',
+        7:  'Transacción cancelada desde el POS',
+        8:  'No puede anular transacción débito',
+        9:  'Error lectura tarjeta',
+        10: 'Monto menor al mínimo permitido',
+        11: 'No existe venta',
+        12: 'Transacción no soportada',
+        13: 'Debe ejecutar cierre',
+        14: 'No hay tono',
+        15: 'Archivo BITMAP.DAT no encontrado',
+        16: 'Error formato respuesta del host',
+        17: 'Error en los 4 últimos dígitos',
+        18: 'Menú inválido',
+        19: 'Error tarjeta distribuidora',
+        20: 'Tarjeta inválida',
+        21: 'Anulación no permitida',
+        22: 'TIMEOUT',
+        24: 'Impresora sin papel',
+        25: 'Fecha inválida',
+        26: 'Debe cargar llaves',
+        27: 'Debe actualizar',
+        60: 'Error en número de cuotas',
+        61: 'Error en armado de solicitud',
+        62: 'Problema con el pinpad interno',
+        65: 'Error al procesar la respuesta del host',
+        67: 'Superó número máximo de ventas, debe ejecutar cierre',
+        68: 'Error genérico, falla al ingresar montos',
+        70: 'Error de formato: número de boleta/ticket excede 6 caracteres',
+        71: 'Error de largo campo de impresión',
+        72: 'Error de monto: debe ser mayor que 0',
+        73: 'Terminal ID no configurado',
+        74: 'Debe ejecutar CIERRE',
+        75: 'Comercio no tiene tarjetas configuradas',
+        76: 'Superó número máximo de ventas, debe ejecutar CIERRE',
+        77: 'Debe ejecutar cierre',
+        78: 'Esperando leer tarjeta',
+        79: 'Solicitando confirmar monto',
+        80: 'Selección de cuotas',
+        81: 'Solicitando ingreso de clave',
+        82: 'Enviando transacción al host',
+        83: 'Selección menú crédito/redcompra',
+        84: 'Opere tarjeta',
+        85: 'Selección de cuotas',
+        86: 'Ingreso de cuotas',
+        87: 'Confirmación de cuotas',
+        88: 'Error cantidad cuotas',
+        93: 'Declinada',
+        94: 'Error al procesar respuesta',
+        95: 'Error al imprimir TASA'
     };
 
     // Sugerencias de acción por código de respuesta (para mostrar al usuario cuando hay rechazo)
     const RESPONSE_HINTS = {
-        70: 'El POS no tiene las llaves criptográficas cargadas. Ejecute "Cargar llaves" (comando 0800) o realice un cierre de día en el POS.',
-        88: 'El POS no puede comunicarse con Transbank. Verifique la conexión a internet del POS.',
-        91: 'El banco emisor no está disponible. Reintente en unos minutos.',
-        99: 'La venta fue cancelada por el usuario en el POS.'
+        1:  'El banco emisor rechazó la transacción. Intente con otra tarjeta.',
+        2:  'El host de Transbank no responde. Verifique la conexión a internet del POS.',
+        3:  'Falló la conexión con Transbank. Verifique la red del POS.',
+        7:  'La venta fue cancelada desde el POS.',
+        10: 'El monto es inferior al mínimo permitido por Transbank.',
+        13: 'Debe ejecutar "Cierre de día" en el POS antes de continuar.',
+        22: 'El POS no respondió a tiempo (timeout).',
+        26: 'El POS no tiene llaves criptográficas cargadas. Ejecute "Cargar llaves" (comando 0800).',
+        67: 'El POS alcanzó el máximo de ventas permitidas. Ejecute "Cierre de día".',
+        70: 'El número de ticket excede los 6 caracteres permitidos por el POS. Use un identificador numérico de máximo 6 dígitos.',
+        72: 'El monto de la venta debe ser mayor que $0.',
+        73: 'El terminal ID no está configurado en el POS. Contacte a soporte Transbank.',
+        74: 'Debe ejecutar "Cierre de día" antes de continuar.',
+        75: 'El comercio no tiene tarjetas configuradas en Transbank. Contacte a soporte.',
+        76: 'El POS alcanzó el máximo de ventas. Ejecute "Cierre de día".',
+        77: 'Debe ejecutar "Cierre de día".',
+        88: 'Error en la cantidad de cuotas solicitadas.',
+        93: 'Transacción declinada por el banco emisor.'
     };
 
     // ==================== CLASE PRINCIPAL ====================
@@ -493,14 +551,28 @@
          */
         async sale(amount, ticket) {
             try {
-                console.log(`💳 Procesando venta: $${amount} - Ticket: ${ticket}`);
-                
-                // Formatear parámetros
-                const amountStr = amount.toString().padStart(9, '0');
-                const ticketStr = ticket.toString().padStart(6, '0');
-                
-                // Comando: 0200|MONTO|TICKET|||||
-                const command = `0200|${amountStr}|${ticketStr}|||||`;
+                console.log(`💳 Procesando venta: $${amount} - Ticket original: ${ticket}`);
+
+                // Formatear monto: 9 dígitos, padding con ceros, truncado a 9 (consistente con SDK oficial)
+                const amountStr = amount.toString().padStart(9, '0').slice(0, 9);
+
+                // Formatear ticket: MÁX 6 caracteres.
+                // El POS rechaza con código 70 ("Error de formato Campo de Boleta MAX 6") si excede 6 chars.
+                // Si viene con prefijos no numéricos (ej: "TKT112624"), extraer solo los dígitos.
+                let ticketClean = String(ticket || '').replace(/\D/g, ''); // solo dígitos
+                if (!ticketClean) {
+                    // Fallback si el ticket no tiene dígitos: usar timestamp (últimos 6)
+                    ticketClean = String(Date.now()).slice(-6);
+                }
+                // Si quedan más de 6 dígitos, tomar los últimos 6 (más significativos de un id secuencial)
+                if (ticketClean.length > 6) {
+                    ticketClean = ticketClean.slice(-6);
+                }
+                const ticketStr = ticketClean.padStart(6, '0').slice(0, 6);
+                console.log(`🎫 Ticket formateado para POS: ${ticketStr} (6 chars)`);
+
+                // Comando: 0200|MONTO|TICKET|||sendStatus  (mismo formato que SDK oficial)
+                const command = `0200|${amountStr}|${ticketStr}|||0`;
                 
                 // Construir trama manualmente para manejar ACK + respuesta
                 const encoder = new TextEncoder();

@@ -208,8 +208,13 @@
                 <input type="number" class="form-control-sm-pos" id="monto_prueba" value="1000" min="50" step="100">
             </div>
             <div class="mb-2">
-                <label class="form-label-sm">Número de Ticket</label>
-                <input type="text" class="form-control-sm-pos" id="ticket_prueba" value="TEST001">
+                <label class="form-label-sm">Número de Ticket (máx. 6 dígitos)</label>
+                <input type="text" class="form-control-sm-pos" id="ticket_prueba" value="000001"
+                       maxlength="6" pattern="[0-9]{1,6}"
+                       title="Solo dígitos, máximo 6 caracteres (límite del POS Transbank)">
+                <small class="text-muted" style="font-size:0.68rem;">
+                    El POS exige boleta numérica de máximo 6 caracteres (rechaza con código 70 si excede).
+                </small>
             </div>
             <button class="tbk-btn tbk-btn-success mt-1" onclick="procesarVentaPrueba()">
                 <i class="bi bi-credit-card"></i> Procesar Venta de Prueba
@@ -566,9 +571,34 @@ async function anularVenta() {
 async function procesarVentaPrueba() {
     try {
         const monto = parseInt(document.getElementById('monto_prueba').value);
-        const ticket = document.getElementById('ticket_prueba').value;
+        let ticket = (document.getElementById('ticket_prueba').value || '').trim();
         if (!monto || monto < 50) { showError('Ingrese un monto válido (mínimo $50)'); return; }
         if (!ticket) { showError('Ingrese un número de ticket'); return; }
+
+        // Validar formato del ticket: el POS Transbank exige máx 6 dígitos numéricos.
+        // Si viene no numérico o excede 6 chars, normalizamos y avisamos.
+        const soloDigitos = ticket.replace(/\D/g, '');
+        if (!soloDigitos) {
+            showError('El ticket debe contener al menos un dígito numérico.');
+            return;
+        }
+        if (soloDigitos.length > 6 || soloDigitos !== ticket) {
+            const normalizado = soloDigitos.slice(-6).padStart(6, '0');
+            const continuar = await Swal.fire({
+                icon: 'info',
+                title: 'Ticket ajustado',
+                html: `El POS solo acepta boleta numérica de máx. 6 dígitos.<br><br>` +
+                      `Original: <code>${ticket}</code><br>` +
+                      `Se enviará: <code>${normalizado}</code>`,
+                showCancelButton: true,
+                confirmButtonText: 'Continuar',
+                cancelButtonText: 'Cancelar'
+            });
+            if (!continuar.isConfirmed) return;
+            ticket = normalizado;
+            document.getElementById('ticket_prueba').value = normalizado;
+        }
+
         const resultado = await ejecutarVentaPOS(monto, ticket);
 
         // Registrar SIEMPRE en el log (aprobadas y rechazadas) para auditoría/diagnóstico
@@ -613,8 +643,8 @@ function agregarLogTransaccion(resultado, montoEnviado) {
         ? `<div class="mt-1 small" style="color:#7a4a00;">${resultado.hint}</div>`
         : '';
 
-    // Si es error 70, agregar botón rápido de cargar llaves
-    const accionHtml = (!resultado.successful && resultado.responseCode === 70 && typeof cargarLlavesPOSConfirm === 'function')
+    // Si el POS pide cargar llaves (código 26), mostrar botón rápido para hacerlo
+    const accionHtml = (!resultado.successful && resultado.responseCode === 26 && typeof cargarLlavesPOSConfirm === 'function')
         ? `<button type="button" class="btn btn-sm btn-warning mt-1" onclick="cargarLlavesPOSConfirm()">
                <i class="bi bi-key"></i> Cargar llaves
            </button>`
