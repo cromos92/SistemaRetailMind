@@ -1250,11 +1250,21 @@ def descargar_txt_dte_ecommerce(request, dte_id):
         total = dte.monto_con_iva
         iva = total - neto
 
+        # Info enriquecida de métodos de pago para la observación del TXT Acepta.
+        # Incluye tipo de tarjeta, voucher/autorización Transbank y notas (terminal + op del POS).
+        from app.models import METODO_PAGO_TICKET_CHOICES
         metodos_pago_info = []
         for pago in dte.dte_detalle_pagos.all():
-            from app.models import METODO_PAGO_TICKET_CHOICES
             metodo_nombre = dict(METODO_PAGO_TICKET_CHOICES).get(pago.metodo_pago, pago.metodo_pago)
-            metodos_pago_info.append(f"{metodo_nombre}: ${pago.monto:,}")
+            partes = [f"{metodo_nombre}: ${pago.monto:,}"]
+            if pago.tipo_tarjeta:
+                partes.append(f"Tarj: {pago.tipo_tarjeta}")
+            if pago.voucher:
+                partes.append(f"Auth: {pago.voucher}")
+            if getattr(pago, 'notas', None):
+                notas_compactas = ' '.join(str(pago.notas).split())[:80]
+                partes.append(notas_compactas)
+            metodos_pago_info.append(' - '.join(partes))
         metodos_pago_texto = ' | '.join(metodos_pago_info) if metodos_pago_info else 'VENTA INTERNET'
 
         productos_txt = []

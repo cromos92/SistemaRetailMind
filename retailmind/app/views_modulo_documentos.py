@@ -1693,8 +1693,14 @@ def generar_txt_boleta_acepta(datos):
     metodos_pago = emisor.get('metodos_pago', '')
     
     nombre_impresora = emisor.get('nombre_impresora_boleta', 'boleta') or 'boleta'
-    
+
+    # La observación impresa en la boleta ahora incluye información enriquecida de pagos
+    # (tipo de tarjeta, autorización Transbank, terminal/operación).
+    # Se limita el largo total a ~400 chars como margen seguro del campo observación de Acepta.
+    MAX_OBSERVACION = 400
     observacion = f"^ Vendedor: {vendedor_nombre} (Cod: {vendedor_codigo}) ^ Ticket: {correlativo_ticket} ^ DTE: {correlativo} ^ Pago: {metodos_pago} "
+    if len(observacion) > MAX_OBSERVACION:
+        observacion = observacion[:MAX_OBSERVACION - 3] + '...'
     
     linea_obs = [
         vendedor_codigo,

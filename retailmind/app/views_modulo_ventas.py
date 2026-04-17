@@ -2312,11 +2312,34 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             # Preparar datos para TXT
             empresa = ticket.sucursal.empresa
             
-            # Preparar información de métodos de pago
+            # Preparar información de métodos de pago (enriquecida para observaciones del TXT Acepta).
+            # Incluye: método, monto, tipo de tarjeta, voucher/autorización Transbank y datos del POS
+            # (terminal + número de operación guardados en el campo 'notas').
             metodos_pago_info = []
             for pago in ticket.pagos.all():
                 metodo_nombre = dict(METODO_PAGO_TICKET_CHOICES).get(pago.metodo_pago, pago.metodo_pago)
-                metodos_pago_info.append(f"{metodo_nombre}: ${pago.monto:,}")
+                partes = [f"{metodo_nombre}: ${pago.monto:,}"]
+
+                # Tipo de tarjeta (VISA, MASTERCARD, AMEX, etc.)
+                if pago.tipo_tarjeta:
+                    partes.append(f"Tarj: {pago.tipo_tarjeta}")
+
+                # Código de autorización Transbank (voucher)
+                if pago.voucher:
+                    partes.append(f"Auth: {pago.voucher}")
+
+                # Orden de compra si corresponde (ecommerce, convenios, etc.)
+                if getattr(pago, 'numero_orden_compra', None):
+                    partes.append(f"OC: {pago.numero_orden_compra}")
+
+                # Notas: para pagos POS Transbank trae "Terminal: XXX | Op: YYY"
+                if pago.notas:
+                    # Compactar y truncar para que la observación global no explote
+                    notas_compactas = ' '.join(str(pago.notas).split())[:80]
+                    partes.append(notas_compactas)
+
+                metodos_pago_info.append(' - '.join(partes))
+
             metodos_pago_texto = ' | '.join(metodos_pago_info) if metodos_pago_info else 'EFECTIVO'
             
             # ✅ DETECTAR SI ES TICKET DE CAMBIO/DEVOLUCIÓN
