@@ -1630,20 +1630,28 @@ def generar_txt_boleta_acepta(datos):
     lineas.append('~')
     
     # ===== PRODUCTOS (formato boleta) =====
-    # Formato: tipo|codigo||nombre||cantidad|unidad|precio|monto|}
+    # Formato: tipo|codigo||nombre_con_sku||cantidad|unidad|precio|monto|}
+    # El campo 'nombre' (posición 4) tiene máx 80 chars en Acepta.
+    # Se concatena SKU + nombre para que se visualice en la boleta impresa
+    # (igual que hace la factura electrónica). Se respeta el límite total de 80 chars.
+    MAX_NOMBRE_BOLETA = 80
     for index, item in enumerate(datos['detalle'], start=1):
-        codigo_item = limpiar_texto(item.get('codigo', ''), 35) or limpiar_texto(item.get('sku', ''), 35) or 'PROD001'
-        nombre = limpiar_texto(item.get('nombre', ''), 80)
+        # SKU limitado a 20 chars para dejar espacio al nombre dentro de los 80 totales.
+        codigo_item = limpiar_texto(item.get('codigo', ''), 20) or limpiar_texto(item.get('sku', ''), 20) or 'PROD001'
+        # Nombre con el espacio restante (80 - largo SKU - 1 espacio separador)
+        espacio_nombre = max(1, MAX_NOMBRE_BOLETA - len(codigo_item) - 1)
+        nombre = limpiar_texto(item.get('nombre', ''), espacio_nombre)
+        nombre_con_sku = f"{codigo_item} {nombre}".strip()[:MAX_NOMBRE_BOLETA]
         cantidad_val = int(item.get('cantidad', 0))
         precio_val = int(item.get('precio_unitario', 0))
         monto_val = int(item.get('monto_item', 0))
-        
+
         linea_prod = [
-            'INT1',  # Tipo interno
-            codigo_item,
-            '',  # Desc vacía
-            nombre,
-            '',  # Campo vacío
+            'INT1',           # Tipo interno
+            codigo_item,      # SKU (campo 2, también queda en el estructurado)
+            '',               # Desc vacía
+            nombre_con_sku,   # Nombre visible en la impresión = "SKU Nombre"
+            '',               # Campo vacío
             str(cantidad_val),
             limpiar_texto(item.get('unidad', 'UN'), 4),
             str(precio_val),

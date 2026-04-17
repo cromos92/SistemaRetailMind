@@ -4331,6 +4331,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         btnAnterior.disabled = pasoActual <= 2;
 
+        // Re-habilitar el botón Siguiente cada vez que se actualiza el estado del wizard.
+        // Esto cubre el caso de que haya quedado .disabled = true tras una finalización
+        // previa (ver finalizarVenta) y luego el usuario cargue un nuevo ticket.
+        // Si el flujo actual necesita mantenerlo deshabilitado (p.ej. mientras finalizarVenta
+        // está en curso), esa función lo volverá a poner en true después de llamar aquí.
+        if (btnSiguiente) btnSiguiente.disabled = false;
+
         const cfg = {
             1: { sig: 'Datos del cliente <i class="ri-arrow-right-line ms-1"></i>', ctx: 'Creando ticket…', cls: 'btn-primary' },
             2: { sig: 'Ir a productos y pagos <i class="ri-arrow-right-line ms-1"></i>', ctx: 'Completa los datos del cliente / empresa', cls: 'btn-success' },
@@ -8990,6 +8997,18 @@ body {
         limpiarCreditoExternoAlFinalizar();
         mostrarVista('dashboard');
         actualizarDashboard();
+
+        // Re-habilitar botones del wizard que pudieron quedar disabled tras la venta anterior
+        // (ver finalizarVenta). Así cuando el cajero vuelva a entrar a un ticket, el flujo
+        // arranca limpio sin quedar bloqueado en el paso 4.
+        const btnSiguiente = document.getElementById('btnSiguiente');
+        if (btnSiguiente) btnSiguiente.disabled = false;
+        const btnFinalizarVerde = document.querySelector('.btn-success.btn-lg.w-100.py-4');
+        if (btnFinalizarVerde && btnFinalizarVerde.disabled) {
+            btnFinalizarVerde.disabled = false;
+            btnFinalizarVerde.innerHTML = '<i class="ri-check-line"></i> FINALIZAR VENTA';
+        }
+
         setTimeout(() => {
             const qs = document.getElementById('dashboardQuickStart');
             if (qs) { qs.value = ''; qs.focus(); }

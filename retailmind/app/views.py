@@ -17426,19 +17426,14 @@ def api_sucursales_usuario(request):
 @login_required
 def buscar_productos_sucursal(request):
     """
-    Vista para mostrar productos por sucursal con filtros de búsqueda
+    Vista para mostrar productos por sucursal con filtros de búsqueda.
+    Muestra SIEMPRE todas las sucursales sin restricción por usuario.
     """
     # Obtener sucursal actual del usuario (intentar ambas variables)
     sucursal_actual_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
     
-    # Obtener todas las sucursales disponibles para el usuario
-    sucursales_usuario = EmpresaUser.objects.filter(
-        user=request.user,
-        status=True,
-        sucursal__isnull=False
-    ).select_related('sucursal').values_list('sucursal', flat=True).distinct()
-    
-    sucursales = Sucursal.objects.filter(id__in=sucursales_usuario)
+    # Mostrar TODAS las sucursales sin restricción por usuario
+    sucursales = Sucursal.objects.all().order_by('alias')
     
     # Verificar e inicializar atributos básicos si no existen
     try:
@@ -17484,8 +17479,8 @@ def buscar_productos_sucursal(request):
 @login_required
 def obtener_productos_sucursal(request):
     """
-    Vista AJAX para obtener productos filtrados por atributos y sucursal
-    Busca en todas las sucursales a las que el usuario tiene acceso
+    Vista AJAX para obtener productos filtrados por atributos y sucursal.
+    Busca SIEMPRE en TODAS las sucursales sin restricción por usuario.
     """
     try:
         # Obtener parámetros de filtro
@@ -17502,23 +17497,8 @@ def obtener_productos_sucursal(request):
         page = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 25))
         
-        # Obtener sucursales a las que el usuario tiene acceso
-        sucursales_usuario = EmpresaUser.objects.filter(
-            user=request.user,
-            status=True,
-            sucursal__isnull=False
-        ).values_list('sucursal_id', flat=True).distinct()
-        
-        if not sucursales_usuario:
-            return JsonResponse({
-                'success': False,
-                'error': 'No tienes acceso a ninguna sucursal'
-            })
-        
-        # Construir query base - buscar en sucursales del usuario
-        productos_query = Producto.objects.filter(
-            sucursal_id__in=sucursales_usuario
-        ).select_related(
+        # Construir query base - mostrar productos de TODAS las sucursales sin restricción
+        productos_query = Producto.objects.all().select_related(
             'sucursal', 'categoria', 'atributo1', 'atributo2', 'atributo3'
         ).prefetch_related('producto_talla')
         

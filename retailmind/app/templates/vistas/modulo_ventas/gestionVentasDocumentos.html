@@ -191,6 +191,54 @@
     </div>
 </div>
 
+<!-- Modal para Editar BOLETA PAPEL (solo admin) -->
+{% if es_admin %}
+<div class="modal fade" id="modalEditarBoletaPapel" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="ri-edit-2-line me-2"></i> Editar Boleta Papel
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning d-flex align-items-start gap-2 py-2" style="font-size:12px;">
+                    <i class="ri-alert-line" style="font-size:16px;"></i>
+                    <div>
+                        Esta acción sólo está disponible para el perfil <b>administrador</b>
+                        y aplica únicamente a <b>Boletas Papel (manuales)</b>.
+                    </div>
+                </div>
+                <input type="hidden" id="editarBoletaPapelId">
+                <div class="mb-2">
+                    <label class="form-label mb-1">Documento actual</label>
+                    <input type="text" class="form-control form-control-sm" id="editarBoletaPapelDescripcion" readonly>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label mb-1">N° de documento</label>
+                        <input type="number" min="1" step="1" class="form-control form-control-sm" id="editarBoletaPapelNumero" placeholder="Ej: 12345">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label mb-1">Fecha de pago / emisión</label>
+                        <input type="date" class="form-control form-control-sm" id="editarBoletaPapelFecha">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="guardarEdicionBoletaPapel()">
+                    <i class="ri-save-line me-1"></i> Guardar cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Modal para Ver Detalle Completo del DTE -->
 <div class="modal fade" id="modalDetalleCompleto" tabindex="-1">
     <div class="modal-dialog modal-xl">
@@ -842,7 +890,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let documentoSeleccionado = null;
     let documentoActualModal = null; // Documento que se muestra actualmente en el modal
     let timeoutBusqueda = null;
-    
+
+    // Flag: ¿usuario es administrador? (controla si puede editar Boletas Papel)
+    const esAdmin = {% if es_admin %}true{% else %}false{% endif %};
+
     // Variables de ordenamiento
     let ordenCampo = 'fecha';      // Campo por defecto
     let ordenDireccion = 'desc';   // Dirección por defecto (más recientes primero)
@@ -852,6 +903,7 @@ document.addEventListener('DOMContentLoaded', function() {
         listarDocumentos: '{% url "listar_documentos_ventas" %}',
         convertirFactura: '{% url "convertir_ticket_a_factura" %}',
         anularDocumento: '{% url "anular_documento_venta" %}',
+        editarBoletaPapel: '{% url "editar_dte_boleta_papel" %}',
         exportarExcel: '/api/ventas/exportar-documentos/',
         detalleDocumento: (id) => `{% url "detalle_documento_venta" documento_id=0 %}`.replace('/0/', `/${id}/`),
     };
@@ -1121,6 +1173,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             title="Imprimir Ticket de Cambio">
                         <i class="ri-exchange-line"></i><span class="tc-txt"> Cambio</span>
                     </button>
+                    ${(esAdmin && doc.tipo === 'BOLETA PAPEL' && doc.estado !== 'ANULADO') ? `
+                    <button class="btn btn-sm btn-warning btn-action ms-1"
+                            onclick="abrirEditarBoletaPapel(${doc.id})"
+                            title="Editar N° y Fecha de Pago (solo admin)">
+                        <i class="ri-edit-2-line"></i> Editar
+                    </button>` : ''}
                 </td>
             </tr>
         `).join('');
@@ -1280,6 +1338,105 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = `/ventas/documento/${documentoId}/imprimir/`;
         window.open(url, '_blank', 'width=800,height=600');
     }
+
+    // === EDICIÓN DE BOLETA PAPEL (solo admin) ===
+    window.abrirEditarBoletaPapel = function(documentoId) {
+        if (!esAdmin) {
+            mostrarError('Sólo el perfil administrador puede editar boletas papel');
+            return;
+        }
+
+        const doc = documentosData.find(d => d.id === documentoId);
+        if (!doc) {
+            mostrarError('No se encontró el documento seleccionado');
+            return;
+        }
+
+        if (doc.tipo !== 'BOLETA PAPEL') {
+            mostrarError('Sólo se pueden editar Boletas Papel');
+            return;
+        }
+
+        const modalEl = document.getElementById('modalEditarBoletaPapel');
+        if (!modalEl) return;
+
+        document.getElementById('editarBoletaPapelId').value = doc.id;
+        document.getElementById('editarBoletaPapelDescripcion').value =
+            `BOLETA PAPEL #${doc.numero} - ${doc.cliente_nombre || 'Sin cliente'}`;
+        document.getElementById('editarBoletaPapelNumero').value = doc.numero || '';
+
+        // Normalizar fecha al formato YYYY-MM-DD para input[type=date]
+        let fechaInput = '';
+        if (doc.fecha) {
+            if (typeof doc.fecha === 'string') {
+                fechaInput = doc.fecha.split('T')[0].substring(0, 10);
+            } else {
+                const d = new Date(doc.fecha);
+                if (!isNaN(d.getTime())) {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    fechaInput = `${y}-${m}-${day}`;
+                }
+            }
+        }
+        document.getElementById('editarBoletaPapelFecha').value = fechaInput;
+
+        new bootstrap.Modal(modalEl).show();
+    };
+
+    window.guardarEdicionBoletaPapel = function() {
+        const id = document.getElementById('editarBoletaPapelId').value;
+        const numero = document.getElementById('editarBoletaPapelNumero').value;
+        const fecha = document.getElementById('editarBoletaPapelFecha').value;
+
+        if (!id) {
+            mostrarError('Documento no identificado');
+            return;
+        }
+        if (!numero || parseInt(numero, 10) <= 0) {
+            mostrarError('Ingrese un número de documento válido');
+            return;
+        }
+        if (!fecha) {
+            mostrarError('Ingrese una fecha válida');
+            return;
+        }
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        }
+
+        fetch(apiUrls.editarBoletaPapel, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                documento_id: parseInt(id, 10),
+                numero_documento: parseInt(numero, 10),
+                fecha_emision: fecha,
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const modalEl = document.getElementById('modalEditarBoletaPapel');
+                const inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+                if (inst) inst.hide();
+                mostrarExito('Boleta papel actualizada correctamente');
+                cargarDocumentos();
+            } else {
+                mostrarError(data.error || 'No se pudo actualizar la boleta');
+            }
+        })
+        .catch(err => {
+            console.error('Error editar boleta papel:', err);
+            mostrarError('Error al actualizar la boleta');
+        });
+    };
 
     // === FUNCIONES DE UTILIDAD ===
     

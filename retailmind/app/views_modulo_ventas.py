@@ -3430,13 +3430,18 @@ def gestion_ventas_documentos(request):
             sucursal_actual = Sucursal.objects.get(id=sucursal_actual_id)
         except Sucursal.DoesNotExist:
             sucursal_actual = None
-    
+
+    user_rol = getattr(request.user, 'rol', '') or ''
+    es_admin = user_rol == 'administrador'
+
     context = {
         'sucursal_actual': sucursal_actual,
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
         'estado_ticket_choices': ESTADO_TICKET_CHOICES,
         'tipo_documento_choices': TIPO_DOCUMENTO_CHOICES,
         'qz_config': _get_qz_config(sucursal_actual_id),
+        'user_rol': user_rol,
+        'es_admin': es_admin,
     }
     return render(request, 'vistas/modulo_ventas/gestionVentasDocumentos.html', context)
 
@@ -4467,6 +4472,122 @@ def anular_documento_venta(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al anular documento: {str(e)}'
+        })
+
+
+@login_required
+@require_POST
+def editar_dte_boleta_papel(request):
+    """
+    Permite a un administrador corregir la fecha de pago (fecha_emision)
+    y el número de documento de una BOLETA PAPEL (boleta manual).
+
+    Solo usuarios con rol 'administrador' pueden ejecutar esta acción.
+    """
+    try:
+        if getattr(request.user, 'rol', '') != 'administrador':
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo administradores pueden editar boletas papel'
+            }, status=403)
+
+        data = json.loads(request.body)
+        documento_id = data.get('documento_id')
+        nuevo_numero = data.get('numero_documento')
+        nueva_fecha = data.get('fecha_emision')
+
+        if not documento_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de documento requerido'
+            })
+
+        try:
+            nuevo_numero = int(nuevo_numero)
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Número de documento inválido'
+            })
+
+        if nuevo_numero <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'El número de documento debe ser un entero positivo'
+            })
+
+        from datetime import datetime as _dt
+        try:
+            fecha_parsed = _dt.strptime(str(nueva_fecha).strip(), '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Fecha inválida. Formato esperado YYYY-MM-DD'
+            })
+
+        with transaction.atomic():
+            dte = Dte.objects.select_for_update().filter(id=documento_id).first()
+            if not dte:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Documento no encontrado'
+                })
+
+            if dte.tipo_documento != 'BOLETA PAPEL':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Solo se pueden editar documentos tipo BOLETA PAPEL'
+                })
+
+            if dte.estado_dte == 'ANULADO':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se puede editar una boleta anulada'
+                })
+
+            # Verificar duplicado de número en la misma sucursal (BOLETA PAPEL)
+            if nuevo_numero != dte.numero_documento:
+                existe_duplicado = Dte.objects.filter(
+                    sucursal_id=dte.sucursal_id,
+                    tipo_documento='BOLETA PAPEL',
+                    numero_documento=nuevo_numero,
+                ).exclude(id=dte.id).exists()
+                if existe_duplicado:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Ya existe otra BOLETA PAPEL con el número {nuevo_numero} en esta sucursal'
+                    })
+
+            numero_anterior = dte.numero_documento
+            fecha_anterior = dte.fecha_emision
+
+            dte.numero_documento = nuevo_numero
+            dte.fecha_emision = fecha_parsed
+            # Para boletas papel el pago es al contado: vencimiento = emisión
+            dte.fecha_vencimiento = fecha_parsed
+            dte.save(update_fields=['numero_documento', 'fecha_emision', 'fecha_vencimiento'])
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Boleta papel actualizada correctamente',
+            'documento': {
+                'id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
+                'numero_anterior': numero_anterior,
+                'fecha_anterior': fecha_anterior.strftime('%Y-%m-%d') if fecha_anterior else None,
+            }
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al editar boleta papel: {str(e)}'
         })
 
 

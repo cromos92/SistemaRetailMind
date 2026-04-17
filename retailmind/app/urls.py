@@ -30,6 +30,7 @@ from .views_modulo_ventas import (
     convertir_ticket_a_factura,
     detalle_documento_venta,
     anular_documento_venta,
+    editar_dte_boleta_papel,
     # Funciones Cuadratura y Arqueo
     cuadratura_caja,
     generar_cuadratura_caja,
@@ -651,6 +652,7 @@ urlpatterns = [
     path('api/ventas/convertir-factura/', convertir_ticket_a_factura, name='convertir_ticket_a_factura'),
     path('api/ventas/documento/<int:documento_id>/', detalle_documento_venta, name='detalle_documento_venta'),
     path('api/ventas/anular-documento/', anular_documento_venta, name='anular_documento_venta'),
+    path('api/ventas/editar-boleta-papel/', editar_dte_boleta_papel, name='editar_dte_boleta_papel'),
     
     # === CUADRATURA Y ARQUEO DE CAJA ===
     path('ventas/cuadratura-caja/', cuadratura_caja, name='cuadratura_caja'),
