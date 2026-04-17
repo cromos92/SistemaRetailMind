@@ -330,13 +330,46 @@ async function verificarPOS() {
 
 async function cargarLlavesPOS() {
     try {
+        // Verificar conexión antes de intentar
+        if (!Transbank.POS.isConnected) {
+            showError('POS no está conectado.<br>Presione "Conectar POS" primero.');
+            return;
+        }
+
+        // Confirmación (el proceso tarda y requiere confirmar en el POS físico)
+        const confirm = await Swal.fire({
+            icon: 'warning',
+            title: 'Cargar llaves criptográficas',
+            html: 'Esto enviará el comando <code>0800</code> al POS.<br><br>' +
+                  '<strong>Importante:</strong>' +
+                  '<ul style="text-align:left">' +
+                  '<li>El POS puede pedir confirmación — presione <strong>SÍ</strong> en el POS físico.</li>' +
+                  '<li>El proceso dura 30-60 segundos.</li>' +
+                  '<li>No apague el POS ni el computador durante la carga.</li>' +
+                  '</ul>',
+            showCancelButton: true,
+            confirmButtonText: 'Cargar llaves',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#f0a000'
+        });
+        if (!confirm.isConfirmed) return;
+
         showLoading('Cargando llaves... (30-60 segundos)');
         const resultado = await Transbank.POS.loadKeys();
         hideLoading();
-        if (resultado.success) {
-            showSuccess(`Llaves cargadas correctamente<br>Comercio: ${resultado.commerceCode}`);
+        if (resultado && resultado.success) {
+            showSuccess(
+                'Llaves cargadas correctamente.<br>' +
+                `Comercio: ${resultado.commerceCode}<br>` +
+                `Terminal: ${resultado.terminalId}<br><br>` +
+                'Ya puede reintentar la venta.'
+            );
         } else {
-            showError('Error cargando llaves');
+            showError(
+                'No se pudieron cargar las llaves.<br>' +
+                `Código de respuesta: ${resultado ? resultado.responseCode : 'desconocido'}<br><br>` +
+                'Contacte a soporte Transbank si el problema persiste.'
+            );
         }
     } catch (error) {
         hideLoading();
@@ -537,24 +570,62 @@ async function procesarVentaPrueba() {
         if (!monto || monto < 50) { showError('Ingrese un monto válido (mínimo $50)'); return; }
         if (!ticket) { showError('Ingrese un número de ticket'); return; }
         const resultado = await ejecutarVentaPOS(monto, ticket);
+
+        // Registrar SIEMPRE en el log (aprobadas y rechazadas) para auditoría/diagnóstico
+        agregarLogTransaccion(resultado, monto);
+
         if (resultado.successful) {
-            await guardarTransaccionPOS(resultado, null);
-            agregarLogTransaccion(resultado);
+            try {
+                await guardarTransaccionPOS(resultado, null);
+            } catch (e) {
+                console.error('Error guardando transacción:', e);
+            }
         }
     } catch (error) {
         console.error('Error en venta:', error);
     }
 }
 
-function agregarLogTransaccion(resultado) {
+function agregarLogTransaccion(resultado, montoEnviado) {
     const log = document.getElementById('log_transacciones');
+    if (!log) return;
+
+    // Limpiar placeholder "Sin transacciones" si sigue ahí
+    const placeholder = log.querySelector('.text-muted');
+    if (placeholder) placeholder.remove();
+
     const fecha = new Date().toLocaleTimeString();
     const clase = resultado.successful ? 'success' : 'danger';
     const icono = resultado.successful ? 'check-circle' : 'x-circle';
+
+    // Fallbacks para campos que vienen vacíos cuando la venta es rechazada (ej: código 70)
+    const montoMostrar = Number.isFinite(resultado.amount) && resultado.amount > 0
+        ? resultado.amount
+        : (montoEnviado || 0);
+    const authMostrar = resultado.authorizationCode && resultado.authorizationCode.trim()
+        ? resultado.authorizationCode
+        : '—';
+    const codigoRespuesta = (resultado.responseCode !== undefined && resultado.responseCode !== null)
+        ? ` (cód. ${resultado.responseCode})`
+        : '';
+
+    const hintHtml = (!resultado.successful && resultado.hint)
+        ? `<div class="mt-1 small" style="color:#7a4a00;">${resultado.hint}</div>`
+        : '';
+
+    // Si es error 70, agregar botón rápido de cargar llaves
+    const accionHtml = (!resultado.successful && resultado.responseCode === 70 && typeof cargarLlavesPOSConfirm === 'function')
+        ? `<button type="button" class="btn btn-sm btn-warning mt-1" onclick="cargarLlavesPOSConfirm()">
+               <i class="bi bi-key"></i> Cargar llaves
+           </button>`
+        : '';
+
     const item = `
         <div class="alert alert-${clase} mb-1 py-1 px-2">
-            <i class="bi bi-${icono}"></i> <strong>${resultado.responseMessage}</strong><br>
-            <small>$${resultado.amount.toLocaleString()} · Auth: ${resultado.authorizationCode} · ${fecha}</small>
+            <i class="bi bi-${icono}"></i> <strong>${resultado.responseMessage}${codigoRespuesta}</strong><br>
+            <small>$${Number(montoMostrar).toLocaleString('es-CL')} · Auth: ${authMostrar} · ${fecha}</small>
+            ${hintHtml}
+            ${accionHtml}
         </div>
     `;
     log.innerHTML = item + log.innerHTML;
