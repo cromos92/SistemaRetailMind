@@ -3149,9 +3149,10 @@ def regularizar_producto_api(request):
                                 'razon_social': limpiar_texto(nota_credito.emisor.razon_social if nota_credito.emisor else ''),
                                 'giro': limpiar_texto(nota_credito.emisor.giro if nota_credito.emisor else ''),
                                 'acteco': nota_credito.emisor.acteco if nota_credito.emisor else '',
-                                'direccion': limpiar_texto(nota_credito.sucursal.direccion if nota_credito.sucursal else (nota_credito.emisor.direccion if nota_credito.emisor else '')),
-                                'comuna': limpiar_texto(nota_credito.emisor.comuna if nota_credito.emisor else ''),
-                                'ciudad': limpiar_texto(nota_credito.emisor.ciudad if nota_credito.emisor else ''),
+                                # Dirección/comuna/ciudad de la SUCURSAL del NC, fallback a empresa emisora.
+                                'direccion': limpiar_texto((nota_credito.sucursal.direccion if nota_credito.sucursal else '') or (nota_credito.emisor.direccion if nota_credito.emisor else '') or ''),
+                                'comuna': limpiar_texto((nota_credito.sucursal.comuna if nota_credito.sucursal else '') or (nota_credito.emisor.comuna if nota_credito.emisor else '') or ''),
+                                'ciudad': limpiar_texto((nota_credito.sucursal.ciudad if nota_credito.sucursal else '') or (nota_credito.emisor.ciudad if nota_credito.emisor else '') or ''),
                                 'codigo_vendedor': limpiar_texto(usuario),
                                 'nombre_impresora_boleta': getattr(nota_credito.sucursal, 'nombre_impresora_boleta', 'boleta') if nota_credito.sucursal else 'boleta',
                                 'nombre_impresora_factura': getattr(nota_credito.sucursal, 'nombre_impresora_factura', 'factura') if nota_credito.sucursal else 'factura',
@@ -3828,9 +3829,10 @@ def regularizar_dte_masivo(request):
                         'razon_social': limpiar_texto(nota_credito.emisor.razon_social if nota_credito.emisor else 'SIN RAZON SOCIAL'),
                         'giro': limpiar_texto(nota_credito.emisor.giro if (nota_credito.emisor and nota_credito.emisor.giro) else 'COMERCIALIZADORA'),
                         'acteco': nota_credito.emisor.acteco if nota_credito.emisor else '',
-                        'direccion': limpiar_texto(nota_credito.sucursal.direccion if nota_credito.sucursal else (nota_credito.emisor.direccion if nota_credito.emisor else '')),
-                        'comuna': limpiar_texto(nota_credito.emisor.comuna if nota_credito.emisor else ''),
-                        'ciudad': limpiar_texto(nota_credito.emisor.ciudad if nota_credito.emisor else ''),
+                        # Dirección/comuna/ciudad de la SUCURSAL del NC, fallback a empresa emisora.
+                        'direccion': limpiar_texto((nota_credito.sucursal.direccion if nota_credito.sucursal else '') or (nota_credito.emisor.direccion if nota_credito.emisor else '') or ''),
+                        'comuna': limpiar_texto((nota_credito.sucursal.comuna if nota_credito.sucursal else '') or (nota_credito.emisor.comuna if nota_credito.emisor else '') or ''),
+                        'ciudad': limpiar_texto((nota_credito.sucursal.ciudad if nota_credito.sucursal else '') or (nota_credito.emisor.ciudad if nota_credito.emisor else '') or ''),
                         'sucursal': limpiar_texto(nota_credito.sucursal.alias if nota_credito.sucursal else ''),
                         'codigo_vendedor': limpiar_texto(usuario),
                         'nombre_impresora_boleta': getattr(nota_credito.sucursal, 'nombre_impresora_boleta', 'boleta') if nota_credito.sucursal else 'boleta',
@@ -19027,9 +19029,10 @@ def anular_factura_dte(request):
             'razon_social': limpiar_texto(nc.emisor.razon_social or ''),
             'giro': limpiar_texto(nc.emisor.giro or ''),
             'acteco': nc.emisor.acteco or '',
-            'direccion': limpiar_texto(nc.sucursal.direccion if nc.sucursal else nc.emisor.direccion or ''),
-            'comuna': limpiar_texto(nc.emisor.comuna or ''),
-            'ciudad': limpiar_texto(nc.emisor.ciudad or ''),
+            # Dirección/comuna/ciudad de la SUCURSAL, fallback a la empresa emisora.
+            'direccion': limpiar_texto((nc.sucursal.direccion if nc.sucursal else '') or nc.emisor.direccion or ''),
+            'comuna': limpiar_texto((nc.sucursal.comuna if nc.sucursal else '') or nc.emisor.comuna or ''),
+            'ciudad': limpiar_texto((nc.sucursal.ciudad if nc.sucursal else '') or nc.emisor.ciudad or ''),
             'codigo_vendedor': limpiar_texto(nc.responsable or 'USUARIO'),
             'sucursal': limpiar_texto(nc.sucursal.alias if nc.sucursal else ''),
             'telefono': nc.emisor.contacto1 or '',
@@ -19155,10 +19158,10 @@ def detalle_dte(request, dte_id):
                 'emisor': {
                     'nombre': dte.emisor.nombre,
                     'rut': dte.emisor.rut,
-                    # ✅ CORREGIDO: Usar dirección de la SUCURSAL si existe
-                    'direccion': dte.sucursal.direccion if dte.sucursal else dte.emisor.direccion,
-                    'ciudad': dte.emisor.ciudad,
-                    'comuna': dte.emisor.comuna,
+                    # ✅ Usar dirección/ciudad/comuna de la SUCURSAL, con fallback a empresa emisora.
+                    'direccion': (dte.sucursal.direccion if dte.sucursal else '') or dte.emisor.direccion or '',
+                    'ciudad': (dte.sucursal.ciudad if dte.sucursal else '') or dte.emisor.ciudad or '',
+                    'comuna': (dte.sucursal.comuna if dte.sucursal else '') or dte.emisor.comuna or '',
                 }
             },
             'productos': productos,

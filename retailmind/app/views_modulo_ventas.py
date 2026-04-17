@@ -2470,9 +2470,12 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     'razon_social': limpiar_texto(empresa.razon_social or empresa.nombre),
                     'giro': limpiar_texto(empresa.giro or 'Sin giro'),
                     'acteco': empresa.acteco or '',
-                    'direccion': limpiar_texto(empresa.direccion or ''),
-                    'comuna': limpiar_texto(empresa.comuna or ''),
-                    'ciudad': limpiar_texto(empresa.ciudad or ''),
+                    # La dirección/comuna/ciudad del emisor en el DTE debe ser la de la SUCURSAL
+                    # donde se hizo la venta (boletas físicas de cada tienda), cayendo a la
+                    # casa matriz solo si la sucursal no tiene el dato cargado.
+                    'direccion': limpiar_texto((ticket.sucursal.direccion if ticket.sucursal else '') or empresa.direccion or ''),
+                    'comuna': limpiar_texto((ticket.sucursal.comuna if ticket.sucursal else '') or empresa.comuna or ''),
+                    'ciudad': limpiar_texto((ticket.sucursal.ciudad if ticket.sucursal else '') or empresa.ciudad or ''),
                     'codigo_vendedor': limpiar_texto(ticket.vendedor.codigo_vendedor if ticket.vendedor else 'VENDEDOR'),
                     'nombre_vendedor': limpiar_texto(ticket.vendedor.nombre if ticket.vendedor else 'Sin vendedor'),
                     'metodos_pago': limpiar_texto(metodos_pago_texto),
@@ -15197,9 +15200,11 @@ def generar_nc_devolucion(request):
                 'razon_social': limpiar_texto(empresa.razon_social or ''),
                 'giro': limpiar_texto(empresa.giro or ''),
                 'acteco': empresa.acteco or '',
-                'direccion': limpiar_texto(cambio.sucursal.direccion if cambio.sucursal else empresa.direccion or ''),
-                'comuna': limpiar_texto(empresa.comuna or ''),
-                'ciudad': limpiar_texto(empresa.ciudad or ''),
+                # Dirección/comuna/ciudad de la SUCURSAL del cambio/devolución,
+                # con fallback a la casa matriz si la sucursal no tiene el dato.
+                'direccion': limpiar_texto((cambio.sucursal.direccion if cambio.sucursal else '') or empresa.direccion or ''),
+                'comuna': limpiar_texto((cambio.sucursal.comuna if cambio.sucursal else '') or empresa.comuna or ''),
+                'ciudad': limpiar_texto((cambio.sucursal.ciudad if cambio.sucursal else '') or empresa.ciudad or ''),
                 'codigo_vendedor': limpiar_texto(request.user.username or 'USUARIO'),
                 'sucursal': limpiar_texto(cambio.sucursal.alias if cambio.sucursal else ''),
                 'telefono': empresa.contacto1 or '',

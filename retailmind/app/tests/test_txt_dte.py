@@ -7,6 +7,9 @@ from app.views_modulo_documentos import (
     generar_txt_dte_acepta,
     generar_txt_boleta_acepta,
     parsear_txt_acepta,
+    construir_nombre_y_descripcion_item,
+    truncar_campo_sii,
+    MAX_LENGTHS_SII,
 )
 
 
@@ -357,3 +360,132 @@ class TestRetrocompatibilidadSinDescuento(TestCase):
         self.assertIsNone(item.get('monto_descuento'))
         self.assertEqual(item['monto_item'], 100000)
         self.assertEqual(len(parsed['descuentos_recargos']), 0)
+
+
+class TestNmbItemOverflowVaADscItem(TestCase):
+    """
+    Cuando el nombre del producto excede 80 chars, el overflow debe quedar en
+    DscItem (1000 chars) en lugar de perderse. Verifica el helper nuevo y el
+    TXT generado.
+    """
+
+    def test_helper_divide_nombre_largo(self):
+        item = {
+            'sku': 'POL-01',
+            'nombre': 'Polera Manga Larga Algodon Premium Color Azul Rey Talla XL Edicion Limitada 2026 Coleccion Primavera',
+            'descripcion': 'Material: 100% algodon pima peruano certificado.',
+        }
+        nmb, dsc = construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000)
+
+        # NmbItem nunca excede 80
+        self.assertLessEqual(len(nmb), MAX_LENGTHS_SII['NmbItem'])
+        # Empieza con el SKU
+        self.assertTrue(nmb.startswith('POL-01'))
+        # DscItem tiene contenido (overflow del nombre + descripción original)
+        self.assertGreater(len(dsc), 0)
+        self.assertLessEqual(len(dsc), MAX_LENGTHS_SII['DscItem'])
+        # La descripción original aparece en DscItem
+        self.assertIn('algodon pima peruano', dsc)
+
+    def test_txt_factura_coloca_dsc_item_en_campo_3(self):
+        """En factura, el campo 3 de la línea de detalle debe traer el DscItem calculado."""
+        datos = _datos_factura_base()
+        nombre_largo = 'Zapatilla Running Profesional Amortiguacion Maxima Transpirable Talla 42'
+        datos['detalle'] = [{
+            'codigo': 'ZAP-RUN-42',
+            'nombre': nombre_largo + ' Edicion Deportiva 2026',  # > 80 chars
+            'descripcion': 'Incluye plantillas anatomicas',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 89990,
+            'monto_item': 89990,
+        }]
+        txt = generar_txt_dte_acepta(datos)
+        # Campo 2 (NmbItem) y campo 3 (DscItem) están separados por '|'.
+        # Tomo la línea de detalle del TXT (la que empieza con el indicador de exención vacío).
+        for linea in txt.split('\n'):
+            partes = linea.split('|')
+            # Línea de detalle factura tiene 11 campos y campo 2 contiene 'ZAP-RUN-42'
+            if len(partes) >= 11 and 'ZAP-RUN-42' in partes[1]:
+                nmb_item = partes[1]
+                dsc_item = partes[2]
+                self.assertLessEqual(len(nmb_item), MAX_LENGTHS_SII['NmbItem'])
+                # El overflow o la descripción deben estar presentes
+                self.assertTrue(
+                    'Edicion' in dsc_item or 'plantillas' in dsc_item,
+                    f"DscItem no contiene el overflow ni la descripcion: {dsc_item!r}",
+                )
+                break
+        else:
+            self.fail("No se encontró la línea de detalle en el TXT generado")
+
+
+class TestBoletaConDescuentoIncluyeDscRcgGlobal(TestCase):
+    """
+    Boleta con descuento agregado debe emitir el bloque DscRcgGlobal
+    (tabla 4 de boleta Acepta) y la observación debe mencionar el monto.
+    """
+
+    def test_linea_descuento_global_en_boleta(self):
+        datos = _datos_boleta_base()
+        datos['detalle'] = [{
+            'codigo': 'POL-01',
+            'nombre': 'Polera Azul',
+            'descripcion': '',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 8000,   # precio ya rebajado (boleta)
+            'monto_item': 8000,
+        }]
+        datos['descuentos_recargos'] = [{
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento',
+            'tpo_valor': '$',
+            'valor_dr': 2000,
+        }]
+        txt = generar_txt_boleta_acepta(datos)
+
+        # La línea de descuento global debe aparecer
+        self.assertIn('D|Descuento|$|2000|', txt)
+
+    def test_observacion_boleta_incluye_monto_descuento(self):
+        datos = _datos_boleta_base()
+        datos['detalle'] = [{
+            'codigo': 'POL-01',
+            'nombre': 'Polera Azul',
+            'descripcion': '',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 8000,
+            'monto_item': 8000,
+        }]
+        datos['descuentos_recargos'] = [{
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento',
+            'tpo_valor': '$',
+            'valor_dr': 2000,
+        }]
+        txt = generar_txt_boleta_acepta(datos)
+        # La observación incluye "Descuento: $2,000"
+        self.assertIn('Descuento: $2,000', txt)
+
+
+class TestValidacionLargosSII(TestCase):
+    """El helper truncar_campo_sii trunca y emite warning."""
+
+    def test_trunca_campo_que_excede_max_length(self):
+        # RznSocRecep tiene maxLength 100
+        texto_largo = 'X' * 150
+        resultado = truncar_campo_sii(texto_largo, 'RznSocRecep')
+        self.assertEqual(len(resultado), 100)
+
+    def test_no_trunca_si_cabe(self):
+        texto = 'Cliente normal'
+        resultado = truncar_campo_sii(texto, 'RznSocRecep')
+        self.assertEqual(resultado, texto)
+
+    def test_campo_desconocido_solo_limpia_sin_truncar(self):
+        texto = 'X' * 500
+        resultado = truncar_campo_sii(texto, 'CampoInexistente')
+        # No trunca porque no está en MAX_LENGTHS_SII
+        self.assertEqual(len(resultado), 500)

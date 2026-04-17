@@ -1092,6 +1092,261 @@ def limpiar_texto(texto, max_length=None):
     return texto.strip()
 
 
+# ============================================================================
+# Largos máximos oficiales del DTE según esquema XSD SII (DTE_v10.xsd)
+# Fuente: https://github.com/niclabs/DTE/blob/master/schemas/DTE_v10.xsd
+# ============================================================================
+MAX_LENGTHS_SII = {
+    # Emisor
+    'RznSoc': 100,           # Razón social emisor (linea 2 pos. 2)
+    'GiroEmis': 80,          # Giro emisor
+    'Acteco': 6,             # Código de actividad económica (int)
+    'Sucur': 20,             # Nombre de sucursal emisor
+    'DirOrigen': 60,         # Dirección de origen
+    'CmnaOrigen': 20,        # Comuna origen
+    'CiudadOrigen': 20,      # Ciudad origen
+    'CdgSIISucur': 9,        # Código SII de sucursal
+    'CorreoEmisor': 80,
+    # Receptor
+    'RznSocRecep': 100,      # Razón social receptor
+    'GiroRecep': 40,         # Giro receptor (ATENCIÓN: más corto que emisor)
+    'Contacto': 80,          # Contacto receptor
+    'DirRecep': 70,          # Dirección receptor
+    'CmnaRecep': 20,
+    'CiudadRecep': 20,
+    'CorreoReceptor': 80,
+    'CdgIntRecep': 20,       # Código interno receptor
+    # Detalle
+    'NmbItem': 80,           # Nombre del item
+    'DscItem': 1000,         # Descripción del item (opcional, larga)
+    'UnmdItem': 4,           # Unidad de medida
+    'VlrCodigo': 35,         # Valor del código del ítem (CdgItem/VlrCodigo)
+    # Descuentos y recargos
+    'GlosaDR': 45,           # Glosa del descuento/recargo global
+    # Transporte (guía de despacho)
+    'Patente': 8,
+    'RUTTrans': 20,
+    'DirDest': 70,
+    'CmnaDest': 20,
+    'CiudadDest': 20,
+    'NmbTransporte': 40,
+    # Términos de pago y referencias
+    'TermPagoGlosa': 100,
+    'RazonRef': 90,
+}
+
+
+def truncar_campo_sii(texto, nombre_campo, max_len=None):
+    """
+    Sanea un texto y lo trunca al maxLength oficial del SII (XSD DTE_v10).
+
+    Política: NO bloquea (no lanza excepción). Si el texto excede el largo,
+    emite un `logger.warning` con el nombre del campo, largo original, y
+    una vista previa, luego trunca y devuelve. Pensado para no trabar cajas
+    en producción si un dato de cliente quedó mal cargado en la BD.
+
+    Args:
+        texto: Valor a sanear. Puede ser None, int, str, etc.
+        nombre_campo (str): Nombre del campo según XSD (ej: 'NmbItem',
+            'RznSocRecep'). Si está en MAX_LENGTHS_SII y no se pasa
+            `max_len`, se usa ese límite.
+        max_len (int|None): Override explícito del límite.
+
+    Returns:
+        str: Texto limpio y truncado si hacía falta.
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+    if max_len is None:
+        max_len = MAX_LENGTHS_SII.get(nombre_campo)
+    # Sin max_len conocido → solo limpieza básica
+    if max_len is None:
+        return limpiar_texto(texto)
+
+    texto_limpio = limpiar_texto(texto)  # sin truncar
+    if len(texto_limpio) > max_len:
+        preview = texto_limpio[:60]
+        _logger.warning(
+            "[DTE] Campo '%s' excede maxLength SII (%d > %d). Truncado. Valor: %r...",
+            nombre_campo, len(texto_limpio), max_len, preview,
+        )
+        return texto_limpio[:max_len]
+    return texto_limpio
+
+
+# Mapeo campo del dict `datos` → nombre de campo SII (para sanitizar_largos_dte).
+# Se usan los nombres exactos de MAX_LENGTHS_SII como valores.
+_EMISOR_FIELD_MAP = {
+    'razon_social': 'RznSoc',
+    'giro':         'GiroEmis',
+    'direccion':    'DirOrigen',
+    'comuna':       'CmnaOrigen',
+    'ciudad':       'CiudadOrigen',
+    'sucursal':     'Sucur',
+}
+_RECEPTOR_FIELD_MAP = {
+    'razon_social':    'RznSocRecep',
+    'giro':            'GiroRecep',
+    'contacto':        'Contacto',
+    'direccion':       'DirRecep',
+    'comuna':          'CmnaRecep',
+    'ciudad':          'CiudadRecep',
+    'codigo_interno':  'CdgIntRecep',
+}
+_TRANSPORTE_FIELD_MAP = {
+    'patente':              'Patente',
+    'rut_transportista':    'RUTTrans',
+    'direccion_destino':    'DirDest',
+    'comuna_destino':       'CmnaDest',
+    'ciudad_destino':       'CiudadDest',
+}
+
+
+def sanitizar_largos_dte(datos):
+    """
+    Pasada defensiva y NO bloqueante que recorre `datos` y trunca/limpia los
+    campos string según MAX_LENGTHS_SII. Los campos que exceden los límites
+    oficiales del XSD SII se truncan y se emite un log warning.
+
+    Nunca lanza excepción: si el input viene con tipos raros, loguea y sigue.
+    Modifica `datos` in-place y también devuelve el dict (comodidad).
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+    if not isinstance(datos, dict):
+        return datos
+
+    truncados = 0
+
+    def _aplicar(dict_obj, mapa):
+        nonlocal truncados
+        if not isinstance(dict_obj, dict):
+            return
+        for key, sii_field in mapa.items():
+            if key in dict_obj and dict_obj[key] not in (None, ''):
+                original = dict_obj[key]
+                nuevo = truncar_campo_sii(original, sii_field)
+                if isinstance(original, str) and len(limpiar_texto(original)) > MAX_LENGTHS_SII.get(sii_field, 0):
+                    truncados += 1
+                dict_obj[key] = nuevo
+
+    _aplicar(datos.get('emisor'), _EMISOR_FIELD_MAP)
+    _aplicar(datos.get('receptor'), _RECEPTOR_FIELD_MAP)
+    _aplicar(datos.get('transporte'), _TRANSPORTE_FIELD_MAP)
+
+    # Referencias (RazonRef máx 90)
+    referencias = datos.get('referencias') or []
+    if isinstance(referencias, list):
+        for ref in referencias:
+            if isinstance(ref, dict) and ref.get('razon'):
+                nuevo = truncar_campo_sii(ref['razon'], 'RazonRef')
+                if len(limpiar_texto(ref['razon'])) > MAX_LENGTHS_SII['RazonRef']:
+                    truncados += 1
+                ref['razon'] = nuevo
+
+    # Descuentos/recargos globales (GlosaDR máx 45)
+    drs = datos.get('descuentos_recargos') or []
+    if isinstance(drs, list):
+        for dr in drs:
+            if isinstance(dr, dict) and dr.get('glosa_dr'):
+                nuevo = truncar_campo_sii(dr['glosa_dr'], 'GlosaDR')
+                if len(limpiar_texto(dr['glosa_dr'])) > MAX_LENGTHS_SII['GlosaDR']:
+                    truncados += 1
+                dr['glosa_dr'] = nuevo
+
+    if truncados:
+        _logger.warning("[DTE] sanitizar_largos_dte: %d campo(s) truncado(s).", truncados)
+
+    return datos
+
+
+def construir_nombre_item_con_sku(item, max_len=80):
+    """
+    Compatibilidad hacia atrás: devuelve solo el NmbItem.
+    Los callers nuevos deberían usar `construir_nombre_y_descripcion_item()`
+    que además devuelve el DscItem con el overflow.
+
+    Returns:
+        str: NmbItem limpio, nunca supera max_len.
+    """
+    nmb, _dsc = construir_nombre_y_descripcion_item(item, max_nmb=max_len, max_dsc=0)
+    return nmb
+
+
+def construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000):
+    """
+    Construye los dos campos del detalle del DTE:
+      - NmbItem (Nombre del Item, máx 80 chars por XSD SII).
+      - DscItem (Descripción del Item, máx 1000 chars, opcional en XSD).
+
+    Estrategia:
+      1. El SKU/código va primero en NmbItem (prioridad: queda completo).
+      2. Se rellena NmbItem con el nombre del producto hasta llenar max_nmb.
+      3. El "overflow" del nombre que no entró en NmbItem + la descripción
+         original del producto se combinan en DscItem (hasta max_dsc chars,
+         separados por ' / ').
+
+    Esto evita perder información cuando los productos tienen nombres largos
+    (ej: "Polera Manga Larga Algodón Premium Color Azul Talla XL Edición Limitada")
+    que antes se truncaban a 80 chars sin dejar rastro.
+
+    Args:
+        item (dict): Producto con keys 'codigo'|'sku', 'nombre', 'descripcion'.
+        max_nmb (int): Largo máximo de NmbItem (SII: 80).
+        max_dsc (int): Largo máximo de DscItem (SII: 1000).
+            Pasar 0 si no se quiere generar DscItem (modo compatibilidad).
+
+    Returns:
+        tuple[str, str]: (NmbItem, DscItem). DscItem puede ser ''.
+    """
+    # --- NmbItem (prioridad SKU) ---
+    sku_raw = (item.get('codigo') or item.get('sku') or 'Item')
+    sku = limpiar_texto(sku_raw, max_nmb)
+    if not sku:
+        sku = 'Item'
+
+    # Nombre y descripción completos, sin truncar todavía
+    nombre_full = limpiar_texto(item.get('nombre', ''))
+    descripcion_full = limpiar_texto(item.get('descripcion', ''))
+
+    espacio_nombre_en_nmb = max_nmb - len(sku) - 1  # -1 por el espacio separador
+    if espacio_nombre_en_nmb <= 0:
+        nmb = sku[:max_nmb]
+        nombre_que_cabe = ''
+        nombre_overflow = nombre_full
+    else:
+        nombre_que_cabe = nombre_full[:espacio_nombre_en_nmb]
+        nombre_overflow = nombre_full[espacio_nombre_en_nmb:]
+        if nombre_que_cabe:
+            nmb = f"{sku} {nombre_que_cabe}".strip()[:max_nmb]
+        else:
+            nmb = sku[:max_nmb]
+
+    # --- DscItem (overflow nombre + descripción original) ---
+    if max_dsc <= 0:
+        return nmb, ''
+
+    partes_dsc = []
+    if nombre_overflow.strip():
+        partes_dsc.append(nombre_overflow.strip())
+    if descripcion_full and descripcion_full.strip() and descripcion_full.strip() != nombre_full.strip():
+        partes_dsc.append(descripcion_full.strip())
+
+    dsc_full = ' / '.join(partes_dsc)
+    if not dsc_full:
+        return nmb, ''
+
+    if len(dsc_full) > max_dsc:
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.warning(
+            "[DTE] Campo 'DscItem' excede maxLength SII (%d > %d). Truncado.",
+            len(dsc_full), max_dsc,
+        )
+        dsc_full = dsc_full[:max_dsc]
+    return nmb, dsc_full
+
+
 def validar_datos_dte_acepta(datos):
     """
     Valida que los datos mínimos requeridos estén presentes
@@ -1380,7 +1635,10 @@ def generar_txt_nota_credito_acepta(datos):
     es_valido, mensaje = validar_datos_dte_acepta(datos)
     if not es_valido:
         raise ValidationError(f"Error en validación de datos: {mensaje}")
-    
+
+    # Sanear largos de campos según XSD SII (trunca con warning, no bloquea).
+    sanitizar_largos_dte(datos)
+
     separador = '|'
     lineas = []
     
@@ -1465,25 +1723,28 @@ def generar_txt_nota_credito_acepta(datos):
     lineas.append('~')
     
     # ===== PRODUCTOS (cantidades y montos POSITIVOS) =====
+    # NmbItem (nombre_con_codigo) respeta el límite oficial SII de 80 chars.
+    # Si el nombre original excede, el overflow + la descripción van a DscItem
+    # (1000 chars) en lugar de perderse.
     for index, item in enumerate(datos['detalle'], start=1):
-        codigo_item = limpiar_texto(item.get('codigo', ''), 35) or limpiar_texto(item.get('sku', ''), 35) or 'Item'
-        nombre_con_codigo = f"{codigo_item} {limpiar_texto(item.get('nombre', ''), 80)}"
-        
+        codigo_item = truncar_campo_sii(item.get('codigo', '') or item.get('sku', '') or 'Item', 'VlrCodigo')
+        nombre_con_codigo, dsc_item = construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000)
+
         # ✅ Cantidades y montos POSITIVOS
         cantidad_val = abs(int(item.get('cantidad', 0)))
         precio_val = abs(int(item.get('precio_unitario', 0)))
         monto_val = abs(int(item.get('monto_item', 0)))
-        
+
         linea_detalle = [
             str(item.get('indicador_exencion', '')),
-            nombre_con_codigo,
-            limpiar_texto(item.get('descripcion', ''), 1000),
-            str(cantidad_val),  # POSITIVO
-            limpiar_texto(item.get('unidad', 'UN'), 4),
-            str(precio_val),  # POSITIVO
+            nombre_con_codigo,                              # NmbItem (80)
+            dsc_item,                                        # DscItem (1000) — overflow + desc
+            str(cantidad_val),                               # POSITIVO
+            truncar_campo_sii(item.get('unidad', 'UN'), 'UnmdItem'),
+            str(precio_val),                                 # POSITIVO
             formatear_decimal(item.get('descuento_pct', ''), 3, 2) if item.get('descuento_pct') else '',
             formatear_monto(item.get('monto_descuento', 0)) if item.get('monto_descuento') else '',
-            str(monto_val),  # POSITIVO
+            str(monto_val),                                  # POSITIVO
             codigo_item,
             '}'
         ]
@@ -1535,11 +1796,38 @@ def generar_txt_nota_credito_acepta(datos):
     # Referencia en observaciones
     folio_ref = referencias[0].get('folio', '') if referencias else ''
     impresora_texto = f"factura {folio_ref}" if folio_ref else 'factura'
-    
+
+    # Info enriquecida (vendedor, ticket, descuento, métodos de pago).
+    descuentos_recargos_list = datos.get('descuentos_recargos', []) or []
+    monto_descuento_total = sum(
+        int(dr.get('valor_dr', 0) or 0)
+        for dr in descuentos_recargos_list
+        if str(dr.get('tpo_mov', '')).upper() == 'D' and str(dr.get('tpo_valor', '')) == '$'
+    )
+    if monto_descuento_total <= 0:
+        monto_descuento_total = int(totales.get('descuento_global', 0) or 0)
+
+    emisor_info_nc = datos.get('emisor', {}) or {}
+    vendedor_nombre_nc = emisor_info_nc.get('nombre_vendedor', '') or ''
+    metodos_pago_nc = emisor_info_nc.get('metodos_pago', '') or ''
+    correlativo_ticket_nc = emisor_info_nc.get('correlativo_ticket', '') or ''
+
+    info_partes_nc = [monto_letras]
+    if vendedor_nombre_nc:
+        info_partes_nc.append(f"Vendedor: {vendedor_nombre_nc}")
+    if correlativo_ticket_nc:
+        info_partes_nc.append(f"Ticket: {correlativo_ticket_nc}")
+    if monto_descuento_total > 0:
+        info_partes_nc.append(f"Descuento: ${monto_descuento_total:,}")
+    if metodos_pago_nc:
+        info_partes_nc.append(f"Pago: {metodos_pago_nc}")
+
+    info_texto_nc = '  '.join(info_partes_nc) + '  '
+
     info_adicional = [
         f"{vendedor_codigo} ",
         '', '',
-        f"{monto_letras}  ",
+        info_texto_nc,
         '', '', '', '', '', '', '',
         impresora_texto,
         '4',
@@ -1563,7 +1851,10 @@ def generar_txt_boleta_acepta(datos):
     es_valido, mensaje = validar_datos_dte_acepta(datos)
     if not es_valido:
         raise ValidationError(f"Error en validación de datos: {mensaje}")
-    
+
+    # Sanear largos de campos según XSD SII (trunca con warning, no bloquea).
+    sanitizar_largos_dte(datos)
+
     separador = '|'
     lineas = []
     
@@ -1630,30 +1921,26 @@ def generar_txt_boleta_acepta(datos):
     lineas.append('~')
     
     # ===== PRODUCTOS (formato boleta) =====
-    # Formato: tipo|codigo||nombre_con_sku||cantidad|unidad|precio|monto|}
-    # El campo 'nombre' (posición 4) tiene máx 80 chars en Acepta.
-    # Se concatena SKU + nombre para que se visualice en la boleta impresa
-    # (igual que hace la factura electrónica). Se respeta el límite total de 80 chars.
-    MAX_NOMBRE_BOLETA = 80
+    # Formato: tipo|codigo|dsc_item|nombre_con_sku||cantidad|unidad|precio|monto|}
+    # - Campo 4 (nombre) mapea al NmbItem del DTE SII (máx 80 chars).
+    # - Campo 3 (desc) mapea al DscItem (1000 chars) y recibe el overflow del
+    #   nombre cuando el producto tiene nombre largo, más la descripción original.
+    # Esto evita perder información en productos con nombres > 80 chars.
     for index, item in enumerate(datos['detalle'], start=1):
-        # SKU limitado a 20 chars para dejar espacio al nombre dentro de los 80 totales.
-        codigo_item = limpiar_texto(item.get('codigo', ''), 20) or limpiar_texto(item.get('sku', ''), 20) or 'PROD001'
-        # Nombre con el espacio restante (80 - largo SKU - 1 espacio separador)
-        espacio_nombre = max(1, MAX_NOMBRE_BOLETA - len(codigo_item) - 1)
-        nombre = limpiar_texto(item.get('nombre', ''), espacio_nombre)
-        nombre_con_sku = f"{codigo_item} {nombre}".strip()[:MAX_NOMBRE_BOLETA]
+        nombre_con_sku, dsc_item = construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000)
+        codigo_item = truncar_campo_sii(item.get('codigo', '') or item.get('sku', '') or 'PROD001', 'VlrCodigo')
         cantidad_val = int(item.get('cantidad', 0))
         precio_val = int(item.get('precio_unitario', 0))
         monto_val = int(item.get('monto_item', 0))
 
         linea_prod = [
-            'INT1',           # Tipo interno
-            codigo_item,      # SKU (campo 2, también queda en el estructurado)
-            '',               # Desc vacía
-            nombre_con_sku,   # Nombre visible en la impresión = "SKU Nombre"
-            '',               # Campo vacío
+            'INT1',                                          # Tipo interno
+            codigo_item,                                     # SKU/código (estructurado)
+            dsc_item,                                        # DscItem — overflow + desc
+            nombre_con_sku,                                  # NmbItem (máx 80)
+            '',                                              # Campo vacío
             str(cantidad_val),
-            limpiar_texto(item.get('unidad', 'UN'), 4),
+            truncar_campo_sii(item.get('unidad', 'UN'), 'UnmdItem'),
             str(precio_val),
             str(monto_val),
             '}'
@@ -1694,11 +1981,32 @@ def generar_txt_boleta_acepta(datos):
     
     nombre_impresora = emisor.get('nombre_impresora_boleta', 'boleta') or 'boleta'
 
-    # La observación impresa en la boleta ahora incluye información enriquecida de pagos
-    # (tipo de tarjeta, autorización Transbank, terminal/operación).
-    # Se limita el largo total a ~400 chars como margen seguro del campo observación de Acepta.
+    # La observación impresa en la boleta incluye información enriquecida:
+    # vendedor, ticket, DTE, descuento aplicado y métodos de pago (tipo tarjeta,
+    # autorización Transbank, terminal/operación). Se limita el largo total a
+    # ~400 chars como margen seguro del campo observación de Acepta.
     MAX_OBSERVACION = 400
-    observacion = f"^ Vendedor: {vendedor_nombre} (Cod: {vendedor_codigo}) ^ Ticket: {correlativo_ticket} ^ DTE: {correlativo} ^ Pago: {metodos_pago} "
+
+    # Calcular monto de descuento agregado desde el bloque de descuentos/recargos.
+    descuentos_recargos_list = datos.get('descuentos_recargos', []) or []
+    monto_descuento_total = sum(
+        int(dr.get('valor_dr', 0) or 0)
+        for dr in descuentos_recargos_list
+        if str(dr.get('tpo_mov', '')).upper() == 'D' and str(dr.get('tpo_valor', '')) == '$'
+    )
+    if monto_descuento_total <= 0:
+        monto_descuento_total = int(totales.get('descuento_global', 0) or 0)
+
+    obs_partes = [f"Vendedor: {vendedor_nombre} (Cod: {vendedor_codigo})"]
+    if correlativo_ticket:
+        obs_partes.append(f"Ticket: {correlativo_ticket}")
+    if correlativo:
+        obs_partes.append(f"DTE: {correlativo}")
+    if monto_descuento_total > 0:
+        obs_partes.append(f"Descuento: ${monto_descuento_total:,}")
+    if metodos_pago:
+        obs_partes.append(f"Pago: {metodos_pago}")
+    observacion = '^ ' + ' ^ '.join(obs_partes) + ' '
     if len(observacion) > MAX_OBSERVACION:
         observacion = observacion[:MAX_OBSERVACION - 3] + '...'
     
@@ -1806,11 +2114,18 @@ def generar_txt_dte_acepta(datos):
         raise ValidationError(f"Error en validación de datos: {mensaje}")
     
     # ✅ Detectar tipo de documento y usar función específica
-    tipo_doc = datos.get('documento', {}).get('tipo_documento')
+    # Blindaje: algunos callers pasan tipo_documento como string (ej: '61' desde
+    # views.py). Normalizamos a int para que el discriminador funcione siempre.
+    tipo_doc_raw = datos.get('documento', {}).get('tipo_documento')
+    try:
+        tipo_doc = int(tipo_doc_raw) if tipo_doc_raw is not None else None
+    except (TypeError, ValueError):
+        tipo_doc = tipo_doc_raw  # si no es convertible, dejarlo como venía
+
     import logging
     logger = logging.getLogger(__name__)
-    
-    if tipo_doc in [39, 41]:
+
+    if tipo_doc in (39, 41):
         logger.warning(f"🔍 Detectado tipo BOLETA ({tipo_doc}), usando formato específico de boletas")
         return generar_txt_boleta_acepta(datos)
     elif tipo_doc == 61:
@@ -1820,7 +2135,12 @@ def generar_txt_dte_acepta(datos):
         logger.warning(f"🔍 Detectado tipo GUÍA DE DESPACHO ({tipo_doc}), usando formato de factura")
         # Guía de Despacho usa el mismo formato que Factura, solo cambia el tipo
         # Se procesa con el código de factura normal
-    
+
+    # Sanear largos de campos (trunca con warning, no bloquea). Solo llega acá
+    # cuando el tipo es factura/guía (33, 34, 52); para 39/41/61 las funciones
+    # dedicadas ya lo hicieron.
+    sanitizar_largos_dte(datos)
+
     separador = '|'
     lineas = []
     
@@ -1928,34 +2248,33 @@ def generar_txt_dte_acepta(datos):
     lineas.append('~')
     
     # ===== LÍNEAS 6+: DETALLE DE PRODUCTOS =====
-    # ✅ CORREGIDO: Cada producto incluye código al inicio y al final, termina con }
+    # NmbItem (campo 2) tiene límite oficial SII de 80 chars. Se prioriza el SKU
+    # completo y se rellena con el nombre; el overflow + la descripción original
+    # se acumulan en DscItem (campo 3, máx 1000 chars) en lugar de perderse.
     logger.warning(f"🔍 DEBUG - Procesando {len(datos['detalle'])} productos")
     for index, item in enumerate(datos['detalle'], start=1):
-        # Generar código del producto si no existe
-        codigo_item = limpiar_texto(item.get('codigo', ''), 35) or limpiar_texto(item.get('sku', ''), 35)
-        if not codigo_item:
-            codigo_item = f"Item"  # Código genérico si no existe
-        
-        # ✅ FORMATO REAL: Código AL INICIO del nombre
-        nombre_con_codigo = f"{codigo_item} {limpiar_texto(item.get('nombre', ''), 80)}"
-        
-        # ✅ Formatear cantidad y precio como enteros
+        # Código separado para el campo final de la línea (Acepta lo repite al final).
+        codigo_item = truncar_campo_sii(item.get('codigo', '') or item.get('sku', '') or 'Item', 'VlrCodigo')
+
+        # NmbItem con prioridad SKU + DscItem con overflow.
+        nombre_con_codigo, dsc_item = construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000)
+
+        # Formatear cantidad y precio como enteros
         cantidad_val = item.get('cantidad', 0)
         precio_val = item.get('precio_unitario', 0)
-        
-        # ✅ PROBLEMA 3: EXACTAMENTE 9 campos por producto + cierre }
+
         linea_detalle = [
-            str(item.get('indicador_exencion', '')),     # 1. Indicador exención
-            nombre_con_codigo,                            # 2. Código + Nombre
-            limpiar_texto(item.get('descripcion', ''), 1000),  # 3. Descripción
-            str(int(cantidad_val)) if cantidad_val else '',  # 4. Cantidad (entero)
-            limpiar_texto(item.get('unidad', 'UN'), 4),  # 5. Unidad
-            str(int(precio_val)) if precio_val else '',  # 6. Precio unitario (entero)
+            str(item.get('indicador_exencion', '')),                                                    # 1. Indicador exención
+            nombre_con_codigo,                                                                          # 2. NmbItem (SKU + nombre, máx 80)
+            dsc_item,                                                                                   # 3. DscItem (overflow + desc, máx 1000)
+            str(int(cantidad_val)) if cantidad_val else '',                                             # 4. Cantidad (entero)
+            truncar_campo_sii(item.get('unidad', 'UN'), 'UnmdItem'),                                    # 5. Unidad
+            str(int(precio_val)) if precio_val else '',                                                 # 6. Precio unitario (entero)
             formatear_decimal(item.get('descuento_pct', ''), 3, 2) if item.get('descuento_pct') else '',  # 7. Desc %
-            formatear_monto(item.get('monto_descuento', 0)) if item.get('monto_descuento') else '',  # 8. Monto descuento
-            formatear_monto(item.get('monto_item', 0)),  # 9. Monto item
-            codigo_item,  # 10. Código producto al FINAL
-            '}'  # 11. ✅ CIERRE CON }
+            formatear_monto(item.get('monto_descuento', 0)) if item.get('monto_descuento') else '',     # 8. Monto descuento
+            formatear_monto(item.get('monto_item', 0)),                                                 # 9. Monto item
+            codigo_item,                                                                                # 10. Código producto al FINAL
+            '}'                                                                                         # 11. CIERRE
         ]
         linea_producto = separador.join(linea_detalle)
         logger.warning(f"🔍 DEBUG - Producto {index}: {nombre_con_codigo[:30]}... → {linea_producto[:50]}...")
@@ -2037,11 +2356,37 @@ def generar_txt_dte_acepta(datos):
     total_productos = sum(int(item.get('cantidad') or 0) for item in datos.get('detalle', []))
     observaciones_generales = datos.get('observaciones_adicionales') or datos.get('observaciones') or ''
     observaciones_generales = limpiar_texto(observaciones_generales, 200)
-    observacion_texto = ''
-    if tipo_doc == 33 and observaciones_generales:
-        observacion_texto = f"  {observaciones_generales}"
 
-    info_texto = f"{monto_letras}  total Productos: {total_productos}{observacion_texto}"
+    # Calcular monto de descuento agregado (para agregar a la info adicional).
+    descuentos_recargos_list = datos.get('descuentos_recargos', []) or []
+    monto_descuento_total = sum(
+        int(dr.get('valor_dr', 0) or 0)
+        for dr in descuentos_recargos_list
+        if str(dr.get('tpo_mov', '')).upper() == 'D' and str(dr.get('tpo_valor', '')) == '$'
+    )
+    if monto_descuento_total <= 0:
+        monto_descuento_total = int(totales.get('descuento_global', 0) or 0)
+
+    # Información de pago y vendedor enriquecida (si el caller la proveyó).
+    emisor_info = datos.get('emisor', {}) or {}
+    vendedor_nombre_fact = emisor_info.get('nombre_vendedor', '') or ''
+    metodos_pago_fact = emisor_info.get('metodos_pago', '') or ''
+    correlativo_ticket_fact = emisor_info.get('correlativo_ticket', '') or ''
+
+    # Armado de info_texto como partes opcionales (solo lo que hay valor).
+    info_partes = [f"{monto_letras}  total Productos: {total_productos}"]
+    if vendedor_nombre_fact:
+        info_partes.append(f"Vendedor: {vendedor_nombre_fact}")
+    if correlativo_ticket_fact:
+        info_partes.append(f"Ticket: {correlativo_ticket_fact}")
+    if monto_descuento_total > 0:
+        info_partes.append(f"Descuento: ${monto_descuento_total:,}")
+    if metodos_pago_fact:
+        info_partes.append(f"Pago: {metodos_pago_fact}")
+    if tipo_doc == 33 and observaciones_generales:
+        info_partes.append(observaciones_generales)
+
+    info_texto = '  '.join(info_partes)
     info_texto = limpiar_texto(info_texto, 1000)
     
     # ✅ CORRECCIÓN: Línea final con formato correcto
@@ -2236,15 +2581,27 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
     iva = total_con_iva - neto
     total = total_con_iva
     
+    # Calcular descuento agregado (a nivel ticket) para reportarlo en la
+    # observación y, en boleta, como línea DscRcgGlobal informativa.
+    # Nota: el precio_unitario / monto_item de cada línea ya refleja el
+    # descuento en boleta (precio - dto) y en factura (desc_monto por línea),
+    # por lo tanto `descuento_global` NO se resta de nuevo al monto_total.
+    descuento_items_agregado = sum(
+        (tp.descuento_unitario or 0) * tp.stock
+        for tp in ticket.ticket_productos.all()
+    )
+    descuento_ticket_manual = int(ticket.descuento or 0)
+    descuento_total_ticket = descuento_items_agregado if descuento_items_agregado > 0 else descuento_ticket_manual
+
     totales = {
         'monto_neto': neto,
         'monto_exento': 0,
         'tasa_iva': 19,
         'iva': iva,
         'monto_total': total,
-        'descuento_global': 0
+        'descuento_global': descuento_total_ticket,  # Informativo; ya absorbido en monto_total
     }
-    
+
     # Preparar referencias (sistema nuevo de múltiples referencias)
     referencias = []
     
@@ -2266,7 +2623,19 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
             'fecha': ticket.referencia_fecha.strftime('%Y-%m-%d') if ticket.referencia_fecha else '',
             'razon': ''
         })
-    
+
+    # Poblar descuentos/recargos globales si hay descuento aplicado al ticket.
+    # Se genera una sola línea D|Descuento|$|monto|...|} que sale antes de
+    # la observación en el TXT (formato Acepta).
+    descuentos_recargos = []
+    if descuento_total_ticket > 0:
+        descuentos_recargos.append({
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento',
+            'tpo_valor': '$',
+            'valor_dr': descuento_total_ticket,
+        })
+
     # Estructura completa para generar TXT
     datos = {
         'documento': documento,
@@ -2274,7 +2643,8 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         'receptor': receptor,
         'totales': totales,
         'detalle': detalle,
-        'referencias': referencias
+        'referencias': referencias,
+        'descuentos_recargos': descuentos_recargos,
     }
     
     # Generar TXT
@@ -2497,9 +2867,10 @@ def generar_txt_desde_dte_existente(request):
                 'razon_social': limpiar_texto(dte.emisor.razon_social or ''),
                 'giro': limpiar_texto(dte.emisor.giro or ''),
                 'acteco': dte.emisor.acteco or '',
-                'direccion': limpiar_texto(dte.sucursal.direccion if dte.sucursal else dte.emisor.direccion or ''),
-                'comuna': limpiar_texto(dte.emisor.comuna or ''),
-                'ciudad': limpiar_texto(dte.emisor.ciudad or ''),
+                # Dirección/comuna/ciudad de la SUCURSAL con fallback a la empresa emisora.
+                'direccion': limpiar_texto((dte.sucursal.direccion if dte.sucursal else '') or (dte.emisor.direccion if dte.emisor else '') or ''),
+                'comuna': limpiar_texto((dte.sucursal.comuna if dte.sucursal else '') or (dte.emisor.comuna if dte.emisor else '') or ''),
+                'ciudad': limpiar_texto((dte.sucursal.ciudad if dte.sucursal else '') or (dte.emisor.ciudad if dte.emisor else '') or ''),
                 'codigo_vendedor': limpiar_texto(dte.responsable or 'USUARIO'),
                 'sucursal': limpiar_texto(dte.sucursal.alias if dte.sucursal else ''),
                 'telefono': dte.emisor.contacto1 or '',

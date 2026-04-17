@@ -1297,9 +1297,12 @@ def descargar_txt_dte_ecommerce(request, dte_id):
                 'razon_social': limpiar_texto(empresa.razon_social or empresa.nombre),
                 'giro': limpiar_texto(empresa.giro or 'Sin giro'),
                 'acteco': empresa.acteco or '',
-                'direccion': limpiar_texto(empresa.direccion or ''),
-                'comuna': limpiar_texto(empresa.comuna or ''),
-                'ciudad': limpiar_texto(empresa.ciudad or ''),
+                # Priorizar dirección/comuna/ciudad de la SUCURSAL que emite el DTE.
+                # Si la sucursal no tiene el dato (algunas sucursales viejas no cargaron
+                # comuna/ciudad), se cae al dato de la empresa como fallback.
+                'direccion': limpiar_texto((dte.sucursal.direccion if dte.sucursal else '') or empresa.direccion or ''),
+                'comuna': limpiar_texto((dte.sucursal.comuna if dte.sucursal else '') or empresa.comuna or ''),
+                'ciudad': limpiar_texto((dte.sucursal.ciudad if dte.sucursal else '') or empresa.ciudad or ''),
                 'codigo_vendedor': limpiar_texto(str(dte.vendedor.codigo_vendedor) if dte.vendedor else '1000'),
                 'nombre_vendedor': limpiar_texto(dte.vendedor.nombre if dte.vendedor else 'Venta Internet'),
                 'metodos_pago': limpiar_texto(metodos_pago_texto),

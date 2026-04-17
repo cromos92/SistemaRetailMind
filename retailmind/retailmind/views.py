@@ -147,6 +147,11 @@ Si no solicitaste este código, ignora este mensaje.
 
 
 def _finalizar_login(request, user):
+    # Si el usuario llega al 2FA por el flujo passwordless no pasó por authenticate(),
+    # por lo que Django no tiene asociado un backend de auth al request. Se lo anexamos
+    # explícitamente para poder llamar a login() sin errores.
+    if not hasattr(user, 'backend'):
+        user.backend = 'django.contrib.auth.backends.ModelBackend'
     login(request, user)
 
     if hasattr(user, 'requiere_cambio_password') and user.requiere_cambio_password:
@@ -255,6 +260,61 @@ def login_view(request):
 
 
 @ensure_csrf_cookie
+def login_pin_request_view(request):
+    """
+    Login passwordless (solo con PIN por correo).
+
+    Solo se permite si el usuario tiene `requiere_2fa=True`. Si no lo tiene,
+    se le indica que debe usar el login tradicional con contraseña.
+    """
+    if request.user.is_authenticated:
+        return redirect('verHome')
+
+    if request.method != 'POST':
+        return redirect('login')
+
+    email = (request.POST.get('email') or '').strip().lower()
+    if not email:
+        messages.error(request, 'Ingresa tu correo electrónico para recibir el PIN.')
+        return render(request, 'registration/login.html', {'pin_mode': True})
+
+    User = get_user_model()
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        messages.error(request, 'No existe un usuario con ese correo electrónico.')
+        return render(request, 'registration/login.html', {'pin_mode': True})
+
+    if not getattr(user, 'is_active', True) or not getattr(user, 'es_activo', True):
+        messages.error(request, 'Tu cuenta está desactivada. Contacta al administrador.')
+        return render(request, 'registration/login.html', {'pin_mode': True})
+
+    if not _requiere_2fa(user):
+        messages.error(
+            request,
+            'Este usuario no tiene habilitado el ingreso por PIN. Inicia sesión con tu contraseña.'
+        )
+        return render(request, 'registration/login.html')
+
+    if not user.email:
+        messages.error(request, 'No tienes un correo registrado para recibir el PIN.')
+        return render(request, 'registration/login.html', {'pin_mode': True})
+
+    try:
+        codigo = _obtener_codigo_2fa(user)
+        _enviar_pin_2fa(user, codigo)
+    except Exception as e:
+        messages.error(request, f'No se pudo enviar el PIN: {str(e)}')
+        return render(request, 'registration/login.html', {'pin_mode': True})
+
+    request.session['pending_2fa_user_id'] = user.id
+    request.session['pending_2fa_created_at'] = timezone.now().isoformat()
+    # Marca que el flujo es passwordless (no hubo validación de contraseña previa).
+    request.session['pending_2fa_passwordless'] = True
+    return redirect('login_2fa')
+
+
+@ensure_csrf_cookie
 def login_2fa_view(request):
     user_id = request.session.get('pending_2fa_user_id')
     if not user_id:
@@ -279,6 +339,7 @@ def login_2fa_view(request):
         if user.validar_codigo_2fa(codigo, minutos_expiracion=minutos_expiracion):
             request.session.pop('pending_2fa_user_id', None)
             request.session.pop('pending_2fa_created_at', None)
+            request.session.pop('pending_2fa_passwordless', None)
             return _finalizar_login(request, user)
 
         messages.error(request, 'El PIN es incorrecto o ha expirado. Solicita uno nuevo.')
