@@ -10834,14 +10834,31 @@ body {
                 
             } else {
                 // VENTA RECHAZADA
-                Swal.fire({
+                const esErrorInicializacion = resultadoVenta.responseCode === 70;
+                const htmlRechazo = `
+                    <p><strong>Motivo:</strong> ${resultadoVenta.responseMessage}</p>
+                    <p class="small text-muted">Código: ${resultadoVenta.responseCode}</p>
+                    ${resultadoVenta.hint ? `<div class="alert alert-warning small mt-2">${resultadoVenta.hint}</div>` : ''}
+                `;
+
+                const swalCfg = {
                     icon: 'error',
                     title: 'Venta Rechazada',
-                    html: `
-                        <p><strong>Motivo:</strong> ${resultadoVenta.responseMessage}</p>
-                        <p class="small text-muted">Código: ${resultadoVenta.responseCode}</p>
-                    `,
+                    html: htmlRechazo,
                     confirmButtonText: 'OK'
+                };
+
+                // Si es ERROR INICIALIZACIÓN (70), ofrecer cargar llaves al instante
+                if (esErrorInicializacion && typeof cargarLlavesPOSConfirm === 'function') {
+                    swalCfg.showDenyButton = true;
+                    swalCfg.denyButtonText = '🔑 Cargar llaves ahora';
+                    swalCfg.denyButtonColor = '#f0a000';
+                }
+
+                Swal.fire(swalCfg).then((result) => {
+                    if (esErrorInicializacion && result.isDenied && typeof cargarLlavesPOSConfirm === 'function') {
+                        cargarLlavesPOSConfirm();
+                    }
                 });
             }
             
@@ -11495,19 +11512,6 @@ body {
     })();
 
 });
-</script>
-
-<!-- Scripts Transbank Web Serial API (Local) -->
-<script src="{% static 'js/transbank-webserial.js' %}"></script>
-<script src="{% static 'js/transbank-helpers.js' %}"></script>
-
-<script>
-// Verificar que el SDK Web Serial esté cargado
-if (typeof Transbank !== 'undefined' && Transbank.POS) {
-    console.log('✅ Transbank Web Serial API cargado correctamente');
-} else {
-    console.error('❌ Error: Transbank Web Serial API no se cargó');
-}
 </script>
 
 <!-- Scripts Transbank Web Serial API (Local) -->

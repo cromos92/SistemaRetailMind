@@ -2,6 +2,12 @@
  * Funciones auxiliares para integración Transbank en RetailMind
  */
 
+// Guard contra doble carga del archivo (evita duplicar listeners y carrera de auto-conexión)
+if (window.__TBK_HELPERS_LOADED__) {
+    console.warn('⚠️ transbank-helpers.js ya estaba cargado; se ignora la segunda carga.');
+} else {
+    window.__TBK_HELPERS_LOADED__ = true;
+
 // ==================== FUNCIONES DE CONEXIÓN ====================
 
 /**
@@ -130,7 +136,17 @@ async function ejecutarVentaPOS(monto, ticket) {
             showSuccess(`Venta APROBADA<br>Autorización: ${resultado.authorizationCode}`);
             return resultado;
         } else {
-            showError(`Venta RECHAZADA<br>${resultado.responseMessage}`);
+            let html = `Venta RECHAZADA<br><strong>${resultado.responseMessage}</strong>`;
+            if (resultado.hint) {
+                html += `<br><br><small>${resultado.hint}</small>`;
+            }
+            // Sugerir acción concreta en código 70 (ERROR INICIALIZACIÓN)
+            if (resultado.responseCode === 70 && typeof cargarLlavesPOSConfirm === 'function') {
+                html += `<br><br><button type="button" class="btn btn-warning btn-sm" onclick="Swal.close(); cargarLlavesPOSConfirm();">
+                            <i class="ri-key-2-line"></i> Cargar llaves ahora
+                         </button>`;
+            }
+            showError(html);
             return resultado;
         }
         
@@ -138,6 +154,60 @@ async function ejecutarVentaPOS(monto, ticket) {
         hideLoading();
         showError('Error procesando venta: ' + error.message);
         throw error;
+    }
+}
+
+/**
+ * Cargar llaves criptográficas en el POS (comando 0800)
+ * Se usa cuando el POS devuelve código 70 (ERROR INICIALIZACIÓN).
+ * Pide confirmación porque el proceso toma 30-60 segundos y requiere
+ * presionar SÍ en el POS físico.
+ */
+async function cargarLlavesPOSConfirm() {
+    try {
+        if (!Transbank.POS.isConnected) {
+            showError('POS no está conectado. Por favor conéctelo primero.');
+            return;
+        }
+
+        const confirm = await Swal.fire({
+            icon: 'warning',
+            title: 'Cargar llaves criptográficas',
+            html: 'Esto enviará el comando <code>0800</code> al POS.<br><br>' +
+                  '<strong>Importante:</strong>' +
+                  '<ul style="text-align:left">' +
+                  '<li>El POS puede pedir confirmación — presione <strong>SÍ</strong> en el POS físico.</li>' +
+                  '<li>El proceso dura 30-60 segundos.</li>' +
+                  '<li>No apague el POS ni el computador durante la carga.</li>' +
+                  '</ul>',
+            showCancelButton: true,
+            confirmButtonText: 'Cargar llaves',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#f0a000'
+        });
+        if (!confirm.isConfirmed) return;
+
+        showLoading('Cargando llaves en el POS... (30-60 seg)');
+        const resultado = await Transbank.POS.loadKeys();
+        hideLoading();
+
+        if (resultado && resultado.success) {
+            showSuccess(
+                'Llaves cargadas correctamente.<br>' +
+                `Código de comercio: ${resultado.commerceCode}<br>` +
+                `Terminal: ${resultado.terminalId}<br><br>` +
+                'Ya puede reintentar la venta.'
+            );
+        } else {
+            showError(
+                'No se pudieron cargar las llaves.<br>' +
+                `Código de respuesta: ${resultado ? resultado.responseCode : 'desconocido'}<br><br>` +
+                'Contacte a soporte Transbank si el problema persiste.'
+            );
+        }
+    } catch (error) {
+        hideLoading();
+        showError('Error cargando llaves: ' + (error.message || error));
     }
 }
 
@@ -368,14 +438,26 @@ function verificarConfiguracionPOS() {
 
 // Intentar auto-conectar al cargar la página
 document.addEventListener('DOMContentLoaded', function() {
+    // Evitar que múltiples listeners disparen auto-conexión simultánea
+    if (window.__TBK_AUTOCONNECT_STARTED__) {
+        console.log('ℹ️ Auto-conexión POS ya fue iniciada, se omite duplicado.');
+        return;
+    }
+    window.__TBK_AUTOCONNECT_STARTED__ = true;
+
     // Verificar soporte
     if (!verificarSoporteWebSerial()) {
         return;
     }
-    
+
     // Intentar auto-conectar después de 1.5 segundos
     setTimeout(async function() {
         try {
+            // Si otra rutina ya conectó mientras esperábamos, no reintentar
+            if (window.Transbank && Transbank.POS && Transbank.POS.isConnected) {
+                console.log('✅ POS ya conectado, se omite auto-conexión inicial');
+                return;
+            }
             const resultado = await autoconectarPOSPre();
             if (resultado.success) {
                 console.log('✅ POS auto-conectado');
@@ -387,3 +469,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 console.log('✅ Funciones auxiliares Transbank cargadas');
+
+} // fin guard __TBK_HELPERS_LOADED__

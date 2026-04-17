@@ -6992,7 +6992,7 @@ def crear_arqueo(request):
         # Validar que la fecha no sea futura y esté dentro del rango permitido por rol
         from datetime import datetime, date as dt_date
         fecha_obj = datetime.strptime(fecha_arqueo, '%Y-%m-%d').date()
-        hoy = dt_timezone.localdate()
+        hoy = timezone.localdate()
 
         if fecha_obj > hoy:
             return JsonResponse({
@@ -8050,7 +8050,7 @@ def reabrir_arqueo(request):
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
 
         # Verificar permisos y tolerancia de días
-        dias_desde_arqueo = (dt_timezone.localdate() - fecha_obj).days
+        dias_desde_arqueo = (timezone.localdate() - fecha_obj).days
 
         if rol_usuario == 'administrador':
             param = ParametroGlobal.objects.filter(nombre='DIAS_TOLERANCIA_REAPERTURA_ADMIN').first()

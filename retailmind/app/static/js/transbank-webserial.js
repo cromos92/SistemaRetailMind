@@ -7,6 +7,13 @@
 (function(window) {
     'use strict';
 
+    // Guard contra doble carga del archivo (previene instancias duplicadas y carreras de open())
+    if (window.__TBK_WEBSERIAL_LOADED__) {
+        console.warn('⚠️ transbank-webserial.js ya estaba cargado; se ignora la segunda carga.');
+        return;
+    }
+    window.__TBK_WEBSERIAL_LOADED__ = true;
+
     // ==================== CONSTANTES DEL PROTOCOLO ====================
     const STX = 0x02;  // Start of Text
     const ETX = 0x03;  // End of Text
@@ -27,10 +34,18 @@
         51: 'FONDOS INSUFICIENTES',
         54: 'TARJETA VENCIDA',
         61: 'EXCEDE LÍMITE',
-        70: 'ERROR INICIALIZACIÓN',
+        70: 'ERROR INICIALIZACIÓN (faltan llaves en el POS)',
         88: 'SIN CONEXIÓN TRANSBANK',
         91: 'EMISOR NO DISPONIBLE',
         99: 'CANCELADA POR USUARIO'
+    };
+
+    // Sugerencias de acción por código de respuesta (para mostrar al usuario cuando hay rechazo)
+    const RESPONSE_HINTS = {
+        70: 'El POS no tiene las llaves criptográficas cargadas. Ejecute "Cargar llaves" (comando 0800) o realice un cierre de día en el POS.',
+        88: 'El POS no puede comunicarse con Transbank. Verifique la conexión a internet del POS.',
+        91: 'El banco emisor no está disponible. Reintente en unos minutos.',
+        99: 'La venta fue cancelada por el usuario en el POS.'
     };
 
     // ==================== CLASE PRINCIPAL ====================
@@ -43,6 +58,9 @@
             this.timeout = 180000; // 3 minutos para ventas
             this.currentBaudrate = null;
             this.readBuffer = [];
+            // Promesa en vuelo de auto-conexión: sirve para deduplicar llamadas concurrentes
+            // (dos listeners DOMContentLoaded, doble click del usuario, etc.)
+            this._connectingPromise = null;
         }
 
         // ==================== MÉTODOS DE CONEXIÓN ====================
@@ -68,6 +86,17 @@
          * Prueba múltiples baudrates para compatibilidad Verifone/Ingenico
          */
         async autoConnect(tryAllBaudrates = false) {
+            // Si ya hay una conexión en curso, reutilizar esa promesa en lugar de abrir otra
+            if (this._connectingPromise) {
+                console.log('⏳ Auto-conexión en curso, esperando resultado previo...');
+                return this._connectingPromise;
+            }
+            this._connectingPromise = this._doAutoConnect(tryAllBaudrates)
+                .finally(() => { this._connectingPromise = null; });
+            return this._connectingPromise;
+        }
+
+        async _doAutoConnect(tryAllBaudrates = false) {
             try {
                 console.log('🔍 Buscando puertos autorizados...');
                 
@@ -515,9 +544,10 @@
         parseSaleResponse(data) {
             const parts = data.split('|');
             
+            const responseCode = parseInt(parts[1]);
             const response = {
                 functionCode: parseInt(parts[0]),
-                responseCode: parseInt(parts[1]),
+                responseCode: responseCode,
                 commerceCode: parts[2],
                 terminalId: parts[3],
                 ticket: parts[4],
@@ -535,8 +565,9 @@
                 realTime: parts[16] || '',
                 employeeId: parts[17] || '',
                 tip: parseInt(parts[18]) || 0,
-                successful: parseInt(parts[1]) === 0,
-                responseMessage: RESPONSE_CODES[parseInt(parts[1])] || `Código ${parts[1]}`
+                successful: responseCode === 0,
+                responseMessage: RESPONSE_CODES[responseCode] || `Código ${parts[1]}`,
+                hint: RESPONSE_HINTS[responseCode] || ''
             };
             
             console.log(response.successful ? '✅ Venta APROBADA' : '❌ Venta RECHAZADA');
