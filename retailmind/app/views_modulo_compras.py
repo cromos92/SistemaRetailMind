@@ -976,14 +976,20 @@ def dashboard_compras_estrategico(request):
         
         # Query base para compras
         compras_query = Compras.objects.filter(fecha__year=anio)
-        
+
+        # Filtro de temporada: acepta código de familia normalizada
+        # (VERANO/OTONO/INVIERNO/PRIMAVERA) o texto libre (fallback legacy).
         if temporada:
-            compras_query = compras_query.filter(temporada__icontains=temporada)
+            _t_norm = temporada.strip().upper()
+            if _t_norm in {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}:
+                compras_query = compras_query.filter(temporada_familia=_t_norm)
+            else:
+                compras_query = compras_query.filter(temporada__icontains=temporada)
         if proveedor_id:
             compras_query = compras_query.filter(empresa_id=proveedor_id)
         if responsable:
             compras_query = compras_query.filter(responsable=responsable)
-        
+
         # Obtener IDs de compras para filtrar
         compras_ids = list(compras_query.values_list('id', flat=True))
         
@@ -1068,36 +1074,8 @@ def dashboard_compras_estrategico(request):
                 'cumplimiento': cumplimiento
             })
         
-        # ===== ROI POR TEMPORADA =====
-        roi_temporadas = []
-        temporadas = compras_query.values('temporada').distinct()
-        
-        for temp in temporadas:
-            if not temp['temporada']:
-                continue
-                
-            compras_temporada = compras_query.filter(temporada=temp['temporada'])
-            compras_temp_ids = list(compras_temporada.values_list('id', flat=True))
-            
-            productos_temp = Compras_Producto.objects.filter(compras__in=compras_temp_ids)
-            
-            inversion_temp = productos_temp.aggregate(
-                total=Sum(F('costo') * F('compras_producto_talla__stock'))
-            )['total'] or 0
-            
-            valor_temp = productos_temp.aggregate(
-                total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
-            )['total'] or 0
-            
-            roi_temp = 0
-            if inversion_temp > 0:
-                ganancia_temp = valor_temp - inversion_temp
-                roi_temp = round((ganancia_temp / inversion_temp) * 100, 1)
-            
-            roi_temporadas.append({
-                'temporada': temp['temporada'],
-                'roi': roi_temp
-            })
+        # ===== ROI POR TEMPORADA (usa agrupamiento normalizado con YoY) =====
+        roi_temporadas = calcular_roi_temporadas_mejorado(compras_query, compras_ids)
         
         # ===== RENDIMIENTO DETALLADO POR COMPRA =====
         rendimiento_detallado = []
@@ -2836,11 +2814,17 @@ def dashboard_compras_mejorado_api(request):
         # Query base para compras
         compras_query = Compras.objects.filter(fecha__year=anio)
         
+        # Filtro de temporada: acepta código de familia normalizada
+        # (VERANO/OTONO/INVIERNO/PRIMAVERA) o texto libre (fallback legacy).
         if temporada:
-            compras_query = compras_query.filter(temporada__icontains=temporada)
+            _t_norm = temporada.strip().upper()
+            if _t_norm in {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}:
+                compras_query = compras_query.filter(temporada_familia=_t_norm)
+            else:
+                compras_query = compras_query.filter(temporada__icontains=temporada)
         if proveedor_id:
             compras_query = compras_query.filter(empresa_id=proveedor_id)
-        
+
         # IDs de compras para filtrar relaciones
         compras_ids = list(compras_query.values_list('id', flat=True))
         
@@ -3063,9 +3047,13 @@ def calcular_evolucion_mensual_mejorado(anio, temporada='', proveedor_id=''):
     for mes in range(1, 13):
         # Query de compras del mes
         compras_mes = Compras.objects.filter(fecha__year=anio, fecha__month=mes)
-        
+
         if temporada:
-            compras_mes = compras_mes.filter(temporada__icontains=temporada)
+            _t_norm = temporada.strip().upper()
+            if _t_norm in {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}:
+                compras_mes = compras_mes.filter(temporada_familia=_t_norm)
+            else:
+                compras_mes = compras_mes.filter(temporada__icontains=temporada)
         if proveedor_id:
             compras_mes = compras_mes.filter(empresa_id=proveedor_id)
         
@@ -3129,81 +3117,176 @@ def calcular_pareto_proveedores_mejorado(compras_query, compras_ids):
 
 
 def calcular_comparativa_anual_mejorado(anio, temporada='', proveedor_id=''):
-    """Calcula comparativa de inversión mes a mes: año actual vs anterior"""
-    
+    """Calcula comparativa de inversión mes a mes: año actual vs anterior.
+
+    El filtro ``temporada`` acepta:
+      - Código de familia normalizada (VERANO / OTONO / INVIERNO / PRIMAVERA)
+        → filtra por ``temporada_familia``.
+      - Texto libre → fallback por ``temporada__icontains`` (compatibilidad).
+    """
+
+    FAMILIAS_NORMALIZADAS = {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}
+
+    def _aplicar_filtros(qs):
+        if temporada:
+            t_norm = temporada.strip().upper()
+            if t_norm in FAMILIAS_NORMALIZADAS:
+                qs = qs.filter(temporada_familia=t_norm)
+            else:
+                qs = qs.filter(temporada__icontains=temporada)
+        if proveedor_id:
+            qs = qs.filter(empresa_id=proveedor_id)
+        return qs
+
     resultado = {
         'actual': [],
         'anterior': []
     }
-    
+
     for mes in range(1, 13):
-        # Año actual
-        compras_actual = Compras.objects.filter(fecha__year=anio, fecha__month=mes)
-        if temporada:
-            compras_actual = compras_actual.filter(temporada__icontains=temporada)
-        if proveedor_id:
-            compras_actual = compras_actual.filter(empresa_id=proveedor_id)
-        
+        compras_actual = _aplicar_filtros(
+            Compras.objects.filter(fecha__year=anio, fecha__month=mes)
+        )
         compras_actual_ids = list(compras_actual.values_list('id', flat=True))
         productos_actual = Compras_Producto.objects.filter(compras__in=compras_actual_ids)
         inversion_actual = productos_actual.aggregate(
             total=Sum(F('costo') * F('compras_producto_talla__stock'))
         )['total'] or 0
-        
-        # Año anterior
-        compras_anterior = Compras.objects.filter(fecha__year=anio-1, fecha__month=mes)
-        if temporada:
-            compras_anterior = compras_anterior.filter(temporada__icontains=temporada)
-        if proveedor_id:
-            compras_anterior = compras_anterior.filter(empresa_id=proveedor_id)
-        
+
+        compras_anterior = _aplicar_filtros(
+            Compras.objects.filter(fecha__year=anio - 1, fecha__month=mes)
+        )
         compras_anterior_ids = list(compras_anterior.values_list('id', flat=True))
         productos_anterior = Compras_Producto.objects.filter(compras__in=compras_anterior_ids)
         inversion_anterior = productos_anterior.aggregate(
             total=Sum(F('costo') * F('compras_producto_talla__stock'))
         )['total'] or 0
-        
+
         resultado['actual'].append(float(inversion_actual))
         resultado['anterior'].append(float(inversion_anterior))
-    
+
     return resultado
 
 
 def calcular_roi_temporadas_mejorado(compras_query, compras_ids):
-    """Calcula ROI por temporada"""
-    
-    temporadas = compras_query.values('temporada').distinct()
+    """Calcula ROI por temporada, preferentemente agrupando por
+    `temporada_familia` + `temporada_anio` (normalizados) para permitir
+    comparativas YoY reales (ej. Invierno 2025 vs Invierno 2026).
+
+    Fallback: si la compra aún no tiene los campos normalizados (data legacy),
+    se agrupa por el texto libre `temporada` como antes.
+
+    Devuelve una lista de objetos:
+      {
+        'temporada': 'Invierno 2025',
+        'temporada_familia': 'INVIERNO',
+        'temporada_anio': 2025,
+        'roi': 45.2,
+        'inversion': 1234.0,
+        'valor_venta': 1800.0,
+        # Comparativa YoY (mismo rubro, año anterior)
+        'roi_anterior': 38.1,
+        'inversion_anterior': 1000.0,
+        'delta_roi': 7.1,
+        'delta_inversion_pct': 23.4,
+      }
+    """
+
+    FAMILIA_LEGIBLE = {
+        'VERANO': 'Verano',
+        'OTONO': 'Otoño',
+        'INVIERNO': 'Invierno',
+        'PRIMAVERA': 'Primavera',
+    }
+
+    def _metricas(qs_compras):
+        ids = list(qs_compras.values_list('id', flat=True))
+        prods = Compras_Producto.objects.filter(compras__in=ids)
+        inv = prods.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        val = prods.aggregate(
+            total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        roi = round(((float(val) - float(inv)) / float(inv)) * 100, 1) if inv else 0
+        return float(inv), float(val), roi
+
     resultado = []
-    
-    for temp in temporadas:
+
+    # 1) Rubros normalizados (familia + año) — base de la comparativa YoY
+    rubros_normalizados = compras_query.exclude(
+        temporada_familia__isnull=True
+    ).exclude(
+        temporada_anio__isnull=True
+    ).values('temporada_familia', 'temporada_anio').distinct()
+
+    familias_anios_vistos = set()
+
+    for r in rubros_normalizados:
+        familia = r['temporada_familia']
+        anio = r['temporada_anio']
+        familias_anios_vistos.add((familia, anio))
+
+        compras_temp = compras_query.filter(
+            temporada_familia=familia, temporada_anio=anio
+        )
+        inv, val, roi = _metricas(compras_temp)
+
+        # Año anterior (mismo rubro) — NO filtra por compras_query porque el
+        # query original ya está acotado al año actual; buscamos el anterior
+        # en toda la tabla de compras (respetando eliminadas no incluidas aquí).
+        compras_temp_ant = Compras.objects.filter(
+            temporada_familia=familia,
+            temporada_anio=anio - 1,
+        ).exclude(estado='ELIMINADA')
+        inv_ant, _val_ant, roi_ant = _metricas(compras_temp_ant)
+
+        delta_roi = round(roi - roi_ant, 1)
+        delta_inv_pct = 0.0
+        if inv_ant > 0:
+            delta_inv_pct = round(((inv - inv_ant) / inv_ant) * 100, 1)
+
+        resultado.append({
+            'temporada': f"{FAMILIA_LEGIBLE.get(familia, familia)} {anio}",
+            'temporada_familia': familia,
+            'temporada_anio': anio,
+            'roi': roi,
+            'inversion': inv,
+            'valor_venta': val,
+            'roi_anterior': roi_ant,
+            'inversion_anterior': inv_ant,
+            'delta_roi': delta_roi,
+            'delta_inversion_pct': delta_inv_pct,
+        })
+
+    # 2) Fallback: compras viejas sin campos normalizados (texto libre)
+    legacy = compras_query.filter(
+        Q(temporada_familia__isnull=True) | Q(temporada_anio__isnull=True)
+    ).values('temporada').distinct()
+
+    for temp in legacy:
         temporada_nombre = temp['temporada']
         if not temporada_nombre:
             continue
-        
-        compras_temp = compras_query.filter(temporada=temporada_nombre)
-        compras_temp_ids = list(compras_temp.values_list('id', flat=True))
-        
-        productos_temp = Compras_Producto.objects.filter(compras__in=compras_temp_ids)
-        
-        inversion = productos_temp.aggregate(
-            total=Sum(F('costo') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        valor_venta = productos_temp.aggregate(
-            total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
-        )['total'] or 0
-        
-        roi = 0
-        if inversion > 0:
-            roi = round(((valor_venta - inversion) / inversion) * 100, 1)
-        
+        compras_temp = compras_query.filter(
+            temporada=temporada_nombre,
+            temporada_familia__isnull=True,
+        )
+        inv, val, roi = _metricas(compras_temp)
         resultado.append({
             'temporada': temporada_nombre,
+            'temporada_familia': None,
+            'temporada_anio': None,
             'roi': roi,
-            'inversion': float(inversion),
-            'valor_venta': float(valor_venta)
+            'inversion': inv,
+            'valor_venta': val,
+            # Sin comparativo YoY confiable cuando no hay familia/año
+            'roi_anterior': 0,
+            'inversion_anterior': 0,
+            'delta_roi': 0,
+            'delta_inversion_pct': 0,
         })
-    
+
     return resultado
 
 

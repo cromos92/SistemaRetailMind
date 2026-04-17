@@ -12,13 +12,28 @@ class Compras(models.Model):
         ('ELIMINADA', 'Eliminada'),
         ('CANCELADA', 'Cancelada'),
     ]
-    
+
+    # Familia de temporada (normalizada, separada del año)
+    # Permite comparar "Invierno YoY" sin depender de texto libre.
+    TEMPORADA_FAMILIA_CHOICES = [
+        ('VERANO', 'Verano'),
+        ('OTONO', 'Otoño'),
+        ('INVIERNO', 'Invierno'),
+        ('PRIMAVERA', 'Primavera'),
+    ]
+
     empresa =   models.ForeignKey(Empresa,   on_delete=models.CASCADE)
     nombre=   models.CharField(max_length=200)
     correlativo = models.IntegerField()
     responsable=   models.CharField(max_length=50)
     temporada=   models.CharField(max_length=50)
-    fecha =   models.DateField( auto_now=True)
+    # fecha = fecha REAL de la compra. Editable para permitir cargar compras
+    # históricas (ej. del año pasado) con su fecha original y que los
+    # dashboards las clasifiquen en el año correcto. Default = hoy.
+    fecha = models.DateField(default=timezone.localdate)
+    # fecha_creacion = auditoría de cuándo se registró en el sistema.
+    # Separada de `fecha` para no perder trazabilidad al permitir fechas históricas.
+    fecha_creacion = models.DateTimeField(null=True, blank=True, auto_now_add=True)
     fechaInicioTemporada =   models.DateField(null=True,blank=True)
     fechaTerminoTemporada =   models.DateField(null=True,blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='ACTIVA')
@@ -35,7 +50,20 @@ class Compras(models.Model):
     fecha_entrega_estimada = models.DateField(null=True, blank=True,
         help_text='Calculada: fecha_envio + Empresa.lead_time_dias')
     fecha_entrega_real = models.DateField(null=True, blank=True)
-    
+
+    # Temporada normalizada: familia + año. Habilita comparativas YoY reales
+    # (ej. Invierno 2025 vs Invierno 2026) sin tener que parsear texto libre.
+    temporada_familia = models.CharField(
+        max_length=20,
+        choices=TEMPORADA_FAMILIA_CHOICES,
+        null=True, blank=True,
+        help_text='Familia de temporada (normalizada) para comparativas YoY',
+    )
+    temporada_anio = models.IntegerField(
+        null=True, blank=True,
+        help_text='Año de la temporada (ej. 2025) para comparativas YoY',
+    )
+
     def __str__(self):
         return f"Compras   {self.nombre} - {self.temporada}"
     

@@ -1362,11 +1362,46 @@
                                                     style="border-radius: 10px; border: 2px solid #e9ecef;">
                                             </div>
                                             <div class="col-md-6">
-                                                <label for="temporada" class="form-label fw-semibold" style="color: #405189;">
-                                                    <i class="bi bi-calendar-season me-1"></i>Temporada
+                                                <label for="tipo" class="form-label fw-semibold" style="color: #405189;">
+                                                    <i class="bi bi-diagram-3 me-1"></i>Tipo de Compra
                                                 </label>
-                                                <input type="text" class="form-control" id="temporada" name="temporada"
-                                                    placeholder="Ej: Invierno 2025" required
+                                                <select class="form-select" id="tipo" name="tipo" required
+                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <option value="inicial" selected>Compra Inicial</option>
+                                                    <option value="reposicion">Reposición</option>
+                                                    <option value="urgente">Urgente</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="fecha_compra" class="form-label fw-semibold" style="color: #405189;">
+                                                    <i class="bi bi-calendar-date me-1"></i>Fecha Real de la Compra
+                                                </label>
+                                                <input type="date" class="form-control" id="fecha_compra" name="fecha_compra" required
+                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                <small class="text-muted d-block mt-1" style="font-size: 11px;">
+                                                    <i class="bi bi-info-circle me-1"></i>
+                                                    Fecha en que se realizó la compra (puede ser pasada para cargar históricas).
+                                                </small>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label for="temporada_familia" class="form-label fw-semibold" style="color: #405189;">
+                                                    <i class="bi bi-cloud-sun me-1"></i>Temporada
+                                                </label>
+                                                <select class="form-select" id="temporada_familia" name="temporada_familia" required
+                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <option value="" selected disabled>Selecciona...</option>
+                                                    <option value="VERANO">Verano</option>
+                                                    <option value="OTONO">Otoño</option>
+                                                    <option value="INVIERNO">Invierno</option>
+                                                    <option value="PRIMAVERA">Primavera</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label for="temporada_anio" class="form-label fw-semibold" style="color: #405189;">
+                                                    <i class="bi bi-123 me-1"></i>Año
+                                                </label>
+                                                <input type="number" class="form-control" id="temporada_anio" name="temporada_anio"
+                                                    min="2020" max="2099" placeholder="Ej: 2025" required
                                                     style="border-radius: 10px; border: 2px solid #e9ecef;">
                                             </div>
                                         </div>
@@ -1405,7 +1440,55 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
+                            <!-- Sección opcional: Datos adicionales (lead time) -->
+                            <div class="mb-3">
+                                <div class="accordion" id="accordionDatosAdicionales">
+                                    <div class="accordion-item" style="border-radius: 12px; overflow: hidden; border: 1px solid #e9ecef;">
+                                        <h2 class="accordion-header" id="headingDatosAdicionales">
+                                            <button class="accordion-button collapsed fw-semibold"
+                                                    type="button"
+                                                    data-bs-toggle="collapse"
+                                                    data-bs-target="#collapseDatosAdicionales"
+                                                    aria-expanded="false"
+                                                    aria-controls="collapseDatosAdicionales"
+                                                    style="color: #405189; background: #f8f9fa;">
+                                                <i class="bi bi-truck me-2"></i>Datos adicionales (opcional)
+                                            </button>
+                                        </h2>
+                                        <div id="collapseDatosAdicionales"
+                                             class="accordion-collapse collapse"
+                                             aria-labelledby="headingDatosAdicionales"
+                                             data-bs-parent="#accordionDatosAdicionales">
+                                            <div class="accordion-body">
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <label for="fecha_envio_proveedor" class="form-label fw-semibold" style="color: #405189;">
+                                                            <i class="bi bi-box-seam me-1"></i>Fecha envío del proveedor
+                                                        </label>
+                                                        <input type="date" class="form-control" id="fecha_envio_proveedor"
+                                                            name="fecha_envio_proveedor"
+                                                            style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="fecha_entrega_real" class="form-label fw-semibold" style="color: #405189;">
+                                                            <i class="bi bi-check-circle me-1"></i>Fecha entrega real
+                                                        </label>
+                                                        <input type="date" class="form-control" id="fecha_entrega_real"
+                                                            name="fecha_entrega_real"
+                                                            style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted d-block mt-2" style="font-size: 11px;">
+                                                    <i class="bi bi-info-circle me-1"></i>
+                                                    Estas fechas alimentan el análisis de lead time por proveedor (YoY).
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
                         
                         <!-- Footer con estilo del proyecto -->
@@ -4635,6 +4718,21 @@ function resetCSVUpload() {
 }
 
 
+        // Al abrir el modal, pre-rellenar fecha real de hoy y año de temporada = año actual
+        $('#modalCrearCompra').on('show.bs.modal', function () {
+            const hoy = new Date();
+            const yyyy = hoy.getFullYear();
+            const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+            const dd = String(hoy.getDate()).padStart(2, '0');
+            const fechaHoy = `${yyyy}-${mm}-${dd}`;
+            if (!$('#fecha_compra').val()) {
+                $('#fecha_compra').val(fechaHoy);
+            }
+            if (!$('#temporada_anio').val()) {
+                $('#temporada_anio').val(yyyy);
+            }
+        });
+
         $('#formCrearCompra').on('submit', function (e) {
             e.preventDefault(); // Evita que se envíe normalmente
 
@@ -4644,6 +4742,27 @@ function resetCSVUpload() {
 
             const fechaInicio = $('#fechaInicioTemporada').val();
             const fechaTermino = $('#fechaTerminoTemporada').val();
+            const fechaCompra = $('#fecha_compra').val();
+            const temporadaFamilia = $('#temporada_familia').val();
+            const temporadaAnio = $('#temporada_anio').val();
+
+            if (!fechaCompra) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Fecha requerida',
+                    text: 'Debes indicar la fecha real de la compra.'
+                });
+                return;
+            }
+
+            if (!temporadaFamilia || !temporadaAnio) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Temporada incompleta',
+                    text: 'Selecciona la familia (Verano/Otoño/Invierno/Primavera) y el año de temporada.'
+                });
+                return;
+            }
 
             if (!fechaInicio || !fechaTermino || new Date(fechaInicio) > new Date(fechaTermino)) {
                 Swal.fire({

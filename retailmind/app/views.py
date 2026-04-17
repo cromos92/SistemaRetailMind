@@ -6253,57 +6253,128 @@ def obtenerDetalleComprasPorParametros(request):
     return True
 def crear_compra(request):
     try:
-        # Obtener datos del formulario
+        from datetime import date as _date
+
+        # Campos requeridos
         empresa_id = request.POST.get('empresa')
         nombre = request.POST.get('nombre')
-        temporada = request.POST.get('temporada')
         fecha_inicio = request.POST.get('fechaInicioTemporada')
         fecha_termino = request.POST.get('fechaTerminoTemporada')
+        fecha_compra_str = request.POST.get('fecha_compra')
+        temporada_familia = (request.POST.get('temporada_familia') or '').strip().upper()
+        temporada_anio_raw = request.POST.get('temporada_anio')
+        tipo = (request.POST.get('tipo') or 'inicial').strip().lower()
 
-        # Validar datos requeridos
-        if not all([empresa_id, nombre, temporada, fecha_inicio, fecha_termino]):
+        # Opcionales (accordion "Datos adicionales")
+        fecha_envio_proveedor = request.POST.get('fecha_envio_proveedor') or None
+        fecha_entrega_real = request.POST.get('fecha_entrega_real') or None
+
+        # Retro-compatibilidad: si el cliente sigue mandando 'temporada' (texto libre)
+        # lo aceptamos, pero priorizamos familia + año si vienen.
+        temporada_legacy = request.POST.get('temporada')
+
+        # Validación campos mínimos
+        requeridos = [empresa_id, nombre, fecha_inicio, fecha_termino, fecha_compra_str]
+        if not all(requeridos):
             return JsonResponse({'success': False, 'error': 'Datos incompletos'}, status=400)
+
+        if not temporada_familia and not temporada_legacy:
+            return JsonResponse({'success': False, 'error': 'Debes indicar la temporada'}, status=400)
+
+        # Validar familia contra choices permitidas
+        FAMILIAS_VALIDAS = {'VERANO', 'OTONO', 'INVIERNO', 'PRIMAVERA'}
+        if temporada_familia and temporada_familia not in FAMILIAS_VALIDAS:
+            return JsonResponse({
+                'success': False,
+                'error': 'Familia de temporada inválida'
+            }, status=400)
+
+        # Validar tipo
+        TIPOS_VALIDOS = {'inicial', 'reposicion', 'urgente'}
+        if tipo not in TIPOS_VALIDOS:
+            tipo = 'inicial'
+
+        # Parsear fecha real de la compra (puede ser histórica)
+        try:
+            fecha_compra = _date.fromisoformat(fecha_compra_str)
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Fecha de compra inválida'
+            }, status=400)
+
+        # Año de temporada: si viene explícito úsalo, si no, deriva de fecha_compra
+        temporada_anio = None
+        if temporada_anio_raw:
+            try:
+                temporada_anio = int(temporada_anio_raw)
+                if temporada_anio < 2000 or temporada_anio > 2100:
+                    raise ValueError
+            except ValueError:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Año de temporada inválido'
+                }, status=400)
+        else:
+            temporada_anio = fecha_compra.year
 
         if fecha_inicio > fecha_termino:
             return JsonResponse({'success': False, 'error': 'Fechas inválidas'}, status=400)
 
-        # Obtener empresa
+        # Proveedor y sucursal
         empresa = get_object_or_404(Empresa, id=empresa_id)
 
-        # Obtener sucursal de la sesión
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'Sucursal no definida en la sesión'}, status=400)
-
-        # Obtener la sucursal
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
 
-        # Usar la función obtener_siguiente_correlativo que maneja la creación automática
+        # Correlativo con creación automática si no existe
         numero_actual = obtener_siguiente_correlativo(sucursal, 'COMPRA')
 
-        # Crear la compra
+        # Construir texto `temporada` legible para compatibilidad con vistas antiguas
+        # (se usa en exportaciones y en filtros icontains). Si el cliente mandó el
+        # texto libre lo respetamos; si no, lo armamos con familia + año.
+        FAMILIA_LEGIBLE = {
+            'VERANO': 'Verano',
+            'OTONO': 'Otoño',
+            'INVIERNO': 'Invierno',
+            'PRIMAVERA': 'Primavera',
+        }
+        if temporada_legacy:
+            temporada_texto = temporada_legacy.strip()
+        elif temporada_familia:
+            temporada_texto = f"{FAMILIA_LEGIBLE[temporada_familia]} {temporada_anio}"
+        else:
+            temporada_texto = ''
+
         compra = Compras.objects.create(
             empresa=empresa,
             nombre=nombre,
-            temporada=temporada,
+            temporada=temporada_texto,
+            temporada_familia=temporada_familia or None,
+            temporada_anio=temporada_anio,
             responsable=request.user.get_full_name() or 'Sistema',
             correlativo=numero_actual,
+            fecha=fecha_compra,
             fechaInicioTemporada=fecha_inicio,
-            fechaTerminoTemporada=fecha_termino
+            fechaTerminoTemporada=fecha_termino,
+            tipo=tipo,
+            fecha_envio_proveedor=fecha_envio_proveedor or None,
+            fecha_entrega_real=fecha_entrega_real or None,
         )
 
         return JsonResponse({
-            'success': True, 
+            'success': True,
             'message': 'Compra creada exitosamente',
             'compra_id': compra.id
         })
 
     except Exception as e:
-        # Log del error para debugging
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error al crear compra: {str(e)}")
-        
+
         return JsonResponse({'success': False, 'error': f'Error interno: {str(e)}'}, status=500)
 
 
