@@ -191,38 +191,81 @@
     </div>
 </div>
 
-<!-- Modal para Editar BOLETA PAPEL (solo admin) -->
-{% if es_admin %}
+<!-- Modal de edición de DTE (permisos granulares por campo + tipo DTE) -->
+{% if puede_editar_algun_dte %}
 <div class="modal fade" id="modalEditarBoletaPapel" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title">
-                    <i class="ri-edit-2-line me-2"></i> Editar Boleta Papel
+                    <i class="ri-edit-2-line me-2"></i> Editar Documento
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-warning d-flex align-items-start gap-2 py-2" style="font-size:12px;">
-                    <i class="ri-alert-line" style="font-size:16px;"></i>
+                <div class="alert alert-info d-flex align-items-start gap-2 py-2" style="font-size:12px;" id="editarDteAlertaPermisos">
+                    <i class="ri-information-line" style="font-size:16px;"></i>
                     <div>
-                        Esta acción sólo está disponible para el perfil <b>administrador</b>
-                        y aplica únicamente a <b>Boletas Papel (manuales)</b>.
+                        Los campos disponibles dependen de los permisos asignados a tu usuario
+                        (por campo y por tipo de DTE). Los campos bloqueados se muestran en gris.
                     </div>
                 </div>
                 <input type="hidden" id="editarBoletaPapelId">
+                <input type="hidden" id="editarDteTipo">
                 <div class="mb-2">
                     <label class="form-label mb-1">Documento actual</label>
                     <input type="text" class="form-control form-control-sm" id="editarBoletaPapelDescripcion" readonly>
                 </div>
                 <div class="row g-2">
-                    <div class="col-md-6">
-                        <label class="form-label mb-1">N° de documento</label>
-                        <input type="number" min="1" step="1" class="form-control form-control-sm" id="editarBoletaPapelNumero" placeholder="Ej: 12345">
+                    <div class="col-md-6" data-campo="numero_documento">
+                        <label class="form-label mb-1">
+                            N° de documento
+                            <i class="ri-lock-line text-muted d-none" data-lock-icon="numero_documento" title="Sin permiso"></i>
+                        </label>
+                        <input type="number" min="1" step="1" class="form-control form-control-sm"
+                               id="editarBoletaPapelNumero" placeholder="Ej: 12345">
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label mb-1">Fecha de pago / emisión</label>
+                    <div class="col-md-6" data-campo="fecha">
+                        <label class="form-label mb-1">
+                            Fecha de emisión
+                            <i class="ri-lock-line text-muted d-none" data-lock-icon="fecha" title="Sin permiso"></i>
+                        </label>
                         <input type="date" class="form-control form-control-sm" id="editarBoletaPapelFecha">
+                    </div>
+                </div>
+
+                <!-- Sección Pagos -->
+                <div class="mt-3" data-campo="pago">
+                    <label class="form-label mb-1">
+                        <i class="ri-money-dollar-circle-line"></i> Pagos
+                        <i class="ri-lock-line text-muted d-none" data-lock-icon="pago" title="Sin permiso"></i>
+                        <small class="text-muted ms-1" style="font-weight:normal;">
+                            (la suma debe coincidir con el total del DTE)
+                        </small>
+                    </label>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0" id="tablaPagosEditar">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:55%;font-size:11px;">Método</th>
+                                    <th style="width:35%;font-size:11px;">Monto</th>
+                                    <th style="width:10%;font-size:11px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyPagosEditar"></tbody>
+                            <tfoot>
+                                <tr>
+                                    <td class="text-end fw-medium">Total pagos:</td>
+                                    <td id="editarDtePagosTotal" class="fw-bold">$0</td>
+                                    <td id="editarDtePagosBadge"></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-end text-muted" style="font-size:11px;">Total DTE:</td>
+                                    <td id="editarDteMontoReferencia" class="text-muted" style="font-size:11px;">$0</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -851,6 +894,22 @@ input[type=number] { -moz-appearance: textfield; }
     font-size: 11px;
 }
 
+/* ========== MODAL EDICIÓN DTE - CAMPOS BLOQUEADOS POR PERMISOS ========== */
+.campo-bloqueado {
+    opacity: 0.55;
+    pointer-events: none;
+}
+.campo-bloqueado input,
+.campo-bloqueado select,
+.campo-bloqueado button {
+    background: var(--nexo-gray-100) !important;
+    cursor: not-allowed !important;
+}
+.campo-bloqueado .form-label {
+    color: var(--nexo-gray-500) !important;
+}
+.campo-bloqueado [data-lock-icon] { color: var(--nexo-warning) !important; }
+
 /* ========== DESCUENTO EN TABLA ========== */
 #tablaDocumentos td .text-danger small,
 #tablaDocumentos td small.text-danger {
@@ -893,6 +952,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Flag: ¿usuario es administrador? (controla si puede editar Boletas Papel)
     const esAdmin = {% if es_admin %}true{% else %}false{% endif %};
+
+    // Permisos granulares de edición de DTE (por campo y por tipo de DTE).
+    // La lógica es AND: para editar un campo X en un DTE de tipo T se
+    // requieren ambos (permisoCampoDte[X] && permisoTipoDte[T]).
+    const permisoCampoDte = {
+        numero_documento: {% if puede_editar_numero_dte %}true{% else %}false{% endif %},
+        fecha:            {% if puede_editar_fecha_dte %}true{% else %}false{% endif %},
+        pago:             {% if puede_editar_pago_dte %}true{% else %}false{% endif %},
+    };
+    const permisoTipoDte = {
+        'BOLETA ELECTRONICA':  {% if puede_editar_tipo_boleta_electronica %}true{% else %}false{% endif %},
+        'BOLETA PAPEL':        {% if puede_editar_tipo_boleta_papel %}true{% else %}false{% endif %},
+        'FACTURA ELECTRONICA': {% if puede_editar_tipo_factura_electronica %}true{% else %}false{% endif %},
+        'FACTURA EXENTA':      {% if puede_editar_tipo_factura_exenta %}true{% else %}false{% endif %},
+    };
+
+    // Catálogo de métodos de pago (sincronizado con METODO_PAGO_TICKET_CHOICES).
+    const METODOS_PAGO_DTE = [
+        {% for codigo, label in metodo_pago_choices %}
+            { codigo: '{{ codigo|escapejs }}', label: '{{ label|escapejs }}' },
+        {% endfor %}
+    ];
+
+    function puedeEditarCampoEnTipo(campo, tipoDte) {
+        if (!campo) return false;
+        if (!permisoCampoDte[campo]) return false;
+        if (!tipoDte) return false;
+        return !!permisoTipoDte[tipoDte];
+    }
+
+    function dteTieneAlgunCampoEditable(tipoDte) {
+        if (!permisoTipoDte[tipoDte]) return false;
+        return !!(permisoCampoDte.numero_documento
+               || permisoCampoDte.fecha
+               || permisoCampoDte.pago);
+    }
 
     // Variables de ordenamiento
     let ordenCampo = 'fecha';      // Campo por defecto
@@ -1173,10 +1268,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             title="Imprimir Ticket de Cambio">
                         <i class="ri-exchange-line"></i><span class="tc-txt"> Cambio</span>
                     </button>
-                    ${(esAdmin && doc.tipo === 'BOLETA PAPEL' && doc.estado !== 'ANULADO') ? `
+                    ${(doc.estado !== 'ANULADO' && dteTieneAlgunCampoEditable(doc.tipo)) ? `
                     <button class="btn btn-sm btn-warning btn-action ms-1"
                             onclick="abrirEditarBoletaPapel(${doc.id})"
-                            title="Editar N° y Fecha de Pago (solo admin)">
+                            title="Editar campos permitidos del DTE">
                         <i class="ri-edit-2-line"></i> Editar
                     </button>` : ''}
                 </td>
@@ -1339,21 +1434,124 @@ document.addEventListener('DOMContentLoaded', function() {
         window.open(url, '_blank', 'width=800,height=600');
     }
 
-    // === EDICIÓN DE BOLETA PAPEL (solo admin) ===
-    window.abrirEditarBoletaPapel = function(documentoId) {
-        if (!esAdmin) {
-            mostrarError('Sólo el perfil administrador puede editar boletas papel');
+    // === EDICIÓN GRANULAR DE DTE (por campo + por tipo DTE) ===
+    // Mantiene el nombre `abrirEditarBoletaPapel` por compatibilidad con
+    // llamadas existentes en la tabla, pero funciona para cualquier DTE.
+
+    function formatearFechaParaInput(fecha) {
+        if (!fecha) return '';
+        if (typeof fecha === 'string') {
+            return fecha.split('T')[0].substring(0, 10);
+        }
+        const d = new Date(fecha);
+        if (isNaN(d.getTime())) return '';
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    function renderOpcionesMetodoPago(seleccionado) {
+        return METODOS_PAGO_DTE.map(m => {
+            const sel = (m.codigo === seleccionado) ? 'selected' : '';
+            return `<option value="${m.codigo}" ${sel}>${m.label}</option>`;
+        }).join('');
+    }
+
+    function aplicarPermisosFormularioEdicion(tipoDte) {
+        // Habilita/deshabilita cada sección del modal según si el usuario
+        // tiene permiso para ese campo en ese tipo de DTE.
+        const campos = ['numero_documento', 'fecha', 'pago'];
+        campos.forEach(campo => {
+            const permitido = puedeEditarCampoEnTipo(campo, tipoDte);
+            const grupo = document.querySelector(`[data-campo="${campo}"]`);
+            const lock = document.querySelector(`[data-lock-icon="${campo}"]`);
+            if (grupo) {
+                grupo.classList.toggle('campo-bloqueado', !permitido);
+                grupo.querySelectorAll('input, select, button[data-editor="pago"]').forEach(el => {
+                    el.disabled = !permitido;
+                });
+            }
+            if (lock) {
+                lock.classList.toggle('d-none', permitido);
+            }
+        });
+    }
+
+    function pintarTablaPagosEditar(pagos, tipoDte) {
+        const tbody = document.getElementById('tbodyPagosEditar');
+        if (!tbody) return;
+        const puedeEditarPagos = puedeEditarCampoEnTipo('pago', tipoDte);
+
+        if (!pagos || pagos.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="text-center text-muted" style="font-size:12px;">
+                        Este DTE no tiene pagos registrados.
+                    </td>
+                </tr>`;
+            recalcularTotalPagosEditar();
             return;
         }
 
+        tbody.innerHTML = pagos.map((p, idx) => {
+            const opts = renderOpcionesMetodoPago(p.metodo || p.metodo_pago);
+            const monto = parseInt(p.monto || 0, 10);
+            return `
+                <tr data-pago-idx="${idx}" data-pago-id="${p.id || ''}">
+                    <td>
+                        <select class="form-select form-select-sm pago-metodo"
+                                data-editor="pago" ${puedeEditarPagos ? '' : 'disabled'}>
+                            ${opts}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" min="0" step="1"
+                               class="form-control form-control-sm pago-monto"
+                               data-editor="pago"
+                               value="${monto}" ${puedeEditarPagos ? '' : 'disabled'}>
+                    </td>
+                    <td class="text-muted" style="font-size:10px;">#${p.id || '—'}</td>
+                </tr>`;
+        }).join('');
+
+        tbody.querySelectorAll('.pago-monto').forEach(input => {
+            input.addEventListener('input', recalcularTotalPagosEditar);
+        });
+        recalcularTotalPagosEditar();
+    }
+
+    function recalcularTotalPagosEditar() {
+        const inputs = document.querySelectorAll('#tbodyPagosEditar .pago-monto');
+        let suma = 0;
+        inputs.forEach(i => { suma += parseInt(i.value || 0, 10) || 0; });
+        document.getElementById('editarDtePagosTotal').textContent = formatearMoneda(suma);
+        const referenciaEl = document.getElementById('editarDteMontoReferencia');
+        const totalReferencia = parseInt(referenciaEl?.dataset?.monto || 0, 10);
+        const badge = document.getElementById('editarDtePagosBadge');
+        if (!badge) return;
+        if (totalReferencia <= 0) {
+            badge.innerHTML = '';
+            return;
+        }
+        if (suma === totalReferencia) {
+            badge.innerHTML = '<span class="badge bg-success" style="font-size:10px;">OK</span>';
+        } else {
+            const diff = suma - totalReferencia;
+            const signo = diff > 0 ? '+' : '';
+            badge.innerHTML = `<span class="badge bg-danger" style="font-size:10px;">${signo}${formatearMoneda(Math.abs(diff))}</span>`;
+        }
+    }
+
+    window.abrirEditarBoletaPapel = function(documentoId) {
         const doc = documentosData.find(d => d.id === documentoId);
         if (!doc) {
             mostrarError('No se encontró el documento seleccionado');
             return;
         }
 
-        if (doc.tipo !== 'BOLETA PAPEL') {
-            mostrarError('Sólo se pueden editar Boletas Papel');
+        if (!dteTieneAlgunCampoEditable(doc.tipo)) {
+            mostrarError('No tienes permisos para editar este tipo de documento');
             return;
         }
 
@@ -1361,45 +1559,69 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!modalEl) return;
 
         document.getElementById('editarBoletaPapelId').value = doc.id;
+        document.getElementById('editarDteTipo').value = doc.tipo || '';
         document.getElementById('editarBoletaPapelDescripcion').value =
-            `BOLETA PAPEL #${doc.numero} - ${doc.cliente_nombre || 'Sin cliente'}`;
+            `${doc.tipo} #${doc.numero} - ${doc.cliente_nombre || 'Sin cliente'}`;
         document.getElementById('editarBoletaPapelNumero').value = doc.numero || '';
+        document.getElementById('editarBoletaPapelFecha').value = formatearFechaParaInput(doc.fecha);
 
-        // Normalizar fecha al formato YYYY-MM-DD para input[type=date]
-        let fechaInput = '';
-        if (doc.fecha) {
-            if (typeof doc.fecha === 'string') {
-                fechaInput = doc.fecha.split('T')[0].substring(0, 10);
-            } else {
-                const d = new Date(doc.fecha);
-                if (!isNaN(d.getTime())) {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    fechaInput = `${y}-${m}-${day}`;
-                }
-            }
-        }
-        document.getElementById('editarBoletaPapelFecha').value = fechaInput;
+        // Referencia para validar suma de pagos en la UI.
+        const referenciaEl = document.getElementById('editarDteMontoReferencia');
+        const totalDte = parseInt(doc.total || 0, 10);
+        referenciaEl.dataset.monto = totalDte;
+        referenciaEl.textContent = formatearMoneda(totalDte);
+
+        pintarTablaPagosEditar(doc.metodos_pago || [], doc.tipo);
+        aplicarPermisosFormularioEdicion(doc.tipo);
 
         new bootstrap.Modal(modalEl).show();
     };
 
     window.guardarEdicionBoletaPapel = function() {
         const id = document.getElementById('editarBoletaPapelId').value;
-        const numero = document.getElementById('editarBoletaPapelNumero').value;
-        const fecha = document.getElementById('editarBoletaPapelFecha').value;
-
+        const tipoDte = document.getElementById('editarDteTipo').value;
         if (!id) {
             mostrarError('Documento no identificado');
             return;
         }
-        if (!numero || parseInt(numero, 10) <= 0) {
-            mostrarError('Ingrese un número de documento válido');
-            return;
+
+        const payload = { documento_id: parseInt(id, 10) };
+
+        if (puedeEditarCampoEnTipo('numero_documento', tipoDte)) {
+            const numero = document.getElementById('editarBoletaPapelNumero').value;
+            if (!numero || parseInt(numero, 10) <= 0) {
+                mostrarError('Ingrese un número de documento válido');
+                return;
+            }
+            payload.numero_documento = parseInt(numero, 10);
         }
-        if (!fecha) {
-            mostrarError('Ingrese una fecha válida');
+
+        if (puedeEditarCampoEnTipo('fecha', tipoDte)) {
+            const fecha = document.getElementById('editarBoletaPapelFecha').value;
+            if (!fecha) {
+                mostrarError('Ingrese una fecha válida');
+                return;
+            }
+            payload.fecha_emision = fecha;
+        }
+
+        if (puedeEditarCampoEnTipo('pago', tipoDte)) {
+            const pagos = [];
+            document.querySelectorAll('#tbodyPagosEditar tr[data-pago-id]').forEach(tr => {
+                const pagoId = parseInt(tr.getAttribute('data-pago-id'), 10);
+                if (!pagoId) return;
+                const metodo = tr.querySelector('.pago-metodo')?.value || '';
+                const monto = parseInt(tr.querySelector('.pago-monto')?.value || 0, 10) || 0;
+                pagos.push({ id: pagoId, metodo_pago: metodo, monto: monto });
+            });
+            if (pagos.length > 0) {
+                payload.pagos = pagos;
+            }
+        }
+
+        // Si no hay ningún campo modificable, nada que enviar.
+        if (!('numero_documento' in payload) && !('fecha_emision' in payload) && !('pagos' in payload)) {
+            mostrarError('No tienes permisos para editar ningún campo de este DTE');
             return;
         }
 
@@ -1414,11 +1636,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
                 'X-Requested-With': 'XMLHttpRequest',
             },
-            body: JSON.stringify({
-                documento_id: parseInt(id, 10),
-                numero_documento: parseInt(numero, 10),
-                fecha_emision: fecha,
-            })
+            body: JSON.stringify(payload)
         })
         .then(r => r.json())
         .then(data => {
@@ -1426,15 +1644,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const modalEl = document.getElementById('modalEditarBoletaPapel');
                 const inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
                 if (inst) inst.hide();
-                mostrarExito('Boleta papel actualizada correctamente');
+                mostrarExito('Documento actualizado correctamente');
                 cargarDocumentos();
             } else {
-                mostrarError(data.error || 'No se pudo actualizar la boleta');
+                mostrarError(data.error || 'No se pudo actualizar el documento');
             }
         })
         .catch(err => {
-            console.error('Error editar boleta papel:', err);
-            mostrarError('Error al actualizar la boleta');
+            console.error('Error editar DTE:', err);
+            mostrarError('Error al actualizar el documento');
         });
     };
 

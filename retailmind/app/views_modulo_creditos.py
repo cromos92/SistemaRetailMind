@@ -1087,26 +1087,62 @@ def obtener_empresas_disponibles(request):
 @login_required
 @require_GET
 def obtener_sucursales_empresa(request):
-    """Obtener las sucursales de la empresa actual"""
+    """Obtener las sucursales de una empresa.
+
+    Acepta un parámetro opcional `empresa_id` por query string.
+    - Si se pasa `empresa_id`, devuelve las sucursales de esa empresa.
+    - Si no se pasa, usa la empresa activa en la sesión (`idEmpresaActual`).
+    Solo retorna sucursales activas.
+    """
     try:
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        if not empresa_actual_id:
+        empresa_id_param = request.GET.get('empresa_id')
+        empresa_id = None
+
+        if empresa_id_param:
+            try:
+                empresa_id = int(empresa_id_param)
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'empresa_id inválido'
+                }, status=400)
+        else:
+            empresa_id = request.session.get('idEmpresaActual')
+
+        if not empresa_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay empresa activa en la sesión'
             }, status=400)
 
-        sucursales = Sucursal.objects.filter(empresa_id=empresa_actual_id).order_by('alias')
-        
+        empresa = Empresa.objects.filter(id=empresa_id).first()
+        if not empresa:
+            return JsonResponse({
+                'success': False,
+                'error': 'La empresa indicada no existe'
+            }, status=404)
+
+        sucursales = Sucursal.objects.filter(
+            empresa_id=empresa_id,
+            activa=True,
+        ).order_by('alias')
+
         sucursales_data = [{
             'id': s.id,
             'alias': s.alias,
-            'direccion': s.direccion or ''
+            'nombre': s.nombre or '',
+            'direccion': s.direccion or '',
+            'comuna': s.comuna or '',
+            'ciudad': s.ciudad or '',
         } for s in sucursales]
-        
+
         return JsonResponse({
             'success': True,
-            'sucursales': sucursales_data
+            'empresa': {
+                'id': empresa.id,
+                'nombre': empresa.nombre,
+            },
+            'sucursales': sucursales_data,
         })
     except Exception as e:
         return JsonResponse({

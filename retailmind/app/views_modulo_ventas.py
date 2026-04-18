@@ -33,6 +33,9 @@ from .utils_ventas import (
     agrupar_metodos_pago,
     formatear_metodos_pago_str,
     get_sucursal_id,
+    puede_editar_campo_dte,
+    permisos_edicion_dte_context,
+    CODIGO_PERMISO_TIPO_DTE,
     ONLY_DTE_PRODUCTO,
     ONLY_DTE_PAGO,
     ONLY_TICKET_PRODUCTO_POS,
@@ -50,7 +53,7 @@ from .services.transbank_sdk_service import (
 from .models import (
     Ticket, Ticket_Productos, TicketDetallePago, TicketReferencia, Vendedor, Producto, Producto_Talla,
     Sucursal, EmpresaUser, Empresa, Movimientos_Producto, LoteProducto, Dte, Dte_Productos, Dte_Detalle_Pago,
-    Correlativo, ESTADO_TICKET_CHOICES, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
+    Correlativo, ESTADO_TICKET_CHOICES, METODO_PAGO_TICKET_CHOICES, ORIGEN_PAGO_CHOICES, TIPO_DOCUMENTO_CHOICES,
     ArqueoCaja, ESTADO_ARQUEO_CHOICES, RESULTADO_REVISION_CHOICES, GrupoDeposito, DepositoBancario,
     ObservacionArqueo, LogAccionCaja, log_accion_caja,
     ConfiguracionPOS, TransaccionPOS, LogPOS,
@@ -2220,11 +2223,42 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     
     # Obtener siguiente correlativo para el DTE
     correlativo_dte = obtener_siguiente_correlativo(ticket.sucursal, tipo_dte)
-    
-    # Calcular montos - Los precios del ticket YA INCLUYEN IVA
-    total_con_iva = Decimal(ticket.total or 0)
-    descuento = Decimal(ticket.descuento or 0)
-    
+
+    # Calcular montos AUTORITATIVOS a partir de las líneas reales del ticket.
+    # NO confiamos en ticket.total / ticket.descuento porque pueden quedar
+    # stale si algún paso del flujo no los recalculó (ver bug histórico donde
+    # al agregar un producto en el paso 3 el TXT del DTE mostraba una línea
+    # "Descuento: $X" fantasma por desfase entre ticket.total y la suma real
+    # de los items).
+    descuento_real_lineas = sum(
+        (tp.descuento_unitario or 0) * tp.stock
+        for tp in ticket.ticket_productos.all()
+    )
+    suma_items_brutos = sum(
+        (tp.precio or 0) * tp.stock
+        for tp in ticket.ticket_productos.all()
+    )
+    total_real_lineas = suma_items_brutos - descuento_real_lineas
+
+    # Si ticket.total está sincronizado con las líneas, lo respetamos. Si no,
+    # usamos el cálculo autoritativo basado en las líneas (y logeamos el desfase
+    # para diagnosticar flujos mal cerrados).
+    ticket_total_guardado = int(ticket.total or 0)
+    if ticket_total_guardado != total_real_lineas and total_real_lineas > 0:
+        print(
+            f"⚠️ Desfase ticket.total (${ticket_total_guardado:,}) vs suma de líneas "
+            f"(${total_real_lineas:,}). Usando suma de líneas como autoritativo."
+        )
+        # Reconciliar también en DB para que el resto del flujo (resumen, cuadratura) use el valor correcto.
+        ticket.total = total_real_lineas
+        ticket.descuento = descuento_real_lineas
+        if hasattr(ticket, 'subTotal'):
+            ticket.subTotal = suma_items_brutos
+        ticket.save(update_fields=['total', 'descuento', 'subTotal'] if hasattr(ticket, 'subTotal') else ['total', 'descuento'])
+
+    total_con_iva = Decimal(total_real_lineas)
+    descuento = Decimal(descuento_real_lineas)
+
     # Descomponer el total para obtener neto e IVA
     # Total = Neto + IVA, donde IVA = Neto * 0.19
     # Total = Neto * 1.19
@@ -2538,13 +2572,19 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     'monto_item': prod_txt['total']
                 })
             
-            # Detect discounts (per-item or global) and add Tabla 4 block + fix total
+            # Detect discounts (per-item or global) and add Tabla 4 block + fix total.
+            #
+            # IMPORTANTE: El único descuento "real" es el que está materializado
+            # en las líneas (tp.descuento_unitario). NO usamos ticket.descuento
+            # como fallback porque ese campo puede quedar stale al agregar
+            # productos nuevos en el paso 3 (ver recalc en registrar_pagos_ticket).
+            # Si ticket.descuento > 0 pero ninguna línea trae descuento, lo
+            # ignoramos para evitar generar una línea "Descuento: $X" fantasma.
             descuento_items = sum(
                 (tp.descuento_unitario or 0) * tp.stock
                 for tp in ticket.ticket_productos.all()
             )
-            descuento_ticket = int(ticket.descuento or 0)
-            descuento_efectivo = descuento_items if descuento_items > 0 else descuento_ticket
+            descuento_efectivo = descuento_items  # solo líneas; no arrastrar stale
 
             suma_items_txt = sum(d['monto_item'] for d in datos_txt['detalle'])
 
@@ -2560,14 +2600,15 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     datos_txt['totales']['monto_total'] = total_correcto
                 print(f"TXT: Descuento ${descuento_efectivo:,} aplicado. Items: ${suma_items_txt:,}, Total: ${total_correcto:,}")
             elif suma_items_txt > int(total) and int(total) > 0:
-                diferencia_desc = suma_items_txt - int(total)
-                print(f"TXT: Items sum ({suma_items_txt}) > Total ({int(total)}). Adding discount section: ${diferencia_desc:,}")
-                datos_txt['descuentos_recargos'] = [{
-                    'tpo_mov': 'D',
-                    'glosa_dr': 'Descuento',
-                    'tpo_valor': '$',
-                    'valor_dr': diferencia_desc,
-                }]
+                # Red de seguridad: items > total DTE. Antes generábamos una
+                # línea de descuento fantasma aquí, pero eso ocultaba el bug
+                # real (ticket.total stale). Preferimos CORREGIR el total
+                # del DTE para que coincida con la suma real de items.
+                print(
+                    f"⚠️ TXT: Items sum (${suma_items_txt:,}) > DTE total (${int(total):,}). "
+                    f"Corrigiendo monto_total a suma de items (no se genera línea de descuento)."
+                )
+                datos_txt['totales']['monto_total'] = suma_items_txt
             
             # Generar TXT
             contenido_txt = generar_txt_dte_acepta(datos_txt)
@@ -3147,14 +3188,23 @@ def registrar_pagos_ticket(request, correlativo):
                 tp.subtotal = correcto
                 tp.save(update_fields=['subtotal'])
 
-        nuevo_subtotal = sum(tp.subtotal for tp in todas_lineas)
-        if nuevo_descuento_prod > 0:
-            ticket.descuento = nuevo_descuento_prod
-            ticket.total = nuevo_subtotal
-        else:
-            descuento_previo = ticket.descuento or 0
-            ticket.total = nuevo_subtotal - descuento_previo
-        print(f"  💰 Nuevo total del ticket: ${ticket.total:,} (descuento: ${ticket.descuento or 0:,})")
+        # tp.subtotal ya tiene el descuento aplicado línea por línea,
+        # así que nuevo_subtotal equivale al total final después del dcto.
+        # El "subtotal bruto" del ticket es la suma sin descuentos.
+        nuevo_subtotal_neto = sum(tp.subtotal for tp in todas_lineas)
+        nuevo_subtotal_bruto = sum((tp.precio or 0) * tp.stock for tp in todas_lineas)
+
+        # Server-authoritative: descuento y total se derivan SIEMPRE de las
+        # líneas actuales del ticket. No arrastramos un `ticket.descuento`
+        # previo (evita el bug donde agregar un producto nuevo en paso 3 hacía
+        # que el TXT del DTE generara una línea "Descuento: $X" fantasma igual
+        # al precio del producto agregado, por haber dejado stale el campo
+        # `ticket.descuento` de una cotización / intento anterior).
+        ticket.descuento = nuevo_descuento_prod
+        ticket.total = nuevo_subtotal_neto
+        if hasattr(ticket, 'subTotal'):
+            ticket.subTotal = nuevo_subtotal_bruto
+        print(f"  💰 Nuevo total del ticket: ${ticket.total:,} (subtotal bruto: ${nuevo_subtotal_bruto:,}, descuento: ${ticket.descuento or 0:,})")
 
     pagos = payload.get('pagos') or []
     ids_existentes = list(ticket.pagos.values_list('id', flat=True))
@@ -3173,6 +3223,20 @@ def registrar_pagos_ticket(request, correlativo):
         if metodo_pago not in dict(METODO_PAGO_TICKET_CHOICES):
             metodo_pago = 'OTRO'
 
+        # Origen del pago (MANUAL vs POS_INTEGRADO). El frontend lo envía
+        # explícitamente según qué botón usó el cajero (F6/F7 manuales vs
+        # POS TBK Automático con SDK). Si no viene y el método es de tarjeta
+        # Transbank, asumimos MANUAL para que no quede ambiguo.
+        METODOS_TBK_TARJETA = {
+            'TBK_DEBITO_POS', 'TBK_CREDITO_POS', 'TBK_PREPAGO_POS',
+            'TBK_POS_INTEGRADO', 'TBK_MANUAL',
+            'TARJETA_DEBITO', 'TARJETA_CREDITO',
+        }
+        origen_pago_raw = (pago.get('origen_pago') or '').strip().upper()
+        if origen_pago_raw not in dict(ORIGEN_PAGO_CHOICES):
+            origen_pago_raw = 'MANUAL' if metodo_pago in METODOS_TBK_TARJETA else ''
+        origen_pago_val = origen_pago_raw or None
+
         if pago_id and pago_id in ids_existentes:
             TicketDetallePago.objects.filter(id=pago_id, ticket=ticket).update(
                 metodo_pago=metodo_pago,
@@ -3181,6 +3245,7 @@ def registrar_pagos_ticket(request, correlativo):
                 numero_orden_compra=pago.get('numero_orden_compra'),
                 monto=monto,
                 notas=pago.get('notas', ''),
+                origen_pago=origen_pago_val,
             )
             ids_existentes.remove(pago_id)
         else:
@@ -3192,6 +3257,7 @@ def registrar_pagos_ticket(request, correlativo):
                 numero_orden_compra=pago.get('numero_orden_compra'),
                 monto=monto,
                 notas=pago.get('notas', ''),
+                origen_pago=origen_pago_val,
             )
 
     if ids_existentes:
@@ -3477,6 +3543,10 @@ def gestion_ventas_documentos(request):
     user_rol = getattr(request.user, 'rol', '') or ''
     es_admin = user_rol == 'administrador'
 
+    # Permisos granulares de edición de DTE (3 campos x 4 tipos).
+    # El template los usa para mostrar/habilitar cada control del modal.
+    permisos_dte = permisos_edicion_dte_context(request.user, sucursal_actual_id)
+
     context = {
         'sucursal_actual': sucursal_actual,
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
@@ -3485,6 +3555,17 @@ def gestion_ventas_documentos(request):
         'qz_config': _get_qz_config(sucursal_actual_id),
         'user_rol': user_rol,
         'es_admin': es_admin,
+        # Flags por campo
+        'puede_editar_fecha_dte': permisos_dte['campo']['fecha'],
+        'puede_editar_numero_dte': permisos_dte['campo']['numero_documento'],
+        'puede_editar_pago_dte': permisos_dte['campo']['pago'],
+        # Flags por tipo de DTE (nombre amigable: sin espacios para usar en template)
+        'puede_editar_tipo_boleta_electronica': permisos_dte['tipo']['BOLETA ELECTRONICA'],
+        'puede_editar_tipo_boleta_papel': permisos_dte['tipo']['BOLETA PAPEL'],
+        'puede_editar_tipo_factura_electronica': permisos_dte['tipo']['FACTURA ELECTRONICA'],
+        'puede_editar_tipo_factura_exenta': permisos_dte['tipo']['FACTURA EXENTA'],
+        # ¿Puede editar algo en algún tipo? → controla visibilidad del modal
+        'puede_editar_algun_dte': permisos_dte['cualquiera'],
     }
     return render(request, 'vistas/modulo_ventas/gestionVentasDocumentos.html', context)
 
@@ -3550,16 +3631,24 @@ def listar_documentos_ventas(request):
             if tipo_db:
                 dtes_filtrados = dtes_filtrados.filter(tipo_documento=tipo_db)
 
-            if estado:
-                estado_dte_map = {
-                    'PENDIENTE': 'PENDIENTE',
-                    'PAGADO': 'EMITIDO',
-                    'ANULADO': 'ANULADO',
-                }
-                if estado in estado_dte_map:
-                    dtes_filtrados = dtes_filtrados.filter(estado_dte=estado_dte_map[estado])
+        # Filtrar por estado (independiente del tipo de documento)
+        if estado:
+            estado_dte_map = {
+                'PENDIENTE': 'PENDIENTE',
+                'PAGADO': 'EMITIDO',
+                'ANULADO': 'ANULADO',
+            }
+            if estado in estado_dte_map:
+                dtes_filtrados = dtes_filtrados.filter(estado_dte=estado_dte_map[estado])
 
-            if metodo_pago:
+        # Filtrar por método de pago (independiente del tipo de documento)
+        # MULTIPLE es un valor sintético: DTEs con más de un método de pago distinto
+        if metodo_pago:
+            if metodo_pago == 'MULTIPLE':
+                dtes_filtrados = dtes_filtrados.annotate(
+                    _n_metodos=Count('dte_asociado__metodo_pago', distinct=True)
+                ).filter(_n_metodos__gt=1)
+            else:
                 dtes_filtrados = dtes_filtrados.filter(
                     dte_asociado__metodo_pago=metodo_pago
                 ).distinct()
@@ -3860,8 +3949,14 @@ def exportar_documentos_ventas_excel(request):
                 dtes_query = dtes_query.filter(estado_dte=estado_dte_map[estado])
         
         # Filtrar por método de pago
+        # MULTIPLE es un valor sintético: DTEs con más de un método de pago distinto
         if metodo_pago:
-            dtes_query = dtes_query.filter(dte_asociado__metodo_pago=metodo_pago).distinct()
+            if metodo_pago == 'MULTIPLE':
+                dtes_query = dtes_query.annotate(
+                    _n_metodos=Count('dte_asociado__metodo_pago', distinct=True)
+                ).filter(_n_metodos__gt=1)
+            else:
+                dtes_query = dtes_query.filter(dte_asociado__metodo_pago=metodo_pago).distinct()
         
         # Filtro de búsqueda
         if buscar:
@@ -4461,22 +4556,43 @@ def anular_documento_venta(request):
 @require_POST
 def editar_dte_boleta_papel(request):
     """
-    Permite a un administrador corregir la fecha de pago (fecha_emision)
-    y el número de documento de una BOLETA PAPEL (boleta manual).
+    Edita campos puntuales de un DTE aplicando permisos granulares.
 
-    Solo usuarios con rol 'administrador' pueden ejecutar esta acción.
+    Cada campo editable está protegido por DOS permisos que deben ser
+    `puede_editar=True` simultáneamente:
+
+      1. Permiso del campo:
+           - fecha            -> `dte_editar_fecha`
+           - numero_documento -> `dte_editar_numero`
+           - pago             -> `dte_editar_pago`
+
+      2. Permiso del tipo de DTE:
+           - BOLETA ELECTRONICA   -> `dte_editar_tipo_boleta_electronica`
+           - BOLETA PAPEL         -> `dte_editar_tipo_boleta_papel`
+           - FACTURA ELECTRONICA  -> `dte_editar_tipo_factura_electronica`
+           - FACTURA EXENTA       -> `dte_editar_tipo_factura_exenta`
+
+    Sólo se actualizan los campos presentes en el body Y para los que
+    el usuario tenga ambos permisos. El resto se ignora en silencio.
+
+    Body esperado::
+
+        {
+          "documento_id": 123,
+          "numero_documento": 456,               // opcional
+          "fecha_emision": "2026-04-17",         // opcional
+          "pagos": [                             // opcional
+             {"id": 10, "metodo_pago": "EFECTIVO", "monto": 50000},
+             {"id": 11, "metodo_pago": "TRANSFERENCIA", "monto": 30000}
+          ]
+        }
+
+    Por compatibilidad, el nombre `editar_dte_boleta_papel` se mantiene
+    (la URL es usada por el template). Internamente ya es genérico.
     """
     try:
-        if getattr(request.user, 'rol', '') != 'administrador':
-            return JsonResponse({
-                'success': False,
-                'error': 'Solo administradores pueden editar boletas papel'
-            }, status=403)
-
         data = json.loads(request.body)
         documento_id = data.get('documento_id')
-        nuevo_numero = data.get('numero_documento')
-        nueva_fecha = data.get('fecha_emision')
 
         if not documento_id:
             return JsonResponse({
@@ -4484,28 +4600,82 @@ def editar_dte_boleta_papel(request):
                 'error': 'ID de documento requerido'
             })
 
-        try:
-            nuevo_numero = int(nuevo_numero)
-        except (TypeError, ValueError):
+        tiene_numero = 'numero_documento' in data and data.get('numero_documento') is not None
+        tiene_fecha = 'fecha_emision' in data and data.get('fecha_emision') is not None
+        tiene_pagos = 'pagos' in data and data.get('pagos') is not None
+
+        if not (tiene_numero or tiene_fecha or tiene_pagos):
             return JsonResponse({
                 'success': False,
-                'error': 'Número de documento inválido'
+                'error': 'No se enviaron campos para editar'
             })
 
-        if nuevo_numero <= 0:
-            return JsonResponse({
-                'success': False,
-                'error': 'El número de documento debe ser un entero positivo'
-            })
+        # Parse / validaciones básicas antes de tocar DB.
+        nuevo_numero = None
+        if tiene_numero:
+            try:
+                nuevo_numero = int(data.get('numero_documento'))
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Número de documento inválido'
+                })
+            if nuevo_numero <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El número de documento debe ser un entero positivo'
+                })
 
-        from datetime import datetime as _dt
-        try:
-            fecha_parsed = _dt.strptime(str(nueva_fecha).strip(), '%Y-%m-%d').date()
-        except (TypeError, ValueError):
-            return JsonResponse({
-                'success': False,
-                'error': 'Fecha inválida. Formato esperado YYYY-MM-DD'
-            })
+        fecha_parsed = None
+        if tiene_fecha:
+            from datetime import datetime as _dt
+            try:
+                fecha_parsed = _dt.strptime(
+                    str(data.get('fecha_emision')).strip(), '%Y-%m-%d'
+                ).date()
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Fecha inválida. Formato esperado YYYY-MM-DD'
+                })
+
+        pagos_payload = []
+        if tiene_pagos:
+            pagos_raw = data.get('pagos') or []
+            if not isinstance(pagos_raw, list):
+                return JsonResponse({
+                    'success': False,
+                    'error': '`pagos` debe ser una lista'
+                })
+            metodos_validos = {c for c, _ in METODO_PAGO_TICKET_CHOICES}
+            for idx, item in enumerate(pagos_raw):
+                if not isinstance(item, dict):
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Pago #{idx + 1} inválido'
+                    })
+                try:
+                    pago_id = int(item.get('id'))
+                    monto = int(item.get('monto'))
+                except (TypeError, ValueError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Pago #{idx + 1}: id o monto inválido'
+                    })
+                metodo = str(item.get('metodo_pago') or '').strip().upper()
+                if metodo not in metodos_validos:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Pago #{idx + 1}: método de pago inválido ({metodo})'
+                    })
+                if monto < 0:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Pago #{idx + 1}: monto no puede ser negativo'
+                    })
+                pagos_payload.append({'id': pago_id, 'metodo_pago': metodo, 'monto': monto})
+
+        sucursal_id_sesion = get_sucursal_id(request)
 
         with transaction.atomic():
             dte = Dte.objects.select_for_update().filter(id=documento_id).first()
@@ -4515,49 +4685,153 @@ def editar_dte_boleta_papel(request):
                     'error': 'Documento no encontrado'
                 })
 
-            if dte.tipo_documento != 'BOLETA PAPEL':
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Solo se pueden editar documentos tipo BOLETA PAPEL'
-                })
-
             if dte.estado_dte == 'ANULADO':
                 return JsonResponse({
                     'success': False,
-                    'error': 'No se puede editar una boleta anulada'
+                    'error': 'No se puede editar un documento anulado'
                 })
 
-            # Verificar duplicado de número en la misma sucursal (BOLETA PAPEL)
-            if nuevo_numero != dte.numero_documento:
+            # El tipo de DTE debe ser uno de los reconocidos por la matriz
+            # de permisos (si no, no hay forma de autorizar el cambio).
+            if (dte.tipo_documento or '').upper() not in CODIGO_PERMISO_TIPO_DTE:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Tipo de documento no editable: {dte.tipo_documento}'
+                }, status=403)
+
+            # Validar permisos campo + tipo para cada cambio solicitado.
+            errores_permiso = []
+
+            def _check(campo):
+                if not puede_editar_campo_dte(
+                    request.user, campo, dte.tipo_documento,
+                    sucursal_id=sucursal_id_sesion,
+                ):
+                    errores_permiso.append(campo)
+
+            if tiene_numero:
+                _check('numero_documento')
+            if tiene_fecha:
+                _check('fecha')
+            if tiene_pagos:
+                _check('pago')
+
+            if errores_permiso:
+                labels = {
+                    'numero_documento': 'N° documento',
+                    'fecha': 'fecha',
+                    'pago': 'pagos',
+                }
+                campos_txt = ', '.join(labels.get(c, c) for c in errores_permiso)
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'No tiene permisos para editar {campos_txt} en '
+                        f'{dte.tipo_documento}'
+                    )
+                }, status=403)
+
+            # Validación de número duplicado en la misma sucursal + tipo.
+            if tiene_numero and nuevo_numero != dte.numero_documento:
                 existe_duplicado = Dte.objects.filter(
                     sucursal_id=dte.sucursal_id,
-                    tipo_documento='BOLETA PAPEL',
+                    tipo_documento=dte.tipo_documento,
                     numero_documento=nuevo_numero,
                 ).exclude(id=dte.id).exists()
                 if existe_duplicado:
                     return JsonResponse({
                         'success': False,
-                        'error': f'Ya existe otra BOLETA PAPEL con el número {nuevo_numero} en esta sucursal'
+                        'error': (
+                            f'Ya existe otro {dte.tipo_documento} con el '
+                            f'número {nuevo_numero} en esta sucursal'
+                        )
                     })
 
+            # Validación específica de pagos:
+            #  - Los ids enviados deben pertenecer al DTE.
+            #  - El conjunto enviado debe cubrir TODOS los pagos del DTE
+            #    (editamos, no agregamos/eliminamos).
+            #  - La suma debe coincidir con `monto_con_iva` para mantener
+            #    la cuadratura del documento.
+            pagos_actualizar = []
+            if tiene_pagos:
+                ids_enviados = [p['id'] for p in pagos_payload]
+                if len(ids_enviados) != len(set(ids_enviados)):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Hay ids de pago duplicados en el body'
+                    })
+
+                pagos_existentes = list(
+                    Dte_Detalle_Pago.objects.select_for_update()
+                    .filter(dte_id=dte.id)
+                )
+                ids_existentes = {p.id for p in pagos_existentes}
+                ids_enviados_set = set(ids_enviados)
+
+                if ids_enviados_set != ids_existentes:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            'Los pagos enviados no coinciden con los del DTE. '
+                            'Debe enviar todos los pagos existentes (solo se '
+                            'permite editar, no agregar/eliminar).'
+                        )
+                    })
+
+                suma_pagos = sum(p['monto'] for p in pagos_payload)
+                monto_esperado = int(dte.monto_con_iva or 0)
+                if monto_esperado > 0 and suma_pagos != monto_esperado:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'La suma de los pagos ({suma_pagos:,}) no coincide '
+                            f'con el total del DTE ({monto_esperado:,}).'
+                        )
+                    })
+
+                pagos_por_id = {p.id: p for p in pagos_existentes}
+                for item in pagos_payload:
+                    obj = pagos_por_id[item['id']]
+                    obj.metodo_pago = item['metodo_pago']
+                    obj.monto = item['monto']
+                    pagos_actualizar.append(obj)
+
+            # Aplicar cambios ----------------------------------------------
             numero_anterior = dte.numero_documento
             fecha_anterior = dte.fecha_emision
 
-            dte.numero_documento = nuevo_numero
-            dte.fecha_emision = fecha_parsed
-            # Para boletas papel el pago es al contado: vencimiento = emisión
-            dte.fecha_vencimiento = fecha_parsed
-            dte.save(update_fields=['numero_documento', 'fecha_emision', 'fecha_vencimiento'])
+            update_fields = []
+            if tiene_numero:
+                dte.numero_documento = nuevo_numero
+                update_fields.append('numero_documento')
+            if tiene_fecha:
+                dte.fecha_emision = fecha_parsed
+                update_fields.append('fecha_emision')
+                # Para boletas papel el pago es al contado.
+                if (dte.tipo_documento or '').upper() == 'BOLETA PAPEL':
+                    dte.fecha_vencimiento = fecha_parsed
+                    update_fields.append('fecha_vencimiento')
+
+            if update_fields:
+                dte.save(update_fields=update_fields)
+
+            for obj in pagos_actualizar:
+                obj.save(update_fields=['metodo_pago', 'monto'])
 
         return JsonResponse({
             'success': True,
-            'message': 'Boleta papel actualizada correctamente',
+            'message': 'Documento actualizado correctamente',
             'documento': {
                 'id': dte.id,
+                'tipo_documento': dte.tipo_documento,
                 'numero_documento': dte.numero_documento,
                 'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
                 'numero_anterior': numero_anterior,
-                'fecha_anterior': fecha_anterior.strftime('%Y-%m-%d') if fecha_anterior else None,
+                'fecha_anterior': (
+                    fecha_anterior.strftime('%Y-%m-%d') if fecha_anterior else None
+                ),
+                'pagos_actualizados': len(pagos_actualizar),
             }
         })
 
@@ -4569,7 +4843,7 @@ def editar_dte_boleta_papel(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Error al editar boleta papel: {str(e)}'
+            'error': f'Error al editar documento: {str(e)}'
         })
 
 
@@ -9102,7 +9376,8 @@ def iniciar_venta_pos(request):
                     tipo_tarjeta=transaccion.nombre_tarjeta,
                     voucher=transaccion.codigo_autorizacion,
                     monto=int(transaccion.monto),
-                    notas=f'POS {configuracion.nombre} - Oper: {transaccion.numero_operacion}'
+                    notas=f'POS {configuracion.nombre} - Oper: {transaccion.numero_operacion}',
+                    origen_pago='POS_INTEGRADO',
                 )
                 
                 # Asociar el detalle de pago con la transacción
@@ -9248,7 +9523,8 @@ def guardar_venta_pos(request):
                 tipo_tarjeta=sale_response.get('cardBrand', ''),
                 voucher=sale_response.get('authorizationCode', ''),
                 monto=int(transaccion.monto),
-                notas=f'POS - Oper: {sale_response.get("operationNumber", "")}'
+                notas=f'POS - Oper: {sale_response.get("operationNumber", "")}',
+                origen_pago='POS_INTEGRADO',
             )
             
             transaccion.detalle_pago = detalle_pago
@@ -9383,7 +9659,8 @@ def completar_transaccion_pos(request):
                 tipo_tarjeta=transaccion.nombre_tarjeta,
                 voucher=transaccion.codigo_autorizacion,
                 monto=int(transaccion.monto),
-                notas=f'POS {transaccion.configuracion_pos.nombre} - Oper: {transaccion.numero_operacion}'
+                notas=f'POS {transaccion.configuracion_pos.nombre} - Oper: {transaccion.numero_operacion}',
+                origen_pago='POS_INTEGRADO',
             )
             
             # Asociar el detalle de pago con la transacción

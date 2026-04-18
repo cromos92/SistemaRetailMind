@@ -150,3 +150,87 @@ ONLY_TICKET_PRODUCTO_POS = (
     'ProductoTalla__stock', 'ProductoTalla__producto_id',
     'ProductoTalla__producto__articulo', 'ProductoTalla__producto__sucursal_id',
 )
+
+
+# ========== PERMISOS GRANULARES DE EDICIÓN DE DTE ==========
+#
+# La matriz es separada (3 campos editables + 4 tipos de DTE). Para
+# autorizar la edición de un campo sobre un DTE concreto, el usuario
+# debe tener `puede_editar=True` en AMBAS opciones (la del campo y la
+# del tipo de DTE).
+#
+# Los códigos viven en `OpcionMenu` y se administran desde la pantalla
+# de gestión de permisos como cualquier otro permiso.
+
+# Mapping campo lógico -> código de OpcionMenu.
+CODIGO_PERMISO_CAMPO_DTE = {
+    'fecha': 'dte_editar_fecha',
+    'numero_documento': 'dte_editar_numero',
+    'pago': 'dte_editar_pago',
+}
+
+# Mapping `tipo_documento` almacenado en DB -> código de OpcionMenu.
+CODIGO_PERMISO_TIPO_DTE = {
+    'BOLETA ELECTRONICA': 'dte_editar_tipo_boleta_electronica',
+    'BOLETA PAPEL': 'dte_editar_tipo_boleta_papel',
+    'FACTURA ELECTRONICA': 'dte_editar_tipo_factura_electronica',
+    'FACTURA EXENTA': 'dte_editar_tipo_factura_exenta',
+}
+
+
+def _tiene_permiso_edicion(user, codigo_opcion: str, sucursal_id=None) -> bool:
+    """Wrapper local para evitar import circular con `app.models`."""
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return False
+    # Import local para evitar ciclos en tiempo de carga.
+    from app.models import PermisoRol
+    return PermisoRol.tiene_permiso(
+        user, codigo_opcion, 'puede_editar', sucursal_id=sucursal_id
+    )
+
+
+def puede_editar_campo_dte(user, campo: str, tipo_documento: str | None,
+                           sucursal_id=None) -> bool:
+    """
+    Verifica que el usuario pueda editar el `campo` sobre un DTE del
+    `tipo_documento` indicado, considerando ambas dimensiones de permiso.
+
+    Args:
+        user: Usuario autenticado.
+        campo: 'fecha' | 'numero_documento' | 'pago'.
+        tipo_documento: valor tal como está almacenado en `Dte.tipo_documento`
+            (ej. 'BOLETA ELECTRONICA'). Si es desconocido retorna False.
+        sucursal_id: sucursal activa, para respetar `PermisoSucursal`.
+    """
+    codigo_campo = CODIGO_PERMISO_CAMPO_DTE.get(campo)
+    codigo_tipo = CODIGO_PERMISO_TIPO_DTE.get((tipo_documento or '').upper().strip())
+    if not codigo_campo or not codigo_tipo:
+        return False
+    return (
+        _tiene_permiso_edicion(user, codigo_campo, sucursal_id)
+        and _tiene_permiso_edicion(user, codigo_tipo, sucursal_id)
+    )
+
+
+def permisos_edicion_dte_context(user, sucursal_id=None) -> dict:
+    """
+    Devuelve un diccionario apto para pasar al template con el estado
+    de los 7 permisos de edición de DTE (3 campos + 4 tipos).
+    Útil en context_processors o en vistas que renderizan el modal.
+    """
+    flags_campo = {
+        campo: _tiene_permiso_edicion(user, codigo, sucursal_id)
+        for campo, codigo in CODIGO_PERMISO_CAMPO_DTE.items()
+    }
+    flags_tipo = {
+        tipo: _tiene_permiso_edicion(user, codigo, sucursal_id)
+        for tipo, codigo in CODIGO_PERMISO_TIPO_DTE.items()
+    }
+    return {
+        'campo': flags_campo,
+        'tipo': flags_tipo,
+        # Booleano rápido: ¿puede editar algo en algún tipo?
+        'cualquiera': (
+            any(flags_campo.values()) and any(flags_tipo.values())
+        ),
+    }

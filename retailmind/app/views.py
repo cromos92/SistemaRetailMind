@@ -38,6 +38,7 @@ from .models import (
 from django.contrib.auth.decorators import login_required
 from app.decorators import requiere_permiso
 from app.models.permisos import PermisoRol
+from app.utils_permisos import puede_cambiar_sucursal
 from django.contrib.sessions.models import Session
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
@@ -17240,12 +17241,16 @@ def es_administrador(user):
 @login_required
 def cambiar_empresa(request):
     """
-    Vista para mostrar las empresas y sucursales disponibles para el usuario
-    SOLO muestra empresas que tienen sucursales asignadas
-    RESTRINGIDO: Solo usuarios con rol 'administrador' pueden cambiar sucursal
+    Vista para mostrar las empresas y sucursales disponibles para el usuario.
+    SOLO muestra empresas que tienen sucursales asignadas.
+
+    El permiso para cambiar sucursal se resuelve por:
+      1. Rol 'administrador' -> siempre puede.
+      2. En caso contrario: PermisoUsuario > PermisoRol sobre la opción
+         'cambiar_empresa' (flag puede_ver). Configurable desde
+         /app/permisos/gestion/.
     """
-    # Verificar que el usuario sea administrador
-    puede_cambiar = es_administrador(request.user)
+    puede_cambiar = puede_cambiar_sucursal(request.user)
     
     print(f"🔍 DEBUG - Usuario actual: {request.user}")
     print(f"🔍 DEBUG - Usuario ID: {request.user.id}")
@@ -17323,18 +17328,22 @@ def cambiar_empresa(request):
 @require_POST
 def seleccionar_empresa_sucursal(request):
     """
-    Vista AJAX para cambiar la empresa y sucursal activa del usuario
-    RESTRINGIDO: Solo usuarios con rol 'administrador' pueden cambiar sucursal
+    Vista AJAX para cambiar la empresa y sucursal activa del usuario.
+
+    El permiso para cambiar sucursal se resuelve por el sistema estándar:
+      1. Rol 'administrador' -> siempre puede.
+      2. En caso contrario: PermisoUsuario > PermisoRol sobre la opción
+         'cambiar_empresa' (flag puede_ver). Configurable desde
+         /app/permisos/gestion/.
     """
     import logging
     logger = logging.getLogger(__name__)
-    
+
     try:
-        # Verificar que el usuario sea administrador
-        if not es_administrador(request.user):
+        if not puede_cambiar_sucursal(request.user):
             return JsonResponse({
                 'success': False,
-                'error': 'No tienes permisos para cambiar de sucursal. Solo los administradores pueden realizar esta acción.'
+                'error': 'No tienes permisos para cambiar de sucursal. Contacta al administrador para habilitar la opción "Cambiar Empresa/Sucursal" en la gestión de permisos.'
             })
         
         empresa_user_id = request.POST.get('empresa_user_id')
@@ -17455,11 +17464,13 @@ def api_sucursales_usuario(request):
     """
     API para obtener las sucursales disponibles del usuario actual.
     Usado por el quick-switch dropdown en el header.
-    NOTA: Solo administradores pueden cambiar sucursal.
+
+    El flag `puede_cambiar` se resuelve vía el sistema estándar de permisos
+    (PermisoUsuario > PermisoRol) sobre la opción 'cambiar_empresa'.
+    Configurable desde /app/permisos/gestion/.
     """
     try:
-        # Verificar si el usuario puede cambiar sucursal
-        puede_cambiar = es_administrador(request.user)
+        puede_cambiar = puede_cambiar_sucursal(request.user)
         
         empresas_usuario = EmpresaUser.objects.filter(
             user=request.user,

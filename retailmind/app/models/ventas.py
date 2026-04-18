@@ -31,6 +31,16 @@ METODO_PAGO_TICKET_CHOICES = [
     ('MULTIPLE', 'Pagos Combinados'),
 ]
 
+# Origen del pago: distingue pagos ingresados manualmente (voucher digitado)
+# de los ejecutados por el SDK Transbank (POS integrado). Valor NULL se
+# interpreta como "histórico / desconocido" (registros previos a este campo).
+ORIGEN_PAGO_CHOICES = [
+    ('MANUAL', 'Ingreso Manual (voucher digitado)'),
+    ('POS_INTEGRADO', 'POS Integrado (SDK Transbank)'),
+    ('POS_WEB', 'POS Web / Webpay'),
+    ('EXTERNO', 'Sistema Externo'),
+]
+
 # ========== CONSTANTES PARA MOVIMIENTOS ==========
 TIPO_MOVIMIENTO_CHOICES = [
     ('INGRESO', 'Ingreso'),
@@ -322,6 +332,17 @@ class TicketDetallePago(models.Model):
     numero_orden_compra = models.CharField(max_length=100, null=True, blank=True, help_text="Número de orden de compra del cliente")
     monto = models.IntegerField()
     notas = models.TextField(blank=True, null=True)
+    origen_pago = models.CharField(
+        max_length=20,
+        choices=ORIGEN_PAGO_CHOICES,
+        null=True, blank=True,
+        help_text=(
+            "Origen/canal del pago. NULL = histórico (pre-migración). "
+            "Permite distinguir un pago con voucher digitado a mano (MANUAL) "
+            "de uno ejecutado por el SDK del POS Transbank (POS_INTEGRADO), "
+            "aunque ambos tengan el mismo metodo_pago (TBK_DEBITO_POS, etc.)."
+        ),
+    )
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
 
@@ -334,10 +355,23 @@ class TicketDetallePago(models.Model):
             models.Index(fields=['ticket', 'metodo_pago'], name='ticketpago_tic_met_idx'),
             # Filtros por método de pago en dashboards
             models.Index(fields=['metodo_pago'], name='ticketpago_metodo_idx'),
+            # Filtros por origen (MANUAL vs POS_INTEGRADO) en conciliación
+            models.Index(fields=['metodo_pago', 'origen_pago'], name='ticketpago_met_ori_idx'),
         ]
 
     def __str__(self):
         return f"Pago {self.get_metodo_pago_display()} - ${self.monto:,} (Ticket {self.ticket.correlativo})"
+
+    @property
+    def es_pos_integrado(self) -> bool:
+        """True si el pago proviene del POS integrado (SDK Transbank).
+
+        Prefiere el campo explícito `origen_pago`; si está en NULL (histórico)
+        cae a la señal implícita de tener una `TransaccionPOS` enlazada.
+        """
+        if self.origen_pago:
+            return self.origen_pago in ('POS_INTEGRADO', 'POS_WEB')
+        return self.transaccion_pos.exists()
 
 
 # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========

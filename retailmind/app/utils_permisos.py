@@ -2,7 +2,7 @@
 Utilidades centralizadas para permisos y filtrado de sucursales.
 El flag is_superuser de Django NO otorga privilegios. Solo importa el sistema de roles y permisos.
 """
-from .models import Sucursal, EmpresaUser, PermisoUsuario
+from .models import Sucursal, EmpresaUser, PermisoUsuario, PermisoRol
 
 
 def obtener_sucursales_usuario(usuario):
@@ -80,6 +80,33 @@ def usuario_puede_ver_todas_sucursales(usuario):
     if getattr(usuario, 'rol', '') == 'administrador':
         return True
     return PermisoUsuario.usuario_ve_todas_sucursales(usuario)
+
+
+def puede_cambiar_sucursal(usuario):
+    """
+    Verifica si un usuario puede cambiar su empresa/sucursal activa.
+
+    Orden de resolución:
+    1. Si el rol es 'administrador' -> siempre True (fallback de seguridad).
+    2. En caso contrario se consulta el sistema estándar de permisos
+       (PermisoUsuario > PermisoRol > PermisoSucursal) sobre la opción
+       'cambiar_empresa' usando el flag `puede_ver`.
+
+    Esto permite habilitar o deshabilitar el cambio de sucursal desde
+    la interfaz de gestión de permisos (/app/permisos/gestion/) tanto
+    a nivel de rol como con overrides por usuario.
+    """
+    if not usuario or not getattr(usuario, 'is_authenticated', False):
+        return False
+
+    if getattr(usuario, 'rol', '') == 'administrador':
+        return True
+
+    return PermisoRol.tiene_permiso(
+        usuario,
+        codigo_opcion='cambiar_empresa',
+        tipo_permiso='puede_ver',
+    )
 
 
 def obtener_contexto_sucursales(usuario, request):

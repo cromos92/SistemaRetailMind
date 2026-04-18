@@ -5,6 +5,7 @@ Permite verificar permisos y filtrar menús en templates
 from django import template
 from django.db.models import Q
 from app.models import PermisoRol, PermisoUsuario, OpcionMenu, ModuloSistema
+from app.utils_permisos import puede_cambiar_sucursal as _puede_cambiar_sucursal
 
 register = template.Library()
 
@@ -296,6 +297,23 @@ def es_administrador(user):
         return False
     
     return hasattr(user, 'rol') and user.rol == 'administrador'
+
+
+@register.filter(name='puede_cambiar_sucursal')
+def puede_cambiar_sucursal_filter(user):
+    """
+    Verifica si el usuario puede cambiar su empresa/sucursal activa.
+
+    Resuelve en el mismo orden que el backend (ver app.utils_permisos):
+      1. Rol 'administrador' -> siempre True.
+      2. PermisoUsuario > PermisoRol sobre la opción 'cambiar_empresa'.
+
+    Uso en template:
+        {% if user|puede_cambiar_sucursal %}
+            <a href="{% url 'cambiar_empresa' %}">Cambiar sucursal</a>
+        {% endif %}
+    """
+    return _puede_cambiar_sucursal(user)
 
 
 @register.filter

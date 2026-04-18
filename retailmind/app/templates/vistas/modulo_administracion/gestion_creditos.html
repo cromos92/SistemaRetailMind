@@ -1320,14 +1320,33 @@
                                 <option value="">-- Usar empresa actual --</option>
                                 <!-- Se llenará dinámicamente -->
                             </select>
-                            <small style="color: var(--nexo-text-muted);">Si no selecciona, se asignará a la empresa de la sesión actual</small>
+                            <small style="color: var(--nexo-text-muted);">
+                                <i class="ri-information-line me-1"></i>
+                                Si cambia la empresa, se listarán únicamente las sucursales de esa empresa.
+                            </small>
                         </div>
 
                         <!-- Asignación a Sucursales -->
                         <div class="col-12 mt-3">
-                            <h6 style="color: var(--nexo-primary); font-weight: 600; border-bottom: 1px solid var(--nexo-gray-300); padding-bottom: 8px;">
-                                <i class="ri-store-2-line me-1"></i> Asignación a Sucursales <small style="color: var(--nexo-gray-500); font-weight: normal;">(Opcional)</small>
-                            </h6>
+                            <div class="d-flex flex-wrap align-items-center justify-content-between" style="border-bottom: 1px solid var(--nexo-gray-300); padding-bottom: 8px;">
+                                <h6 class="mb-0" style="color: var(--nexo-primary); font-weight: 600;">
+                                    <i class="ri-store-2-line me-1"></i> Asignación a Sucursales
+                                    <small style="color: var(--nexo-gray-500); font-weight: normal;">(Opcional)</small>
+                                    <span id="badge-empresa-sucursales" class="badge ms-2" style="background: var(--nexo-info); color: white; font-weight: 500; display:none;">
+                                        <i class="ri-building-line me-1"></i><span class="text"></span>
+                                    </span>
+                                </h6>
+                                <div class="d-flex gap-2 mt-2 mt-md-0">
+                                    <button type="button" class="btn btn-sm nexo-btn-secondary" id="btn-sucursales-seleccionar-todas" title="Seleccionar todas">
+                                        <i class="ri-checkbox-multiple-line"></i>
+                                        <span class="d-none d-sm-inline ms-1">Todas</span>
+                                    </button>
+                                    <button type="button" class="btn btn-sm nexo-btn-secondary" id="btn-sucursales-limpiar" title="Limpiar selección">
+                                        <i class="ri-close-circle-line"></i>
+                                        <span class="d-none d-sm-inline ms-1">Ninguna</span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-12">
                             <div class="alert mb-2" style="background-color: rgba(255, 176, 32, 0.1); border-left: 4px solid var(--nexo-warning); border-radius: var(--nexo-radius-md); padding: 10px 15px;">
@@ -1336,12 +1355,25 @@
                                     <strong>No seleccionar ninguna sucursal</strong> si es personal administrativo, externo o de otra empresa.
                                 </small>
                             </div>
-                            <div id="sucursales-container" class="row g-2">
+                            <div class="mb-2">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text" style="background: var(--nexo-bg-secondary); border-color: var(--nexo-gray-300);">
+                                        <i class="ri-search-line"></i>
+                                    </span>
+                                    <input type="text" id="filtro-sucursales-modal" class="form-control nexo-input" placeholder="Buscar sucursal por nombre o dirección...">
+                                </div>
+                            </div>
+                            <div id="sucursales-container" class="row g-2" style="max-height: 260px; overflow-y: auto;">
                                 <!-- Las sucursales se cargarán dinámicamente -->
                                 <div class="col-12 text-center py-3">
                                     <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
                                     <small class="ms-2" style="color: var(--nexo-text-muted);">Cargando sucursales...</small>
                                 </div>
+                            </div>
+                            <div class="mt-2 text-end">
+                                <small style="color: var(--nexo-text-muted);">
+                                    <span id="contador-sucursales-seleccionadas">0</span> de <span id="contador-sucursales-total">0</span> sucursales seleccionadas
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -1590,26 +1622,31 @@ $(document).ready(function() {
 
     function openNuevoTrabajadorModal() {
         $('#form-nuevo-trabajador')[0].reset();
-        
+        $('#filtro-sucursales-modal').val('');
+        $('#badge-empresa-sucursales').hide().find('.text').text('');
+        $('#contador-sucursales-seleccionadas').text('0');
+        $('#contador-sucursales-total').text('0');
+
         flatpickr('#trabajador-fecha-nacimiento', {
             dateFormat: 'd-m-Y',
             locale: 'es',
             allowInput: true
         });
-        
+
         cargarEmpresasParaTrabajador();
-        cargarSucursalesParaTrabajador();
-        
+        // Carga inicial con la empresa de sesión (sin empresa_id en el select)
+        cargarSucursalesParaTrabajador(null);
+
         $('#modal-nuevo-trabajador').modal('show');
     }
-    
+
     function cargarEmpresasParaTrabajador() {
         $.get('/app/api/empresas/')
             .done(function(response) {
                 if (response.success && response.empresas) {
                     let options = '<option value="">-- Usar empresa actual --</option>';
                     response.empresas.forEach(function(emp) {
-                        options += `<option value="${emp.id}">${emp.nombre}</option>`;
+                        options += `<option value="${emp.id}" data-nombre="${emp.nombre}">${emp.nombre}</option>`;
                     });
                     $('#trabajador-empresa').html(options);
                 }
@@ -1619,7 +1656,7 @@ $(document).ready(function() {
             });
     }
 
-    function cargarSucursalesParaTrabajador() {
+    function cargarSucursalesParaTrabajador(empresaId) {
         $('#sucursales-container').html(`
             <div class="col-12 text-center py-3">
                 <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
@@ -1627,22 +1664,42 @@ $(document).ready(function() {
             </div>
         `);
 
-        $.get('/app/api/creditos/sucursales/')
+        const params = {};
+        if (empresaId) {
+            params.empresa_id = empresaId;
+        }
+
+        $.get('/app/api/creditos/sucursales/', params)
             .done(function(response) {
                 if (response.success) {
-                    sucursalesDisponibles = response.sucursales;
-                    renderSucursalesCheckboxes(response.sucursales);
+                    sucursalesDisponibles = response.sucursales || [];
+
+                    // Mostrar badge con el nombre de la empresa asociada
+                    if (response.empresa && response.empresa.nombre) {
+                        $('#badge-empresa-sucursales')
+                            .show()
+                            .find('.text')
+                            .text(response.empresa.nombre);
+                    } else {
+                        $('#badge-empresa-sucursales').hide();
+                    }
+
+                    renderSucursalesCheckboxes(sucursalesDisponibles);
+                    actualizarContadorSucursales();
                 } else {
+                    $('#badge-empresa-sucursales').hide();
                     $('#sucursales-container').html(`
                         <div class="col-12">
                             <div class="alert alert-warning mb-0">
-                                <i class="ri-alert-line"></i> No se pudieron cargar las sucursales
+                                <i class="ri-alert-line"></i> ${response.error || 'No se pudieron cargar las sucursales'}
                             </div>
                         </div>
                     `);
+                    actualizarContadorSucursales();
                 }
             })
             .fail(function() {
+                $('#badge-empresa-sucursales').hide();
                 $('#sucursales-container').html(`
                     <div class="col-12">
                         <div class="alert alert-danger mb-0">
@@ -1650,15 +1707,16 @@ $(document).ready(function() {
                         </div>
                     </div>
                 `);
+                actualizarContadorSucursales();
             });
     }
 
     function renderSucursalesCheckboxes(sucursales) {
-        if (sucursales.length === 0) {
+        if (!sucursales || sucursales.length === 0) {
             $('#sucursales-container').html(`
                 <div class="col-12">
                     <div class="alert alert-info mb-0">
-                        <i class="ri-information-line"></i> No hay sucursales disponibles
+                        <i class="ri-information-line"></i> Esta empresa no tiene sucursales activas
                     </div>
                 </div>
             `);
@@ -1667,44 +1725,81 @@ $(document).ready(function() {
 
         let html = '';
         sucursales.forEach(function(s) {
+            const direccionCompleta = [s.direccion, s.comuna, s.ciudad].filter(Boolean).join(', ');
+            const textoBusqueda = (s.alias + ' ' + (s.nombre || '') + ' ' + direccionCompleta).toLowerCase();
             html += `
-                <div class="col-md-4 col-sm-6">
-                    <div class="form-check sucursal-checkbox-item" style="background: var(--nexo-bg-secondary); border-radius: var(--nexo-radius-md); padding: 10px 15px; border: 1px solid var(--nexo-gray-300); cursor: pointer;">
+                <div class="col-md-4 col-sm-6 sucursal-wrapper" data-search="${textoBusqueda}">
+                    <div class="form-check sucursal-checkbox-item" style="background: var(--nexo-bg-secondary); border-radius: var(--nexo-radius-md); padding: 10px 15px; border: 1px solid var(--nexo-gray-300); cursor: pointer; transition: all 0.15s ease;">
                         <input class="form-check-input" type="checkbox" value="${s.id}" id="suc-${s.id}" name="sucursales">
                         <label class="form-check-label" for="suc-${s.id}" style="cursor: pointer; width: 100%;">
                             <strong style="color: var(--nexo-text-primary);">${s.alias}</strong>
-                            ${s.direccion ? `<br><small style="color: var(--nexo-text-muted);">${s.direccion}</small>` : ''}
+                            ${direccionCompleta ? `<br><small style="color: var(--nexo-text-muted);">${direccionCompleta}</small>` : ''}
                         </label>
                     </div>
                 </div>
             `;
         });
-        
-        // Agregar opción de "Ninguna"
-        html += `
-            <div class="col-12 mt-2">
-                <small style="color: var(--nexo-text-muted);">
-                    <i class="ri-checkbox-blank-circle-line me-1"></i>
-                    Si no seleccionas ninguna sucursal, el beneficiario no estará asociado a ninguna tienda (ideal para administrativos o externos)
-                </small>
-            </div>
-        `;
-        
+
         $('#sucursales-container').html(html);
 
-        // Estilo para checkbox seleccionado
+        // Click en la tarjeta completa alterna el checkbox
         $('.sucursal-checkbox-item').on('click', function(e) {
             if (e.target.type !== 'checkbox') {
                 const checkbox = $(this).find('input[type="checkbox"]');
-                checkbox.prop('checked', !checkbox.prop('checked'));
+                checkbox.prop('checked', !checkbox.prop('checked')).trigger('change');
             }
-            updateSucursalStyle($(this));
         });
 
         $('input[name="sucursales"]').on('change', function() {
             updateSucursalStyle($(this).closest('.sucursal-checkbox-item'));
+            actualizarContadorSucursales();
+        });
+
+        // Reaplicar filtro de texto si había uno escrito
+        aplicarFiltroSucursalesModal();
+    }
+
+    function actualizarContadorSucursales() {
+        const total = $('input[name="sucursales"]').length;
+        const seleccionadas = $('input[name="sucursales"]:checked').length;
+        $('#contador-sucursales-total').text(total);
+        $('#contador-sucursales-seleccionadas').text(seleccionadas);
+    }
+
+    function aplicarFiltroSucursalesModal() {
+        const q = ($('#filtro-sucursales-modal').val() || '').toLowerCase().trim();
+        if (!q) {
+            $('.sucursal-wrapper').show();
+            return;
+        }
+        $('.sucursal-wrapper').each(function() {
+            const match = ($(this).data('search') || '').toString().indexOf(q) !== -1;
+            $(this).toggle(match);
         });
     }
+
+    // Listeners del modal de beneficiario (solo se registran una vez)
+    $('#trabajador-empresa').on('change', function() {
+        const empresaId = $(this).val();
+        // Al cambiar de empresa se limpian las selecciones y se recarga la lista
+        cargarSucursalesParaTrabajador(empresaId || null);
+    });
+
+    $('#btn-sucursales-seleccionar-todas').on('click', function() {
+        $('.sucursal-wrapper:visible input[name="sucursales"]')
+            .prop('checked', true)
+            .trigger('change');
+    });
+
+    $('#btn-sucursales-limpiar').on('click', function() {
+        $('input[name="sucursales"]:checked')
+            .prop('checked', false)
+            .trigger('change');
+    });
+
+    $('#filtro-sucursales-modal').on('input', function() {
+        aplicarFiltroSucursalesModal();
+    });
 
     function updateSucursalStyle(item) {
         const checkbox = item.find('input[type="checkbox"]');

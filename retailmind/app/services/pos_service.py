@@ -367,7 +367,8 @@ class POSTransactionService:
             tipo_tarjeta=transaccion.nombre_tarjeta,
             voucher=transaccion.codigo_autorizacion,
             monto=int(transaccion.monto),
-            notas=f'POS {transaccion.configuracion_pos.nombre} - Oper: {transaccion.numero_operacion}'
+            notas=f'POS {transaccion.configuracion_pos.nombre} - Oper: {transaccion.numero_operacion}',
+            origen_pago='POS_INTEGRADO',
         )
         
         # Asociar el detalle de pago con la transacción

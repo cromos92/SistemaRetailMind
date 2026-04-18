@@ -667,10 +667,66 @@
                                 </div>
                             </div>
 
-                            <!-- Panel Derecho: Resumen y Pagos -->
+                            <!-- Panel Derecho: Resumen (sticky arriba) + Pagos -->
                             <div class="col-md-4">
-                                <!-- Métodos de Pago -->
-                                <div class="card shadow-sm">
+                                <!-- ===== RESUMEN STICKY (encabezado fijo) ===== -->
+                                <div class="pos-resumen-sticky-wrapper">
+                                    <div class="card shadow-sm pos-resumen-card">
+                                        <div class="card-header bg-primary text-white py-2">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <h6 class="mb-0 fw-bold text-white">
+                                                    <i class="ri-calculator-line me-1"></i> Resumen de Venta
+                                                </h6>
+                                                <span class="badge bg-white text-primary" style="font-size:0.65rem;">
+                                                    <i class="ri-shopping-bag-line"></i> <span id="totalItems">0</span> items
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="card-body p-2">
+                                            <!-- Hero: Saldo pendiente gigante / Pagado -->
+                                            <div id="heroSaldo" class="pos-hero-saldo pos-hero-pendiente">
+                                                <div class="pos-hero-label">
+                                                    <i class="ri-arrow-down-circle-line"></i>
+                                                    <span id="heroSaldoLabel">SALDO PENDIENTE</span>
+                                                </div>
+                                                <div class="pos-hero-amount" id="saldo">$0</div>
+                                            </div>
+
+                                            <!-- Desglose compacto (3 columnas) -->
+                                            <div class="pos-resumen-mini mt-2">
+                                                <div class="pos-resumen-mini-cell">
+                                                    <span class="pos-mini-label">Subtotal</span>
+                                                    <strong id="subtotal">$0</strong>
+                                                </div>
+                                                <div class="pos-resumen-mini-cell" id="lineaDescuento" style="display: none;">
+                                                    <span class="pos-mini-label text-warning"><i class="ri-price-tag-3-line"></i> Dcto.</span>
+                                                    <strong class="text-warning" id="descuento">-$0</strong>
+                                                </div>
+                                                <div class="pos-resumen-mini-cell">
+                                                    <span class="pos-mini-label">Total</span>
+                                                    <strong class="text-primary" id="total">$0</strong>
+                                                </div>
+                                                <div class="pos-resumen-mini-cell">
+                                                    <span class="pos-mini-label">Pagado</span>
+                                                    <strong class="text-success" id="pagado">$0</strong>
+                                                </div>
+                                            </div>
+
+                                            <!-- CTA Continuar a Finalizar (aparece cuando saldo = 0) -->
+                                            <div id="ctaContinuarFinalizar" class="mt-2" style="display:none;">
+                                                <button class="btn btn-success btn-lg w-100 py-3 fw-bold pos-cta-finalizar"
+                                                        onclick="pasoSiguiente()"
+                                                        title="Ir al paso de confirmación (F10)">
+                                                    <i class="ri-check-double-line me-1"></i> CONTINUAR A FINALIZAR
+                                                    <kbd class="pos-kbd-cta ms-2">F10</kbd>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ===== MÉTODOS DE PAGO ===== -->
+                                <div class="card shadow-sm mt-2">
                                     <div class="card-header bg-success text-white py-2">
                                         <h6 class="mb-0 fw-bold text-white">
                                             <i class="ri-wallet-3-line me-1"></i> Método de Pago
@@ -678,7 +734,7 @@
                                     </div>
                                     <div class="card-body p-2">
                                         <!-- Atajos rápidos -->
-                                        <div class="d-flex align-items-center gap-1 mb-1 px-1" style="font-size:0.6rem;">
+                                        <div class="d-flex align-items-center gap-1 mb-2 px-1 flex-wrap" style="font-size:0.6rem;">
                                             <i class="ri-keyboard-box-line text-muted"></i>
                                             <span class="text-muted">Atajos:</span>
                                             <kbd style="font-size:0.55rem">F4</kbd><span class="text-muted">Efectivo total</span>
@@ -687,76 +743,99 @@
                                             <span class="text-muted mx-1">·</span>
                                             <kbd style="font-size:0.55rem">F10</kbd><span class="text-muted">Siguiente</span>
                                         </div>
-                                        <div class="row g-1 mb-2">
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-success w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="agregarPago('EFECTIVO')" id="btnPagoEfectivo">
-                                                    <kbd class="pos-kbd-badge">F5</kbd>
-                                                    <i class="ri-money-dollar-circle-line d-block mb-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.75rem">Efectivo</span>
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-primary w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="agregarPago('TBK_DEBITO_POS')" id="btnPagoDebito">
-                                                    <kbd class="pos-kbd-badge">F6</kbd>
-                                                    <i class="ri-bank-card-line d-block mb-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.75rem">Débito</span>
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-info w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="agregarPago('TBK_CREDITO_POS')" id="btnPagoCredito">
-                                                    <kbd class="pos-kbd-badge">F7</kbd>
-                                                    <i class="ri-bank-card-2-line d-block mb-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.75rem">Crédito</span>
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-warning w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="agregarPago('TRANSFERENCIA')" id="btnPagoTransferencia">
-                                                    <kbd class="pos-kbd-badge">F8</kbd>
-                                                    <i class="ri-exchange-line d-block mb-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.75rem">Transfer.</span>
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-secondary w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="pagarConVentaInternet()" id="btnPagoInternet">
-                                                    <kbd class="pos-kbd-badge">F9</kbd>
-                                                    <i class="ri-shopping-cart-line d-block mb-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.75rem">Internet</span>
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-danger w-100 py-2 pos-pago-btn" style="min-height:58px;" onclick="pagarConPOSTransbank()" id="btn-pos-transbank">
-                                                    <i class="ri-bank-card-line d-block mb-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.75rem">POS TBK</span>
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-danger w-100 py-2" style="min-height:58px; border-style: dashed;" onclick="activarCreditoTrabajador()">
-                                                    <i class="ri-vip-crown-line d-block mb-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.75rem">Cred. Trab.</span>
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-info w-100 py-2" style="min-height:58px; border-style: dashed;" onclick="pagarConCreditoExterno()">
-                                                    <i class="ri-bank-line d-block mb-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.75rem">Cred. Ext.</span>
-                                                </button>
-                                            </div>
-                                            <div class="col-12">
-                                                <button class="btn w-100 py-2" onclick="agregarPago('ORDEN_COMPRA')" style="border: 2px solid #7c3aed; color:#7c3aed;">
-                                                    <i class="ri-file-list-3-line me-1"></i>
-                                                    <span class="fw-bold" style="font-size:0.78rem">ORDEN DE COMPRA</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                
-                                        <!-- Pago rápido F4 -->
-                                        <div class="mb-1">
-                                            <button class="btn btn-success w-100 py-2 fw-bold pos-pago-btn" onclick="pagoRapidoEfectivoTotal()" style="font-size:0.8rem; position:relative;">
+
+                                        <!-- Pago rápido F4 (destacado arriba) -->
+                                        <div class="mb-2">
+                                            <button class="btn btn-success w-100 fw-bold pos-pago-btn" onclick="pagoRapidoEfectivoTotal()" style="font-size:0.85rem; position:relative; min-height:54px;">
                                                 <kbd class="pos-kbd-badge" style="background:rgba(255,255,255,0.2); color:white; border-color:rgba(255,255,255,0.3);">F4</kbd>
                                                 <i class="ri-flashlight-line me-1"></i> PAGO RÁPIDO — Efectivo Total
                                             </button>
                                         </div>
-                                
+
+                                        <!-- Grupo 1: PRINCIPALES (Efectivo + POS TBK integrado) -->
+                                        <div class="pos-pago-grupo-label">
+                                            <i class="ri-star-fill text-warning"></i> Principales
+                                        </div>
+                                        <div class="row g-1 mb-2">
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-success w-100 pos-pago-btn pos-pago-btn-lg" onclick="agregarPago('EFECTIVO')" id="btnPagoEfectivo" title="Pago en efectivo (F5)">
+                                                    <kbd class="pos-kbd-badge">F5</kbd>
+                                                    <i class="ri-money-dollar-circle-line"></i>
+                                                    <span class="label-principal">Efectivo</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-danger w-100 pos-pago-btn pos-pago-btn-lg pos-pago-btn-integrado" onclick="pagarConPOSTransbank()" id="btn-pos-transbank" title="Cobro automático vía POS Transbank Web Serial (integrado)">
+                                                    <span class="pos-badge-integrado">INTEGRADO</span>
+                                                    <i class="ri-bank-card-line"></i>
+                                                    <span class="label-principal">POS TBK</span>
+                                                    <small class="label-sub">Automático</small>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Grupo 2: MANUALES (digitación de voucher) -->
+                                        <div class="pos-pago-grupo-label">
+                                            <i class="ri-edit-line text-muted"></i> Ingreso manual
+                                        </div>
+                                        <div class="row g-1 mb-2">
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-primary w-100 pos-pago-btn pos-pago-btn-md" onclick="agregarPago('TBK_DEBITO_POS')" id="btnPagoDebito" title="Débito manual — ingreso manual de voucher (F6)">
+                                                    <kbd class="pos-kbd-badge">F6</kbd>
+                                                    <i class="ri-bank-card-line"></i>
+                                                    <span class="label-principal">Débito</span>
+                                                    <small class="label-sub">Manual</small>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-info w-100 pos-pago-btn pos-pago-btn-md" onclick="agregarPago('TBK_CREDITO_POS')" id="btnPagoCredito" title="Crédito manual — ingreso manual de voucher (F7)">
+                                                    <kbd class="pos-kbd-badge">F7</kbd>
+                                                    <i class="ri-bank-card-2-line"></i>
+                                                    <span class="label-principal">Crédito</span>
+                                                    <small class="label-sub">Manual</small>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-warning w-100 pos-pago-btn pos-pago-btn-md" onclick="agregarPago('TRANSFERENCIA')" id="btnPagoTransferencia" title="Transferencia bancaria (F8)">
+                                                    <kbd class="pos-kbd-badge">F8</kbd>
+                                                    <i class="ri-exchange-line"></i>
+                                                    <span class="label-principal">Transfer.</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-secondary w-100 pos-pago-btn pos-pago-btn-md" onclick="pagarConVentaInternet()" id="btnPagoInternet" title="Venta por canal online (F9)">
+                                                    <kbd class="pos-kbd-badge">F9</kbd>
+                                                    <i class="ri-shopping-cart-line"></i>
+                                                    <span class="label-principal">Internet</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Grupo 3: CRÉDITOS Y ESPECIALES -->
+                                        <div class="pos-pago-grupo-label">
+                                            <i class="ri-vip-crown-line text-muted"></i> Créditos / Especiales
+                                        </div>
+                                        <div class="row g-1 mb-2">
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-danger w-100 pos-pago-btn pos-pago-btn-sm" style="border-style: dashed;" onclick="activarCreditoTrabajador()" title="Crédito interno para trabajadores">
+                                                    <i class="ri-vip-crown-line"></i>
+                                                    <span class="label-principal">Cred. Trab.</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-info w-100 pos-pago-btn pos-pago-btn-sm" style="border-style: dashed;" onclick="pagarConCreditoExterno()" title="Convenio con empresa externa">
+                                                    <i class="ri-bank-line"></i>
+                                                    <span class="label-principal">Cred. Ext.</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-12">
+                                                <button class="btn w-100 pos-pago-btn-orden" onclick="agregarPago('ORDEN_COMPRA')" title="Orden de compra empresa">
+                                                    <i class="ri-file-list-3-line me-1"></i>
+                                                    <span class="fw-bold">ORDEN DE COMPRA</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         <!-- Indicador crédito activo -->
                                         <div id="indicador-credito-trabajador" style="display: none;" class="alert alert-success mt-1 mb-0 py-2">
                                             <div class="d-flex justify-content-between align-items-center">
@@ -803,7 +882,7 @@
                                                 </div>
                                             </div>
                                         </div>
-                                
+
                                         <!-- Lista de pagos -->
                                         <div class="mt-2">
                                             <h6 class="fw-bold mb-1" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">Pagos Registrados</h6>
@@ -815,43 +894,6 @@
                                         </div>
                                     </div>
                                 </div>
-                                <!-- Resumen -->
-                                <div class="card shadow-sm mt-2">
-                                    <div class="card-header bg-primary text-white py-2">
-                                        <h6 class="mb-0 fw-bold text-white">
-                                            <i class="ri-calculator-line me-1"></i> Resumen
-                                        </h6>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <span class="text-muted" style="font-size:0.82rem">Items:</span>
-                                            <strong id="totalItems" style="font-size:0.85rem">0</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <span class="text-muted" style="font-size:0.82rem">Subtotal:</span>
-                                            <strong id="subtotal" style="font-size:0.85rem">$0</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between align-items-center mb-1" id="lineaDescuento" style="display: none;">
-                                            <span class="text-warning" style="font-size:0.82rem"><i class="ri-price-tag-3-line"></i> Descuento:</span>
-                                            <strong class="text-warning" id="descuento" style="font-size:0.85rem">-$0</strong>
-                                        </div>
-                                        <hr class="my-1">
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <span class="fw-bold">Total:</span>
-                                            <strong class="text-primary fs-6" id="total">$0</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <span class="text-muted" style="font-size:0.82rem">Pagado:</span>
-                                            <strong class="text-success" id="pagado" style="font-size:0.85rem">$0</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span class="fw-medium">Saldo:</span>
-                                            <strong class="text-danger fw-bold fs-6" id="saldo">$0</strong>
-                                        </div>
-                                    </div>
-                                </div>
-
-                              
                             </div>
                         </div>
                     </div>
@@ -2991,6 +3033,245 @@
     padding: 1px 5px;
 }
 
+/* =========================================================
+   POS · Resumen sticky arriba + Hero Saldo
+   ========================================================= */
+.pos-resumen-sticky-wrapper {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
+}
+.pos-resumen-card {
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.15);
+    overflow: hidden;
+}
+.pos-hero-saldo {
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    text-align: center;
+    transition: background 0.3s ease, color 0.3s ease, transform 0.25s ease;
+}
+.pos-hero-saldo.pos-hero-pendiente {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.08) 0%, rgba(220, 53, 69, 0.18) 100%);
+    border: 1px solid rgba(220, 53, 69, 0.25);
+    color: #c82333;
+}
+.pos-hero-saldo.pos-hero-pagado {
+    background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(25, 135, 84, 0.22) 100%);
+    border: 1px solid rgba(25, 135, 84, 0.3);
+    color: #0f5132;
+    animation: heroPagadoPop 0.45s ease-out;
+}
+.pos-hero-saldo.pos-hero-exceso {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.12) 0%, rgba(255, 193, 7, 0.28) 100%);
+    border: 1px solid rgba(255, 193, 7, 0.5);
+    color: #856404;
+}
+.pos-hero-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    opacity: 0.85;
+}
+.pos-hero-amount {
+    font-size: 2.1rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-top: 4px;
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+}
+@keyframes heroPagadoPop {
+    0%   { transform: scale(0.92); opacity: 0.6; }
+    60%  { transform: scale(1.04); }
+    100% { transform: scale(1); opacity: 1; }
+}
+/* Mini grid de desglose */
+.pos-resumen-mini {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+}
+.pos-resumen-mini-cell {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    padding: 2px 0;
+    border-bottom: 1px dashed rgba(0,0,0,0.06);
+}
+.pos-resumen-mini-cell:last-child,
+.pos-resumen-mini-cell:nth-last-child(2) {
+    border-bottom: none;
+}
+.pos-mini-label {
+    color: #6c757d;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.pos-resumen-mini-cell strong {
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================
+   POS · CTA Continuar a Finalizar (aparece cuando saldo = 0)
+   ========================================================= */
+.pos-cta-finalizar {
+    position: relative;
+    font-size: 1rem !important;
+    letter-spacing: 0.4px;
+    box-shadow: 0 4px 14px rgba(25, 135, 84, 0.35);
+    animation: ctaPulse 1.4s ease-in-out infinite;
+    border: none;
+}
+.pos-cta-finalizar:hover,
+.pos-cta-finalizar:focus {
+    animation-play-state: paused;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(25, 135, 84, 0.5);
+}
+.pos-kbd-cta {
+    background: rgba(255,255,255,0.22);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.35);
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: inherit;
+}
+@keyframes ctaPulse {
+    0%   { box-shadow: 0 4px 14px rgba(25, 135, 84, 0.35); }
+    50%  { box-shadow: 0 6px 20px rgba(25, 135, 84, 0.65); }
+    100% { box-shadow: 0 4px 14px rgba(25, 135, 84, 0.35); }
+}
+
+/* =========================================================
+   POS · Métodos de pago — botones agrupados y agrandados
+   ========================================================= */
+.pos-pago-grupo-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #6c757d;
+    margin: 2px 2px 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.pos-pago-btn-lg,
+.pos-pago-btn-md,
+.pos-pago-btn-sm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding: 6px 4px !important;
+    border-width: 2px;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.pos-pago-btn-lg { min-height: 82px; }
+.pos-pago-btn-md { min-height: 70px; }
+.pos-pago-btn-sm { min-height: 54px; }
+
+.pos-pago-btn-lg i { font-size: 1.8rem; line-height: 1; }
+.pos-pago-btn-md i { font-size: 1.45rem; line-height: 1; }
+.pos-pago-btn-sm i { font-size: 1.15rem; line-height: 1; }
+
+.pos-pago-btn-lg .label-principal,
+.pos-pago-btn-md .label-principal,
+.pos-pago-btn-sm .label-principal {
+    font-weight: 700;
+    line-height: 1.05;
+    margin-top: 2px;
+}
+.pos-pago-btn-lg .label-principal { font-size: 0.92rem; }
+.pos-pago-btn-md .label-principal { font-size: 0.82rem; }
+.pos-pago-btn-sm .label-principal { font-size: 0.72rem; }
+
+.pos-pago-btn-lg .label-sub,
+.pos-pago-btn-md .label-sub,
+.pos-pago-btn-sm .label-sub {
+    font-size: 0.6rem;
+    opacity: 0.75;
+    font-weight: 500;
+    margin-top: 1px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.pos-pago-btn-lg:hover,
+.pos-pago-btn-md:hover,
+.pos-pago-btn-sm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+}
+
+/* Botón POS TBK (integrado) — destacado */
+.pos-pago-btn-integrado {
+    position: relative;
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.06) 0%, rgba(220, 53, 69, 0.15) 100%);
+}
+.pos-badge-integrado {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: #dc3545;
+    color: #fff;
+    font-size: 0.48rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+}
+
+/* Botón Orden de Compra (púrpura) */
+.pos-pago-btn-orden {
+    border: 2px solid #7c3aed;
+    color: #7c3aed;
+    padding: 10px !important;
+    font-size: 0.8rem;
+    letter-spacing: 0.4px;
+    transition: all 0.15s ease;
+}
+.pos-pago-btn-orden:hover {
+    background: #7c3aed;
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* =========================================================
+   POS · Responsive overrides para pantallas chicas
+   ========================================================= */
+@media (max-width: 1366px) {
+    .pos-pago-btn-lg { min-height: 72px; }
+    .pos-pago-btn-md { min-height: 62px; }
+    .pos-pago-btn-sm { min-height: 50px; }
+    .pos-pago-btn-lg i { font-size: 1.55rem; }
+    .pos-pago-btn-md i { font-size: 1.25rem; }
+    .pos-pago-btn-lg .label-principal { font-size: 0.82rem; }
+    .pos-pago-btn-md .label-principal { font-size: 0.75rem; }
+    .pos-hero-amount { font-size: 1.75rem; }
+}
+@media (max-width: 991.98px) {
+    .pos-resumen-sticky-wrapper {
+        position: static;
+    }
+    .pos-hero-amount { font-size: 1.55rem; }
+    .pos-pago-btn-lg { min-height: 64px; }
+    .pos-pago-btn-md { min-height: 56px; }
+    .pos-pago-btn-sm { min-height: 46px; }
+}
+
 /* ============================================================
    MODAL AGREGAR PRODUCTO — Estilos completos
    ============================================================ */
@@ -4192,6 +4473,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 labelModo.textContent = qzActivo ? 'Impresora Térmica (QZ Tray)' : 'Ventana del navegador';
                 labelModo.style.color = qzActivo ? 'var(--nexo-success)' : 'var(--nexo-gray-500)';
             }
+            // Auto-scroll al inicio y enfocar botón Finalizar para evitar scroll manual
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(() => {
+                const btnFinalizar = document.querySelector('#step4 button[onclick="pasoSiguiente()"]');
+                if (btnFinalizar) btnFinalizar.focus();
+            }, 350);
         }
 
         // Auto-enfocar quick-add bar al entrar al paso 3
@@ -6053,6 +6340,15 @@ document.addEventListener('DOMContentLoaded', function() {
             monto = saldoPendiente;
         }
 
+        // Pagos de tarjeta Transbank agregados desde este flujo son SIEMPRE
+        // ingreso manual (el cajero digita el voucher). El flujo automático
+        // vía SDK usa otro camino y marca 'POS_INTEGRADO' explícitamente.
+        const METODOS_TBK_MANUAL = new Set([
+            'TBK_DEBITO_POS', 'TBK_CREDITO_POS', 'TBK_PREPAGO_POS',
+            'TBK_POS_INTEGRADO', 'TBK_MANUAL',
+            'TARJETA_DEBITO', 'TARJETA_CREDITO'
+        ]);
+
         const pago = {
             metodo_pago: metodo,
             monto: monto,
@@ -6061,6 +6357,9 @@ document.addEventListener('DOMContentLoaded', function() {
             numero_orden_compra: numeroOrdenCompra,
             notas: notas
         };
+        if (METODOS_TBK_MANUAL.has(metodo)) {
+            pago.origen_pago = 'MANUAL';
+        }
 
         pagosActuales.push(pago);
         actualizarListaPagos();
@@ -6072,6 +6371,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
         mostrarNotificacion('Pago agregado correctamente', 'success');
         guardarEstadoPOS();
+
+        // Si la venta queda cubierta (saldo = 0), enfocar CTA "Continuar a Finalizar"
+        // para evitar que el usuario tenga que scrollear buscando el botón Siguiente.
+        setTimeout(() => {
+            const cta = document.getElementById('ctaContinuarFinalizar');
+            if (cta && cta.style.display !== 'none') {
+                cta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const btnCta = cta.querySelector('button');
+                if (btnCta) btnCta.focus();
+            }
+        }, 320);
     }
 
     function actualizarListaPagos() {
@@ -6245,18 +6555,27 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Cambiar color y etiqueta del saldo
-        const saldoElement = document.getElementById('saldo');
-        const saldoLabel = saldoElement.closest('.d-flex')?.querySelector('span:first-child');
-        if (saldo > 0) {
-            saldoElement.className = 'text-danger fw-bold fs-6';
-            if (saldoLabel) saldoLabel.innerHTML = '<i class="ri-arrow-down-circle-line text-danger me-1"></i>Pendiente:';
-        } else if (saldo < 0) {
-            saldoElement.className = 'text-danger fw-bold fs-6';
-            if (saldoLabel) saldoLabel.innerHTML = '<i class="ri-error-warning-fill text-danger me-1"></i>Exceso:';
-        } else {
-            saldoElement.className = 'text-success fw-bold fs-6';
-            if (saldoLabel) saldoLabel.innerHTML = '<i class="ri-checkbox-circle-fill text-success me-1"></i>Saldo:';
+        // === Hero Saldo (encabezado sticky) ===
+        const heroSaldo = document.getElementById('heroSaldo');
+        const heroLabel = document.getElementById('heroSaldoLabel');
+        const ctaFinalizar = document.getElementById('ctaContinuarFinalizar');
+        if (heroSaldo && heroLabel) {
+            heroSaldo.classList.remove('pos-hero-pendiente', 'pos-hero-pagado', 'pos-hero-exceso');
+            if (saldo > 0) {
+                heroSaldo.classList.add('pos-hero-pendiente');
+                heroLabel.textContent = 'SALDO PENDIENTE';
+                if (ctaFinalizar) ctaFinalizar.style.display = 'none';
+            } else if (saldo < 0) {
+                heroSaldo.classList.add('pos-hero-exceso');
+                heroLabel.textContent = 'EXCESO DE PAGO';
+                if (ctaFinalizar) ctaFinalizar.style.display = 'none';
+            } else {
+                heroSaldo.classList.add('pos-hero-pagado');
+                heroLabel.textContent = (totalPagado > 0) ? 'VENTA CUBIERTA ✓' : 'SALDO';
+                if (ctaFinalizar) {
+                    ctaFinalizar.style.display = (totalPagado > 0 && (totales.total || 0) > 0) ? 'block' : 'none';
+                }
+            }
         }
 
         // Alerta inline cuando pagos exceden el total
@@ -9269,10 +9588,10 @@ body {
             'TRANSFERENCIA': 'Transferencia',
             'CREDITO_TRABAJADOR': 'Crédito Trabajador',
             'CREDITO_EXTERNO': 'Crédito Externo',
-            'TBK_POS_INTEGRADO': 'POS Transbank',
-            'TBK_DEBITO_POS': 'Débito Transbank',
-            'TBK_CREDITO_POS': 'Crédito Transbank',
-            'TBK_PREPAGO_POS': 'Prepago Transbank',
+            'TBK_POS_INTEGRADO': 'POS Transbank (Integrado)',
+            'TBK_DEBITO_POS': 'Débito Manual',
+            'TBK_CREDITO_POS': 'Crédito Manual',
+            'TBK_PREPAGO_POS': 'Prepago Manual',
             'VENTA_INTERNET': 'Venta Internet',
             'ORDEN_COMPRA': 'Orden de Compra',
             'TARJETA_COMERCIAL': 'Tarjeta Comercial',
@@ -10777,13 +11096,15 @@ body {
                     metodoPago = 'TBK_CREDITO_POS';
                 }
                 
-                // Agregar pago
+                // Agregar pago (POS_INTEGRADO: ejecutado por el SDK Transbank,
+                // permite distinguirlo de un voucher digitado manualmente)
                 const pago = {
                     metodo_pago: metodoPago,
                     monto: resultadoVenta.amount,
                     tipo_tarjeta: resultadoVenta.cardBrand,
                     voucher: resultadoVenta.authorizationCode,
-                    notas: `Terminal: ${resultadoVenta.terminalId} | Op: ${resultadoVenta.operationNumber}`
+                    notas: `Terminal: ${resultadoVenta.terminalId} | Op: ${resultadoVenta.operationNumber}`,
+                    origen_pago: 'POS_INTEGRADO'
                 };
                 
                 pagosActuales.push(pago);
