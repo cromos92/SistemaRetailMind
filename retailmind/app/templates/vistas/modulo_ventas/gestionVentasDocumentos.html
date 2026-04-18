@@ -1523,11 +1523,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function configurarSelectorTipoDte(tipoDte, estadoDte) {
-        // Muestra el selector de Tipo de Documento SOLO si:
+        // Muestra el selector de Tipo de Documento si:
         //   - el tipo pertenece a un grupo intercambiable
         //   - el usuario tiene permiso en ambos extremos del grupo
-        //   - el DTE está en estado PENDIENTE (único momento en que el
-        //     folio aún no fue enviado al SII y puede reasignarse).
+        //   - el DTE no está ANULADO
+        // Al cambiar el tipo el folio original queda "saltado" y se reserva
+        // uno nuevo del correlativo destino. Si el DTE ya estaba emitido,
+        // se muestra un warning más explícito.
         const grupo = document.getElementById('grupoEditarTipoDte');
         const select = document.getElementById('editarBoletaPapelTipoSelect');
         const lock = document.querySelector('[data-lock-icon="tipo_documento"]');
@@ -1539,9 +1541,10 @@ document.addEventListener('DOMContentLoaded', function() {
         select.innerHTML = '';
 
         const puedeCambiar = puedeCambiarTipoDesde(tipoDte);
-        const esPendiente = (estadoDte || '').toUpperCase() === 'PENDIENTE';
+        const estadoUp = (estadoDte || '').toUpperCase();
+        const esAnulado = estadoUp === 'ANULADO';
 
-        if (!puedeCambiar) return;
+        if (!puedeCambiar || esAnulado) return;
 
         const destinos = tiposDteCompatibles[tipoDte] || [];
         destinos.forEach(t => {
@@ -1552,22 +1555,15 @@ document.addEventListener('DOMContentLoaded', function() {
             select.appendChild(opt);
         });
 
-        // Mostrar el grupo incluso si no es PENDIENTE, pero deshabilitarlo
-        // con un mensaje explicativo.
         grupo.classList.remove('d-none');
-        select.disabled = !esPendiente;
-
-        if (lock) {
-            lock.classList.toggle('d-none', esPendiente);
-            if (!esPendiente) {
-                lock.title = 'Solo DTEs en estado PENDIENTE pueden cambiar de tipo';
-            }
-        }
+        select.disabled = false;
+        if (lock) lock.classList.add('d-none');
     }
 
     function onCambioTipoDteSelect() {
         const select = document.getElementById('editarBoletaPapelTipoSelect');
         const tipoOriginal = document.getElementById('editarDteTipo').value;
+        const estadoOriginal = (document.getElementById('editarDteEstado').value || '').toUpperCase();
         const hint = document.getElementById('editarTipoDteHint');
         const hintDest = document.getElementById('editarTipoDteHintDest');
         const inputNumero = document.getElementById('editarBoletaPapelNumero');
@@ -1576,7 +1572,28 @@ document.addEventListener('DOMContentLoaded', function() {
         const tipoNuevo = select.value;
         const cambia = tipoNuevo && tipoNuevo !== tipoOriginal;
 
-        if (hint) hint.classList.toggle('d-none', !cambia);
+        if (hint) {
+            hint.classList.toggle('d-none', !cambia);
+            // Si el DTE ya estaba emitido, reemplazamos el hint por uno más
+            // severo: el documento ya fue entregado al cliente / registrado.
+            if (cambia) {
+                const emitido = estadoOriginal && estadoOriginal !== 'PENDIENTE';
+                hint.classList.toggle('text-warning', !emitido);
+                hint.classList.toggle('text-danger', emitido);
+                hint.innerHTML = emitido
+                    ? '<i class="ri-error-warning-line"></i> <strong>Atención:</strong> '
+                      + 'este DTE ya estaba <strong>' + estadoOriginal + '</strong>. '
+                      + 'Al cambiar el tipo se reasignará a un folio nuevo de '
+                      + '<span id="editarTipoDteHintDest">' + labelTipoDocumento(tipoNuevo) + '</span>. '
+                      + 'El folio original queda <strong>saltado</strong>. '
+                      + 'Verifica que esto no afecte registros contables/SII.'
+                    : '<i class="ri-alert-line"></i> '
+                      + 'Al cambiar el tipo se asignará un <strong>folio nuevo</strong> '
+                      + 'del correlativo de <span id="editarTipoDteHintDest">'
+                      + labelTipoDocumento(tipoNuevo) + '</span>. '
+                      + 'El N° actual quedará saltado.';
+            }
+        }
         if (hintDest) hintDest.textContent = labelTipoDocumento(tipoNuevo);
 
         // Al cambiar el tipo se reasigna folio automáticamente: bloqueamos

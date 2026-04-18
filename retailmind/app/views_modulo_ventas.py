@@ -4777,19 +4777,15 @@ def editar_dte_boleta_papel(request):
                 }, status=403)
 
             # --- Validación de cambio de TIPO (solo pares compatibles) ---
+            # Nota: se permite en cualquier estado excepto ANULADO (ya
+            # bloqueado arriba). Cuando el DTE está EMITIDO/ACEPTADO el folio
+            # origen queda "saltado" y se reserva uno nuevo del correlativo
+            # destino; la responsabilidad de la trazabilidad contable es del
+            # operador. La UI muestra un warning en estos casos.
             cambiar_tipo = False
             if tiene_tipo:
                 tipo_actual = (dte.tipo_documento or '').upper().strip()
                 if nuevo_tipo != tipo_actual:
-                    if dte.estado_dte != 'PENDIENTE':
-                        return JsonResponse({
-                            'success': False,
-                            'error': (
-                                'Solo se puede cambiar el tipo de un DTE en '
-                                'estado PENDIENTE. Este DTE está en estado '
-                                f'{dte.estado_dte}.'
-                            )
-                        }, status=400)
                     if not son_tipos_compatibles(tipo_actual, nuevo_tipo):
                         return JsonResponse({
                             'success': False,
