@@ -177,6 +177,60 @@ CODIGO_PERMISO_TIPO_DTE = {
     'FACTURA EXENTA': 'dte_editar_tipo_factura_exenta',
 }
 
+# Pares de tipos de DTE entre los que se permite el cambio "en caliente"
+# desde la gestión de documentos. Sólo se incluyen combinaciones con el
+# mismo tratamiento tributario (IVA y datos del receptor), de modo que
+# cambiar de uno a otro no requiere recalcular montos ni pedir giro.
+TIPOS_DTE_INTERCAMBIABLES: tuple[frozenset, ...] = (
+    frozenset({'BOLETA ELECTRONICA', 'BOLETA PAPEL'}),
+)
+
+
+def son_tipos_compatibles(origen: str, destino: str) -> bool:
+    """True si los dos tipos pertenecen al mismo grupo intercambiable.
+
+    La comparación es case-insensitive y tolerante a espacios/None.
+    Si `origen == destino` devuelve False (no es un "cambio").
+    """
+    o = (origen or '').upper().strip()
+    d = (destino or '').upper().strip()
+    if not o or not d or o == d:
+        return False
+    return frozenset({o, d}) in TIPOS_DTE_INTERCAMBIABLES
+
+
+def tipos_compatibles_para(tipo: str) -> list[str]:
+    """Devuelve la lista de tipos DTE a los que `tipo` puede cambiar
+    (incluye el propio tipo al inicio). Vacía si no participa de ningún
+    grupo intercambiable.
+    """
+    t = (tipo or '').upper().strip()
+    for grupo in TIPOS_DTE_INTERCAMBIABLES:
+        if t in grupo:
+            return [t] + sorted(x for x in grupo if x != t)
+    return []
+
+
+def puede_cambiar_tipo_dte(user, origen: str, destino: str,
+                           sucursal_id=None) -> bool:
+    """Verifica que el usuario pueda cambiar un DTE de `origen` a `destino`.
+
+    Requiere:
+      * Que sean tipos compatibles (ver :data:`TIPOS_DTE_INTERCAMBIABLES`).
+      * Que el usuario tenga permiso de edición sobre AMBOS tipos
+        (`dte_editar_tipo_*`).
+    """
+    if not son_tipos_compatibles(origen, destino):
+        return False
+    cod_origen = CODIGO_PERMISO_TIPO_DTE.get(origen.upper().strip())
+    cod_destino = CODIGO_PERMISO_TIPO_DTE.get(destino.upper().strip())
+    if not cod_origen or not cod_destino:
+        return False
+    return (
+        _tiene_permiso_edicion(user, cod_origen, sucursal_id)
+        and _tiene_permiso_edicion(user, cod_destino, sucursal_id)
+    )
+
 
 def _tiene_permiso_edicion(user, codigo_opcion: str, sucursal_id=None) -> bool:
     """Wrapper local para evitar import circular con `app.models`."""
@@ -215,7 +269,8 @@ def puede_editar_campo_dte(user, campo: str, tipo_documento: str | None,
 def permisos_edicion_dte_context(user, sucursal_id=None) -> dict:
     """
     Devuelve un diccionario apto para pasar al template con el estado
-    de los 7 permisos de edición de DTE (3 campos + 4 tipos).
+    de los 7 permisos de edición de DTE (3 campos + 4 tipos) más los
+    pares de tipos intercambiables habilitados para el usuario.
     Útil en context_processors o en vistas que renderizan el modal.
     """
     flags_campo = {
@@ -226,6 +281,25 @@ def permisos_edicion_dte_context(user, sucursal_id=None) -> dict:
         tipo: _tiene_permiso_edicion(user, codigo, sucursal_id)
         for tipo, codigo in CODIGO_PERMISO_TIPO_DTE.items()
     }
+
+    # Para cada tipo DTE conocido, la lista de destinos permitidos al
+    # usuario (sólo los que pertenecen al mismo grupo intercambiable Y
+    # para los que tiene permiso de edición). Incluye el propio tipo.
+    compatibles_por_tipo: dict[str, list[str]] = {}
+    for tipo in CODIGO_PERMISO_TIPO_DTE:
+        compatibles = tipos_compatibles_para(tipo)
+        if not compatibles:
+            continue
+        # Filtrar los destinos a los que NO tiene permiso.
+        permitidos = [
+            t for t in compatibles
+            if flags_tipo.get(t, False)
+        ]
+        # Sólo exponer si el usuario tiene permiso sobre el propio tipo
+        # y al menos un destino distinto.
+        if flags_tipo.get(tipo) and len(permitidos) > 1:
+            compatibles_por_tipo[tipo] = permitidos
+
     return {
         'campo': flags_campo,
         'tipo': flags_tipo,
@@ -233,4 +307,6 @@ def permisos_edicion_dte_context(user, sucursal_id=None) -> dict:
         'cualquiera': (
             any(flags_campo.values()) and any(flags_tipo.values())
         ),
+        # Pares intercambiables con ambos permisos concedidos.
+        'compatibles_por_tipo': compatibles_por_tipo,
     }

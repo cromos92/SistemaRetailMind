@@ -35,6 +35,9 @@ from .utils_ventas import (
     get_sucursal_id,
     puede_editar_campo_dte,
     permisos_edicion_dte_context,
+    puede_cambiar_tipo_dte,
+    son_tipos_compatibles,
+    tipos_compatibles_para,
     CODIGO_PERMISO_TIPO_DTE,
     ONLY_DTE_PRODUCTO,
     ONLY_DTE_PAGO,
@@ -3547,6 +3550,12 @@ def gestion_ventas_documentos(request):
     # El template los usa para mostrar/habilitar cada control del modal.
     permisos_dte = permisos_edicion_dte_context(request.user, sucursal_actual_id)
 
+    # Pares de tipos intercambiables habilitados para el usuario
+    # (ej.: {"BOLETA ELECTRONICA": ["BOLETA ELECTRONICA", "BOLETA PAPEL"], ...}).
+    # Sólo se incluyen entradas donde el usuario tiene permiso para ambos
+    # extremos del grupo, para que el frontend pueda ofrecer el cambio.
+    compatibles_por_tipo = permisos_dte.get('compatibles_por_tipo', {})
+
     context = {
         'sucursal_actual': sucursal_actual,
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
@@ -3566,6 +3575,11 @@ def gestion_ventas_documentos(request):
         'puede_editar_tipo_factura_exenta': permisos_dte['tipo']['FACTURA EXENTA'],
         # ¿Puede editar algo en algún tipo? → controla visibilidad del modal
         'puede_editar_algun_dte': permisos_dte['cualquiera'],
+        # Mapa serializado {tipo_origen: [tipos_destino]} para el JS del modal
+        # (usado para mostrar el selector "Tipo de Documento" en cambios
+        # compatibles, p. ej. BOLETA ELECTRONICA ↔ BOLETA PAPEL).
+        'tipos_dte_compatibles_json': json.dumps(compatibles_por_tipo),
+        'puede_cambiar_tipo_dte_flag': bool(compatibles_por_tipo),
     }
     return render(request, 'vistas/modulo_ventas/gestionVentasDocumentos.html', context)
 
@@ -3641,16 +3655,37 @@ def listar_documentos_ventas(request):
             if estado in estado_dte_map:
                 dtes_filtrados = dtes_filtrados.filter(estado_dte=estado_dte_map[estado])
 
-        # Filtrar por método de pago (independiente del tipo de documento)
-        # MULTIPLE es un valor sintético: DTEs con más de un método de pago distinto
+        # Filtrar por método de pago (independiente del tipo de documento).
+        # MULTIPLE es un valor sintético: DTEs con más de un método de pago distinto.
+        # Algunas opciones agrupan variantes históricas y POS Transbank, porque el
+        # mismo tipo "lógico" se almacena con distintos códigos según el origen
+        # (migración Laravel, POS integrado, ingreso manual, etc.).
         if metodo_pago:
             if metodo_pago == 'MULTIPLE':
                 dtes_filtrados = dtes_filtrados.annotate(
                     _n_metodos=Count('dte_asociado__metodo_pago', distinct=True)
                 ).filter(_n_metodos__gt=1)
             else:
+                metodo_pago_grupos = {
+                    # "Tarjeta Débito" agrupa genérico (histórico) + POS Transbank
+                    'TARJETA_DEBITO': ['TARJETA_DEBITO', 'TBK_DEBITO_POS'],
+                    # "Tarjeta Crédito" agrupa genérico + POS Transbank + manual
+                    'TARJETA_CREDITO': [
+                        'TARJETA_CREDITO',
+                        'TBK_CREDITO_POS',
+                        'TBK_MANUAL',
+                    ],
+                    # "Transbank POS" cubre cualquier pago procesado por el SDK
+                    'TBK_POS_INTEGRADO': [
+                        'TBK_POS_INTEGRADO',
+                        'TBK_DEBITO_POS',
+                        'TBK_CREDITO_POS',
+                        'TBK_PREPAGO_POS',
+                    ],
+                }
+                valores = metodo_pago_grupos.get(metodo_pago, [metodo_pago])
                 dtes_filtrados = dtes_filtrados.filter(
-                    dte_asociado__metodo_pago=metodo_pago
+                    dte_asociado__metodo_pago__in=valores
                 ).distinct()
 
         if buscar:
@@ -4603,8 +4638,9 @@ def editar_dte_boleta_papel(request):
         tiene_numero = 'numero_documento' in data and data.get('numero_documento') is not None
         tiene_fecha = 'fecha_emision' in data and data.get('fecha_emision') is not None
         tiene_pagos = 'pagos' in data and data.get('pagos') is not None
+        tiene_tipo = 'tipo_documento' in data and data.get('tipo_documento') is not None
 
-        if not (tiene_numero or tiene_fecha or tiene_pagos):
+        if not (tiene_numero or tiene_fecha or tiene_pagos or tiene_tipo):
             return JsonResponse({
                 'success': False,
                 'error': 'No se enviaron campos para editar'
@@ -4637,6 +4673,15 @@ def editar_dte_boleta_papel(request):
                 return JsonResponse({
                     'success': False,
                     'error': 'Fecha inválida. Formato esperado YYYY-MM-DD'
+                })
+
+        nuevo_tipo = None
+        if tiene_tipo:
+            nuevo_tipo = str(data.get('tipo_documento') or '').upper().strip()
+            if nuevo_tipo not in CODIGO_PERMISO_TIPO_DTE:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Tipo de documento destino no soportado: {nuevo_tipo}'
                 })
 
         pagos_payload = []
@@ -4731,8 +4776,47 @@ def editar_dte_boleta_papel(request):
                     )
                 }, status=403)
 
+            # --- Validación de cambio de TIPO (solo pares compatibles) ---
+            cambiar_tipo = False
+            if tiene_tipo:
+                tipo_actual = (dte.tipo_documento or '').upper().strip()
+                if nuevo_tipo != tipo_actual:
+                    if dte.estado_dte != 'PENDIENTE':
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                'Solo se puede cambiar el tipo de un DTE en '
+                                'estado PENDIENTE. Este DTE está en estado '
+                                f'{dte.estado_dte}.'
+                            )
+                        }, status=400)
+                    if not son_tipos_compatibles(tipo_actual, nuevo_tipo):
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'No se puede cambiar de {tipo_actual} a '
+                                f'{nuevo_tipo}: no son tipos compatibles '
+                                '(se permite solo BOLETA ELECTRONICA ↔ '
+                                'BOLETA PAPEL).'
+                            )
+                        }, status=400)
+                    if not puede_cambiar_tipo_dte(
+                        request.user, tipo_actual, nuevo_tipo,
+                        sucursal_id=sucursal_id_sesion,
+                    ):
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                'No tiene permisos para cambiar el tipo del '
+                                f'DTE a {nuevo_tipo}.'
+                            )
+                        }, status=403)
+                    cambiar_tipo = True
+
             # Validación de número duplicado en la misma sucursal + tipo.
-            if tiene_numero and nuevo_numero != dte.numero_documento:
+            # Si también cambia el tipo, la validación se pospone a cuando
+            # ya se asignó el folio del nuevo tipo (más abajo).
+            if tiene_numero and not cambiar_tipo and nuevo_numero != dte.numero_documento:
                 existe_duplicado = Dte.objects.filter(
                     sucursal_id=dte.sucursal_id,
                     tipo_documento=dte.tipo_documento,
@@ -4800,11 +4884,51 @@ def editar_dte_boleta_papel(request):
             # Aplicar cambios ----------------------------------------------
             numero_anterior = dte.numero_documento
             fecha_anterior = dte.fecha_emision
+            tipo_anterior = dte.tipo_documento
 
             update_fields = []
-            if tiene_numero:
+
+            # Si cambia el tipo, tomamos un folio nuevo del correlativo del
+            # tipo destino (el folio anterior del tipo origen queda como
+            # "saltado"). Si además llegó `numero_documento` en el payload,
+            # usamos ese (validando duplicado contra el nuevo tipo).
+            if cambiar_tipo:
+                if tiene_numero:
+                    existe_dup_destino = Dte.objects.filter(
+                        sucursal_id=dte.sucursal_id,
+                        tipo_documento=nuevo_tipo,
+                        numero_documento=nuevo_numero,
+                    ).exclude(id=dte.id).exists()
+                    if existe_dup_destino:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'Ya existe otro {nuevo_tipo} con el '
+                                f'número {nuevo_numero} en esta sucursal'
+                            )
+                        })
+                    numero_asignado = nuevo_numero
+                else:
+                    try:
+                        numero_asignado = obtener_siguiente_correlativo(
+                            dte.sucursal, nuevo_tipo
+                        )
+                    except Exception as exc:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                'No se pudo obtener un folio del tipo '
+                                f'{nuevo_tipo}: {exc}'
+                            )
+                        })
+
+                dte.tipo_documento = nuevo_tipo
+                dte.numero_documento = numero_asignado
+                update_fields.extend(['tipo_documento', 'numero_documento'])
+            elif tiene_numero:
                 dte.numero_documento = nuevo_numero
                 update_fields.append('numero_documento')
+
             if tiene_fecha:
                 dte.fecha_emision = fecha_parsed
                 update_fields.append('fecha_emision')
@@ -4827,11 +4951,13 @@ def editar_dte_boleta_papel(request):
                 'tipo_documento': dte.tipo_documento,
                 'numero_documento': dte.numero_documento,
                 'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
+                'tipo_anterior': tipo_anterior,
                 'numero_anterior': numero_anterior,
                 'fecha_anterior': (
                     fecha_anterior.strftime('%Y-%m-%d') if fecha_anterior else None
                 ),
                 'pagos_actualizados': len(pagos_actualizar),
+                'tipo_cambiado': cambiar_tipo,
             }
         })
 

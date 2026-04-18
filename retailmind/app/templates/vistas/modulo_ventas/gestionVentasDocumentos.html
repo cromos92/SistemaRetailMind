@@ -43,14 +43,17 @@
                         <select class="form-select form-select-sm" id="metodoPago">
                             <option value="">Todos</option>
                             <option value="EFECTIVO">Efectivo</option>
-                            <option value="TARJETA_DEBITO">Tarjeta Débito</option>
-                            <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
+                            <option value="TARJETA_DEBITO">Tarjeta Débito (incl. POS)</option>
+                            <option value="TARJETA_CREDITO">Tarjeta Crédito (incl. POS)</option>
+                            <option value="TBK_POS_INTEGRADO">Transbank POS (cualquiera)</option>
                             <option value="TRANSFERENCIA">Transferencia</option>
+                            <option value="VENTA_INTERNET">Venta por Internet</option>
+                            <option value="TARJETA_COMERCIAL">Tarjeta Comercial</option>
                             <option value="ORDEN_COMPRA">Orden de Compra</option>
+                            <option value="CONVENIO">Convenio</option>
                             <option value="CREDITO_TRABAJADOR">Crédito Trabajador</option>
                             <option value="CREDITO_EXTERNO">Crédito Externo</option>
                             <option value="CHEQUE">Cheque</option>
-                            <option value="TBK_POS_INTEGRADO">Transbank POS</option>
                             <option value="MULTIPLE">Pagos Combinados</option>
                         </select>
                     </div>
@@ -212,10 +215,28 @@
                 </div>
                 <input type="hidden" id="editarBoletaPapelId">
                 <input type="hidden" id="editarDteTipo">
+                <input type="hidden" id="editarDteEstado">
                 <div class="mb-2">
                     <label class="form-label mb-1">Documento actual</label>
                     <input type="text" class="form-control form-control-sm" id="editarBoletaPapelDescripcion" readonly>
                 </div>
+
+                <!-- Cambio de tipo de DTE (solo para pares compatibles y estado PENDIENTE) -->
+                <div class="mb-2 d-none" data-campo="tipo_documento" id="grupoEditarTipoDte">
+                    <label class="form-label mb-1">
+                        Tipo de Documento
+                        <i class="ri-lock-line text-muted d-none" data-lock-icon="tipo_documento" title="Sin permiso"></i>
+                    </label>
+                    <select class="form-select form-select-sm" id="editarBoletaPapelTipoSelect">
+                    </select>
+                    <small id="editarTipoDteHint" class="text-warning d-none d-block mt-1" style="font-size:11px;">
+                        <i class="ri-alert-line"></i>
+                        Al cambiar el tipo se asignará un <strong>folio nuevo</strong>
+                        del correlativo de <span id="editarTipoDteHintDest"></span>.
+                        El N° actual quedará saltado.
+                    </small>
+                </div>
+
                 <div class="row g-2">
                     <div class="col-md-6" data-campo="numero_documento">
                         <label class="form-label mb-1">
@@ -968,6 +989,27 @@ document.addEventListener('DOMContentLoaded', function() {
         'FACTURA EXENTA':      {% if puede_editar_tipo_factura_exenta %}true{% else %}false{% endif %},
     };
 
+    // Mapa {tipo_origen: [tipos_destino]} sólo con los pares sobre los que el
+    // usuario tiene permiso en ambos extremos. Permite cambiar tipo DTE
+    // "en caliente" (por ejemplo BOLETA PAPEL ↔ BOLETA ELECTRONICA).
+    const tiposDteCompatibles = {{ tipos_dte_compatibles_json|safe }};
+
+    function puedeCambiarTipoDesde(tipoDte) {
+        if (!tipoDte) return false;
+        const destinos = tiposDteCompatibles[tipoDte] || [];
+        return destinos.length > 1;
+    }
+
+    function labelTipoDocumento(tipo) {
+        const labels = {
+            'BOLETA ELECTRONICA':  'Boleta Electrónica',
+            'BOLETA PAPEL':        'Boleta Papel',
+            'FACTURA ELECTRONICA': 'Factura Electrónica',
+            'FACTURA EXENTA':      'Factura Exenta',
+        };
+        return labels[tipo] || tipo;
+    }
+
     // Catálogo de métodos de pago (sincronizado con METODO_PAGO_TICKET_CHOICES).
     const METODOS_PAGO_DTE = [
         {% for codigo, label in metodo_pago_choices %}
@@ -984,9 +1026,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function dteTieneAlgunCampoEditable(tipoDte) {
         if (!permisoTipoDte[tipoDte]) return false;
-        return !!(permisoCampoDte.numero_documento
-               || permisoCampoDte.fecha
-               || permisoCampoDte.pago);
+        const algunCampo = !!(permisoCampoDte.numero_documento
+                           || permisoCampoDte.fecha
+                           || permisoCampoDte.pago);
+        const puedeCambiarTipo = puedeCambiarTipoDesde(tipoDte);
+        return algunCampo || puedeCambiarTipo;
     }
 
     // Variables de ordenamiento
@@ -1478,6 +1522,84 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function configurarSelectorTipoDte(tipoDte, estadoDte) {
+        // Muestra el selector de Tipo de Documento SOLO si:
+        //   - el tipo pertenece a un grupo intercambiable
+        //   - el usuario tiene permiso en ambos extremos del grupo
+        //   - el DTE está en estado PENDIENTE (único momento en que el
+        //     folio aún no fue enviado al SII y puede reasignarse).
+        const grupo = document.getElementById('grupoEditarTipoDte');
+        const select = document.getElementById('editarBoletaPapelTipoSelect');
+        const lock = document.querySelector('[data-lock-icon="tipo_documento"]');
+        const hint = document.getElementById('editarTipoDteHint');
+        if (!grupo || !select) return;
+
+        grupo.classList.add('d-none');
+        if (hint) hint.classList.add('d-none');
+        select.innerHTML = '';
+
+        const puedeCambiar = puedeCambiarTipoDesde(tipoDte);
+        const esPendiente = (estadoDte || '').toUpperCase() === 'PENDIENTE';
+
+        if (!puedeCambiar) return;
+
+        const destinos = tiposDteCompatibles[tipoDte] || [];
+        destinos.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = labelTipoDocumento(t);
+            if (t === tipoDte) opt.selected = true;
+            select.appendChild(opt);
+        });
+
+        // Mostrar el grupo incluso si no es PENDIENTE, pero deshabilitarlo
+        // con un mensaje explicativo.
+        grupo.classList.remove('d-none');
+        select.disabled = !esPendiente;
+
+        if (lock) {
+            lock.classList.toggle('d-none', esPendiente);
+            if (!esPendiente) {
+                lock.title = 'Solo DTEs en estado PENDIENTE pueden cambiar de tipo';
+            }
+        }
+    }
+
+    function onCambioTipoDteSelect() {
+        const select = document.getElementById('editarBoletaPapelTipoSelect');
+        const tipoOriginal = document.getElementById('editarDteTipo').value;
+        const hint = document.getElementById('editarTipoDteHint');
+        const hintDest = document.getElementById('editarTipoDteHintDest');
+        const inputNumero = document.getElementById('editarBoletaPapelNumero');
+        if (!select) return;
+
+        const tipoNuevo = select.value;
+        const cambia = tipoNuevo && tipoNuevo !== tipoOriginal;
+
+        if (hint) hint.classList.toggle('d-none', !cambia);
+        if (hintDest) hintDest.textContent = labelTipoDocumento(tipoNuevo);
+
+        // Al cambiar el tipo se reasigna folio automáticamente: bloqueamos
+        // el input de número y lo vaciamos para no confundir.
+        if (inputNumero) {
+            if (cambia) {
+                inputNumero.dataset.valorOriginal = inputNumero.value;
+                inputNumero.value = '';
+                inputNumero.placeholder = 'Se asignará automáticamente';
+                inputNumero.disabled = true;
+            } else {
+                if (inputNumero.dataset.valorOriginal !== undefined) {
+                    inputNumero.value = inputNumero.dataset.valorOriginal;
+                }
+                inputNumero.placeholder = 'Ej: 12345';
+                // Sólo re-habilitar si el permiso lo permitía originalmente.
+                inputNumero.disabled = !puedeEditarCampoEnTipo(
+                    'numero_documento', tipoOriginal
+                );
+            }
+        }
+    }
+
     function pintarTablaPagosEditar(pagos, tipoDte) {
         const tbody = document.getElementById('tbodyPagosEditar');
         if (!tbody) return;
@@ -1560,9 +1682,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('editarBoletaPapelId').value = doc.id;
         document.getElementById('editarDteTipo').value = doc.tipo || '';
+        document.getElementById('editarDteEstado').value = doc.estado || '';
         document.getElementById('editarBoletaPapelDescripcion').value =
             `${doc.tipo} #${doc.numero} - ${doc.cliente_nombre || 'Sin cliente'}`;
-        document.getElementById('editarBoletaPapelNumero').value = doc.numero || '';
+        const inputNumeroEdit = document.getElementById('editarBoletaPapelNumero');
+        if (inputNumeroEdit) {
+            inputNumeroEdit.value = doc.numero || '';
+            delete inputNumeroEdit.dataset.valorOriginal;
+            inputNumeroEdit.placeholder = 'Ej: 12345';
+        }
         document.getElementById('editarBoletaPapelFecha').value = formatearFechaParaInput(doc.fecha);
 
         // Referencia para validar suma de pagos en la UI.
@@ -1573,6 +1701,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         pintarTablaPagosEditar(doc.metodos_pago || [], doc.tipo);
         aplicarPermisosFormularioEdicion(doc.tipo);
+        configurarSelectorTipoDte(doc.tipo, doc.estado);
+
+        // Conectar el listener del selector de tipo (una sola vez).
+        const selectTipo = document.getElementById('editarBoletaPapelTipoSelect');
+        if (selectTipo && !selectTipo.dataset.listenerConectado) {
+            selectTipo.addEventListener('change', onCambioTipoDteSelect);
+            selectTipo.dataset.listenerConectado = '1';
+        }
 
         new bootstrap.Modal(modalEl).show();
     };
@@ -1587,7 +1723,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const payload = { documento_id: parseInt(id, 10) };
 
-        if (puedeEditarCampoEnTipo('numero_documento', tipoDte)) {
+        // Cambio de TIPO de DTE (solo si fue ofrecido y el usuario lo cambió).
+        const selectTipoEl = document.getElementById('editarBoletaPapelTipoSelect');
+        const tipoSeleccionado = selectTipoEl && !selectTipoEl.disabled
+            ? selectTipoEl.value : '';
+        const cambiaTipo = tipoSeleccionado && tipoSeleccionado !== tipoDte;
+        if (cambiaTipo) {
+            payload.tipo_documento = tipoSeleccionado;
+        }
+
+        // Si cambia el tipo, el folio se reasigna automáticamente
+        // (backend: obtener_siguiente_correlativo del tipo destino), así
+        // que NO enviamos numero_documento desde acá.
+        if (!cambiaTipo && puedeEditarCampoEnTipo('numero_documento', tipoDte)) {
             const numero = document.getElementById('editarBoletaPapelNumero').value;
             if (!numero || parseInt(numero, 10) <= 0) {
                 mostrarError('Ingrese un número de documento válido');
@@ -1620,7 +1768,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Si no hay ningún campo modificable, nada que enviar.
-        if (!('numero_documento' in payload) && !('fecha_emision' in payload) && !('pagos' in payload)) {
+        const tieneCampo = ('numero_documento' in payload)
+                       || ('fecha_emision' in payload)
+                       || ('pagos' in payload)
+                       || ('tipo_documento' in payload);
+        if (!tieneCampo) {
             mostrarError('No tienes permisos para editar ningún campo de este DTE');
             return;
         }
