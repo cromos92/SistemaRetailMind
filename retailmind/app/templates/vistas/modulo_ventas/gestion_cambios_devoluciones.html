@@ -3477,7 +3477,12 @@ function configurarEventos() {
             escanearProducto();
         }
     });
-    
+
+    // Motivo principal: actualizar en vivo el estado de "Ver Resumen"
+    $('#select-motivo-principal').on('change', function() {
+        actualizarEstadoBotonVerResumen();
+    });
+
     // Products can only be selected via scanning - no manual "select all"
     
     // Prevenir cierre accidental del modal con ESC o click fuera
@@ -4992,13 +4997,15 @@ function siguientePaso(event) {
         $('#btn-continuar-inline').removeClass('show-animated').hide();
         cargarProductosOriginales();
         setTimeout(() => $('#input-escanear-sku').focus(), 200);
-        $('#btn-siguiente').prop('disabled', false).removeClass('show-animated')
+        $('#btn-siguiente').removeClass('show-animated')
             .html('Ver Resumen <i class="ri-arrow-right-circle-fill ms-1"></i>');
         $('#btn-anterior').show();
         $('#footer-hint').hide();
         actualizarStepper();
         actualizarFooterPaso();
         actualizarVistaPreviaTotales();
+        // Evaluar si se puede habilitar "Ver Resumen" al entrar al paso 2
+        actualizarEstadoBotonVerResumen();
         
         console.log('  ✅ Paso 2 mostrado correctamente');
         console.log('  → pasoActual ahora es:', pasoActual);
@@ -5048,9 +5055,11 @@ function pasoAnterior(event) {
         $('#paso-seleccionar-productos').hide();
         $('#btn-siguiente').show().prop('disabled', !ticketActual)
             .removeClass('show-animated')
+            .attr('title', '')
             .html('Continuar <i class="ri-arrow-right-line ms-1"></i>');
         $('#btn-anterior').hide();
-        $('#footer-hint').toggle(!ticketActual);
+        // Restaurar texto original del hint (puede haber sido sobreescrito en paso 2)
+        $('#footer-hint').text('Busca un documento').toggle(!ticketActual);
         // Re-mostrar el CTA inline si todavía hay un documento cargado
         if (ticketActual) {
             $('#btn-continuar-inline').show().addClass('show-animated');
@@ -5332,6 +5341,52 @@ function actualizarVistaPreviaTotales() {
 
     // ✅ ACTUALIZAR RESUMEN DEL FOOTER
     actualizarResumenFooter(montoOriginal, montoNuevo, diferencia);
+
+    // Habilitar/deshabilitar "Ver Resumen" según requisitos del paso 2
+    actualizarEstadoBotonVerResumen();
+}
+
+/**
+ * Habilita el botón "Ver Resumen" en paso 2 sólo cuando se cumplen los
+ * requisitos mínimos. Si faltan datos, lo deja clickable pero con tooltip
+ * explicando exactamente qué falta (así el usuario no se confunde si al
+ * hacer click sólo sale un SweetAlert genérico).
+ */
+function actualizarEstadoBotonVerResumen() {
+    // Sólo aplica al paso 2
+    if (typeof pasoActual === 'undefined' || pasoActual !== 2) return;
+
+    const motivo = $('#select-motivo-principal').val();
+    const escaneados = (typeof productosEscaneados !== 'undefined')
+        ? Object.keys(productosEscaneados).length : 0;
+    const seleccionados = $('.check-producto:checked').length;
+    const tipoOp = tipoOperacionDetectada;
+    const esCambio = tipoOp === 'CAMBIO_SIMPLE' || tipoOp === 'CAMBIO_CON_DIFERENCIA';
+    const hayProductosNuevos = (typeof productosNuevos !== 'undefined')
+        ? productosNuevos.length > 0 : false;
+
+    const faltantes = [];
+    if (!motivo) faltantes.push('seleccionar motivo');
+    if (escaneados === 0 && seleccionados === 0) {
+        faltantes.push('escanear al menos 1 producto');
+    }
+    if (esCambio && !hayProductosNuevos) {
+        faltantes.push('agregar producto nuevo para el cambio');
+    }
+
+    const $btn = $('#btn-siguiente');
+    const $hint = $('#footer-hint');
+    if (faltantes.length === 0) {
+        $btn.prop('disabled', false)
+            .attr('title', 'Continuar al resumen')
+            .removeClass('btn-outline-secondary').addClass('btn-primary');
+        $hint.hide();
+    } else {
+        $btn.prop('disabled', true)
+            .attr('title', 'Falta: ' + faltantes.join(', '))
+            .removeClass('btn-outline-secondary');
+        $hint.text('Falta: ' + faltantes.join(', ')).show();
+    }
 }
 
 // Función para actualizar el resumen del footer

@@ -246,39 +246,48 @@
                                     </h6>
                                 </div>
                                 <div class="card-body py-2">
-                                    <div class="row g-2 justify-content-center">
-                                        <div class="col-md-4">
-                                            <div class="form-check form-check-card">
+                                    <div class="row g-2 justify-content-center doc-type-grid">
+                                        <div class="col-md-4 d-flex">
+                                            <div class="form-check form-check-card flex-fill">
                                                 <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoBoletaElectronica" value="BOLETA_ELECTRONICA" checked>
-                                                <label class="form-check-label card h-100" for="tipoBoletaElectronica">
-                                                    <div class="card-body text-center p-2">
-                                                        <i class="ri-file-check-line fs-3 text-primary mb-1 d-block"></i>
-                                                        <h6 class="card-title mb-1" style="font-size:0.82rem">Boleta Electrónica</h6>
-                                                        <div class="badge bg-primary" id="correlativos-BOLETA_ELECTRONICA"><i class="ri-check-line"></i> Disponible</div>
+                                                <label class="form-check-label card doc-type-card" for="tipoBoletaElectronica">
+                                                    <span class="doc-type-check"><i class="ri-check-line"></i></span>
+                                                    <div class="card-body d-flex flex-column align-items-center justify-content-between text-center p-3">
+                                                        <div class="doc-type-icon-wrap doc-type-icon-primary">
+                                                            <i class="ri-file-check-line doc-type-icon"></i>
+                                                        </div>
+                                                        <h6 class="doc-type-title">Boleta Electrónica</h6>
+                                                        <span class="badge doc-type-badge bg-primary" id="correlativos-BOLETA_ELECTRONICA"><i class="ri-check-line"></i> Disponible</span>
                                                     </div>
                                                 </label>
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="form-check form-check-card">
+                                        <div class="col-md-4 d-flex">
+                                            <div class="form-check form-check-card flex-fill">
                                                 <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoBoletaPapel" value="BOLETA_PAPEL">
-                                                <label class="form-check-label card h-100" for="tipoBoletaPapel">
-                                                    <div class="card-body text-center p-2">
-                                                        <i class="ri-file-paper-line fs-3 text-secondary mb-1 d-block"></i>
-                                                        <h6 class="card-title mb-1" style="font-size:0.82rem">Boleta Papel</h6>
-                                                        <div class="badge bg-info" id="correlativos-BOLETA_PAPEL"><i class="ri-check-line"></i> Disponible</div>
+                                                <label class="form-check-label card doc-type-card" for="tipoBoletaPapel">
+                                                    <span class="doc-type-check"><i class="ri-check-line"></i></span>
+                                                    <div class="card-body d-flex flex-column align-items-center justify-content-between text-center p-3">
+                                                        <div class="doc-type-icon-wrap doc-type-icon-secondary">
+                                                            <i class="ri-file-paper-line doc-type-icon"></i>
+                                                        </div>
+                                                        <h6 class="doc-type-title">Boleta Papel</h6>
+                                                        <span class="badge doc-type-badge bg-info" id="correlativos-BOLETA_PAPEL"><i class="ri-check-line"></i> Disponible</span>
                                                     </div>
                                                 </label>
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="form-check form-check-card">
+                                        <div class="col-md-4 d-flex">
+                                            <div class="form-check form-check-card flex-fill">
                                                 <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoFacturaElectronica" value="FACTURA_ELECTRONICA">
-                                                <label class="form-check-label card h-100" for="tipoFacturaElectronica">
-                                                    <div class="card-body text-center p-2">
-                                                        <i class="ri-file-invoice-line fs-3 text-warning mb-1 d-block"></i>
-                                                        <h6 class="card-title mb-1" style="font-size:0.82rem">Factura Electrónica</h6>
-                                                        <div class="badge bg-warning text-dark" id="correlativos-FACTURA_ELECTRONICA"><i class="ri-check-line"></i> Disponible</div>
+                                                <label class="form-check-label card doc-type-card" for="tipoFacturaElectronica">
+                                                    <span class="doc-type-check"><i class="ri-check-line"></i></span>
+                                                    <div class="card-body d-flex flex-column align-items-center justify-content-between text-center p-3">
+                                                        <div class="doc-type-icon-wrap doc-type-icon-warning">
+                                                            <i class="ri-file-invoice-line doc-type-icon"></i>
+                                                        </div>
+                                                        <h6 class="doc-type-title">Factura Electrónica</h6>
+                                                        <span class="badge doc-type-badge bg-warning text-dark" id="correlativos-FACTURA_ELECTRONICA"><i class="ri-check-line"></i> Disponible</span>
                                                     </div>
                                                 </label>
                                             </div>
@@ -2282,47 +2291,169 @@
 }
 
 /* ========== DOCUMENT TYPE SELECTOR NEXO ========== */
+.doc-type-grid {
+    align-items: stretch;
+}
+
 .form-check-card {
     position: relative;
+    display: flex;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    min-height: 1px;
 }
 
 .form-check-card .form-check-input {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 10;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
+    margin: 0;
 }
 
-.form-check-card .card {
+.form-check-card .card,
+.form-check-card .doc-type-card {
     cursor: pointer;
     transition: var(--nexo-transition-normal);
     border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    background: var(--nexo-white);
+    width: 100%;
     height: 100%;
-    border-radius: var(--nexo-radius-lg);
+    min-height: 108px;
+    margin: 0;
+    overflow: hidden;
+    position: relative;
 }
 
-.form-check-card .card:hover {
+.form-check-card .doc-type-card .card-body {
+    gap: 0.25rem;
+    min-height: 108px;
+    padding: 0.5rem 0.4rem !important;
+}
+
+.form-check-card .doc-type-icon-wrap {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--nexo-gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--nexo-transition-normal);
+    flex-shrink: 0;
+}
+
+.form-check-card .doc-type-icon {
+    font-size: 1.05rem;
+    line-height: 1;
+    color: var(--nexo-gray-700);
+    transition: var(--nexo-transition-normal);
+}
+
+.form-check-card .doc-type-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+    margin: 0;
+    line-height: 1.15;
+}
+
+.form-check-card .doc-type-badge {
+    font-size: 0.62rem;
+    padding: 0.22em 0.55em;
+    border-radius: var(--nexo-radius-full);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.form-check-card .doc-type-check {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--nexo-white);
+    border: 2px solid var(--nexo-gray-300);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--nexo-white);
+    font-size: 0.6rem;
+    transition: var(--nexo-transition-fast);
+    z-index: 2;
+}
+
+.form-check-card .doc-type-check i {
+    opacity: 0;
+    transition: var(--nexo-transition-fast);
+}
+
+.form-check-card .card:hover,
+.form-check-card .doc-type-card:hover {
     border-color: var(--nexo-primary);
-    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.15);
+    box-shadow: 0 4px 10px rgba(0, 102, 255, 0.14);
     transform: translateY(-2px);
 }
 
-.form-check-card .form-check-input:checked + .card {
-    border-color: var(--nexo-primary);
-    background-color: var(--nexo-primary-light);
-    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.25);
+.form-check-card .doc-type-card:hover .doc-type-icon-wrap {
+    background: var(--nexo-primary-light);
 }
 
-.form-check-card .form-check-input:disabled + .card {
+.form-check-card .form-check-input:checked + .card,
+.form-check-card .form-check-input:checked + .doc-type-card {
+    border-color: var(--nexo-primary);
+    background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #FFFFFF 100%);
+    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.2);
+}
+
+.form-check-card .form-check-input:checked + .doc-type-card .doc-type-icon-wrap {
+    background: var(--nexo-primary);
+    box-shadow: 0 2px 6px rgba(0, 102, 255, 0.35);
+}
+
+.form-check-card .form-check-input:checked + .doc-type-card .doc-type-icon {
+    color: var(--nexo-white);
+}
+
+.form-check-card .form-check-input:checked + .doc-type-card .doc-type-check {
+    background: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+}
+
+.form-check-card .form-check-input:checked + .doc-type-card .doc-type-check i {
+    opacity: 1;
+}
+
+.form-check-card .form-check-input:focus-visible + .card,
+.form-check-card .form-check-input:focus-visible + .doc-type-card {
+    outline: 3px solid var(--nexo-primary-light);
+    outline-offset: 2px;
+}
+
+.form-check-card .form-check-input:disabled + .card,
+.form-check-card .form-check-input:disabled + .doc-type-card {
     opacity: 0.5;
     cursor: not-allowed;
     background-color: var(--nexo-gray-100);
 }
 
-.form-check-card .form-check-input:disabled + .card:hover {
+.form-check-card .form-check-input:disabled + .card:hover,
+.form-check-card .form-check-input:disabled + .doc-type-card:hover {
     transform: none;
     box-shadow: none;
     border-color: var(--nexo-gray-300);
+}
+
+@media (max-width: 767.98px) {
+    .form-check-card .card,
+    .form-check-card .doc-type-card,
+    .form-check-card .doc-type-card .card-body {
+        min-height: 96px;
+    }
 }
 
 /* ========== BOTONES DE ACCIÓN ========== */
