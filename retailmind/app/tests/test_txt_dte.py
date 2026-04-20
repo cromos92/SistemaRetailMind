@@ -466,8 +466,79 @@ class TestBoletaConDescuentoIncluyeDscRcgGlobal(TestCase):
             'valor_dr': 2000,
         }]
         txt = generar_txt_boleta_acepta(datos)
-        # La observación incluye "Descuento: $2,000"
-        self.assertIn('Descuento: $2,000', txt)
+        # La observación compacta usa "Dc:<monto>" en vez de "Descuento: $2,000"
+        # para respetar el tope de 90 chars del XSD (RazonRef). Ver
+        # construir_observacion_compacta() en views_modulo_documentos.py.
+        self.assertIn('Dc:2000', txt)
+
+
+class TestBoletaNoLlevaFchVenc(TestCase):
+    """
+    Regresión: boletas (39/41) no deben llevar fecha de vencimiento en el
+    header. El XSD SII solo permite FchVenc en facturas con pago diferido,
+    y el campo 7 de la línea 1 debe quedar vacío.
+    """
+
+    def test_fchvenc_ausente_en_boleta(self):
+        datos = _datos_boleta_base()
+        datos['detalle'] = [{
+            'codigo': 'POL-01',
+            'nombre': 'Polera',
+            'descripcion': '',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 8000,
+            'monto_item': 8000,
+        }]
+        txt = generar_txt_boleta_acepta(datos)
+        primera_linea = txt.split('\n')[0]
+        # Formato esperado: 39|folio|fecha|ind_servicio|||||}
+        # (9 campos, campo 7 = FchVenc vacío).
+        self.assertTrue(primera_linea.startswith('39|'))
+        self.assertFalse(
+            '2026-04-07' in primera_linea.split('|')[6:],
+            f"FchVenc no debe aparecer en boleta. Línea: {primera_linea}",
+        )
+
+
+class TestObservacionCompactaRespeta90Chars(TestCase):
+    """
+    La observación final del TXT debe caber en 90 chars para respetar el
+    maxLength del XSD SII (RazonRef / TermPagoGlosa).
+    """
+
+    def test_observacion_compacta_boleta(self):
+        datos = _datos_boleta_base()
+        datos['emisor']['metodos_pago'] = (
+            'EFECTIVO: $100 - Tarj: VISA - Auth: 12345 | '
+            'Transbank Debito POS: $791 - Terminal: XYZ - Op: 456'
+        )
+        datos['detalle'] = [{
+            'codigo': 'POL-01', 'nombre': 'Polera', 'descripcion': '',
+            'cantidad': 1, 'unidad': 'UN', 'precio_unitario': 891,
+            'monto_item': 891,
+        }]
+        datos['descuentos_recargos'] = [{
+            'tpo_mov': 'D', 'glosa_dr': 'Descuento', 'tpo_valor': '$',
+            'valor_dr': 99,
+        }]
+        txt = generar_txt_boleta_acepta(datos)
+
+        # Línea de observación = última línea útil (antes del último ~\).
+        lineas_util = [l for l in txt.split('\n') if l and l not in ('~', '\\')]
+        linea_obs = lineas_util[-1]
+
+        # Campo 4 de la línea de observación es la glosa compacta (índice 3).
+        campo_obs = linea_obs.split('|')[3]
+        self.assertLessEqual(
+            len(campo_obs), 90,
+            f"Observación compacta excede 90 chars: {campo_obs!r}",
+        )
+        # Contiene los marcadores cortos esperados.
+        self.assertIn('V:V01', campo_obs)
+        self.assertIn('T:1001', campo_obs)
+        self.assertIn('EFE:100', campo_obs)
+        self.assertIn('TBK:791', campo_obs)
 
 
 class TestValidacionLargosSII(TestCase):

@@ -8195,8 +8195,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             console.error('Error al descontar crédito:', creditoData.error);
                             mostrarNotificacion('Venta finalizada pero error al descontar del crédito: ' + creditoData.error, 'warning');
                             setTimeout(() => {
-                                volverAlDashboard();
-                                actualizarDashboard();
+                                recargarPOSDashboard();
                             }, 3000);
                         }
                     })
@@ -8204,8 +8203,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.error('Error al procesar crédito:', error);
                         mostrarNotificacion('Venta finalizada pero error al procesar el crédito', 'warning');
                         setTimeout(() => {
-                            volverAlDashboard();
-                            actualizarDashboard();
+                            recargarPOSDashboard();
                         }, 2000);
                     });
                 } else {
@@ -8486,8 +8484,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     `,
                     confirmButtonText: 'Cerrar'
                 }).then(() => {
-                    volverAlDashboard();
-                    actualizarDashboard();
+                    recargarPOSDashboard();
                 });
             }
         } catch (error) {
@@ -8498,8 +8495,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 text: 'La venta se guardó pero hubo un error al generar el DTE: ' + error.message,
                 confirmButtonText: 'Cerrar'
             }).then(() => {
-                volverAlDashboard();
-                actualizarDashboard();
+                recargarPOSDashboard();
             });
         }
     }
@@ -8520,9 +8516,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Checkbox no marcado → ir directo al dashboard sin preguntar
-        volverAlDashboard();
-        actualizarDashboard();
+        // Checkbox no marcado → recargar el POS para dejar el formulario limpio
+        recargarPOSDashboard();
     }
     
     // ✅ Función para cargar datos del ticket antes de imprimir
@@ -8603,8 +8598,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (result.isConfirmed) {
                     imprimirTicketsCambio(ticketId, cantidad, modoImpresion);
                 } else {
-                    volverAlDashboard();
-                    actualizarDashboard();
+                    recargarPOSDashboard();
                 }
             });
         }
@@ -8651,7 +8645,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 impresionVentanaEnProgreso = false; // ✅ Reset flag si no hay ticket
                 Swal.close();
                 mostrarNotificacion('No hay ticket para imprimir', 'warning');
-                volverAlDashboard();
+                recargarPOSDashboard();
                 return;
             }
             
@@ -8768,12 +8762,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (ventanaImpresion && !ventanaImpresion.closed) {
                         ventanaImpresion.close();
                     }
-                    volverAlDashboard();
-                    actualizarDashboard();
                 } catch (e) {
-                    console.error('Error al volver al dashboard:', e);
-                    volverAlDashboard();
+                    console.error('Error al cerrar ventana de impresión:', e);
                 }
+                recargarPOSDashboard();
             });
             
         } catch (error) {
@@ -8792,13 +8784,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 buttonsStyling: false
             }).then(() => {
-                try {
-                    volverAlDashboard();
-                    actualizarDashboard();
-                } catch (e) {
-                    console.error('Error al volver:', e);
-                    volverAlDashboard();
-                }
+                recargarPOSDashboard();
             });
         }
     }
@@ -8820,8 +8806,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!ticketActual) {
                 Swal.close();
                 mostrarNotificacion('No hay ticket para imprimir', 'warning');
-                volverAlDashboard();
                 impresionEnProgreso = false;
+                recargarPOSDashboard();
                 return;
             }
 
@@ -8847,7 +8833,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         allowOutsideClick: false,
                         customClass: { confirmButton: 'btn btn-success btn-lg px-5 py-3 fw-bold fs-4' },
                         buttonsStyling: false
-                    }).then(() => { volverAlDashboard(); });
+                    }).then(() => { recargarPOSDashboard(); });
                     impresionEnProgreso = false;
                     return;
                 }
@@ -8918,8 +8904,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 customClass: { confirmButton: 'btn btn-success btn-lg px-5 py-3 fw-bold fs-4' },
                 buttonsStyling: false
             }).then(() => {
-                volverAlDashboard();
-                actualizarDashboard();
+                recargarPOSDashboard();
             });
             
         } catch (error) {
@@ -8950,8 +8935,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Usar modo ventana como fallback
                     imprimirTicketsCambio(ticketActual.ticket_id, cantidad, 'ventana');
                 } else {
-                    volverAlDashboard();
-                    actualizarDashboard();
+                    recargarPOSDashboard();
                 }
             });
         }
@@ -9464,6 +9448,17 @@ body {
             if (qs) { qs.value = ''; qs.focus(); }
         }, 200);
     }
+
+    // Recarga completa del POS tras finalizar una venta. Evita que queden opciones
+    // "pegadas" del ticket anterior (checkbox Ticket de Cambio, radio Tipo de Documento,
+    // cantidad de copias, referencias de factura, etc.). Preserva la URL base sin
+    // query string para que no se re-ejecuten acciones previas al montar la vista.
+    function recargarPOSDashboard() {
+        try { limpiarCreditoExternoAlFinalizar(); } catch (e) { /* noop */ }
+        const destino = window.location.pathname;
+        window.location.replace(destino);
+    }
+    window.recargarPOSDashboard = recargarPOSDashboard;
 
     function cancelarVenta() {
         if (confirm('¿Está seguro de cancelar la venta? Se perderán todos los cambios.')) {

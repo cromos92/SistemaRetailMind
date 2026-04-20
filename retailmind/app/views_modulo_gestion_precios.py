@@ -389,15 +389,36 @@ def buscar_productos(request):
                 producto=producto
             ).select_related('usuario').first()
             
-            # Buscar productos similares en otras sucursales
+            # Buscar productos similares en otras sucursales (con stock agregado por sucursal)
             productos_similares = Producto.objects.filter(
                 articulo=producto.articulo,
                 atributo1=producto.atributo1,
                 atributo2=producto.atributo2
-            ).exclude(sucursal=producto.sucursal).select_related('sucursal')
-            
-            # Obtener lista de sucursales donde existe el producto
-            sucursales_lista = [p.sucursal.alias for p in productos_similares if p.sucursal]
+            ).exclude(sucursal=producto.sucursal).select_related('sucursal').annotate(
+                stock_sucursal=Sum('producto_talla__stock')
+            )
+
+            # Detalle de stock por sucursal: incluye la sucursal actual + las similares
+            sucursales_detalle = []
+            if producto.sucursal:
+                sucursales_detalle.append({
+                    'alias': producto.sucursal.alias,
+                    'stock': int(stock_total or 0),
+                    'es_actual': True,
+                })
+            for p in productos_similares:
+                if p.sucursal:
+                    sucursales_detalle.append({
+                        'alias': p.sucursal.alias,
+                        'stock': int(p.stock_sucursal or 0),
+                        'es_actual': False,
+                    })
+
+            # Stock total sumado en toda la red de sucursales (actual + similares)
+            stock_total_red = sum(s['stock'] for s in sucursales_detalle)
+
+            # Mantener compatibilidad: lista/cantidad de sucursales "similares" (sin la actual)
+            sucursales_lista = [s['alias'] for s in sucursales_detalle if not s['es_actual']]
             sucursales_count = len(sucursales_lista)
             
             # Agregar a resultados
@@ -431,6 +452,8 @@ def buscar_productos(request):
                 } if ultimo_cambio else None,
                 'sucursales_similares': sucursales_count,
                 'sucursales_lista': sucursales_lista,
+                'sucursales_detalle': sucursales_detalle,
+                'stock_total_red': stock_total_red,
             })
         
         # Paginación manual

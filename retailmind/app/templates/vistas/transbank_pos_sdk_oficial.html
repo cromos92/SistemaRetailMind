@@ -96,6 +96,40 @@
     .tbk-btn.btn-warning   { background: var(--tbk-warning); color: #000; }
     .tbk-btn.btn-danger    { background: var(--tbk-error); color: white; }
 
+    /* Paso pre-requisito para cierre de día completado */
+    .tbk-btn.tbk-paso-completado {
+        background: var(--tbk-success);
+        color: white;
+        position: relative;
+    }
+    .tbk-btn.tbk-paso-completado:hover {
+        background: #00b898;
+    }
+    .tbk-btn.tbk-paso-completado::after {
+        content: "\F26B"; /* bi-check-circle-fill */
+        font-family: "bootstrap-icons";
+        margin-left: auto;
+        font-size: 0.95rem;
+    }
+
+    /* Cierre de día bloqueado (falta algún paso previo) */
+    .tbk-btn.tbk-cierre-bloqueado {
+        background: #8a8a8a;
+        color: #f1f1f1;
+        cursor: help;
+        opacity: 0.85;
+    }
+    .tbk-btn.tbk-cierre-bloqueado:hover {
+        background: #6f6f6f;
+    }
+    .tbk-btn.tbk-cierre-bloqueado::after {
+        content: "\F335"; /* bi-lock-fill */
+        font-family: "bootstrap-icons";
+        margin-left: auto;
+        font-size: 0.85rem;
+        opacity: 0.8;
+    }
+
     /* Inputs compactos */
     .form-control-sm-pos {
         height: 28px;
@@ -183,13 +217,13 @@
             <button class="tbk-btn btn-info" onclick="consultarUltimaVenta()">
                 <i class="bi bi-receipt"></i> Última Venta
             </button>
-            <button class="tbk-btn btn-info" onclick="consultarTotales()">
+            <button id="btn-totales-dia" class="tbk-btn btn-info tbk-paso-cierre" onclick="consultarTotales()">
                 <i class="bi bi-calculator"></i> Totales del Día
             </button>
-            <button class="tbk-btn btn-info" onclick="consultarDetalleVentas()">
+            <button id="btn-detalle-ventas" class="tbk-btn btn-info tbk-paso-cierre" onclick="consultarDetalleVentas()">
                 <i class="bi bi-list-check"></i> Detalle Ventas
             </button>
-            <button class="tbk-btn btn-danger" onclick="cerrarDia()">
+            <button id="btn-cierre-dia" class="tbk-btn btn-danger tbk-cierre-bloqueado" onclick="cerrarDia()" title="Primero ejecute Totales del Día y Detalle Ventas">
                 <i class="bi bi-lock"></i> Cierre de Día
             </button>
             <button class="tbk-btn btn-warning" onclick="anularVenta()">
@@ -295,6 +329,85 @@ function toggleTechInfo(el) {
 }
 
 // ==================== FUNCIONES POS ====================
+
+// ---- Estado de pre-requisitos para Cierre de Día ----
+// Obliga al operador a revisar Totales y Detalle antes de cerrar el día.
+const cierreDiaState = {
+    totalesConsultados: false,
+    detalleConsultado: false,
+};
+
+function marcarPasoCierreCompletado(paso) {
+    if (paso === 'totales') {
+        cierreDiaState.totalesConsultados = true;
+        const btn = document.getElementById('btn-totales-dia');
+        if (btn) {
+            btn.classList.remove('btn-info');
+            btn.classList.add('tbk-paso-completado');
+        }
+    } else if (paso === 'detalle') {
+        cierreDiaState.detalleConsultado = true;
+        const btn = document.getElementById('btn-detalle-ventas');
+        if (btn) {
+            btn.classList.remove('btn-info');
+            btn.classList.add('tbk-paso-completado');
+        }
+    }
+    actualizarBotonCierreDia();
+}
+
+function actualizarBotonCierreDia() {
+    const btn = document.getElementById('btn-cierre-dia');
+    if (!btn) return;
+    const listo = cierreDiaState.totalesConsultados && cierreDiaState.detalleConsultado;
+    if (listo) {
+        btn.classList.remove('tbk-cierre-bloqueado');
+        btn.title = 'Pre-requisitos completados: puede ejecutar el cierre de día';
+    } else {
+        btn.classList.add('tbk-cierre-bloqueado');
+        btn.title = 'Primero ejecute Totales del Día y Detalle Ventas';
+    }
+}
+
+function resetearPasosCierreDia() {
+    cierreDiaState.totalesConsultados = false;
+    cierreDiaState.detalleConsultado = false;
+    ['btn-totales-dia', 'btn-detalle-ventas'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.classList.remove('tbk-paso-completado');
+            btn.classList.add('btn-info');
+        }
+    });
+    actualizarBotonCierreDia();
+}
+
+function validarPrerequisitosCierreDia() {
+    if (cierreDiaState.totalesConsultados && cierreDiaState.detalleConsultado) {
+        return true;
+    }
+    const pendientes = [];
+    if (!cierreDiaState.totalesConsultados) {
+        pendientes.push('<li><i class="bi bi-calculator text-warning"></i> <strong>Totales del Día</strong></li>');
+    }
+    if (!cierreDiaState.detalleConsultado) {
+        pendientes.push('<li><i class="bi bi-list-check text-warning"></i> <strong>Detalle Ventas</strong></li>');
+    }
+    Swal.fire({
+        icon: 'warning',
+        title: 'Falta revisar movimientos',
+        html: `
+            <p class="mb-2 text-start">Antes de ejecutar el <strong>Cierre de Día</strong> debe consultar:</p>
+            <ul class="text-start mb-2" style="padding-left: 1.25rem;">${pendientes.join('')}</ul>
+            <p class="small text-muted mb-0 text-start">
+                <i class="bi bi-info-circle"></i>
+                Esto asegura que revisó las transacciones del día antes de cerrarlas en el POS.
+            </p>
+        `,
+        confirmButtonText: 'Entendido'
+    });
+    return false;
+}
 
 async function conectarPOS() {
     try {
@@ -412,6 +525,7 @@ async function consultarTotales() {
         showLoading('Consultando totales...');
         const resultado = await Transbank.POS.getTotals();
         hideLoading();
+        marcarPasoCierreCompletado('totales');
         Swal.fire({
             icon: 'info',
             title: 'Totales del Día',
@@ -430,6 +544,8 @@ async function consultarTotales() {
 
 async function cerrarDia() {
     try {
+        if (!validarPrerequisitosCierreDia()) return;
+
         const confirm = await Swal.fire({
             icon: 'warning',
             title: '¿Cerrar día?',
@@ -443,6 +559,7 @@ async function cerrarDia() {
             const resultado = await Transbank.POS.closeDay();
             hideLoading();
             if (resultado.successful) {
+                resetearPasosCierreDia();
                 showSuccess('Cierre de día completado');
             } else {
                 showError('Error en cierre de día');
@@ -456,22 +573,24 @@ async function cerrarDia() {
 
 async function consultarDetalleVentas() {
     try {
-        const { value } = await Swal.fire({
+        const result = await Swal.fire({
             title: 'Detalle de Ventas',
             text: '¿Desea imprimir el detalle en el POS?',
             icon: 'question',
             showCancelButton: true,
             showDenyButton: true,
-            confirmButtonText: 'Solo Consultar',
-            denyButtonText: 'Imprimir en POS',
-            cancelButtonText: 'Cancelar'
+            confirmButtonText: 'Imprimir en POS',
+            denyButtonText: 'Solo Consultar',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true
         });
-        if (value === undefined) return;
-        const printOnPOS = value === false;
+        if (result.isDismissed) return;
+        const printOnPOS = result.isConfirmed;
         showLoading('Obteniendo detalle de ventas... (puede tardar)');
         const resultado = await Transbank.POS.getSalesDetail(printOnPOS);
         hideLoading();
         if (resultado.successful) {
+            marcarPasoCierreCompletado('detalle');
             let txListHtml = '';
             if (resultado.transactions && resultado.transactions.length > 0) {
                 txListHtml = '<hr><div style="max-height:300px;overflow-y:auto;">' +

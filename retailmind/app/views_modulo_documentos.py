@@ -1347,6 +1347,204 @@ def construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000):
     return nmb, dsc_full
 
 
+# ============================================================================
+# Helpers de observación compacta y referencias para vendedor/ticket/pago.
+#
+# Contexto: antes, las 3 funciones generadoras armaban una glosa concatenada
+# con "^" que mezclaba vendedor + ticket interno + folio DTE + descuento +
+# medios de pago + voucher/auth/terminal. El resultado superaba fácilmente
+# los 90/100 chars que el XSD SII permite en RazonRef / TermPagoGlosa, y
+# Acepta rechazaba el TXT en silencio (el archivo quedaba generado pero sin
+# emitir). Se reemplaza por:
+#   1) Una observación COMPACTA (≤90 chars) con claves cortas.
+#   2) Referencias dedicadas <Referencia TpoDocRef="VEN"> (código vendedor)
+#      y <Referencia TpoDocRef="SET"> (ticket interno), en documentos que
+#      soportan la sección de referencias (33/34/52/61).
+# ============================================================================
+
+# Abreviaturas ≤3 chars para comprimir los nombres de METODO_PAGO_TICKET_CHOICES
+# al armar la glosa compacta. Los valores completos quedan en la BD en
+# Dte_Detalle_Pago (con voucher, auth, terminal), acá solo comprimimos lo
+# mínimo que el XSD permite imprimir.
+_ABREV_METODO_PAGO = {
+    'EFECTIVO': 'EFE',
+    'TARJETA_DEBITO': 'DEB',
+    'TARJETA_CREDITO': 'CRE',
+    'TBK_DEBITO_POS': 'TBK',
+    'TBK_CREDITO_POS': 'TBK',
+    'TBK_PREPAGO_POS': 'TBK',
+    'TBK_POS_INTEGRADO': 'TBK',
+    'TBK_MANUAL': 'TBK',
+    'TRANSBANK_DEBITO_POS': 'TBK',
+    'TRANSBANK_CREDITO_POS': 'TBK',
+    'TRANSFERENCIA': 'TRF',
+    'CHEQUE': 'CHQ',
+    'TARJETA_COMERCIAL': 'TCC',
+    'VENTA_INTERNET': 'WEB',
+    'ORDEN_COMPRA': 'OC',
+    'CONVENIO': 'CNV',
+    'CREDITO_TRABAJADOR': 'CRT',
+    'CREDITO_EXTERNO': 'CRX',
+    'MULTIPLE': 'MIX',
+    'OTRO': 'OTR',
+}
+
+
+def _resumir_metodos_pago(metodos_pago_texto, max_len=60):
+    """
+    Toma el string largo que arma `views_modulo_ventas.py` / `views_ecommerce.py`
+    ─p.ej. "EFECTIVO: $100 - Tarj: VISA - Auth: 12345 | Transbank Debito POS:
+    $791 - Terminal: XYZ"─ y devuelve un resumen compacto tipo
+    "EFE:100 TBK:791".
+
+    Descarta voucher/auth/terminal/notas porque esa info ya vive en
+    `Dte_Detalle_Pago.notas` y no hace falta arrastrarla al TXT (era una de
+    las razones por las que la glosa explotaba los 90 chars del XSD).
+    """
+    if not metodos_pago_texto:
+        return ''
+    partes = []
+    for trozo in str(metodos_pago_texto).split('|'):
+        trozo = trozo.strip()
+        if not trozo:
+            continue
+        # Cabeza = "EFECTIVO: $100", ignorar lo que viene tras ' - '.
+        cabeza = trozo.split(' - ')[0].strip()
+        m = re.match(r'^([^:]+):\s*\$?([\d.,\-]+)', cabeza)
+        if not m:
+            continue
+        nombre = m.group(1).strip().upper().replace(' ', '_').replace('É', 'E')
+        monto = m.group(2).replace('.', '').replace(',', '').replace('$', '').strip()
+        abrev = _ABREV_METODO_PAGO.get(nombre)
+        if not abrev:
+            # Fallback: 3 primeras letras alfabéticas del nombre.
+            alfa = re.sub(r'[^A-Z]', '', nombre)
+            abrev = alfa[:3] if alfa else nombre[:3]
+        partes.append(f"{abrev}:{monto}")
+    resumen = ' '.join(partes)
+    if len(resumen) > max_len:
+        resumen = resumen[:max_len]
+    return resumen
+
+
+def construir_observacion_compacta(datos, max_len=90, incluir_dte=True):
+    """
+    Arma la glosa compacta (≤max_len chars) que va en el campo observación
+    de la última línea del TXT Acepta. Respeta los topes del XSD SII
+    (RazonRef=90, TermPagoGlosa=100).
+
+    Formato: "V:NICK2 T:179432 D:282105 Dc:99 EFE:100 TBK:791"
+      * V:  código vendedor
+      * T:  correlativo interno del ticket (distinto del folio DTE)
+      * D:  folio DTE (omitible con `incluir_dte=False` cuando el dato ya
+            viaja como referencia VEN/SET y saturaría la glosa).
+      * Dc: monto de descuento aplicado (solo si > 0).
+      * <MET>:<monto>...  medios de pago abreviados.
+
+    Args:
+        datos (dict): Estructura completa del DTE ya validada.
+        max_len (int): Tope de largo (default 90 = RazonRef).
+        incluir_dte (bool): Si False, omite "D:<folio>" para dejar espacio.
+
+    Returns:
+        str: Glosa SIEMPRE ≤ max_len chars.
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    emisor = datos.get('emisor') or {}
+    doc = datos.get('documento') or {}
+    totales = datos.get('totales') or {}
+
+    vendedor_codigo = (
+        emisor.get('codigo_vendedor') or emisor.get('sucursal') or ''
+    )
+    vendedor_codigo = limpiar_texto(str(vendedor_codigo), 10)
+
+    correlativo_ticket = str(emisor.get('correlativo_ticket') or '').strip()
+    folio_dte = str(doc.get('folio') or '').strip()
+
+    drs = datos.get('descuentos_recargos') or []
+    monto_descuento = sum(
+        int(dr.get('valor_dr', 0) or 0)
+        for dr in drs
+        if str(dr.get('tpo_mov', '')).upper() == 'D' and str(dr.get('tpo_valor', '')) == '$'
+    )
+    if monto_descuento <= 0:
+        monto_descuento = int(totales.get('descuento_global', 0) or 0)
+
+    resumen_pagos = _resumir_metodos_pago(emisor.get('metodos_pago', ''))
+
+    partes = []
+    if vendedor_codigo:
+        partes.append(f"V:{vendedor_codigo}")
+    if correlativo_ticket:
+        partes.append(f"T:{correlativo_ticket}")
+    if incluir_dte and folio_dte:
+        partes.append(f"D:{folio_dte}")
+    if monto_descuento > 0:
+        partes.append(f"Dc:{monto_descuento}")
+    if resumen_pagos:
+        partes.append(resumen_pagos)
+
+    glosa = ' '.join(partes)
+    if len(glosa) > max_len:
+        _logger.warning(
+            "[DTE] Observacion compacta excede %d chars (%d). Truncada. Glosa=%r",
+            max_len, len(glosa), glosa[:max_len],
+        )
+        glosa = glosa[:max_len]
+    return glosa
+
+
+def construir_referencias_vendedor_ticket(datos):
+    """
+    Arma referencias internas para que vendedor y ticket viajen en campos
+    propios del XSD en vez de apilarse en la glosa.
+
+    Genera (cuando hay datos):
+      * Referencia TpoDocRef="VEN" con RazonRef=<código vendedor>.
+      * Referencia TpoDocRef="SET" con FolioRef=<correlativo interno>.
+
+    NOTA: "VEN" y "SET" no están en el catálogo numérico del SII (33, 39,
+    801…). El XSD define <TpoDocRef> como xs:string ≤3 chars, así que
+    alfanuméricos son aceptados como referencias internas. Acepta las
+    respeta sin enviarlas como referencia formal al SII.
+
+    Returns:
+        list[dict]: Cada dict es una referencia lista para sumar al
+        bloque `referencias` del `datos`. Keys: tipo_documento, folio,
+        fecha, razon.
+    """
+    emisor = datos.get('emisor') or {}
+    doc = datos.get('documento') or {}
+    fecha = formatear_fecha(doc.get('fecha_emision', ''))
+
+    refs = []
+
+    codigo_vendedor = limpiar_texto(
+        str(emisor.get('codigo_vendedor') or emisor.get('sucursal') or ''), 20
+    )
+    if codigo_vendedor:
+        refs.append({
+            'tipo_documento': 'VEN',
+            'folio': '1',
+            'fecha': fecha,
+            'razon': codigo_vendedor[:MAX_LENGTHS_SII['RazonRef']],
+        })
+
+    correlativo_ticket = str(emisor.get('correlativo_ticket') or '').strip()
+    if correlativo_ticket:
+        refs.append({
+            'tipo_documento': 'SET',
+            'folio': correlativo_ticket[:18],  # FolioRef SII = 18 chars.
+            'fecha': fecha,
+            'razon': '',
+        })
+
+    return refs
+
+
 def validar_datos_dte_acepta(datos):
     """
     Valida que los datos mínimos requeridos estén presentes
@@ -1412,6 +1610,112 @@ def validar_datos_dte_acepta(datos):
             return False, f"Falta el precio unitario en línea {i+1}"
     
     return True, "OK"
+
+
+def validar_dte_antes_de_guardar(datos):
+    """
+    Chequeo pre-escritura del DTE. NO bloquea la generación (política
+    acordada: truncar + warn), pero devuelve errores y advertencias para
+    que el caller los registre y los pinte en la UI.
+
+    Complementa a:
+      * `validar_datos_dte_acepta()` — valida presencia de campos obligatorios.
+      * `sanitizar_largos_dte()` — trunca en silencio a los largos del XSD.
+
+    Este validador se para justo antes de escribir el TXT y reporta:
+      - Errores críticos (faltan datos obligatorios) → el caller decide si
+        aborta o intenta igual.
+      - Warnings de consistencia (FchVenc en boleta, RUT genérico con razón
+        social real, largos sobre maxLength XSD).
+
+    Args:
+        datos (dict): Estructura completa del DTE ya validada/saneada.
+
+    Returns:
+        dict: {
+            'ok': bool,             # False si hay errores críticos.
+            'errores': list[str],   # Datos obligatorios faltantes.
+            'warnings': list[str],  # Inconsistencias no bloqueantes.
+        }
+    """
+    errores = []
+    warnings = []
+
+    # 1) Campos obligatorios (reuso).
+    es_valido, mensaje = validar_datos_dte_acepta(datos)
+    if not es_valido:
+        errores.append(mensaje)
+
+    # 2) Largos que siguen excedidos tras sanitizar (defensivo).
+    def _check_len(dict_obj, mapa, prefijo):
+        if not isinstance(dict_obj, dict):
+            return
+        for key, sii_field in mapa.items():
+            valor = dict_obj.get(key)
+            if not isinstance(valor, str):
+                continue
+            max_len = MAX_LENGTHS_SII.get(sii_field)
+            if max_len and len(valor) > max_len:
+                warnings.append(
+                    f"{prefijo}.{key} excede {max_len} chars "
+                    f"({len(valor)}): '{valor[:40]}...'"
+                )
+
+    _check_len(datos.get('emisor'), _EMISOR_FIELD_MAP, 'emisor')
+    _check_len(datos.get('receptor'), _RECEPTOR_FIELD_MAP, 'receptor')
+    _check_len(datos.get('transporte'), _TRANSPORTE_FIELD_MAP, 'transporte')
+
+    for i, ref in enumerate(datos.get('referencias') or []):
+        razon = str(ref.get('razon', '') or '')
+        if len(razon) > MAX_LENGTHS_SII['RazonRef']:
+            warnings.append(
+                f"referencias[{i}].razon excede 90 chars ({len(razon)})"
+            )
+
+    for i, dr in enumerate(datos.get('descuentos_recargos') or []):
+        glosa = str(dr.get('glosa_dr', '') or '')
+        if len(glosa) > MAX_LENGTHS_SII['GlosaDR']:
+            warnings.append(
+                f"descuentos_recargos[{i}].glosa_dr excede 45 chars ({len(glosa)})"
+            )
+
+    # 3) Consistencias específicas del formato Acepta/SII.
+    doc = datos.get('documento') or {}
+    try:
+        tipo = int(doc.get('tipo_documento')) if doc.get('tipo_documento') else None
+    except (TypeError, ValueError):
+        tipo = None
+
+    # Boletas (39/41) no permiten FchVenc en el XSD.
+    if tipo in (39, 41) and doc.get('fecha_vencimiento'):
+        warnings.append(
+            "FchVenc presente en boleta (39/41): el XSD no lo permite, "
+            "se omitirá al generar el TXT."
+        )
+
+    # Receptor 66666666-6 con razón social distinta de CONSUMIDOR FINAL.
+    receptor = datos.get('receptor') or {}
+    rut_rec = formatear_rut(receptor.get('rut', '') or '')
+    rz = (receptor.get('razon_social') or '').strip().upper()
+    if rut_rec == '66666666-6' and rz and rz not in ('CONSUMIDOR FINAL', 'CONSUMIDOR'):
+        warnings.append(
+            f"Receptor 66666666-6 con razon_social='{receptor.get('razon_social')}': "
+            "si el cliente es identificado usar su RUT real, si no dejar 'CONSUMIDOR FINAL'."
+        )
+
+    # Observación compacta prevista (para que se vea en UI si supera 90).
+    observacion_preview = construir_observacion_compacta(datos, max_len=10000)
+    if len(observacion_preview) > 90:
+        warnings.append(
+            f"Observación compacta preliminar mide {len(observacion_preview)} "
+            f"chars (>90). Se truncará al generar el TXT."
+        )
+
+    return {
+        'ok': len(errores) == 0,
+        'errores': errores,
+        'warnings': warnings,
+    }
 
 
 # =====================================================================
@@ -1756,15 +2060,20 @@ def generar_txt_nota_credito_acepta(datos):
     lineas.append('~')
     
     # ===== REFERENCIA OBLIGATORIA =====
-    # NC siempre debe tener referencia al documento que anula/corrige
-    referencias = datos.get('referencias', [])
+    # NC siempre debe tener referencia al documento que anula/corrige.
+    # Se agregan también las referencias internas VEN/SET (vendedor + ticket)
+    # para no concentrarlas en la glosa larga — misma lógica que en factura.
+    referencias = list(datos.get('referencias', []) or [])
+    referencias.extend(construir_referencias_vendedor_ticket(datos))
+
     if referencias and len(referencias) > 0:
         for ref in referencias:
             tipo_ref = str(ref.get('tipo_documento', ''))
             folio_ref = str(ref.get('folio', ''))
             fecha_ref = formatear_fecha(ref.get('fecha', ''))
             cod_ref = str(ref.get('razon', '')) or '1'  # 1=anula, 3=corrige montos
-            
+            cod_ref = truncar_campo_sii(cod_ref, 'RazonRef')
+
             # Formato SIN espacios: 33||12345|2025-11-05|1|}
             linea_ref = [
                 tipo_ref,
@@ -1793,34 +2102,24 @@ def generar_txt_nota_credito_acepta(datos):
     except:
         monto_letras = f"{monto_total} PESOS (Total Art {monto_neto})"
     
-    # Referencia en observaciones
-    folio_ref = referencias[0].get('folio', '') if referencias else ''
+    # Referencia en observaciones (folio del documento anulado/corregido).
+    # Buscar solo entre referencias numéricas (SII), no VEN/SET internas.
+    folio_ref = ''
+    for ref in (datos.get('referencias') or []):
+        if str(ref.get('tipo_documento', '')).isdigit():
+            folio_ref = ref.get('folio', '') or ''
+            break
     impresora_texto = f"factura {folio_ref}" if folio_ref else 'factura'
 
-    # Info enriquecida (vendedor, ticket, descuento, métodos de pago).
-    descuentos_recargos_list = datos.get('descuentos_recargos', []) or []
-    monto_descuento_total = sum(
-        int(dr.get('valor_dr', 0) or 0)
-        for dr in descuentos_recargos_list
-        if str(dr.get('tpo_mov', '')).upper() == 'D' and str(dr.get('tpo_valor', '')) == '$'
+    # Observación compacta (≤90 chars) reemplaza la antigua concatenación.
+    # Ver comentario en `construir_observacion_compacta()`.
+    observacion_compacta_nc = construir_observacion_compacta(
+        datos, max_len=90, incluir_dte=False
     )
-    if monto_descuento_total <= 0:
-        monto_descuento_total = int(totales.get('descuento_global', 0) or 0)
-
-    emisor_info_nc = datos.get('emisor', {}) or {}
-    vendedor_nombre_nc = emisor_info_nc.get('nombre_vendedor', '') or ''
-    metodos_pago_nc = emisor_info_nc.get('metodos_pago', '') or ''
-    correlativo_ticket_nc = emisor_info_nc.get('correlativo_ticket', '') or ''
 
     info_partes_nc = [monto_letras]
-    if vendedor_nombre_nc:
-        info_partes_nc.append(f"Vendedor: {vendedor_nombre_nc}")
-    if correlativo_ticket_nc:
-        info_partes_nc.append(f"Ticket: {correlativo_ticket_nc}")
-    if monto_descuento_total > 0:
-        info_partes_nc.append(f"Descuento: ${monto_descuento_total:,}")
-    if metodos_pago_nc:
-        info_partes_nc.append(f"Pago: {metodos_pago_nc}")
+    if observacion_compacta_nc:
+        info_partes_nc.append(observacion_compacta_nc)
 
     info_texto_nc = '  '.join(info_partes_nc) + '  '
 
@@ -1867,18 +2166,21 @@ def generar_txt_boleta_acepta(datos):
     totales = datos['totales']
     
     # ===== LÍNEA 1: IdDoc BOLETA =====
-    # Formato: 39|folio|fecha|ind_servicio|||fecha||}
+    # Formato: 39|folio|fecha|ind_servicio|||||}
+    # ⚠️ FchVenc (campo 7) NO aplica para boletas (39/41). El XSD SII solo
+    # lo permite bajo IdDoc de facturas con forma_pago=2 (crédito). Se deja
+    # vacío para que Acepta no lo propague al XML.
     fecha_emision = formatear_fecha(doc.get('fecha_emision', ''))
     ind_servicio = doc.get('ind_servicio', '3')  # 3 = Boleta de venta y servicios
-    
+
     linea1 = [
         str(doc.get('tipo_documento', '')),  # 39 o 41
         str(doc.get('folio', '')),
         fecha_emision,
         str(ind_servicio),
         '', '',  # Campos vacíos
-        fecha_emision,  # Fecha vencimiento = fecha emisión
-        '',  # Campo vacío
+        '',      # FchVenc vacío — no aplica para boletas
+        '',      # Campo vacío
         '}'
     ]
     lineas.append(separador.join(linea1))
@@ -1972,44 +2274,18 @@ def generar_txt_boleta_acepta(datos):
         lineas.append(linea_desc)
         lineas.append('~')
     
-    # ===== OBSERVACIONES CON FORMATO ESPECIAL =====
-    vendedor_codigo = emisor.get('sucursal', '') or emisor.get('codigo_vendedor', '') or 'USUARIO'
-    vendedor_nombre = emisor.get('nombre_vendedor', '') or 'Sin vendedor'
-    correlativo = doc.get('folio', '')
-    correlativo_ticket = emisor.get('correlativo_ticket', '')
-    metodos_pago = emisor.get('metodos_pago', '')
-    
+    # ===== OBSERVACIÓN COMPACTA (≤90 chars, compatible con RazonRef XSD) =====
+    # Antes se concatenaba "^ Vendedor: ... ^ Ticket: ... ^ Pago: ..." llegando
+    # a 140+ chars, que violaba maxLength=90 de RazonRef al parsearse y hacía
+    # que Acepta rechazara el TXT en silencio. Ahora usamos claves cortas con
+    # topes controlados. La información detallada de pagos (voucher, auth,
+    # terminal) sigue guardada en Dte_Detalle_Pago.notas en la BD; el TXT
+    # solo necesita un resumen imprimible.
+    vendedor_codigo = emisor.get('codigo_vendedor', '') or emisor.get('sucursal', '') or 'USUARIO'
     nombre_impresora = emisor.get('nombre_impresora_boleta', 'boleta') or 'boleta'
 
-    # La observación impresa en la boleta incluye información enriquecida:
-    # vendedor, ticket, DTE, descuento aplicado y métodos de pago (tipo tarjeta,
-    # autorización Transbank, terminal/operación). Se limita el largo total a
-    # ~400 chars como margen seguro del campo observación de Acepta.
-    MAX_OBSERVACION = 400
+    observacion = construir_observacion_compacta(datos, max_len=90)
 
-    # Calcular monto de descuento agregado desde el bloque de descuentos/recargos.
-    descuentos_recargos_list = datos.get('descuentos_recargos', []) or []
-    monto_descuento_total = sum(
-        int(dr.get('valor_dr', 0) or 0)
-        for dr in descuentos_recargos_list
-        if str(dr.get('tpo_mov', '')).upper() == 'D' and str(dr.get('tpo_valor', '')) == '$'
-    )
-    if monto_descuento_total <= 0:
-        monto_descuento_total = int(totales.get('descuento_global', 0) or 0)
-
-    obs_partes = [f"Vendedor: {vendedor_nombre} (Cod: {vendedor_codigo})"]
-    if correlativo_ticket:
-        obs_partes.append(f"Ticket: {correlativo_ticket}")
-    if correlativo:
-        obs_partes.append(f"DTE: {correlativo}")
-    if monto_descuento_total > 0:
-        obs_partes.append(f"Descuento: ${monto_descuento_total:,}")
-    if metodos_pago:
-        obs_partes.append(f"Pago: {metodos_pago}")
-    observacion = '^ ' + ' ^ '.join(obs_partes) + ' '
-    if len(observacion) > MAX_OBSERVACION:
-        observacion = observacion[:MAX_OBSERVACION - 3] + '...'
-    
     linea_obs = [
         vendedor_codigo,
         '', '',
@@ -2305,25 +2581,31 @@ def generar_txt_dte_acepta(datos):
     lineas.append('~')
     
     # ===== REFERENCIAS A OTROS DOCUMENTOS (Opcional) =====
-    referencias = datos.get('referencias', [])
+    # Se agregan automáticamente 2 referencias internas (VEN=vendedor,
+    # SET=ticket interno) para no meter esos datos en la glosa larga.
+    referencias = list(datos.get('referencias', []) or [])
+    referencias.extend(construir_referencias_vendedor_ticket(datos))
     logger.warning(f"🔍 DEBUG - Procesando referencias: {len(referencias)} refs")
-    
+
     if referencias and len(referencias) > 0:
         logger.warning(f"🔍 DEBUG - Agregando {len(referencias)} referencias al TXT")
         for idx, ref in enumerate(referencias):
             logger.warning(f"🔍 DEBUG - Referencia {idx+1}: tipo={ref.get('tipo_documento')}, folio={ref.get('folio')}")
-            # ✅ Formato correcto: 801|| folio | fecha|| |}
+            # Formato: <tipo>|<ind_global>| <folio> | <fecha>|<razon>|}
+            # Para VEN/SET el razón queda vacío o con el código corto; para
+            # 33/39/801… se respeta la razón original del caller.
             fecha_ref = formatear_fecha(ref.get('fecha', ''))
             folio_ref = str(ref.get('folio', ''))
             tipo_ref = str(ref.get('tipo_documento', ''))
-            
+            razon_ref = truncar_campo_sii(ref.get('razon', '') or '', 'RazonRef')
+
             linea_ref = [
-                tipo_ref,  # 1. Tipo documento
-                '',  # 2. Campo vacío
-                f" {folio_ref} ",  # 3. Folio CON espacios
-                f" {fecha_ref}",  # 4. Fecha CON espacio
-                '',  # 5. Campo vacío
-                '}'  # 6. Cierre
+                tipo_ref,                # 1. TpoDocRef
+                '',                      # 2. IndGlobal
+                f" {folio_ref} ",        # 3. FolioRef
+                f" {fecha_ref}",         # 4. FchRef
+                razon_ref,               # 5. RazonRef / CodRef
+                '}'                      # 6. Cierre
             ]
             linea_ref_completa = separador.join(linea_ref)
             logger.warning(f"🔍 DEBUG - Línea referencia: '{linea_ref_completa}'")
@@ -2357,32 +2639,19 @@ def generar_txt_dte_acepta(datos):
     observaciones_generales = datos.get('observaciones_adicionales') or datos.get('observaciones') or ''
     observaciones_generales = limpiar_texto(observaciones_generales, 200)
 
-    # Calcular monto de descuento agregado (para agregar a la info adicional).
-    descuentos_recargos_list = datos.get('descuentos_recargos', []) or []
-    monto_descuento_total = sum(
-        int(dr.get('valor_dr', 0) or 0)
-        for dr in descuentos_recargos_list
-        if str(dr.get('tpo_mov', '')).upper() == 'D' and str(dr.get('tpo_valor', '')) == '$'
+    # Observación compacta (≤90 chars) con vendedor/ticket/descuento/pagos.
+    # Vendedor y ticket también viajan como Referencias VEN/SET más arriba,
+    # pero se incluyen acá también porque ese es el texto que se imprime en
+    # el recuadro de observación de la factura física (Acepta no renderiza
+    # Referencias en la impresión). `incluir_dte=False` porque el folio ya
+    # se repite en el encabezado impreso de la factura.
+    observacion_compacta = construir_observacion_compacta(
+        datos, max_len=90, incluir_dte=False
     )
-    if monto_descuento_total <= 0:
-        monto_descuento_total = int(totales.get('descuento_global', 0) or 0)
 
-    # Información de pago y vendedor enriquecida (si el caller la proveyó).
-    emisor_info = datos.get('emisor', {}) or {}
-    vendedor_nombre_fact = emisor_info.get('nombre_vendedor', '') or ''
-    metodos_pago_fact = emisor_info.get('metodos_pago', '') or ''
-    correlativo_ticket_fact = emisor_info.get('correlativo_ticket', '') or ''
-
-    # Armado de info_texto como partes opcionales (solo lo que hay valor).
     info_partes = [f"{monto_letras}  total Productos: {total_productos}"]
-    if vendedor_nombre_fact:
-        info_partes.append(f"Vendedor: {vendedor_nombre_fact}")
-    if correlativo_ticket_fact:
-        info_partes.append(f"Ticket: {correlativo_ticket_fact}")
-    if monto_descuento_total > 0:
-        info_partes.append(f"Descuento: ${monto_descuento_total:,}")
-    if metodos_pago_fact:
-        info_partes.append(f"Pago: {metodos_pago_fact}")
+    if observacion_compacta:
+        info_partes.append(observacion_compacta)
     if tipo_doc == 33 and observaciones_generales:
         info_partes.append(observaciones_generales)
 
@@ -2698,31 +2967,44 @@ def generar_txt_acepta_api(request):
         
         # Generar contenido TXT
         contenido_txt = generar_txt_dte_acepta(datos)
-        
+
+        # Chequeo pre-escritura: detecta largos/consistencias que no cumplen
+        # el XSD SII. No bloquea la descarga (política: truncar + warn) pero
+        # se emiten al frontend vía header para pintarlos en la UI.
+        validacion = validar_dte_antes_de_guardar(datos)
+        for w in validacion.get('warnings', []):
+            logger.warning("[DTE] validación pre-guardado: %s", w)
+
         # Crear nombre del archivo
         tipo_doc = datos['documento'].get('tipo_documento', 'XX')
         folio = datos['documento'].get('folio', '0000')
         fecha = formatear_fecha(datos['documento'].get('fecha_emision', timezone.localdate()))
         nombre_archivo = f"dte_{tipo_doc}_{folio}_{fecha.replace('-', '')}.txt"
-        
+
         # Retornar como archivo descargable
         response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
-        
+        # Header de advertencias (consumible por el frontend).
+        if validacion.get('warnings'):
+            response['X-DTE-Warnings'] = json.dumps(
+                validacion['warnings'], ensure_ascii=False
+            )
+            response['Access-Control-Expose-Headers'] = 'X-DTE-Warnings'
+
         return response
-        
+
     except ValidationError as e:
         return JsonResponse({
             'success': False,
             'error': str(e)
         }, status=400)
-        
+
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
             'error': 'JSON inválido'
         }, status=400)
-        
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -2996,14 +3278,26 @@ def generar_txt_desde_dte_existente(request):
         
         # Generar TXT
         contenido_txt = generar_txt_dte_acepta(datos)
-        
+
+        # Validación pre-escritura (mismo criterio que generar_txt_acepta_api).
+        validacion = validar_dte_antes_de_guardar(datos)
+        import logging as _logging
+        _v_logger = _logging.getLogger(__name__)
+        for w in validacion.get('warnings', []):
+            _v_logger.warning("[DTE] validación pre-guardado (dte_id=%s): %s", dte.id, w)
+
         # Crear nombre del archivo
         nombre_archivo = f"dte_{tipo_numerico}_{dte.numero_documento}_{dte.fecha_emision.strftime('%Y%m%d')}.txt"
-        
+
         # Retornar como archivo descargable
         response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
-        
+        if validacion.get('warnings'):
+            response['X-DTE-Warnings'] = json.dumps(
+                validacion['warnings'], ensure_ascii=False
+            )
+            response['Access-Control-Expose-Headers'] = 'X-DTE-Warnings'
+
         return response
         
     except json.JSONDecodeError:

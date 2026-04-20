@@ -288,6 +288,48 @@ const GeneradorTXTAcepta = {
     },
 
     /**
+     * Parsea el header X-DTE-Warnings del backend (JSON) y lo devuelve como
+     * array de strings. Se usa para avisar al operador que un TXT se generó
+     * pero algún campo fue truncado o es sospechoso (FchVenc en boleta, RUT
+     * genérico con razón social real, observación >90 chars, etc.).
+     */
+    _leerWarnings(response) {
+        const raw = response.headers.get('X-DTE-Warnings');
+        if (!raw) return [];
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [raw];
+        }
+    },
+
+    /**
+     * Pinta los warnings en el toast/console. Si existe window.Swal (SweetAlert)
+     * o window.toastr se prefiere ese canal; si no, se hace console.warn y se
+     * devuelve el array para que el caller los muestre como prefiera.
+     */
+    _mostrarWarnings(warnings) {
+        if (!warnings || warnings.length === 0) return;
+        const mensaje = warnings.map((w, i) => `${i + 1}. ${w}`).join('\n');
+        if (typeof window !== 'undefined') {
+            if (window.Swal) {
+                window.Swal.fire({
+                    icon: 'warning',
+                    title: 'DTE generado con advertencias',
+                    text: mensaje,
+                    confirmButtonText: 'Entendido',
+                });
+            } else if (window.toastr) {
+                window.toastr.warning(mensaje, 'DTE: advertencias SII');
+            } else {
+                console.warn('[DTE] Advertencias del servidor:\n' + mensaje);
+                if (typeof window.alert === 'function') window.alert('DTE generado con advertencias:\n' + mensaje);
+            }
+        }
+    },
+
+    /**
      * Enviar datos al servidor para generar TXT
      */
     async generarTXT(datos) {
@@ -306,6 +348,8 @@ const GeneradorTXTAcepta = {
                 throw new Error(error.error || 'Error al generar archivo TXT');
             }
 
+            const warnings = this._leerWarnings(response);
+
             // Descargar el archivo
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -317,7 +361,9 @@ const GeneradorTXTAcepta = {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            return { success: true };
+            if (warnings.length) this._mostrarWarnings(warnings);
+
+            return { success: true, warnings };
 
         } catch (error) {
             console.error('Error al generar TXT:', error);
@@ -344,6 +390,8 @@ const GeneradorTXTAcepta = {
                 throw new Error(error.error || 'Error al generar archivo TXT');
             }
 
+            const warnings = this._leerWarnings(response);
+
             // Descargar el archivo
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -355,7 +403,9 @@ const GeneradorTXTAcepta = {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            return { success: true };
+            if (warnings.length) this._mostrarWarnings(warnings);
+
+            return { success: true, warnings };
 
         } catch (error) {
             console.error('Error al generar TXT desde DTE:', error);

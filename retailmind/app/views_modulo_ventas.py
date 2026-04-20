@@ -4882,6 +4882,21 @@ def editar_dte_boleta_papel(request):
             fecha_anterior = dte.fecha_emision
             tipo_anterior = dte.tipo_documento
 
+            # Localizar el Ticket vinculado ANTES de modificar el DTE, para
+            # poder resolverlo aunque cambie numero_documento o tipo_documento.
+            # El match es por sucursal + folio_dte (numero original). Si no
+            # existe ticket asociado (ej: DTE emitido directo sin ticket
+            # previo), ticket_vinculado queda en None y no se propaga nada.
+            ticket_vinculado = (
+                Ticket.objects
+                .select_for_update()
+                .filter(
+                    sucursal_id=dte.sucursal_id,
+                    folio_dte=dte.numero_documento,
+                )
+                .first()
+            )
+
             update_fields = []
 
             # Si cambia el tipo, tomamos un folio nuevo del correlativo del
@@ -4939,6 +4954,24 @@ def editar_dte_boleta_papel(request):
             for obj in pagos_actualizar:
                 obj.save(update_fields=['metodo_pago', 'monto'])
 
+            # Propagar al Ticket vinculado (si existe) para mantener la
+            # consistencia con la cuadratura. Se ejecuta SIEMPRE al guardar,
+            # aunque la fecha no haya cambiado, para que el resumen siempre
+            # quede alineado con la fecha_emision actual del DTE.
+            #
+            # Se usa .update() (queryset) en lugar de .save() porque
+            # `Ticket.fecha` tiene auto_now=True y un save() lo reescribiria
+            # a "hoy" en vez de a la fecha del DTE.
+            ticket_sincronizado = False
+            if ticket_vinculado:
+                ticket_fields = {'fecha': dte.fecha_emision}
+                if cambiar_tipo or tiene_numero:
+                    ticket_fields['folio_dte'] = dte.numero_documento
+                Ticket.objects.filter(pk=ticket_vinculado.pk).update(
+                    **ticket_fields
+                )
+                ticket_sincronizado = True
+
         return JsonResponse({
             'success': True,
             'message': 'Documento actualizado correctamente',
@@ -4954,6 +4987,8 @@ def editar_dte_boleta_papel(request):
                 ),
                 'pagos_actualizados': len(pagos_actualizar),
                 'tipo_cambiado': cambiar_tipo,
+                'ticket_sincronizado': ticket_sincronizado,
+                'ticket_id': ticket_vinculado.pk if ticket_vinculado else None,
             }
         })
 

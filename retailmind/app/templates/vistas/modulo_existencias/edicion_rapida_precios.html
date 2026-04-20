@@ -2412,13 +2412,27 @@ function renderizarResultadosBusqueda(productos) {
         div.className = 'product-search-result' + (yaAgregado ? ' selected' : '');
         div.onclick = () => agregarALista(producto);
         
-        // Info de sucursales similares
+        // Info de sucursales con stock por cada una (incluye la sucursal actual)
         let sucursalesInfo = '';
-        if (producto.sucursales_similares > 0) {
-            // Crear tooltip con la lista de sucursales
+        const detalle = Array.isArray(producto.sucursales_detalle) ? producto.sucursales_detalle : [];
+        if (detalle.length > 0) {
+            // Texto compacto: "EDEL (15), NICK1 (8)" — la sucursal actual se marca con •
+            const partesBadge = detalle.map(s => {
+                const marca = s.es_actual ? '• ' : '';
+                return `${marca}${s.alias} (${s.stock})`;
+            });
+            const totalRed = (typeof producto.stock_total_red === 'number')
+                ? producto.stock_total_red
+                : detalle.reduce((acc, s) => acc + (s.stock || 0), 0);
+            const tooltipTexto = `Stock por sucursal — Total en red: ${totalRed} unid.\n` +
+                detalle.map(s => `${s.es_actual ? '★ ' : ''}${s.alias}: ${s.stock}`).join('\n');
+
+            sucursalesInfo = `<span class="info-badge info-badge-sucursales" title="${tooltipTexto}">
+                <i class="ri-store-2-line"></i> ${partesBadge.join(', ')} &nbsp;·&nbsp; Total: ${totalRed}
+            </span>`;
+        } else if (producto.sucursales_similares > 0) {
             const sucursalesTexto = producto.sucursales_lista ? producto.sucursales_lista.join(', ') : '';
             const tooltipTexto = sucursalesTexto ? `También en: ${sucursalesTexto}` : 'Existe en otras sucursales';
-            
             sucursalesInfo = `<span class="info-badge info-badge-sucursales" title="${tooltipTexto}">
                 <i class="ri-store-2-line"></i> ${producto.sucursales_lista ? producto.sucursales_lista.join(', ') : producto.sucursales_similares + ' sucursal' + (producto.sucursales_similares > 1 ? 'es' : '')}
             </span>`;
@@ -2510,6 +2524,8 @@ function agregarALista(producto) {
         markup_nuevo: calcularMarkup(producto.costo, producto.precio_venta),
         sucursales_similares: producto.sucursales_similares || 0,
         sucursales_lista: producto.sucursales_lista || [],
+        sucursales_detalle: producto.sucursales_detalle || [],
+        stock_total_red: producto.stock_total_red || 0,
         ultimo_cambio: producto.ultimo_cambio
     });
     
@@ -2559,9 +2575,20 @@ function renderizarListaEdicion() {
         const diferenciaColor = diferencia < 0 ? 'var(--nexo-error)' : 'var(--nexo-accent)';
         const diferenciaIcon = diferencia < 0 ? 'ri-arrow-down-line' : 'ri-arrow-up-line';
         
-        // Info de sucursales y historial
+        // Info de sucursales y historial — muestra stock por sucursal (incluye la actual)
         let infoExtra = '';
-        if (item.sucursales_similares > 0) {
+        const detalleItem = Array.isArray(item.sucursales_detalle) ? item.sucursales_detalle : [];
+        if (detalleItem.length > 0) {
+            const partesItem = detalleItem.map(s => `${s.es_actual ? '• ' : ''}${s.alias} (${s.stock})`);
+            const totalItem = (typeof item.stock_total_red === 'number')
+                ? item.stock_total_red
+                : detalleItem.reduce((acc, s) => acc + (s.stock || 0), 0);
+            const tooltipItem = `Stock por sucursal — Total en red: ${totalItem} unid.\n` +
+                detalleItem.map(s => `${s.es_actual ? '★ ' : ''}${s.alias}: ${s.stock}`).join('\n');
+            infoExtra += `<span class="info-badge info-badge-sucursales" style="margin-right: 5px;" title="${tooltipItem}">
+                <i class="ri-store-2-line"></i> ${partesItem.join(', ')} · Total: ${totalItem}
+            </span>`;
+        } else if (item.sucursales_similares > 0) {
             infoExtra += `<span class="info-badge info-badge-sucursales" style="margin-right: 5px;">
                 <i class="ri-store-2-line"></i> ${item.sucursales_similares}
             </span>`;
