@@ -1545,6 +1545,7 @@ div[style*="border: 1px solid #000"] {
                                     <input type="number" class="form-control fw-bold text-center pos-input-precio"
                                            id="precioProducto" placeholder="$0">
                                     <input type="hidden" id="precioOriginal">
+                                    <input type="hidden" id="skuCargado">
                                 </div>
 
                                 <div class="pos-unified-input">
@@ -2089,6 +2090,28 @@ $(document).ready(function() {
         });
     });
 
+    // Si el usuario modifica manualmente el SKU y deja de coincidir con el
+    // producto cargado, limpiamos la info mostrada para evitar mezclar datos
+    // (ej. seleccionar en modal y luego tipear otro SKU sin buscar).
+    $('#skuProducto').on('input', function() {
+        const skuActual = $(this).val().trim();
+        const skuCargado = ($('#skuCargado').val() || '').trim();
+        if (skuCargado && skuActual !== skuCargado) {
+            $('#articuloProducto').text('—');
+            $('#descripcionProducto').text('—');
+            $('#marcaProducto').text('—');
+            $('#tallaProducto').text('—');
+            $('#precioProducto').val('');
+            $('#precioOriginal').val('');
+            $('#stockProducto').val('');
+            $('#skuCargado').val('');
+            $('#productoSeleccionadoBanner').addClass('d-none');
+            $('#bannerNombreProducto').text('');
+            $('#bannerInfoProducto').text('');
+            $('#infoProductoWrap').addClass('d-none');
+        }
+    });
+
     // Buscar producto por SKU (Enter en campo SKU)
     $('#skuProducto').on('keydown', function(e) {
         if (e.which === 13) {
@@ -2183,6 +2206,7 @@ $(document).ready(function() {
                     $('#precioProducto').val(producto.precio_venta);
                     $('#precioOriginal').val(producto.precio_venta);
                     $('#stockProducto').val(producto.stock);
+                    $('#skuCargado').val(sku);
                     // Mostrar banner + panel de info del producto cargado
                     $('#bannerNombreProducto').text(producto.articulo + (producto.talla ? ' — ' + producto.talla : ''));
                     $('#bannerInfoProducto').text(
@@ -2218,6 +2242,7 @@ $(document).ready(function() {
 
     function agregarProductoAlTicket() {
         const sku = $('#skuProducto').val().trim();
+        const skuCargado = ($('#skuCargado').val() || '').trim();
         const articulo = $('#articuloProducto').text().trim();
         const descripcion = $('#descripcionProducto').text().trim();
         const marca = $('#marcaProducto').text().trim();
@@ -2228,7 +2253,7 @@ $(document).ready(function() {
         const stock = parseInt($('#stockProducto').val()) || 0;
 
         // Validaciones
-        if (!sku || !articulo) {
+        if (!sku || !articulo || articulo === '—') {
             Swal.fire({
                 icon: 'error',
                 title: 'Producto requerido',
@@ -2236,6 +2261,15 @@ $(document).ready(function() {
                 confirmButtonText: 'Entendido'
             });
             $('#skuProducto').focus();
+            return;
+        }
+
+        // Si el SKU tipeado NO coincide con el SKU cargado en el formulario,
+        // significa que el usuario escribió otro SKU sin buscarlo. Forzamos
+        // búsqueda por SKU (que, si existe, trae precio/stock/articulo reales
+        // y auto-agrega al ticket con esos datos frescos).
+        if (!skuCargado || sku !== skuCargado) {
+            buscarProductoPorSku(/* autoAdd= */ true);
             return;
         }
 
@@ -2605,6 +2639,7 @@ $(document).ready(function() {
         $('#skuProducto').val('').trigger('change');
         $('#precioProducto').val('');
         $('#precioOriginal').val('');
+        $('#skuCargado').val('');
         $('#cantidadProducto').val(1);
         $('#stockProducto').val('');
 
@@ -3332,6 +3367,7 @@ $(document).ready(function() {
         $('#precioProducto').val(producto.precio || 0);
         $('#precioOriginal').val(producto.precio || 0);
         $('#stockProducto').val(producto.stock || 0);
+        $('#skuCargado').val(producto.sku || '');
         $('#cantidadProducto').val(1);
 
         // Mostrar banner + panel info de producto cargado

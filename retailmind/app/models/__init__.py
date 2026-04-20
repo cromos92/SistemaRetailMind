@@ -86,6 +86,8 @@ from .compras import (  # noqa: F401
     Compras_Producto_Talla,
     Productos_Recepcionados,
     Solicitud_Regularizacion,
+    CurvaDistribucion,
+    CurvaDistribucionItem,
 )
 
 from .cotizaciones import (  # noqa: F401

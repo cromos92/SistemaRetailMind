@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from .organizacion import Empresa, Sucursal
-from .catalogo import Producto_Talla, TIPO_TALLA_CHOICES
+from .catalogo import Producto_Talla, TIPO_TALLA_CHOICES, GuiaTalla, AtributoOpcion
 from .dte import Dte, Dte_Productos, ESTADO_RECEPCION_PRODUCTO_CHOICES, TIPO_PROBLEMA_CHOICES, TIPO_SOLUCION_CHOICES, ESTADO_SOLICITUD_CHOICES
 
 class Compras(models.Model):
@@ -98,6 +98,15 @@ class Compras_Producto(models.Model):
         verbose_name='Precio nuevo',
         help_text='Precio de venta que traerá esta compra (si difiere del anterior)',
     )
+    sucursal_destino = models.ForeignKey(
+        Sucursal,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='compras_productos_destino',
+        verbose_name='Sucursal destino sugerida',
+        help_text='Sucursal destino sugerida para este producto. Viene del formato de importación (opcional) y se usa como default en la Recepción de Productos. Puede sobrescribirse al recepcionar.',
+    )
 
     def __str__(self):
         return f"Compras_Producto   {self.nombre} - {self.compras}"
@@ -108,6 +117,11 @@ class Compras_Producto(models.Model):
             return self.precio_nuevo - self.precio_anterior
         return 0
 class Compras_Producto_Talla(models.Model):
+    # Marcador especial usado cuando el usuario importa una compra con solo
+    # el total, sin desglose de tallas. Esta fila "fantasma" concentra todo
+    # el stock hasta que se ejecute la distribución por guía de tallas.
+    TALLA_SIN_DESGLOSAR = '__TOTAL__'
+
     compra_producto =   models.ForeignKey(Compras_Producto,   on_delete=models.CASCADE)
     stock=   models.IntegerField()
     talla=   models.CharField(max_length=50)
@@ -124,6 +138,11 @@ class Compras_Producto_Talla(models.Model):
         ('recibido_completo', 'Recibido Completo'),
         ('cancelado', 'Cancelado'),
     ])
+    pendiente_distribuir = models.BooleanField(
+        default=False,
+        verbose_name='Pendiente de distribuir por guía',
+        help_text='True cuando la fila es el total provisorio de una compra importada sin desglose de tallas. Al aplicar la guía de tallas esta fila se reemplaza por filas reales.',
+    )
 
     def __str__(self):
         return f"Compras_Producto_Talla   {self.compra_producto} - {self.stock}"
@@ -507,3 +526,72 @@ class Solicitud_Regularizacion(models.Model):
             }
         return None
 
+
+# =====================================================================
+# CURVAS DE DISTRIBUCIÓN DE TALLAS
+# =====================================================================
+# Una curva define qué porcentaje del total va a cada talla cuando el
+# usuario importa una compra con sólo totales (sin desglose por talla).
+# - Se puede filtrar por marca y/o género para sugerencias automáticas.
+# - Puede opcionalmente anclarse a una GuiaTalla concreta para reutilizar
+#   el set de tallas (CL/US/EU/...).
+# =====================================================================
+class CurvaDistribucion(models.Model):
+    nombre = models.CharField(max_length=120)
+    descripcion = models.CharField(max_length=255, blank=True, null=True)
+    marca = models.ForeignKey(
+        AtributoOpcion,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='curvas_distribucion_por_marca',
+        help_text='Opcional. Si se indica, la curva aparecerá como sugerencia al distribuir productos de esta marca.',
+    )
+    genero = models.ForeignKey(
+        AtributoOpcion,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='curvas_distribucion_por_genero',
+        help_text='Opcional. Misma lógica que marca pero para género/sexo.',
+    )
+    guia_talla = models.ForeignKey(
+        GuiaTalla,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='curvas_distribucion',
+        help_text='Guía de tallas usada como base (opcional).',
+    )
+    activo = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    creado_por = models.CharField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Curva de distribución de tallas'
+        verbose_name_plural = 'Curvas de distribución de tallas'
+
+    def __str__(self):
+        partes = [self.nombre]
+        if self.marca_id:
+            partes.append(self.marca.valor)
+        if self.genero_id:
+            partes.append(self.genero.valor)
+        return ' · '.join(partes)
+
+    @property
+    def suma_porcentajes(self):
+        return sum((it.porcentaje or 0) for it in self.items.all())
+
+
+class CurvaDistribucionItem(models.Model):
+    curva = models.ForeignKey(
+        CurvaDistribucion, on_delete=models.CASCADE, related_name='items'
+    )
+    talla = models.CharField(max_length=50)
+    # Usamos DecimalField para evitar pérdidas por redondeo al sumar %.
+    porcentaje = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    orden = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+        unique_together = ('curva', 'talla')
+
+    def __str__(self):
+        return f"{self.curva.nombre} · {self.talla} = {self.porcentaje}%"

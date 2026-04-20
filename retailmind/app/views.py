@@ -5987,12 +5987,19 @@ def verGestionCompras(request):
         request.user, 'gestion_compras', 'puede_eliminar', sucursal_id=sucursal_id
     )
 
+    # Sucursales disponibles para el selector opcional de importación y la
+    # asignación masiva en Recepción de Productos.
+    sucursales_disponibles = list(
+        Sucursal.objects.all().order_by('alias').values('id', 'alias')
+    )
+
     context = {
         'empresas': empresas,
         'id_atributo_marca': marca.id if marca else 0,
         'id_atributo_color': color.id if color else 0,
         'id_atributo_genero': genero.id if genero else 0,
         'puede_eliminar_compra': puede_eliminar_compra,
+        'sucursales_disponibles': sucursales_disponibles,
     }
     return render(request, 'vistas/modulo_compras/gestionCompras.html', context)
  
@@ -6538,7 +6545,9 @@ def obtener_compras_por_anio(request):
     page = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 20)  # 20 registros por página
     search = request.GET.get('search', '').strip()
-    
+    # Filtro opcional por sucursal destino de recepciones (ver doc al final).
+    sucursal_id = request.GET.get('sucursal_id') or ''
+
     if not anio:
         return JsonResponse({'success': False, 'error': 'Año no especificado'}, status=400)
 
@@ -6575,6 +6584,23 @@ def obtener_compras_por_anio(request):
         ).values_list('id', flat=True).distinct()
         compras_base = compras_base.filter(id__in=matching_ids)
 
+    # Filtro por sucursal: devolver solo compras que tengan al menos una
+    # recepción con sucursal_destino = sucursal_id. La "sucursal" no vive
+    # en Compras sino en Productos_Recepcionados, por eso atravesamos la
+    # relación hasta las recepciones.
+    if sucursal_id:
+        try:
+            sucursal_id_int = int(sucursal_id)
+            ids_con_recep = Productos_Recepcionados.objects.filter(
+                sucursal_destino_id=sucursal_id_int,
+                compra_producto_talla__compra_producto__compras__in=compras_base,
+            ).values_list(
+                'compra_producto_talla__compra_producto__compras_id', flat=True
+            ).distinct()
+            compras_base = compras_base.filter(id__in=list(ids_con_recep))
+        except (ValueError, TypeError):
+            pass
+
     # Ahora anotar sobre la query limpia (sin JOINs de búsqueda)
     compras_query = compras_base.select_related('empresa').annotate(
         unidades_totales=Sum('compras_producto__compras_producto_talla__stock'),
@@ -6591,7 +6617,7 @@ def obtener_compras_por_anio(request):
 
     # Contar total de registros para paginación
     total_count = compras_query.count()
-    
+
     # Aplicar paginación
     offset = (page - 1) * page_size
     compras = compras_query.values(
@@ -6600,11 +6626,42 @@ def obtener_compras_por_anio(request):
         'unidades_totales', 'costo_total', 'total_recepcionado', 'pendientes_crear'
     )[offset:offset + page_size]
 
+    compras_list = list(compras)
+
+    # Bulk: sucursales destino donde se recepcionaron unidades de cada compra
+    # (para mostrar como chips "PAO2:30u" al lado del nombre en la grilla).
+    compras_ids_page = [c['id'] for c in compras_list]
+    sucursales_por_compra = {}
+    if compras_ids_page:
+        recep_suc = (
+            Productos_Recepcionados.objects
+            .filter(
+                compra_producto_talla__compra_producto__compras_id__in=compras_ids_page,
+                sucursal_destino__isnull=False,
+            )
+            .values(
+                'compra_producto_talla__compra_producto__compras_id',
+                'sucursal_destino_id',
+                'sucursal_destino__alias',
+            )
+            .annotate(unidades=Sum('stockArribado'))
+        )
+        for row in recep_suc:
+            cid = row['compra_producto_talla__compra_producto__compras_id']
+            sucursales_por_compra.setdefault(cid, []).append({
+                'sucursal_id': row['sucursal_destino_id'],
+                'sucursal': row['sucursal_destino__alias'] or 'Sin nombre',
+                'unidades': int(row['unidades'] or 0),
+            })
+        # Ordenar por unidades descendente para que el chip más relevante vaya primero
+        for cid in sucursales_por_compra:
+            sucursales_por_compra[cid].sort(key=lambda x: x['unidades'], reverse=True)
+
     # Calcular días restantes y formatear datos
     hoy = timezone.localdate()
     data = []
-    
-    for compra in compras:
+
+    for compra in compras_list:
         # Calcular días restantes
         if compra['fechaInicioTemporada'] and compra['fechaTerminoTemporada']:
             if compra['fechaInicioTemporada'] <= hoy <= compra['fechaTerminoTemporada']:
@@ -6627,6 +6684,8 @@ def obtener_compras_por_anio(request):
             'recepcionado': int(compra['total_recepcionado'] or 0),
             'pendientes_crear': int(compra['pendientes_crear'] or 0),
             'dias_temporada': dias_restantes,
+            # Nuevo: sucursales donde llegó la mercadería (solo referencia).
+            'sucursales_destino': sucursales_por_compra.get(compra['id'], []),
         })
 
     # Respuesta con metadatos de paginación
@@ -6641,7 +6700,8 @@ def obtener_compras_por_anio(request):
             'has_next': page * page_size < total_count,
             'has_previous': page > 1
         },
-        'search': search
+        'search': search,
+        'sucursal_id': sucursal_id or None,
     }
 
     return JsonResponse(response_data)
@@ -6652,33 +6712,57 @@ def importar_csv_compra(request):
         compra_id = data.get('compra_id')
         filas = data.get('filas', [])
 
+        # Cache alias -> Sucursal para no hacer una query por fila.
+        # La sucursal en el CSV es OPCIONAL: si viene vacía no se setea.
+        sucursales_por_alias = {}
+
+        def resolver_sucursal(alias):
+            if not alias:
+                return None
+            alias_norm = str(alias).strip()
+            if not alias_norm:
+                return None
+            if alias_norm in sucursales_por_alias:
+                return sucursales_por_alias[alias_norm]
+            suc = Sucursal.objects.filter(alias__iexact=alias_norm).first()
+            sucursales_por_alias[alias_norm] = suc
+            return suc
+
         productos_dict = {}
 
         for fila in filas:
+            sucursal_alias = (fila.get('sucursal') or '').strip()
+            # La sucursal también se agrupa por producto: dos filas con misma
+            # combinación pero distinta sucursal deben ser dos productos.
             key = (
-                fila['nombre'],
+                fila.get('nombre', ''),
                 fila.get('descripcion', ''),
-                fila['atributo1'],
-                fila['atributo2'],
-                fila['atributo3'],
-                fila.get('atributo4', ''),  # si existe
-                fila['costo'],
-                fila['precioSugerido']
+                fila.get('atributo1', ''),
+                fila.get('atributo2', ''),
+                fila.get('atributo3', ''),
+                fila.get('atributo4', ''),
+                fila.get('costo', 0) or 0,
+                fila.get('precioSugerido', 0) or 0,
+                sucursal_alias,
             )
 
             if key not in productos_dict:
                 productos_dict[key] = {
-                    "stock_tallas": []
+                    "stock_tallas": [],
+                    "sucursal_alias": sucursal_alias,
                 }
 
             productos_dict[key]["stock_tallas"].append({
-                "talla": fila["talla"],
-                "stock": fila["stock"]
+                "talla": fila.get("talla", ""),
+                "stock": fila.get("stock", 0) or 0,
             })
 
         compra = Compras.objects.get(id=compra_id)
 
-        for (nombre, descripcion, a1, a2, a3, a4, costo, precio) in productos_dict:
+        for key, info in productos_dict.items():
+            nombre, descripcion, a1, a2, a3, a4, costo, precio, sucursal_alias = key
+            sucursal_destino = resolver_sucursal(sucursal_alias)
+
             prod = Compras_Producto.objects.create(
                 compras=compra,
                 nombre=nombre,
@@ -6688,15 +6772,35 @@ def importar_csv_compra(request):
                 atributo3=a3,
                 atributo4=a4,
                 costo=costo,
-                precioSugerido=precio
+                precioSugerido=precio,
+                sucursal_destino=sucursal_destino,
             )
 
-            for talla_info in productos_dict[(nombre, descripcion, a1, a2, a3, a4, costo, precio)]["stock_tallas"]:
-                Compras_Producto_Talla.objects.create(
-                    compra_producto=prod,
-                    stock=talla_info["stock"],
-                    talla=talla_info["talla"]
-                )
+            # Si TODAS las filas de este producto vienen sin talla, sumamos el
+            # stock total y creamos UNA sola fila "fantasma" marcada como
+            # pendiente de distribuir. Se redistribuirá por guía de tallas
+            # desde el modal de Recepción.
+            filas_sin_talla = [t for t in info["stock_tallas"] if not (t.get("talla") or '').strip()]
+            filas_con_talla = [t for t in info["stock_tallas"] if (t.get("talla") or '').strip()]
+
+            if filas_sin_talla and not filas_con_talla:
+                stock_total = sum(int(t["stock"] or 0) for t in filas_sin_talla)
+                if stock_total > 0:
+                    Compras_Producto_Talla.objects.create(
+                        compra_producto=prod,
+                        stock=stock_total,
+                        talla=Compras_Producto_Talla.TALLA_SIN_DESGLOSAR,
+                        pendiente_distribuir=True,
+                    )
+            else:
+                # Mezcla con tallas explícitas: respetamos las con talla y
+                # descartamos las vacías (evitan duplicar stock al azar).
+                for talla_info in filas_con_talla:
+                    Compras_Producto_Talla.objects.create(
+                        compra_producto=prod,
+                        stock=talla_info["stock"],
+                        talla=talla_info["talla"]
+                    )
 
         return JsonResponse({"success": True})
 
@@ -6776,12 +6880,33 @@ def recepcionar_compra(request):
                     'numero': factura['numero_documento']
                 })
 
+        # Lista global de sucursales disponibles (para selects de recepción)
+        sucursales_disponibles = list(
+            Sucursal.objects.all().order_by('alias').values('id', 'alias')
+        )
+
+        # Helper: resolver AtributoOpcion por valor (case-insensitive) para
+        # anexar marca_id/genero_id en cada producto (necesario para filtrar
+        # curvas de distribución y guías de tallas en el frontend).
+        _atributo_cache = {}
+        def _opcion_por_valor(valor):
+            if not valor:
+                return None
+            key = valor.strip().lower()
+            if key in _atributo_cache:
+                return _atributo_cache[key]
+            opt = AtributoOpcion.objects.filter(valor__iexact=valor).first()
+            _atributo_cache[key] = opt.id if opt else None
+            return _atributo_cache[key]
+
         # ============================
         # VISTA AGRUPADA POR PRODUCTO
         # ============================
         if vista_agrupada:
             # Obtener todas las tallas sin paginar primero
-            todas_tallas = tallas_query.all()
+            todas_tallas = tallas_query.select_related(
+                'compra_producto__sucursal_destino'
+            ).all()
             
             # Agrupar por producto (nombre + marca + color + género)
             productos_agrupados = {}
@@ -6790,12 +6915,15 @@ def recepcionar_compra(request):
                 key = f"{t.compra_producto.nombre}|{t.compra_producto.atributo1}|{t.compra_producto.atributo2}|{t.compra_producto.atributo3}"
                 
                 if key not in productos_agrupados:
+                    sucursal_sug = t.compra_producto.sucursal_destino
                     productos_agrupados[key] = {
                         'nombre': t.compra_producto.nombre,
                         'descripcion': t.compra_producto.descripcion,
                         'marca': t.compra_producto.atributo1,
+                        'marca_id': _opcion_por_valor(t.compra_producto.atributo1),
                         'color': t.compra_producto.atributo2,
                         'genero': t.compra_producto.atributo3,
+                        'genero_id': _opcion_por_valor(t.compra_producto.atributo3),
                         'costo': t.compra_producto.costo,
                         'precio': t.compra_producto.precioSugerido,
                         'stock_total': 0,
@@ -6803,19 +6931,29 @@ def recepcionar_compra(request):
                         'tallas': [],
                         '_tallas_map': {},
                         'compra_producto_ids': set(),
+                        'sucursal_destino_id': sucursal_sug.id if sucursal_sug else None,
+                        'sucursal_destino_alias': sucursal_sug.alias if sucursal_sug else None,
+                        # Si hay una fila fantasma en el producto, lo marcamos
+                        # para habilitar en el frontend el botón "Distribuir
+                        # por guía de tallas".
+                        'pendiente_distribuir': False,
                     }
                 productos_agrupados[key]['compra_producto_ids'].add(t.compra_producto.id)
+                if getattr(t, 'pendiente_distribuir', False):
+                    productos_agrupados[key]['pendiente_distribuir'] = True
                 
                 # Obtener TODAS las recepciones existentes para esta talla
                 recepciones = Productos_Recepcionados.objects.filter(
                     compra_producto_talla=t
-                ).select_related('dte')
+                ).select_related('dte', 'sucursal_destino')
                 
                 # Calcular total recepcionado sumando todas las recepciones
                 recepcionado_talla = sum(r.stockArribado for r in recepciones)
                 
                 # Construir lista de facturas asociadas desde todas las recepciones
                 facturas_de_talla = []
+                sucursal_recep_id = None
+                sucursal_recep_alias = None
                 for recep in recepciones:
                     if recep.dte:
                         facturas_de_talla.append({
@@ -6823,7 +6961,16 @@ def recepcionar_compra(request):
                             'numero': str(recep.dte.numero_documento),
                             'cantidad': recep.stockArribado
                         })
-                
+                    # Priorizar la última sucursal destino recepcionada (no None)
+                    if recep.sucursal_destino_id and sucursal_recep_id is None:
+                        sucursal_recep_id = recep.sucursal_destino_id
+                        sucursal_recep_alias = recep.sucursal_destino.alias if recep.sucursal_destino else None
+
+                # Sucursal a mostrar: la ya recepcionada tiene prioridad,
+                # si no existe usamos la sugerida por el producto.
+                suc_id_talla = sucursal_recep_id or productos_agrupados[key]['sucursal_destino_id']
+                suc_alias_talla = sucursal_recep_alias or productos_agrupados[key]['sucursal_destino_alias']
+
                 # AGRUPAR TALLAS IGUALES: usar talla como clave dentro del producto
                 talla_key = t.talla
                 producto = productos_agrupados[key]
@@ -6839,7 +6986,9 @@ def recepcionar_compra(request):
                         'factura_id': facturas_de_talla[0]['id'] if facturas_de_talla else None,
                         'factura_numero': ', '.join([f['numero'] for f in facturas_de_talla]) if facturas_de_talla else None,
                         'facturas_asociadas': facturas_de_talla,
-                        'facturas': facturas_con_saldo
+                        'facturas': facturas_con_saldo,
+                        'sucursal_destino_id': suc_id_talla,
+                        'sucursal_destino_alias': suc_alias_talla,
                     }
                 else:
                     # Talla ya existe: SUMAR stock y recepcionado
@@ -6848,7 +6997,14 @@ def recepcionar_compra(request):
                     talla_existente['stock'] += t.stock
                     talla_existente['recepcionado'] += recepcionado_talla
                     talla_existente['pendiente'] = talla_existente['stock'] - talla_existente['recepcionado']
-                    
+
+                    # Si la entrada agrupada no tiene sucursal pero esta fila sí
+                    # (porque la recepción se guardó contra esta fila concreta),
+                    # propagar la sucursal para que aparezca al reabrir el modal.
+                    if not talla_existente.get('sucursal_destino_id') and suc_id_talla:
+                        talla_existente['sucursal_destino_id'] = suc_id_talla
+                        talla_existente['sucursal_destino_alias'] = suc_alias_talla
+
                     # Agregar facturas nuevas que no existan ya
                     for f in facturas_de_talla:
                         factura_ya_existe = any(
@@ -6858,7 +7014,7 @@ def recepcionar_compra(request):
                             if 'facturas_asociadas' not in talla_existente:
                                 talla_existente['facturas_asociadas'] = []
                             talla_existente['facturas_asociadas'].append(f)
-                    
+
                     # Actualizar factura_numero para mostrar todas
                     talla_existente['factura_numero'] = ', '.join([
                         str(f['numero']) for f in talla_existente.get('facturas_asociadas', [])
@@ -6894,6 +7050,7 @@ def recepcionar_compra(request):
                 'proveedor_id': compra.empresa.id if compra.empresa else None,
                 'nombre_compra': compra.nombre if hasattr(compra, 'nombre') and compra.nombre else f'Compra #{compra.id}',
                 'nombre_proveedor': compra.empresa.nombre if compra.empresa else 'Sin proveedor',
+                'sucursales_disponibles': sucursales_disponibles,
                 'pagination': {
                     'page': page,
                     'page_size': page_size,
@@ -6912,7 +7069,7 @@ def recepcionar_compra(request):
         # ============================
         else:
             # Obtener todas las tallas sin paginar primero para agrupar
-            todas_tallas = tallas_query.all()
+            todas_tallas = tallas_query.select_related('compra_producto__sucursal_destino').all()
             
             # Agrupar por producto + talla (clave única: nombre+marca+color+genero+talla)
             tallas_agrupadas = {}
@@ -6923,12 +7080,14 @@ def recepcionar_compra(request):
                 # Obtener TODAS las recepciones para esta talla específica
                 recepciones_talla = Productos_Recepcionados.objects.filter(
                     compra_producto_talla=t
-                ).select_related('dte')
+                ).select_related('dte', 'sucursal_destino')
                 
                 recepcionado_talla = sum(r.stockArribado for r in recepciones_talla)
                 
                 # Construir facturas de esta talla
                 facturas_de_talla = []
+                sucursal_recep_id = None
+                sucursal_recep_alias = None
                 for recep in recepciones_talla:
                     if recep.dte:
                         facturas_de_talla.append({
@@ -6936,7 +7095,14 @@ def recepcionar_compra(request):
                             'numero': str(recep.dte.numero_documento),
                             'cantidad': recep.stockArribado
                         })
-                
+                    if recep.sucursal_destino_id and sucursal_recep_id is None:
+                        sucursal_recep_id = recep.sucursal_destino_id
+                        sucursal_recep_alias = recep.sucursal_destino.alias if recep.sucursal_destino else None
+
+                sucursal_sug = t.compra_producto.sucursal_destino
+                suc_id_talla = sucursal_recep_id or (sucursal_sug.id if sucursal_sug else None)
+                suc_alias_talla = sucursal_recep_alias or (sucursal_sug.alias if sucursal_sug else None)
+
                 if key not in tallas_agrupadas:
                     tallas_agrupadas[key] = {
                         'compra_producto_talla_ids': [t.id],
@@ -6944,8 +7110,10 @@ def recepcionar_compra(request):
                         'nombre': t.compra_producto.nombre,
                         'descripcion': t.compra_producto.descripcion,
                         'marca': t.compra_producto.atributo1,
+                        'marca_id': _opcion_por_valor(t.compra_producto.atributo1),
                         'color': t.compra_producto.atributo2,
                         'genero': t.compra_producto.atributo3,
+                        'genero_id': _opcion_por_valor(t.compra_producto.atributo3),
                         'costo': t.compra_producto.costo,
                         'precio': t.compra_producto.precioSugerido,
                         'stock': t.stock,
@@ -6953,7 +7121,10 @@ def recepcionar_compra(request):
                         'recepcionado': recepcionado_talla,
                         'factura_id': facturas_de_talla[0]['id'] if facturas_de_talla else None,
                         'facturas': facturas_con_saldo,
-                        'facturas_asociadas': facturas_de_talla
+                        'facturas_asociadas': facturas_de_talla,
+                        'sucursal_destino_id': suc_id_talla,
+                        'sucursal_destino_alias': suc_alias_talla,
+                        'pendiente_distribuir': getattr(t, 'pendiente_distribuir', False),
                     }
                 else:
                     existente = tallas_agrupadas[key]
@@ -6962,7 +7133,15 @@ def recepcionar_compra(request):
                         existente['compra_producto_ids'].append(t.compra_producto.id)
                     existente['stock'] += t.stock
                     existente['recepcionado'] += recepcionado_talla
-                    
+
+                    # Propagar sucursal destino guardada si la entrada agrupada aún
+                    # no tenía una. Evita perder la sucursal cuando una compra
+                    # importada tiene varias filas Compras_Producto_Talla para la
+                    # misma talla y la recepción se guardó contra una fila específica.
+                    if not existente.get('sucursal_destino_id') and suc_id_talla:
+                        existente['sucursal_destino_id'] = suc_id_talla
+                        existente['sucursal_destino_alias'] = suc_alias_talla
+
                     # Agregar facturas nuevas
                     for f in facturas_de_talla:
                         factura_ya_existe = any(
@@ -7005,6 +7184,7 @@ def recepcionar_compra(request):
                 'items': resultado,
                 'vista_agrupada': False,
                 'proveedor_id': compra.empresa.id,
+                'sucursales_disponibles': sucursales_disponibles,
                 'pagination': {
                     'page': page,
                     'page_size': page_size,
@@ -8607,19 +8787,41 @@ def guardar_recepcion(request):
         data = json.loads(request.body)
         compra_id = data.get('compra_id')
         recepciones = data.get('recepciones', [])
+        # Sucursal global: fallback usado cuando la fila no trae sucursal propia.
         sucursal_destino_id = data.get('sucursal_destino_id')
 
         if not compra_id or not recepciones:
             return JsonResponse({'success': False, 'error': 'Datos incompletos'}, status=400)
 
-        sucursal_destino = None
+        sucursal_destino_global = None
         if sucursal_destino_id:
-            sucursal_destino = Sucursal.objects.filter(id=sucursal_destino_id).first()
+            sucursal_destino_global = Sucursal.objects.filter(id=sucursal_destino_id).first()
+
+        # Cache para no consultar la misma sucursal por fila en recepciones
+        # masivas.
+        sucursales_cache = {}
+        if sucursal_destino_global:
+            sucursales_cache[sucursal_destino_global.id] = sucursal_destino_global
+
+        def resolver_sucursal_item(suc_id):
+            if not suc_id:
+                return sucursal_destino_global
+            if suc_id in sucursales_cache:
+                return sucursales_cache[suc_id]
+            suc = Sucursal.objects.filter(id=suc_id).first()
+            sucursales_cache[suc_id] = suc
+            return suc or sucursal_destino_global
 
         for item in recepciones:
             compra_talla_id = item['compra_producto_talla_id']
             cantidad = item['recepcionado']
             factura_id = item.get('factura_id')
+            # Importante: diferenciar "el front no envió sucursal_destino_id"
+            # (no tocar la sucursal existente) vs "envió '' o None explícito"
+            # (el usuario pidió quitarla).
+            sucursal_en_payload = 'sucursal_destino_id' in item
+            sucursal_raw = item.get('sucursal_destino_id')
+            sucursal_item = resolver_sucursal_item(sucursal_raw)
 
             compra_talla = Compras_Producto_Talla.objects.select_related('compra_producto').get(id=compra_talla_id)
             compra_producto = compra_talla.compra_producto
@@ -8634,8 +8836,13 @@ def guardar_recepcion(request):
                 recepcion_existente.es_reposicion = compra_producto.es_reposicion
                 recepcion_existente.precio_anterior = compra_producto.precio_anterior
                 recepcion_existente.precio_nuevo = compra_producto.precio_nuevo
-                if sucursal_destino:
-                    recepcion_existente.sucursal_destino = sucursal_destino
+                # Permitir tanto asignar como desasignar la sucursal de forma
+                # explícita. Antes `if sucursal_item:` impedía limpiar la
+                # sucursal (bug que impedía ver cambios al reabrir).
+                if sucursal_en_payload:
+                    recepcion_existente.sucursal_destino = sucursal_item
+                elif sucursal_item:
+                    recepcion_existente.sucursal_destino = sucursal_item
                 recepcion_existente.save()
             else:
                 Productos_Recepcionados.objects.create(
@@ -8646,13 +8853,342 @@ def guardar_recepcion(request):
                     es_reposicion=compra_producto.es_reposicion,
                     precio_anterior=compra_producto.precio_anterior,
                     precio_nuevo=compra_producto.precio_nuevo,
-                    sucursal_destino=sucursal_destino,
+                    sucursal_destino=sucursal_item,
                 )
 
         return JsonResponse({'success': True})
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+def actualizar_sucursal_recepciones(request):
+    """
+    Actualiza SOLO el campo `sucursal_destino` de todas las recepciones
+    (`Productos_Recepcionados`) ligadas a los `compra_producto_talla_ids`
+    recibidos. NO toca cantidades, facturas, ni crea filas nuevas: solo
+    sobrescribe la sucursal de las recepciones existentes.
+
+    Pensado para el flujo de "Elegir filas → Aplicar sucursal" en el modal
+    de Recepción, donde el usuario solo quiere corregir / asignar destino
+    sin modificar las cantidades ya guardadas.
+
+    Payload:
+    {
+      "compra_id": <int>,              # opcional (solo para trazabilidad)
+      "compra_producto_talla_ids": [<int>, ...],
+      "sucursal_destino_id": <int|null|"">  # null/"" limpia la sucursal
+    }
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    talla_ids = data.get('compra_producto_talla_ids') or []
+    if not talla_ids:
+        return JsonResponse({
+            'success': False,
+            'error': 'Debes enviar compra_producto_talla_ids'
+        }, status=400)
+
+    sucursal_raw = data.get('sucursal_destino_id')
+    sucursal = None
+    if sucursal_raw:
+        try:
+            sucursal = Sucursal.objects.filter(id=int(sucursal_raw)).first()
+            if not sucursal:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Sucursal {sucursal_raw} no encontrada'
+                }, status=404)
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': 'sucursal_destino_id inválido'
+            }, status=400)
+
+    try:
+        # Solo actualizamos recepciones pendientes de crear producto
+        # (producto_talla__isnull=True). Una vez creado el producto
+        # cambiar la sucursal ya no tiene sentido: los movimientos de
+        # stock ya quedaron ligados a la sucursal original.
+        qs = Productos_Recepcionados.objects.filter(
+            compra_producto_talla_id__in=talla_ids,
+            producto_talla__isnull=True,
+        )
+        total_encontradas = qs.count()
+        actualizadas = qs.update(sucursal_destino=sucursal)
+
+        return JsonResponse({
+            'success': True,
+            'actualizadas': actualizadas,
+            'encontradas': total_encontradas,
+            'sucursal_id': sucursal.id if sucursal else None,
+            'sucursal': sucursal.alias if sucursal else None,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# =====================================================================
+# DISTRIBUCIÓN POR GUÍA DE TALLAS Y CURVAS GUARDABLES
+# =====================================================================
+# Cuando una compra se importa con "Talla" vacía, queda una fila fantasma
+# en Compras_Producto_Talla con pendiente_distribuir=True. Desde Recepción
+# el usuario abre un modal y distribuye el stock total en las tallas
+# reales, ya sea manualmente, usando una GuiaTalla, o aplicando una curva
+# guardada de CurvaDistribucion.
+# =====================================================================
+
+def _serializar_curva(curva):
+    return {
+        'id': curva.id,
+        'nombre': curva.nombre,
+        'descripcion': curva.descripcion or '',
+        'marca_id': curva.marca_id,
+        'marca': curva.marca.valor if curva.marca_id else None,
+        'genero_id': curva.genero_id,
+        'genero': curva.genero.valor if curva.genero_id else None,
+        'guia_talla_id': curva.guia_talla_id,
+        'guia_talla_nombre': curva.guia_talla.nombre if curva.guia_talla_id else None,
+        'activo': curva.activo,
+        'items': [
+            {
+                'talla': it.talla,
+                'porcentaje': float(it.porcentaje or 0),
+                'orden': it.orden,
+            }
+            for it in curva.items.order_by('orden', 'id')
+        ],
+    }
+
+
+@login_required
+def listar_curvas_distribucion(request):
+    """Lista curvas activas. Acepta filtros opcionales por marca/género."""
+    from .models import CurvaDistribucion
+
+    qs = CurvaDistribucion.objects.filter(activo=True).select_related(
+        'marca', 'genero', 'guia_talla'
+    ).prefetch_related('items')
+
+    marca_id = request.GET.get('marca_id')
+    genero_id = request.GET.get('genero_id')
+    if marca_id:
+        # Incluye curvas genéricas (sin marca) y las de esa marca.
+        qs = qs.filter(Q(marca__isnull=True) | Q(marca_id=marca_id))
+    if genero_id:
+        qs = qs.filter(Q(genero__isnull=True) | Q(genero_id=genero_id))
+
+    return JsonResponse({
+        'success': True,
+        'curvas': [_serializar_curva(c) for c in qs.order_by('nombre')],
+    })
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def guardar_curva_distribucion(request):
+    """
+    Crea o actualiza una curva. Payload:
+    {
+      id?: <int>,         # si viene, update; si no, create
+      nombre: str,
+      descripcion?: str,
+      marca_id?: int,
+      genero_id?: int,
+      guia_talla_id?: int,
+      items: [{talla: str, porcentaje: number, orden?: int}],
+    }
+    Valida que la suma de porcentajes sea 100 (±0.01 de tolerancia).
+    """
+    from .models import CurvaDistribucion, CurvaDistribucionItem
+
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    nombre = (data.get('nombre') or '').strip()
+    items = data.get('items') or []
+    if not nombre:
+        return JsonResponse({'success': False, 'error': 'El nombre es obligatorio'}, status=400)
+    if not items:
+        return JsonResponse({'success': False, 'error': 'Debes definir al menos una talla con porcentaje'}, status=400)
+
+    # Validar suma (permitimos ±0.01 por redondeos).
+    from decimal import Decimal as _D, InvalidOperation
+    try:
+        suma = sum(_D(str(it.get('porcentaje') or 0)) for it in items)
+    except (InvalidOperation, TypeError):
+        return JsonResponse({'success': False, 'error': 'Porcentajes inválidos'}, status=400)
+    if abs(suma - _D('100')) > _D('0.01'):
+        return JsonResponse({
+            'success': False,
+            'error': f'Los porcentajes deben sumar 100% (actual: {float(suma):.2f}%)'
+        }, status=400)
+
+    curva_id = data.get('id')
+    if curva_id:
+        curva = CurvaDistribucion.objects.filter(id=curva_id).first()
+        if not curva:
+            return JsonResponse({'success': False, 'error': 'Curva no encontrada'}, status=404)
+    else:
+        curva = CurvaDistribucion(
+            creado_por=(request.user.username if request.user.is_authenticated else None)
+        )
+
+    curva.nombre = nombre
+    curva.descripcion = (data.get('descripcion') or '').strip() or None
+    curva.marca_id = data.get('marca_id') or None
+    curva.genero_id = data.get('genero_id') or None
+    curva.guia_talla_id = data.get('guia_talla_id') or None
+    curva.activo = bool(data.get('activo', True))
+    curva.save()
+
+    # Reemplazar items (enfoque simple y seguro).
+    curva.items.all().delete()
+    nuevos = []
+    for idx, it in enumerate(items):
+        talla = (it.get('talla') or '').strip()
+        if not talla:
+            continue
+        try:
+            porcentaje = _D(str(it.get('porcentaje') or 0))
+        except (InvalidOperation, TypeError):
+            porcentaje = _D('0')
+        nuevos.append(CurvaDistribucionItem(
+            curva=curva,
+            talla=talla,
+            porcentaje=porcentaje,
+            orden=int(it.get('orden', idx)),
+        ))
+    CurvaDistribucionItem.objects.bulk_create(nuevos)
+
+    return JsonResponse({'success': True, 'curva': _serializar_curva(curva)})
+
+
+@login_required
+@require_POST
+def eliminar_curva_distribucion(request):
+    from .models import CurvaDistribucion
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    curva_id = data.get('id')
+    if not curva_id:
+        return JsonResponse({'success': False, 'error': 'ID requerido'}, status=400)
+    CurvaDistribucion.objects.filter(id=curva_id).delete()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def distribuir_tallas_compra_producto(request):
+    """
+    Reemplaza la fila fantasma (pendiente_distribuir=True) de un
+    Compras_Producto por las filas reales definidas en `distribucion`.
+
+    Payload:
+    {
+      compra_producto_id: int,
+      distribucion: [{talla: str, stock: int}, ...]
+    }
+
+    Reglas:
+    - El producto debe tener UNA fila pendiente_distribuir. Si ya tiene
+      tallas reales, se rechaza para evitar inconsistencias (el usuario
+      debe limpiar primero).
+    - La suma de stock debe igualar el stock total actual.
+    - Si la fila fantasma tiene recepciones asociadas se rechaza.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    compra_producto_id = data.get('compra_producto_id')
+    distribucion = data.get('distribucion') or []
+    if not compra_producto_id or not distribucion:
+        return JsonResponse({'success': False, 'error': 'Datos incompletos'}, status=400)
+
+    cp = Compras_Producto.objects.filter(id=compra_producto_id).first()
+    if not cp:
+        return JsonResponse({'success': False, 'error': 'Compra_Producto no encontrado'}, status=404)
+
+    # Consistencia: solo debe haber UNA fila fantasma y NINGUNA real.
+    tallas = Compras_Producto_Talla.objects.filter(compra_producto=cp)
+    fantasmas = [t for t in tallas if t.pendiente_distribuir]
+    reales = [t for t in tallas if not t.pendiente_distribuir]
+    if not fantasmas:
+        return JsonResponse({'success': False, 'error': 'Este producto ya tiene tallas desglosadas'}, status=400)
+    if reales:
+        return JsonResponse({
+            'success': False,
+            'error': 'El producto tiene tallas desglosadas además del total. Elimina las filas manuales antes de redistribuir.'
+        }, status=400)
+    if len(fantasmas) > 1:
+        return JsonResponse({'success': False, 'error': 'Se detectaron múltiples filas totales; inconsistente.'}, status=400)
+
+    fantasma = fantasmas[0]
+
+    # No permitir redistribuir si ya se recepcionó contra la fila fantasma.
+    tiene_recepciones = Productos_Recepcionados.objects.filter(
+        compra_producto_talla=fantasma
+    ).exists()
+    if tiene_recepciones:
+        return JsonResponse({
+            'success': False,
+            'error': 'La fila total ya tiene recepciones. Elimínalas antes de redistribuir.'
+        }, status=400)
+
+    # Validar y normalizar distribución.
+    total_actual = int(fantasma.stock or 0)
+    items_normalizados = []
+    suma = 0
+    for raw in distribucion:
+        talla = (raw.get('talla') or '').strip()
+        try:
+            stock = int(raw.get('stock') or 0)
+        except (TypeError, ValueError):
+            stock = 0
+        if not talla or stock <= 0:
+            continue
+        items_normalizados.append({'talla': talla, 'stock': stock})
+        suma += stock
+
+    if not items_normalizados:
+        return JsonResponse({'success': False, 'error': 'Debes indicar al menos una talla con stock > 0'}, status=400)
+
+    if suma != total_actual:
+        return JsonResponse({
+            'success': False,
+            'error': f'La suma por talla ({suma}) debe igualar el total {total_actual}. Ajusta las cantidades.'
+        }, status=400)
+
+    # Ejecutar reemplazo.
+    fantasma.delete()
+    Compras_Producto_Talla.objects.bulk_create([
+        Compras_Producto_Talla(
+            compra_producto=cp,
+            stock=it['stock'],
+            talla=it['talla'],
+            pendiente_distribuir=False,
+        )
+        for it in items_normalizados
+    ])
+
+    return JsonResponse({
+        'success': True,
+        'tallas_creadas': len(items_normalizados),
+        'total_redistribuido': suma,
+    })
+
 
 @login_required
 @require_POST
@@ -8851,15 +9387,10 @@ def obtener_productos_para_crear(request):
         'dte'  # NUEVO: incluir relación con Dte
     ).all()
 
-    # ✅ Filtrar por sucursal activa: cada sucursal solo ve sus propias recepciones.
-    # Se incluyen también las filas sin sucursal_destino (registros legacy / migración)
-    # para no perder datos históricos.
-    sucursal_activa_id = request.session.get('idSucursalActual')
-    if sucursal_activa_id:
-        from django.db.models import Q
-        qs = qs.filter(
-            Q(sucursal_destino_id=sucursal_activa_id) | Q(sucursal_destino__isnull=True)
-        )
+    # NOTA: No filtramos por sucursal activa. La creación de productos es
+    # centralizada (solo EDEL / casa matriz la ejecuta), por lo que todas
+    # las recepciones deben verse aquí. La sucursal_destino se conserva
+    # únicamente como referencia/guía en la respuesta.
 
     if anio:
         qs = qs.filter(fecha__year=anio)
@@ -8980,6 +9511,32 @@ def obtener_productos_para_crear(request):
                 'proveedor_id': compra.empresa.id if compra.empresa else None,
             }
 
+    # Bulk: sucursales destino por producto (solo referencia, no filtro).
+    # Permite mostrar en la UI en qué sucursales llegó la mercadería.
+    producto_ids_bulk = [p['compra_producto_talla__compra_producto_id'] for p in productos_list]
+    sucursales_por_producto = {}
+    if producto_ids_bulk:
+        suc_qs = (
+            Productos_Recepcionados.objects
+            .filter(
+                compra_producto_talla__compra_producto_id__in=producto_ids_bulk,
+                sucursal_destino__isnull=False,
+            )
+            .values(
+                'compra_producto_talla__compra_producto_id',
+                'sucursal_destino_id',
+                'sucursal_destino__alias',
+            )
+            .annotate(unidades=Sum('stockArribado'))
+        )
+        for row in suc_qs:
+            pid = row['compra_producto_talla__compra_producto_id']
+            sucursales_por_producto.setdefault(pid, []).append({
+                'sucursal_id': row['sucursal_destino_id'],
+                'sucursal': row['sucursal_destino__alias'] or 'Sin nombre',
+                'unidades': row['unidades'] or 0,
+            })
+
     respuesta = []
     for p in productos_list:
         talla_id = p['primer_producto_talla']
@@ -9024,6 +9581,10 @@ def obtener_productos_para_crear(request):
             # Nuevos campos de trazabilidad
             'origen_tipo': origen_tipo,
             'precio_alerta': talla_id in precio_alertas,
+            # Sucursales destino (solo referencia visual, no filtra).
+            'sucursales_destino': sucursales_por_producto.get(
+                p['compra_producto_talla__compra_producto_id'], []
+            ),
         })
 
     # Devolver respuesta con información de paginación
@@ -9066,17 +9627,12 @@ def detalle_producto_para_crear(request, producto_id):
     compra_producto = get_object_or_404(Compras_Producto, id=producto_id)
 
     # Obtener tallas recepcionadas sin producto_talla aún - AGRUPAR SOLO POR TALLA
-    # ✅ Filtrar por sucursal activa para no mezclar recepciones entre sucursales.
-    sucursal_activa_id = request.session.get('idSucursalActual')
-    from django.db.models import Q as _Q
-    filtro_sucursal = (
-        _Q(sucursal_destino_id=sucursal_activa_id) | _Q(sucursal_destino__isnull=True)
-        if sucursal_activa_id else _Q()
-    )
+    # NOTA: No se filtra por sucursal. La creación de productos es centralizada
+    # (solo EDEL / casa matriz); la sucursal_destino es solo referencia.
     recepcionadas = Productos_Recepcionados.objects.filter(
         compra_producto_talla__compra_producto=compra_producto,
         producto_talla__isnull=True
-    ).filter(filtro_sucursal).values('compra_producto_talla__talla').annotate(
+    ).values('compra_producto_talla__talla').annotate(
         stock=Sum('stockArribado')
     ).order_by('compra_producto_talla__talla')
 
@@ -9140,16 +9696,15 @@ def obtener_recepciones_producto(request, producto_id):
         compra_producto = get_object_or_404(Compras_Producto, id=producto_id)
         
         # Obtener todas las recepciones pendientes (sin producto_talla creado)
+        # NOTA: No se filtra por sucursal. La creación de productos es centralizada
+        # (solo EDEL / casa matriz); la sucursal_destino es solo referencia.
         recepciones = Productos_Recepcionados.objects.filter(
             compra_producto_talla__compra_producto=compra_producto,
             producto_talla__isnull=True  # Solo las que no han sido procesadas
-        ).filter(
-            # ✅ Solo recepciones de la sucursal activa (legacy sin sucursal incluidos)
-            Q(sucursal_destino_id=request.session.get('idSucursalActual')) |
-            Q(sucursal_destino__isnull=True)
         ).select_related(
             'compra_producto_talla',
-            'dte'
+            'dte',
+            'sucursal_destino',
         ).order_by('dte__numero_documento', 'compra_producto_talla__talla')
         
         data_recepciones = []
@@ -9165,6 +9720,9 @@ def obtener_recepciones_producto(request, producto_id):
                 'fecha': rec.fecha.strftime('%d/%m/%Y') if rec.fecha else None,
                 'estado': rec.estado,
                 'observaciones': rec.observaciones,
+                # Sucursal destino solo como referencia/guía (no filtra visibilidad).
+                'sucursal_destino_id': rec.sucursal_destino_id,
+                'sucursal_destino': rec.sucursal_destino.alias if rec.sucursal_destino else None,
             })
         
         return JsonResponse({
@@ -9741,8 +10299,160 @@ def guias_talla_list(request):
     print(f"📋 Datos a enviar: {data}")
     return JsonResponse(data, safe=False)
 
- 
- 
+
+# =====================================================================
+# REASIGNAR / ASIGNAR GUÍA DE TALLAS A PRODUCTO EXISTENTE
+# =====================================================================
+# Permite tomar un producto existente (creado en modo "Sin guía" con
+# talla '00', o con otra guía) y asignarle una guía de tallas nueva,
+# creando las Producto_Talla de cada talla de la guía. Opcionalmente
+# migra el stock de la talla '00' a las nuevas tallas mediante
+# Movimientos_Producto (AJUSTE_NEGATIVO/AJUSTE_POSITIVO) manteniendo
+# la trazabilidad histórica (la Producto_Talla '00' no se elimina).
+# =====================================================================
+@login_required
+@require_POST
+@transaction.atomic
+def asignar_guia_talla_producto(request):
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    producto_id = data.get('producto_id')
+    guia_talla_id = data.get('guia_talla_id') or None  # '' / None = quitar guía
+    migrar = bool(data.get('migrar_desde_00', False))
+    distribucion = data.get('distribucion') or []  # [{talla, stock}]
+    usuario = request.session.get('nombreUsuario', 'Sistema')
+
+    if not producto_id:
+        return JsonResponse({'success': False, 'error': 'producto_id requerido'}, status=400)
+
+    producto = Producto.objects.filter(id=producto_id).select_related('guia_talla').first()
+    if not producto:
+        return JsonResponse({'success': False, 'error': 'Producto no encontrado'}, status=404)
+
+    # ---- 1. Validar guía destino ----
+    nueva_guia = None
+    if guia_talla_id:
+        nueva_guia = GuiaTalla.objects.filter(id=guia_talla_id).first()
+        if not nueva_guia:
+            return JsonResponse({'success': False, 'error': 'Guía de tallas no encontrada'}, status=404)
+
+    tipo = (producto.tipo_talla or 'CL').lower()
+
+    # ---- 2. Obtener/crear Producto_Talla para cada talla de la nueva guía ----
+    tallas_destino = []  # [(talla_str, Producto_Talla)]
+    if nueva_guia:
+        items = list(nueva_guia.items.order_by('orden', 'id'))
+        if not items:
+            return JsonResponse({'success': False, 'error': 'La guía no tiene tallas definidas'}, status=400)
+        for it in items:
+            # Usar la columna del tipo de talla del producto si existe, si no
+            # caer a CL/US/EU/UK/BR/CM.
+            talla_val = (
+                getattr(it, tipo, None) or it.cl or it.us or it.eu or it.uk or it.br or it.cm
+            )
+            if not talla_val:
+                continue
+            talla_val = str(talla_val).strip()
+            pt = Producto_Talla.objects.filter(producto=producto, talla=talla_val).first()
+            if not pt:
+                pt = Producto_Talla.objects.create(
+                    producto=producto,
+                    sku=obtener_siguiente_sku(),
+                    stock=0,
+                    talla=talla_val,
+                )
+            tallas_destino.append((talla_val, pt))
+
+    # ---- 3. Aplicar nueva guía al producto ----
+    producto.guia_talla = nueva_guia
+    producto.save(update_fields=['guia_talla'])
+
+    # ---- 4. Migración opcional de stock desde talla '00' ----
+    movimientos_creados = 0
+    if migrar:
+        pt_00 = Producto_Talla.objects.filter(producto=producto, talla='00').first()
+        if not pt_00:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontró la talla "00" para migrar. Verifica que el producto haya sido creado en modo "Sin guía".'
+            }, status=400)
+
+        distribucion_norm = []
+        total = 0
+        for d in distribucion:
+            t = str((d.get('talla') or '')).strip()
+            try:
+                s = int(d.get('stock') or 0)
+            except (TypeError, ValueError):
+                s = 0
+            if t and s > 0:
+                distribucion_norm.append({'talla': t, 'stock': s})
+                total += s
+
+        if total <= 0:
+            return JsonResponse({'success': False, 'error': 'La distribución debe mover al menos 1 unidad'}, status=400)
+
+        if total > (pt_00.stock or 0):
+            return JsonResponse({
+                'success': False,
+                'error': f'Stock insuficiente en talla "00": disponible {pt_00.stock or 0}, solicitado {total}'
+            }, status=400)
+
+        # Verificar que todas las tallas destino existan en el mapa recién creado.
+        tallas_map = {t: pt for t, pt in tallas_destino}
+        faltantes = [d['talla'] for d in distribucion_norm if d['talla'] not in tallas_map]
+        if faltantes:
+            return JsonResponse({
+                'success': False,
+                'error': f'Las tallas {faltantes} no existen en la guía seleccionada'
+            }, status=400)
+
+        # EGRESO de talla '00' por el total a migrar
+        registrar_movimiento_producto(
+            producto_talla=pt_00,
+            concepto='AJUSTE_NEGATIVO',
+            cantidad=total,
+            responsable=usuario,
+            dte=None,
+            sucursal_origen=producto.sucursal,
+            sucursal_destino=producto.sucursal,
+            observaciones=f'Migración talla "00" → guía {nueva_guia.nombre if nueva_guia else "—"}',
+            referencia_externa=f'REASIGNAR_GUIA_{producto.id}',
+            crear_lote_fifo=False,
+        )
+        movimientos_creados += 1
+
+        # INGRESO a cada nueva talla
+        for d in distribucion_norm:
+            pt = tallas_map[d['talla']]
+            registrar_movimiento_producto(
+                producto_talla=pt,
+                concepto='AJUSTE_POSITIVO',
+                cantidad=d['stock'],
+                responsable=usuario,
+                dte=None,
+                sucursal_origen=producto.sucursal,
+                sucursal_destino=producto.sucursal,
+                observaciones=f'Reparto de talla "00" por asignación de guía {nueva_guia.nombre if nueva_guia else "—"}',
+                referencia_externa=f'REASIGNAR_GUIA_{producto.id}',
+                crear_lote_fifo=True,
+            )
+            movimientos_creados += 1
+
+    return JsonResponse({
+        'success': True,
+        'producto_id': producto.id,
+        'guia_talla_id': producto.guia_talla_id,
+        'guia_talla_nombre': producto.guia_talla.nombre if producto.guia_talla else None,
+        'tallas_destino': [{'talla': t, 'producto_talla_id': pt.id, 'sku': pt.sku} for t, pt in tallas_destino],
+        'migrado': migrar,
+        'movimientos_creados': movimientos_creados,
+    })
+
+
 def crear_guia_talla(request):
     if request.method == 'POST':
         try:
@@ -10591,6 +11301,23 @@ def crear_producto_desde_recepcion(request):
     precio_sugerido = int(data.get('precio_sugerido') or 0)
     tipo_talla = data.get('tipo_talla') or 'CL'
     guia_talla = data.get('guia_talla') or None
+    # El frontend puede enviar sin_guia=1 cuando el usuario eligió "Sin guía"
+    # (talla única 00). En ese caso consolidamos todas las recepciones en una
+    # sola Producto_Talla y guia_talla queda en None.
+    es_sin_guia = (
+        (data.get('sin_guia') in ('1', 'true', 'True'))
+        or guia_talla in ('SIN_GUIA',)
+    )
+    if es_sin_guia:
+        guia_talla = None
+    # Cuando la compra venía con talla consolidada ("00" o "__TOTAL__") y el
+    # usuario distribuye el total en tallas reales de la guía. Debemos:
+    # 1) reemplazar la Compras_Producto_Talla consolidada por N reales
+    #    proporcionales, 2) clonar Productos_Recepcionados por DTE×talla,
+    # 3) seguir el flujo normal para crear Producto_Talla y movimientos.
+    redistribuir_desde_consolidado = (
+        data.get('redistribuir_desde_consolidado') in ('1', 'true', 'True')
+    )
     producto_compra_id = data.get('producto_compra_id') or None
     
     # ========== DEBUG: Ver datos recibidos ==========
@@ -10780,6 +11507,115 @@ def crear_producto_desde_recepcion(request):
         )
         print(f"🆕 Producto nuevo creado: {articulo}")
 
+    # =====================================================================
+    # 2b. PRE-PROCESO: Redistribuir Compras_Producto_Talla consolidada
+    # =====================================================================
+    # Si el usuario eligió distribuir las N unidades que llegaron como una
+    # única talla "00"/"__TOTAL__" en las tallas reales de la guía, creamos
+    # N nuevas Compras_Producto_Talla proporcionales y clonamos las
+    # Productos_Recepcionados por DTE × nueva talla manteniendo trazabilidad
+    # al DTE. La CPT consolidada se borra (cascade borra sus recepciones
+    # originales, pero ya tenemos las réplicas creadas).
+    if redistribuir_desde_consolidado and producto_compra_id:
+        # Parsear distribución del formulario (stock_<talla>) excluyendo '00'
+        distribucion_form = {}
+        for k, v in data.items():
+            if not k.startswith('stock_'):
+                continue
+            talla_k = k[len('stock_'):].strip()
+            if talla_k in ('00', '__TOTAL__', ''):
+                continue
+            try:
+                stock_k = int(v or 0)
+            except (TypeError, ValueError):
+                stock_k = 0
+            if talla_k and stock_k > 0:
+                distribucion_form[talla_k] = stock_k
+
+        total_form = sum(distribucion_form.values())
+
+        # Encontrar la CPT consolidada (talla == '00' o '__TOTAL__')
+        cpt_consolidada = Compras_Producto_Talla.objects.filter(
+            compra_producto_id=producto_compra_id,
+            talla__in=['00', '__TOTAL__']
+        ).first()
+
+        if cpt_consolidada and distribucion_form and total_form > 0:
+            stock_consolidado = int(cpt_consolidada.stock or 0)
+            if total_form != stock_consolidado:
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'La suma distribuida ({total_form}) debe igualar el '
+                        f'stock consolidado ({stock_consolidado}).'
+                    )
+                }, status=400)
+
+            # Recepciones existentes contra la CPT consolidada, agrupadas por DTE
+            recepciones_previas = list(
+                Productos_Recepcionados.objects.filter(
+                    compra_producto_talla=cpt_consolidada
+                ).values('id', 'dte_id', 'stockArribado', 'sucursal_destino_id')
+            )
+
+            # Crear las nuevas CPT reales
+            mapa_cpt_por_talla = {}
+            for talla_nueva, stock_nueva in distribucion_form.items():
+                cpt_nueva = Compras_Producto_Talla.objects.create(
+                    compra_producto_id=cpt_consolidada.compra_producto_id,
+                    talla=talla_nueva,
+                    stock=stock_nueva,
+                    pendiente_distribuir=False,
+                )
+                mapa_cpt_por_talla[talla_nueva] = cpt_nueva
+
+            # Clonar Productos_Recepcionados por DTE × nueva talla. Para cada
+            # DTE se reparte su stockArribado proporcional a distribucion_form
+            # (mismas proporciones que la distribución global), compensando
+            # residuos en la última talla para conservar suma exacta.
+            from collections import defaultdict
+            por_dte = defaultdict(lambda: {'total': 0, 'sucursal_id': None, 'ids': []})
+            for r in recepciones_previas:
+                key = r['dte_id']
+                por_dte[key]['total'] += int(r['stockArribado'] or 0)
+                por_dte[key]['ids'].append(r['id'])
+                if r['sucursal_destino_id'] and not por_dte[key]['sucursal_id']:
+                    por_dte[key]['sucursal_id'] = r['sucursal_destino_id']
+
+            for dte_id, info in por_dte.items():
+                total_dte = info['total']
+                if total_dte <= 0:
+                    continue
+                # Reparto proporcional con ajuste de residuos.
+                tallas_orden = list(distribucion_form.keys())
+                partes = []
+                acumulado = 0
+                for i, t_n in enumerate(tallas_orden):
+                    if i < len(tallas_orden) - 1:
+                        asignado = (distribucion_form[t_n] * total_dte) // stock_consolidado
+                        acumulado += asignado
+                        partes.append(asignado)
+                    else:
+                        partes.append(total_dte - acumulado)
+                for t_n, cantidad in zip(tallas_orden, partes):
+                    if cantidad <= 0:
+                        continue
+                    Productos_Recepcionados.objects.create(
+                        compra_producto_talla=mapa_cpt_por_talla[t_n],
+                        dte_id=dte_id,
+                        stockArribado=cantidad,
+                        sucursal_destino_id=info['sucursal_id'],
+                        producto_talla=None,
+                    )
+
+            # Eliminar la CPT consolidada (cascade borra sus recepciones
+            # originales; ya replicamos las nuevas por talla).
+            cpt_consolidada.delete()
+            print(
+                f"🔀 Redistribuido consolidado {stock_consolidado} uds → "
+                f"{len(distribucion_form)} tallas reales"
+            )
+
     # 3. Crear o reutilizar variantes (tallas)
     tallas = []
     tallas_nuevas = 0
@@ -10920,22 +11756,32 @@ def crear_producto_desde_recepcion(request):
     for pt, stock, talla in tallas:
         print(f"   Talla: {talla}, Stock a ingresar: {stock}, PT ID: {pt.id}, Stock actual PT: {pt.stock}")
         if producto_compra_id:
-            # Generar variantes de la talla para búsqueda flexible
-            variantes_talla = generar_variantes_talla(talla)
-            
-            # Obtener TODAS las recepciones de esta talla agrupadas por DTE
-            # Usar __in para buscar todas las variantes de formato
-            # ✅ Filtrar por sucursal activa para no mezclar cantidades entre sucursales
             from django.db.models import Q as _Q3
-            recepciones = Productos_Recepcionados.objects.filter(
-                compra_producto_talla__compra_producto_id=producto_compra_id,
-                compra_producto_talla__talla__in=variantes_talla,
-                producto_talla__isnull=True  # Solo las no procesadas
-            ).filter(
+            filtro_sucursal_mov = (
                 _Q3(sucursal_destino=sucursal) | _Q3(sucursal_destino__isnull=True)
-            ).values('dte_id').annotate(
-                cantidad=Sum('stockArribado')
             )
+            if es_sin_guia:
+                # Consolidar TODAS las recepciones (cualquier talla) de este
+                # producto_compra_id para crear lotes por DTE apuntando a la
+                # única Producto_Talla "00".
+                recepciones = Productos_Recepcionados.objects.filter(
+                    compra_producto_talla__compra_producto_id=producto_compra_id,
+                    producto_talla__isnull=True
+                ).filter(filtro_sucursal_mov).values('dte_id').annotate(
+                    cantidad=Sum('stockArribado')
+                )
+            else:
+                # Generar variantes de la talla para búsqueda flexible
+                variantes_talla = generar_variantes_talla(talla)
+                
+                # Obtener TODAS las recepciones de esta talla agrupadas por DTE
+                recepciones = Productos_Recepcionados.objects.filter(
+                    compra_producto_talla__compra_producto_id=producto_compra_id,
+                    compra_producto_talla__talla__in=variantes_talla,
+                    producto_talla__isnull=True  # Solo las no procesadas
+                ).filter(filtro_sucursal_mov).values('dte_id').annotate(
+                    cantidad=Sum('stockArribado')
+                )
             
             # Convertir a lista para poder iterar múltiples veces
             recepciones_list = list(recepciones)
@@ -11006,14 +11852,25 @@ def crear_producto_desde_recepcion(request):
     # no las de otras sucursales que puedan tener el mismo compra_producto_id.
     if producto_compra_id:
         from django.db.models import Q as _Q2
-        for pt, stock, talla in tallas:
-            filtro_sucursal_update = (
-                _Q2(sucursal_destino=sucursal) | _Q2(sucursal_destino__isnull=True)
-            )
+        filtro_sucursal_update = (
+            _Q2(sucursal_destino=sucursal) | _Q2(sucursal_destino__isnull=True)
+        )
+        if es_sin_guia and tallas:
+            # Modo "Sin guía": TODAS las Productos_Recepcionados de la compra
+            # (con cualquier talla original, incluso "__TOTAL__") apuntan al
+            # único Producto_Talla "00" recién creado. Mantiene trazabilidad
+            # compra ↔ producto aunque la talla del catálogo ya no coincida
+            # con la talla que traía la recepción.
+            pt_unica = tallas[0][0]
             Productos_Recepcionados.objects.filter(
                 compra_producto_talla__compra_producto_id=producto_compra_id,
-                compra_producto_talla__talla=talla
-            ).filter(filtro_sucursal_update).update(producto_talla=pt)
+            ).filter(filtro_sucursal_update).update(producto_talla=pt_unica)
+        else:
+            for pt, stock, talla in tallas:
+                Productos_Recepcionados.objects.filter(
+                    compra_producto_talla__compra_producto_id=producto_compra_id,
+                    compra_producto_talla__talla=talla
+                ).filter(filtro_sucursal_update).update(producto_talla=pt)
 
     # ========== 6. SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ==========
     # Sincroniza automáticamente Y crea alertas para que las sucursales revisen el cambio
@@ -12584,16 +13441,22 @@ def tallas_producto(request, producto_id):
         # Obtener todas las tallas del producto
         tallas = Producto_Talla.objects.filter(producto=producto)
         
-        # Preparar datos del producto
+        # Preparar datos del producto (+ ids para reasignar guía de tallas)
         datos_producto = {
             'id': producto.id,
             'articulo': producto.articulo,
             'descripcion': producto.descripcion,
             'categoria': producto.categoria.nombre if producto.categoria else '',
             'marca': producto.atributo1.valor if producto.atributo1 else '',
+            'marca_id': producto.atributo1_id,
             'color': producto.atributo2.valor if producto.atributo2 else '',
             'genero': producto.atributo3.valor if producto.atributo3 else '',
-            'precioventa': float(producto.precioventa)
+            'precioventa': float(producto.precioventa),
+            'guia_talla_id': producto.guia_talla_id,
+            'guia_talla_nombre': producto.guia_talla.nombre if producto.guia_talla else None,
+            'stock_talla_00': sum(
+                (t.stock or 0) for t in tallas if (t.talla or '').strip() == '00'
+            ),
         }
         
         # Preparar datos de las tallas
@@ -17884,7 +18747,7 @@ def descargar_formato_importacion_compras(request):
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
         from openpyxl.worksheet.datavalidation import DataValidation
-        from .models import Productos_Atributos, AtributoOpcion, Producto_Talla, Compras_Producto_Talla
+        from .models import Productos_Atributos, AtributoOpcion, Producto_Talla, Compras_Producto_Talla, Sucursal
         from django.http import HttpResponse
         import io
         
@@ -17918,7 +18781,12 @@ def descargar_formato_importacion_compras(request):
         
         todas_tallas.sort(key=sort_talla)
         tallas = todas_tallas or ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', 'XS', 'S', 'M', 'L', 'XL', 'XXL']
-        
+
+        # Obtener alias de sucursales disponibles (opcional en el formato)
+        sucursales_alias = list(
+            Sucursal.objects.all().order_by('alias').values_list('alias', flat=True)
+        )
+
         # ========== CREAR WORKBOOK ==========
         wb = Workbook()
         
@@ -17947,7 +18815,8 @@ def descargar_formato_importacion_compras(request):
             'Costo C/U',
             'Precio Sug.',
             'Stock',
-            'Talla ▼'
+            'Talla ▼ (opcional)',
+            'Sucursal ▼ (opcional)'
         ]
         
         for col, header in enumerate(headers, 1):
@@ -17958,14 +18827,18 @@ def descargar_formato_importacion_compras(request):
             cell.border = thin_border
         
         # Anchos de columna
-        column_widths = [25, 30, 20, 18, 15, 12, 12, 8, 12]
+        column_widths = [25, 30, 20, 18, 15, 12, 12, 8, 12, 22]
         for col, width in enumerate(column_widths, 1):
             ws.column_dimensions[get_column_letter(col)].width = width
         
         # Filas de ejemplo
+        sucursal_ejemplo = sucursales_alias[0] if sucursales_alias else ''
         ejemplos = [
-            ['Zapatilla Deportiva', 'Zapatilla running para hombre', marcas[0] if marcas else 'Nike', colores[0] if colores else 'Negro', generos[0] if generos else 'Hombre', 35000, 45000, 10, tallas[7] if len(tallas) > 7 else '42'],
-            ['Polera Casual', 'Polera manga corta algodón', marcas[1] if len(marcas) > 1 else 'Adidas', colores[2] if len(colores) > 2 else 'Azul', generos[1] if len(generos) > 1 else 'Mujer', 8000, 12000, 15, 'M'],
+            ['Zapatilla Deportiva', 'Zapatilla running para hombre', marcas[0] if marcas else 'Nike', colores[0] if colores else 'Negro', generos[0] if generos else 'Hombre', 35000, 45000, 10, tallas[7] if len(tallas) > 7 else '42', sucursal_ejemplo],
+            ['Polera Casual', 'Polera manga corta algodón', marcas[1] if len(marcas) > 1 else 'Adidas', colores[2] if len(colores) > 2 else 'Azul', generos[1] if len(generos) > 1 else 'Mujer', 8000, 12000, 15, 'M', ''],
+            # Fila de ejemplo con TOTAL sin desglose de tallas (talla en blanco).
+            # Se distribuirá por guía de tallas en Recepción.
+            ['Zapatilla Running Pack', 'Ejemplo: total 60 pares, sin detalle de tallas', marcas[0] if marcas else 'Nike', colores[0] if colores else 'Negro', generos[0] if generos else 'Hombre', 35000, 45000, 60, '', sucursal_ejemplo],
         ]
         
         example_fill = PatternFill(start_color="E6F0FF", end_color="E6F0FF", fill_type="solid")
@@ -17987,6 +18860,7 @@ def descargar_formato_importacion_compras(request):
             ('B', 'colores', colores),
             ('C', 'generos', generos),
             ('D', 'tallas', [str(t) for t in tallas]),
+            ('E', 'sucursales', sucursales_alias),
         ]
         
         for col_letter, nombre, valores in listas_config:
@@ -18003,6 +18877,7 @@ def descargar_formato_importacion_compras(request):
             ('D', 'B', len(colores), "Color", "Selecciona un color o escribe uno nuevo"),
             ('E', 'C', len(generos), "Género", "Selecciona un género o escribe uno nuevo"),
             ('I', 'D', len(tallas), "Talla", "Selecciona una talla o escribe una nueva"),
+            ('J', 'E', len(sucursales_alias), "Sucursal (opcional)", "Selecciona la sucursal destino. Campo OPCIONAL: puedes dejarlo vacío."),
         ]
         
         for col_destino, col_fuente, cant, titulo, prompt_text in validaciones:
@@ -18024,12 +18899,12 @@ def descargar_formato_importacion_compras(request):
         # ========== HOJA 2: VALORES VÁLIDOS (REFERENCIA VISIBLE) ==========
         ws_valores = wb.create_sheet(title="Valores Válidos")
         
-        ws_valores.merge_cells('A1:D1')
+        ws_valores.merge_cells('A1:E1')
         ws_valores['A1'] = 'VALORES VÁLIDOS PARA ATRIBUTOS'
         ws_valores['A1'].font = Font(bold=True, size=14)
         
-        ws_valores.merge_cells('A2:D2')
-        ws_valores['A2'] = 'Usa estos valores o escribe nuevos. Los nuevos se crearán automáticamente al importar.'
+        ws_valores.merge_cells('A2:E2')
+        ws_valores['A2'] = 'Usa estos valores o escribe nuevos. Los nuevos se crearán automáticamente al importar. Sucursal es OPCIONAL.'
         ws_valores['A2'].font = Font(italic=True, color="666666")
         
         val_headers = [
@@ -18037,23 +18912,26 @@ def descargar_formato_importacion_compras(request):
             (f'COLORES ({len(colores)})', "E6FFE6"),
             (f'GÉNEROS ({len(generos)})', "FFE6E6"),
             (f'TALLAS ({len(tallas)})', "FFF0E6"),
+            (f'SUCURSALES - opcional ({len(sucursales_alias)})', "F0E6FF"),
         ]
         for col, (header, color) in enumerate(val_headers, 1):
             cell = ws_valores.cell(row=4, column=col, value=header)
             cell.font = Font(bold=True)
             cell.fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
         
-        max_rows = max(len(marcas), len(colores), len(generos), len(tallas))
+        max_rows = max(len(marcas), len(colores), len(generos), len(tallas), len(sucursales_alias))
         for i in range(max_rows):
             ws_valores.cell(row=5+i, column=1, value=marcas[i] if i < len(marcas) else '')
             ws_valores.cell(row=5+i, column=2, value=colores[i] if i < len(colores) else '')
             ws_valores.cell(row=5+i, column=3, value=generos[i] if i < len(generos) else '')
             ws_valores.cell(row=5+i, column=4, value=str(tallas[i]) if i < len(tallas) else '')
+            ws_valores.cell(row=5+i, column=5, value=sucursales_alias[i] if i < len(sucursales_alias) else '')
         
         ws_valores.column_dimensions['A'].width = 25
         ws_valores.column_dimensions['B'].width = 20
         ws_valores.column_dimensions['C'].width = 15
         ws_valores.column_dimensions['D'].width = 12
+        ws_valores.column_dimensions['E'].width = 25
         
         # ========== HOJA 3: INSTRUCCIONES ==========
         ws_inst = wb.create_sheet(title="Instrucciones")
@@ -18073,7 +18951,9 @@ def descargar_formato_importacion_compras(request):
             ('   • Costo C/U: Solo números (sin $ ni puntos)', False, 11),
             ('   • Precio Sug.: Precio de venta (solo números)', False, 11),
             ('   • Stock: Cantidad de unidades', False, 11),
-            ('   • Talla ▼: HAZ CLIC para ver lista desplegable', False, 11),
+            ('   • Talla ▼ (opcional): HAZ CLIC para ver lista desplegable', False, 11),
+            ('     ↪ Si dejas la Talla en blanco, el stock queda como TOTAL a distribuir en Recepción usando una guía de tallas o curva guardada.', False, 10),
+            ('   • Sucursal ▼ (opcional): Sucursal destino sugerida. Puedes dejarla vacía', False, 11),
             ('', False, 11),
             ('═' * 60, False, 11),
             ('', False, 11),

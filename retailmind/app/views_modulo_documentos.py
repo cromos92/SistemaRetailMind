@@ -1427,6 +1427,46 @@ def _resumir_metodos_pago(metodos_pago_texto, max_len=60):
     return resumen
 
 
+def _extraer_observaciones_humanas(valor):
+    """
+    ``ticket.observaciones_adicionales`` se usa internamente para guardar
+    metadatos del POS en JSON (p. ej. ``{"condicion_pago_dte": 1}``). Si
+    ese string cae directo en la glosa del TXT, Acepta imprime basura tipo
+    ``condicion_pago_dte: 1}`` dentro del DTE.
+
+    Esta helper acepta el valor crudo y devuelve SOLO texto legible para
+    imprimir:
+
+      * Si es un JSON dict → extrae las claves típicas de observación
+        humana (``observaciones``, ``glosa``, ``nota``) y descarta el resto.
+      * Si es un JSON sin texto humano → devuelve "".
+      * Si es texto plano → lo retorna sin cambios.
+    """
+    if not valor:
+        return ''
+    texto = str(valor).strip()
+    if not texto:
+        return ''
+    # Heurística: si empieza con { o [ probablemente es JSON.
+    if texto.startswith('{') or texto.startswith('['):
+        try:
+            import json as _json
+            data = _json.loads(texto)
+        except (ValueError, TypeError):
+            return ''
+        if isinstance(data, dict):
+            for k in ('observaciones', 'glosa', 'nota', 'observacion', 'notas'):
+                v = data.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v.strip()
+            return ''
+        if isinstance(data, list):
+            partes = [str(x).strip() for x in data if isinstance(x, str) and x.strip()]
+            return ' '.join(partes)
+        return ''
+    return texto
+
+
 def construir_observacion_compacta(datos, max_len=90, incluir_dte=True):
     """
     Arma la glosa compacta (≤max_len chars) que va en el campo observación
@@ -1499,17 +1539,18 @@ def construir_observacion_compacta(datos, max_len=90, incluir_dte=True):
 
 def construir_referencias_vendedor_ticket(datos):
     """
-    Arma referencias internas para que vendedor y ticket viajen en campos
-    propios del XSD en vez de apilarse en la glosa.
+    ⚠️ DEPRECADO — NO USAR EN TXT Acepta.
 
-    Genera (cuando hay datos):
-      * Referencia TpoDocRef="VEN" con RazonRef=<código vendedor>.
-      * Referencia TpoDocRef="SET" con FolioRef=<correlativo interno>.
+    Antes generaba referencias internas TpoDocRef="VEN" / "SET" para sacar
+    vendedor/ticket de la glosa. En producción el SII (vía Acepta) rechaza
+    esas referencias porque el catálogo oficial solo acepta códigos
+    numéricos (33, 39, 52, 56, 61, 801…). El XSD base define TpoDocRef
+    como string ≤3, pero Acepta aplica un catálogo cerrado y retorna
+    error al encontrar "VEN"/"SET".
 
-    NOTA: "VEN" y "SET" no están en el catálogo numérico del SII (33, 39,
-    801…). El XSD define <TpoDocRef> como xs:string ≤3 chars, así que
-    alfanuméricos son aceptados como referencias internas. Acepta las
-    respeta sin enviarlas como referencia formal al SII.
+    Se deja la función como referencia histórica por si se quiere usar en
+    exports internos (p. ej. listas de partida). No se invoca desde los
+    generadores oficiales (factura 33/34, NC 61, boleta 39/41).
 
     Returns:
         list[dict]: Cada dict es una referencia lista para sumar al
@@ -2061,10 +2102,10 @@ def generar_txt_nota_credito_acepta(datos):
     
     # ===== REFERENCIA OBLIGATORIA =====
     # NC siempre debe tener referencia al documento que anula/corrige.
-    # Se agregan también las referencias internas VEN/SET (vendedor + ticket)
-    # para no concentrarlas en la glosa larga — misma lógica que en factura.
+    # NOTA: Antes se inyectaban además 2 referencias internas VEN/SET, pero
+    # Acepta/SII las rechaza (TpoDocRef solo acepta códigos del catálogo).
+    # Vendedor y ticket viajan ahora únicamente en la glosa compacta.
     referencias = list(datos.get('referencias', []) or [])
-    referencias.extend(construir_referencias_vendedor_ticket(datos))
 
     if referencias and len(referencias) > 0:
         for ref in referencias:
@@ -2274,17 +2315,29 @@ def generar_txt_boleta_acepta(datos):
         lineas.append(linea_desc)
         lineas.append('~')
     
-    # ===== OBSERVACIÓN COMPACTA (≤90 chars, compatible con RazonRef XSD) =====
-    # Antes se concatenaba "^ Vendedor: ... ^ Ticket: ... ^ Pago: ..." llegando
-    # a 140+ chars, que violaba maxLength=90 de RazonRef al parsearse y hacía
-    # que Acepta rechazara el TXT en silencio. Ahora usamos claves cortas con
-    # topes controlados. La información detallada de pagos (voucher, auth,
-    # terminal) sigue guardada en Dte_Detalle_Pago.notas en la BD; el TXT
-    # solo necesita un resumen imprimible.
+    # ===== OBSERVACIÓN (monto en letras + resumen compacto) =====
+    # Se alinea con la glosa de factura: "<MONTO_EN_LETRAS>  V:NICK2 T:179522 EFE:100 TBK:791"
+    # El monto en letras lo imprime Acepta en el recuadro de observación de
+    # la boleta. La parte compacta (≤90 chars con claves cortas) aporta
+    # trazabilidad de vendedor / ticket / pagos sin romper los topes del
+    # XSD SII (RazonRef=90). Info detallada de pagos sigue en
+    # Dte_Detalle_Pago.notas; aquí solo va el resumen imprimible.
     vendedor_codigo = emisor.get('codigo_vendedor', '') or emisor.get('sucursal', '') or 'USUARIO'
     nombre_impresora = emisor.get('nombre_impresora_boleta', 'boleta') or 'boleta'
 
-    observacion = construir_observacion_compacta(datos, max_len=90)
+    try:
+        from num2words import num2words
+        monto_letras_boleta = num2words(int(totales.get('monto_total', 0) or 0), lang='es').upper()
+        monto_letras_boleta = f"{monto_letras_boleta} PESOS"
+    except Exception as e:
+        logger.warning(f"⚠️ Error convirtiendo monto a letras (boleta): {e}")
+        monto_letras_boleta = f"{int(totales.get('monto_total', 0) or 0)} PESOS"
+
+    observacion_compacta_b = construir_observacion_compacta(datos, max_len=90)
+    partes_obs_b = [monto_letras_boleta]
+    if observacion_compacta_b:
+        partes_obs_b.append(observacion_compacta_b)
+    observacion = limpiar_texto('  '.join(partes_obs_b), 200)
 
     linea_obs = [
         vendedor_codigo,
@@ -2581,10 +2634,13 @@ def generar_txt_dte_acepta(datos):
     lineas.append('~')
     
     # ===== REFERENCIAS A OTROS DOCUMENTOS (Opcional) =====
-    # Se agregan automáticamente 2 referencias internas (VEN=vendedor,
-    # SET=ticket interno) para no meter esos datos en la glosa larga.
+    # NOTA: Antes se inyectaban automáticamente 2 referencias internas
+    # (VEN=vendedor, SET=ticket interno) para sacar ese dato de la glosa.
+    # Acepta / SII rechazan esas referencias porque TpoDocRef debe ser un
+    # código del catálogo SII (33/39/52/56/61/801…), no alfanumérico. Se
+    # desactivó la inyección: la info de vendedor/ticket va ahora solo en
+    # la glosa compacta (V:..., T:...) y en el propio ticket interno.
     referencias = list(datos.get('referencias', []) or [])
-    referencias.extend(construir_referencias_vendedor_ticket(datos))
     logger.warning(f"🔍 DEBUG - Procesando referencias: {len(referencias)} refs")
 
     if referencias and len(referencias) > 0:
@@ -2636,7 +2692,9 @@ def generar_txt_dte_acepta(datos):
         monto_letras = f"{int(monto_total)} PESOS"
     
     total_productos = sum(int(item.get('cantidad') or 0) for item in datos.get('detalle', []))
-    observaciones_generales = datos.get('observaciones_adicionales') or datos.get('observaciones') or ''
+    observaciones_generales = _extraer_observaciones_humanas(
+        datos.get('observaciones_adicionales') or datos.get('observaciones') or ''
+    )
     observaciones_generales = limpiar_texto(observaciones_generales, 200)
 
     # Observación compacta (≤90 chars) con vendedor/ticket/descuento/pagos.

@@ -84,24 +84,33 @@
         }
     }
 
-    /* Secciones del formulario */
+    /* Secciones del formulario - compactadas para que el modal respire */
     .crear-seccion {
         background: #f8f9fa;
-        border-radius: 12px;
-        padding: 14px 16px;
-        margin-bottom: 14px;
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
         border: 1px solid #e9ecef;
     }
     .crear-seccion-titulo {
-        font-size: .8rem;
+        font-size: .72rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: .4px;
-        margin-bottom: 10px;
+        letter-spacing: .3px;
+        margin-bottom: 6px;
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 5px;
     }
+    /* Filas compactas dentro de secciones */
+    .crear-seccion .row.g-2 > [class^="col-"],
+    .crear-seccion .row.g-3 > [class^="col-"] { padding-top: 2px !important; padding-bottom: 2px !important; }
+    .crear-seccion .mb-2 { margin-bottom: .4rem !important; }
+    /* Tabla de tallas más densa */
+    #tablaTallasCrearProducto tbody td,
+    #tablaTallasManual tbody td { padding: 4px 8px !important; font-size: .78rem; }
+    #tablaTallasCrearProducto thead th,
+    #tablaTallasManual thead th { padding: 6px 8px !important; }
     .crear-seccion-titulo.info { color: #405189; }
     .crear-seccion-titulo.attrs { color: #0ab39c; }
     .crear-seccion-titulo.precios { color: #f0a500; }
@@ -2271,19 +2280,15 @@
                 </div>
                 <form id="formCrearProductoDesdeRecepcion">
                     <div class="modal-body">
-                        <!-- Banner de trazabilidad de compra -->
-                        <div id="bannerCompraRecepcion" class="d-none mb-3" role="alert"
-                             style="border-radius:10px;border-left:4px solid #0ab39c;background:linear-gradient(135deg,#e0f2f1 0%,#b2dfdb 100%);padding:10px 16px;">
-                            <div class="d-flex align-items-center gap-3 flex-wrap">
-                                <i class="bi bi-truck text-success fs-5"></i>
-                                <div>
-                                    <strong id="bannerCompraNombre" class="text-success"></strong>
-                                    <span class="ms-2 badge bg-success" id="bannerCompraTipo"></span>
-                                </div>
-                                <div class="ms-auto text-muted small">
-                                    <i class="bi bi-building me-1"></i><span id="bannerCompraProveedor"></span>
-                                </div>
-                            </div>
+                        <!-- Barra de chips informativos compacta (tipo tabs) -->
+                        <div id="infoChipsBarRecepcion" class="d-flex flex-wrap align-items-center gap-1 mb-1" style="min-height:0;"></div>
+                        <div id="infoChipsDetalleRecepcion" class="mb-2"></div>
+                        <!-- Banner legacy: ocultado por defecto. El dato de compra se
+                             empuja al chip "Compra" vía bindBannerCompraToChip(). -->
+                        <div id="bannerCompraRecepcion" class="d-none">
+                            <strong id="bannerCompraNombre" class="text-success"></strong>
+                            <span class="badge bg-success" id="bannerCompraTipo"></span>
+                            <span id="bannerCompraProveedor"></span>
                         </div>
 
                         <div class="row g-3">
@@ -2371,11 +2376,20 @@
                                             </select>
                                         </div>
                                         <div class="col-7">
-                                            <label class="form-label">Guía de Talla</label>
-                                            <select name="guia_talla" class="form-select select2" id="selectGuiaTalla" required>
+                                            <label class="form-label">
+                                                Guía de Talla
+                                                <span class="badge bg-light text-muted border" style="font-size:.6rem;">opcional</span>
+                                            </label>
+                                            <select name="guia_talla" class="form-select select2" id="selectGuiaTalla">
                                                 <option value="">-- Seleccionar guía --</option>
+                                                <option value="SIN_GUIA"><i class="bi bi-lightning"></i>⚡ Sin guía (talla única 00 — rápido)</option>
                                             </select>
                                         </div>
+                                    </div>
+                                    <!-- Nota explicativa del modo "Sin guía" -->
+                                    <div id="notaSinGuiaRecepcion" class="alert alert-warning py-2 px-3 mt-2 mb-0 d-none" style="font-size:.72rem;border-radius:8px;">
+                                        <i class="bi bi-lightning-charge-fill text-warning me-1"></i>
+                                        <strong>Modo rápido:</strong> el producto se creará con una única talla <code>00</code> (talla única CL) consolidando todo el stock. Podrás asignarle una guía más tarde sin perder trazabilidad.
                                     </div>
                                     <div class="guia-talla-toolbar mt-2">
                                         <button type="button" class="btn btn-outline-success" id="btnConfigGuiaTalla" title="Crear guía de talla">
@@ -2625,11 +2639,19 @@
                                             </select>
                                         </div>
                                         <div class="col-7">
-                                            <label class="form-label">Guía de Talla</label>
-                                            <select name="guia_talla" class="form-select select2" id="selectGuiaTallaManual" required>
+                                            <label class="form-label">
+                                                Guía de Talla
+                                                <span class="badge bg-light text-muted border" style="font-size:.6rem;">opcional</span>
+                                            </label>
+                                            <select name="guia_talla" class="form-select select2" id="selectGuiaTallaManual">
                                                 <option value="">-- Seleccionar guía --</option>
+                                                <option value="SIN_GUIA">⚡ Sin guía (talla única 00 — rápido)</option>
                                             </select>
                                         </div>
+                                    </div>
+                                    <div id="notaSinGuiaManual" class="alert alert-warning py-2 px-3 mt-2 mb-0 d-none" style="font-size:.72rem;border-radius:8px;">
+                                        <i class="bi bi-lightning-charge-fill text-warning me-1"></i>
+                                        <strong>Modo rápido:</strong> el producto se creará con una única talla <code>00</code> consolidando todo el stock. Podrás reasignar una guía más adelante.
                                     </div>
                                     <div class="guia-talla-toolbar mt-2">
                                         <button type="button" class="btn btn-outline-primary" id="btnConfigGuiaTallaManual" title="Crear guía de talla">
@@ -3811,9 +3833,107 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-warning me-2" id="btnAbrirReasignarGuia">
+                        <i class="bi bi-rulers me-1"></i>Asignar / Reasignar Guía
+                    </button>
                     <button type="button" class="btn btn-primary" id="btnCopiarTallasSeleccionadas">
                         <i class="bi bi-copy me-1"></i>Copiar Tallas Seleccionadas
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL REASIGNAR / ASIGNAR GUÍA DE TALLAS ========== -->
+    <div class="modal fade" id="modalReasignarGuia" tabindex="-1" aria-labelledby="modalReasignarGuiaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius:14px;overflow:hidden;">
+                <div class="modal-header text-white py-2 px-3" style="background:linear-gradient(135deg,#f0a500 0%,#e67e00 100%);">
+                    <div>
+                        <h6 class="modal-title mb-0 fw-bold"><i class="bi bi-rulers me-2"></i>Asignar / Reasignar Guía de Tallas</h6>
+                        <small class="opacity-75" id="reasignGuiaSubtitulo">Mantiene trazabilidad histórica de lotes y movimientos</small>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-3">
+                    <input type="hidden" id="reasignGuiaProductoId">
+                    <input type="hidden" id="reasignGuiaMarcaId">
+                    <input type="hidden" id="reasignGuiaStock00" value="0">
+
+                    <div class="card border-0 mb-2" style="background:#fff7e6;border-radius:10px;">
+                        <div class="card-body py-2 px-3">
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold" id="reasignGuiaProductoNombre">—</div>
+                                    <small class="text-muted" id="reasignGuiaProductoAtributos"></small>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted d-block" style="font-size:.7rem;">Guía actual</small>
+                                    <span class="badge bg-secondary" id="reasignGuiaActual">— sin guía —</span>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted d-block" style="font-size:.7rem;">Stock talla "00"</small>
+                                    <span class="badge bg-info" id="reasignGuiaStock00Label">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 align-items-end mb-2">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-semibold"><i class="bi bi-rulers me-1 text-warning"></i>Nueva guía</label>
+                            <select class="form-select form-select-sm" id="reasignGuiaSelect">
+                                <option value="">— Quitar guía (volver a sin guía) —</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="form-check form-switch d-inline-flex align-items-center gap-2 mt-3">
+                                <input class="form-check-input" type="checkbox" id="reasignGuiaMigrarCheck">
+                                <label class="form-check-label small" for="reasignGuiaMigrarCheck">
+                                    Migrar stock de "00" a las nuevas tallas
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="reasignGuiaDistribucionPanel" class="d-none">
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReasignEquitativo"><i class="bi bi-arrow-left-right me-1"></i>Equitativo</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="btnReasignLimpiar"><i class="bi bi-eraser me-1"></i>Limpiar</button>
+                            <div class="ms-auto d-flex align-items-center gap-2">
+                                <small class="text-muted">Asignado:</small>
+                                <span class="badge" id="reasignGuiaBadgeSuma" style="font-size:.85rem;">0 / 0</span>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height:260px;overflow-y:auto;">
+                            <table class="table table-sm align-middle mb-0" id="tablaReasignDistribucion">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width:40%;">Talla</th>
+                                        <th class="text-end" style="width:60%;">Stock a migrar</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <div class="alert alert-info py-2 px-3 mt-2 mb-0" style="font-size:.78rem;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Al migrar: se registran <strong>AJUSTE_NEGATIVO</strong> desde la talla <code>00</code> y <strong>AJUSTE_POSITIVO</strong> en cada nueva talla. El historial de lotes FIFO y movimientos previos no se borra.
+                        </div>
+                    </div>
+
+                    <div id="reasignGuiaNoMigrar" class="alert alert-secondary py-2 px-3 mt-2 mb-0" style="font-size:.78rem;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Si no migras stock, las nuevas tallas de la guía quedan con <strong>stock = 0</strong>. El stock de la talla <code>00</code> se mantiene intacto y podrás migrarlo después. Esto preserva trazabilidad al 100%.
+                    </div>
+                </div>
+
+                <div class="modal-footer py-2 px-3 bg-light">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnAplicarReasignGuia"><i class="bi bi-check2-circle me-1"></i>Aplicar</button>
                 </div>
             </div>
         </div>
@@ -4386,6 +4506,10 @@ function showError(msg) {
     }
 
     function abrirModalCrearProducto(productoId) {
+        // Limpiar barra de chips del producto anterior (si había)
+        if (typeof InfoChipsRecepcion !== 'undefined') {
+            InfoChipsRecepcion.clearAll();
+        }
         $.get(`/app/detalle_producto_para_crear/${productoId}/`, function (data) {
             const form = $('#formCrearProductoDesdeRecepcion');
 
@@ -4418,9 +4542,15 @@ function showError(msg) {
                 $('#bannerCompraNombre').text('Compra: ' + (data.compra_nombre || 'Sin nombre'));
                 $('#bannerCompraTipo').text(data.compra_tipo ? data.compra_tipo.toUpperCase() : '');
                 $('#bannerCompraProveedor').text(data.proveedor_nombre || '');
-                $('#bannerCompraRecepcion').removeClass('d-none');
+                // El banner legacy queda oculto, la info aparece como chip.
+                if (typeof bindBannerCompraToChip === 'function') {
+                    bindBannerCompraToChip();
+                }
             } else {
                 $('#bannerCompraRecepcion').addClass('d-none');
+                if (typeof InfoChipsRecepcion !== 'undefined') {
+                    InfoChipsRecepcion.remove('compra');
+                }
             }
 
             // Setear atributos por TEXTO (Marca, Color, Género)
@@ -4463,12 +4593,53 @@ function showError(msg) {
         </tr>`;
                 tbody.append(fila);
             });
-            // Agregar mensaje aclaratorio de SKU sugerido
+
+            // Guardar si este producto viene como TOTAL CONSOLIDADO (una sola
+            // talla "00" o "__TOTAL__"). Al elegir una guía real podremos
+            // ofrecer redistribuir esas unidades en las tallas reales.
+            const esTallaConsolidada = (
+                data.tallas.length === 1 &&
+                ['00', '__TOTAL__', ''].indexOf(String(data.tallas[0].talla).trim()) !== -1
+            );
+            const stockConsolidado = esTallaConsolidada ? parseInt(data.tallas[0].stock || 0, 10) : 0;
+            $('#tablaTallasCrearProducto')
+                .data('consolidado', esTallaConsolidada)
+                .data('consolidado-stock', stockConsolidado)
+                .data('consolidado-talla', esTallaConsolidada ? String(data.tallas[0].talla) : '');
+
+            // Agregar el banner+CTA para redistribuir si está consolidado.
+            $('#bannerRedistribuirConsolidado').remove();
+            if (esTallaConsolidada && stockConsolidado > 0) {
+                $('#tablaTallasCrearProducto').before(`
+                    <div id="bannerRedistribuirConsolidado" class="alert alert-warning py-2 px-3 mb-2 d-flex align-items-center justify-content-between flex-wrap gap-2" style="font-size:.82rem;border-radius:10px;">
+                        <div>
+                            <i class="bi bi-lightning-charge-fill text-warning me-1"></i>
+                            <strong>Producto consolidado:</strong> llegaron
+                            <span class="badge bg-warning text-dark">${stockConsolidado} uds</span>
+                            en talla única <code>${data.tallas[0].talla}</code>.
+                            <br>
+                            <small class="text-muted">Elige una guía de tallas arriba y haz clic en <em>Distribuir en tallas de la guía</em> para repartir el stock en tallas reales sin perder trazabilidad.</small>
+                        </div>
+                        <button type="button" class="btn btn-warning btn-sm" id="btnDistribuirEnGuia" disabled>
+                            <i class="bi bi-bounding-box me-1"></i>Distribuir en tallas de la guía
+                        </button>
+                    </div>
+                `);
+            }
+            // Agregar leyenda visual de SKUs (reutilizado vs nuevo)
             if ($('#skuSugeridoInfo').length === 0) {
                 $('#tablaTallasCrearProducto').after(`
-                <div class="alert alert-info alert-sm mt-2" id="skuSugeridoInfo">
-                  <i class="bi bi-info-circle me-2"></i>
-                  <strong>Nota:</strong> El SKU mostrado es solo una sugerencia. El SKU definitivo se asignará al guardar el producto y puede variar si otro usuario crea productos al mismo tiempo.
+                <div class="mt-2 d-flex flex-wrap align-items-center gap-2" id="skuSugeridoInfo" style="font-size:.7rem;">
+                    <span class="text-muted"><i class="bi bi-info-circle me-1"></i>SKU:</span>
+                    <span class="badge bg-success-subtle" style="color:#2e7d32;font-weight:600;">
+                        <i class="bi bi-arrow-repeat me-1"></i>reutiliza
+                    </span>
+                    <span class="text-muted" style="font-size:.65rem;">= la talla ya existe en el producto, mismo SKU, se suma stock</span>
+                    <span class="mx-2 text-muted">·</span>
+                    <span class="badge bg-primary-subtle" style="color:#0d47a1;font-weight:600;">
+                        <i class="bi bi-plus-circle me-1"></i>nuevo
+                    </span>
+                    <span class="text-muted" style="font-size:.65rem;">= talla nueva, se creará con este SKU (definitivo al guardar)</span>
                 </div>`);
             }
             // Inicializar Select2 para guías de talla (se hará después de que el modal esté visible)
@@ -5389,8 +5560,11 @@ function showError(msg) {
         $.get(url, function (data) {
             const select = $('#selectGuiaTalla');
 
-            // Limpia opciones y select2 previa
-            select.empty().append('<option value="">-- Seleccionar guía --</option>');
+            // Limpia opciones y repuebla. Añadimos SIEMPRE la opción especial
+            // "Sin guía" para permitir creación rápida con talla única "00".
+            select.empty()
+                .append('<option value="">-- Seleccionar guía --</option>')
+                .append('<option value="SIN_GUIA">⚡ Sin guía (talla única 00 — rápido)</option>');
 
             data.forEach(g => {
                 const isSelected = seleccionarId && parseInt(g.id) === parseInt(seleccionarId);
@@ -5685,7 +5859,22 @@ function showError(msg) {
         const guiaId = $(this).val();
         const tipoTalla = $('select[name="tipo_talla"]').val(); // 👈 importante
 
-        if (!guiaId) return;
+        // Toggle visual del modo "Sin guía" (talla única 00)
+        aplicarModoSinGuiaRecepcion(guiaId === 'SIN_GUIA');
+
+        // Habilitar/deshabilitar CTA "Distribuir en tallas de la guía"
+        // cuando el producto llegó consolidado y eligen una guía real.
+        const esConsolidado = $('#tablaTallasCrearProducto').data('consolidado') === true;
+        const modoRedistribuirActivo = $('#tablaTallasCrearProducto').data('modo-redistribuir') === true;
+        const $btnDist = $('#btnDistribuirEnGuia');
+        if ($btnDist.length) {
+            const habilitar = esConsolidado && !modoRedistribuirActivo
+                && guiaId && guiaId !== 'SIN_GUIA';
+            $btnDist.prop('disabled', !habilitar)
+                .data('guia-id', habilitar ? guiaId : '');
+        }
+
+        if (!guiaId || guiaId === 'SIN_GUIA') return;
 
         $.get(`/app/guia_talla_detalle/${guiaId}/`, function (res) {
             if (!res || !res.tallas) {
@@ -5822,11 +6011,16 @@ function verificarProductoExistente(articulo, marca, color, genero, categoria, s
     };
     
     $.get('/app/verificar_producto_existente/', params, function(response) {
-        // Limpiar paneles anteriores
+        // Limpiar paneles legacy y chips previos de estado/similares/otras
         $('#panelProductoEncontrado').remove();
         $('#advertenciaProductosSimilares').remove();
         $('#indicadorVerificacion').remove();
         $('#alertaPreciosOtrasSucursalesRecepcion').remove();
+        if (typeof InfoChipsRecepcion !== 'undefined') {
+            InfoChipsRecepcion.remove('estado');
+            InfoChipsRecepcion.remove('similares');
+            InfoChipsRecepcion.remove('otras_sucursales');
+        }
         
         // ✅ SIEMPRE verificar precios en otras sucursales
         if (response.productos_otras_sucursales && response.productos_otras_sucursales.length > 0) {
@@ -5838,6 +6032,10 @@ function verificarProductoExistente(articulo, marca, color, genero, categoria, s
             mostrarProductoEncontrado(response.producto_encontrado, response.tallas_existentes);
             // Pasar también el mapa de tallas normalizadas para comparación flexible
             mostrarSkusExistentes(response.tallas_existentes, response.tallas_normalizadas_map || {});
+            // Las tallas que NO están en el producto existente (ej. cuando
+            // el usuario distribuyó el consolidado en tallas nuevas) quedan
+            // con SKU vacío; aquí las rellenamos con SKUs nuevos.
+            generarNuevosSkus();
             console.log('✅ Producto encontrado:', response.producto_encontrado);
         } else {
             // ⚠️ Producto NO existe - Mostrar similares si hay
@@ -5849,49 +6047,58 @@ function verificarProductoExistente(articulo, marca, color, genero, categoria, s
     });
 }
 
-// ✅ Mostrar alerta de precios diferentes en OTRAS SUCURSALES (para modal Recepción)
+// ✅ ALERTA PRECIOS OTRAS SUCURSALES — usa chip bar
 function mostrarAlertaPreciosOtrasSucursalesRecepcion(productosOtrasSucursales) {
     $('#alertaPreciosOtrasSucursalesRecepcion').remove();
-    if (!productosOtrasSucursales || productosOtrasSucursales.length === 0) return;
+    if (!productosOtrasSucursales || productosOtrasSucursales.length === 0) {
+        InfoChipsRecepcion.remove('otras_sucursales');
+        return;
+    }
 
     const precioForm = parseInt($('#formCrearProductoDesdeRecepcion input[name="precioventa"]').val()) || 0;
     const hayDiferencias = productosOtrasSucursales.some(p => precioForm > 0 ? p.precioventa !== precioForm : p.precio_diferente);
-    const borderColor = hayDiferencias ? '#ef9a9a' : '#90caf9';
-    const bgColor = hayDiferencias ? 'linear-gradient(135deg,#ffebee,#fce4ec)' : 'linear-gradient(135deg,#e3f2fd,#e8eaf6)';
-    const iconColor = hayDiferencias ? '#c62828' : '#1565c0';
 
     let chips = '';
     productosOtrasSucursales.forEach(p => {
         const esDif = precioForm > 0 && p.precioventa !== precioForm;
         const dif = precioForm > 0 ? ((p.precioventa - precioForm) / precioForm * 100).toFixed(1) : 0;
-        const difLabel = esDif ? `<span style="font-size:.6rem;color:${parseFloat(dif) > 0 ? '#c62828' : '#2e7d32'};">${parseFloat(dif) > 0 ? '+' : ''}${dif}%</span>` : '';
+        const difLabel = esDif ? `<span style="font-size:.58rem;color:${parseFloat(dif) > 0 ? '#c62828' : '#2e7d32'};">${parseFloat(dif) > 0 ? '+' : ''}${dif}%</span>` : '';
         chips += `
-        <div class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded me-1 mb-1" style="background:#fff;border:1px solid ${esDif ? '#ffcc80' : '#c5cae9'};font-size:.72rem;">
+        <div class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded me-1 mb-1" style="background:#fff;border:1px solid ${esDif ? '#ffcc80' : '#c5cae9'};font-size:.65rem;">
             <strong>${p.sucursal_nombre}</strong>
             <span class="text-success fw-bold">$${p.precioventa.toLocaleString('es-CL')}</span>
             ${difLabel}
-            <button type="button" class="btn btn-sm p-0 btnCopiarPrecioSucursalRecepcion" style="font-size:.68rem;color:#1565c0;line-height:1;"
+            <button type="button" class="btn btn-sm p-0 btnCopiarPrecioSucursalRecepcion" style="font-size:.62rem;color:#1565c0;line-height:1;"
                     data-precio="${p.precioventa}" data-costo="${p.costo}" data-sobreprecio="${p.sobreprecio}" title="Usar precios de ${p.sucursal_nombre}">
                 <i class="bi bi-arrow-down-circle"></i>
             </button>
         </div>`;
     });
 
-    const html = `
-    <div id="alertaPreciosOtrasSucursalesRecepcion" class="mb-2" style="border-radius:10px;border:1px solid ${borderColor};background:${bgColor};padding:8px 14px;">
-        <div class="d-flex align-items-center justify-content-between mb-1">
-            <span style="font-size:.76rem;font-weight:700;color:${iconColor};">
-                <i class="bi bi-${hayDiferencias ? 'exclamation-triangle-fill' : 'info-circle-fill'} me-1"></i>
-                ${hayDiferencias ? 'Precios diferentes en otras sucursales' : 'Existe en otras sucursales'}
-            </span>
-            <button type="button" class="btn-close" style="font-size:.55rem;" onclick="$(this).closest('#alertaPreciosOtrasSucursalesRecepcion').fadeOut(200,function(){$(this).remove();})"></button>
-        </div>
-        <div class="d-flex flex-wrap">${chips}</div>
-        ${hayDiferencias ? '<small class="text-muted d-block mt-1" style="font-size:.66rem;"><i class="bi bi-lightbulb me-1"></i>Mantener precios uniformes evita inconsistencias.</small>' : ''}
-    </div>`;
+    const maxPreview = 3;
+    const preview = productosOtrasSucursales.slice(0, maxPreview).map(p => p.sucursal_nombre).join(', ');
+    const overflow = productosOtrasSucursales.length > maxPreview ? ` +${productosOtrasSucursales.length - maxPreview}` : '';
+    const rangoPrecios = (() => {
+        const precios = productosOtrasSucursales.map(p => p.precioventa || 0).filter(x => x > 0);
+        if (!precios.length) return '';
+        const min = Math.min(...precios);
+        const max = Math.max(...precios);
+        return min === max
+            ? `$${min.toLocaleString('es-CL')}`
+            : `$${min.toLocaleString('es-CL')}–$${max.toLocaleString('es-CL')}`;
+    })();
 
-    const $panel = $('#panelProductoEncontrado');
-    if ($panel.length) $panel.after(html); else $('#formCrearProductoDesdeRecepcion .modal-body').prepend(html);
+    const detalle = `
+        <div class="d-flex flex-wrap">${chips}</div>
+        ${hayDiferencias ? '<small class="text-muted d-block mt-1" style="font-size:.6rem;"><i class="bi bi-lightbulb me-1"></i>Mantener precios uniformes evita inconsistencias.</small>' : ''}
+    `;
+
+    InfoChipsRecepcion.set('otras_sucursales', {
+        label: hayDiferencias ? 'Precios difieren' : 'En otras sucursales',
+        resumen: `· ${preview}${overflow} · ${rangoPrecios}`,
+        tipoColor: hayDiferencias ? 'otras_suc_dif' : 'otras_suc_ok',
+        detalleHtml: detalle
+    });
 }
 
 $(document).on('click', '.btnCopiarPrecioSucursalRecepcion', function() {
@@ -5948,86 +6155,105 @@ $(document).on('click', '.btnCopiarPrecioSucursalRecepcion', function() {
 });
 
 function mostrarProductoEncontrado(producto, tallasExistentes) {
+    // Legacy panels out
     $('#panelProductoEncontrado').remove();
-    $('#advertenciaProductosSimilares').remove();
     if (!producto) return;
 
-    const tallasHtml = tallasExistentes.map(t =>
-        `<span class="badge me-1" style="background:#e8f5e9;color:#2e7d32;font-size:.68rem;">${t.talla} <small>(${t.stock})</small></span>`
-    ).join('');
+    // Tallas badges (con stock resaltadas, sin stock tenues)
+    const tallasHtml = (tallasExistentes || []).slice(0, 14).map(t => {
+        const conStock = (t.stock || 0) > 0;
+        return `<span class="badge ${conStock ? 'bg-success' : ''}"
+            style="${conStock ? '' : 'background:#efebe9;color:#6d4c41;'}font-size:.62rem;padding:2px 6px;">
+            ${t.talla}${conStock ? ` <small>·${t.stock}</small>` : ''}</span>`;
+    }).join(' ');
+    const tallasOverflow = (tallasExistentes || []).length > 14
+        ? `<span class="text-muted ms-1" style="font-size:.6rem;">+${tallasExistentes.length - 14}</span>`
+        : '';
 
-    const html = `
-    <div id="panelProductoEncontrado" class="mb-3" style="border-radius:12px;border:2px solid #e65100;background:linear-gradient(135deg,#fff3e0,#ffe0b2);padding:14px 16px;box-shadow:0 2px 8px rgba(230,81,0,0.15);">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <span style="font-size:.85rem;font-weight:700;color:#e65100;">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>Este producto YA EXISTE en esta sucursal
-            </span>
+    const detalle = `
+        <div class="d-flex align-items-center flex-wrap gap-2 mb-1" style="font-size:.72rem;">
+            <strong>${producto.articulo}</strong>
+            <span class="text-muted">· ${producto.marca || ''} · ${producto.color || ''} · ${producto.genero || ''} · ${producto.categoria || ''}</span>
         </div>
-        <div class="d-flex flex-wrap gap-2 align-items-center" style="font-size:.8rem;">
-            <span><strong>${producto.articulo}</strong></span>
-            <span class="text-muted">·</span>
-            <span>${producto.marca} · ${producto.color} · ${producto.genero}</span>
-            <span class="text-muted">·</span>
-            <span>${producto.categoria}</span>
-        </div>
-        <div class="mt-2 d-flex flex-wrap align-items-center gap-1">
-            <span style="font-size:.75rem;font-weight:600;color:#bf360c;">Tallas existentes (${producto.total_tallas}):</span>
+        <div class="d-flex flex-wrap gap-1 align-items-center py-1">
             ${tallasHtml || '<span class="text-muted" style="font-size:.68rem;">Sin tallas</span>'}
+            ${tallasOverflow}
         </div>
-        <div class="mt-2 p-2" style="background:rgba(255,255,255,0.7);border-radius:8px;border:1px solid #ffcc80;">
-            <small style="font-size:.72rem;color:#4e342e;">
-                <i class="bi bi-info-circle me-1"></i><strong>Si continúas</strong>, se actualizarán los precios y se agregarán las tallas nuevas al producto existente.
-                Si deseas un producto nuevo, modifica el artículo o los atributos.
-            </small>
-        </div>
-    </div>`;
+        <small class="text-muted d-block" style="font-size:.65rem;">
+            Al guardar se <strong>actualizarán precios</strong> del existente y se <strong>agregarán tallas nuevas</strong>.
+        </small>
+    `;
 
-    $('#formCrearProductoDesdeRecepcion .modal-body').prepend(html);
+    InfoChipsRecepcion.set('estado', {
+        label: 'YA EXISTE',
+        resumen: `· ${producto.articulo} · ${producto.total_tallas || 0} tallas`,
+        tipoColor: 'estado_existente',
+        detalleHtml: detalle
+    });
 }
 
-// 🚨 FUNCIÓN PARA MOSTRAR ADVERTENCIA DE PRODUCTOS SIMILARES (SUCURSAL ACTIVA)
+// 🚨 ADVERTENCIA PRODUCTOS SIMILARES (SUCURSAL ACTIVA) — usa chip bar
 function mostrarAdvertenciaProductosSimilares(similaresSkuRaw, similaresNombreRaw) {
     $('#advertenciaProductosSimilares').remove();
     const todos = [...(similaresSkuRaw || []), ...(similaresNombreRaw || [])];
     const vistos = new Set();
     const unicos = todos.filter(p => { if (vistos.has(p.articulo)) return false; vistos.add(p.articulo); return true; });
-    if (!unicos.length) return;
+    if (!unicos.length) {
+        InfoChipsRecepcion.remove('similares');
+        return;
+    }
 
-    let items = '';
-    unicos.slice(0, 4).forEach(p => {
+    const primero = unicos[0];
+    const precioPrimero = primero.precioventa ? '$' + parseInt(primero.precioventa).toLocaleString('es-CL') : '-';
+
+    // Botón "Usar" del primer similar, inline en el propio chip para ser
+    // accesible sin expandir el detalle. Si hay más de 1, el botón ▼
+    // sigue disponible para elegir otro.
+    const dataPrimeroJson = JSON.stringify(primero).replace(/"/g, '&quot;');
+    const btnUsarInline = `
+        <button type="button"
+                class="btn btn-primary btn-sm py-0 px-2 ms-1 btn-copiar-producto-similar"
+                data-producto='${dataPrimeroJson}'
+                data-modal="recepcion"
+                title="Aplicar identificación de ${primero.articulo}"
+                style="font-size:.62rem;line-height:1.1;border-radius:10px;">
+            <i class="bi bi-arrow-down-circle"></i> Usar
+        </button>
+    `;
+
+    let filas = '';
+    unicos.slice(0, 6).forEach(p => {
         const precio = p.precioventa ? '$' + parseInt(p.precioventa).toLocaleString('es-CL') : '-';
         const dataJson = JSON.stringify(p).replace(/"/g, '&quot;');
-        items += `
-        <div class="d-flex align-items-center gap-2 py-1 px-2 rounded mb-1" style="background:#fff;border:1px solid #ffe082;">
+        filas += `
+        <div class="d-flex align-items-center gap-2 py-1 px-2 rounded mb-1" style="background:#fff;border:1px solid #ffe082;font-size:.7rem;">
             <div class="flex-fill" style="min-width:0;">
-                <strong style="font-size:.78rem;">${p.articulo}</strong>
-                <span class="text-muted" style="font-size:.7rem;"> · ${p.marca || '-'} · ${p.color || '-'} · ${p.genero || '-'}</span>
+                <strong>${p.articulo}</strong>
+                <span class="text-muted"> · ${p.marca || '-'} · ${p.color || '-'} · ${p.genero || '-'}</span>
             </div>
-            <span class="fw-bold text-success" style="font-size:.78rem;white-space:nowrap;">${precio}</span>
-            <span class="text-muted" style="font-size:.68rem;white-space:nowrap;">${p.tallas || ''}</span>
-            <button type="button" class="btn btn-sm btn-outline-primary btn-copiar-producto-similar py-0 px-2"
-                    data-producto='${dataJson}' data-modal="recepcion" style="font-size:.7rem;border-radius:6px;">
-                <i class="bi bi-arrow-down-circle me-1"></i>Usar
+            <span class="fw-bold text-success" style="white-space:nowrap;">${precio}</span>
+            <button type="button" class="btn btn-outline-primary btn-copiar-producto-similar py-0 px-2"
+                    data-producto='${dataJson}' data-modal="recepcion" style="font-size:.65rem;line-height:1.2;border-radius:6px;">
+                <i class="bi bi-arrow-down-circle"></i> Usar
             </button>
         </div>`;
     });
-    if (unicos.length > 4) {
-        items += `<small class="text-muted d-block text-center" style="font-size:.68rem;">y ${unicos.length - 4} más...</small>`;
+    if (unicos.length > 6) {
+        filas += `<small class="text-muted d-block text-center" style="font-size:.62rem;">y ${unicos.length - 6} más…</small>`;
     }
 
-    const html = `
-    <div id="advertenciaProductosSimilares" class="mb-2" style="border-radius:10px;border:1px solid #ffcc80;background:linear-gradient(135deg,#fff8e1,#fff3e0);padding:10px 14px;">
-        <div class="d-flex align-items-center justify-content-between mb-1">
-            <span style="font-size:.78rem;font-weight:700;color:#e65100;">
-                <i class="bi bi-exclamation-triangle-fill me-1"></i>${unicos.length} producto(s) similar(es) encontrado(s)
-            </span>
-            <button type="button" class="btn-close" style="font-size:.6rem;" onclick="$(this).closest('#advertenciaProductosSimilares').fadeOut(200,function(){$(this).remove();})"></button>
-        </div>
-        <small class="text-muted d-block mb-2" style="font-size:.68rem;">Verifica que no estés creando un duplicado.</small>
-        ${items}
-    </div>`;
+    const detalle = `
+        <small class="text-muted d-block mb-1" style="font-size:.62rem;">Verifica que no estés creando un duplicado.</small>
+        ${filas}
+    `;
 
-    $('#modalCrearProductoDesdeRecepcion .modal-body').prepend(html);
+    InfoChipsRecepcion.set('similares', {
+        label: `${unicos.length} similar${unicos.length !== 1 ? 'es' : ''}`,
+        resumen: `· ${primero.articulo} ${precioPrimero}`,
+        tipoColor: 'similares',
+        detalleHtml: detalle,
+        extraChipHtml: btnUsarInline
+    });
 }
 
 // 📋 HANDLER PARA COPIAR DATOS DE PRODUCTO SIMILAR (Modal Recepción)
@@ -6047,7 +6273,14 @@ $(document).on('click', '.btn-copiar-producto-similar', function() {
 function copiarDatosProductoRecepcion(producto) {
     const $modal = $('#modalCrearProductoDesdeRecepcion');
 
-    function ejecutarCopia() {
+    // Regla de negocio: al copiar datos desde un producto similar, SOLO
+    // copiamos datos de identificación (artículo, marca, color, género,
+    // categoría) para que el backend detecte al mismo producto y actualice.
+    // El costo / sobreprecio / precio venta se dejan tal como vienen de la
+    // compra actual — ese es el valor que debe prevalecer y sobrescribir al
+    // existente. Si el usuario realmente quiere copiar precios del similar,
+    // puede marcar el checkbox antes de aplicar.
+    function ejecutarCopia(copiarPrecios) {
         $modal.find('[name="articulo"]').val(producto.articulo);
         if (producto.marca_id) {
             const $s = $modal.find('[name="atributo1"]');
@@ -6069,11 +6302,16 @@ function copiarDatosProductoRecepcion(producto) {
             if (!$s.find(`option[value="${producto.categoria_id}"]`).length) $s.append(`<option value="${producto.categoria_id}">${producto.categoria}</option>`);
             $s.val(producto.categoria_id).trigger('change');
         }
-        if (producto.costo) $modal.find('[name="costo"]').val(Math.round(producto.costo));
-        if (producto.sobreprecio != null) $modal.find('[name="sobreprecio"]').val(Math.round(producto.sobreprecio));
-        if (producto.precioventa) $modal.find('[name="precioventa"]').val(Math.round(producto.precioventa));
+        if (copiarPrecios) {
+            if (producto.costo) $modal.find('[name="costo"]').val(Math.round(producto.costo));
+            if (producto.sobreprecio != null) $modal.find('[name="sobreprecio"]').val(Math.round(producto.sobreprecio));
+            if (producto.precioventa) $modal.find('[name="precioventa"]').val(Math.round(producto.precioventa));
+        }
         $('#advertenciaProductosSimilares').fadeOut(200, function() { $(this).remove(); });
-        showToast('success', `Datos de ${producto.articulo} aplicados`);
+        const detalleToast = copiarPrecios
+            ? `Datos + precios de ${producto.articulo} aplicados`
+            : `Identificación de ${producto.articulo} aplicada (precios de la compra preservados)`;
+        showToast('success', detalleToast);
         setTimeout(() => {
             verificarProductoExistente(producto.articulo, producto.marca_id, producto.color_id, producto.genero_id, producto.categoria_id, producto.articulo);
         }, 500);
@@ -6081,37 +6319,49 @@ function copiarDatosProductoRecepcion(producto) {
 
     const costoActual = parseInt($modal.find('[name="costo"]').val()) || 0;
     const precioActual = parseInt($modal.find('[name="precioventa"]').val()) || 0;
-    const articuloActual = $modal.find('[name="articulo"]').val() || '';
     const nuevoCosto = Math.round(producto.costo || 0);
     const nuevoPrecio = Math.round(producto.precioventa || 0);
-    const hayCambioPrecio = (costoActual > 0 || precioActual > 0) && (costoActual !== nuevoCosto || precioActual !== nuevoPrecio);
+    const hayFormConPrecios = costoActual > 0 || precioActual > 0;
 
-    if (hayCambioPrecio && articuloActual) {
+    // Si el formulario ya tiene precios desde la compra, preguntamos si
+    // además quiere sobrescribirlos con los del similar. Por defecto: NO
+    // (preservar lo del compra, para que el backend actualice al existente
+    // con el nuevo costo/precio al guardar).
+    if (hayFormConPrecios && (nuevoCosto > 0 || nuevoPrecio > 0)) {
         let detalle = '<div style="text-align:left;font-size:.85rem;">';
         detalle += `<div class="mb-2"><strong>Producto similar:</strong> ${producto.articulo} · ${producto.marca || '-'} · ${producto.color || '-'}</div>`;
-        if (costoActual !== nuevoCosto && nuevoCosto > 0) {
-            const d = nuevoCosto - costoActual;
-            detalle += `<div class="mb-1"><strong>Costo:</strong> $${costoActual.toLocaleString('es-CL')} → <strong>$${nuevoCosto.toLocaleString('es-CL')}</strong> <span class="${d > 0 ? 'text-danger' : 'text-success'}">(${d > 0 ? '+' : ''}${d.toLocaleString('es-CL')})</span></div>`;
-        }
-        if (precioActual !== nuevoPrecio && nuevoPrecio > 0) {
-            const d = nuevoPrecio - precioActual;
-            detalle += `<div class="mb-1"><strong>Precio venta:</strong> $${precioActual.toLocaleString('es-CL')} → <strong>$${nuevoPrecio.toLocaleString('es-CL')}</strong> <span class="${d > 0 ? 'text-danger' : 'text-success'}">(${d > 0 ? '+' : ''}${d.toLocaleString('es-CL')})</span></div>`;
-        }
-        detalle += '</div><small class="text-muted d-block mt-2">Se reemplazarán los datos actuales del formulario con los del producto seleccionado.</small>';
+        detalle += `<div class="mb-1"><strong>Compra actual:</strong> costo $${costoActual.toLocaleString('es-CL')} · venta $${precioActual.toLocaleString('es-CL')}</div>`;
+        detalle += `<div class="mb-1"><strong>Producto similar:</strong> costo $${nuevoCosto.toLocaleString('es-CL')} · venta $${nuevoPrecio.toLocaleString('es-CL')}</div>`;
+        detalle += '</div>';
+        detalle += `
+            <div class="form-check mt-3 mb-1" style="text-align:left;">
+                <input class="form-check-input" type="checkbox" id="chkCopiarPreciosSimilar">
+                <label class="form-check-label small" for="chkCopiarPreciosSimilar">
+                    Sobrescribir también <strong>costo y precio venta</strong> con los del similar
+                </label>
+            </div>
+            <small class="text-muted d-block mt-1" style="text-align:left;">
+                Por defecto se mantienen los precios actuales de la compra — el producto existente se actualizará con esos valores al guardar.
+            </small>`;
 
         Swal.fire({
-            title: 'Usar datos de producto similar',
+            title: 'Aplicar datos de producto similar',
             html: detalle,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonText: 'Aplicar datos',
+            confirmButtonText: 'Aplicar',
             cancelButtonText: 'Cancelar',
             confirmButtonColor: '#405189',
         }).then(result => {
-            if (result.isConfirmed) ejecutarCopia();
+            if (result.isConfirmed) {
+                const copiarPrecios = $('#chkCopiarPreciosSimilar').is(':checked');
+                ejecutarCopia(copiarPrecios);
+            }
         });
     } else {
-        ejecutarCopia();
+        // Form vacío de precios → OK copiar precios del similar (mejor que
+        // nada). El usuario luego puede ajustar si la compra tiene otros.
+        ejecutarCopia(true);
     }
 }
 
@@ -6158,15 +6408,22 @@ function copiarDatosProductoManual(producto) {
         $selectCategoria.val(producto.categoria_id).trigger('change');
     }
     
-    // Copiar precios si existen
-    if (producto.costo) {
-        $modal.find('[name="costo"]').val(Math.round(producto.costo));
-    }
-    if (producto.sobreprecio != null) {
-        $modal.find('[name="sobreprecio"]').val(Math.round(producto.sobreprecio));
-    }
-    if (producto.precioventa) {
-        $modal.find('[name="precioventa"]').val(Math.round(producto.precioventa));
+    // Copiar precios SOLO si el formulario aún no tiene valores propios
+    // (viene vacío). Si ya había costo/precio desde el DTE/compra actual,
+    // los preservamos para que al guardar se actualicen en el existente.
+    const costoFormActual = parseInt($modal.find('[name="costo"]').val()) || 0;
+    const precioFormActual = parseInt($modal.find('[name="precioventa"]').val()) || 0;
+    const copiarPreciosManual = !(costoFormActual > 0 || precioFormActual > 0);
+    if (copiarPreciosManual) {
+        if (producto.costo) {
+            $modal.find('[name="costo"]').val(Math.round(producto.costo));
+        }
+        if (producto.sobreprecio != null) {
+            $modal.find('[name="sobreprecio"]').val(Math.round(producto.sobreprecio));
+        }
+        if (producto.precioventa) {
+            $modal.find('[name="precioventa"]').val(Math.round(producto.precioventa));
+        }
     }
     
     // Cerrar el panel de productos coincidentes si existe
@@ -6178,8 +6435,12 @@ function copiarDatosProductoManual(producto) {
     Swal.fire({
         icon: 'success',
         title: 'Datos copiados',
-        html: `<p>Se copió la información de <strong>${producto.articulo}</strong></p>
-               <p class="small text-muted">Al guardar, se actualizará el producto existente en lugar de crear uno nuevo.</p>`,
+        html: `<p>Se copió la identificación de <strong>${producto.articulo}</strong></p>
+               <p class="small text-muted">
+                 ${copiarPreciosManual
+                    ? 'Precios también copiados (formulario vacío).'
+                    : '<strong>Precios preservados:</strong> al guardar se actualizará el producto existente con el costo/precio de la compra actual.'}
+               </p>`,
         timer: 3000,
         showConfirmButton: false
     });
@@ -6299,66 +6560,186 @@ function generarNuevosSkus() {
     });
 }
 
-// Función auxiliar para actualizar el display visual del SKU
+// Función auxiliar para actualizar el display visual del SKU.
+// Muestra explícitamente si el SKU se REUTILIZA (ya existe en el producto)
+// o si es NUEVO (se creará al guardar). La idea es que el usuario sepa de
+// un vistazo si habrá traza compartida o se generará uno fresco.
 function actualizarSkuDisplay(input, skuValue, tipo) {
     const $row = input.closest('tr');
     const $display = $row.find('.sku-display');
-    
+
     if (tipo === 'existente') {
-        $display.html(`<i class="bi bi-check-circle text-success me-1"></i>${skuValue}`)
+        // SKU ya presente en la BD para esa talla → se reutiliza.
+        $display.html(
+            `<i class="bi bi-arrow-repeat text-success me-1"></i>` +
+            `<strong>${skuValue}</strong>` +
+            `<span class="ms-1" style="font-size:.7em;font-weight:600;color:#2e7d32;">· reutiliza</span>`
+        )
                 .removeClass('bg-light bg-warning-subtle')
-                .addClass('bg-success-subtle text-success-emphasis');
+                .addClass('bg-success-subtle')
+                .attr('title', 'Esta talla ya existe en el producto — se reutilizará el SKU existente, se sumará el stock.');
     } else if (tipo === 'sugerido') {
-        $display.html(`<i class="bi bi-lightning text-warning me-1"></i>${skuValue}`)
+        // SKU generado nuevo → se creará al guardar.
+        $display.html(
+            `<i class="bi bi-plus-circle text-primary me-1"></i>` +
+            `<strong>${skuValue}</strong>` +
+            `<span class="ms-1" style="font-size:.7em;font-weight:600;color:#0d47a1;">· nuevo</span>`
+        )
                 .removeClass('bg-light bg-success-subtle')
-                .addClass('bg-warning-subtle text-warning-emphasis');
+                .addClass('bg-primary-subtle')
+                .attr('title', 'Talla nueva para este producto — se creará un Producto_Talla con este SKU al guardar.');
     } else {
-        $display.html(`<i class="bi bi-clock-history text-secondary me-1"></i>${skuValue}`)
-                .removeClass('bg-success-subtle bg-warning-subtle')
-                .addClass('bg-light');
+        // SKU temporal (fallback si el backend falló generando)
+        $display.html(
+            `<i class="bi bi-clock-history text-secondary me-1"></i>` +
+            `<strong>${skuValue}</strong>` +
+            `<span class="ms-1" style="font-size:.7em;font-weight:600;color:#6c757d;">· temporal</span>`
+        )
+                .removeClass('bg-success-subtle bg-primary-subtle bg-warning-subtle')
+                .addClass('bg-light')
+                .attr('title', 'SKU temporal — el backend asignará el SKU definitivo al guardar.');
     }
 }
 
-// 📊 FUNCIÓN PARA MOSTRAR INDICADOR DE VERIFICACIÓN
+// 📊 INDICADOR DE VERIFICACIÓN — en chip bar
 function mostrarIndicadorVerificacion() {
-    // Crear o actualizar el indicador
-    let indicador = $('#indicadorVerificacion');
-    if (indicador.length === 0) {
-        indicador = $('<div id="indicadorVerificacion" class="alert alert-info alert-sm mb-3">' +
-                     '<i class="bi bi-search me-2"></i>Verificando si el producto ya existe...</div>');
-        $('#formCrearProductoDesdeRecepcion .modal-body').prepend(indicador);
-    } else {
-        indicador.removeClass('alert-success alert-warning').addClass('alert-info')
-                .html('<i class="bi bi-search me-2"></i>Verificando si el producto ya existe...');
+    $('#indicadorVerificacion').remove();
+    if (typeof InfoChipsRecepcion !== 'undefined') {
+        InfoChipsRecepcion.set('estado', {
+            label: 'Verificando…',
+            resumen: '· buscando producto existente',
+            tipoColor: 'estado_verif'
+        });
     }
 }
 
-// ✅ FUNCIÓN PARA MOSTRAR INDICADOR DE PRODUCTO EXISTENTE
+// ✅ INDICADOR DE PRODUCTO EXISTENTE — el chip "YA EXISTE" ya lo maneja
+// mostrarProductoEncontrado(). Esta función queda como no-op por compat.
 function mostrarIndicadorProductoExistente() {
-    let indicador = $('#indicadorVerificacion');
-    if (indicador.length === 0) {
-        indicador = $('<div id="indicadorVerificacion" class="alert alert-success alert-sm mb-3">' +
-                     '<i class="bi bi-check-circle me-2"></i>Producto encontrado - Mostrando SKUs existentes</div>');
-        $('#formCrearProductoDesdeRecepcion .modal-body').prepend(indicador);
-    } else {
-        indicador.removeClass('alert-info alert-warning').addClass('alert-success')
-                .html('<i class="bi bi-check-circle me-2"></i>Producto encontrado - Mostrando SKUs existentes');
+    $('#indicadorVerificacion').remove();
+}
+
+// =====================================================================
+// InfoChipsRecepcion — barra horizontal de chips informativos en el modal
+// "Crear Producto desde Recepción". Cada chip es un resumen de una línea;
+// al hacer clic se expande su detalle en un panel compartido debajo.
+// Chips soportados: 'compra', 'estado' (nuevo/existente/verificando),
+// 'similares', 'otras_sucursales'.
+// =====================================================================
+const InfoChipsRecepcion = {
+    estados: {}, // { chipId: {chipHtml, detailHtml, color} }
+
+    // Colores por tipo de chip
+    coloresChip: {
+        compra:           { border:'#0ab39c', bg:'#e0f2f1', text:'#00695c', icon:'bi-truck' },
+        estado_nuevo:     { border:'#ffb300', bg:'#fff8e1', text:'#e65100', icon:'bi-plus-circle' },
+        estado_existente: { border:'#e65100', bg:'#fff3e0', text:'#bf360c', icon:'bi-exclamation-triangle-fill' },
+        estado_verif:     { border:'#1565c0', bg:'#e3f2fd', text:'#0d47a1', icon:'bi-search' },
+        similares:        { border:'#ffb300', bg:'#fff8e1', text:'#e65100', icon:'bi-exclamation-triangle-fill' },
+        otras_suc_dif:    { border:'#ef9a9a', bg:'#ffebee', text:'#c62828', icon:'bi-exclamation-triangle-fill' },
+        otras_suc_ok:     { border:'#90caf9', bg:'#e3f2fd', text:'#1565c0', icon:'bi-info-circle-fill' }
+    },
+
+    // Crea/actualiza un chip por id.
+    //  opts: { label, tipoColor, resumen, detalleHtml?, extraChipHtml? }
+    //   - label: texto destacado en el chip
+    //   - resumen: sub-texto a la derecha (opcional)
+    //   - detalleHtml: si viene, habilita "ver" y lo renderiza en el panel
+    set: function(chipId, opts) {
+        const color = this.coloresChip[opts.tipoColor] || this.coloresChip.estado_verif;
+        this.estados[chipId] = { ...opts, color };
+        this.render();
+    },
+
+    remove: function(chipId) {
+        delete this.estados[chipId];
+        this.render();
+    },
+
+    // Re-renderiza la barra completa desde el estado.
+    render: function() {
+        const $bar = $('#infoChipsBarRecepcion');
+        const $det = $('#infoChipsDetalleRecepcion');
+        if (!$bar.length) return;
+        $bar.empty();
+        $det.empty();
+
+        // Orden fijo: compra primero, luego estado, similares, otras
+        const orden = ['compra', 'estado', 'similares', 'otras_sucursales'];
+        orden.forEach(chipId => {
+            const est = this.estados[chipId];
+            if (!est) return;
+            const c = est.color;
+            const detailPanelId = `chipDetalle_${chipId}`;
+            const tieneDetalle = !!est.detalleHtml;
+
+            const chip = `
+                <span class="info-chip d-inline-flex align-items-center gap-1 rounded-pill"
+                      data-chip="${chipId}"
+                      style="font-size:.68rem;padding:2px 8px 2px 6px;border:1px solid ${c.border};background:${c.bg};color:${c.text};line-height:1.1;">
+                    <i class="bi ${c.icon}"></i>
+                    <strong>${est.label}</strong>
+                    ${est.resumen ? `<span class="text-muted" style="color:#555 !important;font-weight:400;">${est.resumen}</span>` : ''}
+                    ${tieneDetalle
+                        ? `<a class="ms-1" data-bs-toggle="collapse" href="#${detailPanelId}" style="cursor:pointer;color:${c.text};text-decoration:none;"><i class="bi bi-chevron-down"></i></a>`
+                        : ''}
+                    ${est.extraChipHtml || ''}
+                </span>
+            `;
+            $bar.append(chip);
+
+            if (tieneDetalle) {
+                $det.append(`
+                    <div class="collapse mt-1" id="${detailPanelId}" data-chip-detail="${chipId}">
+                        <div class="p-2 rounded" style="background:${c.bg};border-left:3px solid ${c.border};font-size:.72rem;">
+                            ${est.detalleHtml}
+                        </div>
+                    </div>
+                `);
+            }
+        });
+    },
+
+    clearAll: function() {
+        this.estados = {};
+        this.render();
     }
+};
+
+// Sincroniza el banner legacy "Compra" con el chip (se llama cuando la
+// data de la compra está disponible). Se queda como única fuente visible.
+function bindBannerCompraToChip() {
+    const nombre = $('#bannerCompraNombre').text().trim();
+    const tipo = $('#bannerCompraTipo').text().trim();
+    const proveedor = $('#bannerCompraProveedor').text().trim();
+    if (!nombre && !proveedor) {
+        InfoChipsRecepcion.remove('compra');
+        return;
+    }
+    const resumen = [proveedor, tipo].filter(Boolean).join(' · ');
+    const detalle = `
+        <div class="d-flex gap-3 flex-wrap align-items-center">
+            <div><strong>${nombre || 'Compra'}</strong> ${tipo ? `<span class="badge bg-success" style="font-size:.62rem;">${tipo}</span>` : ''}</div>
+            ${proveedor ? `<div><i class="bi bi-building me-1"></i>${proveedor}</div>` : ''}
+        </div>
+    `;
+    InfoChipsRecepcion.set('compra', {
+        label: nombre || 'Compra',
+        resumen: proveedor ? `· ${proveedor}` : '',
+        tipoColor: 'compra',
+        detalleHtml: detalle
+    });
 }
 
 // 🆕 FUNCIÓN PARA MOSTRAR INDICADOR DE PRODUCTO NUEVO
 function mostrarIndicadorProductoNuevo() {
-    let indicador = $('#indicadorVerificacion');
-    const contenido = '<div class="d-flex align-items-center gap-2" style="font-size:.78rem;">' +
-        '<div style="width:24px;height:24px;background:#fff3e0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
-        '<i class="bi bi-plus-circle text-warning"></i></div>' +
-        '<span><strong>Producto nuevo</strong> — Se generarán nuevos SKUs</span></div>';
-    if (indicador.length === 0) {
-        indicador = $(`<div id="indicadorVerificacion" class="mb-2" style="border-radius:8px;background:linear-gradient(135deg,#fff8e1,#fff3e0);border:1px solid #ffe082;padding:8px 12px;">${contenido}</div>`);
-        $('#formCrearProductoDesdeRecepcion .modal-body').prepend(indicador);
-    } else {
-        indicador.html(contenido).css({'background':'linear-gradient(135deg,#fff8e1,#fff3e0)','border-color':'#ffe082'});
-    }
+    InfoChipsRecepcion.set('estado', {
+        label: 'Producto nuevo',
+        resumen: '· se generarán nuevos SKUs',
+        tipoColor: 'estado_nuevo'
+    });
+    // Mantener compat: quitar el banner viejo si quedó
+    $('#indicadorVerificacion').remove();
 }
 // === DEFINICIÓN GLOBAL DE cargarGuiaTallaParaCadaFila (vacía, stub temporal) ===
 function cargarGuiaTallaParaCadaFila(marcaId) {
@@ -6999,6 +7380,279 @@ function actualizarControlesPaginacion() {
 
  
 
+// =====================================================================
+// Modo "Sin guía" (talla única 00) — creación rápida sin guía de tallas.
+// Se activa con la opción especial SIN_GUIA del selector principal.
+// =====================================================================
+function aplicarModoSinGuiaRecepcion(activar) {
+    const $nota = $('#notaSinGuiaRecepcion');
+    const $tbody = $('#tablaTallasCrearProducto tbody');
+    if (activar) {
+        $nota.removeClass('d-none');
+        // Guardar el HTML original para poder restaurar si el usuario cambia.
+        if (!$tbody.data('originalHtml')) {
+            $tbody.data('originalHtml', $tbody.html());
+        }
+        // Sumar el stock total detectado en la recepción.
+        let stockTotal = 0;
+        $tbody.find('input[type="hidden"][name^="stock_"]').each(function() {
+            stockTotal += parseInt($(this).val() || 0, 10);
+        });
+        // Reemplazar por una sola fila consolidada.
+        $tbody.html(`
+            <tr class="modo-sin-guia-row" style="background:#fff9e6;">
+                <td><span class="badge bg-warning text-dark">00</span>
+                    <small class="text-muted d-block" style="font-size:.65rem;">talla única CL</small>
+                </td>
+                <td>
+                    <span class="badge bg-info">${stockTotal.toLocaleString()}</span>
+                    <small class="text-muted d-block" style="font-size:.65rem;">todas las tallas consolidadas</small>
+                    <input type="hidden" name="stock_00" value="${stockTotal}">
+                </td>
+                <td>
+                    <code class="sku-display bg-light px-2 py-1 rounded text-dark" style="font-size:.85em;">
+                        <i class="bi bi-magic text-primary"></i> Auto
+                    </code>
+                    <input type="hidden" class="sku-generado" name="sku_00" value="">
+                </td>
+                <td><small class="text-muted"><i class="bi bi-dash"></i> no aplica</small></td>
+            </tr>
+        `);
+        // Marcar en el form para que el backend consolide los
+        // Productos_Recepcionados al crear.
+        if (!$('#formCrearProductoDesdeRecepcion input[name="sin_guia"]').length) {
+            $('#formCrearProductoDesdeRecepcion').append('<input type="hidden" name="sin_guia" value="1">');
+        }
+    } else {
+        $nota.addClass('d-none');
+        // Restaurar la tabla original si habíamos hecho swap.
+        const original = $tbody.data('originalHtml');
+        if (original) {
+            $tbody.html(original);
+            $tbody.removeData('originalHtml');
+        }
+        $('#formCrearProductoDesdeRecepcion input[name="sin_guia"]').remove();
+    }
+}
+
+// =====================================================================
+// REDISTRIBUIR consolidado (talla única 00/__TOTAL__) en tallas reales
+// de la guía, al momento de CREAR el producto desde recepción.
+// Mantiene trazabilidad clonando Productos_Recepcionados por DTE ×
+// nueva talla, proporcional al stock asignado.
+// =====================================================================
+const DistribuirGuiaAlCrear = {
+    // Carga las tallas de la guía y repinta la tabla con inputs editables.
+    abrir: function() {
+        const guiaId = $('#btnDistribuirEnGuia').data('guia-id') || $('#selectGuiaTalla').val();
+        const $tabla = $('#tablaTallasCrearProducto');
+        const total = parseInt($tabla.data('consolidado-stock') || 0, 10);
+        if (!guiaId || guiaId === 'SIN_GUIA') {
+            Swal.fire('Selecciona una guía', 'Primero elige una guía real de tallas.', 'info');
+            return;
+        }
+        if (total <= 0) {
+            Swal.fire('Sin stock', 'No hay stock consolidado que distribuir.', 'info');
+            return;
+        }
+
+        // Descargar tallas de la guía
+        $.getJSON(`/app/guia_talla_detalle/${guiaId}/`, (res) => {
+            const items = (res && res.tallas) || [];
+            if (!items.length) {
+                Swal.fire('Guía vacía', 'La guía no tiene tallas definidas.', 'warning');
+                return;
+            }
+            const tipoTalla = ($('#modalCrearProductoDesdeRecepcion select[name="tipo_talla"]').val() || 'cl').toLowerCase();
+
+            // Guardar HTML original por si el usuario cancela
+            if (!$tabla.data('originalHtml')) {
+                $tabla.find('tbody').data('originalHtml', $tabla.find('tbody').html());
+            }
+
+            // Repintar header (mantenemos el mismo); y repintar el body con
+            // una fila por talla de la guía. Cada fila usa stock_<talla>
+            // editable e input sku_<talla> oculto (auto en backend).
+            const tbody = $tabla.find('tbody');
+            tbody.empty();
+            items.forEach(t => {
+                const talla = (t[tipoTalla] || t.cl || t.us || t.eu || t.uk || t.br || t.cm || '').toString().trim();
+                if (!talla) return;
+                tbody.append(`
+                    <tr>
+                        <td><span class="badge bg-secondary">${talla}</span></td>
+                        <td>
+                            <input type="number" min="0" class="form-control form-control-sm stock-redistribuir text-end" name="stock_${talla}" value="0" data-talla="${talla}">
+                        </td>
+                        <td>
+                            <code class="bg-light px-2 py-1 rounded text-dark" style="font-size:.85em;">
+                                <i class="bi bi-magic text-primary"></i> Auto
+                            </code>
+                            <input type="hidden" class="sku-generado" name="sku_${talla}" value="">
+                        </td>
+                        <td>
+                            <small class="text-muted"><i class="bi bi-dash"></i></small>
+                        </td>
+                    </tr>
+                `);
+            });
+
+            // Estado + toolbar: sum badge + equitativo + cancelar
+            $tabla.data('modo-redistribuir', true);
+            $('#btnDistribuirEnGuia').prop('disabled', true);
+            if (!$('#toolbarRedistribuir').length) {
+                $tabla.before(`
+                    <div id="toolbarRedistribuir" class="d-flex align-items-center gap-2 flex-wrap mb-2 p-2 bg-light border rounded">
+                        <span class="badge bg-warning text-dark"><i class="bi bi-lightning me-1"></i>Modo distribuir</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRedistEquitativo"><i class="bi bi-arrow-left-right me-1"></i>Equitativo</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="btnRedistLimpiar"><i class="bi bi-eraser me-1"></i>Limpiar</button>
+                        <button type="button" class="btn btn-sm btn-outline-dark" id="btnRedistCancelar"><i class="bi bi-arrow-counterclockwise me-1"></i>Volver a talla 00</button>
+                        <div class="ms-auto d-flex align-items-center gap-2">
+                            <small class="text-muted">Asignado:</small>
+                            <span class="badge" id="badgeRedistSuma" style="font-size:.85rem;">0 / ${total.toLocaleString()}</span>
+                        </div>
+                    </div>
+                `);
+            }
+
+            // Flag oculto que el backend usa para saber que debe
+            // redistribuir el consolidado en vez de buscar talla exacta.
+            if (!$('#formCrearProductoDesdeRecepcion input[name="redistribuir_desde_consolidado"]').length) {
+                $('#formCrearProductoDesdeRecepcion').append('<input type="hidden" name="redistribuir_desde_consolidado" value="1">');
+            }
+
+            DistribuirGuiaAlCrear.actualizarSuma();
+            // Volver a verificar existencia del producto para que las
+            // tallas que YA estén en el producto (si coinciden con la guía)
+            // reutilicen su SKU, y las demás se generen nuevas.
+            const $form = $('#formCrearProductoDesdeRecepcion');
+            const articulo = $form.find('[name="articulo"]').val();
+            const marcaId = $form.find('[name="atributo1"]').val();
+            const colorId = $form.find('[name="atributo2"]').val();
+            const generoId = $form.find('[name="atributo3"]').val();
+            const categoriaId = $form.find('[name="categoria"]').val();
+            if (articulo && marcaId) {
+                // setTimeout para dar tiempo a que el DOM y select2 hayan
+                // terminado el repaint; si no, los inputs .sku-generado no
+                // se encuentran aún.
+                setTimeout(() => {
+                    verificarProductoExistente(articulo, marcaId, colorId, generoId, categoriaId, articulo);
+                }, 50);
+            } else if (typeof generarNuevosSkus === 'function') {
+                generarNuevosSkus();
+            }
+        });
+    },
+
+    cancelar: function() {
+        const $tabla = $('#tablaTallasCrearProducto');
+        const original = $tabla.find('tbody').data('originalHtml');
+        if (original) {
+            $tabla.find('tbody').html(original);
+            $tabla.find('tbody').removeData('originalHtml');
+        }
+        $tabla.data('modo-redistribuir', false);
+        $('#toolbarRedistribuir').remove();
+        $('#formCrearProductoDesdeRecepcion input[name="redistribuir_desde_consolidado"]').remove();
+        // Reactivar botón si sigue habiendo guía real seleccionada
+        const guiaId = $('#selectGuiaTalla').val();
+        $('#btnDistribuirEnGuia').prop('disabled', !(guiaId && guiaId !== 'SIN_GUIA'));
+    },
+
+    actualizarSuma: function() {
+        const total = parseInt($('#tablaTallasCrearProducto').data('consolidado-stock') || 0, 10);
+        let suma = 0;
+        $('.stock-redistribuir').each(function() {
+            suma += parseInt($(this).val()) || 0;
+        });
+        const $b = $('#badgeRedistSuma');
+        $b.text(`${suma.toLocaleString()} / ${total.toLocaleString()}`);
+        $b.removeClass('bg-success bg-danger bg-warning text-dark text-white');
+        if (suma === total && total > 0) $b.addClass('bg-success text-white');
+        else if (suma > total) $b.addClass('bg-danger text-white');
+        else $b.addClass('bg-warning text-dark');
+    },
+
+    equitativo: function() {
+        const total = parseInt($('#tablaTallasCrearProducto').data('consolidado-stock') || 0, 10);
+        const $rows = $('.stock-redistribuir');
+        const n = $rows.length;
+        if (!n || total <= 0) return;
+        const base = Math.floor(total / n);
+        let resto = total - base * n;
+        $rows.each(function(idx) {
+            const extra = idx < resto ? 1 : 0;
+            $(this).val(base + extra);
+        });
+        DistribuirGuiaAlCrear.actualizarSuma();
+    }
+};
+
+// Listeners del modo redistribuir
+$(document).on('click', '#btnDistribuirEnGuia', function() { DistribuirGuiaAlCrear.abrir(); });
+$(document).on('click', '#btnRedistEquitativo', function() { DistribuirGuiaAlCrear.equitativo(); });
+$(document).on('click', '#btnRedistLimpiar', function() { $('.stock-redistribuir').val(0); DistribuirGuiaAlCrear.actualizarSuma(); });
+$(document).on('click', '#btnRedistCancelar', function() { DistribuirGuiaAlCrear.cancelar(); });
+$(document).on('input', '.stock-redistribuir', function() { DistribuirGuiaAlCrear.actualizarSuma(); });
+
+function aplicarModoSinGuiaManual(activar) {
+    const $nota = $('#notaSinGuiaManual');
+    const $tbody = $('#tablaTallasManual tbody');
+    const $btnAgregar = $('#btnAgregarTallaManual');
+    if (activar) {
+        $nota.removeClass('d-none');
+        // Consolidar stock si había filas manuales cargadas (soporta los
+        // dos formatos: name="stock[]" y name="stock_<talla>")
+        let stockTotal = 0;
+        $tbody.find('input[name="stock[]"]').each(function() {
+            stockTotal += parseInt($(this).val() || 0, 10);
+        });
+        if (stockTotal === 0) {
+            $tbody.find('input[name^="stock_"]').each(function() {
+                stockTotal += parseInt($(this).val() || 0, 10);
+            });
+        }
+        $tbody.data('originalHtml', $tbody.html());
+        // El backend manual lee talla[] / stock[] / sku[]; mantenemos ese
+        // naming para no romper el parseo.
+        $tbody.html(`
+            <tr class="modo-sin-guia-row" style="background:#fff9e6;">
+                <td>
+                    <input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="00" readonly>
+                    <small class="text-muted d-block" style="font-size:.65rem;">talla única CL</small>
+                </td>
+                <td>
+                    <input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center" value="${stockTotal || 0}" min="0" required>
+                </td>
+                <td>
+                    <input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly value="" placeholder="Se generará...">
+                </td>
+                <td><small class="text-muted"><i class="bi bi-dash"></i></small></td>
+            </tr>
+        `);
+        $btnAgregar.prop('disabled', true).attr('title', 'Modo "Sin guía": solo talla única 00');
+        if (!$('#formCrearProductoManual input[name="sin_guia"]').length) {
+            $('#formCrearProductoManual').append('<input type="hidden" name="sin_guia" value="1">');
+        }
+        // Actualizar resumen si existe la función.
+        if (typeof actualizarResumenTallasManual === 'function') {
+            actualizarResumenTallasManual();
+        }
+    } else {
+        $nota.addClass('d-none');
+        const original = $tbody.data('originalHtml');
+        if (original) {
+            $tbody.html(original);
+            $tbody.removeData('originalHtml');
+        }
+        $btnAgregar.prop('disabled', false).attr('title', '');
+        $('#formCrearProductoManual input[name="sin_guia"]').remove();
+        if (typeof actualizarResumenTallasManual === 'function') {
+            actualizarResumenTallasManual();
+        }
+    }
+}
+
 $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
     e.preventDefault();
     
@@ -7034,16 +7688,43 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
         }
     });
 
-    // Validar que cada variante tenga guía de talla seleccionada
-    $('.select-guia-talla').each(function() {
-        if (!$(this).val()) {
+    // En modo "Sin guía" no pedimos selectores de equivalencia por fila.
+    const modoSinGuia = $('#selectGuiaTalla').val() === 'SIN_GUIA';
+    const modoRedistribuir = $('#tablaTallasCrearProducto').data('modo-redistribuir') === true;
+
+    // Validar que cada variante tenga guía de talla seleccionada (no aplica
+    // en modo "Sin guía" ni en modo redistribuir donde el selector per-row
+    // se reemplazó por inputs numéricos).
+    if (!modoSinGuia && !modoRedistribuir) {
+        $('.select-guia-talla').each(function() {
+            if (!$(this).val()) {
+                valido = false;
+                mensajes.push('Debes seleccionar una Guía de Talla para cada variante.');
+                $(this).addClass('is-invalid');
+            } else {
+                $(this).removeClass('is-invalid');
+            }
+        });
+    }
+
+    // En modo "redistribuir desde consolidado" validamos que la suma de
+    // stocks por talla iguale exactamente el stock consolidado original.
+    if (modoRedistribuir) {
+        const totalConsolidado = parseInt($('#tablaTallasCrearProducto').data('consolidado-stock') || 0, 10);
+        let sumaDistribuida = 0;
+        $('.stock-redistribuir').each(function() {
+            sumaDistribuida += parseInt($(this).val()) || 0;
+        });
+        if (sumaDistribuida !== totalConsolidado) {
             valido = false;
-            mensajes.push('Debes seleccionar una Guía de Talla para cada variante.');
-            $(this).addClass('is-invalid');
-        } else {
-            $(this).removeClass('is-invalid');
+            mensajes.push(`La suma distribuida (${sumaDistribuida}) debe igualar al total consolidado (${totalConsolidado}). Ajusta las cantidades por talla.`);
         }
-    });
+        if (sumaDistribuida === 0) {
+            valido = false;
+            mensajes.push('Debes asignar stock a al menos una talla.');
+        }
+    }
+
 
     if (!valido) {
         Swal.fire({
@@ -7065,11 +7746,16 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
 
         // --- ENVÍO AJAX ---
         const form = $('#formCrearProductoDesdeRecepcion');
-        const formData = form.serialize();
+        // En modo "Sin guía" (talla única 00) serialize incluye guia_talla=SIN_GUIA,
+        // que para el backend debe ser vacío (producto sin guía).
+        let formData = form.serializeArray();
+        if ($('#selectGuiaTalla').val() === 'SIN_GUIA') {
+            formData = formData.map(f => f.name === 'guia_talla' ? { name: 'guia_talla', value: '' } : f);
+        }
         $.ajax({
             url: '/app/crear_producto_desde_recepcion/',
             type: 'POST',
-            data: formData,
+            data: $.param(formData),
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function(res) {
                 if (res.success) {
@@ -7892,9 +8578,11 @@ function cargarGuiasTallaManual(marcaId) {
     console.log('🔄 Cargando guías de talla para marca:', marcaId);
     $.get(`/app/guias_talla/?marca=${marcaId}`, function(data) {
         console.log('✅ Guías de talla cargadas:', data);
-        // Cargar en el select principal de guía de talla
+        // Cargar en el select principal de guía de talla + opción "Sin guía"
         const selectPrincipal = $('#selectGuiaTallaManual');
-        selectPrincipal.empty().append('<option value="">-- Seleccionar guía --</option>');
+        selectPrincipal.empty()
+            .append('<option value="">-- Seleccionar guía --</option>')
+            .append('<option value="SIN_GUIA">⚡ Sin guía (talla única 00 — rápido)</option>');
         data.forEach(g => {
             selectPrincipal.append(`<option value="${g.id}">${g.text}</option>`);
         });
@@ -7922,7 +8610,10 @@ $('#selectGuiaTallaManual').on('change', function() {
     const guiaId = $(this).val();
     const tipoTalla = $('#modalCrearProductoManual select[name="tipo_talla"]').val();
 
-    if (!guiaId) {
+    // Toggle visual del modo "Sin guía" (talla única 00) en manual
+    aplicarModoSinGuiaManual(guiaId === 'SIN_GUIA');
+
+    if (!guiaId || guiaId === 'SIN_GUIA') {
         // Limpiar info de equivalencias
         $('#tablaTallasManual tbody tr').each(function() {
             $(this).find('.detalle-guia').remove();
@@ -8257,38 +8948,31 @@ function mostrarPanelProductoExistenteManual(producto, tallasExistentes) {
     const stockTotal = tallasExistentes.reduce((sum, t) => sum + (t.stock || 0), 0);
     
     const html = `
-        <div id="panelProductoExistenteManual" class="mb-3" data-precio="${producto.precioventa || 0}"
-             style="border-radius:12px;border:2px solid #e65100;background:linear-gradient(135deg,#fff3e0,#ffe0b2);padding:14px 16px;box-shadow:0 2px 8px rgba(230,81,0,0.15);">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                    <span style="font-size:.88rem;font-weight:700;color:#e65100;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Este producto YA EXISTE en esta sucursal
-                    </span>
-                </div>
-                <div>
-                    <button type="button" class="btn btn-sm btn-warning me-1" id="btnCopiarDatosProducto" title="Copiar precios del producto existente">
-                        <i class="bi bi-clipboard-check me-1"></i>Usar precios
+        <div id="panelProductoExistenteManual" class="mb-2" data-precio="${producto.precioventa || 0}"
+             style="border-radius:8px;border-left:3px solid #e65100;background:#fff3e0;padding:6px 10px;">
+            <div class="d-flex align-items-center flex-wrap gap-2" style="font-size:.75rem;line-height:1.2;">
+                <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                <strong style="color:#e65100;">YA EXISTE</strong>
+                <span class="text-muted">·</span>
+                <span class="badge bg-dark" style="font-size:.62rem;">${producto.marca || ''}</span>
+                <span class="badge" style="background:#e1f5fe;color:#0277bd;font-size:.62rem;">${producto.color || ''}</span>
+                <span class="text-muted" style="font-size:.7rem;">
+                    · $${producto.precioventa?.toLocaleString('es-CL') || 0}
+                    · stock ${stockTotal} en ${tallasExistentes.length} tallas
+                </span>
+                <div class="ms-auto d-flex gap-1">
+                    <button type="button" class="btn btn-warning btn-sm py-0 px-2" id="btnCopiarDatosProducto" style="font-size:.7rem;" title="Copiar precios/atributos del producto existente">
+                        <i class="bi bi-clipboard-check"></i> Usar precios
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-warning" id="btnVerOtrasCoincidencias" title="Ver otras variantes del artículo">
-                        <i class="bi bi-search"></i>
-                    </button>
+                    <a class="btn btn-outline-warning btn-sm py-0 px-2" data-bs-toggle="collapse" href="#detalleProductoExistenteManual" style="font-size:.7rem;">
+                        <i class="bi bi-chevron-down"></i>
+                    </a>
                 </div>
             </div>
-            <div class="d-flex flex-wrap gap-2 align-items-center" style="font-size:.82rem;">
-                <span class="badge bg-dark">${producto.marca}</span>
-                <span class="badge bg-info text-dark">${producto.color}</span>
-                <span class="text-muted">|</span>
-                <span>Precio: <strong>$${producto.precioventa?.toLocaleString('es-CL') || 0}</strong></span>
-                <span class="text-muted">|</span>
-                <span>Stock actual: <strong>${stockTotal}</strong></span>
-                <span class="text-muted">|</span>
-                <span>${tallasExistentes.length} tallas</span>
-            </div>
-            <div class="mt-2 p-2" style="background:rgba(255,255,255,0.7);border-radius:8px;border:1px solid #ffcc80;">
-                <small style="font-size:.72rem;color:#4e342e;">
-                    <i class="bi bi-info-circle me-1"></i><strong>Al guardar</strong>, se actualizarán precios y se agregarán tallas/stock al producto existente.
-                    Para crear uno nuevo, modifica el artículo o atributos.
-                    <br><i class="bi bi-lightbulb me-1 mt-1"></i>Ingresa la cantidad a agregar en cada talla. Usa <kbd>Enter</kbd> para saltar al siguiente.
+            <div class="collapse mt-1" id="detalleProductoExistenteManual">
+                <small class="text-muted d-block" style="font-size:.68rem;">
+                    <i class="bi bi-info-circle me-1"></i>Al guardar se <strong>actualizarán precios</strong> y <strong>se sumará stock</strong> a tallas existentes (se agregan las nuevas).
+                    Para crear producto distinto, cambia artículo o atributos.
                 </small>
             </div>
         </div>
@@ -9525,7 +10209,9 @@ $('#formCrearProductoManual').on('submit', function(e) {
             mensajes.push('Al menos una talla debe tener stock mayor a 0.');
         }
         
-        if (tallaSinSku) {
+        // En modo "Sin guía" el SKU se genera automáticamente en el backend.
+        const modoSinGuiaPre = $('#selectGuiaTallaManual').val() === 'SIN_GUIA';
+        if (tallaSinSku && !modoSinGuiaPre) {
             valido = false;
             mensajes.push('Hay tallas sin SKU asignado. Espera a que se generen.');
         }
@@ -9533,6 +10219,7 @@ $('#formCrearProductoManual').on('submit', function(e) {
     
     // ✅ Validar guía de tallas - SOLO es obligatoria si hay stock > 0
     const guiaId = $('#selectGuiaTallaManual').val();
+    const modoSinGuiaManual = guiaId === 'SIN_GUIA';
     let advertenciasGuia = [];
     
     // Calcular si hay stock en alguna talla
@@ -9545,10 +10232,11 @@ $('#formCrearProductoManual').on('submit', function(e) {
         }
     });
     
-    // La guía de talla es obligatoria SOLO si hay productos con stock > 0
-    if (tieneStockPositivo && !guiaId) {
+    // La guía de talla es obligatoria SOLO si hay productos con stock > 0,
+    // excepto en modo "Sin guía" (SIN_GUIA) que siempre se permite.
+    if (tieneStockPositivo && !guiaId && !modoSinGuiaManual) {
         valido = false;
-        mensajes.push('Debes seleccionar una Guía de Talla cuando hay productos con stock.');
+        mensajes.push('Debes seleccionar una Guía de Talla cuando hay productos con stock (o usa "Sin guía" para talla única 00).');
         $('#selectGuiaTallaManual').addClass('is-invalid');
         $('#selectGuiaTallaManual').closest('.input-group').find('.select2-container').addClass('border-danger');
     } else {
@@ -9556,7 +10244,7 @@ $('#formCrearProductoManual').on('submit', function(e) {
         $('#selectGuiaTallaManual').closest('.input-group').find('.select2-container').removeClass('border-danger');
     }
     
-    if (guiaId) {
+    if (guiaId && !modoSinGuiaManual) {
         // Verificar si hay tallas no encontradas en la guía
         const tallasNoEncontradas = $('#tablaTallasManual .detalle-guia').filter(function() {
             return $(this).text().includes('no encontrada') || $(this).text().includes('no estándar');
@@ -9645,7 +10333,12 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
     
     console.log('🔍 Valor final DTE hidden:', $('#hiddenDteManual').val());
     
-    const formData = $('#formCrearProductoManual').serialize();
+    // En modo "Sin guía" normalizamos a guia_talla vacío antes de enviar.
+    let formDataArr = $('#formCrearProductoManual').serializeArray();
+    if ($('#selectGuiaTallaManual').val() === 'SIN_GUIA') {
+        formDataArr = formDataArr.map(f => f.name === 'guia_talla' ? { name: 'guia_talla', value: '' } : f);
+    }
+    const formData = $.param(formDataArr);
     
     // ✅ DEBUG: Verificar cuántas tallas se están enviando
     const tallasEnviadas = $('#formCrearProductoManual').find('input[name="talla[]"]').map(function() {
@@ -10513,6 +11206,9 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // Función para mostrar el modal con las tallas
     function mostrarModalTallas(producto, tallas) {
         console.log('📋 Mostrando tallas para:', producto.articulo, 'Total tallas:', tallas.length);
+        // Cache global para que otros modales (ej. Reasignar Guía) puedan
+        // acceder al producto actual sin re-consultar el backend.
+        window._ultimoProductoTallas = producto;
         
         // Información del producto
         const infoProducto = `
@@ -10666,6 +11362,188 @@ $('#btnConfirmarActualizacion').on('click', function() {
         $(this).toggleClass('talla-seleccionada');
     });
     
+    // =====================================================================
+    // REASIGNAR / ASIGNAR GUÍA DE TALLAS a producto existente
+    // =====================================================================
+    const ReasignGuia = {
+        productoInfo: null,
+
+        abrirDesdeVerTallas: function() {
+            // Obtenemos los datos del producto actualmente mostrado en
+            // modalVerTallasProducto. Guardamos la última respuesta en un
+            // cache al cargar las tallas.
+            const info = window._ultimoProductoTallas;
+            if (!info) {
+                showErrorAlert('No se pudo abrir', 'Primero abre las tallas del producto.');
+                return;
+            }
+            this.productoInfo = info;
+            $('#reasignGuiaProductoId').val(info.id);
+            $('#reasignGuiaMarcaId').val(info.marca_id || '');
+            $('#reasignGuiaProductoNombre').text(info.articulo || '—');
+            $('#reasignGuiaProductoAtributos').text(
+                [info.marca, info.color, info.genero].filter(Boolean).join(' · ')
+            );
+            const stock00 = parseInt(info.stock_talla_00 || 0, 10);
+            $('#reasignGuiaStock00').val(stock00);
+            $('#reasignGuiaStock00Label').text(stock00.toLocaleString());
+            $('#reasignGuiaActual').text(info.guia_talla_nombre || '— sin guía —');
+
+            // Estado inicial
+            $('#reasignGuiaMigrarCheck').prop('checked', false);
+            $('#reasignGuiaDistribucionPanel').addClass('d-none');
+            $('#reasignGuiaNoMigrar').removeClass('d-none');
+            $('#tablaReasignDistribucion tbody').empty();
+            this.cargarGuiasDisponibles();
+
+            mostrarModal('#modalReasignarGuia');
+        },
+
+        cargarGuiasDisponibles: function() {
+            const marcaId = $('#reasignGuiaMarcaId').val();
+            const url = marcaId ? `/app/guias_talla/?marca=${marcaId}` : `/app/guias_talla/`;
+            const $sel = $('#reasignGuiaSelect');
+            $sel.empty().append('<option value="">— Quitar guía (volver a sin guía) —</option>');
+            $.getJSON(url, (data) => {
+                (data || []).forEach(g => {
+                    $sel.append(`<option value="${g.id}">${g.text || g.nombre}</option>`);
+                });
+                // Pre-seleccionar la guía actual si existe.
+                if (this.productoInfo && this.productoInfo.guia_talla_id) {
+                    $sel.val(this.productoInfo.guia_talla_id);
+                    this.cargarTallasDeGuia(this.productoInfo.guia_talla_id);
+                }
+            });
+        },
+
+        cargarTallasDeGuia: function(guiaId) {
+            const $tbody = $('#tablaReasignDistribucion tbody');
+            $tbody.empty();
+            if (!guiaId) return;
+            $.getJSON(`/app/guia_talla_detalle/${guiaId}/`, (res) => {
+                (res.tallas || []).forEach(t => {
+                    const talla = t.cl || t.us || t.eu || t.uk || t.br || t.cm || '';
+                    if (!talla) return;
+                    $tbody.append(`
+                        <tr>
+                            <td><strong>${talla}</strong></td>
+                            <td><input type="number" min="0" class="form-control form-control-sm text-end reasign-stock" data-talla="${talla}" value="0"></td>
+                        </tr>
+                    `);
+                });
+                this.actualizarSuma();
+            });
+        },
+
+        actualizarSuma: function() {
+            const total = parseInt($('#reasignGuiaStock00').val()) || 0;
+            let suma = 0;
+            $('.reasign-stock').each(function() {
+                suma += parseInt($(this).val()) || 0;
+            });
+            const $b = $('#reasignGuiaBadgeSuma');
+            $b.text(`${suma.toLocaleString()} / ${total.toLocaleString()}`);
+            $b.removeClass('bg-success bg-danger bg-warning text-dark text-white');
+            if (suma === 0) $b.addClass('bg-warning text-dark');
+            else if (suma > total) $b.addClass('bg-danger text-white');
+            else $b.addClass('bg-success text-white');
+        },
+
+        equitativo: function() {
+            const total = parseInt($('#reasignGuiaStock00').val()) || 0;
+            const $rows = $('.reasign-stock');
+            const n = $rows.length;
+            if (!n || total <= 0) return;
+            const base = Math.floor(total / n);
+            let resto = total - base * n;
+            $rows.each(function(idx) {
+                const extra = idx < resto ? 1 : 0;
+                $(this).val(base + extra);
+            });
+            this.actualizarSuma();
+        },
+
+        aplicar: function() {
+            const productoId = $('#reasignGuiaProductoId').val();
+            const guiaId = $('#reasignGuiaSelect').val() || null;
+            const migrar = $('#reasignGuiaMigrarCheck').is(':checked');
+            const distribucion = [];
+            if (migrar) {
+                $('.reasign-stock').each(function() {
+                    const talla = $(this).data('talla');
+                    const stock = parseInt($(this).val()) || 0;
+                    if (stock > 0) distribucion.push({ talla, stock });
+                });
+            }
+
+            $.ajax({
+                url: '/app/api/asignar-guia-talla-producto/',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({
+                    producto_id: parseInt(productoId),
+                    guia_talla_id: guiaId || null,
+                    migrar_desde_00: migrar,
+                    distribucion: distribucion
+                }),
+                success: (resp) => {
+                    if (resp.success) {
+                        cerrarModal('modalReasignarGuia');
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Guía aplicada',
+                            html: `Se asignó <strong>${resp.guia_talla_nombre || 'sin guía'}</strong>.<br>` +
+                                  `Tallas creadas: <strong>${(resp.tallas_destino || []).length}</strong>.<br>` +
+                                  (resp.migrado ? `Movimientos registrados: <strong>${resp.movimientos_creados}</strong>` : 'Sin migración de stock.'),
+                            timer: 3000
+                        });
+                        // Recargar modal de tallas si sigue abierto
+                        if (productoId) mostrarTallasProducto(productoId);
+                    } else {
+                        Swal.fire('Error', resp.error || 'No se pudo aplicar', 'error');
+                    }
+                },
+                error: (xhr) => {
+                    Swal.fire('Error', xhr.responseJSON?.error || 'Error inesperado', 'error');
+                }
+            });
+        }
+    };
+
+    // Capturar producto cargado en modalVerTallasProducto para usar en el
+    // modal de reasignación.
+    $(document).on('click', '#btnAbrirReasignarGuia', function() {
+        ReasignGuia.abrirDesdeVerTallas();
+    });
+
+    $('#reasignGuiaSelect').on('change', function() {
+        const guiaId = $(this).val();
+        if (guiaId) {
+            ReasignGuia.cargarTallasDeGuia(guiaId);
+        } else {
+            $('#tablaReasignDistribucion tbody').empty();
+        }
+        ReasignGuia.actualizarSuma();
+    });
+
+    $('#reasignGuiaMigrarCheck').on('change', function() {
+        const on = $(this).is(':checked');
+        const stock00 = parseInt($('#reasignGuiaStock00').val()) || 0;
+        if (on && stock00 <= 0) {
+            Swal.fire('Sin stock en "00"', 'No hay stock en la talla "00" para migrar. La nueva guía se aplicará sin migrar.', 'info');
+            $(this).prop('checked', false);
+            return;
+        }
+        $('#reasignGuiaDistribucionPanel').toggleClass('d-none', !on);
+        $('#reasignGuiaNoMigrar').toggleClass('d-none', on);
+    });
+
+    $(document).on('input', '.reasign-stock', function() { ReasignGuia.actualizarSuma(); });
+    $('#btnReasignEquitativo').on('click', function() { ReasignGuia.equitativo(); });
+    $('#btnReasignLimpiar').on('click', function() { $('.reasign-stock').val(0); ReasignGuia.actualizarSuma(); });
+    $('#btnAplicarReasignGuia').on('click', function() { ReasignGuia.aplicar(); });
+
     // Evento para copiar tallas seleccionadas
     $('#btnCopiarTallasSeleccionadas').on('click', function() {
         const tallasSeleccionadas = $('#tablaTallasProducto tbody tr.talla-seleccionada');

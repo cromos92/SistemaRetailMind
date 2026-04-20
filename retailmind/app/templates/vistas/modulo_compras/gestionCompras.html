@@ -4,6 +4,8 @@
 <!-- ========== App Menu ========== -->
 {% include '../../layout/menu.html' %}
 
+{{ sucursales_disponibles|json_script:"data-sucursales-disponibles" }}
+
 <style>
 /* ==================== ESTILOS MÓDULO GESTIÓN COMPRAS ==================== */
 /* Ver guía completa en: templates/vistas/ESTILOS_MODULOS.md */
@@ -1198,22 +1200,30 @@
                     <div class="row align-items-center g-3">
                         <div class="col-lg-5 col-md-6">
                             <div class="input-group">
-                                <span class="input-group-text bg-white border-end-0" 
-                                      data-bs-toggle="tooltip" 
+                                <span class="input-group-text bg-white border-end-0"
+                                      data-bs-toggle="tooltip"
                                       data-bs-placement="top"
                                       data-bs-html="true"
                                       title="<strong>🔍 Busca en:</strong><br>• Proveedor, Responsable<br>• Nombre/Temporada compra<br>• Productos: nombre, marca<br>• Color, género, talla">
                                     <i class="bi bi-search text-muted"></i>
                                 </span>
-                                <input type="text" class="form-control border-start-0 ps-0" id="searchCompras" 
+                                <input type="text" class="form-control border-start-0 ps-0" id="searchCompras"
                                        placeholder="Buscar por proveedor, producto, marca, color, talla...">
                                 <button class="btn btn-primary" type="button" id="btnSearchCompras">
                                     Buscar
                                 </button>
                             </div>
-                            <small class="text-muted mt-1 d-block">
-                                <i class="bi bi-lightbulb me-1"></i>Tip: busca productos por nombre, marca, color o talla
-                            </small>
+                            <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                                <small class="text-muted">
+                                    <i class="bi bi-lightbulb me-1"></i>Tip: busca productos por nombre, marca, color o talla
+                                </small>
+                                <div class="input-group input-group-sm ms-auto" style="max-width: 260px;" title="Filtra compras con mercadería recepcionada en la sucursal elegida">
+                                    <span class="input-group-text bg-white" style="font-size: .75rem;"><i class="bi bi-geo-alt-fill text-info"></i></span>
+                                    <select class="form-select" id="filtroSucursalCompras" style="font-size: .8rem;">
+                                        <option value="">Todas las sucursales</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-lg-7 col-md-6">
                             <div class="d-flex justify-content-md-end align-items-center gap-2 flex-wrap">
@@ -1539,6 +1549,7 @@
                                     <ol class="mb-0 small">
                                         <li><strong>Descarga el formato:</strong> Usa el botón "Formato CSV" en la página principal</li>
                                         <li><strong>Completa los datos:</strong> Asegúrate de llenar todas las columnas obligatorias</li>
+                                        <li><strong>Sucursal (opcional):</strong> Si indicas una sucursal, se usará como destino sugerido al recepcionar. Puedes dejarla vacía.</li>
                                         <li><strong>Arrastra o selecciona:</strong> Puedes arrastrar el archivo o hacer clic para seleccionar</li>
                                         <li><strong>Revisa la vista previa:</strong> Verifica los datos antes de importar</li>
                                         <li><strong>Importa:</strong> Haz clic en "Importar Datos" para procesar</li>
@@ -1614,6 +1625,7 @@
                                                     <th width="8%">Precio</th>
                                                     <th width="5%">Total</th>
                                                     <th style="min-width: 200px;">Tallas (stock por talla)</th>
+                                                    <th>Sucursal <small class="text-muted">(opcional)</small></th>
                                                 </tr>
                                             </thead>
                                             <tbody class="text-center"></tbody>
@@ -1748,31 +1760,32 @@
         
         /* ========== MODAL RECEPCIÓN - ESTILOS COMPACTOS ========== */
         #modalRecepcionProductos .modal-content { border-radius: 10px; }
-        #modalRecepcionProductos .modal-header { min-height: 0; }
-        #modalRecepcionProductos .modal-body { padding: 8px !important; }
-        #modalRecepcionProductos .modal-footer { padding: 6px 12px !important; }
+        #modalRecepcionProductos .modal-header { min-height: 0; padding: 6px 12px !important; }
+        #modalRecepcionProductos .modal-body { padding: 6px !important; }
+        #modalRecepcionProductos .modal-footer { padding: 4px 10px !important; }
 
-        /* --- Guía de pasos --- */
+        /* --- Guía de pasos compacta / colapsable --- */
         .recepcion-guia-pasos {
             background: linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 100%);
             border: 1px solid #c5cae9;
-            border-radius: 10px;
-            padding: 10px 14px;
-            margin-bottom: 8px;
+            border-radius: 8px;
+            padding: 4px 10px;
+            margin-bottom: 6px;
+            font-size: 0.72rem;
         }
         .recepcion-guia-pasos .paso {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 0.78rem;
+            gap: 6px;
+            font-size: 0.72rem;
             color: #37474f;
         }
         .recepcion-guia-pasos .paso .paso-num {
-            width: 22px; height: 22px;
+            width: 18px; height: 18px;
             border-radius: 50%;
             background: #405189;
             color: white;
-            font-size: 0.68rem;
+            font-size: 0.62rem;
             font-weight: 700;
             display: flex;
             align-items: center;
@@ -1783,10 +1796,26 @@
             background: #78909c;
         }
         .recepcion-guia-pasos .paso-separador {
-            width: 20px;
+            width: 14px;
             text-align: center;
             color: #90a4ae;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
+        }
+        /* Guía colapsada: queda como strip delgado con toggle */
+        .recepcion-guia-pasos.collapsed {
+            padding: 4px 10px;
+        }
+        .recepcion-guia-pasos.collapsed .guia-content { display: none; }
+        .recepcion-guia-pasos:not(.collapsed) .guia-summary { display: none; }
+        .recepcion-guia-pasos .guia-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .recepcion-guia-pasos .btn-toggle-guia {
+            background: transparent; border: none; color: #405189;
+            font-size: 0.68rem; padding: 0; cursor: pointer;
         }
 
         /* --- Grupo producto: campos de aplicar masivo --- */
@@ -1842,24 +1871,44 @@
             margin-top: 1px;
         }
 
-        .recepcion-toolbar { font-size: 0.8rem; }
+        .recepcion-toolbar { font-size: 0.76rem; }
         .recepcion-toolbar .form-control,
         .recepcion-toolbar .form-select,
-        .recepcion-toolbar .btn { font-size: 0.78rem; }
-        
-        .acciones-masivas-bar { 
-            border-radius: 6px; 
+        .recepcion-toolbar .btn { font-size: 0.74rem; }
+
+        .acciones-masivas-bar {
+            border-radius: 6px;
             background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);
+            padding: 4px 6px !important;
         }
+        .acciones-masivas-bar .btn { padding: 2px 8px !important; font-size: 0.72rem; }
+        .acciones-masivas-bar .form-control,
+        .acciones-masivas-bar .form-select { font-size: 0.72rem; padding: 2px 6px !important; }
 
         #modalRecepcionProductos .table-sm th,
-        #modalRecepcionProductos .table-sm td { padding: 4px 6px; }
+        #modalRecepcionProductos .table-sm td { padding: 3px 5px; }
+
+        /* Columnas ocultas por defecto para compactar la tabla:
+           - Descripción: redundante con el nombre del artículo
+           - Género: poco informativo en la grilla
+           Se mantienen visibles solo en pantallas extra anchas (>1600px). */
+        #tablaRecepcionProductos .recep-col-desc,
+        #tablaRecepcionProductos .recep-col-genero { display: none; }
+        @media (min-width: 1600px) {
+            #tablaRecepcionProductos .recep-col-desc,
+            #tablaRecepcionProductos .recep-col-genero { display: table-cell; }
+        }
+        /* Color: solo en pantallas anchas (>=1280px) */
+        #tablaRecepcionProductos .recep-col-color { display: none; }
+        @media (min-width: 1280px) {
+            #tablaRecepcionProductos .recep-col-color { display: table-cell; }
+        }
 
         #modalRecepcionProductos input[type="number"].cantidad-recepcion,
         #modalRecepcionProductos input[type="number"].recepcionado-input {
-            width: 58px; text-align: center; border-radius: 6px;
-            border: 1px solid #dee2e6; padding: 3px 4px; font-weight: 600;
-            font-size: 0.82rem; transition: all 0.2s;
+            width: 54px; text-align: center; border-radius: 6px;
+            border: 1px solid #dee2e6; padding: 2px 4px; font-weight: 600;
+            font-size: 0.78rem; transition: all 0.2s;
         }
         #modalRecepcionProductos input[type="number"].cantidad-recepcion:focus,
         #modalRecepcionProductos input[type="number"].recepcionado-input:focus {
@@ -1885,8 +1934,23 @@
         }
         .btn-check:checked + .btn-vista i { color: white !important; }
         
-        #modalRecepcionProductos .producto-grupo td { padding: 5px 6px; font-size: 0.8rem; }
-        #modalRecepcionProductos .talla-detalle td { padding: 3px 6px; font-size: 0.78rem; }
+        #modalRecepcionProductos .producto-grupo td { padding: 4px 5px; font-size: 0.76rem; }
+        #modalRecepcionProductos .talla-detalle td { padding: 2px 5px; font-size: 0.74rem; }
+        #modalRecepcionProductos .producto-grupo .badge,
+        #modalRecepcionProductos .talla-detalle .badge { font-size: 0.6rem; }
+
+        /* Modo asignación masiva de sucursal: checkboxes por fila */
+        #tablaRecepcionProductos .col-sucursal-sel { display: none; }
+        #modalRecepcionProductos.modo-sucursal-sel #tablaRecepcionProductos .col-sucursal-sel { display: table-cell; }
+        #modalRecepcionProductos.modo-sucursal-sel #tablaRecepcionProductos tbody tr.row-sucursal-sel {
+            background-color: rgba(13, 202, 240, 0.18) !important;
+        }
+        #modalRecepcionProductos.modo-sucursal-sel .acciones-masivas-bar {
+            background: linear-gradient(135deg, #0a6ca8 0%, #0c7cbf 100%);
+        }
+        #modalRecepcionProductos.modo-sucursal-sel #btnToggleSucursalSeleccion {
+            background: #ffc107 !important; color: #000 !important; border-color: #ffc107 !important;
+        }
         
         #modalRecepcionProductos .input-cantidad-wrapper { position: relative; display: inline-flex; align-items: center; }
         #modalRecepcionProductos .btn-cantidad-rapida { 
@@ -1909,18 +1973,16 @@
                 <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
                     
                     <!-- Header compacto -->
-                    <div class="modal-header border-0 text-white py-2 px-3" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
+                    <div class="modal-header border-0 text-white py-1 px-3" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
                         <div class="d-flex align-items-center gap-2 w-100">
-                            <i class="bi bi-box-seam-fill fs-5 text-white"></i>
-                            <div class="flex-grow-1">
-                                <h6 class="modal-title mb-0 fw-bold text-white" id="modalRecepcionLabel">Recepción de Productos</h6>
-                                <small class="text-white opacity-75" style="font-size: 0.7rem;" id="recepcionSubtitulo">Gestiona la entrada de mercadería</small>
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge rounded-pill px-2 py-1" style="background: rgba(255,255,255,0.15); font-size: 0.75rem;">
+                            <i class="bi bi-box-seam-fill text-white" style="font-size:1rem;"></i>
+                            <h6 class="modal-title mb-0 fw-bold text-white" id="modalRecepcionLabel" style="font-size:0.88rem;">Recepción de Productos</h6>
+                            <small class="text-white opacity-75 d-none d-md-inline" style="font-size: 0.68rem;" id="recepcionSubtitulo">Gestiona la entrada de mercadería</small>
+                            <div class="ms-auto d-flex align-items-center gap-1">
+                                <span class="badge rounded-pill px-2" style="background: rgba(255,255,255,0.15); font-size: 0.68rem;">
                                     <i class="bi bi-hourglass-split me-1"></i><span id="headerPendientes">0</span> pend.
                                 </span>
-                                <span class="badge rounded-pill px-2 py-1" style="background: rgba(255,255,255,0.25); font-size: 0.75rem;">
+                                <span class="badge rounded-pill px-2" style="background: rgba(255,255,255,0.25); font-size: 0.68rem;">
                                     <i class="bi bi-check-circle me-1"></i><span id="headerRecepcionados">0</span> recep.
                                 </span>
                             </div>
@@ -1931,56 +1993,66 @@
                     <div class="modal-body p-2" style="background: #f8f9fa;">
                         <input type="hidden" id="globalIDCompraRecepcion">
 
-                        <!-- Guía de pasos para el usuario -->
-                        <div class="recepcion-guia-pasos" id="guiaPasosRecepcion">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <div class="paso">
-                                        <span class="paso-num">1</span>
-                                        <span><strong>Expandir</strong> un producto haciendo clic en su fila</span>
-                                    </div>
-                                    <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
-                                    <div class="paso">
-                                        <span class="paso-num">2</span>
-                                        <span>Ingresar la <strong>cantidad recibida</strong> en cada talla</span>
-                                    </div>
-                                    <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
-                                    <div class="paso paso-opcional">
-                                        <span class="paso-num">3</span>
-                                        <span>Asociar <strong>factura</strong> <em>(opcional)</em></span>
-                                    </div>
-                                    <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
-                                    <div class="paso">
-                                        <span class="paso-num">4</span>
-                                        <span>Clic en <strong>Guardar Recepción</strong></span>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn btn-sm btn-link text-muted p-0 ms-2" id="btnOcultarGuia" title="Ocultar guía">
-                                    <i class="bi bi-x-lg"></i>
+                        <!-- Guía de pasos (colapsada por defecto) -->
+                        <div class="recepcion-guia-pasos collapsed" id="guiaPasosRecepcion">
+                            <!-- Versión compacta (visible cuando está colapsada) -->
+                            <div class="guia-summary">
+                                <span class="text-muted" style="font-size:0.7rem;">
+                                    <i class="bi bi-info-circle text-primary me-1"></i>
+                                    Expandir producto → cantidad por talla → factura (opcional) → Guardar
+                                </span>
+                                <button type="button" class="btn-toggle-guia" id="btnMostrarGuia" title="Ver guía detallada">
+                                    <i class="bi bi-question-circle"></i> ¿Cómo funciona?
                                 </button>
                             </div>
-                            <div class="mt-1" style="font-size:0.7rem;color:#607d8b;">
-                                <i class="bi bi-lightbulb text-warning me-1"></i>
-                                <strong>Tip:</strong> Usa los botones <em>"Todo"</em> o <em>"50%"</em> en la barra de acciones para rellenar todas las cantidades de golpe. 
-                                También puedes ingresar cantidad y factura a nivel de producto y hacer clic en <em>"Aplicar"</em>.
+                            <!-- Versión expandida -->
+                            <div class="guia-content">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <div class="paso">
+                                            <span class="paso-num">1</span>
+                                            <span><strong>Expandir</strong> un producto haciendo clic en su fila</span>
+                                        </div>
+                                        <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
+                                        <div class="paso">
+                                            <span class="paso-num">2</span>
+                                            <span>Ingresar la <strong>cantidad recibida</strong> en cada talla</span>
+                                        </div>
+                                        <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
+                                        <div class="paso paso-opcional">
+                                            <span class="paso-num">3</span>
+                                            <span>Asociar <strong>factura</strong> <em>(opcional)</em></span>
+                                        </div>
+                                        <span class="paso-separador"><i class="bi bi-arrow-right"></i></span>
+                                        <div class="paso">
+                                            <span class="paso-num">4</span>
+                                            <span>Clic en <strong>Guardar Recepción</strong></span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn-toggle-guia ms-2" id="btnOcultarGuia" title="Ocultar guía">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-1" style="font-size:0.68rem;color:#607d8b;">
+                                    <i class="bi bi-lightbulb text-warning me-1"></i>
+                                    <strong>Tip:</strong> Usa <em>"Todo"</em> o <em>"50%"</em> para rellenar todas las cantidades. A nivel de producto puedes ingresar cantidad/factura y hacer clic en <em>"Aplicar"</em>.
+                                </div>
                             </div>
                         </div>
 
                         <!-- Panel resumen DTEs del proveedor -->
-                        <div id="panelDtesRecepcion" class="mb-2" style="display:none;">
-                            <div class="card border-0" style="border-radius:10px;background:linear-gradient(135deg,#e8f5e9,#e3f2fd);box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-                                <div class="card-body py-2 px-3">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <span style="font-size:.78rem;font-weight:600;color:#405189;">
+                        <div id="panelDtesRecepcion" class="mb-1" style="display:none;">
+                            <div class="card border-0" style="border-radius:8px;background:linear-gradient(135deg,#e8f5e9,#e3f2fd);box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                                <div class="card-body py-1 px-2">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <span style="font-size:.72rem;font-weight:600;color:#405189;">
                                             <i class="bi bi-file-earmark-text me-1"></i>DTEs del proveedor
                                         </span>
-                                        <button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="collapse" data-bs-target="#listaDtesRecepcion" style="font-size:.72rem;">
+                                        <span style="font-size:.7rem;"><strong id="dtesRecepcionCount">0</strong> encontrados</span>
+                                        <span style="font-size:.7rem;">Total: <strong id="dtesRecepcionTotal">$0</strong></span>
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-auto" data-bs-toggle="collapse" data-bs-target="#listaDtesRecepcion" style="font-size:.68rem;">
                                             <i class="bi bi-chevron-down"></i> Ver detalle
                                         </button>
-                                    </div>
-                                    <div class="d-flex gap-3 mt-1" style="font-size:.75rem;">
-                                        <span><strong id="dtesRecepcionCount">0</strong> DTEs encontrados</span>
-                                        <span>Total: <strong id="dtesRecepcionTotal">$0</strong></span>
                                     </div>
                                     <div class="collapse mt-2" id="listaDtesRecepcion">
                                         <div class="table-responsive" style="max-height:150px;overflow-y:auto;">
@@ -2011,10 +2083,10 @@
                         </div>
                         
                         <!-- ========== TOOLBAR UNIFICADA ========== -->
-                        <div class="recepcion-toolbar mb-2">
+                        <div class="recepcion-toolbar mb-1">
                             <!-- Fila 1: Búsqueda + Vista + Filtro + Paginación -->
-                            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-                                <div class="input-group input-group-sm" style="max-width: 280px;">
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                <div class="input-group input-group-sm" style="max-width: 240px;">
                                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
                                     <input type="text" class="form-control border-start-0 ps-0" id="searchRecepcion" placeholder="Buscar producto, marca, talla...">
                                     <button class="btn btn-primary" type="button" id="btnSearchRecepcion"><i class="bi bi-search"></i></button>
@@ -2025,55 +2097,66 @@
                                     <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaDetallada" autocomplete="off">
                                     <label class="btn btn-outline-primary btn-vista" for="vistaDetallada" title="Vista detallada"><i class="bi bi-list-ul"></i></label>
                                 </div>
-                                <select class="form-select form-select-sm" id="filtroEstadoRecepcion" style="width: 140px;">
+                                <select class="form-select form-select-sm" id="filtroEstadoRecepcion" style="width: 120px;">
                                     <option value="">Todo</option>
                                     <option value="pendientes">Pendientes</option>
                                     <option value="parciales">Parciales</option>
                                     <option value="completos">Completos</option>
                                 </select>
                                 <div class="ms-auto d-flex align-items-center gap-2">
-                                    <span class="badge bg-primary rounded-pill" style="font-size: 0.7rem;">
+                                    <span class="badge bg-primary rounded-pill" style="font-size: 0.68rem;">
                                         <span id="totalProductosRecepcion">0</span> prod.
                                     </span>
                                     <div class="btn-group btn-group-sm">
                                         <button type="button" class="btn btn-outline-secondary py-0 px-1" id="btnPrevPage"><i class="bi bi-chevron-left"></i></button>
-                                        <span class="btn btn-light disabled py-0 px-2" id="pageInfo" style="font-size: 0.7rem;">Pág 1</span>
+                                        <span class="btn btn-light disabled py-0 px-2" id="pageInfo" style="font-size: 0.68rem;">Pág 1</span>
                                         <button type="button" class="btn btn-outline-secondary py-0 px-1" id="btnNextPage"><i class="bi bi-chevron-right"></i></button>
                                     </div>
                                 </div>
                             </div>
-                            <!-- Fila 2: Acciones rápidas -->
-                            <div class="acciones-masivas-bar p-2">
-                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <span class="text-white-50 me-1" style="font-size:0.7rem;white-space:nowrap;">Rellenar:</span>
-                                    <button type="button" class="btn btn-success btn-sm py-1" id="btnRecepcionarTodo" title="Rellenar todas las cantidades pendientes con el máximo">
-                                        <i class="bi bi-check-all me-1"></i>Todo (100%)
+                            <!-- Fila 2: Acciones rápidas (compactada) -->
+                            <div class="acciones-masivas-bar">
+                                <div class="d-flex align-items-center gap-1 flex-wrap">
+                                    <button type="button" class="btn btn-success" id="btnRecepcionarTodo" title="Rellenar todas las cantidades pendientes con el máximo">
+                                        <i class="bi bi-check-all me-1"></i>Todo
                                     </button>
-                                    <button type="button" class="btn btn-warning btn-sm py-1 text-dark" id="btnRecepcionarMitad" title="Rellenar con el 50% de las cantidades pendientes">
+                                    <button type="button" class="btn btn-warning text-dark" id="btnRecepcionarMitad" title="Rellenar con el 50% de las cantidades pendientes">
                                         <i class="bi bi-percent"></i> 50%
                                     </button>
                                     <div class="vr mx-1" style="border-color:rgba(255,255,255,0.2);"></div>
-                                    <span class="text-white-50 me-1" style="font-size:0.7rem;white-space:nowrap;">Factura global:</span>
-                                    <div class="input-group input-group-sm" style="width: 200px;">
-                                        <input type="text" class="form-control py-1" id="facturaGlobalMasiva" placeholder="Seleccionar factura..." list="facturas-global-list">
+                                    <div class="input-group input-group-sm" style="width: 180px;">
+                                        <span class="input-group-text py-0 px-2" style="font-size:0.7rem;"><i class="bi bi-receipt"></i></span>
+                                        <input type="text" class="form-control" id="facturaGlobalMasiva" placeholder="Factura global" list="facturas-global-list" title="Factura global: se asigna a todas las filas">
                                         <datalist id="facturas-global-list"></datalist>
-                                        <button class="btn btn-primary py-0" type="button" id="btnAplicarFacturaGlobal" title="Asignar esta factura a todas las filas"><i class="bi bi-arrow-down-circle me-1"></i><span class="d-none d-lg-inline">Asignar</span></button>
+                                        <button class="btn btn-primary" type="button" id="btnAplicarFacturaGlobal" title="Asignar esta factura a todas las filas"><i class="bi bi-arrow-down-circle"></i></button>
                                     </div>
+                                    <div class="input-group input-group-sm" style="width: 240px;">
+                                        <span class="input-group-text py-0 px-2" style="font-size:0.7rem;"><i class="bi bi-geo-alt"></i></span>
+                                        <select class="form-select" id="sucursalGlobalMasiva" title="Sucursal destino a aplicar a las filas seleccionadas">
+                                            <option value="">Elegir sucursal...</option>
+                                        </select>
+                                        <button class="btn btn-info text-white" type="button" id="btnToggleSucursalSeleccion" title="Activar modo selección: marca con checkbox las filas donde quieras aplicar esta sucursal">
+                                            <i class="bi bi-check2-square me-1"></i><span class="d-none d-xl-inline">Elegir filas</span>
+                                        </button>
+                                    </div>
+                                    <button type="button" class="btn btn-warning text-dark" id="btnAplicarSucursalSeleccion" style="display: none;" title="Aplicar la sucursal elegida a las filas marcadas">
+                                        <i class="bi bi-geo-alt-fill me-1"></i>Aplicar a <span id="contadorSucursalSel">0</span>
+                                    </button>
                                     <div class="vr mx-1" style="border-color:rgba(255,255,255,0.2);"></div>
-                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnExpandirTodos" title="Expandir todos los productos">
+                                    <button type="button" class="btn btn-outline-light" id="btnExpandirTodos" title="Expandir/colapsar todos los productos">
                                         <i class="bi bi-arrows-expand"></i>
                                     </button>
-                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnLimpiarTodo" title="Borrar todas las cantidades y facturas ingresadas"><i class="bi bi-eraser"></i></button>
-                                    <button type="button" class="btn btn-outline-light btn-sm py-1" id="btnRecargarFacturas" title="Recargar lista de facturas disponibles"><i class="bi bi-arrow-clockwise"></i></button>
-                                    <button type="button" class="btn btn-outline-danger btn-sm py-1" id="btnToggleEliminar" title="Activar modo para eliminar productos de la compra">
-                                        <i class="bi bi-trash3 me-1"></i>Eliminar
+                                    <button type="button" class="btn btn-outline-light" id="btnLimpiarTodo" title="Borrar todas las cantidades y facturas ingresadas"><i class="bi bi-eraser"></i></button>
+                                    <button type="button" class="btn btn-outline-light" id="btnRecargarFacturas" title="Recargar lista de facturas disponibles"><i class="bi bi-arrow-clockwise"></i></button>
+                                    <button type="button" class="btn btn-outline-danger" id="btnToggleEliminar" title="Activar modo para eliminar productos de la compra">
+                                        <i class="bi bi-trash3"></i>
                                     </button>
-                                    <button type="button" class="btn btn-danger btn-sm py-1" id="btnEliminarSeleccionados" style="display: none;" title="Eliminar productos seleccionados">
-                                        <i class="bi bi-trash3-fill me-1"></i>Eliminar (<span id="contadorSeleccionados">0</span>)
+                                    <button type="button" class="btn btn-danger" id="btnEliminarSeleccionados" style="display: none;" title="Eliminar productos seleccionados">
+                                        <i class="bi bi-trash3-fill me-1"></i>(<span id="contadorSeleccionados">0</span>)
                                     </button>
-                                    <div class="ms-auto d-flex align-items-center gap-3 text-white" style="font-size: 0.75rem;">
-                                        <span><i class="bi bi-hourglass-split text-warning me-1"></i><strong id="quickStatPendientes">0</strong> pend.</span>
-                                        <span><i class="bi bi-check-circle text-success me-1"></i><strong id="quickStatIngresados">0</strong> ingr.</span>
+                                    <div class="ms-auto d-flex align-items-center gap-2 text-white" style="font-size: 0.7rem;">
+                                        <span><i class="bi bi-hourglass-split text-warning me-1"></i><strong id="quickStatPendientes">0</strong></span>
+                                        <span><i class="bi bi-check-circle text-success me-1"></i><strong id="quickStatIngresados">0</strong></span>
                                         <span class="badge rounded-pill" style="background: rgba(10,179,156,0.3);"><strong id="quickStatMonto">$0</strong></span>
                                     </div>
                                 </div>
@@ -2084,46 +2167,50 @@
                         <div class="card border-0 shadow-sm" style="border-radius: 8px;">
                             <div class="card-body p-0">
                                 
-                                <div class="table-responsive" style="max-height: calc(100vh - 280px); min-height: 300px; overflow-y: auto;">
+                                <div class="table-responsive" style="max-height: calc(100vh - 240px); min-height: 300px; overflow-y: auto;">
                                     <table class="table table-hover table-sm align-middle mb-0" id="tablaRecepcionProductos">
                                         <thead class="sticky-top" style="z-index: 10; background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
-                                            <tr class="text-center" style="font-size: 0.78rem;">
-                                                <th class="py-2 text-white" style="min-width: 150px;">Artículo</th>
+                                            <tr class="text-center" style="font-size: 0.7rem;">
+                                                <th class="py-1 text-white col-sucursal-sel" style="width: 36px;">
+                                                    <input type="checkbox" class="form-check-input" id="checkSucursalTodos" title="Seleccionar / deseleccionar todas las filas">
+                                                </th>
+                                                <th class="py-1 text-white" style="min-width: 140px;">Artículo</th>
                                                 <th class="text-white recep-col-desc">Descripción</th>
-                                                <th class="text-white" style="width: 80px;">Marca</th>
-                                                <th class="text-white recep-col-extra" style="width: 70px;">Color</th>
-                                                <th class="text-white recep-col-extra" style="width: 70px;">Género</th>
-                                                <th class="text-white" style="width: 70px;">Costo</th>
-                                                <th class="text-white" style="width: 70px;">Precio</th>
-                                                <th class="text-white" style="width: 55px;">Stock</th>
-                                                <th class="text-white" style="width: 80px;">Talla</th>
-                                                <th class="text-white col-editable" style="width: 100px;">Cantidad recibida</th>
-                                                <th class="text-white col-editable" style="min-width: 160px;">Factura<span class="factura-opcional-badge">opcional</span></th>
-                                                <th class="text-white" style="width: 100px;">Estado</th>
-                                                <th class="text-white col-eliminar" style="width: 50px; display: none;">
+                                                <th class="text-white" style="width: 70px;">Marca</th>
+                                                <th class="text-white recep-col-color" style="width: 60px;">Color</th>
+                                                <th class="text-white recep-col-genero" style="width: 60px;">Género</th>
+                                                <th class="text-white" style="width: 64px;">Costo</th>
+                                                <th class="text-white" style="width: 64px;">Precio</th>
+                                                <th class="text-white" style="width: 50px;">Stock</th>
+                                                <th class="text-white" style="width: 72px;">Talla</th>
+                                                <th class="text-white col-editable" style="width: 92px;">Cant. recibida</th>
+                                                <th class="text-white col-editable" style="min-width: 140px;">Factura<span class="factura-opcional-badge">opcional</span></th>
+                                                <th class="text-white col-editable" style="min-width: 130px;">Sucursal<span class="factura-opcional-badge">opcional</span></th>
+                                                <th class="text-white" style="width: 88px;">Estado</th>
+                                                <th class="text-white col-eliminar" style="width: 40px; display: none;">
                                                     <input type="checkbox" class="form-check-input" id="checkEliminarTodos" title="Seleccionar todos">
                                                 </th>
                                             </tr>
                                         </thead>
-                                        <tbody class="text-center" style="font-size: 0.82rem;"></tbody>
+                                        <tbody class="text-center" style="font-size: 0.76rem;"></tbody>
                                     </table>
                                 </div>
                                 
                                 <!-- Footer compacto con totales + progreso -->
-                                <div class="border-top bg-light px-3 py-2" style="border-radius: 0 0 8px 8px;">
-                                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                                        <span class="small text-muted"><i class="bi bi-hourglass-split text-warning me-1"></i>Pend: <strong id="statPendientes">0</strong></span>
-                                        <span class="small text-muted"><i class="bi bi-check-circle text-success me-1"></i>Recep: <strong class="text-success" id="statRecepcionados">0</strong></span>
-                                        <span class="small text-muted"><i class="bi bi-boxes me-1"></i>Total: <strong id="totalParesRecepcionados">0</strong></span>
-                                        <span class="small text-muted"><i class="bi bi-cash-stack text-success me-1"></i>Inv: <strong class="text-success" id="totalCostoRecepcionado">$0</strong></span>
-                                        <div class="flex-grow-1 d-flex align-items-center gap-2 ms-2">
-                                            <div class="progress flex-grow-1" style="height: 6px; border-radius: 3px;">
-                                                <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
-                                                     role="progressbar" id="progresoRecepcionBar" 
+                                <div class="border-top bg-light px-2 py-1" style="border-radius: 0 0 8px 8px;">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size: 0.7rem;">
+                                        <span class="text-muted"><i class="bi bi-hourglass-split text-warning me-1"></i>Pend: <strong id="statPendientes">0</strong></span>
+                                        <span class="text-muted"><i class="bi bi-check-circle text-success me-1"></i>Recep: <strong class="text-success" id="statRecepcionados">0</strong></span>
+                                        <span class="text-muted"><i class="bi bi-boxes me-1"></i>Total: <strong id="totalParesRecepcionados">0</strong></span>
+                                        <span class="text-muted"><i class="bi bi-cash-stack text-success me-1"></i>Inv: <strong class="text-success" id="totalCostoRecepcionado">$0</strong></span>
+                                        <div class="flex-grow-1 d-flex align-items-center gap-2 ms-1">
+                                            <div class="progress flex-grow-1" style="height: 5px; border-radius: 3px;">
+                                                <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                                                     role="progressbar" id="progresoRecepcionBar"
                                                      style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                                                 </div>
                                             </div>
-                                            <small class="text-muted fw-bold" id="progresoRecepcionPct" style="min-width: 30px;">0%</small>
+                                            <small class="text-muted fw-bold" id="progresoRecepcionPct" style="min-width: 28px;">0%</small>
                                         </div>
                                     </div>
                                 </div>
@@ -2132,14 +2219,151 @@
                     </div>
 
                     <!-- Footer con resumen y acción principal -->
-                    <div class="modal-footer border-0 py-2 px-3" style="background: #eef0f3;">
-                        <small class="text-muted me-auto">
-                            <i class="bi bi-info-circle me-1"></i>Solo se guardarán las tallas donde hayas ingresado una cantidad. Los productos quedarán listos para crear en inventario.
+                    <div class="modal-footer border-0 py-1 px-2" style="background: #eef0f3;">
+                        <small class="text-muted me-auto" style="font-size:0.7rem;">
+                            <i class="bi bi-info-circle me-1"></i>Solo se guardan las tallas con cantidad ingresada. Los productos quedan listos para crear en inventario.
                         </small>
-                        <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancelar</button>
-                        <button type="button" class="btn btn-sm px-4 text-white fw-bold" id="btnGuardarRecepcion" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; font-size: 0.85rem;">
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-1" data-bs-dismiss="modal" style="font-size:0.75rem;"><i class="bi bi-x-lg me-1"></i>Cancelar</button>
+                        <button type="button" class="btn btn-sm px-3 py-1 text-white fw-bold" id="btnGuardarRecepcion" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; font-size: 0.78rem;">
                             <i class="bi bi-check2-circle me-1"></i>Guardar Recepción
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== MODAL DISTRIBUIR TALLAS (GUÍA / CURVA) ========== -->
+        <div class="modal fade" id="modalDistribuirTallas" tabindex="-1" aria-labelledby="modalDistribuirTallasLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden;">
+                    <div class="modal-header text-white py-2 px-3" style="background: linear-gradient(135deg, #6f42c1 0%, #405189 100%);">
+                        <div>
+                            <h6 class="modal-title mb-0 fw-bold"><i class="bi bi-rulers me-2"></i>Distribuir stock por Guía de Tallas</h6>
+                            <small class="opacity-75" id="distTallasSubtitulo">Reparte el total importado en tallas reales</small>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+
+                    <div class="modal-body p-3">
+                        <input type="hidden" id="distTallasCompraProductoId">
+                        <input type="hidden" id="distTallasStockTotal" value="0">
+
+                        <!-- Info del producto -->
+                        <div class="card border-0 mb-2" style="background:#f5f7fb;border-radius:10px;">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex align-items-center gap-3 flex-wrap">
+                                    <div class="flex-grow-1">
+                                        <div class="fw-bold" id="distTallasNombreProducto" style="font-size:.95rem;">—</div>
+                                        <small class="text-muted" id="distTallasAtributos"></small>
+                                    </div>
+                                    <div class="text-end">
+                                        <small class="text-muted d-block" style="font-size:.7rem;">Stock total</small>
+                                        <span class="badge bg-warning text-dark" style="font-size:.9rem;padding:.35rem .65rem;">
+                                            <i class="bi bi-box-seam me-1"></i><strong id="distTallasStockLabel">0</strong> uds
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Selectores de curva / guía -->
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1 fw-semibold"><i class="bi bi-bookmark-star me-1 text-warning"></i>Curva guardada</label>
+                                <div class="input-group input-group-sm">
+                                    <select class="form-select" id="distTallasCurvaSelect">
+                                        <option value="">-- sin usar curva --</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-primary" id="btnAplicarCurvaDistTallas" title="Aplicar curva seleccionada"><i class="bi bi-magic"></i></button>
+                                </div>
+                                <small class="text-muted" style="font-size:.7rem;">Se sugieren automáticamente curvas de esta marca/género.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1 fw-semibold"><i class="bi bi-rulers me-1 text-info"></i>Guía de tallas</label>
+                                <div class="input-group input-group-sm">
+                                    <select class="form-select" id="distTallasGuiaSelect">
+                                        <option value="">-- seleccionar guía --</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-info" id="btnCargarGuiaDistTallas" title="Cargar tallas de la guía y distribuir equitativamente"><i class="bi bi-download"></i></button>
+                                </div>
+                                <small class="text-muted" style="font-size:.7rem;">Usa el set de tallas de una guía existente.</small>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                            <button type="button" class="btn btn-sm btn-outline-success" id="btnAgregarTallaDistTallas"><i class="bi bi-plus-lg"></i> Agregar talla</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnEquitativoDistTallas" title="Repartir equitativamente entre las tallas"><i class="bi bi-arrow-left-right"></i> Equitativo</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="btnLimpiarDistTallas"><i class="bi bi-eraser"></i> Limpiar</button>
+                            <div class="ms-auto d-flex align-items-center gap-2">
+                                <small class="text-muted">Asignado:</small>
+                                <span class="badge" id="distTallasBadgeSuma" style="font-size:.85rem;">0 / 0</span>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height:300px;overflow-y:auto;">
+                            <table class="table table-sm align-middle mb-0" id="tablaDistTallas">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width:25%;">Talla</th>
+                                        <th class="text-end" style="width:22%;">%</th>
+                                        <th class="text-end" style="width:22%;">Stock</th>
+                                        <th style="width:11%;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <div class="alert alert-info py-2 px-3 mt-2 mb-0" style="font-size:.78rem;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            La suma de unidades por talla debe ser exactamente <strong id="distTallasStockLabelAlert">0</strong>.
+                            El botón <em>Equitativo</em> reparte y ajusta residuos. El botón <em>Aplicar curva</em> usa los porcentajes definidos.
+                        </div>
+                    </div>
+
+                    <div class="modal-footer py-2 px-3 bg-light">
+                        <button type="button" class="btn btn-outline-warning btn-sm me-auto" id="btnGuardarComoCurva"><i class="bi bi-bookmark-plus me-1"></i>Guardar como curva</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-success btn-sm" id="btnAplicarDistTallas"><i class="bi bi-check2-circle me-1"></i>Aplicar distribución</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal auxiliar "Guardar como curva" -->
+        <div class="modal fade" id="modalGuardarCurva" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg" style="border-radius:12px;overflow:hidden;">
+                    <div class="modal-header text-white" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);">
+                        <h6 class="modal-title fw-bold"><i class="bi bi-bookmark-plus me-2"></i>Guardar como curva</h6>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">Nombre</label>
+                            <input type="text" class="form-control form-control-sm" id="guardarCurvaNombre" placeholder="Ej: Curva zapatilla hombre 38-44" maxlength="120">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">Descripción (opcional)</label>
+                            <input type="text" class="form-control form-control-sm" id="guardarCurvaDescripcion" maxlength="250">
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold">Marca (opcional)</label>
+                                <select class="form-select form-select-sm" id="guardarCurvaMarca"><option value="">— todas —</option></select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold">Género (opcional)</label>
+                                <select class="form-select form-select-sm" id="guardarCurvaGenero"><option value="">— todos —</option></select>
+                            </div>
+                        </div>
+                        <div class="alert alert-info py-2 px-3 mt-2 mb-0" style="font-size:.78rem;">
+                            Los porcentajes se calculan automáticamente desde la distribución actual. Los ítems con stock 0 se omiten.
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2 px-3 bg-light">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-warning btn-sm" id="btnConfirmarGuardarCurva"><i class="bi bi-save me-1"></i>Guardar</button>
                     </div>
                 </div>
             </div>
@@ -2527,6 +2751,19 @@ function hideGlobalLoader() {
 // Permisos del usuario
 const PUEDE_ELIMINAR_COMPRA = {{ puede_eliminar_compra|yesno:"true,false" }};
 
+// Sucursales disponibles para asignación masiva en Recepción y referencia
+// al importar el formato de compras (columna "Sucursal" opcional).
+// Usamos json_script para evitar problemas de escape con alias raros.
+const SUCURSALES_DISPONIBLES = (function(){
+    try {
+        const el = document.getElementById('data-sucursales-disponibles');
+        return el ? JSON.parse(el.textContent || '[]') : [];
+    } catch (e) {
+        console.error('No se pudo parsear SUCURSALES_DISPONIBLES', e);
+        return [];
+    }
+})();
+
 // IDs de atributos del sistema (Marca, Color, Género)
 const ID_ATRIBUTO_MARCA = parseInt("{{ id_atributo_marca|default:0 }}") || 0;
 const ID_ATRIBUTO_COLOR = parseInt("{{ id_atributo_color|default:0 }}") || 0;
@@ -2545,6 +2782,7 @@ const GestionCompras = (function() {
         importarCSV: '/app/importar_csv_compra/',
         agregarProductoManual: '/app/agregar_producto_manual/',
         guardarRecepcion: '/app/guardar_recepcion/',
+        actualizarSucursalRecepciones: '/app/actualizar_sucursal_recepciones/',
         recepcionarCompra: '/app/compra/recepcionar/',
         eliminarProductoCompra: '/app/eliminar_producto_compra/'
     };
@@ -2622,8 +2860,29 @@ const GestionCompras = (function() {
     $(document).ready(function() {
         $('#anioSeleccionado').val(anioActual);
 
+        // Poblar el filtro de sucursal en la grilla de compras con las
+        // sucursales disponibles. Filtra solo las recepciones que tengan
+        // sucursal_destino asignada en alguna compra.
+        (function poblarFiltroSucursalCompras() {
+            const $sel = $('#filtroSucursalCompras');
+            if (!$sel.length) return;
+            const actual = $sel.val();
+            $sel.find('option:gt(0)').remove();
+            (SUCURSALES_DISPONIBLES || []).forEach(s => {
+                const label = s.alias || s.nombre || ('Sucursal ' + s.id);
+                $sel.append(`<option value="${s.id}">${label}</option>`);
+            });
+            if (actual) $sel.val(actual);
+        })();
+
         // Cargar automáticamente las compras del año actual (respeta ?buscar= de URL)
         cargarComprasPorAnio(anioActual, 1, currentSearchCompras || '');
+
+        // Al cambiar la sucursal recargar desde la primera página
+        $('#filtroSucursalCompras').on('change', function() {
+            const anio = $('#anioSeleccionado').val() || anioActual;
+            cargarComprasPorAnio(anio, 1, currentSearchCompras || '');
+        });
 
         // Cargar DTEs disponibles y atributos al abrir el modal de producto manual
         $('#modalProductoManual').on('show.bs.modal', function(e) {
@@ -2796,6 +3055,7 @@ const GestionCompras = (function() {
             const $row = $(this);
             const recepcionInput = $row.find('.recepcionado-input');
             const facturaInput = $row.find('.factura-datalist-input');
+            const sucursalSelect = $row.find('.sucursal-row-select');
             
             // Usar data-ids como clave (puede ser JSON array)
             let ids = recepcionInput.data('ids');
@@ -2809,11 +3069,12 @@ const GestionCompras = (function() {
             
             const cantidad = parseInt(recepcionInput.val()) || 0;
             const factura = (facturaInput.val() || '').trim();
+            const sucursalId = sucursalSelect.length ? (sucursalSelect.val() || '') : '';
             
-            // Solo guardar si hay datos ingresados
-            if ((cantidad > 0 || factura) && ids) {
+            // Solo guardar si hay algún dato "overrideado" por el usuario
+            if ((cantidad > 0 || factura || sucursalId) && ids) {
                 const key = Array.isArray(ids) ? ids.join('-') : ids;
-                datosRecepcionTemporales[key] = { cantidad, factura };
+                datosRecepcionTemporales[key] = { cantidad, factura, sucursalId };
             }
         });
         console.log('📦 Datos temporales guardados:', Object.keys(datosRecepcionTemporales).length);
@@ -2827,6 +3088,7 @@ const GestionCompras = (function() {
             const $row = $(this);
             const recepcionInput = $row.find('.recepcionado-input');
             const facturaInput = $row.find('.factura-datalist-input');
+            const sucursalSelect = $row.find('.sucursal-row-select');
             
             let ids = recepcionInput.data('ids');
             if (typeof ids === 'string') {
@@ -2850,7 +3112,9 @@ const GestionCompras = (function() {
                         facturaInput.val(datosGuardados.factura);
                         validarFacturaInput(facturaInput);
                     }
-                    // Actualizar indicadores visuales
+                    if (datosGuardados.sucursalId && sucursalSelect.length) {
+                        sucursalSelect.val(datosGuardados.sucursalId);
+                    }
                     actualizarIndicadoresIngresados($row);
                 }
             }
@@ -2952,6 +3216,13 @@ const GestionCompras = (function() {
                 
                 // Guardar proveedor_id global para el select2
                 currentProveedorId = data.proveedor_id;
+
+                // Actualizar lista de sucursales (prioriza la del endpoint y
+                // cae al listado pasado por contexto del template).
+                if (Array.isArray(data.sucursales_disponibles) && data.sucursales_disponibles.length) {
+                    window.SUCURSALES_DISPONIBLES = data.sucursales_disponibles;
+                }
+                poblarSelectSucursalGlobal();
                 
                 // Actualizar información de paginación
                 paginationInfo = data.pagination;
@@ -2975,7 +3246,7 @@ const GestionCompras = (function() {
                 tbody.empty();
                 
                 if (data.items.length === 0) {
-                    tbody.append('<tr><td colspan="11" class="text-center text-muted">No hay productos para recepcionar</td></tr>');
+                    tbody.append('<tr><td colspan="14" class="text-center text-muted">No hay productos para recepcionar</td></tr>');
                 } else {
                     if (data.vista_agrupada) {
                         // Renderizar VISTA AGRUPADA
@@ -3012,6 +3283,50 @@ const GestionCompras = (function() {
         });
     }
 
+    // ============= HELPERS PARA COLUMNA SUCURSAL (opcional) =============
+    // Lista efectiva de sucursales: usa la del endpoint si llegó, si no
+    // cae a la del contexto de página.
+    function sucursalesEfectivas() {
+        return window.SUCURSALES_DISPONIBLES || SUCURSALES_DISPONIBLES || [];
+    }
+
+    // Construye el <select> de sucursal usado tanto en cada fila de talla
+    // como en el control masivo por producto.
+    function buildSucursalSelect(opts) {
+        opts = opts || {};
+        const selectedId = opts.selectedId ? String(opts.selectedId) : '';
+        const dataIds = opts.dataIds || '';
+        const dataGrupo = opts.dataGrupo || '';
+        const extraClass = opts.extraClass || '';
+        const placeholder = opts.placeholder || '— sin sucursal —';
+
+        let optionsHtml = `<option value="">${placeholder}</option>`;
+        sucursalesEfectivas().forEach(s => {
+            const sel = selectedId === String(s.id) ? 'selected' : '';
+            optionsHtml += `<option value="${s.id}" ${sel}>${s.alias}</option>`;
+        });
+
+        return `<select class="form-select form-select-sm sucursal-row-select ${extraClass}"
+                       ${dataIds ? `data-ids='${dataIds}'` : ''}
+                       ${dataGrupo ? `data-grupo="${dataGrupo}"` : ''}
+                       title="Sucursal destino (opcional). Al guardar, sobrescribe la sucursal global masiva."
+                       style="font-size:0.72rem;">${optionsHtml}</select>`;
+    }
+
+    // Repuebla el select de "Sucursal global" de la toolbar con el listado
+    // efectivo. Preserva el valor seleccionado si sigue existiendo.
+    function poblarSelectSucursalGlobal() {
+        const $sel = $('#sucursalGlobalMasiva');
+        if (!$sel.length) return;
+        const prev = $sel.val();
+        let html = '<option value="">Sin sucursal...</option>';
+        sucursalesEfectivas().forEach(s => {
+            html += `<option value="${s.id}">${s.alias}</option>`;
+        });
+        $sel.html(html);
+        if (prev) $sel.val(prev);
+    }
+
     function renderizarVistaAgrupada(items, tbody, search) {
         items.forEach((producto, index) => {
             const grupoId = `grupo-${index}`;
@@ -3039,18 +3354,40 @@ const GestionCompras = (function() {
                 return `<option value="${f.numero}" data-id="${f.id}" label="${label}">${label}</option>`;
             }).join('');
             
+            // Badge + botón cuando la compra trae "total sin desglose"
+            const pendDistrib = producto.pendiente_distribuir === true;
+            const pendDistribBadge = pendDistrib
+                ? `<span class="badge bg-warning text-dark ms-1" title="Compra importada con total sin desglose de tallas"><i class="bi bi-exclamation-triangle me-1"></i>total sin tallas</span>
+                   <button type="button" class="btn btn-sm btn-warning btn-distribuir-tallas ms-1"
+                           data-compra-producto-id="${(producto.compra_producto_ids || [])[0] || ''}"
+                           data-nombre="${(producto.nombre || '').replace(/"/g,'&quot;')}"
+                           data-marca-id="${producto.marca_id || ''}"
+                           data-marca="${(producto.marca || '').replace(/"/g,'&quot;')}"
+                           data-color="${(producto.color || '').replace(/"/g,'&quot;')}"
+                           data-genero-id="${producto.genero_id || ''}"
+                           data-genero="${(producto.genero || '').replace(/"/g,'&quot;')}"
+                           data-stock="${stockTotal}"
+                           title="Distribuir este total en tallas reales">
+                       <i class="bi bi-rulers me-1"></i>Distribuir
+                   </button>`
+                : '';
+
             // Fila principal del producto agrupado
             const filaGrupo = `
-<tr class="producto-grupo ${recepcionadoTotal > 0 ? 'table-warning' : ''}" data-grupo="${grupoId}">
+<tr class="producto-grupo ${recepcionadoTotal > 0 ? 'table-warning' : ''} ${pendDistrib ? 'table-warning-subtle' : ''}" data-grupo="${grupoId}">
+    <td class="col-sucursal-sel">
+        <input type="checkbox" class="form-check-input check-sucursal-grupo" data-grupo="${grupoId}" title="Seleccionar todas las tallas de este producto">
+    </td>
     <td>
         <i class="bi bi-chevron-right expand-icon me-1"></i>
         <strong>${resaltarBusqueda(producto.nombre || '-', search)}</strong>
         ${recepcionadoTotal > 0 ? ' <small class="text-success"><i class="bi bi-check-circle-fill"></i></small>' : ''}
+        ${pendDistribBadge}
     </td>
     <td class="recep-col-desc">${resaltarBusqueda(producto.descripcion || '-', search)}</td>
     <td>${resaltarBusqueda(producto.marca || '-', search)}</td>
-    <td class="recep-col-extra">${resaltarBusqueda(producto.color || '-', search)}</td>
-    <td class="recep-col-extra">${resaltarBusqueda(producto.genero || '-', search)}</td>
+    <td class="recep-col-color">${resaltarBusqueda(producto.color || '-', search)}</td>
+    <td class="recep-col-genero">${resaltarBusqueda(producto.genero || '-', search)}</td>
     <td>$${(producto.costo || 0).toLocaleString()}</td>
     <td>$${(producto.precio || 0).toLocaleString()}</td>
     <td>
@@ -3076,6 +3413,15 @@ const GestionCompras = (function() {
         <datalist id="${datalistIdProducto}">${facturaOptions}</datalist>
     </td>
     <td></td>
+    <td>
+        <div class="masivo-control" title="Sucursal destino para todas las tallas de este producto (opcional). Haz clic en Aplicar para propagar a las tallas.">
+            ${buildSucursalSelect({
+                selectedId: producto.sucursal_destino_id,
+                dataGrupo: grupoId,
+                extraClass: 'sucursal-masiva-input'
+            })}
+        </div>
+    </td>
     <td>
         ${recepcionadoTotal >= stockTotal 
             ? '<span class="badge bg-success" style="font-size:0.65rem"><i class="bi bi-check2-all"></i> OK</span>'
@@ -3128,6 +3474,9 @@ const GestionCompras = (function() {
                 
                 const filaTalla = `
 <tr class="talla-detalle ${tallaCompleta ? 'table-success' : (tieneRecepcion ? 'table-warning' : '')}" data-grupo="${grupoId}" style="display: none;">
+    <td class="col-sucursal-sel">
+        <input type="checkbox" class="form-check-input check-sucursal-talla" data-grupo="${grupoId}" data-ids='${tallaIdsStr}' title="Seleccionar esta talla para asignarle sucursal">
+    </td>
     <td class="ps-4 text-start">
         ${tallaCompleta ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}
         ${tieneRecepcion && !tallaCompleta ? '<i class="bi bi-clock-fill text-warning"></i>' : ''}
@@ -3163,6 +3512,13 @@ const GestionCompras = (function() {
             <i class="bi bi-receipt factura-icon"></i>
         </div>
         <datalist id="${datalistId}">${facturaOptions}</datalist>
+    </td>
+    <td>
+        ${buildSucursalSelect({
+            selectedId: talla.sucursal_destino_id,
+            dataIds: tallaIdsStr,
+            dataGrupo: grupoId
+        })}
     </td>
     <td>
         ${tallaCompleta 
@@ -3216,17 +3572,20 @@ const GestionCompras = (function() {
             const grupoId = $(this).data('grupo');
             const inputCantidad = $(`.recepcion-masiva-input[data-grupo="${grupoId}"]`);
             const inputFactura = $(`.factura-masiva-input[data-grupo="${grupoId}"]`);
+            const selectSucursal = $(`.sucursal-masiva-input[data-grupo="${grupoId}"]`);
             const cantidadTotal = parseInt(inputCantidad.val()) || 0;
             const facturaNumero = (inputFactura.val() || '').trim();
+            const sucursalValor = (selectSucursal.val() || '').trim();
             
-            // Validar que al menos se ingresó cantidad o factura
-            if (cantidadTotal === 0 && !facturaNumero) {
-                GestionCompras.showError('Ingresa una cantidad y/o factura para aplicar');
+            // Validar que al menos se ingresó cantidad, factura o sucursal
+            if (cantidadTotal === 0 && !facturaNumero && !sucursalValor) {
+                GestionCompras.showError('Ingresa cantidad, factura o sucursal para aplicar');
                 return;
             }
             
             const tallasInputs = $(`.recepcionado-input[data-grupo="${grupoId}"]`);
             const tallasFacturas = $(`.factura-datalist-input[data-grupo="${grupoId}"]`);
+            const tallasSucursales = $(`.talla-detalle[data-grupo="${grupoId}"] .sucursal-row-select`);
             const stockTotal = parseInt(inputCantidad.data('stock-total')) || 0;
             
             // Expandir el grupo para mostrar las tallas
@@ -3247,7 +3606,6 @@ const GestionCompras = (function() {
                     const proporcion = stockTalla / stockTotal;
                     const cantidadTalla = Math.round(cantidadTotal * proporcion);
                     $(this).val(cantidadTalla);
-                    // Marcar en verde si tiene cantidad
                     if (cantidadTalla > 0) {
                         $(this).addClass('is-valid').removeClass('is-invalid');
                     }
@@ -3258,14 +3616,21 @@ const GestionCompras = (function() {
             if (facturaNumero) {
                 tallasFacturas.each(function() {
                     $(this).val(facturaNumero);
-                    // Validar la factura aplicada (esperar un poco para que el DOM se actualice)
                     setTimeout(() => {
                         validarFacturaInput($(this));
                     }, 100);
                 });
             }
             
-            // Limpiar inputs del grupo
+            // Aplicar sucursal (si hay valor, incluyendo "") a todas las tallas
+            if (sucursalValor !== '' || selectSucursal.length) {
+                tallasSucursales.each(function() {
+                    $(this).val(sucursalValor);
+                });
+            }
+            
+            // Limpiar inputs del grupo (no limpiar la sucursal masiva: suele
+            // reutilizarse para varios productos seguidos)
             inputCantidad.val('');
             inputFactura.val('');
             
@@ -3276,16 +3641,15 @@ const GestionCompras = (function() {
                 actualizarIndicadoresIngresados($(this));
             });
             
-            let mensaje = '';
-            if (cantidadTotal > 0 && facturaNumero) {
-                mensaje = `Cantidad y factura distribuidas entre las ${tallasInputs.length} talla(s)`;
-            } else if (cantidadTotal > 0) {
-                mensaje = `Cantidad distribuida entre las ${tallasInputs.length} talla(s)`;
-            } else if (facturaNumero) {
-                mensaje = `Factura aplicada a las ${tallasInputs.length} talla(s)`;
-            }
+            let partes = [];
+            if (cantidadTotal > 0) partes.push('cantidad');
+            if (facturaNumero) partes.push('factura');
+            if (sucursalValor) partes.push('sucursal');
+            const mensaje = partes.length
+                ? `${partes.join(', ')} aplicad${partes.length > 1 ? 'as' : 'a'} a ${tallasInputs.length} talla(s)`
+                : '';
             
-            GestionCompras.showSuccess(mensaje);
+            if (mensaje) GestionCompras.showSuccess(mensaje);
         });
     }
 
@@ -3324,11 +3688,14 @@ const GestionCompras = (function() {
             
             const fila = `
 <tr class="talla-detalle ${completo ? 'table-success' : (tieneRecepcion ? 'table-warning' : '')}">
+    <td class="col-sucursal-sel">
+        <input type="checkbox" class="form-check-input check-sucursal-talla" data-ids='${tallaIdsStr}' title="Seleccionar esta fila para asignarle sucursal">
+    </td>
     <td>${resaltarBusqueda(item.nombre || '-', search)}</td>
     <td class="recep-col-desc">${resaltarBusqueda(item.descripcion || '-', search)}</td>
     <td>${resaltarBusqueda(item.marca || '-', search)}</td>
-    <td class="recep-col-extra">${resaltarBusqueda(item.color || '-', search)}</td>
-    <td class="recep-col-extra">${resaltarBusqueda(item.genero || '-', search)}</td>
+    <td class="recep-col-color">${resaltarBusqueda(item.color || '-', search)}</td>
+    <td class="recep-col-genero">${resaltarBusqueda(item.genero || '-', search)}</td>
     <td>$${(item.costo || 0).toLocaleString()}</td>
     <td>$${(item.precio || 0).toLocaleString()}</td>
     <td>
@@ -3374,6 +3741,12 @@ const GestionCompras = (function() {
         <datalist id="${datalistId}">
             ${facturaOptions}
         </datalist>
+    </td>
+    <td>
+        ${buildSucursalSelect({
+            selectedId: item.sucursal_destino_id,
+            dataIds: tallaIdsStr
+        })}
     </td>
     <td>
         ${completo 
@@ -3482,13 +3855,22 @@ const GestionCompras = (function() {
 
     // ========== GUIA DE PASOS + EXPANDIR TODOS ==========
 
-    $('#btnOcultarGuia').on('click', function() {
-        $('#guiaPasosRecepcion').slideUp(200);
+    // Toggle guía: colapsada (strip delgado) <-> expandida (pasos completos)
+    $(document).on('click', '#btnMostrarGuia', function() {
+        $('#guiaPasosRecepcion').removeClass('collapsed');
+        try { localStorage.setItem('recepcion_guia_expandida', '1'); } catch (e) {}
+    });
+    $(document).on('click', '#btnOcultarGuia', function() {
+        $('#guiaPasosRecepcion').addClass('collapsed');
+        try { localStorage.setItem('recepcion_guia_expandida', '0'); } catch (e) {}
     });
 
-    // Mostrar guía cada vez que se abre el modal
+    // Al abrir el modal, respetar la preferencia del usuario (colapsada por defecto)
     $('#modalRecepcionProductos').on('show.bs.modal', function() {
-        $('#guiaPasosRecepcion').show();
+        const $guia = $('#guiaPasosRecepcion').show();
+        let expandida = '0';
+        try { expandida = localStorage.getItem('recepcion_guia_expandida') || '0'; } catch (e) {}
+        $guia.toggleClass('collapsed', expandida !== '1');
     });
 
     // Botón expandir/colapsar todos
@@ -3624,7 +4006,353 @@ const GestionCompras = (function() {
         GestionCompras.showSuccess(`Factura "${factura}" aplicada a ${aplicados} productos`);
         $('#facturaGlobalMasiva').val('');
     });
-    
+
+    // Aplicar sucursal global a TODAS las filas (per-talla + per-producto masivo).
+    // Acepta "" como valor válido para limpiar la sucursal de todas las filas.
+    $('#btnAplicarSucursalGlobal').on('click', function() {
+        const $sel = $('#sucursalGlobalMasiva');
+        const valor = $sel.val() || '';
+        const alias = valor
+            ? ($sel.find('option:selected').text() || '').trim()
+            : '';
+
+        let aplicados = 0;
+        // Selects de sucursal por talla
+        $('.sucursal-row-select').each(function() {
+            $(this).val(valor);
+            aplicados++;
+        });
+        // Selects masivos por producto (vista agrupada)
+        $('.sucursal-masiva-input').each(function() {
+            $(this).val(valor);
+        });
+
+        const msg = valor
+            ? `Sucursal "${alias}" aplicada a ${aplicados} fila(s)`
+            : `Sucursal eliminada de ${aplicados} fila(s)`;
+        GestionCompras.showSuccess(msg);
+    });
+
+    // =====================================================================
+    // DISTRIBUIR TALLAS POR GUÍA / CURVA (para compras importadas sólo con
+    // totales). Se activa con el botón "Distribuir" que aparece en los
+    // productos marcados como pendientes_distribuir.
+    // =====================================================================
+    const DistTallas = {
+        contexto: {}, // { compra_producto_id, nombre, marca_id, marca, color, genero_id, genero, stock }
+        curvasCache: [],
+
+        abrir: function(ctx) {
+            this.contexto = ctx;
+            $('#distTallasCompraProductoId').val(ctx.compra_producto_id || '');
+            $('#distTallasStockTotal').val(ctx.stock || 0);
+            $('#distTallasStockLabel, #distTallasStockLabelAlert').text((ctx.stock || 0).toLocaleString());
+            $('#distTallasNombreProducto').text(ctx.nombre || '—');
+            $('#distTallasAtributos').text(
+                [ctx.marca, ctx.color, ctx.genero].filter(Boolean).join(' · ') || ''
+            );
+            $('#tablaDistTallas tbody').empty();
+            this.cargarCurvas();
+            this.cargarGuias();
+            this.actualizarSuma();
+            $('#modalDistribuirTallas').modal('show');
+        },
+
+        cargarCurvas: function() {
+            const params = new URLSearchParams();
+            if (this.contexto.marca_id) params.append('marca_id', this.contexto.marca_id);
+            if (this.contexto.genero_id) params.append('genero_id', this.contexto.genero_id);
+
+            $.getJSON('/app/api/curvas-distribucion/?' + params.toString(), (data) => {
+                this.curvasCache = (data && data.curvas) || [];
+                const $sel = $('#distTallasCurvaSelect');
+                $sel.empty().append('<option value="">-- sin usar curva --</option>');
+                this.curvasCache.forEach(c => {
+                    const extras = [c.marca, c.genero].filter(Boolean).join(', ');
+                    const label = c.nombre + (extras ? ` (${extras})` : '');
+                    $sel.append(`<option value="${c.id}">${label}</option>`);
+                });
+            });
+        },
+
+        cargarGuias: function() {
+            const $sel = $('#distTallasGuiaSelect');
+            $sel.empty().append('<option value="">-- seleccionar guía --</option>');
+            // Si no tenemos marca_id, listamos todas las guías igualmente.
+            const url = this.contexto.marca_id
+                ? `/app/guias_talla/?marca=${this.contexto.marca_id}`
+                : `/app/guias_talla/`;
+            $.getJSON(url, (data) => {
+                (data || []).forEach(g => {
+                    // guias_talla_list retorna {id, text}
+                    const label = g.text || g.nombre || ('Guía #' + g.id);
+                    $sel.append(`<option value="${g.id}">${label}</option>`);
+                });
+            });
+        },
+
+        agregarFila: function(talla = '', stock = 0, porcentaje = null) {
+            const rowId = 'dtt-' + Date.now() + Math.floor(Math.random() * 1000);
+            const total = parseInt($('#distTallasStockTotal').val()) || 0;
+            const pctVal = porcentaje !== null ? porcentaje : (total > 0 ? ((stock / total) * 100) : 0);
+            const tr = `<tr id="${rowId}">
+                <td><input type="text" class="form-control form-control-sm dt-talla" value="${talla}" placeholder="Ej: 40"></td>
+                <td class="text-end"><input type="number" step="0.01" min="0" max="100" class="form-control form-control-sm text-end dt-pct" value="${pctVal.toFixed(2)}"></td>
+                <td class="text-end"><input type="number" min="0" class="form-control form-control-sm text-end dt-stock" value="${stock}"></td>
+                <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger dt-eliminar"><i class="bi bi-x-lg"></i></button></td>
+            </tr>`;
+            $('#tablaDistTallas tbody').append(tr);
+        },
+
+        actualizarSuma: function() {
+            const total = parseInt($('#distTallasStockTotal').val()) || 0;
+            let suma = 0;
+            $('#tablaDistTallas tbody tr').each(function() {
+                suma += parseInt($(this).find('.dt-stock').val()) || 0;
+            });
+            const $b = $('#distTallasBadgeSuma');
+            $b.text(`${suma.toLocaleString()} / ${total.toLocaleString()}`);
+            $b.removeClass('bg-success bg-danger bg-warning text-dark text-white');
+            if (suma === total && total > 0) $b.addClass('bg-success text-white');
+            else if (suma > total) $b.addClass('bg-danger text-white');
+            else $b.addClass('bg-warning text-dark');
+        },
+
+        redistribuirEquitativo: function() {
+            const total = parseInt($('#distTallasStockTotal').val()) || 0;
+            const $rows = $('#tablaDistTallas tbody tr');
+            const n = $rows.length;
+            if (!n || total <= 0) return;
+            const base = Math.floor(total / n);
+            let resto = total - base * n;
+            $rows.each(function(idx) {
+                const extra = idx < resto ? 1 : 0;
+                const stock = base + extra;
+                const pct = total > 0 ? (stock / total) * 100 : 0;
+                $(this).find('.dt-stock').val(stock);
+                $(this).find('.dt-pct').val(pct.toFixed(2));
+            });
+        },
+
+        aplicarCurva: function(curvaId) {
+            const curva = this.curvasCache.find(c => String(c.id) === String(curvaId));
+            if (!curva) return;
+            const total = parseInt($('#distTallasStockTotal').val()) || 0;
+            $('#tablaDistTallas tbody').empty();
+
+            // Aplicar porcentajes y redondear; compensar residuo en la talla
+            // de mayor % para garantizar suma exacta.
+            const items = curva.items.map(it => {
+                const stockRaw = (it.porcentaje / 100) * total;
+                return { talla: it.talla, porcentaje: it.porcentaje, stockRaw, stock: Math.floor(stockRaw) };
+            });
+            let asignado = items.reduce((s, it) => s + it.stock, 0);
+            let residuo = total - asignado;
+            // Repartir residuo a los ítems con mayor parte fraccionaria.
+            items.sort((a, b) => (b.stockRaw - b.stock) - (a.stockRaw - a.stock));
+            for (let i = 0; i < items.length && residuo > 0; i++) {
+                items[i].stock += 1;
+                residuo -= 1;
+            }
+            // Volver a orden por talla para UX.
+            items.sort((a, b) => {
+                const na = parseFloat(a.talla), nb = parseFloat(b.talla);
+                if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                return String(a.talla).localeCompare(String(b.talla));
+            });
+            items.forEach(it => this.agregarFila(it.talla, it.stock, it.porcentaje));
+            this.actualizarSuma();
+        },
+
+        cargarDesdeGuia: function(guiaId) {
+            if (!guiaId) return;
+            $.getJSON(`/app/guia_talla_detalle/${guiaId}/`, (data) => {
+                $('#tablaDistTallas tbody').empty();
+                // La guía no trae stock, sólo la lista de tallas. Tomamos la
+                // columna CL por defecto (o US si CL está vacío).
+                (data.tallas || []).forEach(t => {
+                    const talla = t.cl || t.us || t.eu || t.uk || t.br || t.cm || '';
+                    if (talla) this.agregarFila(talla, 0, 0);
+                });
+                this.redistribuirEquitativo();
+                this.actualizarSuma();
+            });
+        },
+
+        aplicar: function() {
+            const total = parseInt($('#distTallasStockTotal').val()) || 0;
+            const distribucion = [];
+            let suma = 0;
+            $('#tablaDistTallas tbody tr').each(function() {
+                const talla = ($(this).find('.dt-talla').val() || '').trim();
+                const stock = parseInt($(this).find('.dt-stock').val()) || 0;
+                if (talla && stock > 0) {
+                    distribucion.push({ talla, stock });
+                    suma += stock;
+                }
+            });
+
+            if (!distribucion.length) {
+                Swal.fire('Faltan datos', 'Debes indicar al menos una talla con stock > 0.', 'warning');
+                return;
+            }
+            if (suma !== total) {
+                Swal.fire('Suma inválida', `La suma por talla (${suma}) debe igualar el total ${total}.`, 'error');
+                return;
+            }
+
+            showGlobalLoader();
+            $.ajax({
+                url: '/app/api/distribuir-tallas-compra-producto/',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({
+                    compra_producto_id: $('#distTallasCompraProductoId').val(),
+                    distribucion: distribucion
+                }),
+                success: (resp) => {
+                    hideGlobalLoader();
+                    if (resp.success) {
+                        $('#modalDistribuirTallas').modal('hide');
+                        Swal.fire('Listo', `Se distribuyeron ${resp.total_redistribuido} uds en ${resp.tallas_creadas} tallas`, 'success');
+                        // Recargar la vista de recepción en el mismo modal
+                        cargarDatosRecepcion($('#globalIDCompraRecepcion').val(), currentPage, currentSearch);
+                    } else {
+                        Swal.fire('Error', resp.error || 'No se pudo distribuir', 'error');
+                    }
+                },
+                error: (xhr) => {
+                    hideGlobalLoader();
+                    Swal.fire('Error', xhr.responseJSON?.error || 'Error inesperado', 'error');
+                }
+            });
+        },
+
+        guardarComoCurva: function() {
+            const total = parseInt($('#distTallasStockTotal').val()) || 0;
+            const items = [];
+            $('#tablaDistTallas tbody tr').each(function(idx) {
+                const talla = ($(this).find('.dt-talla').val() || '').trim();
+                const stock = parseInt($(this).find('.dt-stock').val()) || 0;
+                if (talla && stock > 0 && total > 0) {
+                    items.push({ talla, porcentaje: (stock / total) * 100, orden: idx });
+                }
+            });
+            if (!items.length) {
+                Swal.fire('Sin datos', 'No hay tallas con stock para guardar como curva.', 'warning');
+                return;
+            }
+            // Normalizar a 100 exacto.
+            const suma = items.reduce((s, it) => s + it.porcentaje, 0);
+            if (Math.abs(suma - 100) > 0.01) {
+                const factor = 100 / suma;
+                items.forEach(it => it.porcentaje = +(it.porcentaje * factor).toFixed(2));
+                // Ajuste final para asegurar 100.00 exacto.
+                const ajuste = +(100 - items.reduce((s, it) => s + it.porcentaje, 0)).toFixed(2);
+                items[0].porcentaje = +(items[0].porcentaje + ajuste).toFixed(2);
+            }
+
+            $('#guardarCurvaNombre').val(
+                this.contexto.marca && this.contexto.genero
+                    ? `Curva ${this.contexto.marca} ${this.contexto.genero}`
+                    : (this.contexto.nombre || '')
+            );
+            $('#guardarCurvaDescripcion').val('');
+            // Poblar selects de marca/género con las mismas opciones del contexto.
+            const $mSel = $('#guardarCurvaMarca').empty().append('<option value="">— todas —</option>');
+            if (this.contexto.marca_id) $mSel.append(`<option value="${this.contexto.marca_id}" selected>${this.contexto.marca}</option>`);
+            const $gSel = $('#guardarCurvaGenero').empty().append('<option value="">— todos —</option>');
+            if (this.contexto.genero_id) $gSel.append(`<option value="${this.contexto.genero_id}" selected>${this.contexto.genero}</option>`);
+
+            DistTallas._pendingItems = items;
+            $('#modalGuardarCurva').modal('show');
+        },
+
+        _pendingItems: [],
+
+        confirmarGuardarCurva: function() {
+            const payload = {
+                nombre: ($('#guardarCurvaNombre').val() || '').trim(),
+                descripcion: ($('#guardarCurvaDescripcion').val() || '').trim(),
+                marca_id: $('#guardarCurvaMarca').val() || null,
+                genero_id: $('#guardarCurvaGenero').val() || null,
+                items: DistTallas._pendingItems,
+                activo: true
+            };
+            if (!payload.nombre) {
+                Swal.fire('Falta nombre', 'Ingresa un nombre para la curva.', 'warning');
+                return;
+            }
+            $.ajax({
+                url: '/app/api/curvas-distribucion/guardar/',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify(payload),
+                success: (resp) => {
+                    if (resp.success) {
+                        $('#modalGuardarCurva').modal('hide');
+                        Swal.fire('Guardada', `Curva "${payload.nombre}" guardada.`, 'success');
+                        DistTallas.cargarCurvas();
+                    } else {
+                        Swal.fire('Error', resp.error || 'No se pudo guardar', 'error');
+                    }
+                },
+                error: (xhr) => Swal.fire('Error', xhr.responseJSON?.error || 'Error inesperado', 'error')
+            });
+        }
+    };
+
+    // Abrir modal desde el botón "Distribuir" en la tabla de recepción
+    $(document).on('click', '.btn-distribuir-tallas', function(e) {
+        e.stopPropagation();
+        const $b = $(this);
+        DistTallas.abrir({
+            compra_producto_id: $b.data('compra-producto-id'),
+            nombre: $b.data('nombre'),
+            marca_id: $b.data('marca-id'),
+            marca: $b.data('marca'),
+            color: $b.data('color'),
+            genero_id: $b.data('genero-id'),
+            genero: $b.data('genero'),
+            stock: $b.data('stock')
+        });
+    });
+
+    // Eventos internos del modal Distribuir
+    $('#btnAgregarTallaDistTallas').on('click', () => { DistTallas.agregarFila('', 0, 0); DistTallas.actualizarSuma(); });
+    $('#btnEquitativoDistTallas').on('click', () => { DistTallas.redistribuirEquitativo(); DistTallas.actualizarSuma(); });
+    $('#btnLimpiarDistTallas').on('click', () => { $('#tablaDistTallas tbody').empty(); DistTallas.actualizarSuma(); });
+    $('#btnAplicarCurvaDistTallas').on('click', () => {
+        const id = $('#distTallasCurvaSelect').val();
+        if (!id) return Swal.fire('Elige una curva', 'Selecciona primero una curva guardada.', 'info');
+        DistTallas.aplicarCurva(id);
+    });
+    $('#btnCargarGuiaDistTallas').on('click', () => {
+        const id = $('#distTallasGuiaSelect').val();
+        if (!id) return Swal.fire('Elige una guía', 'Selecciona primero una guía de tallas.', 'info');
+        DistTallas.cargarDesdeGuia(id);
+    });
+    $(document).on('click', '.dt-eliminar', function() { $(this).closest('tr').remove(); DistTallas.actualizarSuma(); });
+    $(document).on('input', '.dt-stock', function() {
+        const total = parseInt($('#distTallasStockTotal').val()) || 0;
+        const st = parseInt($(this).val()) || 0;
+        const pct = total > 0 ? (st / total) * 100 : 0;
+        $(this).closest('tr').find('.dt-pct').val(pct.toFixed(2));
+        DistTallas.actualizarSuma();
+    });
+    $(document).on('input', '.dt-pct', function() {
+        const total = parseInt($('#distTallasStockTotal').val()) || 0;
+        const pct = parseFloat($(this).val()) || 0;
+        const stock = Math.round((pct / 100) * total);
+        $(this).closest('tr').find('.dt-stock').val(stock);
+        DistTallas.actualizarSuma();
+    });
+    $('#btnAplicarDistTallas').on('click', () => DistTallas.aplicar());
+    $('#btnGuardarComoCurva').on('click', () => DistTallas.guardarComoCurva());
+    $('#btnConfirmarGuardarCurva').on('click', () => DistTallas.confirmarGuardarCurva());
+
     // Limpiar todo
     $('#btnLimpiarTodo').on('click', function() {
         Swal.fire({
@@ -3707,7 +4435,360 @@ const GestionCompras = (function() {
     // Al cerrar el modal, desactivar modo eliminar
     $('#modalRecepcionProductos').on('hidden.bs.modal', function() {
         desactivarModoEliminar();
+        desactivarModoSucursalSeleccion();
     });
+
+    // ========== MODO ASIGNACIÓN MASIVA DE SUCURSAL (vía checkboxes) ==========
+    // Reemplaza el antiguo "Asignar sucursal global" para evitar asignaciones accidentales.
+    // Flujo: 1) Elegir sucursal en el select  2) Click "Elegir filas" (activa checkboxes)
+    //        3) Marcar filas  4) Click "Aplicar a N"  5) Confirmar.
+    let modoSucursalSelActivo = false;
+
+    function actualizarContadorSucursalSeleccion() {
+        const total = $('.check-sucursal-talla:checked').length;
+        $('#contadorSucursalSel').text(total);
+        if (modoSucursalSelActivo) {
+            $('#btnAplicarSucursalSeleccion').toggle(total > 0);
+        }
+        // Resaltar filas seleccionadas visualmente
+        $('.check-sucursal-talla').each(function() {
+            const $row = $(this).closest('tr');
+            $row.toggleClass('row-sucursal-sel', $(this).is(':checked'));
+        });
+        // Sincronizar checkbox de cabecera
+        const totalCheckboxes = $('.check-sucursal-talla').length;
+        $('#checkSucursalTodos').prop('checked', total > 0 && total === totalCheckboxes);
+    }
+
+    function desactivarModoSucursalSeleccion() {
+        modoSucursalSelActivo = false;
+        $('#modalRecepcionProductos').removeClass('modo-sucursal-sel');
+        $('#btnAplicarSucursalSeleccion').hide();
+        $('#checkSucursalTodos').prop('checked', false);
+        $('.check-sucursal-talla, .check-sucursal-grupo').prop('checked', false);
+        $('tr.row-sucursal-sel').removeClass('row-sucursal-sel');
+        $('#contadorSucursalSel').text('0');
+    }
+
+    $('#btnToggleSucursalSeleccion').on('click', function() {
+        modoSucursalSelActivo = !modoSucursalSelActivo;
+        if (modoSucursalSelActivo) {
+            $('#modalRecepcionProductos').addClass('modo-sucursal-sel');
+            // Expandir todos los grupos para que sean visibles los checkboxes de talla
+            $('.producto-grupo').each(function() {
+                const grupoId = $(this).data('grupo');
+                const $icon = $(this).find('.expand-icon');
+                const $tallas = $(`.talla-detalle[data-grupo="${grupoId}"]`);
+                if (!$tallas.is(':visible')) {
+                    $icon.addClass('expanded');
+                    $(this).addClass('expandido');
+                    $tallas.show();
+                }
+            });
+            actualizarContadorSucursalSeleccion();
+            GestionCompras.showInfo(
+                'Marca con checkbox las filas donde aplicar la sucursal, luego haz clic en "Aplicar a N"'
+            );
+        } else {
+            desactivarModoSucursalSeleccion();
+        }
+    });
+
+    // Seleccionar / deseleccionar todas
+    $(document).on('change', '#checkSucursalTodos', function() {
+        const checked = $(this).is(':checked');
+        $('.check-sucursal-talla').prop('checked', checked);
+        $('.check-sucursal-grupo').prop('checked', checked);
+        actualizarContadorSucursalSeleccion();
+    });
+
+    // Click en checkbox de grupo → selecciona todas las tallas del grupo
+    $(document).on('change', '.check-sucursal-grupo', function(e) {
+        e.stopPropagation();
+        const grupoId = $(this).data('grupo');
+        const checked = $(this).is(':checked');
+        $(`.check-sucursal-talla[data-grupo="${grupoId}"]`).prop('checked', checked);
+        actualizarContadorSucursalSeleccion();
+    });
+
+    // Click en checkbox de talla individual → actualiza contador y grupo asociado
+    $(document).on('change', '.check-sucursal-talla', function(e) {
+        e.stopPropagation();
+        const grupoId = $(this).data('grupo');
+        if (grupoId) {
+            const tallasGrupo = $(`.check-sucursal-talla[data-grupo="${grupoId}"]`);
+            const marcadas = tallasGrupo.filter(':checked').length;
+            $(`.check-sucursal-grupo[data-grupo="${grupoId}"]`)
+                .prop('checked', marcadas > 0 && marcadas === tallasGrupo.length);
+        }
+        actualizarContadorSucursalSeleccion();
+    });
+
+    // Aplicar sucursal a filas marcadas
+    $('#btnAplicarSucursalSeleccion').on('click', function() {
+        const $checks = $('.check-sucursal-talla:checked');
+        if ($checks.length === 0) {
+            GestionCompras.showError('No hay filas seleccionadas');
+            return;
+        }
+        const $select = $('#sucursalGlobalMasiva');
+        const sucursalId = $select.val();
+        const sucursalLabel = sucursalId ? ($select.find('option:selected').text() || 'Sucursal') : 'Sin sucursal';
+
+        // Analizar filas: cuántas tienen cantidad y cuántas no. Las que no
+        // tienen cantidad no se guardarían al dar "Guardar Recepción", por
+        // lo que preguntamos si se auto-completa con la cantidad pendiente.
+        let sinCantidad = 0;
+        $checks.each(function() {
+            const $row = $(this).closest('tr');
+            const $input = $row.find('.recepcionado-input');
+            const cant = parseInt($input.val(), 10);
+            if (!(cant > 0)) {
+                const max = parseInt($input.data('max') || $input.attr('max'), 10);
+                if (max > 0) sinCantidad++;
+            }
+        });
+
+        if (!sucursalId) {
+            Swal.fire({
+                icon: 'question',
+                title: '¿Quitar sucursal a las filas seleccionadas?',
+                text: 'Has elegido "Sin sucursal". Esto borrará la sucursal destino de las filas marcadas.',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, quitar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#6c757d'
+            }).then(r => { if (r.isConfirmed) aplicarSucursalAFilas($checks, '', false); });
+            return;
+        }
+
+        const avisoSinCantidad = sinCantidad > 0
+            ? `<div class="alert alert-warning py-2 mt-2 mb-0" style="font-size:0.82rem;">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <strong>${sinCantidad}</strong> fila(s) seleccionada(s) no tienen cantidad ingresada.
+                Sin cantidad, la recepción no se guarda y la sucursal se perdería.
+               </div>`
+            : '';
+
+        Swal.fire({
+            icon: 'info',
+            title: `Aplicar "${sucursalLabel}"`,
+            html: `
+                <div class="text-start">
+                    <p class="mb-2">Se asignará <strong>${sucursalLabel}</strong> como sucursal destino a <strong>${$checks.length}</strong> fila(s).</p>
+                    ${avisoSinCantidad}
+                </div>`,
+            showDenyButton: sinCantidad > 0,
+            showCancelButton: true,
+            confirmButtonText: sinCantidad > 0
+                ? `<i class="bi bi-box-seam me-1"></i>Rellenar cantidad máx. y aplicar`
+                : `<i class="bi bi-geo-alt-fill me-1"></i>Aplicar`,
+            denyButtonText: `<i class="bi bi-geo-alt me-1"></i>Solo sucursal`,
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0d6efd',
+            denyButtonColor: '#6c757d'
+        }).then(r => {
+            if (r.isConfirmed) {
+                // Con autofill de cantidad si aplica
+                aplicarSucursalAFilas($checks, sucursalId, sinCantidad > 0);
+            } else if (r.isDenied) {
+                // Solo sucursal, sin auto-rellenar cantidad
+                aplicarSucursalAFilas($checks, sucursalId, false);
+            }
+        });
+    });
+
+    // Extrae los compra_producto_talla_ids (posiblemente agrupados) de una fila
+    // de recepción.
+    function extraerTallaIdsFila($row) {
+        const $input = $row.find('.recepcionado-input');
+        let ids = $input.data('ids');
+        if (typeof ids === 'string') {
+            try { ids = JSON.parse(ids); } catch (e) { ids = [ids]; }
+        }
+        if (!ids) {
+            const single = $input.data('id') || $row.find('.check-sucursal-talla').data('ids');
+            if (single) {
+                ids = typeof single === 'string' ? (function(){
+                    try { return JSON.parse(single); } catch(e) { return [single]; }
+                })() : (Array.isArray(single) ? single : [single]);
+            }
+        }
+        return Array.isArray(ids) ? ids : (ids ? [ids] : []);
+    }
+
+    // Aplica la sucursal a las filas marcadas y persiste inmediatamente.
+    // - rellenarCantidad=true : usa guardar_recepcion. Las filas sin cantidad
+    //   se auto-completan con la máxima pendiente (crea o actualiza recepciones).
+    // - rellenarCantidad=false: usa el endpoint actualizar_sucursal_recepciones
+    //   que SOLO cambia sucursal_destino en recepciones existentes,
+    //   sin crear filas nuevas ni modificar cantidades.
+    function aplicarSucursalAFilas($checks, sucursalId, rellenarCantidad) {
+        const compraId = $('#globalIDCompraRecepcion').val();
+        if (!compraId) {
+            GestionCompras.showError('No se pudo identificar la compra');
+            return;
+        }
+
+        // Actualizar el DOM primero en todas las filas marcadas (feedback inmediato)
+        const tallaIdsAAfectar = [];
+        let filasAfectadas = 0;
+        $checks.each(function() {
+            const $row = $(this).closest('tr');
+            const $select = $row.find('.sucursal-row-select');
+            if ($select.length) {
+                $select.val(sucursalId || '').trigger('change');
+            }
+            const ids = extraerTallaIdsFila($row);
+            ids.forEach(id => tallaIdsAAfectar.push(id));
+            filasAfectadas++;
+        });
+
+        if (tallaIdsAAfectar.length === 0) {
+            GestionCompras.showError('No se pudieron identificar las tallas seleccionadas');
+            return;
+        }
+
+        // =========================================================
+        // MODO A: "Solo sucursal" → actualizar_sucursal_recepciones
+        // =========================================================
+        if (!rellenarCantidad) {
+            if (typeof showGlobalLoader === 'function') showGlobalLoader();
+            $.ajax({
+                url: GestionCompras.urls.actualizarSucursalRecepciones,
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({
+                    compra_id: compraId,
+                    compra_producto_talla_ids: tallaIdsAAfectar,
+                    sucursal_destino_id: sucursalId === '' ? '' : (sucursalId || null)
+                }),
+                success: function(resp) {
+                    if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+                    if (resp && resp.success) {
+                        const subtitulo = resp.encontradas === 0
+                            ? 'No había recepciones previas en las filas seleccionadas. Usa "Rellenar cantidad máx. y aplicar" para crear las recepciones.'
+                            : `${resp.actualizadas} recepción(es) actualizadas${resp.sucursal ? ' → ' + resp.sucursal : ' (sucursal borrada)'}`;
+                        GestionCompras.showSuccess(subtitulo);
+
+                        desactivarModoSucursalSeleccion();
+                        const page = (typeof currentPage !== 'undefined' ? currentPage : 1);
+                        const search = (typeof currentSearch !== 'undefined' ? currentSearch : '');
+                        cargarDatosRecepcion(compraId, page, search);
+                    } else {
+                        GestionCompras.showError((resp && resp.error) || 'No se pudo actualizar la sucursal');
+                    }
+                },
+                error: function(xhr) {
+                    if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+                    console.error('Error actualizando sucursal:', xhr);
+                    GestionCompras.showError('Error al actualizar la sucursal. Revisa la consola.');
+                }
+            });
+            return;
+        }
+
+        // =========================================================
+        // MODO B: "Rellenar cantidad máx. y aplicar" → guardar_recepcion
+        // =========================================================
+        const datos = [];
+        let cantidadesRellenadas = 0;
+        let omitidas = 0;
+
+        $checks.each(function() {
+            const $row = $(this).closest('tr');
+            const $input = $row.find('.recepcionado-input');
+            const $facturaInput = $row.find('.factura-datalist-input');
+
+            let cantidad = parseInt($input.val(), 10);
+            if (!(cantidad > 0)) {
+                const max = parseInt($input.data('max') || $input.attr('max'), 10);
+                if (max > 0) {
+                    cantidad = max;
+                    $input.val(max).addClass('filled is-valid');
+                    cantidadesRellenadas++;
+                }
+            }
+
+            if (!(cantidad > 0)) {
+                omitidas++;
+                return;
+            }
+
+            const ids = extraerTallaIdsFila($row);
+            if (!ids.length) { omitidas++; return; }
+
+            const facturaId = (typeof validarFacturaInput === 'function')
+                ? validarFacturaInput($facturaInput)
+                : null;
+
+            const porId = Math.floor(cantidad / ids.length);
+            const resto = cantidad % ids.length;
+            ids.forEach((id, idx) => {
+                const cantAsignada = porId + (idx < resto ? 1 : 0);
+                if (cantAsignada > 0) {
+                    datos.push({
+                        compra_producto_talla_id: id,
+                        recepcionado: cantAsignada,
+                        factura_id: facturaId,
+                        sucursal_destino_id: sucursalId === '' ? '' : (sucursalId || null)
+                    });
+                }
+            });
+        });
+
+        recalcularTotalesRecepcion();
+
+        if (datos.length === 0) {
+            GestionCompras.showError('No se pudo armar el payload. Revisa las filas seleccionadas.');
+            return;
+        }
+
+        if (typeof showGlobalLoader === 'function') showGlobalLoader();
+        $.ajax({
+            url: GestionCompras.urls.guardarRecepcion,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                compra_id: compraId,
+                recepciones: datos,
+                sucursal_destino_id: null
+            }),
+            success: function(resp) {
+                if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+                if (resp && resp.success) {
+                    const extras = [];
+                    if (cantidadesRellenadas > 0) extras.push(`${cantidadesRellenadas} con cantidad auto-rellenada`);
+                    if (omitidas > 0) extras.push(`${omitidas} omitidas`);
+                    const sufijo = extras.length ? ` (${extras.join(', ')})` : '';
+                    GestionCompras.showSuccess(`Sucursal aplicada y guardada en ${datos.length} fila(s)${sufijo}`);
+
+                    desactivarModoSucursalSeleccion();
+                    const page = (typeof currentPage !== 'undefined' ? currentPage : 1);
+                    const search = (typeof currentSearch !== 'undefined' ? currentSearch : '');
+                    cargarDatosRecepcion(compraId, page, search);
+
+                    const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+                    if (typeof cargarComprasPorAnio === 'function') {
+                        cargarComprasPorAnio(
+                            anio,
+                            (typeof currentPageCompras !== 'undefined' ? currentPageCompras : 1),
+                            (typeof currentSearchCompras !== 'undefined' ? currentSearchCompras : '')
+                        );
+                    }
+                } else {
+                    GestionCompras.showError((resp && resp.error) || 'No se pudo guardar la sucursal');
+                }
+            },
+            error: function(xhr) {
+                if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+                console.error('Error guardando sucursal masiva:', xhr);
+                GestionCompras.showError('Error al guardar la sucursal. Revisa la consola.');
+            }
+        });
+    }
 
     // Eliminar seleccionados masivamente
     $('#btnEliminarSeleccionados').on('click', function() {
@@ -4511,18 +5592,23 @@ $('#btnCargarCSV').on('click', function() {
             let filasInvalidas = 0;
 
             todosLosRegistrosCSV.forEach((cols) => {
-                const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
+                // La 10ª columna (sucursal) es OPCIONAL. Si no viene, queda vacía.
+                const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla, sucursalRaw] = cols.map(v => v ? v.toString().trim() : '');
+                const sucursal = sucursalRaw || '';
                 const costo = parseFloat((costoStr || '0').toString().replace(/\./g, '').replace(',', '.'));
                 const stock = parseInt((stockStr || '0').toString().replace(/\./g, ''));
                 const precio = parseFloat((precioStr || '0').toString().replace(/\./g, '').replace(',', '.'));
                 
                 if (nombre && !isNaN(costo) && !isNaN(precio) && !isNaN(stock)) {
-                    // Crear clave única para agrupar (igual que en el backend)
-                    const key = `${nombre}|${descripcion}|${marca}|${color}|${genero}|${costo}|${precio}`;
+                    // Clave de agrupación: misma combinación + misma sucursal.
+                    // Dos filas iguales pero con distinta sucursal quedan como
+                    // dos productos separados (coherente con el backend).
+                    const key = `${nombre}|${descripcion}|${marca}|${color}|${genero}|${costo}|${precio}|${sucursal.toLowerCase()}`;
                     
                     if (!productosAgrupados[key]) {
                         productosAgrupados[key] = {
                             nombre, descripcion, marca, color, genero, costo, precio,
+                            sucursal,
                             tallasMap: {},  // Usar objeto para agrupar por talla
                             totalStock: 0,
                             filas: []
@@ -4598,13 +5684,35 @@ $('#btnCargarCSV').on('click', function() {
                         return a[0].localeCompare(b[0]);
                     });
                 
-                const tallasStr = tallasArray.map(([talla, stock]) => 
-                    `<span class="badge bg-secondary me-1 mb-1">${talla}: ${stock}</span>`
-                ).join('');
+                const tallasStr = tallasArray.map(([talla, stock]) => {
+                    // Caso especial: talla vacía/S_T → "Total sin desglose"
+                    // (se distribuirá por guía en Recepción).
+                    const esTotal = !talla || talla === 'S/T';
+                    const cls = esTotal
+                        ? 'badge bg-warning text-dark border border-warning-subtle me-1 mb-1'
+                        : 'badge bg-secondary me-1 mb-1';
+                    const label = esTotal
+                        ? `<i class="bi bi-exclamation-triangle me-1"></i>Total sin desglose: ${stock}`
+                        : `${talla}: ${stock}`;
+                    return `<span class="${cls}" title="${esTotal ? 'Se distribuirá en Recepción con una guía de tallas' : ''}">${label}</span>`;
+                }).join('');
                 
                 const cantidadTallas = tallasArray.length;
                 const rowClass = cantidadTallas > 1 ? 'table-info' : '';
                 
+                // Validar sucursal contra el catálogo. Si no matchea, avisamos
+                // pero NO rechazamos la fila (sucursal es opcional).
+                let sucursalCell = '<span class="text-muted fst-italic">—</span>';
+                if (prod.sucursal) {
+                    const aliasLower = prod.sucursal.toLowerCase();
+                    const existe = (SUCURSALES_DISPONIBLES || []).some(
+                        s => (s.alias || '').toLowerCase() === aliasLower
+                    );
+                    sucursalCell = existe
+                        ? `<span class="badge bg-info text-dark">${prod.sucursal}</span>`
+                        : `<span class="badge bg-warning text-dark" title="Alias no coincide con ninguna sucursal existente. Se ignorará al importar."><i class="bi bi-exclamation-triangle me-1"></i>${prod.sucursal}</span>`;
+                }
+
                 const row = `
                     <tr class="${rowClass}">
                         <td><small class="text-muted">${index + 1}</small></td>
@@ -4620,6 +5728,7 @@ $('#btnCargarCSV').on('click', function() {
                         <td class="text-end">$${prod.precio.toLocaleString()}</td>
                         <td><span class="badge bg-primary">${prod.totalStock}</span></td>
                         <td class="text-start" style="min-width: 200px;">${tallasStr}</td>
+                        <td class="text-center">${sucursalCell}</td>
                     </tr>
                 `;
                 tbody.append(row);
@@ -4806,18 +5915,21 @@ function resetCSVUpload() {
     function cargarComprasPorAnio(anio, page = 1, search = '') {
         const startTime = performance.now();
         showGlobalLoader();
-        
+
         // Mostrar mensaje de carga específico
         $('#tbodyCompras').html('<tr><td colspan="10" class="text-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando compras del año ' + anio + '...</td></tr>');
-        
+
+        const sucursalFiltroId = $('#filtroSucursalCompras').val() || '';
+
         $.ajax({
             url: '{% url "obtener_compras" %}',
             method: 'GET',
-            data: { 
+            data: {
                 anio: anio,
                 page: page,
                 page_size: 20,
-                search: search
+                search: search,
+                sucursal_id: sucursalFiltroId
             },
             success: function (response) {
                 const endTime = performance.now();
@@ -4859,6 +5971,12 @@ function resetCSVUpload() {
                             const diasBadge = `<span class="badge ${compra.dias_temporada > 30 ? 'bg-success' : (compra.dias_temporada > 0 ? 'bg-warning text-dark' : 'bg-danger')}">${compra.dias_temporada > 0 ? compra.dias_temporada + ' días' : 'Finalizada'}</span>`;
                             const progreso = compra.unidades > 0 ? Math.round((compra.recepcionado / compra.unidades) * 100) : 0;
                             const progresoColor = progreso >= 100 ? '#0ab39c' : (progreso > 0 ? '#f7b84b' : '#e9ecef');
+                            // Chips de sucursales destino donde se recepcionó (referencia).
+                            const sucursalesChips = (compra.sucursales_destino || []).map(s =>
+                                `<span class="badge rounded-pill bg-info-subtle text-info border border-info-subtle me-1" style="font-size:.62rem;font-weight:500;" title="Recepcionado en ${s.sucursal}">
+                                    <i class="bi bi-geo-alt-fill me-1"></i>${s.sucursal}: ${s.unidades}u
+                                </span>`
+                            ).join('');
                             const fila = `
 <tr>
     <td class="text-nowrap col-hide-sm">${compra.id}</td>
@@ -4866,6 +5984,7 @@ function resetCSVUpload() {
     <td class="td-nombre">
         <div class="d-flex flex-column">
             <span>${resaltarBusquedaCompras(compra.nombre, search)}</span>
+            ${sucursalesChips ? `<div class="mt-1" style="line-height:1.4;">${sucursalesChips}</div>` : ''}
             <span class="d-md-none text-muted" style="font-size:0.7rem;">${compra.fecha} · $${compra.costo_total.toLocaleString()}</span>
             <span class="d-md-none mt-1">${diasBadge} ${estadoBadge}</span>
         </div>
@@ -5151,9 +6270,9 @@ function resetCSVUpload() {
     $('#btnImportarCSV').on('click', function () {
         showGlobalLoader();
         const filas = todosLosRegistrosCSV.map(cols => {
-            const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
+            // La 10ª columna (sucursal alias) es OPCIONAL.
+            const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla, sucursalRaw] = cols.map(v => v ? v.toString().trim() : '');
             
-            // Parsear valores numéricos con validación
             const costo = parseFloat((costoStr || '0').toString().replace(/\./g, '').replace(',', '.')) || 0;
             const precioSugerido = parseFloat((precioStr || '0').toString().replace(/\./g, '').replace(',', '.')) || 0;
             const stock = parseInt((stockStr || '0').toString().replace(/\./g, '')) || 0;
@@ -5164,11 +6283,12 @@ function resetCSVUpload() {
                 atributo1: marca,
                 atributo2: color,
                 atributo3: genero,
-                atributo4: '',  // Agregamos atributo4 que faltaba
+                atributo4: '',
                 costo: costo,
                 precioSugerido: precioSugerido,
                 stock: stock,
-                talla
+                talla,
+                sucursal: sucursalRaw || ''
             };
         });
 
@@ -5544,6 +6664,8 @@ function resetCSVUpload() {
             }
             
             const facturaInput = $row.find('.factura-datalist-input');
+            const sucursalSelect = $row.find('.sucursal-row-select');
+            const sucursalDestinoId = sucursalSelect.length ? (sucursalSelect.val() || null) : null;
             
             // Solo validar si hay cantidad ingresada
             if (cantidad > 0 && compraTallaIds && compraTallaIds.length > 0) {
@@ -5562,13 +6684,13 @@ function resetCSVUpload() {
                 let cantidadRestante = cantidad % compraTallaIds.length;
                 
                 compraTallaIds.forEach((id, index) => {
-                    // Agregar 1 extra a los primeros para cubrir el resto
                     const cantidadAsignada = cantidadPorId + (index < cantidadRestante ? 1 : 0);
                     if (cantidadAsignada > 0) {
                         datos.push({
                             compra_producto_talla_id: id,
                             recepcionado: cantidadAsignada,
-                            factura_id: facturaId
+                            factura_id: facturaId,
+                            sucursal_destino_id: sucursalDestinoId || null
                         });
                     }
                 });
@@ -5611,11 +6733,17 @@ function resetCSVUpload() {
 
             showGlobalLoader();
 
+            const sucursalGlobalId = $('#sucursalGlobalMasiva').val() || null;
+
             $.ajax({
                 url: GestionCompras.urls.guardarRecepcion,
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ compra_id: $('#globalIDCompraRecepcion').val(), recepciones: datos }),
+                data: JSON.stringify({
+                    compra_id: $('#globalIDCompraRecepcion').val(),
+                    recepciones: datos,
+                    sucursal_destino_id: sucursalGlobalId
+                }),
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 success: function(data) {
                     hideGlobalLoader();

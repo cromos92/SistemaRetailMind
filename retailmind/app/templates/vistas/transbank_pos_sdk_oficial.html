@@ -571,6 +571,34 @@ async function cerrarDia() {
     }
 }
 
+// Resume el tipo de tarjeta Transbank (CR/DB/PP/RD) a una etiqueta corta con color.
+function formatearTipoTarjeta(cardType) {
+    const tipo = (cardType || '').trim().toUpperCase();
+    const mapa = {
+        'CR': { label: 'CRÉD', cls: 'bg-primary' },
+        'DB': { label: 'DÉB',  cls: 'bg-success' },
+        'RD': { label: 'DÉB',  cls: 'bg-success' },
+        'PP': { label: 'PREP', cls: 'bg-warning text-dark' },
+    };
+    const cfg = mapa[tipo] || { label: tipo || 'N/D', cls: 'bg-secondary' };
+    return `<span class="badge ${cfg.cls}">${cfg.label}</span>`;
+}
+
+// Arma una observación compacta con N° operación (voucher) y tipo crédito/débito.
+function resumirObservacionTx(tx) {
+    const op   = (tx.operationNumber || '').trim();
+    const auth = (tx.authorizationCode || '').trim();
+    const last4 = (tx.last4Digits || '').trim();
+    const tipo = formatearTipoTarjeta(tx.cardType);
+
+    const partes = [];
+    if (op)    partes.push(`<strong>OP</strong> ${op}`);
+    if (auth)  partes.push(`<span class="text-muted">Auth</span> ${auth}`);
+    if (last4) partes.push(`<span class="text-muted">••${last4}</span>`);
+    partes.push(tipo);
+    return partes.join(' · ');
+}
+
 async function consultarDetalleVentas() {
     try {
         const result = await Swal.fire({
@@ -594,12 +622,16 @@ async function consultarDetalleVentas() {
             let txListHtml = '';
             if (resultado.transactions && resultado.transactions.length > 0) {
                 txListHtml = '<hr><div style="max-height:300px;overflow-y:auto;">' +
-                    '<table class="table table-sm table-bordered mb-0"><thead><tr>' +
-                    '<th>#</th><th>Monto</th><th>Tarjeta</th><th>Auth</th></tr></thead><tbody>' +
+                    '<table class="table table-sm table-bordered mb-0 align-middle"><thead><tr>' +
+                    '<th>#</th><th class="text-end">Monto</th><th>Tarjeta</th>' +
+                    '<th>Observación</th></tr></thead><tbody>' +
                     resultado.transactions.map((tx, i) =>
-                        `<tr><td>${i+1}</td><td>$${(tx.amount||0).toLocaleString()}</td>` +
-                        `<td>${tx.cardBrand||''} ${tx.cardType||''}</td>` +
-                        `<td>${tx.authorizationCode||''}</td></tr>`
+                        `<tr>` +
+                            `<td>${i+1}</td>` +
+                            `<td class="text-end">$${(tx.amount||0).toLocaleString()}</td>` +
+                            `<td>${(tx.cardBrand||'').trim()}</td>` +
+                            `<td class="small">${resumirObservacionTx(tx)}</td>` +
+                        `</tr>`
                     ).join('') +
                     '</tbody></table></div>';
             }
