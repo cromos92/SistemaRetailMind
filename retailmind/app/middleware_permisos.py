@@ -6,7 +6,7 @@ from django.shortcuts import redirect
 from django.http import JsonResponse
 from django.contrib import messages
 from django.urls import resolve
-from .models import PermisoRol, OpcionMenu
+from .models import PermisoRol, OpcionMenu, Sucursal
 
 
 # Mapeo de URLs a códigos de opción del menú
@@ -99,6 +99,12 @@ URLS_SIN_VERIFICACION = [
     '/app/bienvenida/', # Página de bienvenida básica siempre accesible
 ]
 
+# URLs restringidas a sucursales específicas (por alias).
+# Si la sucursal activa NO está en la lista, se deniega el acceso con un mensaje claro.
+URL_SOLO_SUCURSALES = {
+    '/app/verGestionProducto/': ['EDEL', 'GILD', 'IMP', 'PA00'],
+}
+
 # URLs que siempre están permitidas (login, logout, static, etc.)
 URLS_SIEMPRE_PERMITIDAS = [
     '/accounts/',
@@ -179,6 +185,16 @@ class PermisosMenuMiddleware:
         # 3. Si el usuario no está autenticado, dejar que Django maneje la autenticación
         if not request.user.is_authenticated:
             return None  # Django redirigirá al login si es necesario
+
+        # 4a. Verificar restricción por sucursal activa (antes del chequeo de roles)
+        for url_restringida, sucursales_permitidas in URL_SOLO_SUCURSALES.items():
+            if url_restringida in path:
+                alias_actual = request.session.get('alias', '')
+                if alias_actual.upper() not in [s.upper() for s in sucursales_permitidas]:
+                    return self.denegar_acceso_sucursal(
+                        request, sucursales_permitidas, alias_actual
+                    )
+                break
         
         # 4. Buscar si la URL tiene un permiso asociado
         # Nota: Todos los usuarios respetan los permisos por rol. is_superuser no otorga privilegios.
@@ -247,3 +263,27 @@ class PermisosMenuMiddleware:
             )
             # Redirigir a página de bienvenida (siempre accesible)
             return redirect('bienvenida')
+
+    def denegar_acceso_sucursal(self, request, sucursales_permitidas, alias_actual):
+        """
+        Deniega el acceso porque la sucursal activa no está en la lista permitida.
+        """
+        is_ajax = (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+            request.content_type == 'application/json' or
+            request.headers.get('Accept', '').startswith('application/json')
+        )
+        lista = ', '.join(sucursales_permitidas)
+        mensaje = (
+            f'⚠️ Módulo restringido: solo accesible desde las sucursales {lista}. '
+            f'Tu sucursal activa es "{alias_actual or "Sin sucursal"}". '
+            'Cambia de sucursal para continuar.'
+        )
+        if is_ajax:
+            return JsonResponse({
+                'success': False,
+                'error': True,
+                'mensaje': mensaje,
+            }, status=403)
+        messages.error(request, mensaje)
+        return redirect('bienvenida')

@@ -2314,7 +2314,15 @@
 
                                 <!-- Sección: Atributos -->
                                 <div class="crear-seccion">
-                                    <div class="crear-seccion-titulo attrs"><i class="bi bi-palette"></i> Atributos</div>
+                                    <div class="crear-seccion-titulo attrs d-flex align-items-center justify-content-between">
+                                        <span><i class="bi bi-palette"></i> Atributos</span>
+                                        <button type="button" id="btnTomarReferenciaEDEL"
+                                                class="btn btn-xs btn-outline-primary py-0 px-2 d-none"
+                                                style="font-size:.68rem;border-radius:8px;"
+                                                title="Aplicar identificación del producto en EDEL (marca, color, género, categoría)">
+                                            <i class="bi bi-building me-1"></i>Usar ref. EDEL
+                                        </button>
+                                    </div>
                                     <div class="row g-2">
                                         <div class="col-6 mb-1">
                                             <label class="form-label">Marca <span class="text-danger">*</span></label>
@@ -2453,6 +2461,20 @@
                                     <div class="mt-2">
                                         <label class="form-label">Precio Sugerido (Compra)</label>
                                         <input type="number" name="precio_sugerido" class="form-control" readonly style="background:#e9ecef;">
+                                    </div>
+                                    <!-- Aviso: precio viene del sugerido de compra, no de markup calculado -->
+                                    <div id="avisoPrecioSugerido" class="d-none mt-1 d-flex align-items-center gap-2 px-2 py-1 rounded"
+                                         style="background:#fff8e1;border:1px solid #ffb300;font-size:.7rem;">
+                                        <i class="bi bi-lightbulb-fill text-warning flex-shrink-0"></i>
+                                        <span>Precio tomado del sugerido de la compra — ¿aplicar markup <strong>x2</strong>?</span>
+                                        <button type="button"
+                                                class="btn btn-warning btn-sm py-0 px-2 flex-shrink-0 btn-markup-rapido"
+                                                data-markup="2.0"
+                                                style="font-size:.7rem;font-weight:700;white-space:nowrap;">
+                                            x2 →
+                                        </button>
+                                        <button type="button" class="btn-close ms-auto flex-shrink-0" id="btnCerrarAvisoPrecio"
+                                                style="font-size:.5rem;" aria-label="Cerrar"></button>
                                     </div>
                                 </div>
                             </div>
@@ -4532,9 +4554,16 @@ function showError(msg) {
                 const pv = redondearPrecio990(pvBruto);
                 form.find('[name="sobreprecio"]').val(sp);
                 form.find('[name="precioventa"]').val(pv);
+                $('#avisoPrecioSugerido').addClass('d-none');
             } else {
                 form.find('[name="precioventa"]').val(_precioSugerido);
                 form.find('[name="sobreprecio"]').val(Math.round(_costo * 0.1));
+                // Avisar que el precio viene del sugerido y conviene aplicar x2
+                if (_precioSugerido > 0) {
+                    $('#avisoPrecioSugerido').removeClass('d-none');
+                } else {
+                    $('#avisoPrecioSugerido').addClass('d-none');
+                }
             }
 
             // Mostrar banner de trazabilidad de compra
@@ -4939,6 +4968,15 @@ function showError(msg) {
         
         // Limpiar cualquier dropdown huérfano de Select2
         $('.select2-container--open').remove();
+
+        // Limpiar globals del modal de recepción
+        window._pausaVerificacionRecepcion = false;
+        window.productoExistenteRecepcion = null;
+        window.tallasExistentesRecepcion = [];
+        window.edelReferenciaRecepcion = null;
+        $('#btnTomarReferenciaEDEL').addClass('d-none');
+        $('#avisoPrecioSugerido').addClass('d-none');
+        InfoChipsRecepcion.remove('duplicado');
         
         console.log("🧹 Select2 destruidos al cerrar modal de recepción");
     });
@@ -5303,6 +5341,12 @@ function showError(msg) {
         const precioNuevo = redondearPrecio990(Math.round(costo * markupVal));
         $scope.find('input[name="precioventa"]').val(precioNuevo);
         actualizarIndicadoresMargen($scope);
+        // Ocultar aviso precio sugerido al aplicar cualquier markup
+        $('#avisoPrecioSugerido').addClass('d-none');
+    });
+
+    $(document).on('click', '#btnCerrarAvisoPrecio', function() {
+        $('#avisoPrecioSugerido').addClass('d-none');
     });
 
     // Markup personalizado
@@ -6026,6 +6070,28 @@ function verificarProductoExistente(articulo, marca, color, genero, categoria, s
         if (response.productos_otras_sucursales && response.productos_otras_sucursales.length > 0) {
             mostrarAlertaPreciosOtrasSucursalesRecepcion(response.productos_otras_sucursales);
         }
+
+        // Guardar referencia EDEL (con tallas_detail para reutilizar SKUs en distribute)
+        window.edelReferenciaRecepcion = response.edel_producto || null;
+        const $btnEdel = $('#btnTomarReferenciaEDEL');
+        if (window.edelReferenciaRecepcion) {
+            $btnEdel.removeClass('d-none')
+                    .attr('title', `Usar identificación EDEL: ${window.edelReferenciaRecepcion.articulo} · ${window.edelReferenciaRecepcion.color} · ${window.edelReferenciaRecepcion.categoria}`);
+        } else {
+            $btnEdel.addClass('d-none');
+        }
+
+        // Duplicados: mostrar chip de advertencia
+        if (response.hay_duplicados) {
+            InfoChipsRecepcion.set('duplicado', {
+                label: `⚠ ${response.total_duplicados} registros iguales`,
+                resumen: '· artículo duplicado en esta sucursal',
+                tipoColor: 'similares',
+                detalleHtml: `<small style="font-size:.72rem;">Hay <strong>${response.total_duplicados}</strong> productos con el mismo artículo y atributos en esta sucursal. Se usará el primero. Considera eliminar los duplicados desde la gestión de productos.</small>`
+            });
+        } else {
+            InfoChipsRecepcion.remove('duplicado');
+        }
         
         if (response.existe) {
             // ✅ Producto EXACTO existe - SOLO mostrar panel verde (no advertencia)
@@ -6036,6 +6102,23 @@ function verificarProductoExistente(articulo, marca, color, genero, categoria, s
             // el usuario distribuyó el consolidado en tallas nuevas) quedan
             // con SKU vacío; aquí las rellenamos con SKUs nuevos.
             generarNuevosSkus();
+            // ✅ Actualizar selects con los IDs reales del producto encontrado
+            // (evita fallos de matching por texto cuando la compra usa abrev distintas)
+            const pe = response.producto_encontrado;
+            if (pe) {
+                window._pausaVerificacionRecepcion = true;
+                const $m = $('#modalCrearProductoDesdeRecepcion');
+                function setOpt($s, id, txt) {
+                    if (!id) return;
+                    if (!$s.find(`option[value="${id}"]`).length) $s.append(`<option value="${id}">${txt || id}</option>`);
+                    $s.val(id).trigger('change');
+                }
+                setOpt($m.find('[name="atributo1"]'), pe.marca_id,    pe.marca);
+                setOpt($m.find('[name="atributo2"]'), pe.color_id,    pe.color);
+                setOpt($m.find('[name="atributo3"]'), pe.genero_id,   pe.genero);
+                setOpt($m.find('[name="categoria"]'), pe.categoria_id, pe.categoria);
+                setTimeout(() => { window._pausaVerificacionRecepcion = false; }, 150);
+            }
             console.log('✅ Producto encontrado:', response.producto_encontrado);
         } else {
             // ⚠️ Producto NO existe - Mostrar similares si hay
@@ -6056,27 +6139,39 @@ function mostrarAlertaPreciosOtrasSucursalesRecepcion(productosOtrasSucursales) 
     }
 
     const precioForm = parseInt($('#formCrearProductoDesdeRecepcion input[name="precioventa"]').val()) || 0;
-    const hayDiferencias = productosOtrasSucursales.some(p => precioForm > 0 ? p.precioventa !== precioForm : p.precio_diferente);
+    // Solo se considera "diferencia" si hay sucursales OTRAS (no la actual) con precio distinto
+    const hayDiferencias = productosOtrasSucursales.some(p =>
+        !p.es_sucursal_actual && (precioForm > 0 ? p.precioventa !== precioForm : p.precio_diferente)
+    );
 
     let chips = '';
     productosOtrasSucursales.forEach(p => {
-        const esDif = precioForm > 0 && p.precioventa !== precioForm;
-        const dif = precioForm > 0 ? ((p.precioventa - precioForm) / precioForm * 100).toFixed(1) : 0;
+        const esActual = !!p.es_sucursal_actual;
+        const esDif = !esActual && precioForm > 0 && p.precioventa !== precioForm;
+        const dif = precioForm > 0 && !esActual ? ((p.precioventa - precioForm) / precioForm * 100).toFixed(1) : 0;
         const difLabel = esDif ? `<span style="font-size:.58rem;color:${parseFloat(dif) > 0 ? '#c62828' : '#2e7d32'};">${parseFloat(dif) > 0 ? '+' : ''}${dif}%</span>` : '';
+        const labelSuc = esActual
+            ? `<strong>${p.sucursal_nombre}</strong><span style="font-size:.55rem;color:#1565c0;margin-left:2px;">(actual)</span>`
+            : `<strong>${p.sucursal_nombre}</strong>`;
+        const borderColor = esActual ? '#90caf9' : (esDif ? '#ffcc80' : '#c5cae9');
+        const bgColor = esActual ? '#e3f2fd' : '#fff';
         chips += `
-        <div class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded me-1 mb-1" style="background:#fff;border:1px solid ${esDif ? '#ffcc80' : '#c5cae9'};font-size:.65rem;">
-            <strong>${p.sucursal_nombre}</strong>
+        <div class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded me-1 mb-1" style="background:${bgColor};border:1px solid ${borderColor};font-size:.65rem;">
+            ${labelSuc}
             <span class="text-success fw-bold">$${p.precioventa.toLocaleString('es-CL')}</span>
             ${difLabel}
-            <button type="button" class="btn btn-sm p-0 btnCopiarPrecioSucursalRecepcion" style="font-size:.62rem;color:#1565c0;line-height:1;"
+            ${!esActual ? `<button type="button" class="btn btn-sm p-0 btnCopiarPrecioSucursalRecepcion" style="font-size:.62rem;color:#1565c0;line-height:1;"
                     data-precio="${p.precioventa}" data-costo="${p.costo}" data-sobreprecio="${p.sobreprecio}" title="Usar precios de ${p.sucursal_nombre}">
                 <i class="bi bi-arrow-down-circle"></i>
-            </button>
+            </button>` : ''}
         </div>`;
     });
 
     const maxPreview = 3;
-    const preview = productosOtrasSucursales.slice(0, maxPreview).map(p => p.sucursal_nombre).join(', ');
+    // Para el resumen del chip mostramos las sucursales "otras" primero; si no hay, mostramos la actual
+    const otrasParaPreview = productosOtrasSucursales.filter(p => !p.es_sucursal_actual);
+    const previewList = otrasParaPreview.length ? otrasParaPreview : productosOtrasSucursales;
+    const preview = previewList.slice(0, maxPreview).map(p => p.sucursal_nombre).join(', ');
     const overflow = productosOtrasSucursales.length > maxPreview ? ` +${productosOtrasSucursales.length - maxPreview}` : '';
     const rangoPrecios = (() => {
         const precios = productosOtrasSucursales.map(p => p.precioventa || 0).filter(x => x > 0);
@@ -6094,7 +6189,7 @@ function mostrarAlertaPreciosOtrasSucursalesRecepcion(productosOtrasSucursales) 
     `;
 
     InfoChipsRecepcion.set('otras_sucursales', {
-        label: hayDiferencias ? 'Precios difieren' : 'En otras sucursales',
+        label: hayDiferencias ? 'Precios difieren' : 'Sucursales',
         resumen: `· ${preview}${overflow} · ${rangoPrecios}`,
         tipoColor: hayDiferencias ? 'otras_suc_dif' : 'otras_suc_ok',
         detalleHtml: detalle
@@ -6159,6 +6254,10 @@ function mostrarProductoEncontrado(producto, tallasExistentes) {
     $('#panelProductoEncontrado').remove();
     if (!producto) return;
 
+    // Guardar globalmente para usar en DistribuirGuiaAlCrear y el botón Copiar
+    window.productoExistenteRecepcion = producto;
+    window.tallasExistentesRecepcion = tallasExistentes || [];
+
     // Tallas badges (con stock resaltadas, sin stock tenues)
     const tallasHtml = (tallasExistentes || []).slice(0, 14).map(t => {
         const conStock = (t.stock || 0) > 0;
@@ -6179,18 +6278,93 @@ function mostrarProductoEncontrado(producto, tallasExistentes) {
             ${tallasHtml || '<span class="text-muted" style="font-size:.68rem;">Sin tallas</span>'}
             ${tallasOverflow}
         </div>
-        <small class="text-muted d-block" style="font-size:.65rem;">
+        <div class="d-flex gap-2 mt-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-outline-primary btn-copiar-producto-existente-recepcion py-0 px-2"
+                    style="font-size:.68rem;border-radius:8px;">
+                <i class="bi bi-clipboard-check me-1"></i>Usar datos de este producto
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-success btn-copiar-producto-existente-recepcion py-0 px-2"
+                    data-con-precios="1"
+                    style="font-size:.68rem;border-radius:8px;">
+                <i class="bi bi-currency-dollar me-1"></i>Usar datos + precios
+            </button>
+        </div>
+        <small class="text-muted d-block mt-1" style="font-size:.65rem;">
             Al guardar se <strong>actualizarán precios</strong> del existente y se <strong>agregarán tallas nuevas</strong>.
         </small>
     `;
+
+    const btnCopiarChip = `
+        <button type="button" class="btn btn-sm p-0 ms-1 btn-copiar-producto-existente-recepcion"
+                style="font-size:.62rem;color:#bf360c;line-height:1;" title="Copiar datos del producto existente al formulario">
+            <i class="bi bi-clipboard-check"></i>
+        </button>`;
 
     InfoChipsRecepcion.set('estado', {
         label: 'YA EXISTE',
         resumen: `· ${producto.articulo} · ${producto.total_tallas || 0} tallas`,
         tipoColor: 'estado_existente',
-        detalleHtml: detalle
+        detalleHtml: detalle,
+        extraChipHtml: btnCopiarChip
     });
 }
+
+// Handler para los botones "Usar datos" / "Usar datos + precios" del chip YA EXISTE
+$(document).on('click', '.btn-copiar-producto-existente-recepcion', function() {
+    const producto = window.productoExistenteRecepcion;
+    if (!producto) return;
+    const conPrecios = $(this).data('con-precios') == 1;
+    _aplicarReferenciaNProductoRecepcion(producto, conPrecios);
+});
+
+// Aplica los datos de un producto de referencia (EDEL o existente) al formulario
+// de recepción. Usa add-if-missing + val().trigger('change') para no depender de
+// una recarga completa de opciones y funcionar correctamente con Select2.
+function _aplicarReferenciaNProductoRecepcion(producto, conPrecios) {
+    const $modal = $('#modalCrearProductoDesdeRecepcion');
+
+    $modal.find('[name="articulo"]').val(producto.articulo);
+
+    function setSelectOption($s, id, texto) {
+        if (!id) return;
+        if (!$s.find(`option[value="${id}"]`).length) {
+            $s.append(`<option value="${id}">${texto || id}</option>`);
+        }
+        $s.val(id).trigger('change');
+    }
+
+    window._pausaVerificacionRecepcion = true;
+    setSelectOption($modal.find('[name="atributo1"]'), producto.marca_id, producto.marca);
+    setSelectOption($modal.find('[name="atributo2"]'), producto.color_id, producto.color);
+    setSelectOption($modal.find('[name="atributo3"]'), producto.genero_id, producto.genero);
+    setSelectOption($modal.find('[name="categoria"]'),  producto.categoria_id, producto.categoria);
+    setTimeout(() => {
+        window._pausaVerificacionRecepcion = false;
+        // Disparar verificación UNA sola vez después de aplicar todos los valores
+        dispararVerificacionProducto();
+    }, 150);
+
+    if (conPrecios) {
+        if (producto.costo)        $modal.find('[name="costo"]').val(producto.costo);
+        if (producto.sobreprecio != null) $modal.find('[name="sobreprecio"]').val(producto.sobreprecio);
+        if (producto.precioventa)  $modal.find('[name="precioventa"]').val(producto.precioventa);
+    }
+
+    showToast('success', conPrecios
+        ? `Datos + precios de "${producto.articulo}" aplicados`
+        : `Identificación de "${producto.articulo}" aplicada`);
+}
+
+// Botón EDEL siempre visible en sección Atributos del modal de recepción
+$(document).on('click', '#btnTomarReferenciaEDEL', function() {
+    const edel = window.edelReferenciaRecepcion;
+    if (!edel) {
+        showToast('warning', 'No se encontró este producto en EDEL');
+        return;
+    }
+    _aplicarReferenciaNProductoRecepcion(edel, false);
+    showToast('success', `Referencia EDEL aplicada: ${edel.color || ''} · ${edel.categoria || ''}`);
+});
 
 // 🚨 ADVERTENCIA PRODUCTOS SIMILARES (SUCURSAL ACTIVA) — usa chip bar
 function mostrarAdvertenciaProductosSimilares(similaresSkuRaw, similaresNombreRaw) {
@@ -6282,6 +6456,7 @@ function copiarDatosProductoRecepcion(producto) {
     // puede marcar el checkbox antes de aplicar.
     function ejecutarCopia(copiarPrecios) {
         $modal.find('[name="articulo"]').val(producto.articulo);
+        window._pausaVerificacionRecepcion = true;
         if (producto.marca_id) {
             const $s = $modal.find('[name="atributo1"]');
             if (!$s.find(`option[value="${producto.marca_id}"]`).length) $s.append(`<option value="${producto.marca_id}">${producto.marca}</option>`);
@@ -6312,9 +6487,11 @@ function copiarDatosProductoRecepcion(producto) {
             ? `Datos + precios de ${producto.articulo} aplicados`
             : `Identificación de ${producto.articulo} aplicada (precios de la compra preservados)`;
         showToast('success', detalleToast);
+        // Levantar pausa y verificar UNA sola vez
         setTimeout(() => {
+            window._pausaVerificacionRecepcion = false;
             verificarProductoExistente(producto.articulo, producto.marca_id, producto.color_id, producto.genero_id, producto.categoria_id, producto.articulo);
-        }, 500);
+        }, 150);
     }
 
     const costoActual = parseInt($modal.find('[name="costo"]').val()) || 0;
@@ -6533,7 +6710,11 @@ function generarNuevosSkus() {
                 if (i < res.skus.length) {
                     const skuValue = res.skus[i];
                     input.val(skuValue);
-                    actualizarSkuDisplay(input, skuValue, 'sugerido');
+                    // En modo redistribuir, mostrar "nuevo" solo si la fila tiene stock > 0
+                    const $stockInput = input.closest('tr').find('.stock-redistribuir');
+                    const enModoRedist = $stockInput.length > 0;
+                    const tieneStock = enModoRedist ? (parseInt($stockInput.val()) || 0) > 0 : true;
+                    actualizarSkuDisplay(input, skuValue, tieneStock ? 'sugerido' : 'pendiente_sin_stock');
                 }
             });
         } else {
@@ -6585,9 +6766,19 @@ function actualizarSkuDisplay(input, skuValue, tipo) {
             `<strong>${skuValue}</strong>` +
             `<span class="ms-1" style="font-size:.7em;font-weight:600;color:#0d47a1;">· nuevo</span>`
         )
-                .removeClass('bg-light bg-success-subtle')
+                .removeClass('bg-light bg-success-subtle bg-warning-subtle')
                 .addClass('bg-primary-subtle')
                 .attr('title', 'Talla nueva para este producto — se creará un Producto_Talla con este SKU al guardar.');
+    } else if (tipo === 'pendiente_sin_stock') {
+        // Talla nueva pero sin stock asignado → se omitirá al guardar.
+        $display.html(
+            `<i class="bi bi-dash-circle text-muted me-1"></i>` +
+            `<strong>${skuValue}</strong>` +
+            `<span class="ms-1" style="font-size:.7em;font-weight:600;color:#9e9e9e;">· sin stock</span>`
+        )
+                .removeClass('bg-success-subtle bg-primary-subtle')
+                .addClass('bg-light')
+                .attr('title', 'Sin stock asignado — esta talla no se creará al guardar.');
     } else {
         // SKU temporal (fallback si el backend falló generando)
         $display.html(
@@ -7475,20 +7666,63 @@ const DistribuirGuiaAlCrear = {
             // editable e input sku_<talla> oculto (auto en backend).
             const tbody = $tabla.find('tbody');
             tbody.empty();
+
+            // Mapa de tallas existentes para marcar reutiliza/nuevo directamente
+            const tallasExistMap = {};
+            (window.tallasExistentesRecepcion || []).forEach(t => {
+                tallasExistMap[String(t.talla).trim()] = { ...t, _fuente: 'local' };
+            });
+            // Fallback: tallas de EDEL (si el producto no existe localmente pero sí en EDEL)
+            const edelTallas = (window.edelReferenciaRecepcion && window.edelReferenciaRecepcion.tallas_detail) || [];
+            edelTallas.forEach(t => {
+                const key = String(t.talla).trim();
+                if (!tallasExistMap[key]) {
+                    tallasExistMap[key] = { ...t, _fuente: 'edel' };
+                }
+            });
+
             items.forEach(t => {
                 const talla = (t[tipoTalla] || t.cl || t.us || t.eu || t.uk || t.br || t.cm || '').toString().trim();
                 if (!talla) return;
+
+                const existente = tallasExistMap[talla];
+                let skuHtml, skuInputVal;
+                if (existente) {
+                    skuInputVal = existente.sku;
+                    const esEdel = existente._fuente === 'edel';
+                    const bgClass  = esEdel ? 'bg-warning-subtle' : 'bg-success-subtle';
+                    const iconCls  = esEdel ? 'bi-building text-warning' : 'bi-arrow-repeat text-success';
+                    const etiqueta = esEdel ? '· reutiliza (EDEL)' : '· reutiliza';
+                    const color    = esEdel ? '#795548' : '#2e7d32';
+                    const titleTxt = esEdel
+                        ? `Talla en EDEL — se reutilizará el SKU de EDEL al crear en esta sucursal.`
+                        : `Esta talla ya existe — se reutilizará el SKU existente, se sumará el stock.`;
+                    skuHtml = `<code class="sku-display ${bgClass} px-2 py-1 rounded text-dark"
+                                     style="font-size:.85em;display:inline-block;min-width:80px;"
+                                     data-talla="${talla}" title="${titleTxt}">
+                                  <i class="bi ${iconCls} me-1"></i>
+                                  <strong>${existente.sku}</strong>
+                                  <span style="font-size:.7em;font-weight:600;color:${color};">${etiqueta}</span>
+                               </code>`;
+                } else {
+                    skuInputVal = '';
+                    skuHtml = `<code class="sku-display bg-light px-2 py-1 rounded text-dark"
+                                     style="font-size:.85em;display:inline-block;min-width:80px;"
+                                     data-talla="${talla}"
+                                     title="Talla nueva — se creará al guardar si tiene stock.">
+                                  <i class="bi bi-hourglass-split text-muted"></i> Pendiente…
+                               </code>`;
+                }
+
                 tbody.append(`
                     <tr>
                         <td><span class="badge bg-secondary">${talla}</span></td>
                         <td>
-                            <input type="number" min="0" class="form-control form-control-sm stock-redistribuir text-end" name="stock_${talla}" value="0" data-talla="${talla}">
+                            <input type="number" min="0" class="form-control form-control-sm stock-redistribuir text-end" name="stock_${talla}" value="0" data-talla="${talla}" data-es-existente="${existente ? '1' : '0'}">
                         </td>
                         <td>
-                            <code class="bg-light px-2 py-1 rounded text-dark" style="font-size:.85em;">
-                                <i class="bi bi-magic text-primary"></i> Auto
-                            </code>
-                            <input type="hidden" class="sku-generado" name="sku_${talla}" value="">
+                            ${skuHtml}
+                            <input type="hidden" class="sku-generado" name="sku_${talla}" value="${skuInputVal}">
                         </td>
                         <td>
                             <small class="text-muted"><i class="bi bi-dash"></i></small>
@@ -7583,6 +7817,15 @@ const DistribuirGuiaAlCrear = {
         $rows.each(function(idx) {
             const extra = idx < resto ? 1 : 0;
             $(this).val(base + extra);
+            // Actualizar display para tallas nuevas
+            if ($(this).data('es-existente') != '1') {
+                const skuInput = $(this).closest('tr').find('.sku-generado');
+                const skuVal = skuInput.val();
+                if (skuVal) {
+                    const tieneStock = (parseInt($(this).val()) || 0) > 0;
+                    actualizarSkuDisplay(skuInput, skuVal, tieneStock ? 'sugerido' : 'pendiente_sin_stock');
+                }
+            }
         });
         DistribuirGuiaAlCrear.actualizarSuma();
     }
@@ -7593,7 +7836,17 @@ $(document).on('click', '#btnDistribuirEnGuia', function() { DistribuirGuiaAlCre
 $(document).on('click', '#btnRedistEquitativo', function() { DistribuirGuiaAlCrear.equitativo(); });
 $(document).on('click', '#btnRedistLimpiar', function() { $('.stock-redistribuir').val(0); DistribuirGuiaAlCrear.actualizarSuma(); });
 $(document).on('click', '#btnRedistCancelar', function() { DistribuirGuiaAlCrear.cancelar(); });
-$(document).on('input', '.stock-redistribuir', function() { DistribuirGuiaAlCrear.actualizarSuma(); });
+$(document).on('input', '.stock-redistribuir', function() {
+    DistribuirGuiaAlCrear.actualizarSuma();
+    // Si la talla es NUEVA (no existente), actualizar display nuevo/sin stock
+    const $input = $(this);
+    if ($input.data('es-existente') == '1') return; // existente: no tocar
+    const skuInput = $input.closest('tr').find('.sku-generado');
+    const skuVal = skuInput.val();
+    if (!skuVal) return; // aún no asignado
+    const tieneStock = (parseInt($input.val()) || 0) > 0;
+    actualizarSkuDisplay(skuInput, skuVal, tieneStock ? 'sugerido' : 'pendiente_sin_stock');
+});
 
 function aplicarModoSinGuiaManual(activar) {
     const $nota = $('#notaSinGuiaManual');
@@ -7846,6 +8099,8 @@ let timeoutVerificacion = null;
 // ⚠️ IMPORTANTE: Usar delegación de eventos para que funcione con Select2
 // Los selects de Select2 disparan el evento 'change' en el elemento original
 function dispararVerificacionProducto() {
+    // Ignorar si estamos en medio de una actualización programática de selects
+    if (window._pausaVerificacionRecepcion) return;
     // Verificar que estemos en el modal de recepción
     if (!$('#modalCrearProductoDesdeRecepcion').hasClass('show')) {
         return;
@@ -11052,19 +11307,12 @@ $('#btnConfirmarActualizacion').on('click', function() {
         $('#modalCrearProductoManual input[name="precioventa"]').val(producto.precioventa);
         $('#modalCrearProductoManual input[name="precio_sugerido"]').val(producto.precioventa);
         
-        // Copiar atributos (marca, color, género)
-        if (producto.atributo1) {
-            $('#modalCrearProductoManual select[name="atributo1"]').val(producto.atributo1).trigger('change');
-        }
-        if (producto.atributo2) {
-            $('#modalCrearProductoManual select[name="atributo2"]').val(producto.atributo2).trigger('change');
-        }
-        if (producto.atributo3) {
-            $('#modalCrearProductoManual select[name="atributo3"]').val(producto.atributo3).trigger('change');
-        }
-        if (producto.categoria_id) {
-            $('#modalCrearProductoManual select[name="categoria"]').val(producto.categoria_id).trigger('change');
-        }
+        // Copiar atributos (marca, color, género) — carga opciones y selecciona por ID
+        // para evitar que la copia falle si el select aún no tiene las opciones cargadas.
+        if (producto.atributo1) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_MARCA, 'atributo1', producto.atributo1);
+        if (producto.atributo2) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_COLOR, 'atributo2', producto.atributo2);
+        if (producto.atributo3) cargarOpcionesAtributoYSeleccionar(ID_ATRIBUTO_GENERO, 'atributo3', producto.atributo3);
+        if (producto.categoria_id) cargarCategoriasYSeleccionar(producto.categoria_id);
         if (producto.tipo_talla) {
             $('#modalCrearProductoManual select[name="tipo_talla"]').val(producto.tipo_talla).trigger('change');
         }

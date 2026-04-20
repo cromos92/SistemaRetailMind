@@ -1603,12 +1603,20 @@
 
                         <!-- Vista Previa de Datos -->
                         <div id="csvPreviewSection" class="d-none">
+
                             <div class="card border-primary mb-3">
-                                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-table me-2"></i>Vista Previa de Datos
+                                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center gap-2">
+                                    <h6 class="mb-0 flex-shrink-0">
+                                        <i class="bi bi-table me-2"></i>Vista Previa
                                     </h6>
-                                    <span class="badge bg-light text-dark" id="totalRegistros">0 registros</span>
+                                    <div class="input-group input-group-sm flex-grow-1" style="max-width:320px;">
+                                        <span class="input-group-text bg-white border-0 text-secondary py-0"><i class="bi bi-search"></i></span>
+                                        <input type="text" class="form-control border-0 shadow-none" id="filtroPreviewCSV" placeholder="Buscar artículo, marca, color…">
+                                        <button class="btn btn-sm btn-light border-0" type="button" id="btnLimpiarFiltroCSV" title="Limpiar">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </div>
+                                    <span class="badge bg-light text-dark flex-shrink-0" id="totalRegistros">0 registros</span>
                                 </div>
                                 <div class="card-body p-0">
                                     <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
@@ -1624,8 +1632,8 @@
                                                     <th width="8%">Costo</th>
                                                     <th width="8%">Precio</th>
                                                     <th width="5%">Total</th>
+                                                    <th style="min-width: 120px;">Sucursal</th>
                                                     <th style="min-width: 200px;">Tallas (stock por talla)</th>
-                                                    <th>Sucursal <small class="text-muted">(opcional)</small></th>
                                                 </tr>
                                             </thead>
                                             <tbody class="text-center"></tbody>
@@ -2103,6 +2111,13 @@
                                     <option value="parciales">Parciales</option>
                                     <option value="completos">Completos</option>
                                 </select>
+                                <div class="input-group input-group-sm" style="width: 190px;" title="Filtrar filas por sucursal destino asignada">
+                                    <span class="input-group-text bg-white py-0 px-2"><i class="bi bi-geo-alt text-info"></i></span>
+                                    <select class="form-select" id="filtroSucursalRecepcion" style="font-size:0.74rem;">
+                                        <option value="">Todas sucursales</option>
+                                        <option value="__sin__">Sin sucursal</option>
+                                    </select>
+                                </div>
                                 <div class="ms-auto d-flex align-items-center gap-2">
                                     <span class="badge bg-primary rounded-pill" style="font-size: 0.68rem;">
                                         <span id="totalProductosRecepcion">0</span> prod.
@@ -2201,8 +2216,8 @@
                                     <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size: 0.7rem;">
                                         <span class="text-muted"><i class="bi bi-hourglass-split text-warning me-1"></i>Pend: <strong id="statPendientes">0</strong></span>
                                         <span class="text-muted"><i class="bi bi-check-circle text-success me-1"></i>Recep: <strong class="text-success" id="statRecepcionados">0</strong></span>
-                                        <span class="text-muted"><i class="bi bi-boxes me-1"></i>Total: <strong id="totalParesRecepcionados">0</strong></span>
-                                        <span class="text-muted"><i class="bi bi-cash-stack text-success me-1"></i>Inv: <strong class="text-success" id="totalCostoRecepcionado">$0</strong></span>
+                                        <span class="text-muted" title="Total ingresado en esta sesión (incluye todas las páginas)"><i class="bi bi-boxes me-1"></i>Total sesión: <strong id="totalParesRecepcionados">0</strong></span>
+                                        <span class="text-muted" title="Inversión estimada para lo ingresado en esta sesión"><i class="bi bi-cash-stack text-success me-1"></i>Inv sesión: <strong class="text-success" id="totalCostoRecepcionado">$0</strong></span>
                                         <div class="flex-grow-1 d-flex align-items-center gap-2 ms-1">
                                             <div class="progress flex-grow-1" style="height: 5px; border-radius: 3px;">
                                                 <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
@@ -2784,7 +2799,8 @@ const GestionCompras = (function() {
         guardarRecepcion: '/app/guardar_recepcion/',
         actualizarSucursalRecepciones: '/app/actualizar_sucursal_recepciones/',
         recepcionarCompra: '/app/compra/recepcionar/',
-        eliminarProductoCompra: '/app/eliminar_producto_compra/'
+        eliminarProductoCompra: '/app/eliminar_producto_compra/',
+        limpiarProductosCompra: '/app/limpiar_productos_compra/',
     };
     // Centralizar AJAX POST
     function ajaxPost(url, data, success, error) {
@@ -3070,11 +3086,12 @@ const GestionCompras = (function() {
             const cantidad = parseInt(recepcionInput.val()) || 0;
             const factura = (facturaInput.val() || '').trim();
             const sucursalId = sucursalSelect.length ? (sucursalSelect.val() || '') : '';
+            const costo = parseFloat(recepcionInput.data('costo')) || 0;
             
             // Solo guardar si hay algún dato "overrideado" por el usuario
             if ((cantidad > 0 || factura || sucursalId) && ids) {
                 const key = Array.isArray(ids) ? ids.join('-') : ids;
-                datosRecepcionTemporales[key] = { cantidad, factura, sucursalId };
+                datosRecepcionTemporales[key] = { cantidad, factura, sucursalId, costo };
             }
         });
         console.log('📦 Datos temporales guardados:', Object.keys(datosRecepcionTemporales).length);
@@ -3122,6 +3139,44 @@ const GestionCompras = (function() {
         
         console.log('📦 Datos temporales restaurados');
         recalcularTotalesRecepcion();
+        actualizarQuickStats();
+    }
+
+    /**
+     * Calcula el total de unidades e inversión ingresadas en TODA la sesión
+     * (página actual del DOM + páginas ya guardadas en datosRecepcionTemporales).
+     * Evita doble-conteo: si un item está en el DOM, se lee del DOM;
+     * si está solo en temporal (otra página), se lee de temporal.
+     */
+    function getSessionStats() {
+        const keysEnDOM = new Set();
+        let cantidadDOM = 0, costoDOM = 0;
+
+        $('#tablaRecepcionProductos tbody tr.talla-detalle .recepcionado-input').each(function() {
+            let ids = $(this).data('ids');
+            if (typeof ids === 'string') { try { ids = JSON.parse(ids); } catch(e) { ids = [ids]; } }
+            const key = Array.isArray(ids) ? ids.join('-') : String(ids || '');
+            if (key) keysEnDOM.add(key);
+            const val = parseInt($(this).val()) || 0;
+            if (val > 0) {
+                cantidadDOM += val;
+                costoDOM += val * (parseFloat($(this).data('costo')) || 0);
+            }
+        });
+
+        let cantidadExtra = 0, costoExtra = 0;
+        Object.entries(datosRecepcionTemporales).forEach(([key, datos]) => {
+            if (!keysEnDOM.has(key) && datos.cantidad > 0) {
+                cantidadExtra += datos.cantidad;
+                costoExtra   += datos.cantidad * (datos.costo || 0);
+            }
+        });
+
+        return {
+            cantidad: cantidadDOM + cantidadExtra,
+            costo:    costoDOM    + costoExtra,
+            extra:    cantidadExtra  // unidades de otras páginas
+        };
     }
 
     $(document).on('click', '.gestionar-compra', function (e) {
@@ -3132,9 +3187,12 @@ const GestionCompras = (function() {
         currentPage = 1;
         currentSearch = '';
         datosRecepcionTemporales = {}; // Limpiar datos de compra anterior
-        
+
         $('#globalIDCompraRecepcion').val(compraId);
         $('#searchRecepcion').val('');
+        // Resetear filtros del modal al abrir una compra nueva
+        $('#filtroEstadoRecepcion').val('');
+        $('#filtroSucursalRecepcion').val('');
         $('#modalRecepcionProductos').modal('show');
         $('#tablaRecepcionProductos tbody').empty();
 
@@ -3235,7 +3293,7 @@ const GestionCompras = (function() {
                 $('#btnNextPage').prop('disabled', !data.pagination.has_next);
                 
                 // Actualizar contador total de productos
-                $('#totalProductosRecepcion').text(data.pagination.total_items || data.items.length);
+                $('#totalProductosRecepcion').text(data.pagination.total_count || data.items.length);
                 
                 // Actualizar subtítulo con info de la compra
                 if (data.nombre_compra) {
@@ -3270,6 +3328,13 @@ const GestionCompras = (function() {
                         $('.col-eliminar').show();
                         $('#checkEliminarTodos').prop('checked', false);
                         actualizarContadorSeleccionados();
+                    }
+                    // Poblar + aplicar filtro por sucursal del modal
+                    if (typeof poblarSelectSucursalFiltroRecepcion === 'function') {
+                        poblarSelectSucursalFiltroRecepcion();
+                    }
+                    if (typeof aplicarFiltrosRecepcion === 'function') {
+                        aplicarFiltrosRecepcion();
                     }
                 }, 100);
             },
@@ -3497,6 +3562,7 @@ const GestionCompras = (function() {
             <button type="button" class="btn-cantidad-rapida btn-max" onclick="aplicarCantidadRapida(this, 'max')" title="Máx"><i class="bi bi-arrow-up-circle-fill"></i></button>
             <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
                    data-ids='${tallaIdsStr}' data-grupo="${grupoId}" data-stock="${talla.stock}"
+                   data-costo="${producto.costo || 0}"
                    data-recepcionado="${talla.recepcionado || 0}" data-max="${pendiente > 0 ? pendiente : talla.stock}"
                    value="${pendiente > 0 ? '' : (talla.recepcionado || '')}"
                    max="${pendiente > 0 ? pendiente : talla.stock}" min="0" placeholder="${pendiente > 0 ? pendiente : talla.stock}">
@@ -3654,6 +3720,7 @@ const GestionCompras = (function() {
     }
 
     function renderizarVistaDetallada(items, tbody, search) {
+        const TALLA_SIN_DESGLOSAR = '__TOTAL__';
         items.forEach(item => {
             // Usar lista de IDs si está agrupado, o crear lista con ID único
             const tallaIds = item.compra_producto_talla_ids || [item.compra_producto_talla_id];
@@ -3685,9 +3752,33 @@ const GestionCompras = (function() {
                     </span>`
                 ).join('');
             }
+
+            // ── Talla: manejar el marcador interno de "total sin desglose"
+            const esTotalSinDesglosar = item.talla === TALLA_SIN_DESGLOSAR;
+            let tallaDisplay;
+            if (esTotalSinDesglosar) {
+                tallaDisplay = `<span class="badge bg-warning text-dark d-block mb-1" title="Stock total importado sin desglose por talla"><i class="bi bi-exclamation-triangle me-1"></i>total sin tallas</span>`;
+                if (item.pendiente_distribuir) {
+                    tallaDisplay += `<button type="button" class="btn btn-xs btn-warning btn-distribuir-tallas py-0 px-1" style="font-size:0.65rem;"
+                        data-compra-producto-id="${(item.compra_producto_ids || [])[0] || ''}"
+                        data-nombre="${(item.nombre || '').replace(/"/g,'&quot;')}"
+                        data-marca-id="${item.marca_id || ''}"
+                        data-marca="${(item.marca || '').replace(/"/g,'&quot;')}"
+                        data-color="${(item.color || '').replace(/"/g,'&quot;')}"
+                        data-genero-id="${item.genero_id || ''}"
+                        data-genero="${(item.genero || '').replace(/"/g,'&quot;')}"
+                        data-stock="${item.stock}"
+                        title="Distribuir este total en tallas reales">
+                        <i class="bi bi-rulers me-1"></i>Distribuir
+                    </button>`;
+                }
+            } else {
+                tallaDisplay = resaltarBusqueda(item.talla || '-', search) + badgeAgrupados;
+            }
+            
             
             const fila = `
-<tr class="talla-detalle ${completo ? 'table-success' : (tieneRecepcion ? 'table-warning' : '')}">
+<tr class="talla-detalle ${completo ? 'table-success' : (tieneRecepcion ? 'table-warning' : (esTotalSinDesglosar ? 'table-warning' : ''))}">
     <td class="col-sucursal-sel">
         <input type="checkbox" class="form-check-input check-sucursal-talla" data-ids='${tallaIdsStr}' title="Seleccionar esta fila para asignarle sucursal">
     </td>
@@ -3702,9 +3793,8 @@ const GestionCompras = (function() {
         <strong>${item.stock || 0}</strong>
         ${pendiente > 0 && tieneRecepcion ? `<small class="text-warning d-block" style="font-size:0.65rem">P:${pendiente}</small>` : ''}
     </td>
-    <td>
-        ${resaltarBusqueda(item.talla || '-', search)}
-        ${badgeAgrupados}
+    <td class="text-center">
+        ${tallaDisplay}
     </td>
     <td>
         <div class="input-cantidad-wrapper">
@@ -3715,6 +3805,7 @@ const GestionCompras = (function() {
             <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
                    data-ids='${tallaIdsStr}'
                    data-stock="${item.stock}"
+                   data-costo="${item.costo || 0}"
                    data-recepcionado="${item.recepcionado || 0}"
                    data-max="${pendiente > 0 ? pendiente : item.stock}"
                    value="${pendiente > 0 ? '' : (item.recepcionado || '')}"
@@ -4856,32 +4947,86 @@ const GestionCompras = (function() {
         });
     });
     
-    // Filtro por estado
-    $('#filtroEstadoRecepcion').on('change', function() {
-        const filtro = $(this).val();
-        
-        $('.talla-detalle, .producto-grupo').each(function() {
+    // =================== FILTROS DE LA TABLA DE RECEPCIÓN ===================
+    // Filtro por estado (pend/parcial/completo) + filtro por sucursal destino.
+    // Ambos se combinan: una fila se oculta si cualquiera de los dos filtros
+    // la descarta. Se re-aplican tras cada render / cambio de filtro.
+
+    function aplicarFiltrosRecepcion() {
+        const filtroEstado = $('#filtroEstadoRecepcion').val() || '';
+        const filtroSucursal = $('#filtroSucursalRecepcion').val() || '';
+
+        // 1) Filtro por sucursal a nivel de talla-detalle (porque la sucursal
+        //    vive en cada fila de talla, no en la fila de producto).
+        $('#tablaRecepcionProductos tbody tr.talla-detalle').each(function() {
             const $fila = $(this);
             const esCompleto = $fila.hasClass('table-success');
             const esParcial = $fila.hasClass('table-warning');
             const esPendiente = !esCompleto && !esParcial;
-            
+
             let mostrar = true;
-            
-            switch(filtro) {
-                case 'pendientes':
-                    mostrar = esPendiente;
-                    break;
-                case 'parciales':
-                    mostrar = esParcial;
-                    break;
-                case 'completos':
-                    mostrar = esCompleto;
-                    break;
+
+            // Filtro por estado
+            switch (filtroEstado) {
+                case 'pendientes': mostrar = esPendiente; break;
+                case 'parciales':  mostrar = esParcial;   break;
+                case 'completos':  mostrar = esCompleto;  break;
             }
-            
+
+            // Filtro por sucursal destino
+            if (mostrar && filtroSucursal) {
+                const sucursalFila = ($fila.find('.sucursal-row-select').val() || '').toString();
+                if (filtroSucursal === '__sin__') {
+                    mostrar = sucursalFila === '';
+                } else {
+                    mostrar = sucursalFila === filtroSucursal;
+                }
+            }
+
             $fila.toggle(mostrar);
         });
+
+        // 2) Mostrar u ocultar la fila de producto-grupo según si tiene al
+        //    menos una talla visible.
+        $('#tablaRecepcionProductos tbody tr.producto-grupo').each(function() {
+            const $grupo = $(this);
+            const grupoId = $grupo.data('grupo');
+            if (!grupoId) { $grupo.show(); return; }
+            const $tallas = $(`.talla-detalle[data-grupo="${grupoId}"]`);
+            const visibles = $tallas.filter(':visible').length;
+
+            if (filtroEstado === '' && filtroSucursal === '') {
+                // Sin filtros: mostrar el grupo (la expansión/colapsado de
+                // tallas la controla la UI aparte, no el filtro).
+                $grupo.show();
+            } else {
+                $grupo.toggle(visibles > 0);
+            }
+        });
+    }
+
+    // Poblar el select de sucursal del modal con las disponibles
+    function poblarSelectSucursalFiltroRecepcion() {
+        const $sel = $('#filtroSucursalRecepcion');
+        if (!$sel.length) return;
+        const actual = $sel.val();
+        // Conservar solo las dos primeras opciones fijas (Todas / Sin sucursal)
+        $sel.find('option').slice(2).remove();
+        (typeof sucursalesEfectivas === 'function' ? sucursalesEfectivas() : []).forEach(s => {
+            $sel.append(`<option value="${s.id}">${s.alias}</option>`);
+        });
+        if (actual) $sel.val(actual);
+    }
+
+    $('#filtroEstadoRecepcion').on('change', aplicarFiltrosRecepcion);
+    $('#filtroSucursalRecepcion').on('change', aplicarFiltrosRecepcion);
+
+    // Cuando cambie la sucursal en alguna fila (ej. tras "Aplicar a N"),
+    // re-aplicar el filtro por si afecta qué filas deberían mostrarse.
+    $(document).on('change', '.sucursal-row-select', function() {
+        if (($('#filtroSucursalRecepcion').val() || '') !== '') {
+            aplicarFiltrosRecepcion();
+        }
     });
     
     // Marcar fila con datos ingresados
@@ -4906,20 +5051,35 @@ const GestionCompras = (function() {
         let pendientes = 0;
         let ingresados = 0;
         let monto = 0;
+        const keysEnDOM = new Set();
         
         $('.recepcionado-input').each(function() {
             const max = parseInt($(this).attr('max')) || 0;
             const valor = parseInt($(this).val()) || 0;
-            const costo = parseFloat($(this).closest('tr').find('td:eq(5)').text().replace(/[^0-9.-]/g, '')) || 0;
+            const costo = parseFloat($(this).data('costo')) || 0;
+            
+            // Recopilar clave para evitar doble-conteo con temporales
+            let ids = $(this).data('ids');
+            if (typeof ids === 'string') { try { ids = JSON.parse(ids); } catch(e) { ids = [ids]; } }
+            const key = Array.isArray(ids) ? ids.join('-') : String(ids || '');
+            if (key) keysEnDOM.add(key);
             
             pendientes += max;
             ingresados += valor;
             monto += valor * costo;
         });
+
+        // Agregar unidades de otras páginas (almacenadas temporalmente)
+        Object.entries(datosRecepcionTemporales).forEach(([key, datos]) => {
+            if (!keysEnDOM.has(key) && datos.cantidad > 0) {
+                ingresados += datos.cantidad;
+                monto      += datos.cantidad * (datos.costo || 0);
+            }
+        });
         
         $('#quickStatPendientes').text(pendientes.toLocaleString());
         $('#quickStatIngresados').text(ingresados.toLocaleString());
-        $('#quickStatMonto').text('$' + monto.toLocaleString());
+        $('#quickStatMonto').text('$' + Math.round(monto).toLocaleString());
     }
     
     // Evento para actualizar quick stats cuando cambia un input
@@ -5567,20 +5727,86 @@ $('#btnCargarCSV').on('click', function() {
                 }
                 const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                // defval:'' evita que SheetJS trunque celdas vacías al final
+                // (ej: filas sin Sucursal). Así garantizamos que la 10ª
+                // columna llegue siempre a la vista previa.
+                data = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '', blankrows: false });
                 rows = data.slice(1);
             } else {
-                data = e.target.result.trim().split('\n').map(line => line.split(','));
+                // Parser CSV tolerante: detecta el separador real del archivo
+                // (coma, punto y coma o tab) y respeta campos entre comillas
+                // con comas internas.
+                let texto = e.target.result || '';
+                if (texto.charCodeAt(0) === 0xFEFF) texto = texto.slice(1); // quitar BOM UTF-8
+                texto = texto.replace(/\r\n?/g, '\n').trim();
+                const primeraLinea = texto.split('\n', 1)[0] || '';
+                const conteoComa = (primeraLinea.match(/,/g) || []).length;
+                const conteoPyc  = (primeraLinea.match(/;/g) || []).length;
+                const conteoTab  = (primeraLinea.match(/\t/g) || []).length;
+                let separador = ',';
+                if (conteoPyc > conteoComa && conteoPyc >= conteoTab) separador = ';';
+                else if (conteoTab > conteoComa && conteoTab > conteoPyc) separador = '\t';
+
+                function parseCSVLine(linea, sep) {
+                    const out = [];
+                    let cur = '';
+                    let enComillas = false;
+                    for (let i = 0; i < linea.length; i++) {
+                        const c = linea[i];
+                        if (enComillas) {
+                            if (c === '"') {
+                                if (linea[i + 1] === '"') { cur += '"'; i++; }
+                                else { enComillas = false; }
+                            } else {
+                                cur += c;
+                            }
+                        } else {
+                            if (c === '"') enComillas = true;
+                            else if (c === sep) { out.push(cur); cur = ''; }
+                            else cur += c;
+                        }
+                    }
+                    out.push(cur);
+                    return out;
+                }
+
+                data = texto.split('\n').map(line => parseCSVLine(line, separador));
                 rows = data.slice(1);
             }
 
-            // Filtrar registros válidos
-            todosLosRegistrosCSV = rows.filter(cols => cols.length >= 9);
+            // Rellenar cada fila a 10 columnas para no perder la Sucursal
+            // cuando el parser (o SheetJS) trunca celdas vacías al final.
+            rows = rows.map(cols => {
+                const safe = Array.isArray(cols) ? cols.slice() : [];
+                while (safe.length < 10) safe.push('');
+                return safe;
+            });
+
+            // Filtrar registros válidos (al menos con nombre / primera columna no vacía)
+            todosLosRegistrosCSV = rows.filter(cols => {
+                const primera = (cols[0] || '').toString().trim();
+                return primera.length > 0;
+            });
 
             if (todosLosRegistrosCSV.length === 0) {
                 Swal.fire('Advertencia', 'No se encontraron registros válidos en el archivo', 'warning');
                 return;
             }
+
+            // Log de depuración: permite al usuario ver en consola exactamente
+            // qué valor está llegando en la columna Sucursal por fila.
+            try {
+                console.groupCollapsed(`[ImportarCSV] ${todosLosRegistrosCSV.length} filas leídas`);
+                console.log('Alias de sucursales en sistema:',
+                    (SUCURSALES_DISPONIBLES || []).map(s => s.alias));
+                console.table(todosLosRegistrosCSV.slice(0, 20).map((cols, i) => ({
+                    fila: i + 2,
+                    nombre: cols[0],
+                    talla: cols[8],
+                    sucursal_csv: cols[9]
+                })));
+                console.groupEnd();
+            } catch (e) { /* noop */ }
 
             // ========== AGRUPAR PRODUCTOS ==========
             // Agrupar por: nombre + descripcion + marca + color + genero + costo + precio
@@ -5593,8 +5819,14 @@ $('#btnCargarCSV').on('click', function() {
 
             todosLosRegistrosCSV.forEach((cols) => {
                 // La 10ª columna (sucursal) es OPCIONAL. Si no viene, queda vacía.
-                const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla, sucursalRaw] = cols.map(v => v ? v.toString().trim() : '');
-                const sucursal = sucursalRaw || '';
+                const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla, sucursalRaw] = cols.map(v => v !== undefined && v !== null ? v.toString().trim() : '');
+                // Normalizamos: colapsa espacios dobles, quita NBSP (\xa0)
+                // y caracteres invisibles que suelen llegar al copiar/pegar
+                // desde Excel y hacen fallar el iexact del backend.
+                const sucursal = (sucursalRaw || '')
+                    .replace(/\u00a0/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
                 const costo = parseFloat((costoStr || '0').toString().replace(/\./g, '').replace(',', '.'));
                 const stock = parseInt((stockStr || '0').toString().replace(/\./g, ''));
                 const precio = parseFloat((precioStr || '0').toString().replace(/\./g, '').replace(',', '.'));
@@ -5641,6 +5873,56 @@ $('#btnCargarCSV').on('click', function() {
             $('#totalCosto').text(`$${totalCosto.toLocaleString()}`);
             $('#totalVenta').text(`$${totalVenta.toLocaleString()}`);
             $('#totalRegistros').text(`${totalProductosUnicos} productos (${registrosValidos} filas)`);
+
+            // ========== RESUMEN POR SUCURSAL ==========
+            // Cuenta productos y unidades detectadas por sucursal, marcando
+            // cuáles alias no matchean ninguna sucursal del sistema para
+            // que el usuario corrija ANTES de importar.
+            const aliasSet = new Set(
+                (SUCURSALES_DISPONIBLES || []).map(s => (s.alias || '').toLowerCase())
+            );
+            const resumenSuc = {};
+            productosArray.forEach(prod => {
+                const key = prod.sucursal || '__SIN__';
+                if (!resumenSuc[key]) {
+                    resumenSuc[key] = {
+                        alias: prod.sucursal || '',
+                        productos: 0,
+                        unidades: 0,
+                        reconocida: prod.sucursal
+                            ? aliasSet.has(prod.sucursal.toLowerCase())
+                            : null,
+                    };
+                }
+                resumenSuc[key].productos += 1;
+                resumenSuc[key].unidades += prod.totalStock;
+            });
+            $('#resumenSucursalesImport').remove();
+            const pills = Object.values(resumenSuc).map(r => {
+                if (r.alias === '') {
+                    return `<span class="badge bg-light text-muted border me-1 mb-1" title="Productos sin sucursal asignada. Se asigna en Recepción."><i class="bi bi-dash-circle me-1"></i>Sin sucursal: ${r.productos} prod · ${r.unidades} u</span>`;
+                }
+                const cls = r.reconocida ? 'bg-info text-dark' : 'bg-warning text-dark';
+                const icon = r.reconocida ? 'bi-geo-alt-fill' : 'bi-exclamation-triangle';
+                const titleExtra = r.reconocida
+                    ? 'Sucursal reconocida'
+                    : 'Alias NO reconocido: se ignorará al importar (quedará sin sucursal)';
+                return `<span class="badge ${cls} me-1 mb-1" title="${titleExtra}"><i class="bi ${icon} me-1"></i>${r.alias}: ${r.productos} prod · ${r.unidades} u</span>`;
+            }).join('');
+            const hayDesconocida = Object.values(resumenSuc).some(
+                r => r.alias !== '' && !r.reconocida
+            );
+            const resumenHtml = `
+                <div id="resumenSucursalesImport" class="alert ${hayDesconocida ? 'alert-warning' : 'alert-info'} py-2 mt-2 mb-2">
+                    <div class="d-flex align-items-center mb-1">
+                        <i class="bi bi-geo-alt-fill me-2"></i>
+                        <strong>Sucursales detectadas en el archivo</strong>
+                        ${hayDesconocida ? '<span class="badge bg-warning text-dark ms-2"><i class="bi bi-exclamation-triangle me-1"></i>Hay alias no reconocidos</span>' : ''}
+                    </div>
+                    <div>${pills || '<span class="text-muted small">Ninguna</span>'}</div>
+                </div>
+            `;
+            $('#csvPreviewSection').prepend(resumenHtml);
 
             // ========== DETECTAR POSIBLES DUPLICADOS ==========
             // Productos con mismo nombre pero diferente precio
@@ -5702,19 +5984,19 @@ $('#btnCargarCSV').on('click', function() {
                 
                 // Validar sucursal contra el catálogo. Si no matchea, avisamos
                 // pero NO rechazamos la fila (sucursal es opcional).
-                let sucursalCell = '<span class="text-muted fst-italic">—</span>';
+                let sucursalCell = '<span class="badge bg-light text-muted border" title="Sin sucursal. Se asignará en Recepción.">sin sucursal</span>';
                 if (prod.sucursal) {
                     const aliasLower = prod.sucursal.toLowerCase();
                     const existe = (SUCURSALES_DISPONIBLES || []).some(
                         s => (s.alias || '').toLowerCase() === aliasLower
                     );
                     sucursalCell = existe
-                        ? `<span class="badge bg-info text-dark">${prod.sucursal}</span>`
-                        : `<span class="badge bg-warning text-dark" title="Alias no coincide con ninguna sucursal existente. Se ignorará al importar."><i class="bi bi-exclamation-triangle me-1"></i>${prod.sucursal}</span>`;
+                        ? `<span class="badge bg-info text-dark" title="Sucursal reconocida: ${prod.sucursal}"><i class="bi bi-geo-alt-fill me-1"></i>${prod.sucursal}</span>`
+                        : `<span class="badge bg-warning text-dark" title="Alias «${prod.sucursal}» no coincide con ninguna sucursal existente. Se ignorará al importar."><i class="bi bi-exclamation-triangle me-1"></i>${prod.sucursal}</span>`;
                 }
 
                 const row = `
-                    <tr class="${rowClass}">
+                    <tr class="${rowClass}" data-sucursal="${(prod.sucursal || '').replace(/"/g, '&quot;')}" data-nombre-lower="${(prod.nombre + ' ' + (prod.marca || '') + ' ' + (prod.color || '') + ' ' + (prod.genero || '')).toLowerCase().replace(/"/g, '')}">
                         <td><small class="text-muted">${index + 1}</small></td>
                         <td class="text-start">
                             <strong>${prod.nombre}</strong>
@@ -5727,8 +6009,8 @@ $('#btnCargarCSV').on('click', function() {
                         <td class="text-end">$${prod.costo.toLocaleString()}</td>
                         <td class="text-end">$${prod.precio.toLocaleString()}</td>
                         <td><span class="badge bg-primary">${prod.totalStock}</span></td>
+                        <td class="text-center csv-sucursal-cell">${sucursalCell}</td>
                         <td class="text-start" style="min-width: 200px;">${tallasStr}</td>
-                        <td class="text-center">${sucursalCell}</td>
                     </tr>
                 `;
                 tbody.append(row);
@@ -5775,6 +6057,10 @@ $('#btnCargarCSV').on('click', function() {
             // Mostrar sección de preview
             $('#csvPreviewSection').removeClass('d-none');
             $('#btnImportarCSV').prop('disabled', false);
+
+            // Reset filtro de búsqueda
+            $('#filtroPreviewCSV').val('');
+            aplicarFiltroPrevioCSV();
 
             // Cerrar loading
             Swal.close();
@@ -5824,7 +6110,38 @@ function resetCSVUpload() {
     $('#totalRegistros').text('0 registros');
     // Limpiar alertas de duplicados y errores
     $('#csvPreviewSection .alert').remove();
+    // Limpiar filtro de búsqueda
+    $('#filtroPreviewCSV').val('');
 }
+
+// ========== HELPERS IMPORTACIÓN CSV ==========
+
+// Filtro de búsqueda en vista previa (delegación + binding directo)
+function aplicarFiltroPrevioCSV() {
+    const q = ($('#filtroPreviewCSV').val() || '').toLowerCase().trim();
+    const $rows = $('#tablaCSVPreview tbody tr');
+    if (!q) {
+        $rows.show();
+        $('#totalRegistros').text(`${$rows.length} productos`);
+        return;
+    }
+    let visible = 0;
+    $rows.each(function () {
+        // Lee del atributo DOM directamente (no del cache jQuery)
+        const nombreLower = ($(this).attr('data-nombre-lower') || '');
+        // Fallback: primer td con strong
+        const nombreTd = ($(this).find('td:eq(1)').text() || '').toLowerCase();
+        const match = nombreLower.includes(q) || nombreTd.includes(q);
+        $(this).toggle(match);
+        if (match) visible++;
+    });
+    $('#totalRegistros').text(`${visible} de ${$rows.length} productos`);
+}
+$(document).on('input', '#filtroPreviewCSV', aplicarFiltroPrevioCSV);
+$(document).on('click', '#btnLimpiarFiltroCSV', function () {
+    $('#filtroPreviewCSV').val('');
+    aplicarFiltroPrevioCSV();
+});
 
 
         // Al abrir el modal, pre-rellenar fecha real de hoy y año de temporada = año actual
@@ -6027,7 +6344,7 @@ function resetCSVUpload() {
             ${compra.recepcionado > 0 ? `<a class="btn btn-soft-teal" href="/app/verGestionProducto/" title="Crear Productos" style="color:#0ab39c;border-color:#0ab39c;">
                 <i class="bi bi-archive"></i>
             </a>` : ''}
-            ${PUEDE_ELIMINAR_COMPRA ? `<a class="btn btn-soft-danger eliminar-compra" href="#" data-id="${compra.id}" title="Eliminar">
+            ${PUEDE_ELIMINAR_COMPRA ? `<a class="btn btn-soft-danger eliminar-compra" href="#" data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}" title="Eliminar compra">
                 <i class="bi bi-trash"></i>
             </a>` : ''}
         </div>
@@ -6041,7 +6358,8 @@ function resetCSVUpload() {
                 <li><a class="dropdown-item gestionar-compra" href="#" data-id="${compra.id}"><i class="bi bi-box-seam me-2 text-success"></i>Recepcionar</a></li>
                 ${compra.recepcionado > 0 ? `<li><a class="dropdown-item editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}"><i class="bi bi-pencil-square me-2 text-warning"></i>Editar Recepciones</a></li>` : ''}
                 ${compra.recepcionado > 0 ? `<li><a class="dropdown-item" href="/app/verGestionProducto/"><i class="bi bi-archive me-2" style="color:#0ab39c;"></i>Crear Productos</a></li>` : ''}
-                ${PUEDE_ELIMINAR_COMPRA ? `<li><hr class="dropdown-divider"></li><li><a class="dropdown-item text-danger eliminar-compra" href="#" data-id="${compra.id}"><i class="bi bi-trash me-2"></i>Eliminar</a></li>` : ''}
+                ${PUEDE_ELIMINAR_COMPRA ? `<li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger eliminar-compra" href="#" data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}"><i class="bi bi-trash me-2"></i>Eliminar Compra</a></li>` : ''}
             </ul>
         </div>
     </td>
@@ -6144,82 +6462,22 @@ function resetCSVUpload() {
 
     $(document).on('click', '.eliminar-compra', function (e) {
         e.preventDefault();
-        const compraId = $(this).data('id');
+        const compraId   = $(this).data('id');
+        const compraNombre = $(this).data('nombre') || `compra #${compraId}`;
 
-        $.ajax({
-            url: GestionCompras.urls.eliminarCompra,
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({ compra_id: compraId, mode: 'check' }),
-            headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            success: function(data) {
-                if (!data.success) return;
-                const info = data.info;
-
-                if (info.tiene_recepciones) {
-                    Swal.fire({
-                        title: 'Eliminación bloqueada',
-                        html: `<div class="text-start">
-                            <p>La compra <strong>"${info.nombre}"</strong> no se puede eliminar porque tiene productos ya recepcionados en inventario.</p>
-                            <div class="alert alert-danger py-2 small mb-2">
-                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                                Eliminarla causaría inconsistencia en el stock del sistema.
-                            </div>
-                            <table class="table table-sm table-bordered mb-0 small">
-                                <tr><td>Proveedor</td><td class="fw-bold">${info.proveedor}</td></tr>
-                                <tr><td>Productos</td><td>${info.total_productos}</td></tr>
-                                <tr><td>Unidades totales</td><td>${info.total_unidades}</td></tr>
-                                <tr><td class="text-danger">Recepcionadas</td><td class="fw-bold text-danger">${info.total_recepcionado}</td></tr>
-                            </table>
-                        </div>`,
-                        icon: 'error',
-                        confirmButtonText: 'Entendido',
-                        confirmButtonColor: '#405189',
-                    });
-                    return;
-                }
-
-                if (info.tiene_productos) {
-                    Swal.fire({
-                        title: 'Compra con productos cargados',
-                        html: `<div class="text-start">
-                            <p>La compra <strong>"${info.nombre}"</strong> tiene productos cargados que aún no fueron recepcionados.</p>
-                            <table class="table table-sm table-bordered mb-2 small">
-                                <tr><td>Proveedor</td><td class="fw-bold">${info.proveedor}</td></tr>
-                                <tr><td>Productos</td><td>${info.total_productos}</td></tr>
-                                <tr><td>Unidades sin recepcionar</td><td class="fw-bold text-warning">${info.total_unidades}</td></tr>
-                            </table>
-                            <p class="mb-0 text-muted small"><i class="bi bi-info-circle me-1"></i>Al eliminar se perderán los productos cargados en esta compra.</p>
-                        </div>`,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#d33',
-                        cancelButtonColor: '#405189',
-                        confirmButtonText: 'Sí, eliminar compra',
-                        cancelButtonText: 'Cancelar'
-                    }).then((result) => {
-                        if (result.isConfirmed) ejecutarEliminacion(compraId, true);
-                    });
-                    return;
-                }
-
-                Swal.fire({
-                    title: '¿Eliminar compra?',
-                    html: `<p>Se eliminará la compra <strong>"${info.nombre}"</strong> (${info.proveedor}).</p><p class="text-muted small mb-0">La compra está vacía, no tiene productos cargados.</p>`,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#405189',
-                    confirmButtonText: 'Eliminar',
-                    cancelButtonText: 'Cancelar'
-                }).then((result) => {
-                    if (result.isConfirmed) ejecutarEliminacion(compraId, false);
-                });
-            },
-            error: function(xhr) {
-                const resp = xhr.responseJSON;
-                Swal.fire('Error', resp?.error || 'No se pudo verificar la compra.', 'error');
-            }
+        Swal.fire({
+            title: '¿Eliminar compra?',
+            html: `¿Seguro que deseas eliminar <strong>"${compraNombre}"</strong>?<br>
+                   <small class="text-muted">Esta acción no se puede deshacer.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="bi bi-trash me-1"></i>Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+            ejecutarEliminacion(compraId, true);
         });
     });
 
@@ -6269,9 +6527,13 @@ function resetCSVUpload() {
 
     $('#btnImportarCSV').on('click', function () {
         showGlobalLoader();
+
         const filas = todosLosRegistrosCSV.map(cols => {
-            // La 10ª columna (sucursal alias) es OPCIONAL.
+            // La 10ª columna (sucursal alias) es OPCIONAL — viene directo del Excel.
             const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla, sucursalRaw] = cols.map(v => v ? v.toString().trim() : '');
+
+            // Normalizar alias (eliminar NBSP y espacios dobles)
+            const sucursal = (sucursalRaw || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
             
             const costo = parseFloat((costoStr || '0').toString().replace(/\./g, '').replace(',', '.')) || 0;
             const precioSugerido = parseFloat((precioStr || '0').toString().replace(/\./g, '').replace(',', '.')) || 0;
@@ -6288,7 +6550,7 @@ function resetCSVUpload() {
                 precioSugerido: precioSugerido,
                 stock: stock,
                 talla,
-                sucursal: sucursalRaw || ''
+                sucursal: sucursal
             };
         });
 
@@ -6351,16 +6613,8 @@ function resetCSVUpload() {
             const stockTalla = parseInt($input.data('stock')) || parseInt($input.attr('max')) || 0;
             const yaRecepcionado = parseInt($input.data('recepcionado')) || 0;
             
-            // Para el costo, buscar en las celdas de la fila padre si es talla agrupada
-            let costo = 0;
-            const grupoId = $input.data('grupo');
-            if (grupoId) {
-                // Buscar costo en la fila de grupo
-                const $grupoRow = $(`.producto-grupo[data-grupo="${grupoId}"]`);
-                costo = parseFloat($grupoRow.find('td').eq(5).text().replace(/[^\d.-]/g, '')) || 0;
-            } else {
-                costo = parseFloat($row.find('td').eq(5).text().replace(/[^\d.-]/g, '')) || 0;
-            }
+            // Leer costo desde data-attribute (fiable en ambas vistas)
+            const costo = parseFloat($input.data('costo')) || 0;
 
             totalNuevoRecepcionado += nuevasUnidades;
             totalCosto += nuevasUnidades * costo;
@@ -6379,9 +6633,16 @@ function resetCSVUpload() {
         
         totalUnidades = totalNuevoRecepcionado;
 
-        // Actualizar totales principales
-        $('#totalParesRecepcionados').text(totalUnidades.toLocaleString());
-        $('#totalCostoRecepcionado').text(`$${totalCosto.toLocaleString()}`);
+        // ── Totales de sesión (incluye otras páginas guardadas temporalmente)
+        const sess = getSessionStats();
+        $('#totalParesRecepcionados').text(sess.cantidad.toLocaleString());
+        $('#totalCostoRecepcionado').text(`$${Math.round(sess.costo).toLocaleString()}`);
+        // Indicar si hay unidades de otras páginas
+        if (sess.extra > 0) {
+            $('#totalParesRecepcionados').attr('title', `${sess.cantidad} total: ${totalNuevoRecepcionado} esta pág. + ${sess.extra} otras páginas`);
+        } else {
+            $('#totalParesRecepcionados').removeAttr('title');
+        }
         
         // Calcular totales reales (ya recepcionado + nuevo)
         const totalRecepcionadoFinal = totalYaRecepcionado + totalNuevoRecepcionado;
@@ -6710,14 +6971,15 @@ function resetCSVUpload() {
         }
         
         if (datos.length === 0) {
+            const esAgrupada = $('#vistaAgrupada').is(':checked');
             Swal.fire({
                 icon: 'warning',
                 title: 'No hay productos para recepcionar',
                 html: `<div style="text-align:left;font-size:0.9rem;">
                     <p class="mb-2">Para guardar una recepción debes:</p>
                     <ol class="mb-2">
-                        <li>Hacer clic en un producto para <strong>expandir sus tallas</strong></li>
-                        <li>Ingresar la <strong>cantidad recibida</strong> en al menos una talla</li>
+                        ${esAgrupada ? '<li>Hacer clic en un producto para <strong>expandir sus tallas</strong></li>' : ''}
+                        <li>Ingresar la <strong>cantidad recibida</strong> en al menos una ${esAgrupada ? 'talla' : 'fila'}</li>
                         <li>Opcionalmente, asociar una <strong>factura</strong></li>
                     </ol>
                     <p class="text-muted mb-0" style="font-size:0.82rem;">

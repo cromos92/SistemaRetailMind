@@ -6911,11 +6911,20 @@ def recepcionar_compra(request):
             # Agrupar por producto (nombre + marca + color + género)
             productos_agrupados = {}
             for t in todas_tallas:
-                # Crear clave única para agrupar producto
-                key = f"{t.compra_producto.nombre}|{t.compra_producto.atributo1}|{t.compra_producto.atributo2}|{t.compra_producto.atributo3}"
+                # La clave incluye la sucursal_destino para que dos registros
+                # del mismo artículo pero con distinta sucursal aparezcan como
+                # grupos separados en Recepción (mismo comportamiento que en
+                # el import CSV donde la sucursal se usó como parte de la key).
+                _suc_key = t.compra_producto.sucursal_destino_id or ''
+                key = f"{t.compra_producto.nombre}|{t.compra_producto.atributo1}|{t.compra_producto.atributo2}|{t.compra_producto.atributo3}|{_suc_key}"
                 
                 if key not in productos_agrupados:
                     sucursal_sug = t.compra_producto.sucursal_destino
+                    # Usar el campo FK directo (siempre fiable) para el ID.
+                    # No usar sucursal_sug.id para evitar None cuando el JOIN
+                    # devuelve NULL aunque el campo FK tenga valor.
+                    suc_id_producto = t.compra_producto.sucursal_destino_id
+                    suc_alias_producto = sucursal_sug.alias if sucursal_sug else None
                     productos_agrupados[key] = {
                         'nombre': t.compra_producto.nombre,
                         'descripcion': t.compra_producto.descripcion,
@@ -6931,11 +6940,8 @@ def recepcionar_compra(request):
                         'tallas': [],
                         '_tallas_map': {},
                         'compra_producto_ids': set(),
-                        'sucursal_destino_id': sucursal_sug.id if sucursal_sug else None,
-                        'sucursal_destino_alias': sucursal_sug.alias if sucursal_sug else None,
-                        # Si hay una fila fantasma en el producto, lo marcamos
-                        # para habilitar en el frontend el botón "Distribuir
-                        # por guía de tallas".
+                        'sucursal_destino_id': suc_id_producto,
+                        'sucursal_destino_alias': suc_alias_producto,
                         'pendiente_distribuir': False,
                     }
                 productos_agrupados[key]['compra_producto_ids'].add(t.compra_producto.id)
@@ -6967,8 +6973,8 @@ def recepcionar_compra(request):
                         sucursal_recep_alias = recep.sucursal_destino.alias if recep.sucursal_destino else None
 
                 # Sucursal a mostrar: la ya recepcionada tiene prioridad,
-                # si no existe usamos la sugerida por el producto.
-                suc_id_talla = sucursal_recep_id or productos_agrupados[key]['sucursal_destino_id']
+                # si no existe usamos la del producto (campo FK directo).
+                suc_id_talla = sucursal_recep_id or t.compra_producto.sucursal_destino_id
                 suc_alias_talla = sucursal_recep_alias or productos_agrupados[key]['sucursal_destino_alias']
 
                 # AGRUPAR TALLAS IGUALES: usar talla como clave dentro del producto
@@ -7074,8 +7080,11 @@ def recepcionar_compra(request):
             # Agrupar por producto + talla (clave única: nombre+marca+color+genero+talla)
             tallas_agrupadas = {}
             for t in todas_tallas:
-                # Crear clave única para agrupar producto + talla
-                key = f"{t.compra_producto.nombre}|{t.compra_producto.atributo1}|{t.compra_producto.atributo2}|{t.compra_producto.atributo3}|{t.talla}"
+                # Clave única: producto + talla + sucursal_destino
+                # (igual que en vista agrupada para que artículos con distinta
+                # sucursal NO se fusionen en una sola fila)
+                _suc_key = t.compra_producto.sucursal_destino_id or ''
+                key = f"{t.compra_producto.nombre}|{t.compra_producto.atributo1}|{t.compra_producto.atributo2}|{t.compra_producto.atributo3}|{t.talla}|{_suc_key}"
                 
                 # Obtener TODAS las recepciones para esta talla específica
                 recepciones_talla = Productos_Recepcionados.objects.filter(
@@ -7100,7 +7109,8 @@ def recepcionar_compra(request):
                         sucursal_recep_alias = recep.sucursal_destino.alias if recep.sucursal_destino else None
 
                 sucursal_sug = t.compra_producto.sucursal_destino
-                suc_id_talla = sucursal_recep_id or (sucursal_sug.id if sucursal_sug else None)
+                # FK directo para el ID — fiable aunque el JOIN devuelva NULL
+                suc_id_talla = sucursal_recep_id or t.compra_producto.sucursal_destino_id
                 suc_alias_talla = sucursal_recep_alias or (sucursal_sug.alias if sucursal_sug else None)
 
                 if key not in tallas_agrupadas:
@@ -9236,9 +9246,87 @@ def eliminar_producto_compra(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+
+@login_required
 @require_POST
 @transaction.atomic
-def agregar_producto_manual(request):
+def limpiar_productos_compra(request):
+    """
+    Elimina TODOS los Compras_Producto (y sus tallas en cascada) de una compra,
+    sin eliminar la compra en sí.
+    - mode=check  → devuelve info sin modificar nada
+    - mode=delete → elimina si no hay recepciones (o si force=True para ignorar)
+    Bloqueado si algún producto tiene recepciones registradas.
+    """
+    try:
+        data = json.loads(request.body)
+        compra_id = data.get('compra_id')
+        mode      = data.get('mode', 'delete')
+        force     = data.get('force', False)
+
+        if not compra_id:
+            return JsonResponse({'success': False, 'error': 'ID de compra no proporcionado'}, status=400)
+
+        compra = get_object_or_404(Compras, id=compra_id)
+
+        if compra.estado == 'ELIMINADA':
+            return JsonResponse({'success': False, 'error': 'La compra está eliminada'}, status=400)
+
+        productos = Compras_Producto.objects.filter(compras=compra)
+        total_productos = productos.count()
+
+        if total_productos == 0:
+            return JsonResponse({'success': False, 'error': 'Esta compra no tiene productos para eliminar.'}, status=400)
+
+        tallas_qs = Compras_Producto_Talla.objects.filter(compra_producto__compras=compra)
+        total_unidades = sum(t.stock for t in tallas_qs)
+
+        recepciones_count = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__compra_producto__compras=compra
+        ).count()
+
+        info = {
+            'compra_id':       compra.id,
+            'nombre':          compra.nombre,
+            'proveedor':       compra.empresa.nombre if compra.empresa else '-',
+            'total_productos': total_productos,
+            'total_unidades':  total_unidades,
+            'recepciones_count': recepciones_count,
+        }
+
+        if mode == 'check':
+            return JsonResponse({'success': True, 'info': info})
+
+        # Bloquear si hay recepciones (a menos que se fuerce)
+        if recepciones_count > 0 and not force:
+            return JsonResponse({
+                'success': False,
+                'blocked': True,
+                'error': (
+                    f'La compra "{compra.nombre}" tiene {recepciones_count} recepción(es) '
+                    f'ya registradas. Eliminar los productos causaría inconsistencia en el stock.'
+                ),
+                'info': info,
+            }, status=400)
+
+        # Eliminar productos (cascade elimina tallas y recepciones si force)
+        productos.delete()
+
+        return JsonResponse({
+            'success': True,
+            'message': (
+                f'Se eliminaron {total_productos} producto(s) ({total_unidades} unidades) '
+                f'de la compra "{compra.nombre}". La compra se mantiene.'
+            )
+        })
+
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error: {str(e)}'}, status=500)
+
+
+
     try:
         # Detectar si es JSON o POST normal
         if request.content_type == 'application/json':
@@ -10970,7 +11058,14 @@ def verificar_producto_existente(request):
                 pass
 
     # Buscar producto con los filtros exactos (en la sucursal activa)
-    producto = Producto.objects.filter(**filtros).first()
+    producto = Producto.objects.filter(**filtros).select_related('sucursal', 'atributo1', 'atributo2', 'atributo3', 'categoria').first()
+
+    # Detectar duplicados en la sucursal activa (mismo artículo + atributos)
+    hay_duplicados = False
+    total_duplicados = 0
+    if producto and articulo:
+        total_duplicados = Producto.objects.filter(**filtros).count()
+        hay_duplicados = total_duplicados > 1
     
     # ========== BÚSQUEDA FLEXIBLE SI NO ENCUENTRA EXACTO ==========
     if not producto and articulo:
@@ -11012,7 +11107,7 @@ def verificar_producto_existente(request):
             
         productos_candidatos = Producto.objects.filter(
             **filtros_candidatos
-        ).select_related('atributo1', 'atributo2', 'atributo3')
+        ).select_related('atributo1', 'atributo2', 'atributo3', 'sucursal', 'categoria')
         
         for prod in productos_candidatos:
             # Comparar atributos case-insensitive
@@ -11163,6 +11258,20 @@ def verificar_producto_existente(request):
         # ========== BUSCAR PRECIOS EN OTRAS SUCURSALES ==========
         productos_otras_sucursales = []
         try:
+            # Incluir la sucursal actual primero (siempre existe porque producto fue encontrado aquí)
+            sucursal_actual_obj = producto.sucursal
+            productos_otras_sucursales.append({
+                'sucursal_id': producto.sucursal_id,
+                'sucursal_nombre': sucursal_actual_obj.alias if sucursal_actual_obj else 'Sucursal actual',
+                'precioventa': int(producto.precioventa or 0),
+                'costo': int(producto.costo or 0),
+                'sobreprecio': int(producto.sobreprecio or 0),
+                'precio_diferente': False,
+                'marca': producto.atributo1.valor if producto.atributo1 else '-',
+                'color': producto.atributo2.valor if producto.atributo2 else '-',
+                'es_sucursal_actual': True,
+            })
+
             # Buscar productos con mismo artículo y atributos en OTRAS sucursales
             filtros_otras = {
                 'articulo': articulo,
@@ -11179,7 +11288,7 @@ def verificar_producto_existente(request):
             otros_productos = Producto.objects.filter(
                 **filtros_otras
             ).exclude(
-                sucursal_id=sucursal_id  # Excluir sucursal actual
+                sucursal_id=sucursal_id  # Excluir sucursal actual (ya incluida arriba)
             ).select_related('sucursal', 'atributo1', 'atributo2')
             
             for op in otros_productos:
@@ -11191,11 +11300,12 @@ def verificar_producto_existente(request):
                     'sobreprecio': int(op.sobreprecio or 0),
                     'precio_diferente': int(op.precioventa or 0) != int(producto.precioventa or 0),
                     'marca': op.atributo1.valor if op.atributo1 else '-',
-                    'color': op.atributo2.valor if op.atributo2 else '-'
+                    'color': op.atributo2.valor if op.atributo2 else '-',
+                    'es_sucursal_actual': False,
                 })
             
             if productos_otras_sucursales:
-                print(f"📊 Producto encontrado en {len(productos_otras_sucursales)} otras sucursales")
+                print(f"📊 Producto encontrado en {len(productos_otras_sucursales)} sucursales (incluye actual)")
         except Exception as e:
             print(f"⚠️ Error buscando en otras sucursales: {e}")
         # =========================================================
@@ -11205,10 +11315,13 @@ def verificar_producto_existente(request):
             'producto_id': producto.id,
             'producto_encontrado': producto_encontrado,
             'tallas_existentes': list(tallas_existentes),
-            'tallas_normalizadas_map': tallas_normalizadas_map,  # Mapa para comparación flexible
+            'tallas_normalizadas_map': tallas_normalizadas_map,
             'productos_similares_sku': productos_similares_sku,
             'productos_similares_nombre': productos_similares_nombre,
-            'productos_otras_sucursales': productos_otras_sucursales  # ✅ NUEVO: Precios en otras sucursales
+            'productos_otras_sucursales': productos_otras_sucursales,
+            'edel_producto': _build_edel_producto_ref(articulo, producto),
+            'hay_duplicados': hay_duplicados,
+            'total_duplicados': total_duplicados,
         })
     else:
         # ========== BUSCAR PRECIOS EN OTRAS SUCURSALES (para producto nuevo) ==========
@@ -11276,8 +11389,57 @@ def verificar_producto_existente(request):
             'producto_encontrado': None,
             'productos_similares_sku': productos_similares_sku,
             'productos_similares_nombre': productos_similares_nombre,
-            'productos_otras_sucursales': productos_otras_sucursales  # ✅ NUEVO: Precios en otras sucursales
+            'productos_otras_sucursales': productos_otras_sucursales,
+            'edel_producto': _build_edel_producto_ref(articulo, None),
         })
+
+
+def _build_edel_producto_ref(articulo, producto_local):
+    """Busca el producto en EDEL (alias='EDEL') y devuelve sus datos de referencia.
+    Si el producto_local ya es de EDEL se reutiliza su data directamente.
+    Retorna None si no hay producto en EDEL."""
+    try:
+        # Si el producto encontrado ya pertenece a EDEL, no hacer otra query
+        if producto_local and producto_local.sucursal and \
+                producto_local.sucursal.alias and \
+                producto_local.sucursal.alias.upper() == 'EDEL':
+            p = producto_local
+        else:
+            p = Producto.objects.filter(
+                articulo=articulo,
+                sucursal__alias__iexact='EDEL'
+            ).select_related('atributo1', 'atributo2', 'atributo3', 'categoria', 'sucursal').first()
+
+        if not p:
+            return None
+
+        tallas_qs = Producto_Talla.objects.filter(producto=p).values('talla', 'sku', 'stock')
+        tallas_lista = [t['talla'] for t in tallas_qs]
+        return {
+            'id': p.id,
+            'articulo': p.articulo,
+            'descripcion': p.descripcion,
+            'marca': p.atributo1.valor if p.atributo1 else '-',
+            'marca_id': p.atributo1_id,
+            'color': p.atributo2.valor if p.atributo2 else '-',
+            'color_id': p.atributo2_id,
+            'genero': p.atributo3.valor if p.atributo3 else '-',
+            'genero_id': p.atributo3_id,
+            'categoria': p.categoria.nombre if p.categoria else '-',
+            'categoria_id': p.categoria_id,
+            'precioventa': int(p.precioventa or 0),
+            'costo': int(p.costo or 0),
+            'sobreprecio': int(p.sobreprecio or 0),
+            'total_tallas': len(tallas_lista),
+            'tallas': ', '.join(tallas_lista),
+            # Detalle por talla (necesario para "reutiliza" en modo distribuir)
+            'tallas_detail': [{'talla': t['talla'], 'sku': t['sku'], 'stock': t['stock'] or 0} for t in tallas_qs],
+        }
+    except Exception as e:
+        print(f"⚠️ Error buscando producto en EDEL: {e}")
+        return None
+
+
 @transaction.atomic
 def crear_producto_desde_recepcion(request):
     # 1. Validar sesión y datos básicos
@@ -11517,13 +11679,16 @@ def crear_producto_desde_recepcion(request):
     # al DTE. La CPT consolidada se borra (cascade borra sus recepciones
     # originales, pero ya tenemos las réplicas creadas).
     if redistribuir_desde_consolidado and producto_compra_id:
-        # Parsear distribución del formulario (stock_<talla>) excluyendo '00'
+        # Parsear distribución del formulario (stock_<talla>)
+        # Nota: '00' puede ser tanto el consolidado ORIGINAL (fuente) como una
+        # talla real del guía (destino). El consolidado se identifica por su
+        # registro en Compras_Producto_Talla, no por el nombre de talla.
         distribucion_form = {}
         for k, v in data.items():
             if not k.startswith('stock_'):
                 continue
             talla_k = k[len('stock_'):].strip()
-            if talla_k in ('00', '__TOTAL__', ''):
+            if talla_k in ('__TOTAL__', ''):   # solo excluir marcadores internos
                 continue
             try:
                 stock_k = int(v or 0)
