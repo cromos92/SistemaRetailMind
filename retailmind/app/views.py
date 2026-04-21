@@ -13428,6 +13428,17 @@ def facturas_pendientes(request):
     
     q = request.GET.get('q', '').strip()
     
+    # compra_id (opcional): si viene, ajustamos la ventana de fechas para
+    # que siempre abarque la fecha real de la compra. Caso de uso: una
+    # compra creada en 2025 que recién llega/se recepciona en 2026; con el
+    # filtro por meses los DTE de 2025 quedaban fuera y el select del
+    # modal "Agregar Producto Manual" aparecía vacío.
+    compra_id = request.GET.get('compra_id')
+    try:
+        compra_id = int(compra_id) if compra_id else None
+    except (TypeError, ValueError):
+        compra_id = None
+    
     # Parámetros de limitación
     try:
         meses = int(request.GET.get('meses', 1))  # Por defecto MES ACTUAL (1 mes)
@@ -13447,6 +13458,18 @@ def facturas_pendientes(request):
     
     ESTADOS_EXCLUIDOS = ['ANULADO', 'CANCELADO', 'RECHAZADO']
     fecha_corte = timezone.localdate() - timedelta(days=meses * 30)
+
+    # Si nos pasan compra_id, extender el corte hacia atrás hasta incluir
+    # la fecha de la compra (con 30 días de colchón), para soportar compras
+    # cuyo DTE es más antiguo que la ventana "meses".
+    if compra_id:
+        try:
+            from .models import Compras
+            compra = Compras.objects.only('fecha').get(id=compra_id)
+            if compra.fecha:
+                fecha_corte = min(fecha_corte, compra.fecha - timedelta(days=30))
+        except Exception:
+            pass
     
     # Buscar DTEs de COMPRA de TODAS las sucursales/empresas del usuario
     facturas = Dte.objects.filter(

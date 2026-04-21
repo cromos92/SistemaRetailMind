@@ -2139,11 +2139,14 @@
                                     <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaDetallada" autocomplete="off">
                                     <label class="btn btn-outline-primary btn-vista" for="vistaDetallada" title="Vista detallada"><i class="bi bi-list-ul"></i></label>
                                 </div>
-                                <select class="form-select form-select-sm" id="filtroEstadoRecepcion" style="width: 120px;">
-                                    <option value="">Todo</option>
-                                    <option value="pendientes">Pendientes</option>
-                                    <option value="parciales">Parciales</option>
-                                    <option value="completos">Completos</option>
+                                <select class="form-select form-select-sm" id="filtroEstadoRecepcion"
+                                        style="width: 200px;"
+                                        title="Filtrar por estado de rebaja de stock">
+                                    <option value="">Todo (rebajado y pendiente)</option>
+                                    <option value="pendientes">Pendientes por rebajar</option>
+                                    <option value="rebajados">Ya rebajados (parcial o total)</option>
+                                    <option value="parciales">Sólo parciales</option>
+                                    <option value="completos">Sólo completos</option>
                                 </select>
                                 <div class="input-group input-group-sm" style="width: 190px;" title="Filtrar filas por sucursal destino asignada">
                                     <span class="input-group-text bg-white py-0 px-2"><i class="bi bi-geo-alt text-info"></i></span>
@@ -2166,19 +2169,9 @@
                             <!-- Fila 2: Acciones rápidas (compactada) -->
                             <div class="acciones-masivas-bar">
                                 <div class="d-flex align-items-center gap-1 flex-wrap">
-                                    <button type="button" class="btn btn-success" id="btnRecepcionarTodo" title="Rellenar todas las cantidades pendientes con el máximo">
-                                        <i class="bi bi-check-all me-1"></i>Todo
-                                    </button>
-                                    <button type="button" class="btn btn-warning text-dark" id="btnRecepcionarMitad" title="Rellenar con el 50% de las cantidades pendientes">
-                                        <i class="bi bi-percent"></i> 50%
-                                    </button>
-                                    <div class="vr mx-1" style="border-color:rgba(255,255,255,0.2);"></div>
-                                    <div class="input-group input-group-sm" style="width: 180px;">
-                                        <span class="input-group-text py-0 px-2" style="font-size:0.7rem;"><i class="bi bi-receipt"></i></span>
-                                        <input type="text" class="form-control" id="facturaGlobalMasiva" placeholder="Factura global" list="facturas-global-list" title="Factura global: se asigna a todas las filas">
-                                        <datalist id="facturas-global-list"></datalist>
-                                        <button class="btn btn-primary" type="button" id="btnAplicarFacturaGlobal" title="Asignar esta factura a todas las filas"><i class="bi bi-arrow-down-circle"></i></button>
-                                    </div>
+                                    <!-- Datalist global de facturas (usado por inputs por fila,
+                                         aunque ya no exista el input "Factura global" masivo). -->
+                                    <datalist id="facturas-global-list"></datalist>
                                     <div class="input-group input-group-sm" style="width: 240px;">
                                         <span class="input-group-text py-0 px-2" style="font-size:0.7rem;"><i class="bi bi-geo-alt"></i></span>
                                         <select class="form-select" id="sucursalGlobalMasiva" title="Sucursal destino a aplicar a las filas seleccionadas">
@@ -2196,7 +2189,6 @@
                                         <i class="bi bi-arrows-expand"></i>
                                     </button>
                                     <button type="button" class="btn btn-outline-light" id="btnLimpiarTodo" title="Borrar todas las cantidades y facturas ingresadas"><i class="bi bi-eraser"></i></button>
-                                    <button type="button" class="btn btn-outline-light" id="btnRecargarFacturas" title="Recargar lista de facturas disponibles"><i class="bi bi-arrow-clockwise"></i></button>
                                     <button type="button" class="btn btn-outline-danger" id="btnToggleEliminar" title="Activar modo para eliminar productos de la compra">
                                         <i class="bi bi-trash3"></i>
                                     </button>
@@ -2949,7 +2941,7 @@ const GestionCompras = (function() {
             $('#proveedorIdManual').val(empresaId || '');
 
             if (empresaId) {
-                cargarDtesDisponiblesManual(empresaId);
+                cargarDtesDisponiblesManual(empresaId, compraId);
             } else {
                 $('#selectDteManual').empty().append('<option value="">Sin proveedor asignado</option>');
             }
@@ -4090,29 +4082,8 @@ const GestionCompras = (function() {
         }
     });
 
-    // Botón para recargar facturas disponibles
-    $('#btnRecargarFacturas').on('click', function() {
-        const compraId = $('#globalIDCompraRecepcion').val();
-        if (compraId) {
-            const $btn = $(this);
-            const originalHtml = $btn.html();
-            $btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat"></i> Recargando...');
-            
-            actualizarFacturasDisponibles('manual')
-                .always(() => {
-                    setTimeout(() => {
-                        $btn.prop('disabled', false).html(originalHtml);
-                    }, 300);
-                });
-        } else {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Sin compra seleccionada',
-                text: 'Por favor, abre primero una recepción de compra.',
-                confirmButtonText: 'Entendido'
-            });
-        }
-    });
+    // (Botón "Recargar facturas" eliminado de la toolbar; la recarga se
+    // dispara automáticamente al abrir el modal vía actualizarFacturasDisponibles.)
 
     // ========== GUIA DE PASOS + EXPANDIR TODOS ==========
 
@@ -4157,116 +4128,11 @@ const GestionCompras = (function() {
     });
 
     // ========== FUNCIONES DE ACCIONES MASIVAS ==========
-    
-    // Recepcionar todo (marcar todas las cantidades pendientes)
-    $('#btnRecepcionarTodo').on('click', function() {
-        const $btn = $(this);
-        const originalHtml = $btn.html();
-        $btn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Aplicando...');
-        
-        Swal.fire({
-            title: '¿Recepcionar todo?',
-            html: 'Se marcarán <strong>todas las cantidades pendientes</strong> como recibidas.<br><small class="text-muted">Aún podrás modificar antes de guardar.</small>',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: '#0ab39c',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: '<i class="bi bi-check-all me-1"></i>Sí, recepcionar todo',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                let totalAplicado = 0;
-                
-                // Aplicar a inputs de vista detallada
-                $('.recepcionado-input').each(function() {
-                    const max = parseInt($(this).attr('max')) || 0;
-                    if (max > 0) {
-                        $(this).val(max).addClass('has-value');
-                        marcarFilaConDatos($(this));
-                        totalAplicado += max;
-                    }
-                });
-                
-                // Aplicar a inputs masivos de vista agrupada
-                $('.recepcion-masiva-input').each(function() {
-                    const stockTotal = parseInt($(this).data('stock-total')) || 0;
-                    if (stockTotal > 0) {
-                        $(this).val(stockTotal);
-                    }
-                });
-                
-                recalcularTotalesRecepcion();
-                actualizarQuickStats();
-                
-                GestionCompras.showSuccess(`Se aplicaron ${totalAplicado.toLocaleString()} unidades en total`);
-            }
-            $btn.prop('disabled', false).html(originalHtml);
-        });
-    });
-    
-    // Recepcionar 50%
-    $('#btnRecepcionarMitad').on('click', function() {
-        let totalAplicado = 0;
-        
-        $('.recepcionado-input').each(function() {
-            const max = parseInt($(this).attr('max')) || 0;
-            const mitad = Math.ceil(max / 2);
-            if (mitad > 0) {
-                $(this).val(mitad).addClass('has-value');
-                marcarFilaConDatos($(this));
-                totalAplicado += mitad;
-            }
-        });
-        
-        $('.recepcion-masiva-input').each(function() {
-            const stockTotal = parseInt($(this).data('stock-total')) || 0;
-            const mitad = Math.ceil(stockTotal / 2);
-            if (mitad > 0) {
-                $(this).val(mitad);
-            }
-        });
-        
-        recalcularTotalesRecepcion();
-        actualizarQuickStats();
-        
-        GestionCompras.showSuccess(`Se aplicó 50%: ${totalAplicado.toLocaleString()} unidades`);
-    });
-    
-    // Aplicar factura global a todos
-    $('#btnAplicarFacturaGlobal').on('click', function() {
-        const factura = $('#facturaGlobalMasiva').val().trim();
-        
-        if (!factura) {
-            $('#facturaGlobalMasiva').addClass('input-error');
-            setTimeout(() => $('#facturaGlobalMasiva').removeClass('input-error'), 300);
-            GestionCompras.showError('Ingresa un número de factura');
-            return;
-        }
-        
-        let aplicados = 0;
-        
-        // Aplicar a todas las facturas de vista detallada
-        $('.factura-datalist-input').each(function() {
-            $(this).val(factura).addClass('has-factura');
-            aplicados++;
-        });
-        
-        // Aplicar a facturas masivas
-        $('.factura-masiva-input').each(function() {
-            $(this).val(factura);
-            aplicados++;
-        });
-        
-        // Validar facturas
-        setTimeout(() => {
-            $('.factura-datalist-input, .factura-masiva-input').each(function() {
-                validarFacturaInput($(this));
-            });
-        }, 100);
-        
-        GestionCompras.showSuccess(`Factura "${factura}" aplicada a ${aplicados} productos`);
-        $('#facturaGlobalMasiva').val('');
-    });
+    //
+    // Los botones "Todo (100%)", "50%" y "Factura global" fueron retirados
+    // de la toolbar por pedido del operador (inducían a llenar cantidades
+    // sin querer y a asignar facturas incorrectas en masa). Se mantiene el
+    // flujo por fila (inputs individuales + botones de cantidad rápida).
 
     // Aplicar sucursal global a TODAS las filas (per-talla + per-producto masivo).
     // Acepta "" como valor válido para limpiar la sucursal de todas las filas.
@@ -5136,9 +5002,11 @@ const GestionCompras = (function() {
 
             let mostrar = true;
 
-            // Filtro por estado
+            // Filtro por estado. "rebajados" = parcial o completo (ya bajó
+            // algo de stock). "pendientes" = ninguna recepción todavía.
             switch (filtroEstado) {
                 case 'pendientes': mostrar = esPendiente; break;
+                case 'rebajados':  mostrar = esParcial || esCompleto; break;
                 case 'parciales':  mostrar = esParcial;   break;
                 case 'completos':  mostrar = esCompleto;  break;
             }
@@ -7599,7 +7467,7 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
         }, 1500);
     });
 
-    function cargarDtesDisponiblesManual(proveedorId) {
+    function cargarDtesDisponiblesManual(proveedorId, compraId) {
         const select = $('#selectDteManual');
 
         // Destruir select2 previo si existe
@@ -7615,10 +7483,18 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             return;
         }
 
-        $.get('/app/facturas_pendientes/', {
+        // Enviamos compra_id para que el backend ajuste la ventana de fechas
+        // e incluya DTEs emitidos en el periodo de la compra aunque la
+        // compra sea antigua (ej. compra 2025 que recepciona en 2026).
+        const params = {
             proveedor_id: proveedorId,
             meses: 12
-        }, function(data) {
+        };
+        if (compraId) {
+            params.compra_id = compraId;
+        }
+
+        $.get('/app/facturas_pendientes/', params, function(data) {
             console.log('DTEs recibidos para proveedor', proveedorId, ':', data);
             select.empty();
             if (!data || data.length === 0) {
