@@ -9289,15 +9289,25 @@ def distribuir_tallas_compra_producto(request):
 @transaction.atomic
 def eliminar_recepcion_pendiente(request):
     """
-    Elimina un producto pendiente de la lista "Por Despachar":
-    1. Borra todas sus Productos_Recepcionados aún no vinculadas a un Producto_Talla.
-    2. Borra el Compras_Producto (y sus Compras_Producto_Talla en cascada).
-    Si quedan más recepciones ya vinculadas (producto ya creado parcialmente),
-    solo elimina las pendientes sin tocar el Compras_Producto.
+    Elimina las recepciones pendientes de una fila de "Pendientes de crear".
+
+    Cada fila representa la combinación (compra_producto × sucursal_destino),
+    por lo que se elimina SÓLO las Productos_Recepcionados pendientes que
+    pertenecen a la sucursal recibida en el payload. Las pendientes de otras
+    sucursales y las procesadas se conservan.
+
+    El Compras_Producto (y sus Compras_Producto_Talla en cascada) se elimina
+    únicamente si al terminar NO queda ninguna recepción (ni pendiente ni
+    procesada) en ninguna sucursal.
+
+    Compat: si no llega `sucursal_destino_id` (flujo legacy antes del cambio
+    multi-sucursal), se mantiene el comportamiento antiguo: borrar todas las
+    pendientes del compra_producto.
     """
     try:
         data = json.loads(request.body)
         compra_producto_id = data.get('compra_producto_id')
+        sucursal_destino_id_raw = data.get('sucursal_destino_id')
 
         if not compra_producto_id:
             return JsonResponse({'success': False, 'error': 'ID de producto de compra no proporcionado'}, status=400)
@@ -9306,32 +9316,72 @@ def eliminar_recepcion_pendiente(request):
         compra = compra_producto.compras
         tallas = Compras_Producto_Talla.objects.filter(compra_producto=compra_producto)
 
-        # Recepciones pendientes (aún no ligadas a un Producto_Talla real)
+        # Determinar filtro por sucursal para la eliminación.
+        # • Si llega sucursal_destino_id válido → estrictamente esa sucursal.
+        # • Si llega como string vacío ('' / 'null' / None) pero la clave
+        #   existe → fila "Sin sucursal" (sucursal_destino IS NULL).
+        # • Si no llega la clave en absoluto → legacy (sin filtro).
+        sucursal_keyword = 'sucursal_destino_id' in data
+        sucursal_destino_id = None
+        sucursal_destino_alias = None
+        if sucursal_keyword:
+            try:
+                if sucursal_destino_id_raw not in (None, '', 'null'):
+                    sucursal_destino_id = int(sucursal_destino_id_raw)
+                    try:
+                        sucursal_destino_alias = Sucursal.objects.only('alias').get(
+                            pk=sucursal_destino_id
+                        ).alias
+                    except Sucursal.DoesNotExist:
+                        sucursal_destino_alias = f'ID {sucursal_destino_id}'
+            except (TypeError, ValueError):
+                sucursal_destino_id = None
+
+        if sucursal_keyword:
+            if sucursal_destino_id is not None:
+                filtro_sucursal = Q(sucursal_destino_id=sucursal_destino_id)
+                sucursal_desc = sucursal_destino_alias or f'sucursal {sucursal_destino_id}'
+            else:
+                # fila "Sin sucursal" explícita
+                filtro_sucursal = Q(sucursal_destino__isnull=True)
+                sucursal_desc = 'sin sucursal asignada'
+        else:
+            # Legacy: sin filtro
+            filtro_sucursal = Q()
+            sucursal_desc = 'todas las sucursales'
+
+        # Recepciones pendientes (no ligadas a Producto_Talla) de la sucursal
+        # seleccionada.
         recepciones_pendientes = Productos_Recepcionados.objects.filter(
             compra_producto_talla__in=tallas,
             producto_talla__isnull=True,
-        )
+        ).filter(filtro_sucursal)
         total_pendientes = recepciones_pendientes.count()
         total_stock = recepciones_pendientes.aggregate(s=Sum('stockArribado'))['s'] or 0
 
-        # Recepciones ya procesadas (ligadas a un Producto_Talla)
+        # Eliminar SÓLO esas pendientes
+        recepciones_pendientes.delete()
+
+        # Ver si, después de borrar, queda algo en ESTE compra_producto
+        # (cualquier sucursal, pendiente o procesada).
+        restantes_totales = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__in=tallas,
+        ).count()
+
+        # Recepciones ya procesadas (para el mensaje informativo)
         recepciones_procesadas = Productos_Recepcionados.objects.filter(
             compra_producto_talla__in=tallas,
             producto_talla__isnull=False,
         ).count()
 
-        # Eliminar las recepciones pendientes
-        recepciones_pendientes.delete()
-
-        # Solo eliminar el Compras_Producto si NO quedan recepciones procesadas
-        # (si ya hay stock en productos reales, el ítem de compra debe conservarse)
+        # Sólo eliminamos el Compras_Producto cuando ya no queda NADA en
+        # ninguna sucursal. Así no rompemos los registros de compra cuando
+        # queda stock pendiente en otras sucursales (o stock ya procesado).
         eliminado_cp = False
-        if recepciones_procesadas == 0:
-            nombre_producto = compra_producto.nombre
+        nombre_producto = compra_producto.nombre
+        if restantes_totales == 0:
             compra_producto.delete()   # cascada elimina Compras_Producto_Talla
             eliminado_cp = True
-        else:
-            nombre_producto = compra_producto.nombre
 
         return JsonResponse({
             'success': True,
@@ -9342,12 +9392,19 @@ def eliminar_recepcion_pendiente(request):
             'stock_eliminado': total_stock,
             'compra_producto_eliminado': eliminado_cp,
             'tenia_procesadas': recepciones_procesadas > 0,
+            'sucursal_destino_id': sucursal_destino_id,
+            'sucursal_destino_alias': sucursal_destino_alias,
             'message': (
                 f'Se eliminaron {total_pendientes} recepción(es) pendiente(s) '
-                f'({total_stock} uds) del producto "{nombre_producto}" '
-                f'en la compra "{compra.nombre}".'
-                + (f' El ítem de compra también fue eliminado.' if eliminado_cp else
-                   f' El ítem de compra se conservó porque ya tiene {recepciones_procesadas} recepción(es) procesada(s).')
+                f'({total_stock} uds) del producto "{nombre_producto}" en la compra '
+                f'"{compra.nombre}" para {sucursal_desc}.'
+                + (
+                    ' El ítem de compra también fue eliminado porque ya no queda '
+                    'ninguna recepción en ninguna sucursal.'
+                    if eliminado_cp else
+                    f' El ítem de compra se conservó (aún quedan {restantes_totales} '
+                    f'recepción(es) — pendientes de otras sucursales o ya procesadas).'
+                )
             )
         })
 

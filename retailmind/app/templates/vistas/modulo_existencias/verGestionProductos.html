@@ -12156,10 +12156,18 @@ $('#btnConfirmarActualizacion').on('click', function() {
 
     // ====== ELIMINAR RECEPCIÓN PENDIENTE ======
     $(document).on('click', '.btn-eliminar-recepcion-pendiente', function() {
-        const productoId  = $(this).data('id');
-        const nombre      = $(this).data('nombre') || 'este producto';
-        const compraNombre = $(this).data('compra') || '';
-        const stock       = parseInt($(this).data('stock')) || 0;
+        const productoId     = $(this).data('id');
+        const nombre         = $(this).data('nombre') || 'este producto';
+        const compraNombre   = $(this).data('compra') || '';
+        const stock          = parseInt($(this).data('stock')) || 0;
+        // Sucursal destino de la fila (ver `cargarProductosParaCrear`). Si
+        // viene vacía, es una fila legacy sin sucursal_destino → el backend
+        // hace fallback al comportamiento antiguo.
+        const sucursalIdAttr = $(this).attr('data-sucursal-id');
+        const sucursalNombre = $(this).attr('data-sucursal-nombre') || '';
+        const sucursalId = (sucursalIdAttr !== undefined && sucursalIdAttr !== '' && sucursalIdAttr !== 'null')
+            ? sucursalIdAttr
+            : null;
 
         const detalleHtml = `
             <div style="text-align:left;font-size:.9rem;">
@@ -12168,10 +12176,13 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     <strong>${nombre}</strong>
                 </div>
                 ${compraNombre ? `<div class="mb-1"><i class="bi bi-truck me-1 text-muted"></i><strong>Compra:</strong> ${compraNombre}</div>` : ''}
+                ${sucursalNombre ? `<div class="mb-1"><i class="bi bi-shop me-1 text-muted"></i><strong>Sucursal destino:</strong> ${sucursalNombre}</div>` : ''}
                 <div class="mb-3"><i class="bi bi-stack me-1 text-muted"></i><strong>Stock pendiente:</strong> ${stock} uds</div>
                 <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:.82rem;">
                     <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                    Se eliminarán las <strong>recepciones pendientes</strong> y el ítem de la compra (si no tiene unidades ya creadas).
+                    Se eliminarán <strong>únicamente las recepciones pendientes de ${sucursalNombre || 'esta fila'}</strong>.
+                    Las pendientes en otras sucursales y las recepciones ya procesadas se conservarán.
+                    El ítem de la compra sólo se elimina si no queda ninguna recepción en ninguna sucursal.
                     Esta acción <strong>no se puede deshacer</strong>.
                 </div>
             </div>`;
@@ -12193,7 +12204,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
                 method: 'POST',
                 contentType: 'application/json',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                data: JSON.stringify({ compra_producto_id: productoId }),
+                data: JSON.stringify({
+                    compra_producto_id: productoId,
+                    sucursal_destino_id: sucursalId,
+                }),
                 success: function(res) {
                     if (res.success) {
                         let html = `<p>${res.message}</p>`;
