@@ -9412,6 +9412,125 @@ def eliminar_recepcion_pendiente(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+@require_POST
+@transaction.atomic
+def eliminar_producto_todas_sucursales(request):
+    """
+    Elimina un producto del catálogo en TODAS las sucursales.
+
+    Dada la PK de un Producto cualquiera (el que se seleccionó desde la UI),
+    se identifica por su "clave lógica" compartida entre sucursales:
+        (articulo, atributo1, atributo2, atributo3, categoria)
+    y se eliminan TODAS las filas de `Producto` que coincidan en TODAS las
+    sucursales, arrastrando en cascada:
+        • Producto_Talla             (FK CASCADE)
+        • Movimientos_Producto       (FK CASCADE en ProductoTalla)
+        • LoteProducto               (FK CASCADE en producto_talla)
+        • CambioPrecioPendiente      (FK CASCADE en producto_talla)
+        • NotificacionCambioPrecio   (FK CASCADE en cambio_precio)
+        • HistorialCambioPrecio      (FK CASCADE en producto)
+
+    IMPORTANTE: `Productos_Recepcionados.producto_talla` es CASCADE también,
+    pero NO queremos perder la traza de la compra. Antes de borrar, por
+    tanto, desenlazamos esas recepciones (producto_talla = NULL). Así
+    reaparecen como "Pendientes de crear" en la tabla principal y pueden
+    re-crearse correctamente después.
+    """
+    try:
+        data = json.loads(request.body)
+        producto_id = data.get('producto_id')
+        if not producto_id:
+            return JsonResponse({'success': False, 'error': 'producto_id requerido'}, status=400)
+
+        try:
+            producto_ref = Producto.objects.get(pk=producto_id)
+        except Producto.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Producto no encontrado'}, status=404)
+
+        # Clave lógica compartida entre sucursales
+        filtros = {
+            'articulo': producto_ref.articulo,
+            'atributo1_id': producto_ref.atributo1_id,
+            'atributo2_id': producto_ref.atributo2_id,
+            'atributo3_id': producto_ref.atributo3_id,
+            'categoria_id': producto_ref.categoria_id,
+        }
+        productos_hermanos = list(
+            Producto.objects.filter(**filtros).select_related('sucursal')
+        )
+        if not productos_hermanos:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontraron productos coincidentes.'
+            }, status=404)
+
+        # Recolectar Producto_Talla ids antes de borrar (para desenlazar
+        # recepciones). Evitamos el cascade CASCADE sobre Productos_Recepcionados
+        # que borraría las recepciones y perderíamos la trazabilidad compra↔DTE.
+        producto_ids = [p.id for p in productos_hermanos]
+        tallas_ids = list(
+            Producto_Talla.objects.filter(producto_id__in=producto_ids).values_list('id', flat=True)
+        )
+
+        # Contadores previos para el resumen
+        total_tallas = len(tallas_ids)
+        total_movimientos = Movimientos_Producto.objects.filter(
+            ProductoTalla_id__in=tallas_ids
+        ).count() if tallas_ids else 0
+        total_lotes = LoteProducto.objects.filter(
+            producto_talla_id__in=tallas_ids
+        ).count() if tallas_ids else 0
+        total_recepciones_enlazadas = Productos_Recepcionados.objects.filter(
+            producto_talla_id__in=tallas_ids
+        ).count() if tallas_ids else 0
+
+        # 1) Desenlazar recepciones → vuelven a estado "pendientes"
+        if tallas_ids:
+            Productos_Recepcionados.objects.filter(
+                producto_talla_id__in=tallas_ids
+            ).update(producto_talla=None)
+
+        # 2) Borrar productos (cascade hace el resto)
+        sucursales_info = [
+            {
+                'producto_id': p.id,
+                'sucursal_id': p.sucursal_id,
+                'sucursal_alias': p.sucursal.alias if p.sucursal else None,
+            }
+            for p in productos_hermanos
+        ]
+        nombre_producto = producto_ref.articulo
+        Producto.objects.filter(id__in=producto_ids).delete()
+
+        print(
+            f"🗑️  Eliminado producto '{nombre_producto}' en "
+            f"{len(productos_hermanos)} sucursal(es). "
+            f"Tallas borradas: {total_tallas}, movimientos: {total_movimientos}, "
+            f"lotes: {total_lotes}, recepciones desenlazadas: {total_recepciones_enlazadas}."
+        )
+
+        return JsonResponse({
+            'success': True,
+            'nombre': nombre_producto,
+            'productos_eliminados': len(productos_hermanos),
+            'tallas_eliminadas': total_tallas,
+            'movimientos_eliminados': total_movimientos,
+            'lotes_eliminados': total_lotes,
+            'recepciones_desenlazadas': total_recepciones_enlazadas,
+            'sucursales': sucursales_info,
+            'message': (
+                f'Se eliminó "{nombre_producto}" en {len(productos_hermanos)} '
+                f'sucursal(es). Se borraron {total_tallas} variantes de talla, '
+                f'{total_movimientos} movimientos y {total_lotes} lotes FIFO. '
+                f'{total_recepciones_enlazadas} recepción(es) volvieron a quedar '
+                f'como pendientes para que puedas recrear el producto donde corresponda.'
+            )
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 def eliminar_producto_compra(request):
     try:
         data = json.loads(request.body)
@@ -11669,31 +11788,32 @@ def crear_producto_desde_recepcion(request):
 
     data = request.POST
 
-    # Sucursal OBJETIVO del producto que se está creando. El usuario crea
-    # desde EDEL pero cada fila de la tabla "Pendientes de crear" representa
-    # una (compra_producto × sucursal_destino). El frontend envía
-    # `sucursal_destino_id` con la sucursal de la fila; si no viene, caemos a
-    # la sucursal activa de la sesión (compat con creación manual desde
-    # otros puntos del sistema).
-    sucursal_destino_id_posted = (data.get('sucursal_destino_id') or '').strip() or None
-    sucursal_objetivo_id = sucursal_destino_id_posted or session_sucursal_id
-    try:
-        sucursal = Sucursal.objects.get(pk=sucursal_objetivo_id)
-    except Sucursal.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'error': f'Sucursal destino {sucursal_objetivo_id} no encontrada.'
-        }, status=400)
+    # Diseño multi-sucursal:
+    # • El `Producto` se crea (o se actualiza) SIEMPRE en la sucursal ACTIVA
+    #   del usuario — el catálogo es centralizado. La sucursal de la fila
+    #   (`sucursal_destino_id`) es SÓLO una referencia para saber a qué
+    #   sucursal va a parar físicamente la mercadería.
+    # • `sucursal_destino_id` sirve únicamente como filtro para decidir qué
+    #   `Productos_Recepcionados` enlazar al `Producto_Talla` creado (los que
+    #   corresponden a esa fila) y para qué unidades registrar el ingreso en
+    #   los `Movimientos_Producto` de la sucursal activa.
+    sucursal = get_object_or_404(Sucursal, pk=session_sucursal_id)
     sucursal_id = sucursal.id
 
-    # Filtro de recepciones por sucursal OBJETIVO. Cuando el frontend envía
-    # explícitamente la sucursal de la fila (flujo nuevo: una fila por
-    # sucursal), filtramos de forma ESTRICTA por esa sucursal para no tocar
-    # recepciones de otras sucursales. Cuando NO viene (flujo legacy/manual),
-    # mantenemos el filtro amplio que también agarra recepciones huérfanas
-    # (sucursal_destino IS NULL).
+    sucursal_destino_id_posted = (data.get('sucursal_destino_id') or '').strip() or None
+    sucursal_destino_fila_id = None
     if sucursal_destino_id_posted:
-        filtro_sucursal_recepciones = Q(sucursal_destino=sucursal)
+        try:
+            sucursal_destino_fila_id = int(sucursal_destino_id_posted)
+        except (TypeError, ValueError):
+            sucursal_destino_fila_id = None
+
+    # Filtro de recepciones por la sucursal DESTINO de la fila. Cuando llega
+    # explícitamente el id de sucursal, filtramos estricto para no tocar
+    # recepciones de otras sucursales. Sin id (flujo legacy o fila "Sin
+    # sucursal"), mantenemos el filtro amplio (sucursal activa + NULL).
+    if sucursal_destino_fila_id is not None:
+        filtro_sucursal_recepciones = Q(sucursal_destino_id=sucursal_destino_fila_id)
     else:
         filtro_sucursal_recepciones = (
             Q(sucursal_destino=sucursal) | Q(sucursal_destino__isnull=True)
@@ -12039,9 +12159,11 @@ def crear_producto_desde_recepcion(request):
                 if r['sucursal_destino_id'] and not por_dte[key]['sucursal_id']:
                     por_dte[key]['sucursal_id'] = r['sucursal_destino_id']
 
-            # Garantizamos que las nuevas recepciones queden con la sucursal
-            # objetivo (incluso si la previa tenía NULL).
-            sucursal_dest_nuevas = sucursal.id
+            # Las recepciones clonadas mantienen como destino la sucursal de
+            # la fila (si se envió) — NO la sucursal activa del usuario, ya
+            # que el destino físico de la mercadería es un dato de la compra,
+            # no del catálogo. Fallback: dejar NULL / el mismo valor previo.
+            sucursal_dest_nuevas = sucursal_destino_fila_id
 
             for dte_id, info in por_dte.items():
                 total_dte = info['total']

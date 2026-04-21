@@ -1544,6 +1544,19 @@
         background: #405189;
         color: #fff;
     }
+    .btn-action-busq.eliminar {
+        background: #fdecee;
+        color: #dc3545;
+    }
+    .btn-action-busq.eliminar:hover {
+        background: #dc3545;
+        color: #fff;
+    }
+    .btn-action-busq:disabled {
+        opacity: .6;
+        cursor: not-allowed;
+        transform: none;
+    }
 
     @media (max-width: 768px) {
         .prod-card-main { flex-direction: column; }
@@ -14342,6 +14355,101 @@ $('#btnConfirmarActualizacion').on('click', function() {
     }
 
     // Mostrar resultados de búsqueda - DISEÑO MEJORADO
+    // ====== ELIMINAR PRODUCTO DE TODAS LAS BODEGAS ======
+    // Borra un Producto del catálogo en todas las sucursales (mismo articulo +
+    // atributos). Desenlaza sus Productos_Recepcionados para que vuelvan a
+    // aparecer como pendientes de crear. Uso típico: revertir creaciones mal
+    // hechas (por ej. un producto que se creó en NICK1 cuando debía ser en
+    // bodega central).
+    $(document).on('click', '.btn-eliminar-producto-todas', function() {
+        const $btn        = $(this);
+        const productoId  = $btn.data('producto-id');
+        const nombre      = $btn.data('producto-nombre') || 'este producto';
+        const marca       = $btn.data('producto-marca') || '';
+        const color       = $btn.data('producto-color') || '';
+        const stock       = parseInt($btn.data('producto-stock')) || 0;
+        const sucursal    = $btn.data('producto-sucursal') || '';
+
+        const detalleHtml = `
+            <div style="text-align:left;font-size:.9rem;">
+                <div class="mb-2">
+                    <i class="bi bi-box-seam me-1 text-danger"></i>
+                    <strong>${nombre}</strong>
+                </div>
+                ${marca ? `<div class="mb-1"><i class="bi bi-tag me-1 text-muted"></i><strong>Marca:</strong> ${marca}</div>` : ''}
+                ${color ? `<div class="mb-1"><i class="bi bi-palette me-1 text-muted"></i><strong>Color:</strong> ${color}</div>` : ''}
+                ${sucursal ? `<div class="mb-1"><i class="bi bi-building me-1 text-muted"></i><strong>Visto en:</strong> ${sucursal}</div>` : ''}
+                <div class="mb-3"><i class="bi bi-stack me-1 text-muted"></i><strong>Stock actual:</strong> ${stock} uds</div>
+                <div class="alert alert-danger py-2 px-3 mb-0" style="font-size:.82rem;">
+                    <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                    <strong>ATENCIÓN:</strong> se eliminará este producto (y todas sus tallas,
+                    movimientos, lotes FIFO e historial de precio) en
+                    <strong>TODAS las bodegas</strong> donde exista con la misma referencia.
+                    <br><br>
+                    Las recepciones de compras asociadas se
+                    <strong>desenlazarán</strong> (no se borran) y volverán a
+                    aparecer como <em>pendientes de crear</em>.
+                    <br><br>
+                    <strong>Esta acción no se puede deshacer.</strong>
+                </div>
+            </div>`;
+
+        Swal.fire({
+            title: 'Eliminar producto en todas las bodegas',
+            html: detalleHtml,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-trash3 me-1"></i>Sí, eliminar de TODAS',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            focusCancel: true,
+            reverseButtons: true,
+        }).then(result => {
+            if (!result.isConfirmed) return;
+
+            $btn.prop('disabled', true);
+            $.ajax({
+                url: '/app/eliminar_producto_todas_sucursales/',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({ producto_id: productoId }),
+                success: function(res) {
+                    if (!res.success) {
+                        Swal.fire('Error', res.error || 'No se pudo eliminar el producto.', 'error');
+                        $btn.prop('disabled', false);
+                        return;
+                    }
+                    const sucListHtml = (res.sucursales || []).map(s =>
+                        `<li><i class="bi bi-building me-1 text-muted"></i>${s.sucursal_alias || 'Sin alias'}</li>`
+                    ).join('');
+                    Swal.fire({
+                        title: 'Producto eliminado',
+                        html: `
+                            <div style="text-align:left;font-size:.88rem;">
+                                <p class="mb-2">${res.message}</p>
+                                ${sucListHtml ? `<div class="small text-muted mb-1">Sucursales afectadas:</div><ul class="mb-0" style="font-size:.82rem;">${sucListHtml}</ul>` : ''}
+                            </div>`,
+                        icon: 'success',
+                        confirmButtonText: 'Entendido',
+                    });
+                    // Refrescar la búsqueda y los totales de pendientes
+                    if (typeof buscarProductosParaEditar === 'function') buscarProductosParaEditar();
+                    if (typeof cargarProductosParaCrear === 'function') {
+                        cargarProductosParaCrear(new Date().getFullYear());
+                    }
+                    if (typeof cargarConteoTabs === 'function') cargarConteoTabs();
+                },
+                error: function(xhr) {
+                    const msg = xhr.responseJSON?.error || 'Error al conectar con el servidor.';
+                    Swal.fire('Error', msg, 'error');
+                    $btn.prop('disabled', false);
+                }
+            });
+        });
+    });
+
     function mostrarResultadosProductos(productos, filtro = '') {
         if (!productos || productos.length === 0) {
             $('#resultadosBusquedaProductos').html(`
@@ -14457,6 +14565,17 @@ $('#btnConfirmarActualizacion').on('click', function() {
                             data-excluido="${producto.excluir_de_analitica}"
                             title="${producto.excluir_de_analitica ? 'Incluir este producto en analítica (en todas las bodegas)' : 'Excluir este producto de analítica (en todas las bodegas)'}">
                         <i class="bi bi-${producto.excluir_de_analitica ? 'eye-slash' : 'bar-chart-line'}"></i>
+                    </button>
+                    <button class="btn-action-busq eliminar btn-eliminar-producto-todas"
+                            data-producto-id="${producto.producto_id}"
+                            data-producto-nombre="${producto.nombre || ''}"
+                            data-producto-marca="${producto.marca || ''}"
+                            data-producto-color="${producto.color || ''}"
+                            data-producto-stock="${stockVal}"
+                            data-producto-sucursal="${producto.sucursal_nombre || ''}"
+                            title="Eliminar definitivamente de TODAS las bodegas"
+                            style="color:#dc3545;">
+                        <i class="bi bi-trash3"></i>
                     </button>
                 </div>
             </div>`;

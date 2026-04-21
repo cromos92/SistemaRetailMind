@@ -467,6 +467,7 @@ urlpatterns = [
      path('obtener_recepciones_producto/<int:producto_id>/', views.obtener_recepciones_producto, name='obtener_recepciones_producto'),
      path('actualizar_recepciones_producto/', views.actualizar_recepciones_producto, name='actualizar_recepciones_producto'),
      path('eliminar_recepcion_pendiente/', views.eliminar_recepcion_pendiente, name='eliminar_recepcion_pendiente'),
+     path('eliminar_producto_todas_sucursales/', views.eliminar_producto_todas_sucursales, name='eliminar_producto_todas_sucursales'),
      path('obtener_recepciones_compra/<int:compra_id>/', views.obtener_recepciones_compra, name='obtener_recepciones_compra'),
      path('actualizar_recepciones_compra/', views.actualizar_recepciones_compra, name='actualizar_recepciones_compra'),
      path('app/sku_para_talla/', views.sku_para_talla, name='sku_para_talla'),
