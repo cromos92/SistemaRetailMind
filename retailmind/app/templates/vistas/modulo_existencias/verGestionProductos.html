@@ -6875,6 +6875,47 @@ function generarNuevosSkus() {
 }
 
 // Función auxiliar para actualizar el display visual del SKU.
+// ============================================================
+// Helpers de normalización de tallas (equivalentes al backend
+// `normalizar_talla` y `generar_variantes_talla`). Usados para
+// comparar tallas entre la guía (ej: "36.5") y las del producto
+// existente (ej: "36,5") sin fallar por diferencias de formato.
+// ============================================================
+function normalizarTallaJs(talla) {
+    if (talla == null) return '';
+    let s = String(talla).trim();
+    // Preservar "00", "01", ... (talla única CL, etc.)
+    if (/^0\d+$/.test(s)) return s;
+    s = s.replace(',', '.');
+    const n = parseFloat(s);
+    if (Number.isFinite(n)) {
+        if (Math.floor(n) === n) return String(Math.trunc(n)); // "36"
+        return n.toFixed(1);                                   // "36.5"
+    }
+    return s.toUpperCase();
+}
+
+function variantesTallaJs(talla) {
+    if (talla == null) return [];
+    const raw = String(talla).trim();
+    const out = new Set();
+    if (raw) out.add(raw);
+    if (/^0\d+$/.test(raw)) return Array.from(out);
+    const norm = raw.replace(',', '.');
+    const n = parseFloat(norm);
+    if (Number.isFinite(n)) {
+        if (Math.floor(n) === n) {
+            out.add(String(Math.trunc(n)));                 // "36"
+            out.add(`${Math.trunc(n)}.0`);                  // "36.0"
+            out.add(`${Math.trunc(n)},0`);                  // "36,0"
+        } else {
+            out.add(n.toFixed(1));                          // "36.5"
+            out.add(n.toFixed(1).replace('.', ','));        // "36,5"
+        }
+    }
+    return Array.from(out);
+}
+
 // Muestra explícitamente si el SKU se REUTILIZA (ya existe en el producto)
 // o si es NUEVO (se creará al guardar). La idea es que el usuario sepa de
 // un vistazo si habrá traza compartida o se generará uno fresco.
@@ -7800,19 +7841,37 @@ const DistribuirGuiaAlCrear = {
             const tbody = $tabla.find('tbody');
             tbody.empty();
 
-            // Mapa de tallas existentes para marcar reutiliza/nuevo directamente
+            // Mapa de tallas existentes, INDEXADO POR VARIANTES para que
+            // "36.5" y "36,5" (o "36" y "36.0") se traten como la misma talla.
+            // Esto refleja el mismo criterio que usa el backend en
+            // `normalizar_talla` / `generar_variantes_talla`, de modo que lo
+            // que se muestra como "reutiliza" coincida con lo que el backend
+            // efectivamente reutilizará al guardar.
             const tallasExistMap = {};
-            (window.tallasExistentesRecepcion || []).forEach(t => {
-                tallasExistMap[String(t.talla).trim()] = { ...t, _fuente: 'local' };
-            });
-            // Fallback: tallas de EDEL (si el producto no existe localmente pero sí en EDEL)
+            const indexarTallaExistente = (t, fuente) => {
+                const entrada = { ...t, _fuente: fuente };
+                variantesTallaJs(t.talla).forEach(k => {
+                    if (k && !tallasExistMap[k]) tallasExistMap[k] = entrada;
+                });
+                const norm = normalizarTallaJs(t.talla);
+                if (norm && !tallasExistMap[norm]) tallasExistMap[norm] = entrada;
+            };
+            (window.tallasExistentesRecepcion || []).forEach(t => indexarTallaExistente(t, 'local'));
             const edelTallas = (window.edelReferenciaRecepcion && window.edelReferenciaRecepcion.tallas_detail) || [];
-            edelTallas.forEach(t => {
-                const key = String(t.talla).trim();
-                if (!tallasExistMap[key]) {
-                    tallasExistMap[key] = { ...t, _fuente: 'edel' };
+            edelTallas.forEach(t => indexarTallaExistente(t, 'edel'));
+
+            // Lookup tolerante a formato: prueba la talla tal cual, su
+            // versión normalizada, y todas sus variantes.
+            const buscarExistenteRedist = (talla) => {
+                if (tallasExistMap[talla]) return tallasExistMap[talla];
+                const norm = normalizarTallaJs(talla);
+                if (norm && tallasExistMap[norm]) return tallasExistMap[norm];
+                const variantes = variantesTallaJs(talla);
+                for (const v of variantes) {
+                    if (tallasExistMap[v]) return tallasExistMap[v];
                 }
-            });
+                return undefined;
+            };
 
             // Pre-calcular lista de tallas válidas para asignar índices de tab correlativos
             const tallasValidas = items
@@ -7825,7 +7884,7 @@ const DistribuirGuiaAlCrear = {
                 __tabIdxRedist++;
                 const tabIdx = 200 + __tabIdxRedist;
 
-                const existente = tallasExistMap[talla];
+                const existente = buscarExistenteRedist(talla);
                 let skuHtml, skuInputVal;
                 if (existente) {
                     skuInputVal = existente.sku;
