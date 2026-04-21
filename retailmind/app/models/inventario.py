@@ -830,3 +830,107 @@ class TareaAplicacionAjustes(models.Model):
         if self.total and self.total > 0:
             return int(self.procesados / self.total * 100)
         return 0
+
+
+# ========== COLA DE DESPACHO INTERNO ==========
+
+ESTADO_PENDIENTE_DESPACHO_CHOICES = [
+    ('PENDIENTE', 'Pendiente'),
+    ('PARCIAL', 'Parcialmente despachado'),
+    ('DESPACHADO', 'Despachado'),
+    ('ANULADO', 'Anulado'),
+]
+
+
+class PendienteDespacho(models.Model):
+    """
+    Cola de unidades que están físicamente en la bodega central (catálogo),
+    pero cuya recepción de compra indicaba una sucursal destino distinta.
+
+    Cada entrada representa "tengo X unidades de este Producto_Talla que
+    tienen que salir a la sucursal Y". Al emitir una Guía de Despacho
+    interna a Y, la UI puede precargar estos pendientes automáticamente y
+    descontarlos al confirmar la emisión.
+
+    Se alimenta desde `crear_producto_desde_recepcion` cuando la sucursal
+    destino de la recepción es distinta de la sucursal activa (donde vive
+    el catálogo).
+    """
+    producto_talla = models.ForeignKey(
+        Producto_Talla,
+        on_delete=models.CASCADE,
+        related_name='pendientes_despacho',
+    )
+    sucursal_origen = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='despachos_origen_pendientes',
+        help_text='Sucursal donde vive el stock (casi siempre EDEL / casa matriz).',
+    )
+    sucursal_destino = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='despachos_destino_pendientes',
+        help_text='Sucursal a la que hay que despachar la mercadería.',
+    )
+
+    cantidad = models.IntegerField(default=0)
+    cantidad_despachada = models.IntegerField(default=0)
+
+    # Trazabilidad opcional al origen (compra / DTE)
+    compra_producto = models.ForeignKey(
+        'app.Compras_Producto',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pendientes_despacho',
+    )
+    dte_origen = models.ForeignKey(
+        Dte,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pendientes_despacho_origen',
+        help_text='DTE de la compra que generó este pendiente (trazabilidad).',
+    )
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_PENDIENTE_DESPACHO_CHOICES,
+        default='PENDIENTE',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['sucursal_destino', 'estado']),
+            models.Index(fields=['producto_talla', 'estado']),
+            models.Index(fields=['estado', '-created_at']),
+        ]
+        verbose_name = 'Pendiente de Despacho'
+        verbose_name_plural = 'Pendientes de Despacho'
+
+    def __str__(self):
+        return (
+            f"Pendiente {self.cantidad - self.cantidad_despachada}/"
+            f"{self.cantidad} → {self.sucursal_destino.alias if self.sucursal_destino_id else '?'} "
+            f"({self.get_estado_display()})"
+        )
+
+    @property
+    def cantidad_restante(self):
+        return max(0, (self.cantidad or 0) - (self.cantidad_despachada or 0))
+
+    def recomputar_estado(self):
+        """Ajusta el estado según cantidad_despachada vs cantidad."""
+        if self.estado == 'ANULADO':
+            return
+        if (self.cantidad_despachada or 0) <= 0:
+            self.estado = 'PENDIENTE'
+        elif self.cantidad_despachada >= (self.cantidad or 0):
+            self.estado = 'DESPACHADO'
+        else:
+            self.estado = 'PARCIAL'

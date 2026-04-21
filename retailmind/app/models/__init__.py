@@ -78,6 +78,8 @@ from .inventario import (  # noqa: F401
     TomaInventarioDetalle,
     TomaInventarioLog,
     TareaAplicacionAjustes,
+    PendienteDespacho,
+    ESTADO_PENDIENTE_DESPACHO_CHOICES,
 )
 
 from .compras import (  # noqa: F401

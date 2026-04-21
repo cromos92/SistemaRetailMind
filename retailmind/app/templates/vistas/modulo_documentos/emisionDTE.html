@@ -1176,6 +1176,14 @@
                     <select id="sucursalDestinoSelect" class="form-select form-select-sm">
                         <option value="">Seleccionar sucursal destino...</option>
                     </select>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-primary w-100 mt-1 d-none"
+                            id="btnCargarPendientesDespacho"
+                            title="Cargar automáticamente productos pendientes de despacho hacia la sucursal seleccionada">
+                        <i class="bi bi-inbox-fill me-1"></i>
+                        <span id="btnCargarPendientesLabel">Cargar pendientes</span>
+                        <span class="badge bg-warning text-dark ms-1 d-none" id="badgeCargarPendientes">0</span>
+                    </button>
                 </div>
                 
                 <div class="col-md-2">
@@ -1529,6 +1537,57 @@
 
         <!-- Step-3 eliminado - contenido movido al Step-2 -->
 
+    </div>
+</div>
+
+<!-- Modal para seleccionar pendientes de despacho hacia la sucursal destino -->
+<div class="modal fade" id="modalPendientesDespacho" tabindex="-1" aria-labelledby="modalPendientesDespachoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content" style="border-radius:14px; overflow:hidden;">
+            <div class="modal-header py-2 px-3" style="background:linear-gradient(135deg,#1b5e20 0%,#2e7d32 100%);">
+                <div class="flex-grow-1 text-white">
+                    <h5 class="modal-title mb-0" id="modalPendientesDespachoLabel" style="font-weight:600;">
+                        <i class="bi bi-inbox-fill me-2"></i>Pendientes de Despacho
+                    </h5>
+                    <small class="text-white-50" id="modalPendientesDespachoSubtitle">Seleccione los productos a agregar al despacho.</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="px-3 py-2 d-flex align-items-center gap-2 border-bottom" style="background:#f7f9f7;">
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input" type="checkbox" id="chkPendientesTodos" checked>
+                        <label class="form-check-label small" for="chkPendientesTodos">Seleccionar todos</label>
+                    </div>
+                    <span class="text-muted ms-auto small" id="pendientesResumenSeleccion">0 items · 0 uds</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light" style="font-size:.78rem;">
+                            <tr>
+                                <th style="width:34px;"></th>
+                                <th>Producto</th>
+                                <th class="text-center">Talla / SKU</th>
+                                <th class="text-end">Pendiente</th>
+                                <th class="text-center" style="width:100px;">A despachar</th>
+                                <th class="text-end">Disp.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaPendientesDespachoBody" style="font-size:.8rem;"></tbody>
+                    </table>
+                </div>
+                <div class="text-center py-4 text-muted small d-none" id="pendientesDespachoVacio">
+                    <i class="bi bi-emoji-smile fs-3 d-block mb-2"></i>
+                    No hay pendientes para esta sucursal.
+                </div>
+            </div>
+            <div class="modal-footer py-2 px-3">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-success" id="btnConfirmarCargarPendientes">
+                    <i class="bi bi-arrow-right-circle me-1"></i>Agregar al despacho
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1966,6 +2025,11 @@ function initializeEventListeners() {
             $('#receptorExternoContainer').slideUp(300);
             $('#infoDespachoInterno').slideUp(300);
             $('#infoDespachoExterno').slideUp(300);
+
+            // Resetear el botón de pendientes (sólo aplica a despacho interno)
+            if (typeof actualizarBotonPendientesDespacho === 'function') {
+                actualizarBotonPendientesDespacho();
+            }
             
             if (type === 'interno') {
                 $('#receptorSelect').val('');
@@ -2100,7 +2164,10 @@ function initializeEventListeners() {
     // Sucursal destino change
     $('#sucursalDestinoSelect').on('change', function() {
         validateStep1();
-        
+
+        // Actualizar el conteo de pendientes de despacho hacia esta sucursal
+        actualizarBotonPendientesDespacho();
+
         // Si todo está completo, minimizar la sección
         if (isStep1Complete()) {
             setTimeout(() => {
@@ -2109,6 +2176,203 @@ function initializeEventListeners() {
         }
     });
 }
+
+// ========== COLA DE PENDIENTES DE DESPACHO (integración con verGestionProducto) ==========
+// Estado interno: pendientes activos cargados para la sucursal seleccionada
+let pendientesDespachoCache = [];
+let pendientesDespachoConsumidos = [];  // [{id, cantidad}] para enviar al backend tras emitir
+
+function actualizarBotonPendientesDespacho() {
+    const sucId = $('#sucursalDestinoSelect').val();
+    const $btn = $('#btnCargarPendientesDespacho');
+    const $badge = $('#badgeCargarPendientes');
+    $btn.addClass('d-none');
+    $badge.addClass('d-none').text('0');
+    pendientesDespachoCache = [];
+    if (!sucId || selectedMethod !== 'interno') return;
+
+    $.get('/app/pendientes_despacho/', { sucursal_destino_id: sucId }, function(res) {
+        if (!res || !res.success) return;
+        pendientesDespachoCache = res.items || [];
+        const total = res.total_items || 0;
+        const totalUds = res.total_unidades || 0;
+        if (total > 0) {
+            $btn.removeClass('d-none');
+            $badge.removeClass('d-none').text(total);
+            $('#btnCargarPendientesLabel').text(`Cargar pendientes (${totalUds} uds)`);
+            $btn.attr('title', `Hay ${total} producto(s) pendiente(s) de despachar a ${res.sucursal_destino.alias || ''} (${totalUds} uds). Click para precargarlos.`);
+        }
+    }).fail(function(xhr) {
+        console.warn('No se pudieron cargar los pendientes de despacho:', xhr && xhr.status);
+    });
+}
+
+$(document).on('click', '#btnCargarPendientesDespacho', function() {
+    if (!pendientesDespachoCache.length) {
+        Swal.fire('Sin pendientes', 'No hay productos pendientes de despacho para esta sucursal.', 'info');
+        return;
+    }
+    const $tbody = $('#tablaPendientesDespachoBody');
+    const $vacio = $('#pendientesDespachoVacio');
+    $tbody.empty();
+    $vacio.addClass('d-none');
+    pendientesDespachoCache.forEach((it, idx) => {
+        const maxDespachable = Math.min(it.cantidad_restante, it.disponible_en_origen || 0);
+        const alertaStock = it.disponible_en_origen < it.cantidad_restante
+            ? `<span class="badge bg-warning text-dark ms-1" title="No hay suficiente stock en bodega origen para cubrir el pendiente total">⚠</span>`
+            : '';
+        $tbody.append(`
+            <tr data-idx="${idx}" data-pid="${it.id}" data-pt-id="${it.producto_talla_id}">
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input chk-pendiente" ${maxDespachable > 0 ? 'checked' : ''} ${maxDespachable <= 0 ? 'disabled' : ''}>
+                </td>
+                <td>
+                    <div class="fw-semibold">${it.articulo || ''}</div>
+                    <div class="text-muted" style="font-size:.7rem;">
+                        ${it.marca || ''}${it.marca && it.color ? ' · ' : ''}${it.color || ''}
+                        ${it.compra_nombre ? `<br><i class="bi bi-truck me-1"></i>${it.compra_nombre}` : ''}
+                    </div>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-primary">${it.talla}</span>
+                    <div class="text-muted" style="font-size:.68rem;">SKU ${it.sku || '—'}</div>
+                </td>
+                <td class="text-end">${it.cantidad_restante}${alertaStock}</td>
+                <td class="text-center">
+                    <input type="number" class="form-control form-control-sm text-center cantidad-pendiente"
+                           value="${maxDespachable}" min="0" max="${maxDespachable}"
+                           ${maxDespachable <= 0 ? 'disabled' : ''}>
+                </td>
+                <td class="text-end" style="font-size:.75rem;">${it.disponible_en_origen || 0}</td>
+            </tr>
+        `);
+    });
+    const sucAlias = ($('#sucursalDestinoSelect option:selected').text() || '').trim();
+    $('#modalPendientesDespachoSubtitle').text(`Destino: ${sucAlias} · ${pendientesDespachoCache.length} producto(s)`);
+    actualizarResumenPendientes();
+    const modalEl = document.getElementById('modalPendientesDespacho');
+    const modalInst = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modalInst.show();
+});
+
+$(document).on('change', '#chkPendientesTodos', function() {
+    const checked = $(this).is(':checked');
+    $('#tablaPendientesDespachoBody .chk-pendiente:not(:disabled)').prop('checked', checked);
+    actualizarResumenPendientes();
+});
+
+$(document).on('change input', '#tablaPendientesDespachoBody .chk-pendiente, #tablaPendientesDespachoBody .cantidad-pendiente', function() {
+    actualizarResumenPendientes();
+});
+
+function actualizarResumenPendientes() {
+    let items = 0, uds = 0;
+    $('#tablaPendientesDespachoBody tr').each(function() {
+        const $row = $(this);
+        const checked = $row.find('.chk-pendiente').is(':checked');
+        if (!checked) return;
+        const cant = parseInt($row.find('.cantidad-pendiente').val()) || 0;
+        if (cant > 0) {
+            items++;
+            uds += cant;
+        }
+    });
+    $('#pendientesResumenSeleccion').text(`${items} items · ${uds} uds`);
+}
+
+$(document).on('click', '#btnConfirmarCargarPendientes', function() {
+    const aAgregar = [];
+    $('#tablaPendientesDespachoBody tr').each(function() {
+        const $row = $(this);
+        if (!$row.find('.chk-pendiente').is(':checked')) return;
+        const cant = parseInt($row.find('.cantidad-pendiente').val()) || 0;
+        if (cant <= 0) return;
+        const idx = parseInt($row.attr('data-idx'));
+        const src = pendientesDespachoCache[idx];
+        if (!src) return;
+        aAgregar.push({ ...src, cantidad_final: Math.min(cant, src.cantidad_restante, src.disponible_en_origen || 0) });
+    });
+
+    if (!aAgregar.length) {
+        Swal.fire('Sin selección', 'Marca al menos un ítem con cantidad mayor a cero.', 'info');
+        return;
+    }
+
+    const $tbody = $('#detalleBody');
+    $('#emptyRow', $tbody).remove();
+
+    let agregados = 0, actualizados = 0;
+    aAgregar.forEach(src => {
+        // ¿Ya está en el detalle? Reutilizar fila y sumar cantidad.
+        const $existing = $tbody.find(`tr[data-talla-id="${src.producto_talla_id}"]`).first();
+        if ($existing.length) {
+            const $input = $existing.find('.cantidad-detalle-input');
+            const actual = parseInt($input.val()) || 0;
+            const maxStock = parseInt($input.data('stock-max')) || 0;
+            const nuevaCant = Math.min(actual + src.cantidad_final, maxStock || (actual + src.cantidad_final));
+            $input.val(nuevaCant);
+            actualizados++;
+        } else {
+            const precio = (selectedMethod === 'interno') ? (src.precio_interno || 0) : (src.costo || 0);
+            const subtotal = precio * src.cantidad_final;
+            const fila = `
+                <tr data-producto-id="${src.producto_id}" data-talla-id="${src.producto_talla_id}" data-pendiente-despacho-id="${src.id}">
+                    <td class="text-center">${src.articulo || ''}</td>
+                    <td>${src.descripcion || ''}</td>
+                    <td class="text-center">
+                        <span class="badge bg-primary">${src.talla || ''}</span>
+                        <br><small class="text-muted">SKU: ${src.sku || ''}</small>
+                    </td>
+                    <td class="text-center">
+                        <input type="number" class="form-control form-control-sm cantidad-detalle-input text-center"
+                               value="${src.cantidad_final}" min="1" max="${src.disponible_en_origen || src.cantidad_final}"
+                               data-precio="${precio}" data-stock-max="${src.disponible_en_origen || src.cantidad_final}"
+                               data-sku="${src.sku || ''}"
+                               data-costo="${src.costo || 0}" data-sobreprecio="${src.sobreprecio || 0}">
+                    </td>
+                    <td class="text-end text-muted"><small>$${(src.costo || 0).toLocaleString()}</small></td>
+                    <td class="text-end text-muted"><small>$${(src.sobreprecio || 0).toLocaleString()}</small></td>
+                    <td class="text-end precio-unitario fw-bold">$${precio.toLocaleString()}</td>
+                    <td class="text-end subtotal-detalle fw-bold">$${subtotal.toLocaleString()}</td>
+                    <td class="text-center">
+                        <button class="btn btn-danger btn-sm" onclick="eliminarFilaDetalle(this)" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            $tbody.append(fila);
+            agregados++;
+        }
+    });
+
+    // Re-bindear listeners de cantidad para que recalculen totales.
+    $('.cantidad-detalle-input').off('input').on('input', function() {
+        const cantidad = parseInt($(this).val()) || 0;
+        const precio = parseInt($(this).data('precio')) || 0;
+        const maxStock = parseInt($(this).data('stock-max')) || 0;
+        if (cantidad > maxStock) {
+            $(this).val(maxStock);
+        }
+        const nueva = parseInt($(this).val()) || 0;
+        $(this).closest('tr').find('.subtotal-detalle').text(`$${(nueva * precio).toLocaleString()}`);
+        if (typeof updateTotales === 'function') updateTotales();
+    });
+
+    if (typeof updateTotales === 'function') updateTotales();
+    if (typeof validateStep2 === 'function') validateStep2();
+
+    const modalEl = document.getElementById('modalPendientesDespacho');
+    const inst = bootstrap.Modal.getInstance(modalEl);
+    if (inst) inst.hide();
+
+    Swal.fire({
+        icon: 'success',
+        title: 'Pendientes cargados',
+        html: `Se agregaron <strong>${agregados}</strong> nueva(s) línea(s) y se actualizaron <strong>${actualizados}</strong>.`,
+        timer: 2200,
+        showConfirmButton: false,
+    });
+});
 
 // ========== FUNCIONES DEL WIZARD ==========
 
@@ -5125,6 +5389,23 @@ function procesarEmision() {
         }
     }
     
+    // Recolectar los consumos de PendienteDespacho a descontar tras la
+    // emisión (líneas del detalle que fueron cargadas desde la cola).
+    const consumosPendientesAgg = {};
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        const $tr = $(this);
+        const pendId = $tr.attr('data-pendiente-despacho-id');
+        if (!pendId) return;
+        const cant = parseInt($tr.find('.cantidad-detalle-input').val()) || 0;
+        if (cant <= 0) return;
+        const key = String(pendId);
+        consumosPendientesAgg[key] = (consumosPendientesAgg[key] || 0) + cant;
+    });
+    const consumosPendientes = Object.keys(consumosPendientesAgg).map(k => ({
+        id: parseInt(k),
+        cantidad: consumosPendientesAgg[k],
+    }));
+
     $.ajax({
         url: '/app/emitir_dte/', // Ajustar según tu endpoint
         method: 'POST',
@@ -5135,7 +5416,22 @@ function procesarEmision() {
         data: JSON.stringify(data),
         success: function(response) {
             hideLoading();
-            
+
+            // Descontar PendienteDespacho consumidos (fire-and-forget; si
+            // falla, sólo dejamos registros huérfanos que luego se pueden
+            // limpiar manualmente — NO bloqueamos la emisión).
+            if (response && response.success && consumosPendientes.length) {
+                $.ajax({
+                    url: '/app/consumir_pendientes_despacho/',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    data: JSON.stringify({ consumos: consumosPendientes }),
+                }).fail(function(xhr) {
+                    console.warn('No se pudo descontar PendienteDespacho:', xhr && xhr.status);
+                });
+            }
+
             if (response.success) {
                 // ✅ GENERAR TXT AUTOMÁTICAMENTE para Factura o Guía
                 if (selectedConcept === 'factura' || selectedConcept === 'guia') {

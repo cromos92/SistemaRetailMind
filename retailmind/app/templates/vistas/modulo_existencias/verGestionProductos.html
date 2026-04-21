@@ -1128,6 +1128,93 @@
         border: 1px solid rgba(198,40,40,0.15);
     }
 
+    /* Chips de sucursales destino (desglose colapsado) */
+    .prod-sucursales-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+    }
+    .suc-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 600;
+        background: #e8f5e9;
+        color: #1b5e20;
+        border: 1px solid #c8e6c9;
+        line-height: 1.5;
+    }
+    .suc-chip > i.bi-shop { font-size: .78rem; opacity: .8; }
+    .suc-chip-stock {
+        background: rgba(27,94,32,.15);
+        color: #1b5e20;
+        padding: 0 6px;
+        border-radius: 999px;
+        font-size: .68rem;
+        font-weight: 700;
+    }
+    .suc-chip-flag {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 5px;
+        font-size: .6rem;
+        font-weight: 700;
+        border-radius: 3px;
+        letter-spacing: .02em;
+    }
+    .suc-chip-flag.consolidado {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeeba;
+    }
+    .suc-chip-flag.real {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+    }
+    .suc-chip-flag.creado {
+        background: rgba(255,255,255,.3);
+        color: inherit;
+    }
+    .suc-chip.suc-chip-creado {
+        background: #eceff1;
+        color: #455a64;
+        border-color: #cfd8dc;
+    }
+    .suc-chip.suc-chip-creado .suc-chip-stock {
+        background: rgba(69,90,100,.2);
+        color: #455a64;
+    }
+    .suc-chip-btn {
+        padding: 0 4px;
+        height: 18px;
+        line-height: 1;
+        border: 0;
+        border-radius: 4px;
+        background: rgba(27,94,32,.15);
+        color: #1b5e20;
+        font-size: .68rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+    }
+    .suc-chip-btn:hover {
+        background: #1b5e20;
+        color: #fff;
+    }
+    .suc-chip-btn-danger {
+        background: rgba(220,53,69,.15);
+        color: #c62828;
+    }
+    .suc-chip-btn-danger:hover {
+        background: #dc3545;
+        color: #fff;
+    }
+
     /* Stock visual cell */
     .stock-cell {
         min-width: 100px;
@@ -3536,6 +3623,71 @@
         </div>
     </div>
 
+    <!-- ========== MODAL: EDITAR ATRIBUTOS DE LINEA DE COMPRA ========== -->
+    <div class="modal fade" id="modalEditarAtributos" tabindex="-1" aria-labelledby="modalEditarAtributosLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header" style="background: linear-gradient(135deg, #405189 0%, #5b72a8 100%); color: #fff;">
+                    <h5 class="modal-title" id="modalEditarAtributosLabel">
+                        <i class="bi bi-tags me-2"></i>Editar Atributos del Producto
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editAtributosCompraProductoId" value="">
+
+                    <div class="alert alert-info border-0 mb-3" style="border-radius: 10px;">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Consolidacion automatica:</strong>
+                        si al guardar los atributos esta linea queda identica a otra de la misma compra,
+                        el sistema las fusiona en una sola fila. El merge solo ocurre si <strong>ninguna
+                        de las dos</strong> tiene productos ya creados.
+                    </div>
+
+                    <div class="mb-2">
+                        <small class="text-muted d-block">Articulo</small>
+                        <strong id="editAtributosNombreProducto">-</strong>
+                    </div>
+
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-6">
+                            <label for="editAtributo1" class="form-label fw-bold">
+                                <i class="bi bi-tag-fill me-1 text-primary"></i>Marca (atributo1)
+                            </label>
+                            <input type="text" id="editAtributo1" class="form-control" maxlength="200" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editAtributo2" class="form-label fw-bold">
+                                <i class="bi bi-circle-fill me-1" style="color:#6c757d;"></i>Color (atributo2)
+                            </label>
+                            <input type="text" id="editAtributo2" class="form-control" maxlength="200" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editAtributo3" class="form-label fw-bold">
+                                <i class="bi bi-person-fill me-1 text-info"></i>Genero (atributo3)
+                            </label>
+                            <input type="text" id="editAtributo3" class="form-control" maxlength="200" autocomplete="off">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editAtributo4" class="form-label fw-bold">
+                                <i class="bi bi-three-dots me-1 text-secondary"></i>Atributo 4
+                            </label>
+                            <input type="text" id="editAtributo4" class="form-control" maxlength="200" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-1"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btnGuardarAtributos">
+                        <i class="bi bi-check-circle me-1"></i>Guardar cambios
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== MODAL: EDITAR RECEPCIÓN ========== -->
     <div class="modal fade" id="modalEditarRecepcion" tabindex="-1" aria-labelledby="modalEditarRecepcionLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
@@ -4141,8 +4293,37 @@ function showError(msg) {
         // ========== TAB ACTIVO ==========
         let tabActivo = sessionStorage.getItem('tabGestionProductos') || 'pendientes';
 
+        // Helper: lee los filtros activos desde los inputs del DOM.
+        // Devuelve un objeto solo con los valores no vacios, listo para mergear.
+        function obtenerFiltrosActivosDOM() {
+            const filtros = {};
+            const articulo = ($('#filtroArticulo').val() || '').trim();
+            const marca = ($('#filtroMarca').val() || '').trim();
+            const color = ($('#filtroColor').val() || '').trim();
+            const genero = ($('#filtroGenero').val() || '').trim();
+            const factura = ($('#filtroFactura').val() || '').trim();
+            if (articulo) filtros.articulo = articulo;
+            if (marca) filtros.marca = marca;
+            if (color) filtros.color = color;
+            if (genero) filtros.genero = genero;
+            if (factura) filtros.factura = factura;
+            // estado solo se toma del dropdown en tab "todos"
+            if (tabActivo === 'todos') {
+                const estadoDOM = $('#filtroEstado').val();
+                if (estadoDOM) filtros.estado = estadoDOM;
+            }
+            return filtros;
+        }
+
         function cargarProductosParaCrear(anio, extraParams = {}) {
             console.log('Llamando a cargarProductosParaCrear', anio, extraParams);
+
+            // Auto-merge de filtros activos del DOM. Lo que venga en extraParams
+            // tiene prioridad (callers explicitos como aplicarFiltros / modal avanzado
+            // ya pasan todo lo que quieren). Esto evita que se "pierdan" los
+            // filtros al refrescar por una accion (crear producto, paginar, etc).
+            const filtrosDOM = obtenerFiltrosActivosDOM();
+            extraParams = { ...filtrosDOM, ...extraParams };
 
             // Inyectar filtro de estado según tab activo (solo si no viene ya un filtro de estado explícito)
             if (!extraParams.estado) {
@@ -4235,35 +4416,85 @@ function showError(msg) {
                     const stockClass = stockTotal === 0 ? 'zero' : stockTotal < 5 ? 'low' : 'ok';
                     const stockPct = Math.min(100, (stockTotal / Math.max(stockTotal, 50)) * 100);
 
-                    // Sucursal destino (cada fila representa una sucursal)
-                    const sucursalIdRow = p.sucursal_destino_id != null ? p.sucursal_destino_id : '';
-                    const sucursalNombreRow = p.sucursal_destino || 'Sin sucursal';
+                    // Desglose por sucursal destino (viene del backend).
+                    // Cada item: { sucursal_id, sucursal_alias, stock,
+                    //   tallas_resumen:[{talla,stock}], tiene_consolidado,
+                    //   tiene_pendientes, tiene_creados }.
+                    const detalleSucursales = Array.isArray(p.sucursales_detalle) ? p.sucursales_detalle : [];
+                    const sucursalesPendientes = detalleSucursales.filter(s => s.tiene_pendientes);
+                    const multiSucursal = sucursalesPendientes.length > 1;
 
-                    // Botones de acciones
+                    // Ids JSON-encodeados para el botón "Crear todas". Los
+                    // null (sin sucursal) los representamos como cadena vacía
+                    // para el front y los tratamos en el handler.
+                    const idsTodas = sucursalesPendientes
+                        .map(s => s.sucursal_id == null ? '' : String(s.sucursal_id))
+                        .join(',');
+                    const nombresTodas = sucursalesPendientes
+                        .map(s => s.sucursal_alias || 'Sin sucursal')
+                        .join(', ');
+
+                    // Chips por sucursal destino con mini-breakdown y acciones.
+                    // El chip cambia de color según estado:
+                    //   • tiene_pendientes   → chip verde + botones + / trash
+                    //   • sólo tiene_creados → chip gris "ya creado" (lectura)
+                    const chipsSucursalesHtml = detalleSucursales.map(s => {
+                        const sucId = s.sucursal_id == null ? '' : String(s.sucursal_id);
+                        const sucAlias = s.sucursal_alias || 'Sin sucursal';
+                        const stock = Number(s.stock) || 0;
+                        const esConsolidado = !!s.tiene_consolidado;
+                        const resumenTallas = Array.isArray(s.tallas_resumen) ? s.tallas_resumen : [];
+                        const tallasTip = resumenTallas.map(t => `${t.talla}:${t.stock}`).join(' · ');
+                        const chipClass = s.tiene_pendientes ? 'suc-chip' : 'suc-chip suc-chip-creado';
+                        const flagHtml = s.tiene_pendientes
+                            ? (esConsolidado
+                                ? `<span class="suc-chip-flag consolidado" title="Talla consolidada 00 — requiere distribuir">00</span>`
+                                : `<span class="suc-chip-flag real" title="Tallas reales detectadas">Tallas</span>`)
+                            : `<span class="suc-chip-flag creado" title="Ya procesado"><i class="bi bi-check-lg"></i></span>`;
+                        const accionesPorSuc = s.tiene_pendientes && !p.creado ? `
+                            <button class="btn suc-chip-btn btn-crear-sucursal-single abrir-crear-producto"
+                                    data-id="${p.producto_id}"
+                                    data-sucursal-id="${sucId}"
+                                    data-sucursal-nombre="${sucAlias}"
+                                    title="Crear sólo para ${sucAlias}">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                            <button class="btn suc-chip-btn suc-chip-btn-danger btn-eliminar-recepcion-pendiente"
+                                    data-id="${p.producto_id}"
+                                    data-nombre="${p.nombre || ''}"
+                                    data-compra="${p.compra_nombre || ''}"
+                                    data-stock="${stock}"
+                                    data-sucursal-id="${sucId}"
+                                    data-sucursal-nombre="${sucAlias}"
+                                    title="Eliminar pendientes de ${sucAlias}">
+                                <i class="bi bi-trash3"></i>
+                            </button>` : '';
+                        return `
+                            <span class="${chipClass}" title="${sucAlias}: ${stock} uds — ${tallasTip}">
+                                <i class="bi bi-shop"></i>
+                                <strong>${sucAlias}</strong>
+                                <span class="suc-chip-stock">${stock}</span>
+                                ${flagHtml}
+                                ${accionesPorSuc}
+                            </span>`;
+                    }).join('');
+
+                    // Botones principales por fila.
                     let botonesHtml = '';
                     if (!p.creado) {
+                        const btnCrearTodas = sucursalesPendientes.length > 0 ? `
+                            <button class="btn-action crear btn-crear-todas-sucursales"
+                                    data-id="${p.producto_id}"
+                                    data-sucursales-ids="${idsTodas}"
+                                    data-sucursales-nombres="${nombresTodas}"
+                                    data-tip="${multiSucursal ? 'Crear producto para TODAS las sucursales (' + sucursalesPendientes.length + ')' : 'Crear producto para ' + nombresTodas}">
+                                <i class="bi bi-${multiSucursal ? 'stack' : 'plus-lg'}"></i>
+                            </button>` : '';
                         botonesHtml = `
                             <div class="acciones-cell">
-                                <button class="btn-action crear abrir-crear-producto"
-                                        data-id="${p.producto_id}"
-                                        data-sucursal-id="${sucursalIdRow}"
-                                        data-sucursal-nombre="${sucursalNombreRow}"
-                                        data-tip="Crear producto para ${sucursalNombreRow}">
-                                    <i class="bi bi-plus-lg"></i>
-                                </button>
+                                ${btnCrearTodas}
                                 <button class="btn-action editar-rec btn-editar-recepcion" data-id="${p.producto_id}" data-nombre="${p.nombre}" data-tip="Editar recepción">
                                     <i class="bi bi-pencil-square"></i>
-                                </button>
-                                <button class="btn-action eliminar btn-eliminar-recepcion-pendiente"
-                                        data-id="${p.producto_id}"
-                                        data-nombre="${p.nombre || ''}"
-                                        data-compra="${p.compra_nombre || ''}"
-                                        data-stock="${p.stock_total || 0}"
-                                        data-sucursal-id="${sucursalIdRow}"
-                                        data-sucursal-nombre="${sucursalNombreRow}"
-                                        data-tip="Eliminar recepción pendiente"
-                                        style="color:#dc3545;">
-                                    <i class="bi bi-trash3"></i>
                                 </button>
                             </div>`;
                     } else {
@@ -4285,18 +4516,32 @@ function showError(msg) {
                         infoFIFO = `<span class="text-muted" style="font-size:0.75rem;">—</span>`;
                     }
 
-                    // Attribute pills
+                    // Attribute pills (SIN el pill de sucursal, ahora hay chips abajo)
                     const marcaPill = p.atributo1 ? `<span class="attr-pill marca"><i class="bi bi-tag-fill"></i>${p.atributo1}</span>` : '';
                     const colorPill = p.atributo2 ? `<span class="attr-pill color"><i class="bi bi-circle-fill" style="font-size:0.5rem;"></i>${p.atributo2}</span>` : '';
                     const generoPill = p.atributo3 ? `<span class="attr-pill genero"><i class="bi bi-person-fill"></i>${p.atributo3}</span>` : '';
-                    const sucursalPill = `<span class="attr-pill sucursal" title="Sucursal destino" style="background:#e8f5e9;color:#1b5e20;border-color:#c8e6c9;"><i class="bi bi-shop"></i>${sucursalNombreRow}</span>`;
+
+                    // Boton editar atributos de la linea de compra (habilita consolidacion automatica)
+                    const btnEditarAtributos = !p.creado ? `
+                        <button class="btn btn-sm btn-outline-primary btn-editar-atributos ms-1"
+                                data-id="${p.producto_id}"
+                                data-nombre="${p.nombre || ''}"
+                                data-atributo1="${p.atributo1 || ''}"
+                                data-atributo2="${p.atributo2 || ''}"
+                                data-atributo3="${p.atributo3 || ''}"
+                                data-atributo4="${p.atributo4 || ''}"
+                                title="Editar atributos (permite consolidar filas duplicadas)"
+                                style="padding:0 6px; font-size:0.7rem; line-height:1.4;">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>` : '';
 
                     const fila = `
                 <tr>
                     <td class="prod-info-cell">
                         <div class="prod-nombre">${p.nombre}</div>
                         ${p.descripcion ? `<div class="prod-desc" title="${p.descripcion}">${p.descripcion}</div>` : ''}
-                        <div class="prod-atributos">${marcaPill}${colorPill}${generoPill}${sucursalPill}</div>
+                        <div class="prod-atributos">${marcaPill}${colorPill}${generoPill}${btnEditarAtributos}</div>
+                        ${chipsSucursalesHtml ? `<div class="prod-sucursales-chips">${chipsSucursalesHtml}</div>` : ''}
                     </td>
                     <td class="text-center">${estado}</td>
                     <td class="text-center">${origenBadge}</td>
@@ -4394,11 +4639,28 @@ function showError(msg) {
             ? sucursalIdAttr
             : null;
         console.log('[CrearProducto] click → producto_id=%s, sucursal_id=%s, sucursal=%s', id, sucursalId, sucursalNombre);
-        abrirModalCrearProducto(id, sucursalId, sucursalNombre);
+        // Lista de una sola sucursal (fallback al flujo puntual)
+        const sucursalesIds = sucursalId ? [sucursalId] : [];
+        abrirModalCrearProducto(id, sucursalesIds, sucursalNombre || '');
+    });
+
+    // ========== CREAR PRODUCTO PARA TODAS LAS SUCURSALES EN BATCH ==========
+    // Abre el modal con la lista de sucursales destino que tienen pendientes
+    // de este compra_producto, para crear de un solo click en todas a la vez.
+    $(document).on('click', '.btn-crear-todas-sucursales', function () {
+        const id = $(this).data('id');
+        const idsAttr = ($(this).attr('data-sucursales-ids') || '').trim();
+        const nombresAttr = ($(this).attr('data-sucursales-nombres') || '').trim();
+        // idsAttr puede incluir entradas vacías para "Sin sucursal" (null)
+        const sucursalesIds = idsAttr.length
+            ? idsAttr.split(',').map(s => s.trim())
+            : [];
+        console.log('[CrearProducto] click TODAS → producto_id=%s, sucursales=%o', id, sucursalesIds);
+        abrirModalCrearProducto(id, sucursalesIds, nombresAttr);
     });
 
 
-    
+
     // ========== INICIALIZACIÓN DE LA PÁGINA ==========
 
     // Banner de alertas de precios en otras sucursales
@@ -4499,7 +4761,8 @@ function showError(msg) {
         const sucursalId = (sucursalIdAttr !== undefined && sucursalIdAttr !== '' && sucursalIdAttr !== 'null')
             ? sucursalIdAttr
             : null;
-        abrirModalCrearProducto(id, sucursalId, sucursalNombre);
+        const sucursalesIds = sucursalId ? [sucursalId] : [];
+        abrirModalCrearProducto(id, sucursalesIds, sucursalNombre || '');
     });
     const ID_ATRIBUTO_MARCA = parseInt("{{ id_atributo_marca|default:0 }}");
     const ID_ATRIBUTO_COLOR = parseInt("{{ id_atributo_color|default:0 }}");
@@ -4632,40 +4895,66 @@ function showError(msg) {
         $('#btnTomarReferenciaEDEL').addClass('d-none');
     }
 
-    function abrirModalCrearProducto(productoId, sucursalDestinoId, sucursalDestinoNombre) {
+    function abrirModalCrearProducto(productoId, sucursalesDestinoIds, sucursalesDestinoNombres) {
         // Reset integral del modal (equivalente a refrescar la página)
         resetModalCrearProductoRecepcion();
 
-        // Guardar la sucursal destino de la fila que se clickeó. Esta es la
-        // sucursal para la que se crea el producto (no la sucursal activa
-        // del usuario). El backend usa `sucursal_destino_id` para saber
-        // qué recepciones enlazar y bajo qué sucursal crear el Producto.
+        // Normalizar parámetros a lista. Compat: si llega un único id (string
+        // o number), lo envolvemos. Si es '', null, undefined → lista vacía.
+        let sucursalesIds;
+        if (Array.isArray(sucursalesDestinoIds)) {
+            sucursalesIds = sucursalesDestinoIds.slice();
+        } else if (sucursalesDestinoIds === undefined || sucursalesDestinoIds === null || sucursalesDestinoIds === '') {
+            sucursalesIds = [];
+        } else {
+            sucursalesIds = [String(sucursalesDestinoIds)];
+        }
+        // Filtrar ids reales (no las cadenas vacías que representan NULL)
+        const sucursalesIdsValidos = sucursalesIds
+            .map(x => (x == null ? '' : String(x).trim()))
+            .filter(x => x !== '' && x !== 'null');
+
+        // Inyectar hidden inputs en el form. El backend acepta:
+        //   • sucursales_destino_ids[]  → lista (flujo batch multi-sucursal).
+        //   • sucursal_destino_id       → singular (compat legacy).
         const $form = $('#formCrearProductoDesdeRecepcion');
         $form.find('input[name="sucursal_destino_id"]').remove();
-        if (sucursalDestinoId !== undefined && sucursalDestinoId !== null && sucursalDestinoId !== '') {
-            $form.append(`<input type="hidden" name="sucursal_destino_id" value="${sucursalDestinoId}">`);
+        $form.find('input[name^="sucursales_destino_ids"]').remove();
+        sucursalesIdsValidos.forEach(sid => {
+            $form.append(`<input type="hidden" name="sucursales_destino_ids[]" value="${sid}">`);
+        });
+        // Para compat, si es una sola sucursal también enviamos el singular.
+        if (sucursalesIdsValidos.length === 1) {
+            $form.append(`<input type="hidden" name="sucursal_destino_id" value="${sucursalesIdsValidos[0]}">`);
         }
 
-        // Mostrar chip con la sucursal destino en el header del modal
-        if (typeof InfoChipsRecepcion !== 'undefined' && sucursalDestinoNombre) {
+        // Chip con el resumen de sucursales destino en el header del modal
+        const nombresResumen = typeof sucursalesDestinoNombres === 'string'
+            ? sucursalesDestinoNombres
+            : (Array.isArray(sucursalesDestinoNombres) ? sucursalesDestinoNombres.join(', ') : '');
+        if (typeof InfoChipsRecepcion !== 'undefined' && nombresResumen) {
             try {
                 InfoChipsRecepcion.add({
                     key: 'sucursal_destino',
                     icon: 'bi-shop',
-                    label: 'Sucursal destino',
-                    value: sucursalDestinoNombre,
+                    label: sucursalesIdsValidos.length > 1 ? 'Sucursales destino' : 'Sucursal destino',
+                    value: nombresResumen,
                     color: '#1b5e20',
                     bg: '#e8f5e9',
                 });
-            } catch (e) { /* noop si la API de chips no acepta este shape */ }
+            } catch (e) { /* noop */ }
         }
 
-        // Pasar sucursal_id al backend para que el detalle (tallas/stock)
-        // traiga SÓLO lo que corresponde a esta sucursal, evitando mezclar
-        // el stock que llegó a otras sucursales.
-        const qs = (sucursalDestinoId !== undefined && sucursalDestinoId !== null && sucursalDestinoId !== '')
-            ? `?sucursal_id=${encodeURIComponent(sucursalDestinoId)}`
-            : '';
+        // Pasar al endpoint de detalle la lista de sucursales para que traiga
+        // SÓLO las tallas que llegaron a esas sucursales. Si es una sola,
+        // mantenemos la query antigua `?sucursal_id=` para compat; si son
+        // varias, enviamos `?sucursal_ids=<csv>`.
+        let qs = '';
+        if (sucursalesIdsValidos.length === 1) {
+            qs = `?sucursal_id=${encodeURIComponent(sucursalesIdsValidos[0])}`;
+        } else if (sucursalesIdsValidos.length > 1) {
+            qs = `?sucursal_ids=${encodeURIComponent(sucursalesIdsValidos.join(','))}`;
+        }
 
         const urlDetalle = `/app/detalle_producto_para_crear/${productoId}/${qs}`;
         console.log('[CrearProducto] GET ' + urlDetalle);
@@ -4684,11 +4973,14 @@ function showError(msg) {
             const _precioSugerido = parseFloat(data.precioSugerido) || 0;
             form.find('[name="costo"]').val(data.costo);
             form.find('[name="precio_sugerido"]').val(data.precioSugerido);
-            // Calcular sobreprecio (delta) y precio venta con margenes predefinidos
+            // Calcular sobreprecio (delta) y precio venta con margenes predefinidos.
+            // El margen Precio Venta se aplica sobre el COSTO (no sobre el
+            // precio interno) para que el porcentaje configurado sea el
+            // margen real, no uno compuesto.
             if (_costo > 0 && (margenSobreprecioGlobal > 0 || margenPrecioVentaGlobal > 0)) {
                 const sp = Math.round(_costo * (margenSobreprecioGlobal / 100));
                 const precioInterno = _costo + sp;
-                const pvBruto = precioInterno + Math.round(precioInterno * (margenPrecioVentaGlobal / 100));
+                const pvBruto = precioInterno + Math.round(_costo * (margenPrecioVentaGlobal / 100));
                 const pv = redondearPrecio990(pvBruto);
                 form.find('[name="sobreprecio"]').val(sp);
                 form.find('[name="precioventa"]').val(pv);
@@ -4761,31 +5053,38 @@ function showError(msg) {
                 tbody.append(fila);
             });
 
-            // Guardar si este producto viene como TOTAL CONSOLIDADO (una sola
-            // talla "00" o "__TOTAL__"). Al elegir una guía real podremos
-            // ofrecer redistribuir esas unidades en las tallas reales.
-            const esTallaConsolidada = (
-                data.tallas.length === 1 &&
-                ['00', '__TOTAL__', ''].indexOf(String(data.tallas[0].talla).trim()) !== -1
-            );
-            const stockConsolidado = esTallaConsolidada ? parseInt(data.tallas[0].stock || 0, 10) : 0;
+            // Detectar tallas consolidadas (00 / __TOTAL__). En el flujo
+            // batch una misma respuesta puede incluir tanto talla "00" como
+            // tallas reales (35, 36...). Consolidamos el stock 00 aparte:
+            //   • stockConsolidado = suma de unidades en tallas 00.
+            //   • esTallaConsolidada = hay al menos una talla consolidada.
+            //   • hayTallasReales   = hay al menos una talla no-00.
+            const esConsolidadaTalla = (t) => ['00', '__TOTAL__', ''].indexOf(String(t || '').trim()) !== -1;
+            const tallasConsolidadasData = (data.tallas || []).filter(t => esConsolidadaTalla(t.talla));
+            const tallasRealesData       = (data.tallas || []).filter(t => !esConsolidadaTalla(t.talla));
+            const stockConsolidado = tallasConsolidadasData.reduce((a, t) => a + (parseInt(t.stock) || 0), 0);
+            const esTallaConsolidada = tallasConsolidadasData.length > 0 && stockConsolidado > 0;
+            const hayTallasReales = tallasRealesData.length > 0;
+
             $('#tablaTallasCrearProducto')
                 .data('consolidado', esTallaConsolidada)
                 .data('consolidado-stock', stockConsolidado)
-                .data('consolidado-talla', esTallaConsolidada ? String(data.tallas[0].talla) : '');
+                .data('consolidado-talla', esTallaConsolidada ? String(tallasConsolidadasData[0].talla) : '');
 
-            // Agregar el banner+CTA para redistribuir si está consolidado.
+            // Agregar el banner+CTA para redistribuir si hay consolidado.
             $('#bannerRedistribuirConsolidado').remove();
-            if (esTallaConsolidada && stockConsolidado > 0) {
+            if (esTallaConsolidada) {
+                const tallaConsolidadaLbl = tallasConsolidadasData.map(t => t.talla).join(', ');
+                const nota = hayTallasReales
+                    ? 'Se redistribuirá el consolidado entre las tallas de la guía; <strong>las tallas reales listadas abajo se mantienen intactas</strong> y se sumarán al producto.'
+                    : 'Elige una guía de tallas arriba y haz clic en <em>Distribuir en tallas de la guía</em> para repartir el stock en tallas reales sin perder trazabilidad.';
                 $('#tablaTallasCrearProducto').before(`
                     <div id="bannerRedistribuirConsolidado" class="alert alert-warning py-2 px-3 mb-2 d-flex align-items-center justify-content-between flex-wrap gap-2" style="font-size:.82rem;border-radius:10px;">
                         <div>
                             <i class="bi bi-lightning-charge-fill text-warning me-1"></i>
-                            <strong>Producto consolidado:</strong> llegaron
-                            <span class="badge bg-warning text-dark">${stockConsolidado} uds</span>
-                            en talla única <code>${data.tallas[0].talla}</code>.
+                            <strong>Consolidado detectado:</strong> ${stockConsolidado} uds en talla única <code>${tallaConsolidadaLbl}</code>${hayTallasReales ? ` · además hay ${tallasRealesData.length} talla(s) reales en esta recepción` : ''}.
                             <br>
-                            <small class="text-muted">Elige una guía de tallas arriba y haz clic en <em>Distribuir en tallas de la guía</em> para repartir el stock en tallas reales sin perder trazabilidad.</small>
+                            <small class="text-muted">${nota}</small>
                         </div>
                         <button type="button" class="btn btn-warning btn-sm" id="btnDistribuirEnGuia" disabled>
                             <i class="bi bi-bounding-box me-1"></i>Distribuir en tallas de la guía
@@ -5433,8 +5732,9 @@ function showError(msg) {
             $markupBadge.removeClass('bueno medio bajo');
             // Mostrar placeholder con markup guardado si hay costo
             if (costo > 0 && (margenSobreprecioGlobal > 0 || margenPrecioVentaGlobal > 0)) {
+                // margen Precio Venta sobre el COSTO (no sobre costo+sobreprecio).
                 const sp = costo + Math.round(costo * (margenSobreprecioGlobal / 100));
-                const precioSugerido = redondearPrecio990(sp + Math.round(sp * (margenPrecioVentaGlobal / 100)));
+                const precioSugerido = redondearPrecio990(sp + Math.round(costo * (margenPrecioVentaGlobal / 100)));
                 $scope.find('.precio-venta-input').attr('placeholder', '$' + precioSugerido.toLocaleString('es-CL'));
             }
             return;
@@ -5523,7 +5823,9 @@ function showError(msg) {
         if (!isNaN(costo) && costo > 0) {
             const sobreprecio = Math.round(costo * (margenSobreprecioGlobal / 100));
             const precioInterno = costo + sobreprecio;
-            const precioVentaBruto = precioInterno + Math.round(precioInterno * (margenPrecioVentaGlobal / 100));
+            // Margen Precio Venta se aplica sobre el COSTO, no sobre precioInterno:
+            // así el % configurado es el margen real, no uno compuesto con el sobreprecio.
+            const precioVentaBruto = precioInterno + Math.round(costo * (margenPrecioVentaGlobal / 100));
             const precioVenta = redondearPrecio990(precioVentaBruto);
             $form.find('input[name="sobreprecio"]').val(sobreprecio);
             $form.find('input[name="precioventa"]').val(precioVenta);
@@ -5569,8 +5871,10 @@ function showError(msg) {
         // Paso 2: Precio Interno = Costo + Sobreprecio
         const precioInterno = costoEj + margenSP;
 
-        // Paso 3: Precio Venta = Precio Interno + (Precio Interno x %PV)
-        const margenPV = Math.round(precioInterno * (pctPV / 100));
+        // Paso 3: Precio Venta = Precio Interno + (Costo x %PV).
+        // El segundo margen se aplica sobre el costo (no sobre el precio
+        // interno) para que el % configurado represente el margen real.
+        const margenPV = Math.round(costoEj * (pctPV / 100));
         const pvBruto = precioInterno + margenPV;
         const pv = pvBruto >= 1000 ? (Math.floor(pvBruto / 1000) * 1000 + 990) : pvBruto;
 
@@ -7419,7 +7723,22 @@ $(document).ready(function() {
             aplicarFiltros();
         }, 500);
     });
-    
+
+    // Enter aplica filtros inmediatamente (sin esperar debounce)
+    // en todos los inputs de texto de filtro.
+    $('#filtroArticulo, #filtroMarca, #filtroColor, #filtroGenero, #filtroFactura')
+        .on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                clearTimeout(timeoutArticulo);
+                clearTimeout(timeoutMarca);
+                clearTimeout(timeoutColor);
+                clearTimeout(timeoutGenero);
+                clearTimeout(timeoutFactura);
+                aplicarFiltros();
+            }
+        });
+
     // Filtro de estado (inmediato)
     $('#filtroEstado').on('change', function() {
         aplicarFiltros();
@@ -10508,8 +10827,10 @@ function aplicarMargenesManual() {
         const sobreprecio = Math.round(costo * (margenSobreprecioGlobal / 100));
         // Paso 2: Precio Interno = Costo + Sobreprecio
         const precioInterno = costo + sobreprecio;
-        // Paso 3: Precio Venta = Precio Interno + (Precio Interno x %PV)
-        const precioVentaBruto = precioInterno + Math.round(precioInterno * (margenPrecioVentaGlobal / 100));
+        // Paso 3: Precio Venta = Precio Interno + (Costo x %PV).
+        // Se usa el costo como base para evitar que el %PV se componga
+        // con el sobreprecio y termine siendo un margen mayor al configurado.
+        const precioVentaBruto = precioInterno + Math.round(costo * (margenPrecioVentaGlobal / 100));
         const precioVenta = redondearPrecio990(precioVentaBruto);
 
         $('#modalCrearProductoManual input[name="sobreprecio"]').val(sobreprecio);
@@ -14776,6 +15097,156 @@ $('#btnConfirmarActualizacion').on('click', function() {
             }
         });
     };
+
+    // ====================================================================
+    // EDITAR ATRIBUTOS DE LINEA DE COMPRA (con merge automatico seguro)
+    // ====================================================================
+    $(document).on('click', '.btn-editar-atributos', function () {
+        const $btn = $(this);
+        const compraProductoId = $btn.data('id');
+        const nombre = $btn.data('nombre') || '';
+        const atributo1 = $btn.data('atributo1') || '';
+        const atributo2 = $btn.data('atributo2') || '';
+        const atributo3 = $btn.data('atributo3') || '';
+        const atributo4 = $btn.data('atributo4') || '';
+
+        $('#editAtributosCompraProductoId').val(compraProductoId);
+        $('#editAtributosNombreProducto').text(nombre);
+        $('#editAtributo1').val(atributo1);
+        $('#editAtributo2').val(atributo2);
+        $('#editAtributo3').val(atributo3);
+        $('#editAtributo4').val(atributo4);
+
+        const modalEl = document.getElementById('modalEditarAtributos');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    });
+
+    function _refrescarTablaGestionProductos() {
+        if (typeof cargarProductosParaCrear === 'function' && typeof anioActual !== 'undefined') {
+            cargarProductosParaCrear(anioActual);
+        } else if (typeof cargarProductos === 'function') {
+            cargarProductos();
+        }
+    }
+
+    function _enviarEditarAtributos(compraProductoId, payload, $btn) {
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Guardando...');
+
+        $.ajax({
+            url: `/app/api/compras-producto/${compraProductoId}/editar-atributos/`,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify(payload),
+        }).done(function (resp) {
+            if (!resp || !resp.success) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'No se pudo actualizar',
+                    text: (resp && resp.error) || 'Respuesta inesperada del servidor.',
+                });
+                return;
+            }
+
+            const modalEl = document.getElementById('modalEditarAtributos');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+
+            if (resp.merged) {
+                const forzadoBadge = resp.forced ? '<span class="badge bg-warning text-dark">consolidacion forzada</span>' : '';
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Atributos actualizados y consolidados',
+                    html: `
+                        <p>Se unieron dos lineas de compra duplicadas. ${forzadoBadge}</p>
+                        <ul class="list-unstyled text-start small">
+                            <li><strong>Linea oficial (se conserva):</strong> #${resp.target_id}</li>
+                            <li><strong>Linea eliminada:</strong> #${resp.source_id_removed}</li>
+                            <li>Tallas movidas: ${resp.tallas_movidas || 0}</li>
+                            <li>Tallas combinadas (sumadas): ${resp.tallas_combinadas || 0}</li>
+                        </ul>
+                    `,
+                    timer: 4500,
+                    showConfirmButton: true,
+                });
+                _refrescarTablaGestionProductos();
+                return;
+            }
+
+            if (resp.merge_blocked_reason) {
+                const detalle = Array.isArray(resp.productos_creados_por_linea) ? resp.productos_creados_por_linea : [];
+                const listaHtml = detalle.length
+                    ? '<ul class="list-unstyled text-start small mb-2">' +
+                      detalle.map(d => `<li>Linea #${d.compra_producto_id}: <strong>${d.cantidad}</strong> recepcion(es) con producto ya creado</li>`).join('') +
+                      '</ul>'
+                    : '';
+
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Atributos actualizados (sin consolidar)',
+                    html: `
+                        <p class="text-start">${resp.merge_blocked_reason}</p>
+                        ${listaHtml}
+                        <p class="text-start small text-muted">
+                            Al forzar la consolidacion, las <code>Productos_Recepcionados</code> ya creadas
+                            se reasignan al target. Los registros <code>Producto</code> ya creados quedan
+                            intactos (conservan sus atributos originales). Usalo solo si sabes lo que haces.
+                        </p>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="bi bi-exclamation-triangle me-1"></i>Forzar consolidacion',
+                    confirmButtonColor: '#d9822b',
+                    cancelButtonText: 'Dejar asi',
+                    focusCancel: true,
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        // Reintentar con force_merge=true
+                        const forzadoPayload = { ...payload, force_merge: true };
+                        _enviarEditarAtributos(compraProductoId, forzadoPayload, $btn);
+                    } else {
+                        _refrescarTablaGestionProductos();
+                    }
+                });
+                return;
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Atributos actualizados',
+                text: resp.message || 'Los cambios se guardaron.',
+                timer: 2000,
+                showConfirmButton: false,
+            });
+            _refrescarTablaGestionProductos();
+        }).fail(function (xhr) {
+            let msg = 'Error al conectar con el servidor';
+            try {
+                const resp = xhr && xhr.responseJSON;
+                if (resp && resp.error) msg = resp.error;
+            } catch (e) {}
+            Swal.fire({ icon: 'error', title: 'Error', text: msg });
+        }).always(function () {
+            $btn.prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i>Guardar cambios');
+        });
+    }
+
+    $(document).on('click', '#btnGuardarAtributos', function () {
+        const $btn = $(this);
+        const compraProductoId = $('#editAtributosCompraProductoId').val();
+        if (!compraProductoId) {
+            return;
+        }
+
+        const payload = {
+            atributo1: ($('#editAtributo1').val() || '').trim(),
+            atributo2: ($('#editAtributo2').val() || '').trim(),
+            atributo3: ($('#editAtributo3').val() || '').trim(),
+            atributo4: ($('#editAtributo4').val() || '').trim(),
+        };
+
+        _enviarEditarAtributos(compraProductoId, payload, $btn);
+    });
 
 </script>
 
