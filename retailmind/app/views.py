@@ -11618,7 +11618,8 @@ def crear_producto_desde_recepcion(request):
     # `sucursal_destino_id` con la sucursal de la fila; si no viene, caemos a
     # la sucursal activa de la sesión (compat con creación manual desde
     # otros puntos del sistema).
-    sucursal_objetivo_id = data.get('sucursal_destino_id') or session_sucursal_id
+    sucursal_destino_id_posted = (data.get('sucursal_destino_id') or '').strip() or None
+    sucursal_objetivo_id = sucursal_destino_id_posted or session_sucursal_id
     try:
         sucursal = Sucursal.objects.get(pk=sucursal_objetivo_id)
     except Sucursal.DoesNotExist:
@@ -11627,6 +11628,19 @@ def crear_producto_desde_recepcion(request):
             'error': f'Sucursal destino {sucursal_objetivo_id} no encontrada.'
         }, status=400)
     sucursal_id = sucursal.id
+
+    # Filtro de recepciones por sucursal OBJETIVO. Cuando el frontend envía
+    # explícitamente la sucursal de la fila (flujo nuevo: una fila por
+    # sucursal), filtramos de forma ESTRICTA por esa sucursal para no tocar
+    # recepciones de otras sucursales. Cuando NO viene (flujo legacy/manual),
+    # mantenemos el filtro amplio que también agarra recepciones huérfanas
+    # (sucursal_destino IS NULL).
+    if sucursal_destino_id_posted:
+        filtro_sucursal_recepciones = Q(sucursal_destino=sucursal)
+    else:
+        filtro_sucursal_recepciones = (
+            Q(sucursal_destino=sucursal) | Q(sucursal_destino__isnull=True)
+        )
     articulo = data.get('articulo')
     descripcion = data.get('descripcion')
     atributo1 = data.get('atributo1') or None
@@ -11853,8 +11867,20 @@ def crear_producto_desde_recepcion(request):
     # única talla "00"/"__TOTAL__" en las tallas reales de la guía, creamos
     # N nuevas Compras_Producto_Talla proporcionales y clonamos las
     # Productos_Recepcionados por DTE × nueva talla manteniendo trazabilidad
-    # al DTE. La CPT consolidada se borra (cascade borra sus recepciones
-    # originales, pero ya tenemos las réplicas creadas).
+    # al DTE.
+    #
+    # IMPORTANTE (multi-sucursal): una misma CPT consolidada puede tener
+    # recepciones para MÚLTIPLES sucursales (cada sucursal se crea por
+    # separado desde la tabla "Pendientes de crear"). Por lo tanto:
+    #   • Sólo redistribuimos las recepciones de la sucursal objetivo.
+    #   • El "total consolidado" con el que validamos la suma es la suma
+    #     de stockArribado de ESAS recepciones, no cpt_consolidada.stock
+    #     (que representa el total de la compra).
+    #   • Si la CPT de destino (ej. talla "37") ya existe (porque otra
+    #     sucursal ya redistribuyó antes), la reutilizamos y acumulamos su
+    #     stock en vez de crear duplicados.
+    #   • No borramos la CPT consolidada todavía: puede haber recepciones
+    #     de otras sucursales pendientes. Sólo la borramos si queda vacía.
     if redistribuir_desde_consolidado and producto_compra_id:
         # Parsear distribución del formulario (stock_<talla>)
         # Nota: '00' puede ser tanto el consolidado ORIGINAL (fuente) como una
@@ -11883,33 +11909,61 @@ def crear_producto_desde_recepcion(request):
         ).first()
 
         if cpt_consolidada and distribucion_form and total_form > 0:
-            stock_consolidado = int(cpt_consolidada.stock or 0)
-            if total_form != stock_consolidado:
+            # Recepciones de la CPT consolidada que pertenecen a ESTA sucursal.
+            # El total a redistribuir es la suma de stockArribado de estas
+            # (no cpt_consolidada.stock, que es el total de la compra).
+            recepciones_previas = list(
+                Productos_Recepcionados.objects.filter(
+                    compra_producto_talla=cpt_consolidada
+                ).filter(filtro_sucursal_recepciones).values(
+                    'id', 'dte_id', 'stockArribado', 'sucursal_destino_id'
+                )
+            )
+            stock_consolidado_sucursal = sum(
+                int(r['stockArribado'] or 0) for r in recepciones_previas
+            )
+
+            if stock_consolidado_sucursal <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'No hay stock consolidado recepcionado para la sucursal '
+                        f'{sucursal.alias}. No se puede distribuir.'
+                    )
+                }, status=400)
+
+            if total_form != stock_consolidado_sucursal:
                 return JsonResponse({
                     'success': False,
                     'error': (
                         f'La suma distribuida ({total_form}) debe igualar el '
-                        f'stock consolidado ({stock_consolidado}).'
+                        f'stock consolidado recepcionado en {sucursal.alias} '
+                        f'({stock_consolidado_sucursal}).'
                     )
                 }, status=400)
 
-            # Recepciones existentes contra la CPT consolidada, agrupadas por DTE
-            recepciones_previas = list(
-                Productos_Recepcionados.objects.filter(
-                    compra_producto_talla=cpt_consolidada
-                ).values('id', 'dte_id', 'stockArribado', 'sucursal_destino_id')
-            )
-
-            # Crear las nuevas CPT reales
+            # Crear o reutilizar CPT reales por talla. Reutilizamos cuando
+            # otra sucursal ya distribuyó antes en la misma talla (mismo
+            # compra_producto_id), acumulando stock para mantener coherencia
+            # con el total comprado.
             mapa_cpt_por_talla = {}
             for talla_nueva, stock_nueva in distribucion_form.items():
-                cpt_nueva = Compras_Producto_Talla.objects.create(
+                cpt_existente = Compras_Producto_Talla.objects.filter(
                     compra_producto_id=cpt_consolidada.compra_producto_id,
                     talla=talla_nueva,
-                    stock=stock_nueva,
-                    pendiente_distribuir=False,
-                )
-                mapa_cpt_por_talla[talla_nueva] = cpt_nueva
+                ).exclude(pk=cpt_consolidada.pk).first()
+                if cpt_existente:
+                    cpt_existente.stock = int(cpt_existente.stock or 0) + stock_nueva
+                    cpt_existente.pendiente_distribuir = False
+                    cpt_existente.save(update_fields=['stock', 'pendiente_distribuir'])
+                    mapa_cpt_por_talla[talla_nueva] = cpt_existente
+                else:
+                    mapa_cpt_por_talla[talla_nueva] = Compras_Producto_Talla.objects.create(
+                        compra_producto_id=cpt_consolidada.compra_producto_id,
+                        talla=talla_nueva,
+                        stock=stock_nueva,
+                        pendiente_distribuir=False,
+                    )
 
             # Clonar Productos_Recepcionados por DTE × nueva talla. Para cada
             # DTE se reparte su stockArribado proporcional a distribucion_form
@@ -11924,6 +11978,10 @@ def crear_producto_desde_recepcion(request):
                 if r['sucursal_destino_id'] and not por_dte[key]['sucursal_id']:
                     por_dte[key]['sucursal_id'] = r['sucursal_destino_id']
 
+            # Garantizamos que las nuevas recepciones queden con la sucursal
+            # objetivo (incluso si la previa tenía NULL).
+            sucursal_dest_nuevas = sucursal.id
+
             for dte_id, info in por_dte.items():
                 total_dte = info['total']
                 if total_dte <= 0:
@@ -11934,7 +11992,7 @@ def crear_producto_desde_recepcion(request):
                 acumulado = 0
                 for i, t_n in enumerate(tallas_orden):
                     if i < len(tallas_orden) - 1:
-                        asignado = (distribucion_form[t_n] * total_dte) // stock_consolidado
+                        asignado = (distribucion_form[t_n] * total_dte) // stock_consolidado_sucursal
                         acumulado += asignado
                         partes.append(asignado)
                     else:
@@ -11946,16 +12004,36 @@ def crear_producto_desde_recepcion(request):
                         compra_producto_talla=mapa_cpt_por_talla[t_n],
                         dte_id=dte_id,
                         stockArribado=cantidad,
-                        sucursal_destino_id=info['sucursal_id'],
+                        sucursal_destino_id=info['sucursal_id'] or sucursal_dest_nuevas,
                         producto_talla=None,
                     )
 
-            # Eliminar la CPT consolidada (cascade borra sus recepciones
-            # originales; ya replicamos las nuevas por talla).
-            cpt_consolidada.delete()
+            # Borrar las recepciones de la CPT consolidada que ya fueron
+            # redistribuidas (las de esta sucursal). NO borramos la CPT
+            # consolidada todavía: otras sucursales podrían tener sus propias
+            # recepciones pendientes contra la misma CPT.
+            ids_a_borrar = [r['id'] for r in recepciones_previas]
+            if ids_a_borrar:
+                Productos_Recepcionados.objects.filter(id__in=ids_a_borrar).delete()
+
+            # Reducir el stock de la CPT consolidada por lo que acabamos de
+            # trasladar a las CPT reales. Si queda en 0 y sin recepciones,
+            # la eliminamos para no dejar basura.
+            cpt_consolidada.stock = max(
+                0, int(cpt_consolidada.stock or 0) - stock_consolidado_sucursal
+            )
+            restantes = Productos_Recepcionados.objects.filter(
+                compra_producto_talla=cpt_consolidada
+            ).count()
+            if restantes == 0 and int(cpt_consolidada.stock or 0) <= 0:
+                cpt_consolidada.delete()
+            else:
+                cpt_consolidada.save(update_fields=['stock'])
+
             print(
-                f"🔀 Redistribuido consolidado {stock_consolidado} uds → "
-                f"{len(distribucion_form)} tallas reales"
+                f"🔀 Redistribuido ({sucursal.alias}): {stock_consolidado_sucursal} uds → "
+                f"{len(distribucion_form)} tallas reales. "
+                f"Recepciones pendientes restantes en CPT consolidada: {restantes}."
             )
 
     # 3. Crear o reutilizar variantes (tallas)
@@ -12098,10 +12176,10 @@ def crear_producto_desde_recepcion(request):
     for pt, stock, talla in tallas:
         print(f"   Talla: {talla}, Stock a ingresar: {stock}, PT ID: {pt.id}, Stock actual PT: {pt.stock}")
         if producto_compra_id:
-            from django.db.models import Q as _Q3
-            filtro_sucursal_mov = (
-                _Q3(sucursal_destino=sucursal) | _Q3(sucursal_destino__isnull=True)
-            )
+            # Usa el mismo criterio por sucursal que se definió al inicio:
+            # estricto si el frontend envió sucursal_destino_id, amplio (con
+            # NULL) en el flujo legacy.
+            filtro_sucursal_mov = filtro_sucursal_recepciones
             if es_sin_guia:
                 # Consolidar TODAS las recepciones (cualquier talla) de este
                 # producto_compra_id para crear lotes por DTE apuntando a la
@@ -12192,11 +12270,10 @@ def crear_producto_desde_recepcion(request):
     # 5. Actualizar tabla de recepción de productos
     # ✅ Filtrar por sucursal: solo vinculamos las filas de ESTA sucursal,
     # no las de otras sucursales que puedan tener el mismo compra_producto_id.
+    # Reutilizamos el criterio ya definido al inicio (estricto si viene
+    # sucursal_destino_id en el POST; amplio + NULL en el flujo legacy).
     if producto_compra_id:
-        from django.db.models import Q as _Q2
-        filtro_sucursal_update = (
-            _Q2(sucursal_destino=sucursal) | _Q2(sucursal_destino__isnull=True)
-        )
+        filtro_sucursal_update = filtro_sucursal_recepciones
         if es_sin_guia and tallas:
             # Modo "Sin guía": TODAS las Productos_Recepcionados de la compra
             # (con cualquier talla original, incluso "__TOTAL__") apuntan al
