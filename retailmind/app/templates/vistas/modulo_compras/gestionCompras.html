@@ -642,6 +642,36 @@
 .btn-max { background: linear-gradient(135deg, #0ab39c, #099885); color: white; }
 .btn-mitad { background: linear-gradient(135deg, #405189, #364574); color: white; }
 .btn-clear { background: #f8d7da; color: #721c24; }
+.btn-cantidad-rapida:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-cantidad-rapida:disabled:hover { transform: none; }
+
+.input-cantidad-wrapper.recepcion-completa .form-control {
+    background: #e6fff9; border-color: #0ab39c; color: #099885;
+    font-weight: 700; cursor: not-allowed;
+}
+.input-cantidad-wrapper.recepcion-completa .form-control::placeholder {
+    color: #0ab39c; opacity: 1; font-size: 1rem;
+}
+
+/* Select2 compacto dentro de la tabla de recepción y para el selector
+   global de la toolbar. Tiene que calzar con el tamaño de form-select-sm. */
+#tablaRecepcionProductos .sucursal-row-select + .select2-container .select2-selection--single,
+#sucursalGlobalMasiva + .select2-container .select2-selection--single {
+    height: 28px; min-height: 28px; font-size: 0.74rem;
+    border: 1px solid #dee2e6; border-radius: 6px;
+}
+#tablaRecepcionProductos .sucursal-row-select + .select2-container .select2-selection__rendered,
+#sucursalGlobalMasiva + .select2-container .select2-selection__rendered {
+    line-height: 26px; padding-left: 8px; padding-right: 24px;
+}
+#tablaRecepcionProductos .sucursal-row-select + .select2-container .select2-selection__arrow,
+#sucursalGlobalMasiva + .select2-container .select2-selection__arrow {
+    height: 26px; top: 1px;
+}
+#tablaRecepcionProductos .sucursal-row-select + .select2-container .select2-selection__clear,
+#sucursalGlobalMasiva + .select2-container .select2-selection__clear {
+    margin-right: 18px; color: #99a1ab;
+}
 
 .input-factura-wrapper { position: relative; }
 .input-factura-wrapper .form-control {
@@ -2094,10 +2124,14 @@
                         <div class="recepcion-toolbar mb-1">
                             <!-- Fila 1: Búsqueda + Vista + Filtro + Paginación -->
                             <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
-                                <div class="input-group input-group-sm" style="max-width: 240px;">
+                                <div class="input-group input-group-sm" style="max-width: 280px;">
                                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                                    <input type="text" class="form-control border-start-0 ps-0" id="searchRecepcion" placeholder="Buscar producto, marca, talla...">
-                                    <button class="btn btn-primary" type="button" id="btnSearchRecepcion"><i class="bi bi-search"></i></button>
+                                    <input type="text" class="form-control border-start-0 ps-0" id="searchRecepcion"
+                                           placeholder="SKU / artículo / marca / color / talla…"
+                                           autocomplete="off"
+                                           title="Escribe para filtrar en tiempo real. Separa términos con espacios para buscar por varios criterios.">
+                                    <button class="btn btn-outline-secondary" type="button" id="btnLimpiarSearchRecepcion" title="Limpiar búsqueda" style="display:none;"><i class="bi bi-x-lg"></i></button>
+                                    <button class="btn btn-primary" type="button" id="btnSearchRecepcion" title="Buscar (Enter)"><i class="bi bi-search"></i></button>
                                 </div>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaAgrupada" autocomplete="off" checked>
@@ -3351,6 +3385,9 @@ const GestionCompras = (function() {
                         // Renderizar VISTA DETALLADA (original)
                         renderizarVistaDetallada(data.items, tbody, search);
                     }
+                    // Montar Select2 en los selects de sucursal por fila
+                    // (búsqueda por texto, útil cuando hay muchas sucursales).
+                    aplicarSelect2SucursalFilas();
                 }
 
                 // Mostrar contenido primero
@@ -3429,8 +3466,49 @@ const GestionCompras = (function() {
         sucursalesEfectivas().forEach(s => {
             html += `<option value="${s.id}">${s.alias}</option>`;
         });
+        // Destruir select2 antes de repoblar para que reconozca los nuevos
+        // options (si no, mantiene el render del anterior).
+        if ($sel.hasClass('select2-hidden-accessible')) {
+            try { $sel.select2('destroy'); } catch (e) { /* noop */ }
+        }
         $sel.html(html);
         if (prev) $sel.val(prev);
+        aplicarSelect2SucursalGlobal();
+    }
+
+    // Select2 sobre el select de sucursal global con búsqueda rápida.
+    // Se engancha al modal (#modalRecepcionProductos) para que el dropdown
+    // respete el z-index del modal.
+    function aplicarSelect2SucursalGlobal() {
+        const $sel = $('#sucursalGlobalMasiva');
+        if (!$sel.length || typeof $.fn.select2 === 'undefined') return;
+        $sel.select2({
+            dropdownParent: $('#modalRecepcionProductos'),
+            placeholder: 'Sin sucursal...',
+            allowClear: true,
+            width: '100%',
+            minimumResultsForSearch: 6,
+        });
+    }
+
+    // Select2 sobre los <select> de sucursal por fila. Se aplica después
+    // de cada render de la tabla. Como los <select> se destruyen al
+    // re-renderizar, no hace falta hacer destroy antes.
+    function aplicarSelect2SucursalFilas() {
+        if (typeof $.fn.select2 === 'undefined') return;
+        const $selects = $('#tablaRecepcionProductos .sucursal-row-select');
+        if (!$selects.length) return;
+        $selects.each(function () {
+            const $s = $(this);
+            if ($s.hasClass('select2-hidden-accessible')) return; // ya aplicado
+            $s.select2({
+                dropdownParent: $('#modalRecepcionProductos'),
+                placeholder: '— sin sucursal —',
+                allowClear: true,
+                width: '100%',
+                minimumResultsForSearch: 6,
+            });
+        });
     }
 
     function renderizarVistaAgrupada(items, tbody, search) {
@@ -3559,9 +3637,18 @@ const GestionCompras = (function() {
                     return `<option value="${f.numero}" data-id="${f.id}" label="${label}">${label}</option>`;
                 }).join('');
                 
-                // Determinar valor de factura a mostrar
+                // Determinar valor de factura a mostrar. Cuando ya hay más de
+                // una factura asociada (ej. recepciones parciales con distinto
+                // DTE), NO pre-rellenamos el input con el concat
+                // "741317, 121212" porque al guardar se valida como un único
+                // número y falla. En ese caso se dejan las facturas visibles
+                // como badges y el input queda vacío para que el usuario
+                // pueda agregar otra o dejarlo así.
                 let selectedFacturaValue = '';
-                if (talla.factura_numero) {
+                const facturasAsoc = talla.facturas_asociadas || [];
+                if (facturasAsoc.length === 1 && facturasAsoc[0].numero) {
+                    selectedFacturaValue = String(facturasAsoc[0].numero);
+                } else if (facturasAsoc.length === 0 && talla.factura_numero && !String(talla.factura_numero).includes(',')) {
                     selectedFacturaValue = talla.factura_numero;
                 }
                 
@@ -3605,23 +3692,28 @@ const GestionCompras = (function() {
             </small>` : ''}
     </td>
     <td>
-        <div class="input-cantidad-wrapper">
-            <button type="button" class="btn-cantidad-rapida btn-max" onclick="aplicarCantidadRapida(this, 'max')" title="Máx"><i class="bi bi-arrow-up-circle-fill"></i></button>
+        <div class="input-cantidad-wrapper ${pendiente === 0 ? 'recepcion-completa' : ''}">
+            <button type="button" class="btn-cantidad-rapida btn-max" onclick="aplicarCantidadRapida(this, 'max')" title="Máx" ${pendiente === 0 ? 'disabled' : ''}><i class="bi bi-arrow-up-circle-fill"></i></button>
             <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
                    data-ids='${tallaIdsStr}' data-grupo="${grupoId}" data-stock="${talla.stock}"
                    data-costo="${producto.costo || 0}"
                    data-recepcionado="${talla.recepcionado || 0}" data-max="${pendiente > 0 ? pendiente : talla.stock}"
-                   value="${pendiente > 0 ? '' : (talla.recepcionado || '')}"
-                   max="${pendiente > 0 ? pendiente : talla.stock}" min="0" placeholder="${pendiente > 0 ? pendiente : talla.stock}">
-            <button type="button" class="btn-cantidad-rapida btn-mitad" onclick="aplicarCantidadRapida(this, 'mitad')" title="50%">½</button>
+                   value=""
+                   max="${pendiente > 0 ? pendiente : talla.stock}" min="0"
+                   placeholder="${pendiente > 0 ? (tieneRecepcion ? '+ ' + pendiente : pendiente) : '✓'}"
+                   title="${pendiente > 0 ? (tieneRecepcion ? 'Ya recepcionado: ' + talla.recepcionado + '. Lo que ingreses se SUMA al total. Pendiente: ' + pendiente : 'Pendiente: ' + pendiente) : 'Talla completa (' + talla.recepcionado + '/' + talla.stock + ')'}"
+                   ${pendiente === 0 ? 'disabled' : ''}>
+            <button type="button" class="btn-cantidad-rapida btn-mitad" onclick="aplicarCantidadRapida(this, 'mitad')" title="50%" ${pendiente === 0 ? 'disabled' : ''}>½</button>
         </div>
         <span class="indicador-ingresado badge-cantidad-ingresada" style="display:none"></span>
     </td>
     <td>
         <div class="input-factura-wrapper">
-            <input type="text" class="form-control form-control-sm factura-datalist-input ${selectedFacturaValue ? 'has-factura' : ''}" 
+            <input type="text" class="form-control form-control-sm factura-datalist-input ${selectedFacturaValue ? 'has-factura' : ''}"
                    list="${datalistId}" data-ids='${tallaIdsStr}' data-grupo="${grupoId}"
-                   value="${selectedFacturaValue}" placeholder="N° factura (opcional)">
+                   value="${selectedFacturaValue}"
+                   placeholder="${facturasAsoc.length > 1 ? '+ nueva factura' : 'N° factura (opcional)'}"
+                   title="${facturasAsoc.length > 1 ? 'Ya hay ' + facturasAsoc.length + ' facturas asociadas: ' + facturasAsoc.map(f => f.numero).join(', ') + '. Ingresá una nueva para agregar.' : ''}">
             <i class="bi bi-receipt factura-icon"></i>
         </div>
         <datalist id="${datalistId}">${facturaOptions}</datalist>
@@ -3847,9 +3939,10 @@ const GestionCompras = (function() {
         ${tallaDisplay}
     </td>
     <td>
-        <div class="input-cantidad-wrapper">
-            <button type="button" class="btn-cantidad-rapida btn-max" 
-                    onclick="aplicarCantidadRapida(this, 'max')" title="Máximo">
+        <div class="input-cantidad-wrapper ${pendiente === 0 ? 'recepcion-completa' : ''}">
+            <button type="button" class="btn-cantidad-rapida btn-max"
+                    onclick="aplicarCantidadRapida(this, 'max')" title="Máximo"
+                    ${pendiente === 0 ? 'disabled' : ''}>
                 <i class="bi bi-arrow-up-circle-fill"></i>
             </button>
             <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
@@ -3858,12 +3951,15 @@ const GestionCompras = (function() {
                    data-costo="${item.costo || 0}"
                    data-recepcionado="${item.recepcionado || 0}"
                    data-max="${pendiente > 0 ? pendiente : item.stock}"
-                   value="${pendiente > 0 ? '' : (item.recepcionado || '')}"
+                   value=""
                    max="${pendiente > 0 ? pendiente : item.stock}"
                    min="0"
-                   placeholder="${pendiente > 0 ? pendiente : item.stock}">
-            <button type="button" class="btn-cantidad-rapida btn-mitad" 
-                    onclick="aplicarCantidadRapida(this, 'mitad')" title="50%">
+                   placeholder="${pendiente > 0 ? (tieneRecepcion ? '+ ' + pendiente : pendiente) : '✓'}"
+                   title="${pendiente > 0 ? (tieneRecepcion ? 'Ya recepcionado: ' + item.recepcionado + '. Lo que ingreses se SUMA al total. Pendiente: ' + pendiente : 'Pendiente: ' + pendiente) : 'Recepción completa (' + item.recepcionado + '/' + item.stock + ')'}"
+                   ${pendiente === 0 ? 'disabled' : ''}>
+            <button type="button" class="btn-cantidad-rapida btn-mitad"
+                    onclick="aplicarCantidadRapida(this, 'mitad')" title="50%"
+                    ${pendiente === 0 ? 'disabled' : ''}>
                 ½
             </button>
         </div>
@@ -3946,7 +4042,7 @@ const GestionCompras = (function() {
         }
     });
 
-    // Evento para búsqueda
+    // Evento para búsqueda (botón)
     $('#btnSearchRecepcion').on('click', function() {
         guardarDatosTemporales(); // Preservar datos antes de buscar
         const search = $('#searchRecepcion').val().trim();
@@ -3955,11 +4051,35 @@ const GestionCompras = (function() {
         cargarDatosRecepcion(currentCompraId, 1, search);
     });
 
-    // Búsqueda al presionar Enter
+    // Búsqueda al presionar Enter (sin esperar debounce)
     $('#searchRecepcion').on('keypress', function(e) {
         if (e.which === 13) {
+            e.preventDefault();
+            clearTimeout(window._searchRecepcionTimer);
             $('#btnSearchRecepcion').click();
         }
+    });
+
+    // Búsqueda en tiempo real con debounce (350ms). Así el operador puede
+    // escribir el criterio, ver los resultados y asignar sucursal/factura
+    // sin tener que volver a apretar la lupa cada vez. Se preservan los
+    // datos ingresados antes de cada request (guardarDatosTemporales).
+    $('#searchRecepcion').on('input', function() {
+        const val = $(this).val().trim();
+        $('#btnLimpiarSearchRecepcion').toggle(val.length > 0);
+        clearTimeout(window._searchRecepcionTimer);
+        window._searchRecepcionTimer = setTimeout(() => {
+            if (val === currentSearch) return;  // evita request redundante
+            guardarDatosTemporales();
+            currentSearch = val;
+            currentPage = 1;
+            cargarDatosRecepcion(currentCompraId, 1, val);
+        }, 350);
+    });
+
+    // Limpiar búsqueda con un click
+    $('#btnLimpiarSearchRecepcion').on('click', function() {
+        $('#searchRecepcion').val('').trigger('input').focus();
     });
 
     // Cambiar entre vista agrupada y detallada
@@ -6884,32 +7004,54 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
     
     // Función para validar factura contra el servidor
     function validarFacturaConServidor(numeroFactura, proveedorId, inputElement) {
+        const payload = { numero: numeroFactura };
+        if (proveedorId) payload.proveedor_id = proveedorId;
+
         $.ajax({
             url: urls.validarFacturaProveedor,
             method: 'GET',
-            data: {
-                numero: numeroFactura,
-                proveedor_id: proveedorId
-            },
+            data: payload,
             success: function(response) {
                 if (response.existe) {
-                    if (response.pertenece_proveedor) {
-                        // La factura existe y pertenece al proveedor correcto
-                        inputElement.removeClass('is-invalid').addClass('is-valid');
-                        inputElement.attr('title', `Factura válida: ${response.factura.numero} - $${response.factura.monto.toLocaleString()}`);
-                        
-                        // Agregar la factura al datalist si no está
-                        const datalistId = inputElement.attr('list');
-                        const $datalist = $('#' + datalistId);
-                        if (!$datalist.find(`option[data-id="${response.factura.id}"]`).length) {
-                            $datalist.append(`<option value="${response.factura.numero}" data-id="${response.factura.id}">`);
+                    // La factura existe: agregarla siempre al datalist para
+                    // que siguientes filas la reconozcan sin re-pegar al server.
+                    const datalistId = inputElement.attr('list');
+                    const $datalist = datalistId ? $('#' + datalistId) : $();
+                    const $global = $('#facturas-global-list');
+                    [$datalist, $global].forEach($dl => {
+                        if ($dl && $dl.length && !$dl.find(`option[data-id="${response.factura.id}"]`).length) {
+                            $dl.append(`<option value="${response.factura.numero}" data-id="${response.factura.id}">`);
                         }
-                    } else {
-                        // La factura existe pero pertenece a OTRO proveedor
+                    });
+
+                    if (response.tipo_distinto) {
+                        // Existe pero no está marcada como tipo COMPRA
                         inputElement.removeClass('is-valid').addClass('is-invalid');
                         inputElement.attr('title', response.mensaje);
-                        
-                        // Mostrar alerta
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Factura con tipo distinto',
+                            html: `
+                                <div class="text-start">
+                                    <p><strong>Factura N°:</strong> ${response.factura.numero}</p>
+                                    <p><strong>Registrada como:</strong> ${response.factura.tipo_transaccion}</p>
+                                    <p><strong>Emisor:</strong> ${response.factura.emisor_nombre}</p>
+                                    <p><strong>Fecha:</strong> ${response.factura.fecha}</p>
+                                    <hr>
+                                    <p class="text-danger"><i class="bi bi-exclamation-triangle me-2"></i>El DTE existe pero su tipo_transaccion no es COMPRA.</p>
+                                </div>
+                            `,
+                            confirmButtonText: 'Entendido',
+                            confirmButtonColor: '#f06548'
+                        });
+                    } else if (response.pertenece_proveedor || !proveedorId) {
+                        // Pertenece al proveedor (o no se está validando contra proveedor)
+                        inputElement.removeClass('is-invalid').addClass('is-valid has-factura');
+                        inputElement.attr('title', `Factura válida: ${response.factura.numero} - $${response.factura.monto.toLocaleString()}`);
+                    } else {
+                        // Existe pero pertenece a OTRO proveedor
+                        inputElement.removeClass('is-valid').addClass('is-invalid');
+                        inputElement.attr('title', response.mensaje);
                         Swal.fire({
                             icon: 'warning',
                             title: 'Factura de otro proveedor',
@@ -6929,7 +7071,7 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                     }
                 } else {
                     // La factura no existe en el sistema
-                    inputElement.attr('title', response.mensaje);
+                    inputElement.attr('title', response.mensaje || 'Factura no encontrada');
                 }
             },
             error: function() {
@@ -6941,22 +7083,24 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
     // Validación en tiempo real al cambiar la factura (sin servidor para rapidez)
     $(document).on('input', '.factura-datalist-input', function() {
         validarFacturaInput($(this), false);
-        
+
         // Actualizar indicador visual
         const $row = $(this).closest('tr');
         actualizarIndicadoresIngresados($row);
     });
-    
-    // Validación completa al salir del input (con servidor si no se encuentra)
+
+    // Validación completa al salir del input (con servidor si no se encuentra).
+    // Se pega al server aunque no haya `currentProveedorId` seteado, para
+    // detectar facturas que existen en el sistema aunque todavía no hayamos
+    // resuelto el proveedor activo (antes se quedaban marcadas como inválidas).
     $(document).on('blur change', '.factura-datalist-input', function() {
         const $input = $(this);
         const facturaNumero = ($input.val() || '').trim();
-        
-        // Si hay factura ingresada y no es válida localmente, validar con servidor
+
         if (facturaNumero && $input.hasClass('is-invalid')) {
-            validarFacturaConServidor(facturaNumero, currentProveedorId, $input);
+            validarFacturaConServidor(facturaNumero, currentProveedorId || null, $input);
         }
-        
+
         // Actualizar indicador visual
         const $row = $(this).closest('tr');
         actualizarIndicadoresIngresados($row);
@@ -7000,6 +7144,30 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
         recalcularTotalesRecepcion();
     });
 
+    // Pre-resuelve en el servidor las facturas que no tienen `facturaId`
+    // pero sí tienen número. Devuelve una Promise que resuelve a un mapa
+    // { numero -> id|null }. Así el guardado no aborta sólo porque el
+    // datalist local no tuviera esa factura (p. ej. creada hace >2 meses
+    // o perteneciente a otra compra).
+    function resolverFacturasPendientes(numeros) {
+        const unicos = [...new Set(numeros.filter(n => n && !String(n).includes(',')))];
+        if (unicos.length === 0) return Promise.resolve({});
+
+        const proveedorId = (typeof currentProveedorId !== 'undefined' && currentProveedorId) ? currentProveedorId : null;
+        const calls = unicos.map(num => $.ajax({
+            url: urls.validarFacturaProveedor,
+            method: 'GET',
+            data: proveedorId ? { numero: num, proveedor_id: proveedorId } : { numero: num },
+        }).then(resp => [num, (resp && resp.existe && resp.factura) ? resp.factura.id : null])
+          .catch(() => [num, null])
+        );
+        return Promise.all(calls).then(pairs => {
+            const map = {};
+            pairs.forEach(([num, id]) => { map[num] = id; });
+            return map;
+        });
+    }
+
     $('#btnGuardarRecepcion').on('click', function () {
         // PASO 1: Capturar datos de la página actual al store temporal.
         // Después de esto, datosRecepcionTemporales contiene TODO lo
@@ -7007,74 +7175,115 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
         // ya no están en el DOM por búsqueda/paginación).
         guardarDatosTemporales();
 
-        const datos = [];
-        let errorFactura = false;
-        let errorMensajes = [];
-
-        // PASO 2: Iterar el store temporal — incluye lo que el usuario
-        // escribió en otras búsquedas/páginas y ya no está en pantalla.
-        Object.entries(datosRecepcionTemporales).forEach(([key, info]) => {
+        // PASO 2: Hacer un primer pase para detectar facturas con número
+        // pero sin ID, y resolverlas contra el servidor en paralelo antes
+        // de decidir si abortamos. Antes la validación caía en "factura
+        // no encontrada localmente" aunque la factura sí existiera, porque
+        // no pegaba al server en el flujo de guardado.
+        const numerosARevisar = [];
+        Object.values(datosRecepcionTemporales).forEach(info => {
             const cantidad = parseInt(info.cantidad) || 0;
-            const ids = info.ids || [];
-
-            // Si no hay cantidad, no se recepciona (factura/sucursal solas
-            // no generan registro de recepción)
-            if (cantidad <= 0 || ids.length === 0) return;
-
-            const facturaNumero = (info.factura || '').trim();
-            let facturaId = info.facturaId || null;
-
-            // Si la fila SIGUE en el DOM, re-validar contra su datalist
-            // (asegura el ID más actualizado y resalta inputs inválidos).
-            const $rowInDom = $('#tablaRecepcionProductos tbody tr.talla-detalle')
-                .filter(function() {
-                    let domIds = $(this).find('.recepcionado-input').data('ids');
-                    if (typeof domIds === 'string') {
-                        try { domIds = JSON.parse(domIds); } catch(e) { domIds = [domIds]; }
-                    }
-                    const k = Array.isArray(domIds) ? domIds.join('-') : String(domIds || '');
-                    return k === key;
-                });
-            if ($rowInDom.length) {
-                const $facturaInput = $rowInDom.find('.factura-datalist-input');
-                const validatedId = validarFacturaInput($facturaInput);
-                if (validatedId) facturaId = validatedId;
+            if (cantidad <= 0) return;
+            const num = (info.factura || '').trim();
+            if (num && !info.facturaId && !num.includes(',')) {
+                numerosARevisar.push(num);
             }
-
-            // Si hay número de factura pero no se pudo resolver el ID
-            if (facturaNumero && !facturaId) {
-                errorFactura = true;
-                errorMensajes.push(`Factura "${facturaNumero}" no válida (ingresada en otra búsqueda/página).`);
-            }
-
-            // Distribuir cantidad entre los IDs agrupados
-            const cantidadPorId = Math.floor(cantidad / ids.length);
-            const cantidadRestante = cantidad % ids.length;
-
-            ids.forEach((id, index) => {
-                const cantidadAsignada = cantidadPorId + (index < cantidadRestante ? 1 : 0);
-                if (cantidadAsignada > 0) {
-                    datos.push({
-                        compra_producto_talla_id: id,
-                        recepcionado: cantidadAsignada,
-                        factura_id: facturaId,
-                        sucursal_destino_id: info.sucursalId || null
-                    });
-                }
-            });
         });
-        
-        if (errorFactura) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Facturas inválidas',
-                html: '<p>Las siguientes facturas no son válidas:</p><ul style="text-align: left;">' + 
-                      errorMensajes.map(m => `<li>${m}</li>`).join('') + 
-                      '</ul><p class="mt-2">Por favor, selecciona una factura de la lista desplegable.</p>',
-                confirmButtonText: 'Entendido'
+
+        if (typeof showGlobalLoader === 'function') showGlobalLoader();
+        resolverFacturasPendientes(numerosARevisar).then(mapaIds => {
+            if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+
+            const datos = [];
+            let errorFactura = false;
+            const errorMensajes = [];
+
+            Object.entries(datosRecepcionTemporales).forEach(([key, info]) => {
+                const cantidad = parseInt(info.cantidad) || 0;
+                const ids = info.ids || [];
+
+                // Si no hay cantidad, no se recepciona (factura/sucursal solas
+                // no generan registro de recepción)
+                if (cantidad <= 0 || ids.length === 0) return;
+
+                const facturaNumero = (info.factura || '').trim();
+                let facturaId = info.facturaId || null;
+
+                // Si la fila SIGUE en el DOM, re-validar contra su datalist
+                // (asegura el ID más actualizado y resalta inputs inválidos).
+                const $rowInDom = $('#tablaRecepcionProductos tbody tr.talla-detalle')
+                    .filter(function() {
+                        let domIds = $(this).find('.recepcionado-input').data('ids');
+                        if (typeof domIds === 'string') {
+                            try { domIds = JSON.parse(domIds); } catch(e) { domIds = [domIds]; }
+                        }
+                        const k = Array.isArray(domIds) ? domIds.join('-') : String(domIds || '');
+                        return k === key;
+                    });
+                if ($rowInDom.length) {
+                    const $facturaInput = $rowInDom.find('.factura-datalist-input');
+                    const validatedId = validarFacturaInput($facturaInput);
+                    if (validatedId) facturaId = validatedId;
+                }
+
+                // Si sigue sin ID, usar el resuelto por servidor.
+                if (!facturaId && facturaNumero && mapaIds[facturaNumero]) {
+                    facturaId = mapaIds[facturaNumero];
+                    // Cache en store para siguientes guardados
+                    info.facturaId = facturaId;
+                    // Agregar al datalist global para futura resolución rápida
+                    const $glob = $('#facturas-global-list');
+                    if ($glob.length && !$glob.find(`option[data-id="${facturaId}"]`).length) {
+                        $glob.append(`<option value="${facturaNumero}" data-id="${facturaId}">`);
+                    }
+                }
+
+                // Un valor con coma ("741317, 121212") viene del pre-relleno
+                // cuando había varias facturas asociadas; se interpreta como
+                // "no estoy agregando una factura nueva" → factura_id=null.
+                if (facturaNumero.includes(',')) {
+                    facturaId = null;
+                } else if (facturaNumero && !facturaId) {
+                    errorFactura = true;
+                    errorMensajes.push(`Factura "${facturaNumero}" no existe en el sistema.`);
+                }
+
+                // Distribuir cantidad entre los IDs agrupados
+                const cantidadPorId = Math.floor(cantidad / ids.length);
+                const cantidadRestante = cantidad % ids.length;
+
+                ids.forEach((id, index) => {
+                    const cantidadAsignada = cantidadPorId + (index < cantidadRestante ? 1 : 0);
+                    if (cantidadAsignada > 0) {
+                        datos.push({
+                            compra_producto_talla_id: id,
+                            recepcionado: cantidadAsignada,
+                            factura_id: facturaId,
+                            sucursal_destino_id: info.sucursalId || null
+                        });
+                    }
+                });
             });
-            return;
-        }
+
+            if (errorFactura) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Facturas no encontradas',
+                    html: '<p>Las siguientes facturas no existen en el sistema:</p><ul style="text-align: left;">' +
+                          errorMensajes.map(m => `<li>${m}</li>`).join('') +
+                          '</ul><p class="mt-2">Revisá que el número sea correcto y que el DTE esté registrado (botón "Recargar Facturas").</p>',
+                    confirmButtonText: 'Entendido'
+                });
+                return;
+            }
+
+            continuarGuardarRecepcion(datos);
+        });
+    });
+
+    // Extraído del click handler original para poder llamarlo después del
+    // pase async de validación de facturas sin anidar más.
+    function continuarGuardarRecepcion(datos) {
         
         if (datos.length === 0) {
             const esAgrupada = $('#vistaAgrupada').is(':checked');
@@ -7184,7 +7393,7 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                     console.error(xhr);
                 }
             });
-        });
+    }
     // === MANEJO DE MÚLTIPLES TALLAS EN MODAL AGREGAR PRODUCTO ===
     let indiceTallaManual = 0;
     

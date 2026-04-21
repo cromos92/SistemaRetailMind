@@ -6549,21 +6549,51 @@ def validar_factura_proveedor(request):
     """
     numero_factura = request.GET.get('numero', '').strip()
     proveedor_id = request.GET.get('proveedor_id')
-    
+
     if not numero_factura:
         return JsonResponse({'existe': False, 'error': 'Número de factura no proporcionado'})
-    
+
     try:
         proveedor_id = int(proveedor_id) if proveedor_id else None
     except (TypeError, ValueError):
         proveedor_id = None
-    
-    # Buscar la factura por número
+
+    # `Dte.numero_documento` es `IntegerField`; usar `__iexact` con un string
+    # en PostgreSQL produce un CAST + UPPER() que no siempre matchea (y nunca
+    # matcheaba ceros a la izquierda). Casteamos explícitamente a int y
+    # hacemos `__exact` — si no se puede castear, devolvemos "no existe".
+    numero_limpio = ''.join(ch for ch in numero_factura if ch.isdigit())
+    if not numero_limpio:
+        return JsonResponse({
+            'existe': False,
+            'mensaje': f'Número de factura "{numero_factura}" no es numérico'
+        })
+    try:
+        numero_int = int(numero_limpio)
+    except ValueError:
+        return JsonResponse({
+            'existe': False,
+            'mensaje': f'Número de factura "{numero_factura}" inválido'
+        })
+
+    # Se busca primero en COMPRA (caso normal en recepción). Si no aparece
+    # ahí pero existe en otro `tipo_transaccion`, devolvemos igual el match
+    # con una bandera para que el frontend pueda mostrar un mensaje claro
+    # en vez de "no existe" cuando en realidad existe pero está mal
+    # clasificada.
     factura = Dte.objects.filter(
         tipo_transaccion='COMPRA',
-        numero_documento__iexact=numero_factura
-    ).select_related('emisor').first()
-    
+        numero_documento=numero_int,
+    ).select_related('emisor').order_by('-fecha_emision').first()
+
+    tipo_distinto = False
+    if not factura:
+        factura = Dte.objects.filter(
+            numero_documento=numero_int,
+        ).select_related('emisor').order_by('-fecha_emision').first()
+        if factura:
+            tipo_distinto = True
+
     if not factura:
         return JsonResponse({
             'existe': False,
@@ -6583,9 +6613,25 @@ def validar_factura_proveedor(request):
         except Empresa.DoesNotExist:
             pass
     
+    if tipo_distinto:
+        mensaje = (
+            f'La factura N° {factura.numero_documento} existe pero está '
+            f'registrada como {factura.tipo_transaccion}, no como COMPRA. '
+            'Revisa el tipo de transacción del DTE.'
+        )
+    elif pertenece_proveedor:
+        mensaje = 'La factura pertenece a este proveedor'
+    else:
+        mensaje = (
+            f'ALERTA: La factura pertenece a '
+            f'"{factura.emisor.nombre if factura.emisor else "otro proveedor"}", '
+            'no al proveedor de esta compra'
+        )
+
     return JsonResponse({
         'existe': True,
         'pertenece_proveedor': pertenece_proveedor,
+        'tipo_distinto': tipo_distinto,
         'factura': {
             'id': factura.id,
             'numero': str(factura.numero_documento),
@@ -6593,12 +6639,13 @@ def validar_factura_proveedor(request):
             'fecha': factura.fecha_emision.strftime('%d/%m/%Y') if factura.fecha_emision else '',
             'emisor_nombre': factura.emisor.nombre if factura.emisor else 'Desconocido',
             'emisor_id': factura.emisor_id,
-            'estado': factura.estado_dte
+            'estado': factura.estado_dte,
+            'tipo_transaccion': factura.tipo_transaccion,
         },
-        'mensaje': 'La factura pertenece a este proveedor' if pertenece_proveedor else f'ALERTA: La factura pertenece a "{factura.emisor.nombre if factura.emisor else "otro proveedor"}", no al proveedor de esta compra'
+        'mensaje': mensaje,
     })
 
- 
+
 @require_GET
 def obtener_compras_por_anio(request):
     anio = request.GET.get('anio')
@@ -8922,8 +8969,31 @@ def guardar_recepcion(request):
                 dte_id=factura_id,
             ).first()
 
+            # El frontend muestra el input vacío cuando hay pendiente > 0 y
+            # envía sólo el delta nuevo (ej: "6 más para completar los 12").
+            # Antes el backend hacía `stockArribado = cantidad` (reemplazo),
+            # así que una segunda recepción parcial con la MISMA factura
+            # sobrescribía la anterior y quedaba igual en 6.
+            #
+            # Nueva semántica: si existe recepción con la misma factura,
+            # SUMAMOS la cantidad enviada al stockArribado existente,
+            # respetando el stock total comprado para la talla.
             if recepcion_existente:
-                recepcion_existente.stockArribado = cantidad
+                stock_talla = int(compra_talla.stock or 0)
+                previo = int(recepcion_existente.stockArribado or 0)
+
+                # Otras recepciones de la misma talla con distinta factura:
+                # también cuentan para el tope de stock disponible.
+                otras_recepciones = (
+                    Productos_Recepcionados.objects
+                    .filter(compra_producto_talla=compra_talla)
+                    .exclude(id=recepcion_existente.id)
+                    .aggregate(s=Sum('stockArribado'))['s'] or 0
+                )
+                disponible = max(0, stock_talla - int(otras_recepciones))
+                nuevo_total = min(previo + int(cantidad or 0), disponible)
+
+                recepcion_existente.stockArribado = nuevo_total
                 recepcion_existente.es_reposicion = compra_producto.es_reposicion
                 recepcion_existente.precio_anterior = compra_producto.precio_anterior
                 recepcion_existente.precio_nuevo = compra_producto.precio_nuevo
