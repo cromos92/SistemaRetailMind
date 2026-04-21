@@ -11735,8 +11735,12 @@ def crear_producto_desde_recepcion(request):
     
     # Si no encuentra, buscar con atributos case-insensitive por valor
     if not producto_existente:
-        from django.db.models import Q
-        
+        # Nota: `Q` ya está importado a nivel de módulo (línea 46). Evitamos
+        # un `from ... import Q` local: al estar la función anotada con
+        # @transaction.atomic, si reasignamos Q dentro de un bloque, Python
+        # lo trata como variable local en TODA la función y truena con
+        # UnboundLocalError al primer uso previo (línea 11639).
+
         # Obtener valores de atributos para búsqueda flexible
         def get_valor_atributo(attr_id):
             if not attr_id:
