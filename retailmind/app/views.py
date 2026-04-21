@@ -537,24 +537,51 @@ def confirmar_recepcion_api(request):
                 else:
                     # Crear producto y talla en destino
                     producto_origen = producto_talla.producto
-                    producto_destino, _ = Producto.objects.get_or_create(
+
+                    # Fix defensivo: si existen duplicados en la BD para la misma
+                    # combinacion (articulo + sucursal + 4 atributos) elegimos el
+                    # mas antiguo por id y logueamos warning. Evita que el DTE
+                    # falle con MultipleObjectsReturned.
+                    producto_destino_qs = Producto.objects.filter(
                         articulo=producto_origen.articulo,
                         sucursal=sucursal_destino,
                         atributo1=producto_origen.atributo1,
                         atributo2=producto_origen.atributo2,
                         atributo3=producto_origen.atributo3,
                         atributo4=producto_origen.atributo4,
-                        defaults={
-                            'descripcion': producto_origen.descripcion,
-                            'categoria': producto_origen.categoria,
-                            'costo': producto_origen.costo,
-                            'sobreprecio': producto_origen.sobreprecio,
-                            'precioventa': producto_origen.precioventa,
-                            'precioSugerido': producto_origen.precioSugerido,
-                            'tipo_talla': producto_origen.tipo_talla,
-                            'guia_talla': producto_origen.guia_talla
-                        }
-                    )
+                    ).order_by('id')
+
+                    productos_duplicados = list(producto_destino_qs[:2])
+
+                    if not productos_duplicados:
+                        producto_destino = Producto.objects.create(
+                            articulo=producto_origen.articulo,
+                            sucursal=sucursal_destino,
+                            atributo1=producto_origen.atributo1,
+                            atributo2=producto_origen.atributo2,
+                            atributo3=producto_origen.atributo3,
+                            atributo4=producto_origen.atributo4,
+                            descripcion=producto_origen.descripcion,
+                            categoria=producto_origen.categoria,
+                            costo=producto_origen.costo,
+                            sobreprecio=producto_origen.sobreprecio,
+                            precioventa=producto_origen.precioventa,
+                            precioSugerido=producto_origen.precioSugerido,
+                            tipo_talla=producto_origen.tipo_talla,
+                            guia_talla=producto_origen.guia_talla,
+                        )
+                    else:
+                        producto_destino = productos_duplicados[0]
+                        if len(productos_duplicados) > 1:
+                            total_duplicados = producto_destino_qs.count()
+                            logger.warning(
+                                "Producto duplicado en sucursal %s: articulo=%s tiene %s filas en app_producto. Se usa id=%s (mas antigua). Revisar y consolidar manualmente.",
+                                sucursal_destino.alias,
+                                producto_origen.articulo,
+                                total_duplicados,
+                                producto_destino.id,
+                            )
+
                     talla_destino = Producto_Talla.objects.create(
                         producto=producto_destino,
                         talla=producto_talla.talla,
@@ -9845,6 +9872,11 @@ def detalle_producto_para_crear(request, producto_id):
     elif sucursal_id_param == '':
         # Fila "Sin sucursal" (sucursal_destino IS NULL)
         filtro_sucursal = Q(sucursal_destino__isnull=True)
+
+    print(
+        f"[detalle_producto_para_crear] producto_id={producto_id} "
+        f"sucursal_id_param={sucursal_id_param!r} filtro_sucursal={filtro_sucursal}"
+    )
 
     # Obtener tallas recepcionadas sin producto_talla aún - AGRUPAR SOLO POR TALLA
     recepcionadas = Productos_Recepcionados.objects.filter(

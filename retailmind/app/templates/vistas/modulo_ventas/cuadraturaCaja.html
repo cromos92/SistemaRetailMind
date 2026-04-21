@@ -2858,10 +2858,20 @@ function corregirArqueosExpress() {
 }
 
 // ========== RESUMEN DE CAJA ==========
+// Fecha "hoy" en Chile (America/Santiago) en formato YYYY-MM-DD. `toISOString()`
+// devolvía UTC y después de las 21:00 chilenas saltaba al día siguiente,
+// abriendo el modal en la fecha equivocada. Usamos `en-CA` porque produce
+// exactamente "YYYY-MM-DD" respetando el timezone indicado.
+function hoyEnChile() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+}
+
 function abrirResumenCaja() {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = hoyEnChile();
     $('#fechaCuadratura').val(hoy);
-    $('#fechaResumenCaja').text(new Date().toLocaleDateString('es-CL'));
+    $('#fechaResumenCaja').text(
+        new Date(hoy + 'T12:00:00').toLocaleDateString('es-CL')
+    );
     limpiarCamposCuadratura();
     $('#modalResumenCaja').modal('show');
     generarCuadratura();

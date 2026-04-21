@@ -181,10 +181,18 @@
                 const baudratesToTry = tryAllBaudrates ? BAUDRATES : [TBKPOS_DEFAULT_BAUD];
                 
                 for (const port of ports) {
-                    for (const baudRate of baudratesToTry) {
+                    const portInfo = (() => {
                         try {
-                            console.log(`🔌 Probando baudrate ${baudRate}...`);
-                            
+                            const i = port.getInfo();
+                            return `VID:${i.usbVendorId?.toString(16) || '?'} PID:${i.usbProductId?.toString(16) || '?'}`;
+                        } catch { return 'puerto'; }
+                    })();
+
+                    for (const baudRate of baudratesToTry) {
+                        const t0 = Date.now();
+                        try {
+                            console.log(`🔌 Probando ${portInfo} @ ${baudRate} bps...`);
+
                             // Verificar si el puerto ya está abierto
                             if (port.readable && port.writable) {
                                 console.log('⚠️ Puerto abierto, cerrando...');
@@ -195,23 +203,24 @@
                                     console.warn('No se pudo cerrar puerto:', e.message);
                                 }
                             }
-                            
+
                             await port.open({ baudRate });
                             this.port = port;
                             this.reader = port.readable.getReader();
                             this.writer = port.writable.getWriter();
                             this.isConnected = true;
                             this.currentBaudrate = baudRate;
-                            
-                            // Verificar con POLL
+
+                            // Verificar con POLL (3s timeout)
                             const pollResult = await this.poll();
+                            const elapsed = Date.now() - t0;
                             if (pollResult) {
                                 const info = port.getInfo();
                                 const deviceType = this.detectDeviceType(info);
-                                
-                                console.log(`✅ POS conectado y verificado en ${baudRate} bps`);
+
+                                console.log(`✅ POS conectado y verificado @ ${baudRate} bps en ${elapsed}ms`);
                                 console.log(`📱 Dispositivo detectado: ${deviceType}`);
-                                
+
                                 return {
                                     success: true,
                                     connected: true,
@@ -221,8 +230,15 @@
                                     info: info
                                 };
                             }
+
+                            // POLL no tuvo respuesta en 3s: limpiar y probar el siguiente
+                            // baudrate (si no cerramos el puerto aquí, la próxima
+                            // port.open() falla porque ya está abierto).
+                            console.log(`❌ Sin respuesta @ ${baudRate} bps tras ${elapsed}ms (POLL sin ACK)`);
+                            try { await this.disconnect(); } catch (e) {}
                         } catch (err) {
-                            console.log(`❌ Fallo con baudrate ${baudRate}: ${err.message}`);
+                            const elapsed = Date.now() - t0;
+                            console.log(`❌ Fallo @ ${baudRate} bps tras ${elapsed}ms: ${err.message}`);
                             if (this.port) {
                                 try {
                                     await this.disconnect();
@@ -513,13 +529,18 @@
         
         /**
          * POLL - Verificar conexión
+         *
+         * Timeout corto (3s): es un ping simple que debe resolverse con un ACK
+         * del POS en milisegundos. Si el POS no contesta en ese tiempo, es muy
+         * preferible fallar rápido y pasar al siguiente baudrate en vez de
+         * quedar colgado con el timeout global (180s) por cada intento.
          */
         async poll() {
             try {
-                const response = await this.sendCommand('0100');
+                const response = await this.sendCommand('0100', 3000);
                 return response.type === 'ACK';
             } catch (error) {
-                console.error('❌ Error en POLL:', error);
+                console.error('❌ Error en POLL:', error.message);
                 return false;
             }
         }

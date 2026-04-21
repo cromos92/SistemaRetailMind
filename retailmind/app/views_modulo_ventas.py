@@ -4963,6 +4963,8 @@ def editar_dte_boleta_papel(request):
             # `Ticket.fecha` tiene auto_now=True y un save() lo reescribiria
             # a "hoy" en vez de a la fecha del DTE.
             ticket_sincronizado = False
+            ticket_pagos_sincronizados = 0
+            ticket_pagos_resync_modo = None  # 'none' | 'update' | 'rebuild'
             if ticket_vinculado:
                 ticket_fields = {'fecha': dte.fecha_emision}
                 if cambiar_tipo or tiene_numero:
@@ -4971,6 +4973,116 @@ def editar_dte_boleta_papel(request):
                     **ticket_fields
                 )
                 ticket_sincronizado = True
+
+                # Reconciliación idempotente TicketDetallePago ↔ Dte_Detalle_Pago.
+                #
+                # `_calcular_cuadratura_data` lee los pagos desde el Ticket
+                # cuando hay vínculo (Ticket.folio_dte == Dte.numero_documento),
+                # así que cualquier cambio en los pagos del DTE tiene que
+                # replicarse aquí o la caja queda descuadrada.
+                #
+                # Se ejecuta SIEMPRE (no sólo cuando llegó `pagos`) para que
+                # un guardado con los mismos datos sirva además como
+                # reparación de registros desalineados por flujos anteriores.
+                dte_pagos_actuales = list(
+                    Dte_Detalle_Pago.objects
+                    .filter(dte_id=dte.id)
+                    .order_by('id')
+                )
+                ticket_pagos_actuales = list(
+                    TicketDetallePago.objects
+                    .select_for_update()
+                    .filter(ticket_id=ticket_vinculado.pk)
+                    .order_by('id')
+                )
+
+                def _pago_difiere(dp, tp):
+                    return (
+                        (dp.metodo_pago or '') != (tp.metodo_pago or '')
+                        or int(dp.monto or 0) != int(tp.monto or 0)
+                    )
+
+                mismo_largo = (
+                    len(dte_pagos_actuales) == len(ticket_pagos_actuales)
+                )
+                hay_drift = (
+                    not mismo_largo
+                    or any(
+                        _pago_difiere(dp, tp)
+                        for dp, tp in zip(
+                            dte_pagos_actuales, ticket_pagos_actuales
+                        )
+                    )
+                )
+
+                if hay_drift and mismo_largo:
+                    # 1:1 por orden de id. No tocamos tipo_tarjeta / voucher
+                    # del ticket: el usuario sólo edita metodo+monto.
+                    for dp, tp in zip(
+                        dte_pagos_actuales, ticket_pagos_actuales
+                    ):
+                        tp.metodo_pago = dp.metodo_pago
+                        tp.monto = int(dp.monto or 0)
+                        tp.save(update_fields=['metodo_pago', 'monto'])
+                        ticket_pagos_sincronizados += 1
+                    ticket_pagos_resync_modo = 'update'
+                elif hay_drift:
+                    # Cantidad de pagos distinta: reconstruimos los del
+                    # ticket a partir del DTE. Se pierde voucher/tipo_tarjeta
+                    # del ticket original, pero es preferible a tener totales
+                    # que no cuadran en la caja.
+                    TicketDetallePago.objects.filter(
+                        ticket_id=ticket_vinculado.pk
+                    ).delete()
+                    for dp in dte_pagos_actuales:
+                        TicketDetallePago.objects.create(
+                            ticket_id=ticket_vinculado.pk,
+                            metodo_pago=dp.metodo_pago,
+                            monto=int(dp.monto or 0),
+                        )
+                        ticket_pagos_sincronizados += 1
+                    ticket_pagos_resync_modo = 'rebuild'
+                else:
+                    ticket_pagos_resync_modo = 'none'
+
+            # Dejar traza en la bitácora de los arqueos afectados cuando
+            # cambia la fecha y el día origen o destino ya tiene arqueo
+            # cerrado / con diferencias: sus snapshots de teóricos quedaron
+            # desalineados respecto al recálculo en vivo del modal.
+            arqueos_afectados_info = []
+            cambio_fecha_real = (
+                tiene_fecha
+                and fecha_anterior
+                and fecha_anterior != dte.fecha_emision
+            )
+            if cambio_fecha_real and dte.sucursal_id:
+                fechas_a_revisar = {fecha_anterior, dte.fecha_emision}
+                arqueos_afectados_qs = ArqueoCaja.objects.filter(
+                    sucursal_id=dte.sucursal_id,
+                    fecha_arqueo__in=fechas_a_revisar,
+                ).exclude(estado='ABIERTO')
+
+                for arq in arqueos_afectados_qs:
+                    ObservacionArqueo.objects.create(
+                        arqueo=arq,
+                        usuario=request.user,
+                        tipo='SISTEMA',
+                        texto=(
+                            f'DTE #{dte.numero_documento} '
+                            f'({dte.tipo_documento}) editado desde gestión '
+                            f'de documentos. Fecha: '
+                            f'{fecha_anterior.strftime("%d/%m/%Y")} → '
+                            f'{dte.fecha_emision.strftime("%d/%m/%Y")}. '
+                            'Los teóricos guardados del arqueo pueden no '
+                            'coincidir con el recálculo en vivo.'
+                        ),
+                        visible_para_cajera=True,
+                    )
+                    arqueos_afectados_info.append({
+                        'id': arq.id,
+                        'fecha': arq.fecha_arqueo.strftime('%Y-%m-%d'),
+                        'estado': arq.estado,
+                    })
 
         return JsonResponse({
             'success': True,
@@ -4989,6 +5101,9 @@ def editar_dte_boleta_papel(request):
                 'tipo_cambiado': cambiar_tipo,
                 'ticket_sincronizado': ticket_sincronizado,
                 'ticket_id': ticket_vinculado.pk if ticket_vinculado else None,
+                'ticket_pagos_sincronizados': ticket_pagos_sincronizados,
+                'ticket_pagos_resync_modo': ticket_pagos_resync_modo,
+                'arqueos_afectados': arqueos_afectados_info,
             }
         })
 
@@ -5730,10 +5845,13 @@ def listar_cuadraturas(request):
     Optimización clave:
     - Paginación server-side (por defecto 20 items / página).
     - Precomputa pagos por (fecha, método) en 2 queries (tickets + DTEs)
-      usando `TruncDate` + `values(...).annotate(Sum)` y luego mapea en memoria.
-      Antes se hacía un query por cada arqueo + un query por cada ticket (N×M).
+      agrupando por `Ticket.fecha` / `Dte.fecha_emision` y mapeando en
+      memoria. Antes se hacía un query por cada arqueo + uno por cada
+      ticket (N×M).
     - `total_depositos` y `cantidad_depositos` se resuelven con `annotate`
       en lugar de properties que gatillan queries.
+    - Los DTE que ya están representados por un ticket (Ticket.folio_dte)
+      se excluyen del agregado de Dte_Detalle_Pago para no doble-contar.
     """
     try:
         from datetime import datetime
@@ -5795,26 +5913,45 @@ def listar_cuadraturas(request):
             })
 
         # --- Pagos de tickets por fecha y método (1 query) ---
-        from datetime import time as dt_time
-        inicio_rango = timezone.make_aware(
-            datetime.combine(fechas_arqueo[0], dt_time.min)
-        )
-        fin_rango = timezone.make_aware(
-            datetime.combine(fechas_arqueo[-1], dt_time.max)
-        )
-
+        #
+        # Importante: agrupar por `ticket__fecha` (DateField) y NO por
+        # `ticket__created_at`. `editar_dte_boleta_papel` sincroniza
+        # `Ticket.fecha` al editar un DTE, pero `created_at` queda con el
+        # valor original; si agrupáramos por `created_at` un cambio de
+        # fecha desde gestión de documentos no se reflejaría en los
+        # teóricos de la tabla.
+        #
+        # También se acota a `estado='PAGADO'`: el modal de Resumen
+        # (`_calcular_cuadratura_data`) y el detalle de arqueo
+        # (`obtener_detalle_arqueo`) usan el mismo filtro, así que incluir
+        # PENDIENTE_PAGO / PARCIALMENTE_PAGADO mostraba efectivo teórico
+        # aquí que no aparecía en las otras vistas.
         pagos_ticket_qs = (
             TicketDetallePago.objects
             .filter(
                 ticket__sucursal_id=sucursal_actual_id,
-                ticket__created_at__gte=inicio_rango,
-                ticket__created_at__lte=fin_rango,
-                ticket__estado__in=['PENDIENTE_PAGO', 'PAGADO', 'PARCIALMENTE_PAGADO'],
+                ticket__fecha__gte=fechas_arqueo[0],
+                ticket__fecha__lte=fechas_arqueo[-1],
+                ticket__estado='PAGADO',
             )
-            .exclude(ticket__estado='ANULADO')
-            .annotate(fecha=TruncDate('ticket__created_at'))
-            .values('fecha', 'metodo_pago')
+            .values('ticket__fecha', 'metodo_pago')
             .annotate(total=Sum('monto'))
+        )
+
+        # Folios de DTE que ya están contados vía ticket (Ticket.folio_dte):
+        # sus pagos se leen desde TicketDetallePago, así que hay que
+        # excluirlos del agregado de Dte_Detalle_Pago para evitar el doble
+        # conteo. Mismo criterio que `_calcular_cuadratura_data`.
+        folios_con_ticket = set(
+            Ticket.objects
+            .filter(
+                sucursal_id=sucursal_actual_id,
+                fecha__gte=fechas_arqueo[0],
+                fecha__lte=fechas_arqueo[-1],
+                folio_dte__isnull=False,
+                estado='PAGADO',
+            )
+            .values_list('folio_dte', flat=True)
         )
 
         # --- Pagos de DTEs por fecha y método (1 query) ---
@@ -5826,6 +5963,7 @@ def listar_cuadraturas(request):
                 dte__fecha_emision__lte=fechas_arqueo[-1],
             )
             .exclude(dte__estado_dte='ANULADO')
+            .exclude(dte__numero_documento__in=folios_con_ticket)
             .values('dte__fecha_emision', 'metodo_pago')
             .annotate(total=Sum('monto'))
         )
@@ -5833,7 +5971,7 @@ def listar_cuadraturas(request):
         # Acumular en diccionarios: { fecha: { 'EFECTIVO': 123, 'TARJETA_DEBITO': 456, ... } }
         pagos_por_fecha: dict = {}
         for row in pagos_ticket_qs:
-            f = row['fecha']
+            f = row['ticket__fecha']
             pagos_por_fecha.setdefault(f, {})
             pagos_por_fecha[f][row['metodo_pago']] = (
                 pagos_por_fecha[f].get(row['metodo_pago'], 0) + (row['total'] or 0)
@@ -5937,168 +6075,37 @@ def obtener_detalle_arqueo(request, arqueo_id):
             arqueo = get_object_or_404(qs, id=arqueo_id, sucursal_id=sucursal_id)
         
         # ========== RECALCULAR VALORES TEÓRICOS EN TIEMPO REAL ==========
-        from datetime import time as dt_time, datetime
-        
+        #
+        # Se delega en `_calcular_cuadratura_data` para que el detalle del
+        # arqueo muestre EXACTAMENTE los mismos totales que el modal
+        # "Resumen de Caja". Antes estaba duplicada la lógica y faltaban
+        # casos (NC en efectivo, tipo_transaccion='DEVOLUCION'), por lo
+        # que el detalle de un arqueo cerrado podía diferir del Resumen
+        # del mismo día.
         fecha_obj = arqueo.fecha_arqueo
         sucursal = arqueo.sucursal
-        
-        # Crear datetime para filtros con timezone aware
-        inicio_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.min))
-        fin_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.max))
-        
-        # Inicializar totales RECALCULADOS
-        total_efectivo_teorico = 0
-        total_tarjeta_debito_teorico = 0
-        total_tarjeta_credito_teorico = 0
-        total_transbank_teorico = 0
-        total_hites_teorico = 0
-        total_falabella_teorico = 0
-        total_paris_teorico = 0
-        total_ripley_teorico = 0
-        total_mercadopago_teorico = 0
-        total_klap_teorico = 0
-        total_venta_internet_teorico = 0
-        total_transferencia_teorico = 0
-        total_credito_trabajador_teorico = 0
-        total_convenio_teorico = 0
-        total_credito_externo_teorico = 0
-        
-        # ========== PROCESAR TICKETS ==========
-        tickets_del_dia = Ticket.objects.filter(
-            sucursal=sucursal,
-            fecha=fecha_obj,
-            estado='PAGADO'
-        ).prefetch_related('pagos')
 
-        for ticket in tickets_del_dia:
-            # Procesar pagos del ticket
-            for pago in ticket.pagos.all():
-                metodo = pago.metodo_pago
-                monto = pago.monto or 0
-                
-                if metodo == 'EFECTIVO':
-                    total_efectivo_teorico += monto
-                elif metodo == 'TARJETA_DEBITO':
-                    total_tarjeta_debito_teorico += monto
-                    total_transbank_teorico += monto
-                elif metodo == 'TARJETA_CREDITO':
-                    # ✅ TARJETA_CREDITO se considera Transbank (datos migrados y genéricos)
-                    total_tarjeta_credito_teorico += monto
-                elif metodo == 'TBK_DEBITO_POS':
-                    # ✅ Transbank POS Débito
-                    total_tarjeta_debito_teorico += monto
-                elif metodo == 'TBK_CREDITO_POS':
-                    # ✅ Transbank POS Crédito
-                    total_tarjeta_credito_teorico += monto
-                elif metodo == 'TBK_PREPAGO_POS':
-                    # ✅ Transbank POS Prepago (va a débito por convención)
-                    total_tarjeta_debito_teorico += monto
-                    total_transbank_teorico += monto
-                elif metodo == 'TBK_POS_INTEGRADO' or metodo == 'TBK_MANUAL':
-                    total_transbank_teorico += monto
-                elif metodo == 'TRANSFERENCIA':
-                    total_transferencia_teorico += monto
-                elif metodo == 'CREDITO_TRABAJADOR':
-                    total_credito_trabajador_teorico += monto
-                elif metodo == 'CONVENIO':
-                    total_convenio_teorico += monto
-                elif metodo == 'CREDITO_EXTERNO':
-                    total_credito_externo_teorico += monto
-                elif metodo == 'TARJETA_COMERCIAL':
-                    total_hites_teorico += monto
-                elif metodo == 'VENTA_INTERNET':
-                    total_venta_internet_teorico += monto
-                    total_mercadopago_teorico += monto
-        
-        # ========== PROCESAR DTEs (FACTURAS/BOLETAS ELECTRÓNICAS) ==========
-        # Evitar doble conteo de DTEs que ya tienen ticket asociado
-        folios_tickets = Ticket.objects.filter(
-            sucursal=sucursal,
-            fecha=fecha_obj,
-            folio_dte__isnull=False
-        ).values_list('folio_dte', flat=True)
-        
-        dtes_del_dia = Dte.objects.filter(
-            sucursal=sucursal,
-            fecha_emision=fecha_obj,
-            estado_dte__in=['EMITIDO', 'ACEPTADO'],
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
-        ).prefetch_related('dte_asociado')
+        cuadratura = _calcular_cuadratura_data(
+            sucursal, fecha_obj.strftime('%Y-%m-%d')
+        )
 
-        for dte in dtes_del_dia:
-            # Omitir pagos si el DTE ya fue contado por ticket asociado
-            if dte.numero_documento in folios_tickets:
-                continue
-            
-            # Procesar pagos del DTE
-            for pago in dte.dte_asociado.all():
-                metodo = pago.metodo_pago or ''
-                tipo_tarjeta = pago.tipo_tarjeta or ''
-                monto = pago.monto or 0
-                
-                metodo_upper = metodo.upper()
-                tarjeta_upper = tipo_tarjeta.upper()
-                
-                # Efectivo
-                if metodo_upper == 'EFECTIVO' or 'EFECTIVO' in metodo_upper:
-                    total_efectivo_teorico += monto
-                
-                # Transbank Débito (solo por método, tipo_tarjeta no importa)
-                elif metodo_upper in ['TBK_DEBITO_POS', 'TARJETA_DEBITO']:
-                    total_tarjeta_debito_teorico += monto
-                    total_transbank_teorico += monto
-                
-                # Transbank Crédito (solo por método, tipo_tarjeta no importa)
-                elif metodo_upper in ['TBK_CREDITO_POS', 'TARJETA_CREDITO']:
-                    total_tarjeta_credito_teorico += monto
-                    total_transbank_teorico += monto
-                
-                # Transbank Prepago
-                elif metodo_upper == 'TBK_PREPAGO_POS':
-                    total_tarjeta_debito_teorico += monto
-                    total_transbank_teorico += monto
-                
-                # Transbank genérico
-                elif metodo_upper in ['TBK_POS_INTEGRADO', 'TBK_MANUAL']:
-                    total_transbank_teorico += monto
-                
-                # Transferencia
-                elif 'TRANSFERENCIA' in metodo_upper:
-                    total_transferencia_teorico += monto
-                
-                # Convenio
-                elif 'CONVENIO' in metodo_upper:
-                    total_convenio_teorico += monto
-                
-                # Crédito externo
-                elif 'CREDITO_EXTERNO' in metodo_upper or 'CREDITO EXTERNO' in metodo_upper:
-                    total_credito_externo_teorico += monto
-                
-                # Crédito trabajador
-                elif metodo_upper == 'CREDITO_TRABAJADOR':
-                    total_credito_trabajador_teorico += monto
-                
-                # Tarjeta Comercial: solo Hites
-                elif metodo_upper == 'TARJETA_COMERCIAL' or 'HITES' in tarjeta_upper:
-                    total_hites_teorico += monto
-                
-                # Venta Internet: Falabella, Paris, Ripley, MercadoPago, Klap
-                elif metodo_upper == 'VENTA_INTERNET' or 'INTERNET' in metodo_upper:
-                    total_venta_internet_teorico += monto
-                    if 'FALABELLA' in tarjeta_upper:
-                        total_falabella_teorico += monto
-                    elif 'PARIS' in tarjeta_upper:
-                        total_paris_teorico += monto
-                    elif 'RIPLEY' in tarjeta_upper:
-                        total_ripley_teorico += monto
-                    elif 'MERCADO' in tarjeta_upper:
-                        total_mercadopago_teorico += monto
-                    elif 'KLAP' in tarjeta_upper:
-                        total_klap_teorico += monto
-        
-        # ========== CALCULAR TOTALES ==========
-        total_tarjetas_comerciales_teorico = total_hites_teorico
-        
+        total_efectivo_teorico = cuadratura['total_efectivo']
+        total_tarjeta_debito_teorico = cuadratura['total_tarjeta_debito']
+        total_tarjeta_credito_teorico = cuadratura['total_tarjeta_credito']
+        total_transbank_teorico = cuadratura['total_transbank']
+        total_hites_teorico = cuadratura['total_hites']
+        total_falabella_teorico = cuadratura['total_falabella']
+        total_paris_teorico = cuadratura['total_paris']
+        total_ripley_teorico = cuadratura['total_ripley']
+        total_mercadopago_teorico = cuadratura['total_mercadopago']
+        total_klap_teorico = cuadratura['total_klap']
+        total_venta_internet_teorico = cuadratura['total_venta_internet']
+        total_transferencia_teorico = cuadratura['total_transferencia']
+        total_credito_trabajador_teorico = cuadratura['total_credito_trabajador']
+        total_convenio_teorico = cuadratura['total_convenio']
+        total_credito_externo_teorico = cuadratura['total_credito_externo']
+        total_tarjetas_comerciales_teorico = cuadratura['total_tarjetas_comerciales']
+
         # Calcular diferencias ACTUALIZADAS
         diferencia_efectivo = arqueo.total_efectivo_fisico - total_efectivo_teorico
         diferencia_transbank = arqueo.cierre_pos_fisico - total_transbank_teorico
@@ -6126,11 +6133,10 @@ def obtener_detalle_arqueo(request, arqueo_id):
                 'fecha_registro': deposito.fecha_registro.strftime('%d/%m/%Y %H:%M') if deposito.fecha_registro else ''
             })
         
-        # Calcular venta total
-        venta_total = (total_efectivo_teorico + total_transbank_teorico +
-                      total_tarjetas_comerciales_teorico + total_venta_internet_teorico +
-                      total_transferencia_teorico + total_credito_trabajador_teorico +
-                      total_convenio_teorico + total_credito_externo_teorico)
+        # Venta total: usar el valor calculado por `_calcular_cuadratura_data`
+        # (ventas netas = boletas + facturas - notas de crédito). Es el
+        # mismo número que se muestra en el modal "Resumen de Caja".
+        venta_total = cuadratura['venta_total']
         
         arqueo_data = {
             'id': arqueo.id,

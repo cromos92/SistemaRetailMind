@@ -78,21 +78,43 @@ async function autoconectarPOS() {
 
 /**
  * Auto-conectar silencioso (sin solicitar permisos)
- * Solo intenta con puertos ya autorizados, nunca abre diálogo
+ * Solo intenta con puertos ya autorizados, nunca abre diálogo.
+ *
+ * Estrategia en dos pasos:
+ *  1. Prueba el baudrate por defecto (115200) — cubre Ingenico y DESK 3200
+ *     que conectan en <1s; el usuario no percibe ningún cambio.
+ *  2. Si falla, prueba el resto de baudrates (9600/19200/38400/57600) —
+ *     necesario para Verifone VX 520 que puede estar configurado en otra
+ *     velocidad. Ingenico/DESK 3200 nunca caen a este paso porque ya
+ *     conectaron en el intento 1.
  */
 async function autoconectarPOSPre() {
     try {
-        // Solo intentar si hay puertos previamente autorizados
         const puertos = await navigator.serial.getPorts();
         if (puertos.length === 0) {
             console.log('ℹ️ Sin puertos autorizados, esperando conexión manual');
             return { success: false, error: 'Sin puertos autorizados' };
         }
 
-        const resultado = await Transbank.POS.autoConnect(false);
-        if (resultado.success) {
+        let resultado;
+        try {
+            resultado = await Transbank.POS.autoConnect(false);
+        } catch (e1) {
+            console.log('ℹ️ 115200 falló, probando otros baudrates…', e1.message);
+            try {
+                resultado = await Transbank.POS.autoConnect(true);
+            } catch (e2) {
+                console.log('ℹ️ Auto-conexión silenciosa no disponible:', e2.message);
+                return { success: false, error: e2.message };
+            }
+        }
+
+        if (resultado && resultado.success) {
             actualizarEstadoPOS(true, resultado.port, resultado.deviceType);
-            console.log('✅ POS auto-conectado silenciosamente');
+            console.log(
+                `✅ POS auto-conectado silenciosamente @ ${resultado.baudrate || '?'} bps` +
+                (resultado.deviceType ? ` (${resultado.deviceType})` : '')
+            );
         }
         return resultado;
     } catch (error) {

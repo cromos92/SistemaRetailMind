@@ -4372,8 +4372,15 @@ function showError(msg) {
     
      $(document).on('click', '.abrir-crear-producto', function () {
         const id = $(this).data('id');
-        const sucursalId = $(this).data('sucursal-id');
-        const sucursalNombre = $(this).data('sucursal-nombre');
+        // Usamos .attr() (no .data()) para evitar el parsing automático de
+        // jQuery (que puede devolver "" o number según el valor). El atributo
+        // siempre es string plano y lo normalizamos nosotros.
+        const sucursalIdAttr = $(this).attr('data-sucursal-id');
+        const sucursalNombre = $(this).attr('data-sucursal-nombre');
+        const sucursalId = (sucursalIdAttr !== undefined && sucursalIdAttr !== '' && sucursalIdAttr !== 'null')
+            ? sucursalIdAttr
+            : null;
+        console.log('[CrearProducto] click → producto_id=%s, sucursal_id=%s, sucursal=%s', id, sucursalId, sucursalNombre);
         abrirModalCrearProducto(id, sucursalId, sucursalNombre);
     });
 
@@ -4474,8 +4481,11 @@ function showError(msg) {
 
     $(document).on('click', '.abrir-crear-producto', function () {
         const id = $(this).data('id');
-        const sucursalId = $(this).data('sucursal-id');
-        const sucursalNombre = $(this).data('sucursal-nombre');
+        const sucursalIdAttr = $(this).attr('data-sucursal-id');
+        const sucursalNombre = $(this).attr('data-sucursal-nombre');
+        const sucursalId = (sucursalIdAttr !== undefined && sucursalIdAttr !== '' && sucursalIdAttr !== 'null')
+            ? sucursalIdAttr
+            : null;
         abrirModalCrearProducto(id, sucursalId, sucursalNombre);
     });
     const ID_ATRIBUTO_MARCA = parseInt("{{ id_atributo_marca|default:0 }}");
@@ -4644,7 +4654,10 @@ function showError(msg) {
             ? `?sucursal_id=${encodeURIComponent(sucursalDestinoId)}`
             : '';
 
-        $.get(`/app/detalle_producto_para_crear/${productoId}/${qs}`, function (data) {
+        const urlDetalle = `/app/detalle_producto_para_crear/${productoId}/${qs}`;
+        console.log('[CrearProducto] GET ' + urlDetalle);
+
+        $.get(urlDetalle, function (data) {
             const form = $('#formCrearProductoDesdeRecepcion');
 
             // Limpiar el select de guía de talla para evitar llamadas automáticas
