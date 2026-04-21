@@ -1346,6 +1346,26 @@ function obtenerFormatoPrecio(precio) {
     return { alto: 24, ancho: 24, y: 145 };
 }
 
+// Sanea texto para ZPL: escapa caracteres de control (^ ~ \) y remueve
+// caracteres invisibles/no imprimibles que pueden hacer que Zebra Browser Print
+// responda HTTP 500 cuando los textos vienen del catálogo PostgreSQL con
+// tildes, ñ, comillas tipográficas o símbolos raros.
+function sanearZPL(texto) {
+    if (texto === null || texto === undefined) return '';
+    let s = String(texto);
+    // Normalizar comillas/guiones tipográficos que a veces trae Postgres
+    s = s
+        .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+        .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+        .replace(/[\u2013\u2014\u2212]/g, '-')
+        .replace(/\u00A0/g, ' ');
+    // Remover caracteres de control (excepto espacios normales)
+    s = s.replace(/[\x00-\x1F\x7F]/g, '');
+    // Escapar caracteres de control ZPL para que no rompan el parser
+    s = s.replace(/\\/g, ' ').replace(/\^/g, ' ').replace(/~/g, ' ');
+    return s.trim();
+}
+
 function generarZPL(etiquetas) {
     let zpl = '';
     
@@ -1358,12 +1378,40 @@ function generarZPL(etiquetas) {
     const OFFSET_Y = 10;
 
     for (let i = 0; i < etiquetas.length; i += 2) {
-        const e1 = etiquetas[i];      // Etiqueta A (izquierda)
-        const e2 = etiquetas[i + 1];  // Etiqueta B (derecha)
+        const e1Raw = etiquetas[i];      // Etiqueta A (izquierda)
+        const e2Raw = etiquetas[i + 1];  // Etiqueta B (derecha)
+
+        // Saneamos TODOS los campos de texto antes de inyectarlos al ZPL
+        const e1 = e1Raw ? {
+            sucursal: sanearZPL(e1Raw.sucursal),
+            desc: sanearZPL(e1Raw.desc),
+            marca: sanearZPL(e1Raw.marca),
+            sku: sanearZPL(e1Raw.sku),
+            art: sanearZPL(e1Raw.art),
+            precio: sanearZPL(e1Raw.precio),
+            factura: sanearZPL(e1Raw.factura),
+            talla: sanearZPL(e1Raw.talla),
+            color: sanearZPL(e1Raw.color),
+            fecha: sanearZPL(e1Raw.fecha)
+        } : null;
+        const e2 = e2Raw ? {
+            sucursal: sanearZPL(e2Raw.sucursal),
+            desc: sanearZPL(e2Raw.desc),
+            marca: sanearZPL(e2Raw.marca),
+            sku: sanearZPL(e2Raw.sku),
+            art: sanearZPL(e2Raw.art),
+            precio: sanearZPL(e2Raw.precio),
+            factura: sanearZPL(e2Raw.factura),
+            talla: sanearZPL(e2Raw.talla),
+            color: sanearZPL(e2Raw.color),
+            fecha: sanearZPL(e2Raw.fecha)
+        } : null;
+
         const precioFmtA = obtenerFormatoPrecio(e1?.precio);
         const precioFmtB = e2 ? obtenerFormatoPrecio(e2?.precio) : null;
 
         zpl += '^XA\n';
+        zpl += '^CI28\n';   // Habilitar UTF-8 (soporta tildes, ñ y caracteres Unicode)
         zpl += '^PW856\n';  // Ancho total: 10.7cm = 856 dots
         zpl += '^LL240\n';  // Alto: 3cm = 240 dots
 
