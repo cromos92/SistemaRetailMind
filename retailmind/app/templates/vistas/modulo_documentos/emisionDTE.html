@@ -224,6 +224,43 @@
 /* Estilos para modal de resumen de despacho */
 .swal-wide {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    max-height: 95vh;
+    display: grid !important;
+    grid-template-rows: auto 1fr auto;
+    overflow: hidden;
+}
+
+.swal-wide .swal2-html-container {
+    max-height: calc(95vh - 180px);
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-right: 8px;
+}
+
+.swal-wide .swal2-html-container::-webkit-scrollbar {
+    width: 10px;
+}
+
+.swal-wide .swal2-html-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.swal-wide .swal2-html-container::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+.swal-wide .swal2-html-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+@media (max-height: 700px) {
+    .swal-wide .swal2-html-container {
+        max-height: calc(95vh - 150px);
+    }
 }
 
 .resumen-despacho .card {
@@ -4784,6 +4821,8 @@ function emitirDTE() {
         cancelButtonText: '<i class="bi bi-x-circle me-2"></i>Cancelar',
         confirmButtonColor: '#28a745',
         cancelButtonColor: '#6c757d',
+        heightAuto: false,
+        scrollbarPadding: false,
         customClass: {
             popup: 'swal-wide',
             confirmButton: 'btn-lg',

@@ -404,9 +404,18 @@
 
         /**
          * Leer respuesta del POS (usa buffer compartido para no perder bytes entre llamadas)
+         *
+         * El POS puede enviar mensajes intermedios (functionCode 0900) durante operaciones
+         * largas como impresión, cierre de día o carga de llaves. Por defecto se descartan
+         * en forma transparente y se sigue esperando la trama final — así lo hace también
+         * el SDK oficial de Transbank (ver PosBase.js de transbank-pos-sdk-nodejs).
+         *
          * @param {number} customTimeout - Timeout personalizado (opcional)
+         * @param {object}  [options] - { onIntermediate: fn, skipIntermediate: true }
          */
-        async readResponse(customTimeout = null) {
+        async readResponse(customTimeout = null, options = {}) {
+            const { onIntermediate = null, skipIntermediate = true } = options;
+
             return new Promise((resolve, reject) => {
                 let timeout;
                 const timeoutMs = customTimeout || this.timeout;
@@ -446,7 +455,29 @@
                             const response = decoder.decode(new Uint8Array(data));
                             console.log(`📥 Respuesta: ${response}`);
 
+                            // ACK obligatorio por protocolo: el POS espera ACK tras cada trama,
+                            // incluyendo los mensajes intermedios 0900. Si no lo enviamos, el POS
+                            // puede quedarse esperando y no mandar la trama final.
                             this.sendAck().catch(err => console.warn('Error enviando ACK:', err));
+
+                            // Mensaje intermedio (estado): 0900|<codigo>|
+                            // El POS lo emite mientras imprime / procesa. No es la respuesta
+                            // final y debemos seguir leyendo.
+                            if (skipIntermediate && /^0900\|/.test(response)) {
+                                const parts = response.split('|');
+                                const code = parseInt(parts[1]);
+                                console.log(`⏳ POS estado intermedio (0900): ${RESPONSE_CODES[code] || code}`);
+                                if (typeof onIntermediate === 'function') {
+                                    try {
+                                        onIntermediate({
+                                            responseCode: code,
+                                            responseMessage: RESPONSE_CODES[code] || `Código ${parts[1]}`
+                                        });
+                                    } catch (e) { /* callback del usuario no debe romper la lectura */ }
+                                }
+                                return false; // seguir leyendo hasta recibir trama final
+                            }
+
                             settle(resolve, { type: 'DATA', data: response });
                             return true;
                         }
@@ -716,17 +747,20 @@
                     throw new Error('No se recibió ACK del POS');
                 }
 
-                // 2. Esperar datos
-                const response = await this.readResponse(15000);
+                // 2. Esperar datos (30s — el POS puede imprimir el resumen antes de responder;
+                // los 0900 intermedios se descartan automáticamente en readResponse)
+                const response = await this.readResponse(30000);
 
                 if (response.type === 'DATA') {
                     const parts = response.data.split('|');
+                    const responseCode = parseInt(parts[1]);
                     return {
                         functionCode: parseInt(parts[0]),
-                        responseCode: parseInt(parts[1]),
-                        txCount: parseInt(parts[2]),
-                        txTotal: parseInt(parts[3]),
-                        successful: parseInt(parts[1]) === 0
+                        responseCode: responseCode,
+                        txCount: parseInt(parts[2]) || 0,
+                        txTotal: parseInt(parts[3]) || 0,
+                        successful: responseCode === 0,
+                        responseMessage: RESPONSE_CODES[responseCode] || `Código ${parts[1]}`
                     };
                 }
                 throw new Error('Respuesta inválida');
@@ -742,40 +776,43 @@
         async closeDay() {
             try {
                 console.log('🔒 Ejecutando cierre de día...');
-                
+
                 // Construir y enviar comando manualmente
                 const command = '0500||';
                 const encoder = new TextEncoder();
                 const commandBytes = encoder.encode(command);
-                
+
                 let lrc = 0;
                 for (let byte of commandBytes) {
                     lrc ^= byte;
                 }
                 lrc ^= ETX;
-                
+
                 const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
                 console.log(`📤 Enviando: ${command}`);
                 await this.writer.write(frame);
-                
+
                 // 1. Esperar ACK
                 const ack = await this.readResponse(10000);
                 if (ack.type !== 'ACK') {
                     throw new Error('No se recibió ACK del POS');
                 }
-                console.log('⏳ POS procesando cierre (puede tardar 30-60 segundos)...');
-                
-                // 2. Esperar datos (60 segundos)
-                const response = await this.readResponse(60000);
-                
+                console.log('⏳ POS procesando cierre (puede tardar 60-120 segundos mientras imprime)...');
+
+                // 2. Esperar trama final 0500 (hasta 120s). El POS envía varios 0900
+                // "imprimiendo…" que readResponse descarta automáticamente.
+                const response = await this.readResponse(120000);
+
                 if (response.type === 'DATA') {
                     const parts = response.data.split('|');
+                    const responseCode = parseInt(parts[1]);
                     return {
                         functionCode: parseInt(parts[0]),
-                        responseCode: parseInt(parts[1]),
-                        commerceCode: parts[2],
-                        terminalId: parts[3],
-                        successful: parseInt(parts[1]) === 0
+                        responseCode: responseCode,
+                        commerceCode: parts[2] || '',
+                        terminalId: parts[3] || '',
+                        successful: responseCode === 0,
+                        responseMessage: RESPONSE_CODES[responseCode] || `Código ${parts[1]}`
                     };
                 }
                 throw new Error('Respuesta inválida');
@@ -840,13 +877,23 @@
         
         /**
          * Obtener detalle de ventas del día
-         * El POS envía múltiples tramas 0261 (una por transacción) y cierra con 0260.
-         * @param {boolean} printOnPOS - Si debe imprimir en el POS (0=no, 1=sí)
+         *
+         * Protocolo Transbank POS Integrado — comando 0260|<print>|
+         *   print = "0" → el POS imprime el detalle; no manda tramas de detalle por serial
+         *                 (solo ACK + eventuales 0900 "imprimiendo" + 0260 resumen final).
+         *   print = "1" → el POS NO imprime; envía múltiples 0261 (uno por venta) y
+         *                 termina con un 0261 "vacío" (authorizationCode vacío) como
+         *                 marcador de fin de stream (así funciona el SDK oficial).
+         *
+         * @param {boolean} printOnPOS - true = imprimir en el POS, false = solo consultar
          */
         async getSalesDetail(printOnPOS = false) {
             try {
                 console.log('📋 Obteniendo detalle de ventas...');
-                const print = printOnPOS ? '1' : '0';
+                // IMPORTANTE: el flag se envía "invertido" respecto al nombre del parámetro,
+                // pero esto es lo que exige el protocolo (ver SDK oficial Node:
+                // src/PosIntegrado.js: `let print = printOnPos ? "0" : "1"`).
+                const print = printOnPOS ? '0' : '1';
                 const command = `0260|${print}|`;
                 const encoder = new TextEncoder();
                 const commandBytes = encoder.encode(command);
@@ -858,7 +905,7 @@
                 lrc ^= ETX;
 
                 const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
-                console.log(`📤 Enviando: ${command}`);
+                console.log(`📤 Enviando: ${command} (printOnPOS=${printOnPOS})`);
                 await this.writer.write(frame);
 
                 // 1. Esperar ACK (10s)
@@ -867,38 +914,94 @@
                     throw new Error('No se recibió ACK del POS');
                 }
 
-                // 2. Leer tramas: pueden ser múltiples 0261 (detalle) + una 0260 (resumen)
                 const transactions = [];
-                const perFrameTimeout = printOnPOS ? 30000 : 15000;
-                const maxFrames = 200;
 
+                // --- Modo IMPRIMIR EN POS ---
+                // El POS imprime físicamente. Puede tardar y no devolver tramas de detalle.
+                // Esperamos hasta 60s una trama final (0260) para confirmar, o bien damos
+                // el comando por exitoso si no llega nada adicional (timeout "suave").
+                if (printOnPOS) {
+                    console.log('🖨️ POS imprimiendo detalle de ventas… esperando confirmación');
+                    try {
+                        const response = await this.readResponse(60000);
+                        if (response.type === 'DATA') {
+                            const parts = response.data.split('|');
+                            const funcCode = parseInt(parts[0]);
+                            const responseCode = parseInt(parts[1]) || 0;
+                            return {
+                                functionCode: funcCode,
+                                responseCode: responseCode,
+                                txCount: parseInt(parts[2]) || 0,
+                                txTotal: parseInt(parts[3]) || 0,
+                                successful: responseCode === 0,
+                                responseMessage: RESPONSE_CODES[responseCode] || 'IMPRESO EN POS',
+                                printedOnPOS: true,
+                                transactions: transactions
+                            };
+                        }
+                    } catch (e) {
+                        // Muchos POS no emiten trama final tras imprimir; si sólo vimos ACK
+                        // (y descartamos 0900 intermedios) consideramos el comando ejecutado.
+                        console.log('ℹ️ Sin trama final tras impresión; se considera ejecutado.');
+                    }
+                    return {
+                        functionCode: 260,
+                        responseCode: 0,
+                        txCount: 0,
+                        txTotal: 0,
+                        successful: true,
+                        responseMessage: 'IMPRESO EN POS',
+                        printedOnPOS: true,
+                        transactions: transactions
+                    };
+                }
+
+                // --- Modo SOLO CONSULTAR (streaming 0261) ---
+                const maxFrames = 500;
                 for (let i = 0; i < maxFrames; i++) {
-                    const response = await this.readResponse(perFrameTimeout);
+                    let response;
+                    try {
+                        response = await this.readResponse(30000);
+                    } catch (e) {
+                        // Timeout entre tramas: asumimos fin si ya recibimos al menos una.
+                        if (transactions.length > 0) {
+                            console.warn('⚠️ Timeout leyendo siguiente trama; retornando lo acumulado.');
+                            break;
+                        }
+                        throw e;
+                    }
                     if (response.type !== 'DATA') break;
 
                     const parts = response.data.split('|');
                     const funcCode = parseInt(parts[0]);
 
                     if (funcCode === 261) {
-                        // Trama de detalle individual
-                        transactions.push(this.parseSaleResponse(response.data));
+                        const parsed = this.parseSaleResponse(response.data);
+                        const authCode = (parsed.authorizationCode || '').trim();
+                        // Marcador de fin de stream: 0261 con authorizationCode vacío
+                        if (!authCode) {
+                            console.log('🏁 Fin de stream de detalle (trama 0261 vacía)');
+                            break;
+                        }
+                        transactions.push(parsed);
                         console.log(`   📄 Transacción ${transactions.length} recibida`);
                         continue;
                     }
 
-                    // Trama de resumen (0260) o cualquier otra → fin
+                    // Trama 0260 de resumen (algunos POS la envían al final)
+                    const responseCode = parseInt(parts[1]) || 0;
                     return {
                         functionCode: funcCode,
-                        responseCode: parseInt(parts[1]),
+                        responseCode: responseCode,
                         txCount: parseInt(parts[2]) || transactions.length,
-                        txTotal: parseInt(parts[3]) || 0,
-                        successful: parseInt(parts[1]) === 0,
-                        responseMessage: RESPONSE_CODES[parseInt(parts[1])] || `Código ${parts[1]}`,
+                        txTotal: parseInt(parts[3]) || transactions.reduce((s, t) => s + (t.amount || 0), 0),
+                        successful: responseCode === 0,
+                        responseMessage: RESPONSE_CODES[responseCode] || `Código ${parts[1]}`,
+                        printedOnPOS: false,
                         transactions: transactions
                     };
                 }
 
-                // Si solo hubo tramas 0261 sin resumen final
                 return {
                     functionCode: 260,
                     responseCode: 0,
@@ -906,6 +1009,7 @@
                     txTotal: transactions.reduce((s, t) => s + (t.amount || 0), 0),
                     successful: true,
                     responseMessage: 'APROBADA',
+                    printedOnPOS: false,
                     transactions: transactions
                 };
             } catch (error) {

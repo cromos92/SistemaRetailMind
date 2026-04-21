@@ -526,19 +526,21 @@ async function consultarTotales() {
         const resultado = await Transbank.POS.getTotals();
         hideLoading();
         marcarPasoCierreCompletado('totales');
+        const txCount = Number.isFinite(resultado.txCount) ? resultado.txCount : 0;
+        const txTotal = Number.isFinite(resultado.txTotal) ? resultado.txTotal : 0;
         Swal.fire({
             icon: 'info',
             title: 'Totales del Día',
             html: `
                 <div class="text-start">
-                    <strong>Transacciones:</strong> ${resultado.txCount}<br>
-                    <strong>Total:</strong> $${resultado.txTotal.toLocaleString()}
+                    <strong>Transacciones:</strong> ${txCount}<br>
+                    <strong>Total:</strong> $${txTotal.toLocaleString()}
                 </div>
             `
         });
     } catch (error) {
         hideLoading();
-        showError('Error: ' + error.message);
+        await manejarErrorConsultaPOS('totales', 'Totales del Día', error);
     }
 }
 
@@ -554,15 +556,64 @@ async function cerrarDia() {
             confirmButtonText: 'Sí, cerrar',
             cancelButtonText: 'Cancelar'
         });
-        if (confirm.isConfirmed) {
-            showLoading('Ejecutando cierre de día...');
+        if (!confirm.isConfirmed) return;
+
+        showLoading('Ejecutando cierre de día... (puede tardar hasta 2 min)');
+        try {
             const resultado = await Transbank.POS.closeDay();
             hideLoading();
-            if (resultado.successful) {
+            if (resultado && resultado.successful) {
                 resetearPasosCierreDia();
                 showSuccess('Cierre de día completado');
             } else {
-                showError('Error en cierre de día');
+                const msg = resultado && resultado.responseMessage
+                    ? resultado.responseMessage
+                    : 'Respuesta no reconocida';
+                const code = resultado ? resultado.responseCode : 's/d';
+                // El POS pudo haber emitido el comprobante aunque la trama final
+                // de respuesta no llegara limpia. Damos opción de confirmar manual.
+                const confirmarManual = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Cierre reportó error',
+                    html: `
+                        <p class="text-start mb-2">El POS respondió con un error:</p>
+                        <pre class="small text-danger text-start mb-2">Código: ${code}\n${msg}</pre>
+                        <p class="text-start mb-0">
+                            Si el POS <strong>imprimió</strong> el comprobante de cierre
+                            correctamente, puede marcarlo como cerrado localmente.
+                        </p>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, el POS imprimió el cierre',
+                    cancelButtonText: 'Revisar',
+                    confirmButtonColor: '#198754'
+                });
+                if (confirmarManual.isConfirmed) {
+                    resetearPasosCierreDia();
+                    showSuccess('Cierre de día marcado como completado');
+                }
+            }
+        } catch (err) {
+            hideLoading();
+            const confirmarManual = await Swal.fire({
+                icon: 'warning',
+                title: 'No se recibió confirmación del POS',
+                html: `
+                    <p class="text-start mb-2">No se pudo leer la respuesta final del POS:</p>
+                    <pre class="small text-danger text-start mb-2" style="white-space:pre-wrap;">${err.message || err}</pre>
+                    <p class="text-start mb-0">
+                        Si el POS <strong>imprimió</strong> el comprobante de cierre,
+                        puede marcarlo como cerrado localmente.
+                    </p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Sí, el POS imprimió el cierre',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#198754'
+            });
+            if (confirmarManual.isConfirmed) {
+                resetearPasosCierreDia();
+                showSuccess('Cierre de día marcado como completado');
             }
         }
     } catch (error) {
@@ -653,7 +704,39 @@ async function consultarDetalleVentas() {
         }
     } catch (error) {
         hideLoading();
-        showError('Error: ' + error.message);
+        await manejarErrorConsultaPOS('detalle', 'Detalle Ventas', error);
+    }
+}
+
+/**
+ * Cuando falla la lectura de Totales o Detalle pero el POS alcanzó a imprimir
+ * el reporte, le damos al operador la opción de marcar el paso como completado
+ * para poder continuar con el Cierre de Día (si no, el botón queda bloqueado y
+ * se traba el flujo).
+ */
+async function manejarErrorConsultaPOS(paso, titulo, error) {
+    const mensaje = (error && error.message) ? error.message : 'Error desconocido';
+    const res = await Swal.fire({
+        icon: 'warning',
+        title: titulo + ' — error de lectura',
+        html: `
+            <p class="text-start mb-2">No se pudo leer la respuesta del POS:</p>
+            <pre class="small text-danger text-start mb-2" style="white-space:pre-wrap;">${mensaje}</pre>
+            <p class="text-start mb-0">
+                ¿El POS <strong>sí imprimió</strong> el reporte en papel?<br>
+                <span class="small text-muted">
+                    Si la impresión salió correctamente, puede marcar este paso como revisado
+                    y continuar con el Cierre de Día.
+                </span>
+            </p>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, el POS imprimió — continuar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#198754'
+    });
+    if (res.isConfirmed) {
+        marcarPasoCierreCompletado(paso);
     }
 }
 

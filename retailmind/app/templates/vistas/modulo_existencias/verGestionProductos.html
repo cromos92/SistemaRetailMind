@@ -4222,16 +4222,35 @@ function showError(msg) {
                     const stockClass = stockTotal === 0 ? 'zero' : stockTotal < 5 ? 'low' : 'ok';
                     const stockPct = Math.min(100, (stockTotal / Math.max(stockTotal, 50)) * 100);
 
+                    // Sucursal destino (cada fila representa una sucursal)
+                    const sucursalIdRow = p.sucursal_destino_id != null ? p.sucursal_destino_id : '';
+                    const sucursalNombreRow = p.sucursal_destino || 'Sin sucursal';
+
                     // Botones de acciones
                     let botonesHtml = '';
                     if (!p.creado) {
                         botonesHtml = `
                             <div class="acciones-cell">
-                                <button class="btn-action crear abrir-crear-producto" data-id="${p.producto_id}" data-tip="Crear producto">
+                                <button class="btn-action crear abrir-crear-producto"
+                                        data-id="${p.producto_id}"
+                                        data-sucursal-id="${sucursalIdRow}"
+                                        data-sucursal-nombre="${sucursalNombreRow}"
+                                        data-tip="Crear producto para ${sucursalNombreRow}">
                                     <i class="bi bi-plus-lg"></i>
                                 </button>
                                 <button class="btn-action editar-rec btn-editar-recepcion" data-id="${p.producto_id}" data-nombre="${p.nombre}" data-tip="Editar recepción">
                                     <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <button class="btn-action eliminar btn-eliminar-recepcion-pendiente"
+                                        data-id="${p.producto_id}"
+                                        data-nombre="${p.nombre || ''}"
+                                        data-compra="${p.compra_nombre || ''}"
+                                        data-stock="${p.stock_total || 0}"
+                                        data-sucursal-id="${sucursalIdRow}"
+                                        data-sucursal-nombre="${sucursalNombreRow}"
+                                        data-tip="Eliminar recepción pendiente"
+                                        style="color:#dc3545;">
+                                    <i class="bi bi-trash3"></i>
                                 </button>
                             </div>`;
                     } else {
@@ -4257,13 +4276,14 @@ function showError(msg) {
                     const marcaPill = p.atributo1 ? `<span class="attr-pill marca"><i class="bi bi-tag-fill"></i>${p.atributo1}</span>` : '';
                     const colorPill = p.atributo2 ? `<span class="attr-pill color"><i class="bi bi-circle-fill" style="font-size:0.5rem;"></i>${p.atributo2}</span>` : '';
                     const generoPill = p.atributo3 ? `<span class="attr-pill genero"><i class="bi bi-person-fill"></i>${p.atributo3}</span>` : '';
+                    const sucursalPill = `<span class="attr-pill sucursal" title="Sucursal destino" style="background:#e8f5e9;color:#1b5e20;border-color:#c8e6c9;"><i class="bi bi-shop"></i>${sucursalNombreRow}</span>`;
 
                     const fila = `
                 <tr>
                     <td class="prod-info-cell">
                         <div class="prod-nombre">${p.nombre}</div>
                         ${p.descripcion ? `<div class="prod-desc" title="${p.descripcion}">${p.descripcion}</div>` : ''}
-                        <div class="prod-atributos">${marcaPill}${colorPill}${generoPill}</div>
+                        <div class="prod-atributos">${marcaPill}${colorPill}${generoPill}${sucursalPill}</div>
                     </td>
                     <td class="text-center">${estado}</td>
                     <td class="text-center">${origenBadge}</td>
@@ -4352,7 +4372,9 @@ function showError(msg) {
     
      $(document).on('click', '.abrir-crear-producto', function () {
         const id = $(this).data('id');
-        abrirModalCrearProducto(id);
+        const sucursalId = $(this).data('sucursal-id');
+        const sucursalNombre = $(this).data('sucursal-nombre');
+        abrirModalCrearProducto(id, sucursalId, sucursalNombre);
     });
 
 
@@ -4452,7 +4474,9 @@ function showError(msg) {
 
     $(document).on('click', '.abrir-crear-producto', function () {
         const id = $(this).data('id');
-        abrirModalCrearProducto(id);
+        const sucursalId = $(this).data('sucursal-id');
+        const sucursalNombre = $(this).data('sucursal-nombre');
+        abrirModalCrearProducto(id, sucursalId, sucursalNombre);
     });
     const ID_ATRIBUTO_MARCA = parseInt("{{ id_atributo_marca|default:0 }}");
     const ID_ATRIBUTO_COLOR = parseInt("{{ id_atributo_color|default:0 }}");
@@ -4527,12 +4551,100 @@ function showError(msg) {
         });
     }
 
-    function abrirModalCrearProducto(productoId) {
-        // Limpiar barra de chips del producto anterior (si había)
-        if (typeof InfoChipsRecepcion !== 'undefined') {
-            InfoChipsRecepcion.clearAll();
+    // ==================================================================
+    // Reset completo del modal "Crear Producto desde Recepción" para que
+    // abrirlo con otro producto sea equivalente a refrescar la página.
+    // Se ejecuta:
+    //   • Al empezar a cargar los datos del siguiente producto.
+    //   • Al cerrar el modal (hidden.bs.modal).
+    // ==================================================================
+    function resetModalCrearProductoRecepcion() {
+        const $form  = $('#formCrearProductoDesdeRecepcion');
+        const $modal = $('#modalCrearProductoDesdeRecepcion');
+        const $tabla = $('#tablaTallasCrearProducto');
+
+        // 1. Cancelar modo distribuir y su toolbar. Luego vaciar la tabla
+        //    para NO dejar visible el tbody del producto anterior mientras
+        //    llega la respuesta AJAX del siguiente.
+        if (typeof DistribuirGuiaAlCrear !== 'undefined') {
+            try { DistribuirGuiaAlCrear.cancelar(); } catch (e) { /* noop */ }
         }
-        $.get(`/app/detalle_producto_para_crear/${productoId}/`, function (data) {
+        $('#toolbarRedistribuir').remove();
+        $tabla.find('tbody').empty().removeData('originalHtml');
+        $tabla
+            .removeData('modo-redistribuir')
+            .removeData('consolidado')
+            .removeData('consolidado-stock')
+            .removeData('consolidado-talla')
+            .removeAttr('data-modo-redistribuir')
+            .removeAttr('data-consolidado')
+            .removeAttr('data-consolidado-stock')
+            .removeAttr('data-consolidado-talla');
+
+        // 2. Banners / notas dinámicas del flujo anterior
+        $('#bannerRedistribuirConsolidado').remove();
+        $('#skuSugeridoInfo').remove();               // se re-agregará con cada producto
+        $('#notaSinGuiaRecepcion').addClass('d-none');
+        $('#avisoPrecioSugerido').addClass('d-none');
+        $('#panelProductoEncontrado').remove();
+        $('#indicadorVerificacion').remove();
+
+        // 3. Inputs ocultos de flags del producto anterior
+        $form.find('input[name="sin_guia"]').remove();
+        $form.find('input[name="redistribuir_desde_consolidado"]').remove();
+        $form.find('input[name="sucursal_destino_id"]').remove();
+
+        // 4. Limpiar validación visual previa y selects2 sueltos
+        $modal.find('.is-invalid').removeClass('is-invalid');
+        $('.select2-container--open').remove();
+
+        // 5. Resetear chips / globals de contexto
+        if (typeof InfoChipsRecepcion !== 'undefined') {
+            try { InfoChipsRecepcion.clearAll(); } catch (e) { /* noop */ }
+        }
+        window._pausaVerificacionRecepcion = false;
+        window.productoExistenteRecepcion  = null;
+        window.tallasExistentesRecepcion   = [];
+        window.edelReferenciaRecepcion     = null;
+        $('#btnTomarReferenciaEDEL').addClass('d-none');
+    }
+
+    function abrirModalCrearProducto(productoId, sucursalDestinoId, sucursalDestinoNombre) {
+        // Reset integral del modal (equivalente a refrescar la página)
+        resetModalCrearProductoRecepcion();
+
+        // Guardar la sucursal destino de la fila que se clickeó. Esta es la
+        // sucursal para la que se crea el producto (no la sucursal activa
+        // del usuario). El backend usa `sucursal_destino_id` para saber
+        // qué recepciones enlazar y bajo qué sucursal crear el Producto.
+        const $form = $('#formCrearProductoDesdeRecepcion');
+        $form.find('input[name="sucursal_destino_id"]').remove();
+        if (sucursalDestinoId !== undefined && sucursalDestinoId !== null && sucursalDestinoId !== '') {
+            $form.append(`<input type="hidden" name="sucursal_destino_id" value="${sucursalDestinoId}">`);
+        }
+
+        // Mostrar chip con la sucursal destino en el header del modal
+        if (typeof InfoChipsRecepcion !== 'undefined' && sucursalDestinoNombre) {
+            try {
+                InfoChipsRecepcion.add({
+                    key: 'sucursal_destino',
+                    icon: 'bi-shop',
+                    label: 'Sucursal destino',
+                    value: sucursalDestinoNombre,
+                    color: '#1b5e20',
+                    bg: '#e8f5e9',
+                });
+            } catch (e) { /* noop si la API de chips no acepta este shape */ }
+        }
+
+        // Pasar sucursal_id al backend para que el detalle (tallas/stock)
+        // traiga SÓLO lo que corresponde a esta sucursal, evitando mezclar
+        // el stock que llegó a otras sucursales.
+        const qs = (sucursalDestinoId !== undefined && sucursalDestinoId !== null && sucursalDestinoId !== '')
+            ? `?sucursal_id=${encodeURIComponent(sucursalDestinoId)}`
+            : '';
+
+        $.get(`/app/detalle_producto_para_crear/${productoId}/${qs}`, function (data) {
             const form = $('#formCrearProductoDesdeRecepcion');
 
             // Limpiar el select de guía de talla para evitar llamadas automáticas
@@ -4961,24 +5073,19 @@ function showError(msg) {
     $('#modalCrearProductoDesdeRecepcion').on('hidden.bs.modal', function() {
         const $modal = $(this);
         const $selects = $modal.find('select');
-        
+
         $selects.each(function() {
             destruirSelect2Seguro($(this));
         });
-        
-        // Limpiar cualquier dropdown huérfano de Select2
-        $('.select2-container--open').remove();
 
-        // Limpiar globals del modal de recepción
-        window._pausaVerificacionRecepcion = false;
-        window.productoExistenteRecepcion = null;
-        window.tallasExistentesRecepcion = [];
-        window.edelReferenciaRecepcion = null;
-        $('#btnTomarReferenciaEDEL').addClass('d-none');
-        $('#avisoPrecioSugerido').addClass('d-none');
-        InfoChipsRecepcion.remove('duplicado');
-        
-        console.log("🧹 Select2 destruidos al cerrar modal de recepción");
+        // Reset integral del modal: asegura que al volver a abrirlo (otro
+        // producto) sea equivalente a refrescar la página — sin residuos
+        // del producto anterior (tallas, banners, flags, etc.).
+        resetModalCrearProductoRecepcion();
+
+        try { InfoChipsRecepcion.remove('duplicado'); } catch (e) { /* noop */ }
+
+        console.log("🧹 Modal de recepción limpiado completamente");
     });
     
     // Reinicializar Select2 cuando el modal se muestra completamente
@@ -7681,9 +7788,16 @@ const DistribuirGuiaAlCrear = {
                 }
             });
 
+            // Pre-calcular lista de tallas válidas para asignar índices de tab correlativos
+            const tallasValidas = items
+                .map(t => (t[tipoTalla] || t.cl || t.us || t.eu || t.uk || t.br || t.cm || '').toString().trim())
+                .filter(Boolean);
+            let __tabIdxRedist = 0;
             items.forEach(t => {
                 const talla = (t[tipoTalla] || t.cl || t.us || t.eu || t.uk || t.br || t.cm || '').toString().trim();
                 if (!talla) return;
+                __tabIdxRedist++;
+                const tabIdx = 200 + __tabIdxRedist;
 
                 const existente = tallasExistMap[talla];
                 let skuHtml, skuInputVal;
@@ -7718,7 +7832,18 @@ const DistribuirGuiaAlCrear = {
                     <tr>
                         <td><span class="badge bg-secondary">${talla}</span></td>
                         <td>
-                            <input type="number" min="0" class="form-control form-control-sm stock-redistribuir text-end" name="stock_${talla}" value="0" data-talla="${talla}" data-es-existente="${existente ? '1' : '0'}">
+                            <input type="number"
+                                   min="0"
+                                   class="form-control form-control-sm stock-redistribuir text-end"
+                                   name="stock_${talla}"
+                                   value="0"
+                                   inputmode="numeric"
+                                   autocomplete="off"
+                                   tabindex="${tabIdx}"
+                                   data-idx="${__tabIdxRedist}"
+                                   data-talla="${talla}"
+                                   data-es-existente="${existente ? '1' : '0'}"
+                                   title="Tab / Enter / ↓ = siguiente · ↑ = anterior">
                         </td>
                         <td>
                             ${skuHtml}
@@ -7738,10 +7863,15 @@ const DistribuirGuiaAlCrear = {
                 $tabla.before(`
                     <div id="toolbarRedistribuir" class="d-flex align-items-center gap-2 flex-wrap mb-2 p-2 bg-light border rounded">
                         <span class="badge bg-warning text-dark"><i class="bi bi-lightning me-1"></i>Modo distribuir</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRedistEquitativo"><i class="bi bi-arrow-left-right me-1"></i>Equitativo</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRedistEquitativo" title="Reparte el total equitativamente entre todas las tallas"><i class="bi bi-arrow-left-right me-1"></i>Equitativo</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnRedistCompletarResto" title="Coloca el stock faltante en la fila actualmente enfocada"><i class="bi bi-plus-slash-minus me-1"></i>Completar resto</button>
                         <button type="button" class="btn btn-sm btn-outline-danger" id="btnRedistLimpiar"><i class="bi bi-eraser me-1"></i>Limpiar</button>
                         <button type="button" class="btn btn-sm btn-outline-dark" id="btnRedistCancelar"><i class="bi bi-arrow-counterclockwise me-1"></i>Volver a talla 00</button>
                         <div class="ms-auto d-flex align-items-center gap-2">
+                            <small class="text-muted d-none d-md-inline" style="font-size:.7rem;">
+                                <kbd style="font-size:.65rem;">Tab</kbd>/<kbd style="font-size:.65rem;">Enter</kbd> siguiente ·
+                                <kbd style="font-size:.65rem;">↑</kbd>/<kbd style="font-size:.65rem;">↓</kbd> mover
+                            </small>
                             <small class="text-muted">Asignado:</small>
                             <span class="badge" id="badgeRedistSuma" style="font-size:.85rem;">0 / ${total.toLocaleString()}</span>
                         </div>
@@ -7756,6 +7886,18 @@ const DistribuirGuiaAlCrear = {
             }
 
             DistribuirGuiaAlCrear.actualizarSuma();
+
+            // Enfocar la primera fila de stock para permitir ingreso inmediato
+            // por teclado sin necesidad de clic. Seleccionamos el contenido
+            // para que escribir el primer dígito reemplace el 0 inicial.
+            setTimeout(() => {
+                const $first = tbody.find('.stock-redistribuir').first();
+                if ($first.length) {
+                    $first.focus();
+                    try { $first[0].select(); } catch (e) { /* noop */ }
+                }
+            }, 120);
+
             // Volver a verificar existencia del producto para que las
             // tallas que YA estén en el producto (si coinciden con la guía)
             // reutilicen su SKU, y las demás se generen nuevas.
@@ -7828,14 +7970,107 @@ const DistribuirGuiaAlCrear = {
             }
         });
         DistribuirGuiaAlCrear.actualizarSuma();
+        // Tras repartir equitativamente, reenfocar la primera fila por si el
+        // usuario quiere ajustar valores manualmente de inmediato.
+        setTimeout(() => {
+            const $first = $('.stock-redistribuir').first();
+            if ($first.length) { $first.focus(); try { $first[0].select(); } catch(e){} }
+        }, 50);
+    },
+
+    // Coloca el stock que falta para completar el total en la fila actualmente
+    // enfocada (o, si no hay ninguna enfocada, en la primera fila vacía).
+    completarRestoEnFoco: function($target) {
+        const total = parseInt($('#tablaTallasCrearProducto').data('consolidado-stock') || 0, 10);
+        if (total <= 0) return;
+        let suma = 0;
+        $('.stock-redistribuir').each(function() {
+            suma += parseInt($(this).val()) || 0;
+        });
+        const falta = total - suma;
+        if (falta <= 0) {
+            Swal.fire({ icon: 'info', title: 'Total ya asignado', timer: 1600, showConfirmButton: false });
+            return;
+        }
+        let $dest = ($target && $target.length) ? $target : $(document.activeElement);
+        if (!$dest.hasClass('stock-redistribuir')) {
+            // Buscar primera fila vacía
+            $dest = $('.stock-redistribuir').filter(function() {
+                return (parseInt($(this).val()) || 0) === 0;
+            }).first();
+            if (!$dest.length) $dest = $('.stock-redistribuir').first();
+        }
+        const actual = parseInt($dest.val()) || 0;
+        $dest.val(actual + falta);
+        DistribuirGuiaAlCrear.actualizarSuma();
+        $dest.focus();
+        try { $dest[0].select(); } catch(e){}
+        // Refrescar display SKU si es talla nueva
+        if ($dest.data('es-existente') != '1') {
+            const skuInput = $dest.closest('tr').find('.sku-generado');
+            const skuVal = skuInput.val();
+            if (skuVal) {
+                const tieneStock = (parseInt($dest.val()) || 0) > 0;
+                actualizarSkuDisplay(skuInput, skuVal, tieneStock ? 'sugerido' : 'pendiente_sin_stock');
+            }
+        }
     }
 };
 
 // Listeners del modo redistribuir
 $(document).on('click', '#btnDistribuirEnGuia', function() { DistribuirGuiaAlCrear.abrir(); });
 $(document).on('click', '#btnRedistEquitativo', function() { DistribuirGuiaAlCrear.equitativo(); });
-$(document).on('click', '#btnRedistLimpiar', function() { $('.stock-redistribuir').val(0); DistribuirGuiaAlCrear.actualizarSuma(); });
+$(document).on('click', '#btnRedistCompletarResto', function() { DistribuirGuiaAlCrear.completarRestoEnFoco(); });
+$(document).on('click', '#btnRedistLimpiar', function() {
+    $('.stock-redistribuir').val(0);
+    DistribuirGuiaAlCrear.actualizarSuma();
+    setTimeout(() => {
+        const $first = $('.stock-redistribuir').first();
+        if ($first.length) { $first.focus(); try { $first[0].select(); } catch(e){} }
+    }, 30);
+});
 $(document).on('click', '#btnRedistCancelar', function() { DistribuirGuiaAlCrear.cancelar(); });
+
+// ✅ Navegación rápida por teclado en modo distribuir:
+//   - Enter / ArrowDown  → siguiente fila
+//   - ArrowUp            → fila anterior
+//   - En la última fila, Enter enfoca el botón "Crear Producto"
+$(document).on('keydown', '.stock-redistribuir', function(e) {
+    const $rows = $('.stock-redistribuir');
+    const idx = $rows.index(this);
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const $next = $rows.eq(idx + 1);
+        if ($next.length) {
+            $next.focus();
+            try { $next[0].select(); } catch(err){}
+        } else if (e.key === 'Enter') {
+            // Al final del flujo: ir directo al submit del modal actual
+            const $submit = $('#modalCrearProductoDesdeRecepcion button[type="submit"]').first();
+            if ($submit.length) $submit.focus();
+        }
+        return;
+    }
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const $prev = $rows.eq(idx - 1);
+        if ($prev.length) {
+            $prev.focus();
+            try { $prev[0].select(); } catch(err){}
+        }
+        return;
+    }
+    // Bloquear el signo negativo (-) y coma/punto (stock es entero)
+    if (e.key === '-' || e.key === '+' || e.key === 'e' || e.key === 'E' || e.key === ',' || e.key === '.') {
+        e.preventDefault();
+    }
+});
+
+// ✅ Seleccionar todo al enfocar: permite sobreescribir el 0 tipeando directo
+$(document).on('focus', '.stock-redistribuir', function() {
+    try { this.select(); } catch(e){}
+});
+
 $(document).on('input', '.stock-redistribuir', function() {
     DistribuirGuiaAlCrear.actualizarSuma();
     // Si la talla es NUEVA (no existente), actualizar display nuevo/sin stock
@@ -11904,6 +12139,73 @@ $('#btnConfirmarActualizacion').on('click', function() {
         const productoId = $(this).data('id');
         const nombreProducto = $(this).data('nombre');
         abrirModalEditarRecepcion(productoId, nombreProducto);
+    });
+
+    // ====== ELIMINAR RECEPCIÓN PENDIENTE ======
+    $(document).on('click', '.btn-eliminar-recepcion-pendiente', function() {
+        const productoId  = $(this).data('id');
+        const nombre      = $(this).data('nombre') || 'este producto';
+        const compraNombre = $(this).data('compra') || '';
+        const stock       = parseInt($(this).data('stock')) || 0;
+
+        const detalleHtml = `
+            <div style="text-align:left;font-size:.9rem;">
+                <div class="mb-2">
+                    <i class="bi bi-box-seam me-1 text-danger"></i>
+                    <strong>${nombre}</strong>
+                </div>
+                ${compraNombre ? `<div class="mb-1"><i class="bi bi-truck me-1 text-muted"></i><strong>Compra:</strong> ${compraNombre}</div>` : ''}
+                <div class="mb-3"><i class="bi bi-stack me-1 text-muted"></i><strong>Stock pendiente:</strong> ${stock} uds</div>
+                <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:.82rem;">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    Se eliminarán las <strong>recepciones pendientes</strong> y el ítem de la compra (si no tiene unidades ya creadas).
+                    Esta acción <strong>no se puede deshacer</strong>.
+                </div>
+            </div>`;
+
+        Swal.fire({
+            title: 'Eliminar recepción pendiente',
+            html: detalleHtml,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-trash3 me-1"></i>Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+        }).then(result => {
+            if (!result.isConfirmed) return;
+
+            $.ajax({
+                url: '/app/eliminar_recepcion_pendiente/',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify({ compra_producto_id: productoId }),
+                success: function(res) {
+                    if (res.success) {
+                        let html = `<p>${res.message}</p>`;
+                        if (res.tenia_procesadas) {
+                            html += `<small class="text-muted">El ítem de compra se conservó porque ya tiene unidades creadas como producto.</small>`;
+                        }
+                        Swal.fire({
+                            title: 'Recepción eliminada',
+                            html: html,
+                            icon: 'success',
+                            timer: 4000,
+                            showConfirmButton: false
+                        });
+                        // Recargar tabla
+                        cargarProductosParaCrear(new Date().getFullYear());
+                    } else {
+                        Swal.fire('Error', res.error || 'No se pudo eliminar la recepción.', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    const msg = xhr.responseJSON?.error || 'Error al conectar con el servidor.';
+                    Swal.fire('Error', msg, 'error');
+                }
+            });
+        });
     });
     
     // Función para abrir modal de editar recepción

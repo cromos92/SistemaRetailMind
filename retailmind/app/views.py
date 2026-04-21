@@ -43,13 +43,16 @@ from django.contrib.sessions.models import Session
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max, Case, When, Value, IntegerField
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 import re
-from django.db import transaction
+from django.db import transaction, connection
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -360,23 +363,6 @@ def confirmar_recepcion_api(request):
     if not dte_id:
         return JsonResponse({'success': False, 'error': 'Falta dte_id.'}, status=400)
 
-    try:
-        dte = Dte.objects.select_related('sucursal').prefetch_related(
-            'dte_productos__productoTalla__producto__atributo1',
-            'dte_productos__productoTalla__producto__atributo2',
-            'dte_productos__productoTalla__producto__atributo3',
-            'dte_productos__productoTalla__producto__atributo4',
-            'dte_productos__productoTalla__producto__categoria',
-        ).get(id=dte_id)
-    except Dte.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
-
-    if dte.tipo_transaccion != 'TRASPASO':
-        return JsonResponse({'success': False, 'error': 'El DTE no corresponde a un traspaso interno.'}, status=400)
-
-    if dte.estado_dte != 'EMITIDO':
-        return JsonResponse({'success': False, 'error': f'El DTE ya fue procesado (estado: {dte.estado_dte}).'}, status=400)
-
     sucursal_destino_id = request.session.get('idSucursalActual')
     if not sucursal_destino_id:
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión.'}, status=400)
@@ -386,6 +372,36 @@ def confirmar_recepcion_api(request):
 
     try:
         with transaction.atomic():
+            # Defensa en profundidad: PostgreSQL aborta la transaccion si alguna
+            # query se cuelga por un lock, antes que Gunicorn mate el worker.
+            with connection.cursor() as cur:
+                cur.execute("SET LOCAL statement_timeout = '25s'")
+
+            # Lock pesimista del DTE para evitar doble-submit / doble-click.
+            # of=('self',) bloquea solo la fila de Dte, no las tablas prefetched.
+            try:
+                dte = (
+                    Dte.objects
+                    .select_for_update(of=('self',))
+                    .select_related('sucursal')
+                    .prefetch_related(
+                        'dte_productos__productoTalla__producto__atributo1',
+                        'dte_productos__productoTalla__producto__atributo2',
+                        'dte_productos__productoTalla__producto__atributo3',
+                        'dte_productos__productoTalla__producto__atributo4',
+                        'dte_productos__productoTalla__producto__categoria',
+                    )
+                    .get(id=dte_id)
+                )
+            except Dte.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+            if dte.tipo_transaccion != 'TRASPASO':
+                return JsonResponse({'success': False, 'error': 'El DTE no corresponde a un traspaso interno.'}, status=400)
+
+            if dte.estado_dte != 'EMITIDO':
+                return JsonResponse({'success': False, 'error': f'El DTE ya fue procesado (estado: {dte.estado_dte}).'}, status=400)
+
             from .models import Productos_Recepcionados
             
             hoy = timezone.now()
@@ -546,7 +562,6 @@ def confirmar_recepcion_api(request):
                         stock=0
                     )
                     tallas_destino_existentes[sku] = talla_destino
-                    print(f"  ✨ SKU {sku} creado en {sucursal_destino.alias}")
                 
                 # Acumular cantidad documentada a actualizar (no incluye sobrante)
                 if cantidad_a_ingresar > 0:
@@ -603,13 +618,24 @@ def confirmar_recepcion_api(request):
                 Movimientos_Producto.objects.bulk_create(movimientos_a_crear)
             
             # ============================================
-            # FASE 4: Actualizar stocks en batch
+            # FASE 4: Actualizar stocks en batch (1 sola query con CASE/WHEN)
             # ============================================
-            for sku, cantidad in tallas_a_actualizar.items():
-                talla = tallas_destino_existentes[sku]
-                stock_antes = talla.stock
-                Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') + cantidad)
-                print(f"✓ {sku} +{cantidad} en {sucursal_destino.alias} ({stock_antes} → {stock_antes + cantidad})")
+            if tallas_a_actualizar:
+                ids_por_sku = {
+                    sku: tallas_destino_existentes[sku].id
+                    for sku in tallas_a_actualizar
+                }
+                whens = [
+                    When(id=ids_por_sku[sku], then=Value(cantidad))
+                    for sku, cantidad in tallas_a_actualizar.items()
+                ]
+                Producto_Talla.objects.filter(id__in=ids_por_sku.values()).update(
+                    stock=F('stock') + Case(
+                        *whens,
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    )
+                )
             
             # ============================================
             # FASE 5: Actualizar DTE
@@ -641,9 +667,17 @@ def confirmar_recepcion_api(request):
                 registro += f" - {observaciones_generales}"
             dte.referencias = ((dte.referencias or '') + registro).strip()
             dte.save(update_fields=['estado_dte', 'fecha_recepcion', 'hora', 'referencias'])
-            
-            print(f"✓ DTE #{dte.numero_documento} - {dte.estado_dte} (OK:{productos_ok}, Problemas:{productos_problemas})")
-        
+
+            logger.info(
+                "DTE #%s recepcionado en %s: estado=%s ok=%s problemas=%s skus_actualizados=%s",
+                dte.numero_documento,
+                sucursal_destino.alias,
+                dte.estado_dte,
+                productos_ok,
+                productos_problemas,
+                len(tallas_a_actualizar),
+            )
+
         # ============================================
         # FASE 6: Notificación (FUERA de la transacción principal)
         # ============================================
@@ -658,10 +692,9 @@ def confirmar_recepcion_api(request):
                     sucursal_reportante=sucursal_destino,
                     usuario_reportante=request.user if request.user.is_authenticated else None
                 )
-                print(f"✓ Notificación enviada a {dte.sucursal.alias}")
             except Exception as e:
                 # Notificación es secundaria - no afecta la recepción ya completada
-                print(f"⚠ Notificación pendiente (ejecutar migrate): {str(e)[:80]}")
+                logger.warning("Notificacion DTE pendiente: %s", str(e)[:200])
 
         return JsonResponse({
             'success': True,
@@ -6827,6 +6860,25 @@ def recepcionar_compra(request):
         # Obtener la compra
         compra = get_object_or_404(Compras, id=compra_id)
 
+        # ── TOTALES de la COMPRA COMPLETA (independientes del search/filtro)
+        # Se usan en el frontend para mostrar Pend/Recep de toda la sesión
+        # aunque el usuario esté filtrando productos.
+        from django.db.models import Sum as _Sum
+        totales_compra_qs = Compras_Producto_Talla.objects.filter(
+            compra_producto__compras=compra
+        )
+        compra_stock_total = totales_compra_qs.aggregate(s=_Sum('stock'))['s'] or 0
+        compra_recepcionado_previo = (
+            Productos_Recepcionados.objects
+            .filter(compra_producto_talla__compra_producto__compras=compra)
+            .aggregate(s=_Sum('stockArribado'))['s'] or 0
+        )
+        compra_totales = {
+            'stock_total': int(compra_stock_total),
+            'recepcionado_previo': int(compra_recepcionado_previo),
+            'pendiente_previo': int(compra_stock_total) - int(compra_recepcionado_previo),
+        }
+
         # Query base optimizada con select_related
         tallas_query = Compras_Producto_Talla.objects.select_related(
             'compra_producto'
@@ -7057,6 +7109,7 @@ def recepcionar_compra(request):
                 'nombre_compra': compra.nombre if hasattr(compra, 'nombre') and compra.nombre else f'Compra #{compra.id}',
                 'nombre_proveedor': compra.empresa.nombre if compra.empresa else 'Sin proveedor',
                 'sucursales_disponibles': sucursales_disponibles,
+                'compra_totales': compra_totales,
                 'pagination': {
                     'page': page,
                     'page_size': page_size,
@@ -7195,6 +7248,7 @@ def recepcionar_compra(request):
                 'vista_agrupada': False,
                 'proveedor_id': compra.empresa.id,
                 'sucursales_disponibles': sucursales_disponibles,
+                'compra_totales': compra_totales,
                 'pagination': {
                     'page': page,
                     'page_size': page_size,
@@ -9203,11 +9257,78 @@ def distribuir_tallas_compra_producto(request):
 @login_required
 @require_POST
 @transaction.atomic
+@login_required
+@require_POST
+@transaction.atomic
+def eliminar_recepcion_pendiente(request):
+    """
+    Elimina un producto pendiente de la lista "Por Despachar":
+    1. Borra todas sus Productos_Recepcionados aún no vinculadas a un Producto_Talla.
+    2. Borra el Compras_Producto (y sus Compras_Producto_Talla en cascada).
+    Si quedan más recepciones ya vinculadas (producto ya creado parcialmente),
+    solo elimina las pendientes sin tocar el Compras_Producto.
+    """
+    try:
+        data = json.loads(request.body)
+        compra_producto_id = data.get('compra_producto_id')
+
+        if not compra_producto_id:
+            return JsonResponse({'success': False, 'error': 'ID de producto de compra no proporcionado'}, status=400)
+
+        compra_producto = get_object_or_404(Compras_Producto, id=compra_producto_id)
+        compra = compra_producto.compras
+        tallas = Compras_Producto_Talla.objects.filter(compra_producto=compra_producto)
+
+        # Recepciones pendientes (aún no ligadas a un Producto_Talla real)
+        recepciones_pendientes = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__in=tallas,
+            producto_talla__isnull=True,
+        )
+        total_pendientes = recepciones_pendientes.count()
+        total_stock = recepciones_pendientes.aggregate(s=Sum('stockArribado'))['s'] or 0
+
+        # Recepciones ya procesadas (ligadas a un Producto_Talla)
+        recepciones_procesadas = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__in=tallas,
+            producto_talla__isnull=False,
+        ).count()
+
+        # Eliminar las recepciones pendientes
+        recepciones_pendientes.delete()
+
+        # Solo eliminar el Compras_Producto si NO quedan recepciones procesadas
+        # (si ya hay stock en productos reales, el ítem de compra debe conservarse)
+        eliminado_cp = False
+        if recepciones_procesadas == 0:
+            nombre_producto = compra_producto.nombre
+            compra_producto.delete()   # cascada elimina Compras_Producto_Talla
+            eliminado_cp = True
+        else:
+            nombre_producto = compra_producto.nombre
+
+        return JsonResponse({
+            'success': True,
+            'nombre': nombre_producto,
+            'compra_id': compra.id,
+            'compra_nombre': compra.nombre,
+            'recepciones_eliminadas': total_pendientes,
+            'stock_eliminado': total_stock,
+            'compra_producto_eliminado': eliminado_cp,
+            'tenia_procesadas': recepciones_procesadas > 0,
+            'message': (
+                f'Se eliminaron {total_pendientes} recepción(es) pendiente(s) '
+                f'({total_stock} uds) del producto "{nombre_producto}" '
+                f'en la compra "{compra.nombre}".'
+                + (f' El ítem de compra también fue eliminado.' if eliminado_cp else
+                   f' El ítem de compra se conservó porque ya tiene {recepciones_procesadas} recepción(es) procesada(s).')
+            )
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 def eliminar_producto_compra(request):
-    """
-    Elimina un Compras_Producto (y sus tallas en cascada) de una compra.
-    Bloquea si alguna talla ya tiene recepciones.
-    """
     try:
         data = json.loads(request.body)
         compra_producto_id = data.get('compra_producto_id')
@@ -9472,13 +9593,16 @@ def obtener_productos_para_crear(request):
 
     qs = Productos_Recepcionados.objects.select_related(
         'compra_producto_talla__compra_producto__compras__empresa',
-        'dte'  # NUEVO: incluir relación con Dte
+        'dte',  # NUEVO: incluir relación con Dte
+        'sucursal_destino',
     ).all()
 
-    # NOTA: No filtramos por sucursal activa. La creación de productos es
-    # centralizada (solo EDEL / casa matriz la ejecuta), por lo que todas
-    # las recepciones deben verse aquí. La sucursal_destino se conserva
-    # únicamente como referencia/guía en la respuesta.
+    # NOTA: Las compras se recepcionan de forma centralizada en EDEL, pero
+    # cada recepción tiene una `sucursal_destino` que indica a qué sucursal
+    # va la mercadería. Por eso agrupamos por (compra_producto, sucursal)
+    # de modo que, si el mismo producto llega a dos sucursales, aparezcan
+    # DOS filas distintas y al crear el producto para una sucursal sólo
+    # desaparezca esa fila (la otra sucursal queda aún pendiente).
 
     if anio:
         qs = qs.filter(fecha__year=anio)
@@ -9507,7 +9631,8 @@ def obtener_productos_para_crear(request):
     if recientes:
         qs = qs.order_by('-fecha')[:10]
 
-    # Agrupar SOLO por producto (compra_producto_id) para evitar duplicados de diferentes DTEs
+    # Agrupar por (compra_producto, sucursal_destino) para que el mismo
+    # producto llegado a dos sucursales aparezca como DOS filas separadas.
     productos = (
         qs
         .values(
@@ -9519,6 +9644,9 @@ def obtener_productos_para_crear(request):
             'compra_producto_talla__compra_producto__atributo3',
             'compra_producto_talla__compra_producto__atributo4',
             'compra_producto_talla__compra_producto__costo',
+            # Agrupación por sucursal destino:
+            'sucursal_destino_id',
+            'sucursal_destino__alias',
         )
         .annotate(
             stock_total=Sum('stockArribado'),
@@ -9530,6 +9658,12 @@ def obtener_productos_para_crear(request):
                 )
             ),
             count_creados=Count('producto_talla', distinct=True),
+            count_pendientes=Count(
+                Case(
+                    When(producto_talla__isnull=True, then=Value(1)),
+                    output_field=IntegerField()
+                )
+            ),
             ultima_recepcion=Max('fecha'),  # Para ordenar por los más recientes
             # Obtener cualquier producto_talla_id asociado (para mostrar info FIFO)
             primer_producto_talla=Max('producto_talla__id'),
@@ -9599,36 +9733,19 @@ def obtener_productos_para_crear(request):
                 'proveedor_id': compra.empresa.id if compra.empresa else None,
             }
 
-    # Bulk: sucursales destino por producto (solo referencia, no filtro).
-    # Permite mostrar en la UI en qué sucursales llegó la mercadería.
-    producto_ids_bulk = [p['compra_producto_talla__compra_producto_id'] for p in productos_list]
-    sucursales_por_producto = {}
-    if producto_ids_bulk:
-        suc_qs = (
-            Productos_Recepcionados.objects
-            .filter(
-                compra_producto_talla__compra_producto_id__in=producto_ids_bulk,
-                sucursal_destino__isnull=False,
-            )
-            .values(
-                'compra_producto_talla__compra_producto_id',
-                'sucursal_destino_id',
-                'sucursal_destino__alias',
-            )
-            .annotate(unidades=Sum('stockArribado'))
-        )
-        for row in suc_qs:
-            pid = row['compra_producto_talla__compra_producto_id']
-            sucursales_por_producto.setdefault(pid, []).append({
-                'sucursal_id': row['sucursal_destino_id'],
-                'sucursal': row['sucursal_destino__alias'] or 'Sin nombre',
-                'unidades': row['unidades'] or 0,
-            })
-
     respuesta = []
     for p in productos_list:
         talla_id = p['primer_producto_talla']
         compra_id_p = p['primer_compra_id']
+
+        # "creado" ahora es POR SUCURSAL: sólo consideramos la fila como
+        # completamente creada cuando no quedan recepciones pendientes de
+        # esa sucursal. Antes bastaba con que hubiera al menos una
+        # vinculada (count_creados>0), lo que dejaba la fila visible y
+        # permitía volver a crear.
+        tiene_pendientes = (p.get('count_pendientes') or 0) > 0
+        tiene_creados = (p.get('count_creados') or 0) > 0
+        creado_flag = (tiene_creados and not tiene_pendientes)
 
         # origen_tipo
         concepto_mov = movimientos_origen.get(talla_id) if talla_id else None
@@ -9636,7 +9753,7 @@ def obtener_productos_para_crear(request):
             origen_tipo = 'MANUAL'
         elif concepto_mov == 'INGRESO_INICIAL':
             origen_tipo = 'RECEPCION'
-        elif p['count_creados'] > 0:
+        elif tiene_creados:
             origen_tipo = 'RECEPCION'  # fallback para registros legados
         else:
             origen_tipo = None  # aún no creado
@@ -9659,7 +9776,7 @@ def obtener_productos_para_crear(request):
             'costo': p['compra_producto_talla__compra_producto__costo'],
             'stock_total': p['stock_total'],
             'stock_creado': p['stock_creado'],
-            'creado': p['count_creados'] > 0,
+            'creado': creado_flag,
             'producto_talla_id': talla_id,
             'compra_id': compra_id_p,
             'compra_nombre': compra_nombre,
@@ -9669,10 +9786,9 @@ def obtener_productos_para_crear(request):
             # Nuevos campos de trazabilidad
             'origen_tipo': origen_tipo,
             'precio_alerta': talla_id in precio_alertas,
-            # Sucursales destino (solo referencia visual, no filtra).
-            'sucursales_destino': sucursales_por_producto.get(
-                p['compra_producto_talla__compra_producto_id'], []
-            ),
+            # Sucursal destino de la fila (cada fila es una sucursal).
+            'sucursal_destino_id': p.get('sucursal_destino_id'),
+            'sucursal_destino': p.get('sucursal_destino__alias') or 'Sin sucursal',
         })
 
     # Devolver respuesta con información de paginación
@@ -9714,13 +9830,27 @@ def opcion_atributo_crear(request):
 def detalle_producto_para_crear(request, producto_id):
     compra_producto = get_object_or_404(Compras_Producto, id=producto_id)
 
+    # Sucursal destino (opcional). Si se pasa, filtramos las recepciones
+    # para mostrar SÓLO las tallas/stock que llegaron a esa sucursal. Así
+    # cuando el mismo producto llegó a dos sucursales, el modal muestra
+    # únicamente las unidades que se están creando para ESA sucursal.
+    sucursal_id_param = request.GET.get('sucursal_id') or request.GET.get('sucursal_destino_id')
+    filtro_sucursal = Q()
+    if sucursal_id_param:
+        try:
+            sucursal_id_int = int(sucursal_id_param)
+            filtro_sucursal = Q(sucursal_destino_id=sucursal_id_int)
+        except (TypeError, ValueError):
+            pass
+    elif sucursal_id_param == '':
+        # Fila "Sin sucursal" (sucursal_destino IS NULL)
+        filtro_sucursal = Q(sucursal_destino__isnull=True)
+
     # Obtener tallas recepcionadas sin producto_talla aún - AGRUPAR SOLO POR TALLA
-    # NOTA: No se filtra por sucursal. La creación de productos es centralizada
-    # (solo EDEL / casa matriz); la sucursal_destino es solo referencia.
     recepcionadas = Productos_Recepcionados.objects.filter(
         compra_producto_talla__compra_producto=compra_producto,
         producto_talla__isnull=True
-    ).values('compra_producto_talla__talla').annotate(
+    ).filter(filtro_sucursal).values('compra_producto_talla__talla').annotate(
         stock=Sum('stockArribado')
     ).order_by('compra_producto_talla__talla')
 
@@ -9735,7 +9865,7 @@ def detalle_producto_para_crear(request, producto_id):
         compra_producto_talla__compra_producto=compra_producto,
         producto_talla__isnull=True,
         dte_id__isnull=False
-    ).values('dte_id').first()
+    ).filter(filtro_sucursal).values('dte_id').first()
     if dte_query:
         dte_id = dte_query['dte_id']
 
@@ -11443,13 +11573,28 @@ def _build_edel_producto_ref(articulo, producto_local):
 @transaction.atomic
 def crear_producto_desde_recepcion(request):
     # 1. Validar sesión y datos básicos
-    sucursal_id = request.session.get('idSucursalActual')
+    session_sucursal_id = request.session.get('idSucursalActual')
     usuario = request.session.get('nombreUsuario', 'Sistema')
-    if not sucursal_id:
+    if not session_sucursal_id:
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa'}, status=400)
-    sucursal = get_object_or_404(Sucursal, pk=sucursal_id)
 
     data = request.POST
+
+    # Sucursal OBJETIVO del producto que se está creando. El usuario crea
+    # desde EDEL pero cada fila de la tabla "Pendientes de crear" representa
+    # una (compra_producto × sucursal_destino). El frontend envía
+    # `sucursal_destino_id` con la sucursal de la fila; si no viene, caemos a
+    # la sucursal activa de la sesión (compat con creación manual desde
+    # otros puntos del sistema).
+    sucursal_objetivo_id = data.get('sucursal_destino_id') or session_sucursal_id
+    try:
+        sucursal = Sucursal.objects.get(pk=sucursal_objetivo_id)
+    except Sucursal.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'Sucursal destino {sucursal_objetivo_id} no encontrada.'
+        }, status=400)
+    sucursal_id = sucursal.id
     articulo = data.get('articulo')
     descripcion = data.get('descripcion')
     atributo1 = data.get('atributo1') or None

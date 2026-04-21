@@ -2359,7 +2359,8 @@ $(document).ready(function() {
                 title: 'Cantidad actualizada',
                 text: `Se agregaron ${cantidad} unidades. Total en esta línea: ${productoExistente.cantidad}`,
                 timer: 1500,
-                showConfirmButton: false
+                showConfirmButton: false,
+                returnFocus: false
             });
         } else {
             // Verificar si existe el mismo producto con DIFERENTE precio
@@ -2389,7 +2390,7 @@ $(document).ready(function() {
                         actualizarTablaTicket();
                         actualizarTotales();
                         limpiarFormularioProducto();
-                        $('#skuProducto').focus();
+                        setTimeout(function() { $('#skuProducto').trigger('focus').select(); }, 50);
                     }
                 });
                 return;
@@ -2402,7 +2403,7 @@ $(document).ready(function() {
         actualizarTablaTicket();
         actualizarTotales();
         limpiarFormularioProducto();
-        $('#skuProducto').focus();
+        setTimeout(function() { $('#skuProducto').trigger('focus').select(); }, 50);
     }
 
     function agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock) {
@@ -2426,7 +2427,8 @@ $(document).ready(function() {
             title: 'Producto agregado',
             text: `${articulo} agregado al ticket`,
             timer: 1500,
-            showConfirmButton: false
+            showConfirmButton: false,
+            returnFocus: false
         });
     }
 

@@ -3087,11 +3087,43 @@ const GestionCompras = (function() {
             const factura = (facturaInput.val() || '').trim();
             const sucursalId = sucursalSelect.length ? (sucursalSelect.val() || '') : '';
             const costo = parseFloat(recepcionInput.data('costo')) || 0;
+
+            // Capturar el factura_id buscándolo en el datalist actual de la fila
+            // (mientras la fila está en el DOM tenemos acceso al datalist).
+            let facturaId = null;
+            if (factura) {
+                const datalistId = facturaInput.attr('list');
+                const $datalist = datalistId ? $('#' + datalistId) : $();
+                $datalist.find('option').each(function() {
+                    const optVal = ($(this).val() || '').trim();
+                    if (optVal === factura) {
+                        facturaId = $(this).attr('data-id') || null;
+                        return false;
+                    }
+                });
+                // Fallback: buscar en cualquier datalist global
+                if (!facturaId) {
+                    $('datalist option').each(function() {
+                        const optVal = ($(this).val() || '').trim();
+                        if (optVal === factura) {
+                            facturaId = $(this).attr('data-id') || null;
+                            return false;
+                        }
+                    });
+                }
+            }
             
             // Solo guardar si hay algún dato "overrideado" por el usuario
             if ((cantidad > 0 || factura || sucursalId) && ids) {
                 const key = Array.isArray(ids) ? ids.join('-') : ids;
-                datosRecepcionTemporales[key] = { cantidad, factura, sucursalId, costo };
+                datosRecepcionTemporales[key] = {
+                    cantidad,
+                    factura,
+                    facturaId,
+                    sucursalId,
+                    costo,
+                    ids: Array.isArray(ids) ? ids : [ids]   // necesario para guardar
+                };
             }
         });
         console.log('📦 Datos temporales guardados:', Object.keys(datosRecepcionTemporales).length);
@@ -3187,6 +3219,7 @@ const GestionCompras = (function() {
         currentPage = 1;
         currentSearch = '';
         datosRecepcionTemporales = {}; // Limpiar datos de compra anterior
+        window.compraTotalesActual = null;
 
         $('#globalIDCompraRecepcion').val(compraId);
         $('#searchRecepcion').val('');
@@ -3286,6 +3319,11 @@ const GestionCompras = (function() {
                 paginationInfo = data.pagination;
                 currentPage = data.pagination.page;
                 currentSearch = data.search || '';
+
+                // Totales de la compra completa (independientes del filtro/search)
+                if (data.compra_totales) {
+                    window.compraTotalesActual = data.compra_totales;
+                }
                 
                 // Actualizar controles de paginación
                 $('#pageInfo').text(`${data.pagination.page}/${data.pagination.total_pages}`);
@@ -3336,6 +3374,9 @@ const GestionCompras = (function() {
                     if (typeof aplicarFiltrosRecepcion === 'function') {
                         aplicarFiltrosRecepcion();
                     }
+                    // Sincronizar autocompletes per-row con el datalist global
+                    // para que cada fila ofrezca TODAS las facturas del proveedor.
+                    sincronizarDatalistsPerRow();
                 }, 100);
             },
             error: function (xhr) {
@@ -3556,7 +3597,13 @@ const GestionCompras = (function() {
             : (tieneRecepcion ? `<small class="text-muted">${talla.recepcionado} uds recep.</small>` : '')
         }
     </td>
-    <td><strong>${talla.stock || 0}</strong>${pendiente > 0 ? `<small class="text-warning d-block" style="font-size:0.6rem">P:${pendiente}</small>` : ''}</td>
+    <td>
+        <strong>${talla.stock || 0}</strong>
+        ${tieneRecepcion ? `
+            <small class="d-block ${tallaCompleta ? 'text-success' : 'text-warning'}" style="font-size:0.6rem;line-height:1;">
+                <i class="bi bi-check2-circle"></i> ${talla.recepcionado || 0}${pendiente > 0 ? ` · P:${pendiente}` : ''}
+            </small>` : ''}
+    </td>
     <td>
         <div class="input-cantidad-wrapper">
             <button type="button" class="btn-cantidad-rapida btn-max" onclick="aplicarCantidadRapida(this, 'max')" title="Máx"><i class="bi bi-arrow-up-circle-fill"></i></button>
@@ -3791,7 +3838,10 @@ const GestionCompras = (function() {
     <td>$${(item.precio || 0).toLocaleString()}</td>
     <td>
         <strong>${item.stock || 0}</strong>
-        ${pendiente > 0 && tieneRecepcion ? `<small class="text-warning d-block" style="font-size:0.65rem">P:${pendiente}</small>` : ''}
+        ${tieneRecepcion ? `
+            <small class="d-block ${completo ? 'text-success' : 'text-warning'}" style="font-size:0.62rem;line-height:1;">
+                <i class="bi bi-check2-circle"></i> ${item.recepcionado || 0}${pendiente > 0 ? ` · <span class="text-warning">P:${pendiente}</span>` : ''}
+            </small>` : ''}
     </td>
     <td class="text-center">
         ${tallaDisplay}
@@ -3825,7 +3875,7 @@ const GestionCompras = (function() {
                    list="${datalistId}" 
                    data-ids='${tallaIdsStr}' 
                    value=""
-                   placeholder="Factura...">
+                   placeholder="N° factura (autocompleta)...">
             <i class="bi bi-receipt factura-icon"></i>
         </div>
         <span class="indicador-factura badge bg-primary text-white mt-1" style="display: none; font-size: 0.65rem;"></span>
@@ -5474,6 +5524,28 @@ const GestionCompras = (function() {
         // Actualizar datalist global de acciones masivas
         $('#facturas-global-list').html(opciones);
     }
+
+    /**
+     * Copia las opciones del datalist global (#facturas-global-list) a TODOS
+     * los datalists per-row. Llamado tras cada render para que las filas
+     * recién creadas hereden el catálogo completo de facturas inmediatamente.
+     */
+    function sincronizarDatalistsPerRow() {
+        const opciones = $('#facturas-global-list').html();
+        if (!opciones || !opciones.trim()) return;
+        $('datalist[id^="facturas-list-"]').each(function() {
+            // Solo sincronizar si el datalist tiene 0 o muy pocas opciones
+            // (evita sobreescribir si la fila ya tiene su propio set).
+            if ($(this).find('option').length < 2) {
+                $(this).html(opciones);
+            }
+        });
+        $('datalist[id^="facturas-producto-"]').each(function() {
+            if ($(this).find('option').length < 2) {
+                $(this).html(opciones);
+            }
+        });
+    }
     
     function actualizarFacturasDisponibles(origen = 'manual') {
         if (actualizandoFacturas) {
@@ -6597,31 +6669,11 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
 
 
     function recalcularTotalesRecepcion() {
-        let totalUnidades = 0;
-        let totalCosto = 0;
-        let totalStockTotal = 0;
-        let totalYaRecepcionado = 0;
-        let totalNuevoRecepcionado = 0;
-
-        // Solo procesar filas de tallas (no las de grupo)
+        // ── PASO 1: marcar visualmente las filas con valor (DOM only)
         $('#tablaRecepcionProductos tbody tr.talla-detalle').each(function () {
             const $row = $(this);
             const $input = $row.find('.recepcionado-input');
             const nuevasUnidades = parseInt($input.val()) || 0;
-            
-            // Obtener stock total y ya recepcionado de los data attributes
-            const stockTalla = parseInt($input.data('stock')) || parseInt($input.attr('max')) || 0;
-            const yaRecepcionado = parseInt($input.data('recepcionado')) || 0;
-            
-            // Leer costo desde data-attribute (fiable en ambas vistas)
-            const costo = parseFloat($input.data('costo')) || 0;
-
-            totalNuevoRecepcionado += nuevasUnidades;
-            totalCosto += nuevasUnidades * costo;
-            totalStockTotal += stockTalla;
-            totalYaRecepcionado += yaRecepcionado;
-            
-            // Añadir clase visual si tiene valor
             if (nuevasUnidades > 0) {
                 $input.addClass('filled has-value');
                 $row.addClass('row-recepcionado');
@@ -6630,38 +6682,50 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                 $row.removeClass('row-recepcionado');
             }
         });
-        
-        totalUnidades = totalNuevoRecepcionado;
 
-        // ── Totales de sesión (incluye otras páginas guardadas temporalmente)
+        // ── PASO 2: Totales de SESIÓN (DOM + store temporal de otras búsquedas)
         const sess = getSessionStats();
+
+        // Inv sesión y Total sesión: lo nuevo ingresado en la sesión completa
         $('#totalParesRecepcionados').text(sess.cantidad.toLocaleString());
         $('#totalCostoRecepcionado').text(`$${Math.round(sess.costo).toLocaleString()}`);
-        // Indicar si hay unidades de otras páginas
         if (sess.extra > 0) {
-            $('#totalParesRecepcionados').attr('title', `${sess.cantidad} total: ${totalNuevoRecepcionado} esta pág. + ${sess.extra} otras páginas`);
+            $('#totalParesRecepcionados').attr(
+                'title',
+                `${sess.cantidad} total: ${sess.cantidad - sess.extra} esta búsqueda + ${sess.extra} otras búsquedas/páginas`
+            );
         } else {
             $('#totalParesRecepcionados').removeAttr('title');
         }
-        
-        // Calcular totales reales (ya recepcionado + nuevo)
-        const totalRecepcionadoFinal = totalYaRecepcionado + totalNuevoRecepcionado;
-        const pendientes = totalStockTotal - totalRecepcionadoFinal;
-        
-        // Actualizar estadísticas
-        $('#statPendientes').text(Math.max(0, pendientes).toLocaleString());
+
+        // ── PASO 3: Pend / Recep usando los totales de la COMPRA COMPLETA
+        // (vienen del backend, no se ven afectados por el search/filtro)
+        const tot = window.compraTotalesActual || { stock_total: 0, recepcionado_previo: 0 };
+        const totalRecepcionadoFinal = (tot.recepcionado_previo || 0) + sess.cantidad;
+        const pendientes = Math.max(0, (tot.stock_total || 0) - totalRecepcionadoFinal);
+
+        $('#statPendientes').text(pendientes.toLocaleString());
         $('#statRecepcionados').text(totalRecepcionadoFinal.toLocaleString());
-        
-        // Actualizar header
-        $('#headerPendientes').text(Math.max(0, pendientes).toLocaleString());
+        $('#headerPendientes').text(pendientes.toLocaleString());
         $('#headerRecepcionados').text(totalRecepcionadoFinal.toLocaleString());
-        
-        // Actualizar barra de progreso
-        const progreso = totalStockTotal > 0 ? Math.round((totalRecepcionadoFinal / totalStockTotal) * 100) : 0;
+
+        // Tooltip explicando de dónde sale cada uno
+        $('#statPendientes').attr(
+            'title',
+            `Stock total compra: ${(tot.stock_total || 0).toLocaleString()} - Recepcionado total: ${totalRecepcionadoFinal.toLocaleString()}`
+        );
+        $('#statRecepcionados').attr(
+            'title',
+            `Ya guardado: ${(tot.recepcionado_previo || 0).toLocaleString()} + Sesión actual: ${sess.cantidad.toLocaleString()}`
+        );
+
+        // Barra de progreso (basada en totales de la compra completa)
+        const progreso = (tot.stock_total || 0) > 0
+            ? Math.round((totalRecepcionadoFinal / tot.stock_total) * 100)
+            : 0;
         $('#progresoRecepcionBar').css('width', `${progreso}%`).attr('aria-valuenow', progreso);
         $('#progresoRecepcionPct').text(`${progreso}%`);
-        
-        // Cambiar color de la barra según progreso
+
         const $bar = $('#progresoRecepcionBar');
         $bar.removeClass('bg-warning bg-info bg-success');
         if (progreso < 50) {
@@ -6728,51 +6792,94 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
     function validarFacturaInput(facturaInput, validarConServidor = false) {
         const facturaNumero = (facturaInput.val() || '').trim();
         let facturaId = null;
-        
-        if (facturaNumero) {
-            const datalistId = facturaInput.attr('list');
-            const $datalist = $('#' + datalistId);
-            
-            // Normalizar búsqueda (quitar espacios y convertir a minúsculas)
-            const facturaNumeroNormalizado = facturaNumero.replace(/\s+/g, '').toLowerCase();
-            
-            // Buscar opción exacta o parcial con normalización mejorada
-            $datalist.find('option').each(function () {
-                const optionValue = ($(this).val() || '').trim();
-                const optionDataId = $(this).attr('data-id');
-                const optionValueNormalizado = optionValue.replace(/\s+/g, '').toLowerCase();
-                
-                // Intentar coincidencia exacta o normalizada
-                if (optionValue === facturaNumero || 
-                    optionValueNormalizado === facturaNumeroNormalizado ||
-                    optionValue.includes(facturaNumero) ||
-                    facturaNumero.includes(optionValue)) {
-                    facturaId = optionDataId || null;
-                    return false; // Break
-                }
-            });
-            
-            if (facturaId) {
-                facturaInput.removeClass('is-invalid').addClass('is-valid');
-                return facturaId;
+
+        // Helper: mantener el indicador-factura sincronizado con el input
+        const syncIndicador = () => {
+            const $row = facturaInput.closest('tr');
+            const $ind = $row.find('.indicador-factura');
+            if (!$ind.length) return;
+            if (!facturaNumero) {
+                $ind.hide().text('');
             } else {
-                // Si no encontró en el datalist, validar contra el servidor
-                facturaInput.removeClass('is-valid').addClass('is-invalid');
-                
-                // Validar contra el servidor para ver si la factura existe y a quién pertenece
-                if (validarConServidor && currentProveedorId) {
-                    validarFacturaConServidor(facturaNumero, currentProveedorId, facturaInput);
-                } else {
-                    facturaInput.attr('title', 'Esta factura no está en la lista del mes actual. Usa el botón "Recargar Facturas" si es una factura nueva.');
-                }
-                
-                return null;
+                const corta = facturaNumero.length > 12 ? facturaNumero.substring(0, 10) + '…' : facturaNumero;
+                $ind.html(`<i class="bi bi-receipt me-1"></i>${corta}`).show();
             }
-        } else {
-            facturaInput.removeClass('is-invalid is-valid');
-            facturaInput.removeAttr('title');
+        };
+
+        if (!facturaNumero) {
+            facturaInput
+                .removeClass('is-invalid is-valid has-factura')
+                .removeAttr('title');
+            syncIndicador();
             return null;
         }
+
+        // Normalizar (sin espacios, sin caracteres no alfanuméricos, minúsculas).
+        // Esto permite que "F 123-456" matchee con "F123456" en el datalist.
+        const normalize = (s) => (s || '').toString().replace(/[^a-z0-9]/gi, '').toLowerCase();
+        const buscado = normalize(facturaNumero);
+
+        // 1) Buscar en TODOS los datalists disponibles, no solo en el de la fila.
+        //    Cubre el caso donde el usuario escribió una factura existente en
+        //    otra fila o en la lista global pero no en la propia.
+        const datalistsAConsultar = new Set();
+        const datalistId = facturaInput.attr('list');
+        if (datalistId) datalistsAConsultar.add('#' + datalistId);
+        datalistsAConsultar.add('#facturas-global-list');
+        // Como último recurso: cualquier datalist del DOM
+        $('datalist[id^="facturas-"]').each(function() {
+            datalistsAConsultar.add('#' + $(this).attr('id'));
+        });
+
+        let coincidenciaExacta = null;
+        let coincidenciaParcial = null;
+
+        for (const sel of datalistsAConsultar) {
+            $(sel).find('option').each(function () {
+                const optVal = ($(this).val() || '').trim();
+                const optId  = $(this).attr('data-id');
+                const optNorm = normalize(optVal);
+
+                if (optVal === facturaNumero || optNorm === buscado) {
+                    coincidenciaExacta = { val: optVal, id: optId };
+                    return false;  // break
+                }
+                // Parcial solo si el buscado es prefijo razonable (>=3 chars)
+                if (!coincidenciaParcial && buscado.length >= 3 && optNorm.startsWith(buscado)) {
+                    coincidenciaParcial = { val: optVal, id: optId };
+                }
+            });
+            if (coincidenciaExacta) break;
+        }
+
+        const match = coincidenciaExacta || coincidenciaParcial;
+        if (match) {
+            facturaId = match.id || null;
+            facturaInput
+                .removeClass('is-invalid')
+                .addClass('is-valid has-factura')
+                .attr('title', `Factura ${match.val}${coincidenciaExacta ? '' : ' (sugerida por coincidencia parcial)'}`);
+            syncIndicador();
+            return facturaId;
+        }
+
+        // 2) No se encontró en ningún datalist local: marcar como inválida
+        //    y disparar validación contra el servidor (si tenemos proveedor).
+        facturaInput
+            .removeClass('is-valid')
+            .addClass('is-invalid has-factura')
+            .attr('title', 'Factura no encontrada localmente. Verificando con el servidor…');
+        syncIndicador();
+
+        if (validarConServidor && typeof currentProveedorId !== 'undefined' && currentProveedorId) {
+            validarFacturaConServidor(facturaNumero, currentProveedorId, facturaInput);
+        } else {
+            facturaInput.attr(
+                'title',
+                'Factura no está en la lista del mes. Usa "Recargar Facturas" o ingresa el número exacto y se validará al guardar.'
+            );
+        }
+        return null;
     }
     
     // Función para validar factura contra el servidor
@@ -6894,68 +7001,67 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
     });
 
     $('#btnGuardarRecepcion').on('click', function () {
+        // PASO 1: Capturar datos de la página actual al store temporal.
+        // Después de esto, datosRecepcionTemporales contiene TODO lo
+        // ingresado en la sesión (página actual + páginas anteriores que
+        // ya no están en el DOM por búsqueda/paginación).
+        guardarDatosTemporales();
+
         const datos = [];
         let errorFactura = false;
         let errorMensajes = [];
 
-        // Procesar filas de tallas individuales (no las filas de grupo)
-        $('#tablaRecepcionProductos tbody tr.talla-detalle').each(function () {
-            const $row = $(this);
-            const recepcionInput = $row.find('.recepcionado-input');
-            const cantidad = parseInt(recepcionInput.val()) || 0;
-            
-            // Obtener IDs (puede ser lista JSON o ID único)
-            let compraTallaIds = recepcionInput.data('ids');
-            
-            // Si es string JSON, parsearlo
-            if (typeof compraTallaIds === 'string') {
-                try {
-                    compraTallaIds = JSON.parse(compraTallaIds);
-                } catch(e) {
-                    compraTallaIds = [compraTallaIds];
-                }
-            }
-            
-            // Manejar caso antiguo con data-id único
-            if (!compraTallaIds) {
-                const singleId = recepcionInput.data('id');
-                if (singleId) {
-                    compraTallaIds = [singleId];
-                }
-            }
-            
-            const facturaInput = $row.find('.factura-datalist-input');
-            const sucursalSelect = $row.find('.sucursal-row-select');
-            const sucursalDestinoId = sucursalSelect.length ? (sucursalSelect.val() || null) : null;
-            
-            // Solo validar si hay cantidad ingresada
-            if (cantidad > 0 && compraTallaIds && compraTallaIds.length > 0) {
-                const facturaId = validarFacturaInput(facturaInput);
-                const facturaNumero = (facturaInput.val() || '').trim();
-                
-                // Si hay factura ingresada pero no es válida
-                if (facturaNumero && !facturaId) {
-                    errorFactura = true;
-                    const tallaText = $row.find('td').eq(0).text().trim();
-                    errorMensajes.push(`${tallaText}: factura "${facturaNumero}" no válida`);
-                }
-                
-                // Distribuir cantidad entre los IDs agrupados
-                const cantidadPorId = Math.floor(cantidad / compraTallaIds.length);
-                let cantidadRestante = cantidad % compraTallaIds.length;
-                
-                compraTallaIds.forEach((id, index) => {
-                    const cantidadAsignada = cantidadPorId + (index < cantidadRestante ? 1 : 0);
-                    if (cantidadAsignada > 0) {
-                        datos.push({
-                            compra_producto_talla_id: id,
-                            recepcionado: cantidadAsignada,
-                            factura_id: facturaId,
-                            sucursal_destino_id: sucursalDestinoId || null
-                        });
+        // PASO 2: Iterar el store temporal — incluye lo que el usuario
+        // escribió en otras búsquedas/páginas y ya no está en pantalla.
+        Object.entries(datosRecepcionTemporales).forEach(([key, info]) => {
+            const cantidad = parseInt(info.cantidad) || 0;
+            const ids = info.ids || [];
+
+            // Si no hay cantidad, no se recepciona (factura/sucursal solas
+            // no generan registro de recepción)
+            if (cantidad <= 0 || ids.length === 0) return;
+
+            const facturaNumero = (info.factura || '').trim();
+            let facturaId = info.facturaId || null;
+
+            // Si la fila SIGUE en el DOM, re-validar contra su datalist
+            // (asegura el ID más actualizado y resalta inputs inválidos).
+            const $rowInDom = $('#tablaRecepcionProductos tbody tr.talla-detalle')
+                .filter(function() {
+                    let domIds = $(this).find('.recepcionado-input').data('ids');
+                    if (typeof domIds === 'string') {
+                        try { domIds = JSON.parse(domIds); } catch(e) { domIds = [domIds]; }
                     }
+                    const k = Array.isArray(domIds) ? domIds.join('-') : String(domIds || '');
+                    return k === key;
                 });
+            if ($rowInDom.length) {
+                const $facturaInput = $rowInDom.find('.factura-datalist-input');
+                const validatedId = validarFacturaInput($facturaInput);
+                if (validatedId) facturaId = validatedId;
             }
+
+            // Si hay número de factura pero no se pudo resolver el ID
+            if (facturaNumero && !facturaId) {
+                errorFactura = true;
+                errorMensajes.push(`Factura "${facturaNumero}" no válida (ingresada en otra búsqueda/página).`);
+            }
+
+            // Distribuir cantidad entre los IDs agrupados
+            const cantidadPorId = Math.floor(cantidad / ids.length);
+            const cantidadRestante = cantidad % ids.length;
+
+            ids.forEach((id, index) => {
+                const cantidadAsignada = cantidadPorId + (index < cantidadRestante ? 1 : 0);
+                if (cantidadAsignada > 0) {
+                    datos.push({
+                        compra_producto_talla_id: id,
+                        recepcionado: cantidadAsignada,
+                        factura_id: facturaId,
+                        sucursal_destino_id: info.sucursalId || null
+                    });
+                }
+            });
         });
         
         if (errorFactura) {
@@ -7010,30 +7116,64 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                 success: function(data) {
                     hideGlobalLoader();
                     if (data.success) {
-                        $('#modalRecepcionProductos').modal('hide');
-                        const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
-                        cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
+                        // Limpiar store temporal: el guardado fue exitoso,
+                        // no queremos re-enviar estos datos al reabrir el modal.
+                        datosRecepcionTemporales = {};
 
                         const totalRecepcionados = datos.length;
                         const totalUnidades = datos.reduce((sum, d) => sum + d.recepcionado, 0);
-                        Swal.fire({
-                            icon: 'success',
-                            title: '¡Recepción guardada!',
-                            html: `<div style="text-align:left;">
-                                <p><i class="bi bi-check-circle-fill text-success me-1"></i>Se recepcionaron <strong>${totalUnidades}</strong> unidades en <strong>${totalRecepcionados}</strong> línea(s).</p>
-                                <p class="text-muted mb-0" style="font-size:.82rem;"><i class="bi bi-arrow-right me-1"></i>Los productos están listos para ser creados en el módulo de <strong>Gestión de Productos</strong>.</p>
-                            </div>`,
-                            showCancelButton: true,
-                            confirmButtonText: '<i class="bi bi-archive me-1"></i>Ir a Crear Productos',
-                            cancelButtonText: 'Seguir en Compras',
-                            confirmButtonColor: '#0ab39c',
-                            cancelButtonColor: '#6c757d',
-                            reverseButtons: true
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                window.location.href = '/app/verGestionProducto/';
-                            }
-                        });
+
+                        // Toast no intrusivo (no cierra el modal)
+                        if (typeof Swal !== 'undefined' && Swal.mixin) {
+                            Swal.mixin({
+                                toast: true, position: 'top-end',
+                                showConfirmButton: false, timer: 3000,
+                                timerProgressBar: true,
+                            }).fire({
+                                icon: 'success',
+                                title: `${totalUnidades} unidades recepcionadas`,
+                            });
+                        }
+
+                        // Recargar la TABLA del modal con los datos actualizados.
+                        // Esto rebaja el stock visible y actualiza Pend/Recep
+                        // sin tener que cerrar y reabrir.
+                        const compraId = $('#globalIDCompraRecepcion').val();
+                        if (compraId) {
+                            cargarDatosRecepcion(compraId, currentPage || 1, currentSearch || '');
+                        }
+
+                        // Recargar también la tabla principal de compras (en background)
+                        const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
+                        cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
+
+                        // Si TODA la compra quedó completa, ofrecer ir a crear productos
+                        const tot = window.compraTotalesActual;
+                        const yaTodoRecepcionado = tot && (
+                            (tot.recepcionado_previo + totalUnidades) >= tot.stock_total
+                        );
+                        if (yaTodoRecepcionado) {
+                            setTimeout(() => {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: '¡Compra recepcionada al 100%!',
+                                    html: `<p>Se recepcionaron <strong>${totalUnidades}</strong> unidades.</p>
+                                           <p class="text-muted mb-0" style="font-size:.82rem;">
+                                               <i class="bi bi-arrow-right me-1"></i>Los productos están listos para ser creados en el módulo de <strong>Gestión de Productos</strong>.
+                                           </p>`,
+                                    showCancelButton: true,
+                                    confirmButtonText: '<i class="bi bi-archive me-1"></i>Ir a Crear Productos',
+                                    cancelButtonText: 'Seguir en Compras',
+                                    confirmButtonColor: '#0ab39c',
+                                    cancelButtonColor: '#6c757d',
+                                    reverseButtons: true
+                                }).then((result) => {
+                                    if (result.isConfirmed) {
+                                        window.location.href = '/app/verGestionProducto/';
+                                    }
+                                });
+                            }, 800);
+                        }
                     } else {
                         Swal.fire('Error', data.error || 'No se pudo guardar.', 'error');
                     }
