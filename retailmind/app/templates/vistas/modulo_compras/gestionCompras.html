@@ -341,13 +341,26 @@
 }
 
 .expand-icon {
-    transition: transform 0.2s ease;
-    display: inline-block;
+    transition: transform 0.2s ease, background 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    background: rgba(64, 81, 137, 0.08);
     color: #405189;
+    font-weight: 700;
+}
+
+.producto-grupo:hover .expand-icon {
+    background: rgba(64, 81, 137, 0.2);
 }
 
 .expand-icon.expanded {
     transform: rotate(90deg);
+    background: rgba(10, 179, 156, 0.15);
+    color: #099885;
 }
 
 .recepcion-masiva-input {
@@ -533,7 +546,7 @@
     .modal-body .row.g-3 { --bs-gutter-x: 0.5rem; --bs-gutter-y: 0.5rem; }
 
     .input-cantidad-wrapper .form-control { width: 55px; font-size: 0.85rem; padding: 6px 2px; }
-    .btn-cantidad-rapida { width: 24px; height: 24px; font-size: 0.6rem; }
+    .btn-cantidad-rapida { min-width: 34px; height: 24px; font-size: 0.6rem; padding: 0 5px; }
 
     #csvPreviewSection .table th, #csvPreviewSection .table td { font-size: 0.7rem; padding: 0.3rem; }
     .csv-upload-zone .card-body { padding: 1.5rem !important; }
@@ -633,17 +646,23 @@
 }
 
 .btn-cantidad-rapida {
-    width: 22px; height: 22px; padding: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.65rem; font-weight: 700; border-radius: 4px;
+    width: auto; min-width: 38px; height: 26px; padding: 0 8px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+    font-size: 0.68rem; font-weight: 700; border-radius: 6px;
     border: none; cursor: pointer; transition: all 0.15s ease;
+    letter-spacing: 0.3px;
 }
-.btn-cantidad-rapida:hover { transform: scale(1.1); }
-.btn-max { background: linear-gradient(135deg, #0ab39c, #099885); color: white; }
-.btn-mitad { background: linear-gradient(135deg, #405189, #364574); color: white; }
+.btn-cantidad-rapida:hover { transform: scale(1.05); filter: brightness(1.08); }
+.btn-max {
+    background: linear-gradient(135deg, #0ab39c, #099885);
+    color: white;
+    box-shadow: 0 2px 4px rgba(10,179,156,0.35);
+    text-transform: uppercase;
+}
+.btn-max i { font-size: 0.78rem; }
 .btn-clear { background: #f8d7da; color: #721c24; }
-.btn-cantidad-rapida:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-cantidad-rapida:disabled:hover { transform: none; }
+.btn-cantidad-rapida:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.btn-cantidad-rapida:disabled:hover { transform: none; filter: none; }
 
 .input-cantidad-wrapper.recepcion-completa .form-control {
     background: #e6fff9; border-color: #0ab39c; color: #099885;
@@ -1990,12 +2009,10 @@
             background: #ffc107 !important; color: #000 !important; border-color: #ffc107 !important;
         }
         
-        #modalRecepcionProductos .input-cantidad-wrapper { position: relative; display: inline-flex; align-items: center; }
-        #modalRecepcionProductos .btn-cantidad-rapida { 
-            font-size: 0.65rem; padding: 0 3px; background: none; border: none; 
-            cursor: pointer; opacity: 0.6; transition: opacity 0.2s;
-        }
-        #modalRecepcionProductos .btn-cantidad-rapida:hover { opacity: 1; }
+        #modalRecepcionProductos .input-cantidad-wrapper { position: relative; display: inline-flex; align-items: center; gap: 3px; }
+        /* El resto del look del botón Máx vive en la regla global
+           `.btn-cantidad-rapida` (fondo verde, ancho auto, etc.) para
+           que sea visible y legible también dentro del modal. */
         
         @media (max-width: 1400px) {
             .recep-col-extra { display: none; }
@@ -2133,12 +2150,10 @@
                                     <button class="btn btn-outline-secondary" type="button" id="btnLimpiarSearchRecepcion" title="Limpiar búsqueda" style="display:none;"><i class="bi bi-x-lg"></i></button>
                                     <button class="btn btn-primary" type="button" id="btnSearchRecepcion" title="Buscar (Enter)"><i class="bi bi-search"></i></button>
                                 </div>
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaAgrupada" autocomplete="off" checked>
-                                    <label class="btn btn-outline-primary btn-vista" for="vistaAgrupada" title="Vista agrupada"><i class="bi bi-grid-3x3-gap"></i></label>
-                                    <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaDetallada" autocomplete="off">
-                                    <label class="btn btn-outline-primary btn-vista" for="vistaDetallada" title="Vista detallada"><i class="bi bi-list-ul"></i></label>
-                                </div>
+                                <!-- Vista única: agrupada por producto. Checkbox oculto para
+                                     compatibilidad con el resto del JS que consulta
+                                     `$('#vistaAgrupada').is(':checked')`. -->
+                                <input type="checkbox" id="vistaAgrupada" checked style="display:none;">
                                 <select class="form-select form-select-sm" id="filtroEstadoRecepcion"
                                         style="width: 200px;"
                                         title="Filtrar por estado de rebaja de stock">
@@ -3374,11 +3389,14 @@ const GestionCompras = (function() {
                 if (data.items.length === 0) {
                     tbody.append('<tr><td colspan="14" class="text-center text-muted">No hay productos para recepcionar</td></tr>');
                 } else {
-                    if (data.vista_agrupada) {
-                        // Renderizar VISTA AGRUPADA
+                    // Única vista soportada: agrupada por producto. El
+                    // backend sigue aceptando `vista_agrupada` para
+                    // compatibilidad. Si el servidor devolviera el formato
+                    // "flat" (vista detallada vieja), caemos al render
+                    // detallado como respaldo defensivo.
+                    if (data.vista_agrupada !== false) {
                         renderizarVistaAgrupada(data.items, tbody, search);
                     } else {
-                        // Renderizar VISTA DETALLADA (original)
                         renderizarVistaDetallada(data.items, tbody, search);
                     }
                     // Montar Select2 en los selects de sucursal por fila
@@ -3559,8 +3577,11 @@ const GestionCompras = (function() {
         <input type="checkbox" class="form-check-input check-sucursal-grupo" data-grupo="${grupoId}" title="Seleccionar todas las tallas de este producto">
     </td>
     <td>
-        <i class="bi bi-chevron-right expand-icon me-1"></i>
+        <span class="expand-icon me-2" title="Ver / ocultar tallas de este producto">
+            <i class="bi bi-chevron-right"></i>
+        </span>
         <strong>${resaltarBusqueda(producto.nombre || '-', search)}</strong>
+        <small class="text-muted ms-1" style="font-size:0.65rem;">${producto.tallas.length} talla${producto.tallas.length === 1 ? '' : 's'}</small>
         ${recepcionadoTotal > 0 ? ' <small class="text-success"><i class="bi bi-check-circle-fill"></i></small>' : ''}
         ${pendDistribBadge}
     </td>
@@ -3689,7 +3710,12 @@ const GestionCompras = (function() {
     </td>
     <td>
         <div class="input-cantidad-wrapper ${pendiente === 0 ? 'recepcion-completa' : ''}">
-            <button type="button" class="btn-cantidad-rapida btn-max" onclick="aplicarCantidadRapida(this, 'max')" title="Máx" ${pendiente === 0 ? 'disabled' : ''}><i class="bi bi-arrow-up-circle-fill"></i></button>
+            <button type="button" class="btn-cantidad-rapida btn-max"
+                    onclick="aplicarCantidadRapida(this, 'max')"
+                    title="Rellenar con la cantidad pendiente (${pendiente})"
+                    ${pendiente === 0 ? 'disabled' : ''}>
+                <i class="bi bi-lightning-charge-fill"></i><span>TODO</span>
+            </button>
             <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
                    data-ids='${tallaIdsStr}' data-grupo="${grupoId}" data-stock="${talla.stock}"
                    data-costo="${producto.costo || 0}"
@@ -3699,7 +3725,6 @@ const GestionCompras = (function() {
                    placeholder="${pendiente > 0 ? (tieneRecepcion ? '+ ' + pendiente : pendiente) : '✓'}"
                    title="${pendiente > 0 ? (tieneRecepcion ? 'Ya recepcionado: ' + talla.recepcionado + '. Lo que ingreses se SUMA al total. Pendiente: ' + pendiente : 'Pendiente: ' + pendiente) : 'Talla completa (' + talla.recepcionado + '/' + talla.stock + ')'}"
                    ${pendiente === 0 ? 'disabled' : ''}>
-            <button type="button" class="btn-cantidad-rapida btn-mitad" onclick="aplicarCantidadRapida(this, 'mitad')" title="50%" ${pendiente === 0 ? 'disabled' : ''}>½</button>
         </div>
         <span class="indicador-ingresado badge-cantidad-ingresada" style="display:none"></span>
     </td>
@@ -3748,9 +3773,13 @@ const GestionCompras = (function() {
             tallasRows.toggle();
         });
 
-        // Auto-expandir todos los grupos al cargar
+        // Por defecto los grupos quedan COLAPSADOS: el usuario ve 1 fila
+        // por producto y puede hacer clic en el chevron para desglosar
+        // las tallas cuando lo necesite. Sólo auto-expandimos los grupos
+        // que ya tienen alguna recepción registrada (para que las revise
+        // de un vistazo).
         setTimeout(function() {
-            $('.producto-grupo').each(function() {
+            $('.producto-grupo.table-warning').each(function() {
                 const grupoId = $(this).data('grupo');
                 const icon = $(this).find('.expand-icon');
                 const tallasRows = $(`.talla-detalle[data-grupo="${grupoId}"]`);
@@ -3800,17 +3829,40 @@ const GestionCompras = (function() {
                 $tallasRows.show();
             }
             
-            // Distribuir cantidad si se ingresó
+            // Distribuir cantidad si se ingresó.
+            // Regla: si la cantidad ingresada ES IGUAL al stock total
+            // pendiente, se distribuye proporcionalmente entre las tallas
+            // (auto-completa). Si NO calza, NO distribuimos: obligamos al
+            // usuario a desglosar manualmente talla por talla (evita
+            // recepciones parciales distribuidas "al ojo").
             if (cantidadTotal > 0) {
-                tallasInputs.each(function() {
-                    const stockTalla = parseInt($(this).attr('max')) || 0;
-                    const proporcion = stockTalla / stockTotal;
-                    const cantidadTalla = Math.round(cantidadTotal * proporcion);
-                    $(this).val(cantidadTalla);
-                    if (cantidadTalla > 0) {
-                        $(this).addClass('is-valid').removeClass('is-invalid');
+                if (cantidadTotal === stockTotal) {
+                    tallasInputs.each(function() {
+                        const stockTalla = parseInt($(this).attr('max')) || 0;
+                        const proporcion = stockTalla / stockTotal;
+                        const cantidadTalla = Math.round(cantidadTotal * proporcion);
+                        $(this).val(cantidadTalla);
+                        if (cantidadTalla > 0) {
+                            $(this).addClass('is-valid').removeClass('is-invalid');
+                        }
+                    });
+                } else {
+                    // Cantidad no calza con el total → limpiar lo que
+                    // hubiera entrado por distribución previa, mantener
+                    // expandido y avisar al usuario.
+                    tallasInputs.val('');
+                    if (tallasInputs.length) {
+                        tallasInputs.first().focus();
                     }
-                });
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Desglosá por talla',
+                        html: `La cantidad ingresada (<strong>${cantidadTotal}</strong>) no coincide con el total pendiente (<strong>${stockTotal}</strong>) del producto.<br><br>` +
+                              `Ingresá cuántas unidades se recibieron en <strong>cada talla</strong> manualmente.`,
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#405189'
+                    });
+                }
             }
             
             // Aplicar factura a todas las tallas si se ingresó
@@ -3937,9 +3989,10 @@ const GestionCompras = (function() {
     <td>
         <div class="input-cantidad-wrapper ${pendiente === 0 ? 'recepcion-completa' : ''}">
             <button type="button" class="btn-cantidad-rapida btn-max"
-                    onclick="aplicarCantidadRapida(this, 'max')" title="Máximo"
+                    onclick="aplicarCantidadRapida(this, 'max')"
+                    title="Rellenar con la cantidad pendiente (${pendiente})"
                     ${pendiente === 0 ? 'disabled' : ''}>
-                <i class="bi bi-arrow-up-circle-fill"></i>
+                <i class="bi bi-lightning-charge-fill"></i><span>TODO</span>
             </button>
             <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
                    data-ids='${tallaIdsStr}'
@@ -3953,11 +4006,6 @@ const GestionCompras = (function() {
                    placeholder="${pendiente > 0 ? (tieneRecepcion ? '+ ' + pendiente : pendiente) : '✓'}"
                    title="${pendiente > 0 ? (tieneRecepcion ? 'Ya recepcionado: ' + item.recepcionado + '. Lo que ingreses se SUMA al total. Pendiente: ' + pendiente : 'Pendiente: ' + pendiente) : 'Recepción completa (' + item.recepcionado + '/' + item.stock + ')'}"
                    ${pendiente === 0 ? 'disabled' : ''}>
-            <button type="button" class="btn-cantidad-rapida btn-mitad"
-                    onclick="aplicarCantidadRapida(this, 'mitad')" title="50%"
-                    ${pendiente === 0 ? 'disabled' : ''}>
-                ½
-            </button>
         </div>
         <span class="indicador-ingresado badge-cantidad-ingresada" style="display: none;"></span>
     </td>
@@ -4078,13 +4126,10 @@ const GestionCompras = (function() {
         $('#searchRecepcion').val('').trigger('input').focus();
     });
 
-    // Cambiar entre vista agrupada y detallada
-    $('input[name="vistaRecepcion"]').on('change', function() {
-        if (currentCompraId) {
-            guardarDatosTemporales(); // Preservar datos antes de cambiar vista
-            cargarDatosRecepcion(currentCompraId, 1, currentSearch);
-        }
-    });
+    // NOTA: Se eliminó el toggle "Vista detallada / Vista agrupada".
+    // Queda UNA sola vista (agrupada por producto) con botón de
+    // expansión para ver las tallas cuando se necesite desglosar. El
+    // handler antiguo `input[name="vistaRecepcion"]` ya no existe.
 
     // (Botón "Recargar facturas" eliminado de la toolbar; la recarga se
     // dispara automáticamente al abrir el modal vía actualizarFacturasDisponibles.)
@@ -7074,11 +7119,15 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                 const cantidad = parseInt(info.cantidad) || 0;
                 const ids = info.ids || [];
 
-                // Si no hay cantidad, no se recepciona (factura/sucursal solas
-                // no generan registro de recepción)
-                if (cantidad <= 0 || ids.length === 0) return;
+                if (ids.length === 0) return;
 
                 const facturaNumero = (info.factura || '').trim();
+                // Permitimos cantidad=0 SÓLO cuando el usuario está
+                // actualizando la factura de una recepción existente.
+                // En ese caso el backend (guardar_recepcion) detecta el
+                // caso y asigna la factura a la recepción sin DTE.
+                // Sin cantidad ni factura no hay nada que enviar.
+                if (cantidad <= 0 && !facturaNumero) return;
                 let facturaId = info.facturaId || null;
 
                 // Si la fila SIGUE en el DOM, re-validar contra su datalist
@@ -7126,7 +7175,13 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
 
                 ids.forEach((id, index) => {
                     const cantidadAsignada = cantidadPorId + (index < cantidadRestante ? 1 : 0);
-                    if (cantidadAsignada > 0) {
+                    // Enviamos la fila al backend en dos casos:
+                    //   - cantidad > 0: recepción normal.
+                    //   - cantidad == 0 y facturaId != null: el usuario
+                    //     está asignando factura a una recepción previa
+                    //     que se guardó sin DTE. El backend detecta este
+                    //     caso y actualiza la recepción sin factura.
+                    if (cantidadAsignada > 0 || (cantidadAsignada === 0 && facturaId)) {
                         datos.push({
                             compra_producto_talla_id: id,
                             recepcionado: cantidadAsignada,

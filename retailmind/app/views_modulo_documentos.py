@@ -30,7 +30,27 @@ from .models import (
 @login_required
 def gestion_dte(request):
     """Vista para mostrar la página de gestión de DTEs de venta"""
-    return render(request, 'vistas/modulo_administracion/gestion_dte.html')
+    from app.models.permisos import PermisoRol
+
+    sucursal_actual_id = (
+        request.session.get('idSucursalActual')
+        or request.session.get('sucursalActual')
+    )
+
+    es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+
+    puede_descargar_txt_dte = PermisoRol.tiene_permiso(
+        request.user,
+        'dte_descargar_txt',
+        'puede_ver',
+        sucursal_id=sucursal_actual_id,
+    )
+
+    context = {
+        'es_admin': es_admin,
+        'puede_descargar_txt_dte': puede_descargar_txt_dte,
+    }
+    return render(request, 'vistas/modulo_administracion/gestion_dte.html', context)
 
 
 @login_required

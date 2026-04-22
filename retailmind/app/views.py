@@ -9548,6 +9548,28 @@ def guardar_recepcion(request):
             compra_talla = Compras_Producto_Talla.objects.select_related('compra_producto').get(id=compra_talla_id)
             compra_producto = compra_talla.compra_producto
 
+            # Caso especial: recepción sin cantidad nueva pero con factura
+            # nueva. El usuario está "actualizando" la factura de una
+            # recepción existente (que fue guardada sin DTE). En ese caso
+            # buscamos la recepción sin factura y le asignamos el DTE,
+            # en lugar de crear una fila nueva con stockArribado=0.
+            if (not cantidad or int(cantidad) == 0) and factura_id:
+                recepcion_sin_factura = Productos_Recepcionados.objects.filter(
+                    compra_producto_talla=compra_talla,
+                    dte_id__isnull=True,
+                ).order_by('-id').first()
+                if recepcion_sin_factura:
+                    recepcion_sin_factura.dte_id = factura_id
+                    if sucursal_en_payload:
+                        recepcion_sin_factura.sucursal_destino = sucursal_item
+                    elif sucursal_item:
+                        recepcion_sin_factura.sucursal_destino = sucursal_item
+                    recepcion_sin_factura.save()
+                    continue
+                # Si no hay recepción previa sin factura, no creamos una
+                # nueva con stockArribado=0 (no tiene sentido): saltamos.
+                continue
+
             recepcion_existente = Productos_Recepcionados.objects.filter(
                 compra_producto_talla=compra_talla,
                 dte_id=factura_id,
