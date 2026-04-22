@@ -9943,64 +9943,79 @@ def limpiar_productos_compra(request):
         return JsonResponse({'success': False, 'error': f'Error: {str(e)}'}, status=500)
 
 
+@login_required
+@require_POST
+@transaction.atomic
+def agregar_producto_manual_a_compra(request):
+    """
+    Agrega un producto a una Compra existente desde el modal
+    "Agregar Producto Manual" (vista Gestión de Compras).
 
+    Acepta JSON (preferido) o POST form-encoded. Crea un `Compras_Producto`
+    en la compra indicada y las `Compras_Producto_Talla` asociadas. El
+    producto queda enlazado al DTE via la compra (no se modifica el
+    catálogo central `Producto`; eso ocurre al recepcionar).
+    """
     try:
-        # Detectar si es JSON o POST normal
         if request.content_type == 'application/json':
             import json
-            data = json.loads(request.body)
+            data = json.loads(request.body or b'{}')
             dte_id = data.get('dte_id')
             compra_id = data.get('compra_id')
-            nombre = data.get('nombre')
-            descripcion = data.get('descripcion', '')
-            atributo1 = data.get('atributo1', '')
-            atributo2 = data.get('atributo2', '')
-            atributo3 = data.get('atributo3', '')
-            atributo4 = data.get('atributo4', '')
+            nombre = (data.get('nombre') or '').strip()
+            descripcion = data.get('descripcion', '') or ''
+            atributo1 = data.get('atributo1', '') or ''
+            atributo2 = data.get('atributo2', '') or ''
+            atributo3 = data.get('atributo3', '') or ''
+            atributo4 = data.get('atributo4', '') or ''
             costo = data.get('costo')
             precio_sugerido = data.get('precioSugerido')
-            tallas = data.get('tallas', [])  # Lista de {talla, stock}
+            tallas = data.get('tallas', []) or []
         else:
-            # Compatibilidad con POST normal (una sola talla)
             dte_id = request.POST.get('dte_id')
             compra_id = request.POST.get('compra_id')
-            nombre = request.POST.get('nombre')
-            descripcion = request.POST.get('descripcion', '')
-            atributo1 = request.POST.get('atributo1', '')
-            atributo2 = request.POST.get('atributo2', '')
-            atributo3 = request.POST.get('atributo3', '')
-            atributo4 = request.POST.get('atributo4', '')
+            nombre = (request.POST.get('nombre') or '').strip()
+            descripcion = request.POST.get('descripcion', '') or ''
+            atributo1 = request.POST.get('atributo1', '') or ''
+            atributo2 = request.POST.get('atributo2', '') or ''
+            atributo3 = request.POST.get('atributo3', '') or ''
+            atributo4 = request.POST.get('atributo4', '') or ''
             costo = request.POST.get('costo')
             precio_sugerido = request.POST.get('precioSugerido')
-            # Formato antiguo: una sola talla
-            tallas = [{'talla': request.POST.get('talla'), 'stock': request.POST.get('stock')}]
-        
-        # Validaciones
+            # Compatibilidad legacy: una sola talla en campos planos.
+            tallas = [{
+                'talla': request.POST.get('talla'),
+                'stock': request.POST.get('stock'),
+            }]
+
         if not dte_id:
             return JsonResponse({'success': False, 'error': 'Debe seleccionar un DTE'}, status=400)
-        
         if not compra_id:
             return JsonResponse({'success': False, 'error': 'Debe tener una compra activa'}, status=400)
-        
         if not nombre:
             return JsonResponse({'success': False, 'error': 'El nombre del producto es obligatorio'}, status=400)
-        
-        if not tallas or len(tallas) == 0:
+        if not tallas:
             return JsonResponse({'success': False, 'error': 'Debe agregar al menos una talla'}, status=400)
-        
-        # Verificar que el DTE existe y es válido
+
         try:
             dte = Dte.objects.get(id=dte_id, tipo_transaccion='COMPRA')
         except Dte.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'DTE no válido'}, status=400)
-        
-        # Verificar que la compra existe
+
         try:
             compra = Compras.objects.get(id=compra_id)
         except Compras.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Compra no válida'}, status=400)
-        
-        # Crear el producto de compra (esto aparecerá en la recepción)
+
+        if compra.estado == 'ELIMINADA':
+            return JsonResponse({'success': False, 'error': 'La compra está eliminada'}, status=400)
+
+        try:
+            costo_int = int(float(costo or 0))
+            precio_sug_int = int(float(precio_sugerido or 0))
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Costo o precio inválidos'}, status=400)
+
         compra_producto = Compras_Producto.objects.create(
             compras=compra,
             nombre=nombre,
@@ -10009,37 +10024,47 @@ def limpiar_productos_compra(request):
             atributo2=atributo2,
             atributo3=atributo3,
             atributo4=atributo4,
-            costo=int(float(costo or 0)),
-            precioSugerido=int(float(precio_sugerido or 0))
+            costo=costo_int,
+            precioSugerido=precio_sug_int,
         )
-        
-        # Crear todas las tallas del producto
+
         tallas_creadas = 0
         for talla_data in tallas:
-            talla_valor = talla_data.get('talla', '').strip()
-            stock_valor = int(talla_data.get('stock', 0))
-            
+            talla_valor = (talla_data.get('talla') or '').strip()
+            try:
+                stock_valor = int(talla_data.get('stock') or 0)
+            except (TypeError, ValueError):
+                stock_valor = 0
+
             if talla_valor and stock_valor > 0:
                 Compras_Producto_Talla.objects.create(
                     compra_producto=compra_producto,
                     stock=stock_valor,
-                    talla=talla_valor
+                    talla=talla_valor,
                 )
                 tallas_creadas += 1
-        
+
         if tallas_creadas == 0:
-            # Rollback implícito por @transaction.atomic
+            # transaction.atomic revierte el Compras_Producto creado.
             raise ValueError('No se pudo crear ninguna talla válida')
-        
+
         return JsonResponse({
-            'success': True, 
+            'success': True,
             'message': f'Producto agregado con {tallas_creadas} talla(s)',
-            'tallas_creadas': tallas_creadas
+            'tallas_creadas': tallas_creadas,
+            'compra_producto_id': compra_producto.id,
+            'dte_id': dte.id,
         })
-        
+
+    except ValueError as ve:
+        return JsonResponse({'success': False, 'error': str(ve)}, status=400)
     except Exception as e:
+        import traceback
+        print(f"❌ Error en agregar_producto_manual_a_compra: {str(e)}")
+        print(traceback.format_exc())
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
- 
+
+
 def productos_recepcionados(request):
     productos = Productos_Recepcionados.objects.select_related(
         'compra_producto_talla__compra_producto', 'dte'

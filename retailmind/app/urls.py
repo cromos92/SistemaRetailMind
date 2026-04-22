@@ -431,7 +431,7 @@ urlpatterns = [
      path('procesar_pago_masivo/', views.procesar_pago_masivo, name='procesar_pago_masivo'),
      path('guardar_recepcion/', views.guardar_recepcion, name='guardar_recepcion'),
      path('actualizar_sucursal_recepciones/', views.actualizar_sucursal_recepciones, name='actualizar_sucursal_recepciones'),
-     path('agregar_producto_manual/', views.crear_producto_manual, name='agregar_producto_manual'),
+     path('agregar_producto_manual/', views.agregar_producto_manual_a_compra, name='agregar_producto_manual'),
      path('eliminar_producto_compra/', views.eliminar_producto_compra, name='eliminar_producto_compra'),
      path('limpiar_productos_compra/', views.limpiar_productos_compra, name='limpiar_productos_compra'),
      # Distribución por guía de tallas / curvas
