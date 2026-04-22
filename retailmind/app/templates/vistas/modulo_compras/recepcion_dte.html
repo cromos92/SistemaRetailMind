@@ -1122,10 +1122,20 @@
                 <div class="card recepcion-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
-                            <h5 class="mb-0">Documentos de Traspaso</h5>
-                            <small class="text-muted">Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal</small>
+                            <h5 class="mb-0" id="tituloSeccionDocumentos">Documentos de Traspaso</h5>
+                            <small class="text-muted" id="subtituloSeccionDocumentos">Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal</small>
                         </div>
-                        <div>
+                        <div class="d-flex gap-2 align-items-center">
+                            {% if puede_ajustar_emitidos %}
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Modo de vista">
+                                <button type="button" class="btn btn-outline-primary active" id="btnModoRecibidos" title="DTEs dirigidos a esta sucursal (para recepcionar)">
+                                    <i class="bi bi-box-arrow-in-down me-1"></i>Recibidos
+                                </button>
+                                <button type="button" class="btn btn-outline-warning" id="btnModoEmitidos" title="DTEs emitidos por esta sucursal y aún no recepcionados">
+                                    <i class="bi bi-box-arrow-up me-1"></i>Emitidos por mí
+                                </button>
+                            </div>
+                            {% endif %}
                             <button id="btnRefresh" class="btn btn-outline-primary btn-sm">
                                 <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
                             </button>
@@ -1354,6 +1364,89 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal AJUSTAR DTE EMISOR (solo reducir / anular productos) -->
+<div class="modal fade" id="modalAjustarDteEmisor" tabindex="-1" aria-labelledby="modalAjustarDteEmisorLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #c47d00 0%, #e69a00 100%); color: #fff;">
+                <div>
+                    <h5 class="modal-title mb-1" id="modalAjustarDteEmisorLabel">
+                        <i class="bi bi-pencil-square me-2"></i>Ajustar DTE emitido — <span id="ajusteNumero">-</span>
+                    </h5>
+                    <small class="opacity-75" id="ajusteSubtitulo">Reduce cantidades o quita productos antes de que el receptor recepcione</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning border-0 mb-3" style="border-radius: 10px;">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Modo emisor:</strong> esto afecta el DTE <span id="ajusteTipoDocTexto">-</span> <span id="ajusteNumeroRef">-</span>.
+                    Al confirmar se genera un documento de trazabilidad automáticamente:
+                    <ul class="mb-0 mt-1">
+                        <li>Si el DTE original es <strong>Factura/Boleta</strong> → se emite <strong>Nota de Crédito</strong> por el diferencial.</li>
+                        <li>Si es <strong>Guía u otro no-facturable</strong> → se registra un <strong>Ajuste Traspaso</strong> interno.</li>
+                    </ul>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body py-2">
+                                <div class="row">
+                                    <div class="col-6"><small class="text-muted">Tipo:</small> <strong id="ajusteTipoDoc">-</strong></div>
+                                    <div class="col-6"><small class="text-muted">Destino:</small> <strong id="ajusteDestino">-</strong></div>
+                                    <div class="col-6"><small class="text-muted">Fecha emisión:</small> <strong id="ajusteFecha">-</strong></div>
+                                    <div class="col-6"><small class="text-muted">Unidades originales:</small> <strong id="ajusteUnidades">-</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold mb-1">Motivo del ajuste <span class="text-danger">*</span></label>
+                        <textarea id="ajusteMotivo" class="form-control" rows="2" placeholder="Ej: Mercadería dañada, error de conteo en bodega, etc." maxlength="500"></textarea>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="max-height: 45vh; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px;">
+                    <table class="table table-hover mb-0">
+                        <thead class="sticky-top bg-white" style="top: 0; z-index: 10;">
+                            <tr>
+                                <th style="width: 110px;">SKU</th>
+                                <th>Producto</th>
+                                <th style="width: 70px;">Talla</th>
+                                <th style="width: 90px;" class="text-center">Original</th>
+                                <th style="width: 110px;" class="text-center">Nueva cant.</th>
+                                <th style="width: 70px;" class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ajusteProductosBody">
+                            <tr><td colspan="6" class="text-center text-muted py-3">Seleccione un DTE para cargar productos...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 small text-muted">
+                    <div>
+                        <i class="bi bi-info-circle me-1"></i>
+                        Al poner cantidad 0 se quita el producto. Para aumentar, emitir otro DTE.
+                    </div>
+                    <div>
+                        Diferencial neto: <strong id="ajusteDiferencialNeto">$0</strong> · Unidades a retirar: <strong id="ajusteDiferencialUnidades">0</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarAjusteEmisor">
+                    <i class="bi bi-check-circle me-1"></i>Confirmar ajuste y generar documento
+                </button>
             </div>
         </div>
     </div>
@@ -4187,6 +4280,353 @@ function confirmarCorreccionEmisor() {
         });
     });
 }
+
+// =====================================================================
+// MODO EMISOR: toggle "Emitidos por mi" y modal de ajuste
+// =====================================================================
+window.modoEmitidos = false;
+window.emitidosData = [];
+window.ajusteDteActual = null;
+
+function _ajusteFormatearPesos(v) {
+    const n = Number(v) || 0;
+    return '$' + n.toLocaleString('es-CL');
+}
+
+function cambiarModoVista(nuevoModoEmitidos) {
+    if (window.modoEmitidos === nuevoModoEmitidos) return;
+    window.modoEmitidos = nuevoModoEmitidos;
+    if (nuevoModoEmitidos) {
+        $('#btnModoRecibidos').removeClass('active');
+        $('#btnModoEmitidos').addClass('active');
+        $('#tituloSeccionDocumentos').text('DTEs emitidos por mi sucursal');
+        $('#subtituloSeccionDocumentos').text('DTEs que emitiste y todavía no fueron recepcionados. Podés reducir cantidades o quitar productos.');
+        $('#filterEstadoDte').closest('.col-md-3').hide();
+        cargarEmitidos();
+    } else {
+        $('#btnModoEmitidos').removeClass('active');
+        $('#btnModoRecibidos').addClass('active');
+        $('#tituloSeccionDocumentos').text('Documentos de Traspaso');
+        $('#subtituloSeccionDocumentos').text('Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal');
+        $('#filterEstadoDte').closest('.col-md-3').show();
+        paginaActual = 1;
+        cargarRecepciones();
+    }
+}
+
+function cargarEmitidos() {
+    const filtros = {
+        tipo_documento: $('#filterTipoDocumento').val(),
+        fecha_inicio: $('#filterFechaInicio').val(),
+        fecha_fin: $('#filterFechaFin').val(),
+        pagina: paginaActual,
+    };
+
+    $('#recepcionesBody').html(`
+        <tr>
+            <td colspan="7" class="text-center py-4">
+                <div class="spinner-border text-warning" role="status"></div>
+                <p class="mt-2 mb-0 text-muted">Cargando DTEs emitidos pendientes...</p>
+            </td>
+        </tr>
+    `);
+
+    $.ajax({
+        url: '/app/dte/emitidos_pendientes/',
+        method: 'GET',
+        data: filtros,
+        dataType: 'json',
+    }).done(resp => {
+        if (!resp || !resp.success) {
+            Swal.fire('Error', (resp && resp.error) || 'No se pudieron cargar los DTEs emitidos.', 'error');
+            return;
+        }
+        window.emitidosData = resp.items || [];
+        totalPaginas = resp.total_paginas || 1;
+        renderTablaEmitidos();
+        actualizarPaginacion();
+    }).fail(xhr => {
+        const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Error inesperado';
+        $('#recepcionesBody').html(`
+            <tr><td colspan="7" class="text-center py-4 text-muted">
+                <i class="bi bi-exclamation-triangle text-warning me-2"></i>${msg}
+            </td></tr>
+        `);
+    });
+}
+
+function renderTablaEmitidos() {
+    const tbody = $('#recepcionesBody');
+    tbody.empty();
+    if (!window.emitidosData.length) {
+        tbody.append(`
+            <tr><td colspan="7">
+                <div class="empty-state">
+                    <i class="bi bi-clipboard-check"></i>
+                    <h5 class="mt-2">Sin DTEs emitidos pendientes</h5>
+                    <p class="text-muted">Todos los DTEs que emitiste ya fueron recepcionados por su destino, o no hay ninguno en estado "Emitido".</p>
+                </div>
+            </td></tr>
+        `);
+        return;
+    }
+
+    window.emitidosData.forEach(d => {
+        tbody.append(`
+            <tr>
+                <td><strong>${d.tipo_documento}</strong><br><span class="text-muted">#${d.numero_documento}</span></td>
+                <td>${d.sucursal_destino || d.receptor || '-'}</td>
+                <td>${d.fecha_emision || '-'}</td>
+                <td>${d.unidades_productos} uds</td>
+                <td>${_ajusteFormatearPesos(d.monto_con_iva)}</td>
+                <td><span class="badge bg-warning text-dark">Pendiente de recepción</span></td>
+                <td>
+                    <button class="btn btn-sm btn-warning btn-abrir-ajuste" data-dte-id="${d.id}">
+                        <i class="bi bi-pencil-square me-1"></i>Ajustar
+                    </button>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function abrirModalAjusteEmisor(dteId) {
+    const dte = (window.emitidosData || []).find(d => d.id === dteId);
+    if (!dte) {
+        Swal.fire('Error', 'DTE no encontrado en la lista actual.', 'error');
+        return;
+    }
+
+    window.ajusteDteActual = dte;
+
+    $('#ajusteNumero').text('#' + dte.numero_documento);
+    $('#ajusteNumeroRef').text('#' + dte.numero_documento);
+    $('#ajusteTipoDoc').text(dte.tipo_documento);
+    $('#ajusteTipoDocTexto').text(dte.tipo_documento);
+    $('#ajusteDestino').text(dte.sucursal_destino || dte.receptor || '-');
+    $('#ajusteFecha').text(dte.fecha_emision || '-');
+    $('#ajusteUnidades').text(dte.unidades_productos || 0);
+    $('#ajusteMotivo').val('').removeClass('is-invalid');
+
+    $('#ajusteProductosBody').html(`
+        <tr><td colspan="6" class="text-center py-3">
+            <div class="spinner-border text-warning spinner-border-sm"></div>
+            <span class="text-muted ms-2">Cargando productos del DTE...</span>
+        </td></tr>
+    `);
+
+    $.get(`/app/api/detalle_dte_completo/${dteId}/`).done(resp => {
+        const productos = (resp && (resp.productos || resp.dte_productos)) || [];
+        if (!productos.length) {
+            $('#ajusteProductosBody').html(`
+                <tr><td colspan="6" class="text-center text-muted py-3">Sin productos activos en el DTE.</td></tr>
+            `);
+        } else {
+            const filas = productos.filter(p => (p.activo === undefined) || p.activo).map(p => {
+                const dpId = p.id || p.dte_producto_id;
+                const sku = p.sku || (p.productoTalla && p.productoTalla.sku) || '-';
+                const talla = p.talla || (p.productoTalla && p.productoTalla.talla) || '-';
+                const nombre = p.descripcion || p.articulo || p.nombre || '-';
+                const cantidad = parseInt(p.stock || p.cantidad || 0, 10);
+                return `
+                    <tr data-dp-id="${dpId}" data-cantidad-original="${cantidad}" data-precio="${p.precio || 0}">
+                        <td><small class="font-monospace">${sku}</small></td>
+                        <td><small>${nombre}</small></td>
+                        <td class="text-center"><span class="badge bg-secondary">${talla}</span></td>
+                        <td class="text-center"><strong>${cantidad}</strong></td>
+                        <td class="text-center">
+                            <input type="number" class="form-control form-control-sm text-center input-ajuste-cantidad"
+                                   min="0" max="${cantidad}" value="${cantidad}" style="width: 95px; display:inline-block;">
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-danger btn-poner-cero" title="Quitar producto (cantidad = 0)">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            $('#ajusteProductosBody').html(filas);
+            actualizarDiferencialAjuste();
+        }
+    }).fail(() => {
+        $('#ajusteProductosBody').html(`
+            <tr><td colspan="6" class="text-center text-danger py-3">
+                <i class="bi bi-exclamation-triangle"></i> No se pudieron cargar los productos.
+            </td></tr>
+        `);
+    });
+
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAjustarDteEmisor'));
+    modal.show();
+}
+
+function actualizarDiferencialAjuste() {
+    let difNeto = 0;
+    let difUnidades = 0;
+    $('#ajusteProductosBody tr[data-dp-id]').each(function () {
+        const $tr = $(this);
+        const cantOriginal = parseInt($tr.data('cantidad-original'), 10) || 0;
+        const precio = parseFloat($tr.data('precio')) || 0;
+        const $input = $tr.find('.input-ajuste-cantidad');
+        let nuevaCant = parseInt($input.val(), 10);
+        if (isNaN(nuevaCant) || nuevaCant < 0) nuevaCant = 0;
+        if (nuevaCant > cantOriginal) {
+            $input.val(cantOriginal);
+            nuevaCant = cantOriginal;
+        }
+        const dif = cantOriginal - nuevaCant;
+        if (dif > 0) {
+            difUnidades += dif;
+            difNeto += dif * precio;
+        }
+    });
+    $('#ajusteDiferencialNeto').text(_ajusteFormatearPesos(difNeto));
+    $('#ajusteDiferencialUnidades').text(difUnidades);
+}
+
+function confirmarAjusteEmisor() {
+    if (!window.ajusteDteActual) return;
+    const motivo = ($('#ajusteMotivo').val() || '').trim();
+    if (!motivo) {
+        $('#ajusteMotivo').addClass('is-invalid').focus();
+        Swal.fire('Motivo requerido', 'Escribe el motivo del ajuste.', 'warning');
+        return;
+    }
+
+    const ajustes = [];
+    $('#ajusteProductosBody tr[data-dp-id]').each(function () {
+        const $tr = $(this);
+        const dpId = parseInt($tr.data('dp-id'), 10);
+        const cantOriginal = parseInt($tr.data('cantidad-original'), 10) || 0;
+        let nuevaCant = parseInt($tr.find('.input-ajuste-cantidad').val(), 10);
+        if (isNaN(nuevaCant) || nuevaCant < 0) nuevaCant = 0;
+        if (nuevaCant > cantOriginal) nuevaCant = cantOriginal;
+        if (nuevaCant !== cantOriginal) {
+            ajustes.push({ dte_producto_id: dpId, nueva_cantidad: nuevaCant });
+        }
+    });
+
+    if (!ajustes.length) {
+        Swal.fire('Sin cambios', 'No modificaste ninguna cantidad. Baja alguna cantidad o quita un producto.', 'info');
+        return;
+    }
+
+    Swal.fire({
+        title: '¿Confirmar ajuste del DTE?',
+        html: `
+            <p>Se generará un documento de trazabilidad con los productos retirados.</p>
+            <p class="small text-muted">Esta acción reversa el stock al emisor y notifica al receptor.</p>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e69a00',
+        confirmButtonText: 'Sí, ajustar',
+        cancelButtonText: 'Cancelar',
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        const $btn = $('#btnConfirmarAjusteEmisor');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Procesando...');
+
+        $.ajax({
+            url: '/app/dte/ajustar_emitido/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                dte_id: window.ajusteDteActual.id,
+                ajustes: ajustes,
+                motivo: motivo,
+            }),
+        }).done(resp => {
+            if (!resp || !resp.success) {
+                Swal.fire('Error', (resp && resp.error) || 'No se pudo aplicar el ajuste.', 'error');
+                return;
+            }
+            const doc = resp.doc_trazador || {};
+            bootstrap.Modal.getInstance(document.getElementById('modalAjustarDteEmisor')).hide();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Ajuste aplicado',
+                html: `
+                    <p>${resp.message || 'Ajuste realizado correctamente.'}</p>
+                    <ul class="list-unstyled text-start small mb-0">
+                        <li><strong>Documento generado:</strong> ${doc.tipo_documento} #${doc.numero_documento}</li>
+                        <li><strong>Es Nota de Crédito:</strong> ${doc.es_nota_credito ? 'Sí' : 'No (ajuste interno)'}</li>
+                        <li><strong>Unidades retiradas:</strong> ${doc.unidades}</li>
+                        <li><strong>Monto neto:</strong> ${_ajusteFormatearPesos(doc.monto_neto)}</li>
+                    </ul>
+                `,
+                confirmButtonText: 'Entendido',
+            }).then(() => {
+                cargarEmitidos();
+            });
+        }).fail(xhr => {
+            const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Error al aplicar el ajuste.';
+            Swal.fire('Error', msg, 'error');
+        }).always(() => {
+            $btn.prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i>Confirmar ajuste y generar documento');
+        });
+    });
+}
+
+// Wiring de los eventos de modo emisor (no rompe nada si no existen los botones)
+$(document).ready(function () {
+    $('#btnModoRecibidos').on('click', () => cambiarModoVista(false));
+    $('#btnModoEmitidos').on('click', () => cambiarModoVista(true));
+
+    // Refresh respeta el modo activo
+    $('#btnRefresh').on('click', function () {
+        if (window.modoEmitidos) {
+            paginaActual = 1;
+            cargarEmitidos();
+        }
+        // Si no es modoEmitidos, el handler original ya corre cargarRecepciones(true)
+    });
+
+    // Filtros cambian segun modo
+    $('#filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', function () {
+        if (window.modoEmitidos) {
+            paginaActual = 1;
+            cargarEmitidos();
+        }
+    });
+
+    // Paginacion en modo emisor
+    $('#btnPrev').on('click', function () {
+        if (window.modoEmitidos && paginaActual > 1) {
+            paginaActual -= 1;
+            cargarEmitidos();
+        }
+    });
+    $('#btnNext').on('click', function () {
+        if (window.modoEmitidos && paginaActual < totalPaginas) {
+            paginaActual += 1;
+            cargarEmitidos();
+        }
+    });
+
+    // Abrir modal de ajuste
+    $(document).on('click', '.btn-abrir-ajuste', function () {
+        const dteId = parseInt($(this).data('dte-id'), 10);
+        abrirModalAjusteEmisor(dteId);
+    });
+
+    // Input cantidad -> recalcular diferencial
+    $(document).on('input', '#ajusteProductosBody .input-ajuste-cantidad', actualizarDiferencialAjuste);
+
+    // Poner en 0 con el boton X
+    $(document).on('click', '#ajusteProductosBody .btn-poner-cero', function () {
+        const $tr = $(this).closest('tr');
+        $tr.find('.input-ajuste-cantidad').val(0);
+        actualizarDiferencialAjuste();
+    });
+
+    // Confirmar
+    $('#btnConfirmarAjusteEmisor').on('click', confirmarAjusteEmisor);
+});
 </script>
 
 

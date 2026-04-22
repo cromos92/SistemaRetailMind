@@ -13,9 +13,9 @@ from django.views.decorators.http import require_POST, require_GET, require_http
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import (
     Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg,
-    Case, When, IntegerField, Value, Exists, OuterRef, Prefetch,
+    Case, When, IntegerField, Value, Exists, OuterRef, Prefetch, Subquery,
 )
-from django.db.models.functions import TruncDate
+from django.db.models.functions import TruncDate, Coalesce
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -3720,9 +3720,35 @@ def listar_documentos_ventas(request):
         dtes_filtrados = dtes_filtrados.order_by(f'{prefix}{campo_db}', '-id')
 
         # --- Estadísticas globales en UN solo aggregate ---
-        stats = dtes_filtrados.aggregate(
+        # `total_ventas` debe coincidir con la columna "total" que se muestra
+        # por fila: cuando hay pagos registrados, usamos la suma de pagos
+        # (ya refleja descuentos aplicados en el cobro); si no, caemos a
+        # `monto_con_iva`. Sumar directamente `monto_con_iva` daba un monto
+        # mayor cuando el descuento quedaba sólo en el detalle de pago y no
+        # se reflejaba en la cabecera del DTE.
+        pagos_sum_sub = (
+            Dte_Detalle_Pago.objects
+            .filter(dte_id=OuterRef('pk'))
+            .values('dte_id')
+            .annotate(t=Sum('monto'))
+            .values('t')
+        )
+        dtes_con_total = dtes_filtrados.annotate(
+            _total_pagos=Coalesce(
+                Subquery(pagos_sum_sub, output_field=DecimalField(max_digits=14, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=14, decimal_places=2)),
+            ),
+        ).annotate(
+            _total_real=Case(
+                When(_total_pagos__gt=0, then=F('_total_pagos')),
+                default=F('monto_con_iva'),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        )
+
+        stats = dtes_con_total.aggregate(
             total_documentos=Count('id', distinct=True),
-            total_ventas=Sum('monto_con_iva'),
+            total_ventas=Sum('_total_real'),
             total_pendientes=Count('id', filter=Q(estado_dte='PENDIENTE'), distinct=True),
             total_facturas=Count(
                 'id',
@@ -3795,6 +3821,14 @@ def listar_documentos_ventas(request):
 
             metodos_pago_raw = []
             total_pagos = 0
+            # Los pagos heredan la fecha del DTE (Dte_Detalle_Pago no tiene
+            # campo `fecha` propio). Se expone aquí para poder renderizarla
+            # en la grilla y comprobar que sigue alineada al DTE tras una
+            # edición de `fecha_emision`.
+            fecha_pago_dte = (
+                dte.fecha_emision.strftime('%Y-%m-%d')
+                if dte.fecha_emision else None
+            )
             for pago in dte.dte_asociado.all():
                 total_pagos += pago.monto or 0
                 metodos_pago_raw.append({
@@ -3804,6 +3838,7 @@ def listar_documentos_ventas(request):
                     'voucher': pago.voucher or '',
                     'tipo_tarjeta': pago.tipo_tarjeta or '',
                     'notas': getattr(pago, 'notas', '') or '',
+                    'fecha_pago': fecha_pago_dte,
                 })
             metodos_pago = agrupar_metodos_pago(metodos_pago_raw)
 
@@ -4428,16 +4463,27 @@ def detalle_documento_venta(request, documento_id):
                     'subtotal': dp.precio * dp.stock,
                 })
             
-            # Obtener pagos
+            # Obtener pagos.
+            # Nota: `Dte_Detalle_Pago` no tiene un campo `fecha` propio: la
+            # fecha del pago HEREDA de `dte.fecha_emision`. Por eso la
+            # exponemos como `fecha_pago` para que el frontend pueda mostrarla
+            # al usuario y verificar que siempre está alineada con el DTE
+            # (útil cuando se edita la fecha del DTE desde /ventas/documentos).
+            fecha_pago_dte = (
+                documento.fecha_emision.strftime('%Y-%m-%d')
+                if documento.fecha_emision else None
+            )
             pagos_raw = []
             for pago in documento.dte_asociado.all():
                 pagos_raw.append({
+                    'id': pago.id,
                     'metodo': pago.metodo_pago,
                     'metodo_display': obtener_nombre_metodo_pago(pago.metodo_pago),
                     'monto': pago.monto,
                     'voucher': pago.voucher or '',
                     'tipo_tarjeta': pago.tipo_tarjeta or '',
                     'notas': pago.notas or '',
+                    'fecha_pago': fecha_pago_dte,
                 })
 
             # Agrupar pagos por método y sumar montos
@@ -4456,6 +4502,7 @@ def detalle_documento_venta(request, documento_id):
                         'voucher': '',
                         'tipo_tarjeta': tipo_tarjeta,
                         'notas': '',
+                        'fecha_pago': fecha_pago_dte,
                         '_vouchers': set(),
                         '_notas': set(),
                     }
@@ -5253,6 +5300,15 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_notas_credito': 0,
         'total_nc_efectivo': 0,
         'total_nc_transferencia': 0,
+        # Totales "display" (bruto por tipo de documento) — suman TODOS los
+        # DTEs del día, incluso los que tienen ticket asociado. Sirven para
+        # mostrar en la sección "Documentos (referencia)" del Resumen de
+        # Caja, sin afectar la lógica de cuadratura (que sigue usando los
+        # `total_*` deduplicados para no sumar dos veces el mismo monto).
+        'total_boletas_electronicas_display': 0,
+        'total_boletas_papel_display': 0,
+        'total_facturas_display': 0,
+        'total_facturas_exentas_display': 0,
         'cantidad_notas_credito': 0,
         'cantidad_tickets': 0,
         'cantidad_boletas': 0,
@@ -5384,30 +5440,43 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             # Solo contar montos DTE si NO tienen ticket asociado (evita doble conteo)
             if dte.tipo_documento == 'BOLETA ELECTRONICA':
                 cuadratura_data['total_boletas_electronicas'] += monto_real
+                cuadratura_data['total_boletas_electronicas_display'] += monto_real
                 cuadratura_data['cantidad_boletas_electronicas'] += 1
                 cuadratura_data['total_descuentos'] += descuento_dte
             elif dte.tipo_documento == 'BOLETA PAPEL':
                 cuadratura_data['total_boletas_papel'] += monto_real
+                cuadratura_data['total_boletas_papel_display'] += monto_real
                 cuadratura_data['cantidad_boletas_papel'] += 1
                 cuadratura_data['total_descuentos'] += descuento_dte
             elif dte.tipo_documento == 'FACTURA ELECTRONICA':
                 cuadratura_data['total_facturas'] += monto_real
+                cuadratura_data['total_facturas_display'] += monto_real
                 cuadratura_data['cantidad_facturas'] += 1
                 cuadratura_data['total_descuentos'] += descuento_dte
             elif dte.tipo_documento == 'FACTURA EXENTA':
                 cuadratura_data['total_facturas_exentas'] += monto_real
+                cuadratura_data['total_facturas_exentas_display'] += monto_real
                 cuadratura_data['cantidad_facturas_exentas'] += 1
                 cuadratura_data['total_descuentos'] += descuento_dte
         else:
-            # Ticket con DTE: solo registrar cantidades de documentos (no montos)
+            # Ticket con DTE: solo registrar cantidades de documentos (no montos
+            # en `total_*`, para evitar doble conteo con `total_tickets`).
+            # Los `_display` SÍ los sumamos para que la sección "Documentos
+            # (referencia)" del Resumen de Caja refleje el monto emitido por
+            # tipo de documento, aunque el dinero ya esté contabilizado en el
+            # ticket asociado.
             if dte.tipo_documento == 'BOLETA ELECTRONICA':
                 cuadratura_data['cantidad_boletas_electronicas'] += 1
+                cuadratura_data['total_boletas_electronicas_display'] += monto_real
             elif dte.tipo_documento == 'BOLETA PAPEL':
                 cuadratura_data['cantidad_boletas_papel'] += 1
+                cuadratura_data['total_boletas_papel_display'] += monto_real
             elif dte.tipo_documento == 'FACTURA ELECTRONICA':
                 cuadratura_data['cantidad_facturas'] += 1
+                cuadratura_data['total_facturas_display'] += monto_real
             elif dte.tipo_documento == 'FACTURA EXENTA':
                 cuadratura_data['cantidad_facturas_exentas'] += 1
+                cuadratura_data['total_facturas_exentas_display'] += monto_real
         
         # Procesar pagos del DTE SOLO si no tiene ticket asociado
         if not tiene_ticket_asociado:
@@ -5510,6 +5579,164 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     cuadratura_data['total_efectivo'] -= cuadratura_data['total_nc_efectivo']
     
     return cuadratura_data
+
+
+# Mapeo campo de ArqueoCaja ← key del dict devuelto por
+# `_calcular_cuadratura_data`. Se declara a nivel de módulo para que
+# `_recalcular_teoricos_arqueo` y `crear_arqueo` coincidan en el snapshot
+# y no se desincronicen al agregar un nuevo método de pago.
+_MAPEO_TEORICOS_ARQUEO = (
+    ('total_efectivo_teorico', 'total_efectivo'),
+    ('total_tarjeta_debito_teorico', 'total_tarjeta_debito'),
+    ('total_tarjeta_credito_teorico', 'total_tarjeta_credito'),
+    ('total_transbank_teorico', 'total_transbank'),
+    ('total_hites_teorico', 'total_hites'),
+    ('total_tarjetas_comerciales_teorico', 'total_tarjetas_comerciales'),
+    ('total_falabella_teorico', 'total_falabella'),
+    ('total_paris_teorico', 'total_paris'),
+    ('total_ripley_teorico', 'total_ripley'),
+    ('total_mercadopago_teorico', 'total_mercadopago'),
+    ('total_klap_teorico', 'total_klap'),
+    ('total_venta_internet_teorico', 'total_venta_internet'),
+    ('total_transferencia_teorico', 'total_transferencia'),
+    ('total_cheque_teorico', 'total_cheque'),
+    ('total_convenio_teorico', 'total_convenio'),
+    ('total_credito_trabajador_teorico', 'total_credito_trabajador'),
+    ('total_tickets_teorico', 'total_tickets'),
+    ('total_boletas_electronicas_teorico', 'total_boletas_electronicas'),
+    ('total_facturas_teorico', 'total_facturas'),
+    ('total_facturas_exentas_teorico', 'total_facturas_exentas'),
+    ('total_notas_credito_teorico', 'total_notas_credito'),
+    ('cantidad_tickets', 'cantidad_tickets'),
+    ('cantidad_boletas_electronicas', 'cantidad_boletas_electronicas'),
+    ('cantidad_facturas', 'cantidad_facturas'),
+    ('cantidad_facturas_exentas', 'cantidad_facturas_exentas'),
+    ('venta_total_teorica', 'venta_total'),
+)
+
+
+def _to_int(value):
+    """Cast defensivo a int (los Decimal/floats vienen serializados)."""
+    if value is None:
+        return 0
+    try:
+        return int(float(value))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _recalcular_teoricos_arqueo(
+    arqueo, usuario=None, registrar_bitacora=False, razon=''
+):
+    """Re-snapshot de los `total_*_teorico` del arqueo desde la cuadratura actual.
+
+    Vuelve a llamar a `_calcular_cuadratura_data` para la fecha y sucursal
+    del arqueo, actualiza los campos denormalizados y recalcula las
+    diferencias `físico - teórico`. Devuelve un dict con:
+
+        {
+          'cambios': { campo: {'antes': .., 'despues': ..}, ... },
+          'cuadratura': dict completo (como lo entrega _calcular_cuadratura_data),
+          'hay_cambios': bool,
+        }
+
+    Parámetros:
+      - `usuario`: si `registrar_bitacora=True`, autor de la observación.
+      - `registrar_bitacora`: si hay diferencias, crea una entrada en
+        `ObservacionArqueo` tipo SISTEMA con los montos antes/después.
+      - `razon`: texto libre que se anexa a la bitácora para contexto
+        (ej: "solicitado por admin", "auto al abrir arqueo abierto").
+
+    Este helper es la pieza central de la política C ("recalcular mientras
+    está abierto, manual cuando está cerrado"): permite tener un solo
+    punto de verdad y evita que `ArqueoCaja.total_*_teorico` queden
+    fuera de sincronía con `_calcular_cuadratura_data`.
+    """
+    # `fecha_arqueo` suele llegar como `date`, pero si el ORM devolvió una
+    # string (tests / fixtures) respetamos el formato esperado por
+    # `_calcular_cuadratura_data` (YYYY-MM-DD).
+    fecha_arqueo = arqueo.fecha_arqueo
+    fecha_str = (
+        fecha_arqueo.strftime('%Y-%m-%d')
+        if hasattr(fecha_arqueo, 'strftime') else str(fecha_arqueo)
+    )
+    cuadratura = _calcular_cuadratura_data(arqueo.sucursal, fecha_str)
+
+    update_fields = []
+    cambios = {}
+    for campo_arqueo, key_cuadratura in _MAPEO_TEORICOS_ARQUEO:
+        nuevo = _to_int(cuadratura.get(key_cuadratura, 0))
+        actual = _to_int(getattr(arqueo, campo_arqueo, 0))
+        if nuevo != actual:
+            cambios[campo_arqueo] = {'antes': actual, 'despues': nuevo}
+            setattr(arqueo, campo_arqueo, nuevo)
+            update_fields.append(campo_arqueo)
+
+    # Diferencias físico-teórico se recalculan siempre con los valores
+    # actualizados. Para `diferencia_efectivo` replicamos la misma fórmula
+    # que usa `ArqueoCaja.save()` (`físico - (teorico + fondo_fijo)`) para
+    # no divergir cuando el signal se dispare más adelante.
+    nueva_dif_efectivo = (
+        _to_int(arqueo.total_efectivo_fisico)
+        - (_to_int(arqueo.total_efectivo_teorico) + _to_int(arqueo.fondo_fijo_snapshot))
+    )
+    nueva_dif_tbk = (
+        _to_int(arqueo.cierre_pos_fisico) - _to_int(arqueo.total_transbank_teorico)
+    )
+    nueva_dif_debito = (
+        _to_int(arqueo.cierre_debito_fisico) - _to_int(arqueo.total_tarjeta_debito_teorico)
+    )
+    nueva_dif_credito = (
+        _to_int(arqueo.cierre_credito_fisico) - _to_int(arqueo.total_tarjeta_credito_teorico)
+    )
+    if arqueo.diferencia_efectivo != nueva_dif_efectivo:
+        arqueo.diferencia_efectivo = nueva_dif_efectivo
+        update_fields.append('diferencia_efectivo')
+    if arqueo.diferencia_transbank != nueva_dif_tbk:
+        arqueo.diferencia_transbank = nueva_dif_tbk
+        update_fields.append('diferencia_transbank')
+    if arqueo.diferencia_debito != nueva_dif_debito:
+        arqueo.diferencia_debito = nueva_dif_debito
+        update_fields.append('diferencia_debito')
+    if arqueo.diferencia_credito != nueva_dif_credito:
+        arqueo.diferencia_credito = nueva_dif_credito
+        update_fields.append('diferencia_credito')
+
+    # Usamos `QuerySet.update()` para NO disparar `ArqueoCaja.save()`, que
+    # recomputa `total_efectivo_fisico` desde billetes/monedas y pisaría
+    # los valores ingresados en modo Express (donde el total viene como
+    # input libre y las denominaciones quedan en 0).
+    if update_fields:
+        ArqueoCaja.objects.filter(pk=arqueo.pk).update(
+            **{f: getattr(arqueo, f) for f in update_fields}
+        )
+
+    if registrar_bitacora and cambios and usuario is not None:
+        # Construir un resumen legible de los cambios más importantes para
+        # que quede evidencia clara en la bitácora del arqueo.
+        resumen = [
+            f'{campo.replace("total_", "").replace("_teorico", "")}: '
+            f'${c["antes"]:,} → ${c["despues"]:,}'
+            for campo, c in cambios.items()
+            if campo.startswith('total_') and campo.endswith('_teorico')
+        ]
+        texto = (
+            f'Recálculo de teóricos ({razon or "manual"}). Cambios: '
+            + ('; '.join(resumen) if resumen else 'solo cantidades/totales de documentos')
+        )
+        ObservacionArqueo.objects.create(
+            arqueo=arqueo,
+            usuario=usuario,
+            tipo='SISTEMA',
+            texto=texto,
+            visible_para_cajera=True,
+        )
+
+    return {
+        'cambios': cambios,
+        'cuadratura': cuadratura,
+        'hay_cambios': bool(update_fields),
+    }
 
 
 @login_required
@@ -7068,7 +7295,65 @@ def exportar_cuadratura_excel(request):
             ws[f'A{row}'].border = border
             ws[f'B{row}'].border = border
             row += 1
-        
+
+        # Documentos (referencia): montos por tipo de documento incluyendo
+        # ventas cerradas con ticket (usamos los totales `_display`).
+        row += 1
+        ws[f'A{row}'] = "DOCUMENTO"
+        ws[f'B{row}'] = "CANTIDAD"
+        ws[f'C{row}'] = "MONTO"
+        for col in ['A', 'B', 'C']:
+            ws[f'{col}{row}'].font = header_font
+            ws[f'{col}{row}'].fill = header_fill
+        row += 1
+        documentos = [
+            (
+                'Boleta Electrónica',
+                cuadratura_data.get('cantidad_boletas_electronicas', 0),
+                cuadratura_data.get(
+                    'total_boletas_electronicas_display',
+                    cuadratura_data.get('total_boletas_electronicas', 0),
+                ),
+            ),
+            (
+                'Boleta Papel',
+                cuadratura_data.get('cantidad_boletas_papel', 0),
+                cuadratura_data.get(
+                    'total_boletas_papel_display',
+                    cuadratura_data.get('total_boletas_papel', 0),
+                ),
+            ),
+            (
+                'Factura Electrónica',
+                cuadratura_data.get('cantidad_facturas', 0),
+                cuadratura_data.get(
+                    'total_facturas_display',
+                    cuadratura_data.get('total_facturas', 0),
+                ),
+            ),
+            (
+                'Factura Exenta',
+                cuadratura_data.get('cantidad_facturas_exentas', 0),
+                cuadratura_data.get(
+                    'total_facturas_exentas_display',
+                    cuadratura_data.get('total_facturas_exentas', 0),
+                ),
+            ),
+            (
+                'Notas de Crédito',
+                cuadratura_data.get('cantidad_notas_credito', 0),
+                cuadratura_data.get('total_notas_credito', 0),
+            ),
+        ]
+        for nombre, cantidad, monto in documentos:
+            ws[f'A{row}'] = nombre
+            ws[f'B{row}'] = cantidad
+            ws[f'C{row}'] = monto
+            for col in ['A', 'B', 'C']:
+                ws[f'{col}{row}'].border = border
+            row += 1
+
+        row += 1
         # Total
         ws[f'A{row}'] = "TOTAL VENTA"
         ws[f'B{row}'] = cuadratura_data.get('venta_total', 0)
@@ -7078,8 +7363,9 @@ def exportar_cuadratura_excel(request):
         ws[f'B{row}'].border = border
         
         # Ajustar ancho de columnas
-        ws.column_dimensions['A'].width = 25
+        ws.column_dimensions['A'].width = 28
         ws.column_dimensions['B'].width = 15
+        ws.column_dimensions['C'].width = 18
         
         # Preparar respuesta
         from django.http import HttpResponse
@@ -8909,7 +9195,19 @@ def analisis_fraude_caja(request):
 @login_required
 @require_GET
 def obtener_arqueo_detalle(request, arqueo_id):
-    """Obtener detalle completo de un arqueo"""
+    """Obtener detalle completo de un arqueo.
+
+    Política de recálculo (opción C, "recalcular mientras abierto"):
+      - Si el arqueo está `ABIERTO` o `CON_DIFERENCIAS`, re-snapshoteamos
+        los teóricos en cada lectura para reflejar ediciones de fecha de
+        DTE u otros cambios del día en curso, sin que el operador tenga
+        que tocar un botón.
+      - Para estados ya finales (`CERRADO`, `REVISADO`,
+        `DEPOSITO_DECLARADO`, `DEPOSITO_CONFIRMADO`) se respeta el
+        snapshot histórico para auditoría. Si un admin necesita
+        actualizarlo, debe llamar explícitamente al endpoint
+        `recalcular_teoricos_arqueo`, que deja traza en la bitácora.
+    """
     try:
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
         
@@ -8920,7 +9218,19 @@ def obtener_arqueo_detalle(request, arqueo_id):
                 'success': False,
                 'error': 'No tiene acceso a este arqueo'
             })
-        
+
+        # Auto-recálculo silencioso para arqueos todavía en curso. No se
+        # registra en bitácora porque en un arqueo abierto es el
+        # comportamiento esperado (no hay evento que auditar).
+        recalculo_auto_aplicado = False
+        if arqueo.estado in ('ABIERTO', 'CON_DIFERENCIAS'):
+            resultado_recalc = _recalcular_teoricos_arqueo(
+                arqueo,
+                usuario=None,
+                registrar_bitacora=False,
+            )
+            recalculo_auto_aplicado = resultado_recalc['hay_cambios']
+
         arqueo_data = {
             'id': arqueo.id,
             'fecha_arqueo': arqueo.fecha_arqueo.strftime('%Y-%m-%d'),
@@ -8928,6 +9238,12 @@ def obtener_arqueo_detalle(request, arqueo_id):
             'usuario_responsable': arqueo.usuario_responsable.username,
             'estado': arqueo.estado,
             'estado_display': arqueo.get_estado_display(),
+            # Metadatos del recálculo para que el frontend pueda mostrar un
+            # aviso "Teóricos actualizados desde DTE" cuando corresponda.
+            'recalculo_auto_aplicado': recalculo_auto_aplicado,
+            'puede_recalcular_manual': (
+                getattr(request.user, 'rol', None) in ('administrador', 'administracion')
+            ),
             
             # Totales teóricos
             'totales_teoricos': {
@@ -9042,6 +9358,112 @@ def obtener_arqueo_detalle(request, arqueo_id):
             'success': False,
             'error': f'Error al obtener arqueo: {str(e)}'
         })
+
+
+@login_required
+@require_POST
+def recalcular_teoricos_arqueo(request, arqueo_id):
+    """Fuerza el recálculo de los `total_*_teorico` de un arqueo desde los DTEs.
+
+    Pensado para cuando el admin corrige la fecha de un DTE emitido en un
+    día cuyo arqueo ya está cerrado/revisado, y necesita que los teóricos
+    vuelvan a cuadrar con la nueva realidad.
+
+    Permisos:
+      - `ABIERTO` / `CON_DIFERENCIAS`: cualquier usuario con acceso a la
+        sucursal (es equivalente al recálculo automático de
+        `obtener_arqueo_detalle`, pero explícito).
+      - Estados finales (`CERRADO`, `REVISADO`, `DEPOSITO_DECLARADO`,
+        `DEPOSITO_CONFIRMADO`): sólo administrador/administración, y
+        siempre se registra una observación SISTEMA en la bitácora.
+    """
+    try:
+        arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
+
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = rol_usuario in ('administrador', 'administracion')
+
+        if not es_supervisor and arqueo.sucursal_id != int(sucursal_id or 0):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene acceso a este arqueo'
+            }, status=403)
+
+        estado_abierto = arqueo.estado in ('ABIERTO', 'CON_DIFERENCIAS')
+        if not estado_abierto and not es_supervisor:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    'Este arqueo está cerrado. Sólo administración '
+                    'puede recalcular sus teóricos.'
+                )
+            }, status=403)
+
+        # Intentar extraer razón del body (opcional, JSON libre).
+        razon = ''
+        if request.body:
+            try:
+                body = json.loads(request.body)
+                razon = str(body.get('razon', '') or '').strip()[:500]
+            except (ValueError, TypeError):
+                razon = ''
+
+        # Sólo registrar bitácora cuando el usuario disparó el recálculo
+        # sobre un arqueo cerrado o con diferencias — en los ABIERTOS es
+        # el estado de trabajo normal y saturaría la bitácora.
+        registrar = not estado_abierto or bool(razon)
+
+        resultado = _recalcular_teoricos_arqueo(
+            arqueo,
+            usuario=request.user,
+            registrar_bitacora=registrar,
+            razon=razon or ('recálculo manual' if not estado_abierto else 'recálculo desde modal'),
+        )
+
+        try:
+            log_accion_caja(
+                request,
+                'RECALCULAR_TEORICOS',
+                arqueo=arqueo,
+                cambios=resultado['cambios'],
+                razon=razon,
+            )
+        except Exception:
+            # Nunca romper la operación si el log auxiliar falla.
+            pass
+
+        cuadratura = resultado['cuadratura']
+
+        return JsonResponse({
+            'success': True,
+            'hay_cambios': resultado['hay_cambios'],
+            'cambios': resultado['cambios'],
+            'arqueo': {
+                'id': arqueo.id,
+                'estado': arqueo.estado,
+                'total_efectivo_teorico': arqueo.total_efectivo_teorico,
+                'total_tarjeta_debito_teorico': arqueo.total_tarjeta_debito_teorico,
+                'total_tarjeta_credito_teorico': arqueo.total_tarjeta_credito_teorico,
+                'total_transbank_teorico': arqueo.total_transbank_teorico,
+                'total_hites_teorico': arqueo.total_hites_teorico,
+                'total_venta_internet_teorico': arqueo.total_venta_internet_teorico,
+                'venta_total_teorica': arqueo.venta_total_teorica,
+                'diferencia_efectivo': arqueo.diferencia_efectivo,
+                'diferencia_transbank': arqueo.diferencia_transbank,
+                'diferencia_debito': arqueo.diferencia_debito,
+                'diferencia_credito': arqueo.diferencia_credito,
+            },
+            'cuadratura': cuadratura,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al recalcular: {str(e)}'
+        }, status=500)
 
 
 # ========== GESTIÓN POS TRANSBANK ==========

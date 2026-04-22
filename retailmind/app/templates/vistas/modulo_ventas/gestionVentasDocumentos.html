@@ -264,6 +264,10 @@
                             (la suma debe coincidir con el total del DTE)
                         </small>
                     </label>
+                    <div class="alert alert-light border py-1 px-2 mb-2" style="font-size:11px;">
+                        <i class="ri-information-line text-primary me-1"></i>
+                        Los pagos <strong>heredan la fecha del DTE</strong>. Al cambiar la fecha de emisión también se mueven en la cuadratura de caja.
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0" id="tablaPagosEditar">
                             <thead class="table-light">
@@ -2257,6 +2261,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const tieneDetalle = pagos.some(p => p.voucher || p.tipo_tarjeta);
+        // Los pagos no tienen fecha propia: heredan de `fecha_emision` del
+        // DTE. Al exponerla aquí el usuario puede confirmar visualmente que
+        // las fechas quedaron sincronizadas tras editar la fecha del DTE.
+        const tieneFecha = pagos.some(p => p.fecha_pago);
 
         let html = `
             <div class="table-responsive">
@@ -2264,6 +2272,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <thead style="background:#198754;color:#fff;font-size:10px;">
                         <tr>
                             <th style="padding:4px 6px;">Método</th>
+                            ${tieneFecha ? '<th style="padding:4px 6px;">Fecha</th>' : ''}
                             ${tieneDetalle ? '<th style="padding:4px 6px;">Detalle</th>' : ''}
                             <th class="text-end" style="padding:4px 6px;">Monto</th>
                         </tr>
@@ -2275,17 +2284,21 @@ document.addEventListener('DOMContentLoaded', function() {
         pagos.forEach(pago => {
             totalPagos += pago.monto;
             const detalle = [pago.tipo_tarjeta, pago.voucher].filter(Boolean).join(' · ');
+            const fechaPago = pago.fecha_pago ? formatearFecha(pago.fecha_pago) : '—';
 
             html += `
                 <tr>
                     <td style="padding:3px 6px;"><span class="badge bg-success" style="font-size:9px;">${pago.metodo_display}</span></td>
+                    ${tieneFecha ? `<td style="padding:3px 6px;" class="text-muted"><i class="ri-calendar-line me-1" style="opacity:.6;"></i>${fechaPago}</td>` : ''}
                     ${tieneDetalle ? `<td style="padding:3px 6px;" class="text-muted">${detalle || '—'}</td>` : ''}
                     <td class="text-end fw-semibold" style="padding:3px 6px;">${formatearMoneda(pago.monto)}</td>
                 </tr>
             `;
         });
 
-        const spanPago = tieneDetalle ? 2 : 1;
+        let spanPago = 1;
+        if (tieneFecha) spanPago += 1;
+        if (tieneDetalle) spanPago += 1;
         html += `
                     </tbody>
                     <tfoot style="background:#198754;color:#fff;font-size:10px;">

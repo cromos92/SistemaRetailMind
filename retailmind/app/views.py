@@ -55,6 +55,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+ROLES_AJUSTE_DTE_EMISOR = {'administrador', 'administracion', 'gerencia', 'bodega'}
+
+
+def _rol_puede_ajustar_dte_emisor(rol):
+    if not rol:
+        return False
+    return (rol or '').strip().lower() in ROLES_AJUSTE_DTE_EMISOR
+
+
 @login_required
 def recepcion_dte(request):
     """Vista web para la recepción de traspasos internos."""
@@ -65,7 +74,10 @@ def recepcion_dte(request):
             user_rol = eu.rol or ''
     except Exception:
         pass
-    return render(request, 'vistas/modulo_compras/recepcion_dte.html', {'user_rol': user_rol})
+    return render(request, 'vistas/modulo_compras/recepcion_dte.html', {
+        'user_rol': user_rol,
+        'puede_ajustar_emitidos': _rol_puede_ajustar_dte_emisor(user_rol),
+    })
 
 
 @login_required
@@ -1731,6 +1743,440 @@ def editar_dte_traspaso_api(request):
             'success': False,
             'error': f'Error al editar DTE: {str(e)}'
         }, status=500)
+
+
+# ========== AJUSTE DE DTE POR EMISOR (ANTES DE RECEPCION) ==========
+
+@login_required
+@require_GET
+def emitidos_pendientes_api(request):
+    """
+    Lista DTEs emitidos por la sucursal actual que AUN no fueron recepcionados.
+    Se usa en la vista /app/recepcion-dte/ con el toggle 'Emitidos por mi'.
+    """
+    try:
+        sucursal_actual_id = request.session.get('idSucursalActual')
+        if not sucursal_actual_id:
+            return JsonResponse(
+                {'success': False, 'error': 'No hay sucursal activa en la sesion.'},
+                status=400,
+            )
+
+        eu = EmpresaUser.objects.filter(user=request.user, active=True).first()
+        rol = (eu.rol if eu else '') or ''
+        if not _rol_puede_ajustar_dte_emisor(rol):
+            return JsonResponse(
+                {'success': False, 'error': 'No tienes permiso para ver los DTEs emitidos en modo ajuste.'},
+                status=403,
+            )
+
+        pagina = max(int(request.GET.get('pagina', 1) or 1), 1)
+        page_size = 10
+        tipo_documento = (request.GET.get('tipo_documento') or '').strip()
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+
+        qs = (
+            Dte.objects
+            .filter(
+                sucursal_id=sucursal_actual_id,
+                tipo_transaccion='TRASPASO',
+                estado_dte='EMITIDO',
+                fecha_recepcion__isnull=True,
+            )
+            .exclude(tipo_documento__in=['NOTA DE CREDITO', 'AJUSTE TRASPASO'])
+            .select_related('receptor', 'sucursal')
+            .prefetch_related('dte_movimientos__sucursal_destino')
+            .order_by('-fecha_emision', '-id')
+        )
+
+        if tipo_documento:
+            qs = qs.filter(tipo_documento=tipo_documento)
+        if fecha_inicio:
+            qs = qs.filter(fecha_emision__gte=fecha_inicio)
+        if fecha_fin:
+            qs = qs.filter(fecha_emision__lte=fecha_fin)
+
+        total = qs.count()
+        inicio = (pagina - 1) * page_size
+        items_qs = qs[inicio:inicio + page_size]
+
+        items = []
+        for dte in items_qs:
+            mov_salida = next(
+                (m for m in dte.dte_movimientos.all() if m.concepto == 'TRASPASO_SALIDA'),
+                None,
+            )
+            sucursal_destino_nombre = (
+                mov_salida.sucursal_destino.alias
+                if mov_salida and mov_salida.sucursal_destino
+                else (dte.receptor.nombre if dte.receptor else '-')
+            )
+            items.append({
+                'id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.tipo_documento,
+                'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '-',
+                'receptor': dte.receptor.nombre if dte.receptor else '-',
+                'sucursal_destino': sucursal_destino_nombre,
+                'monto_neto': float(dte.monto_neto or 0),
+                'monto_con_iva': float(dte.monto_con_iva or 0),
+                'unidades_productos': dte.unidades_productos or 0,
+                'estado_dte': dte.estado_dte,
+                'es_facturable': dte.tipo_documento in (
+                    'FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
+                    'BOLETA ELECTRONICA', 'BOLETA_ELECTRONICA',
+                ),
+            })
+
+        return JsonResponse({
+            'success': True,
+            'items': items,
+            'pagina': pagina,
+            'page_size': page_size,
+            'total': total,
+            'total_paginas': (total + page_size - 1) // page_size,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': f'Error: {e}'}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajustar_dte_emisor_api(request):
+    """
+    Permite al EMISOR ajustar (reducir o quitar) productos de un DTE de
+    traspaso antes de que el receptor lo recepcione.
+
+    Flujo por tipo de documento del DTE original:
+    - FACTURA/BOLETA electronica → emite NC por el diferencial monetario.
+    - GUIA / otros no-facturables → crea un Dte tipo 'AJUSTE TRASPASO' que
+      referencia al original (trazabilidad interna, sin impacto SII).
+
+    En ambos casos:
+    - Reversa stock al emisor.
+    - Reduce cantidades / desactiva productos en el DTE original.
+    - Recalcula totales del DTE original.
+    - Notifica al receptor.
+
+    Bloqueos:
+    - estado_dte != 'EMITIDO' → error 409.
+    - fecha_recepcion IS NOT NULL → error 409.
+    - Solo la sucursal emisora puede ajustar.
+    - Solo roles en ROLES_AJUSTE_DTE_EMISOR.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON invalido.'}, status=400)
+
+    dte_id = data.get('dte_id')
+    ajustes = data.get('ajustes') or []
+    motivo = (data.get('motivo') or '').strip()
+
+    if not dte_id:
+        return JsonResponse({'success': False, 'error': 'Falta dte_id.'}, status=400)
+    if not ajustes:
+        return JsonResponse({'success': False, 'error': 'Debe indicar al menos un ajuste.'}, status=400)
+    if not motivo:
+        return JsonResponse({'success': False, 'error': 'Debe ingresar el motivo del ajuste.'}, status=400)
+
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    if not sucursal_actual_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesion.'}, status=400)
+    sucursal_actual_id = int(sucursal_actual_id)
+
+    eu = EmpresaUser.objects.filter(user=request.user, active=True).first()
+    rol = (eu.rol if eu else '') or ''
+    if not _rol_puede_ajustar_dte_emisor(rol):
+        return JsonResponse(
+            {'success': False, 'error': 'No tienes permiso para ajustar DTEs emitidos.'},
+            status=403,
+        )
+
+    from decimal import Decimal
+    from .models.dte import NotificacionDTE
+
+    try:
+        with transaction.atomic():
+            try:
+                dte = (
+                    Dte.objects
+                    .select_for_update(of=('self',))
+                    .select_related('emisor', 'receptor', 'sucursal')
+                    .get(id=dte_id)
+                )
+            except Dte.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+            if dte.tipo_transaccion != 'TRASPASO':
+                return JsonResponse({'success': False, 'error': 'Solo aplica a DTEs de traspaso.'}, status=400)
+            if dte.sucursal_id != sucursal_actual_id:
+                return JsonResponse(
+                    {'success': False, 'error': 'Solo la sucursal emisora puede ajustar este DTE.'},
+                    status=403,
+                )
+            if dte.estado_dte != 'EMITIDO':
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El DTE ya fue procesado (estado: {dte.estado_dte}). No se puede ajustar.',
+                }, status=409)
+            if dte.fecha_recepcion is not None:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El DTE ya fue recepcionado por el receptor. No se puede ajustar.',
+                }, status=409)
+
+            ajustes_por_id = {}
+            for a in ajustes:
+                try:
+                    pid = int(a.get('dte_producto_id'))
+                    nueva_cant = int(a.get('nueva_cantidad'))
+                except (TypeError, ValueError):
+                    return JsonResponse(
+                        {'success': False, 'error': 'Ajuste con formato invalido.'},
+                        status=400,
+                    )
+                if nueva_cant < 0:
+                    return JsonResponse(
+                        {'success': False, 'error': 'La nueva cantidad no puede ser negativa.'},
+                        status=400,
+                    )
+                ajustes_por_id[pid] = nueva_cant
+
+            dte_productos = list(
+                Dte_Productos.objects
+                .select_for_update()
+                .filter(id__in=ajustes_por_id.keys(), dte=dte, activo=True)
+                .select_related('productoTalla__producto')
+            )
+            if len(dte_productos) != len(ajustes_por_id):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Alguno de los productos indicados no existe en el DTE o ya fue desactivado.',
+                }, status=400)
+
+            mov_salida_lookup = {
+                m.ProductoTalla_id: m
+                for m in Movimientos_Producto.objects
+                    .select_for_update()
+                    .filter(dte=dte, concepto='TRASPASO_SALIDA', tipo_movimiento='EGRESO')
+            }
+
+            diferencial_neto = Decimal('0')
+            diferencial_unidades = 0
+            lineas_para_documento = []
+            hoy = timezone.now()
+            usuario = request.user.username
+
+            for dp in dte_productos:
+                nueva_cant = ajustes_por_id[dp.id]
+                cantidad_original = int(dp.stock or 0)
+                if nueva_cant > cantidad_original:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'No se permite aumentar cantidad de {dp.descripcion}. Original: {cantidad_original}, nueva: {nueva_cant}.',
+                    }, status=400)
+
+                diferencia = cantidad_original - nueva_cant
+                if diferencia <= 0:
+                    continue
+
+                talla = dp.productoTalla
+                if talla is None:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Producto {dp.descripcion} sin talla asociada. No se puede ajustar.',
+                    }, status=400)
+
+                Producto_Talla.objects.filter(id=talla.id).update(
+                    stock=F('stock') + diferencia
+                )
+
+                mov_salida = mov_salida_lookup.get(talla.id)
+                if mov_salida is not None:
+                    if nueva_cant == 0:
+                        mov_salida.delete()
+                    else:
+                        mov_salida.cantidad = -nueva_cant
+                        mov_salida.observaciones = (
+                            (mov_salida.observaciones or '')
+                            + f' [AJUSTE {hoy.strftime("%Y-%m-%d %H:%M")} por {usuario}: {cantidad_original}->{nueva_cant}]'
+                        )[:500]
+                        mov_salida.save(update_fields=['cantidad', 'observaciones'])
+
+                if nueva_cant == 0:
+                    dp.activo = False
+                dp.stock = nueva_cant
+                dp.save(update_fields=['stock', 'activo'])
+
+                precio_unit = Decimal(str(dp.precio or 0))
+                diferencial_neto += Decimal(diferencia) * precio_unit
+                diferencial_unidades += diferencia
+
+                lineas_para_documento.append({
+                    'dte_producto_id': dp.id,
+                    'productoTalla': talla,
+                    'descripcion': dp.descripcion,
+                    'costo': dp.costo,
+                    'sobreprecio': dp.sobreprecio,
+                    'precio': dp.precio,
+                    'cantidad_ajustada': diferencia,
+                    'cantidad_original': cantidad_original,
+                    'cantidad_nueva': nueva_cant,
+                })
+
+            if not lineas_para_documento:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Ninguno de los ajustes cambia cantidad efectiva.',
+                }, status=400)
+
+            productos_activos = Dte_Productos.objects.filter(dte=dte, activo=True)
+            nuevo_neto = productos_activos.aggregate(
+                s=Sum(F('stock') * F('precio'))
+            )['s'] or Decimal('0')
+            nuevo_neto = Decimal(nuevo_neto)
+            nuevas_unidades = productos_activos.aggregate(u=Sum('stock'))['u'] or 0
+
+            iva_rate = Decimal('0.19')
+            nuevo_con_iva = (nuevo_neto + nuevo_neto * iva_rate).quantize(Decimal('1'))
+
+            dte.monto_neto = nuevo_neto
+            dte.monto_con_iva = nuevo_con_iva
+            dte.unidades_productos = int(nuevas_unidades)
+
+            registro = (
+                f"\n[AJUSTE EMISOR] {hoy.strftime('%Y-%m-%d %H:%M')} {usuario}"
+                f" -{diferencial_unidades} uds"
+                f" (-${int(diferencial_neto):,} neto). Motivo: {motivo}"
+            )
+            dte.referencias = ((dte.referencias or '') + registro).strip()
+            dte.save(update_fields=['monto_neto', 'monto_con_iva', 'unidades_productos', 'referencias'])
+
+            tipo_doc_original = (dte.tipo_documento or '').upper()
+            es_facturable = tipo_doc_original in (
+                'FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
+                'BOLETA ELECTRONICA', 'BOLETA_ELECTRONICA',
+            )
+
+            if es_facturable:
+                tipo_doc_nuevo = 'NOTA DE CREDITO'
+            else:
+                tipo_doc_nuevo = 'AJUSTE TRASPASO'
+
+            numero_nuevo = obtener_siguiente_correlativo(dte.sucursal, tipo_doc_nuevo)
+
+            iva_dif = (diferencial_neto * iva_rate).quantize(Decimal('1'))
+            total_dif = (diferencial_neto + iva_dif).quantize(Decimal('1'))
+
+            doc_nuevo = Dte.objects.create(
+                emisor=dte.emisor,
+                receptor=dte.receptor,
+                numero_documento=numero_nuevo,
+                tipo_documento=tipo_doc_nuevo,
+                monto_neto=diferencial_neto,
+                monto_con_iva=total_dif,
+                estado_pago='PAGADO' if es_facturable else 'PENDIENTE',
+                estado_dte='EMITIDO',
+                responsable=usuario,
+                fecha_emision=hoy.date(),
+                fecha_vencimiento=hoy.date(),
+                diasCredito=0,
+                bultos=0,
+                unidades_productos=diferencial_unidades,
+                tipo_transaccion='AJUSTE' if not es_facturable else 'ANULACION',
+                sucursal=dte.sucursal,
+                es_nota_credito=es_facturable,
+                documento_afectado=dte,
+                motivo_nc=motivo,
+                referencias=(
+                    f"Ajuste emisor sobre DTE #{dte.numero_documento} ({tipo_doc_original}). "
+                    f"{diferencial_unidades} uds retiradas. Motivo: {motivo}"
+                ),
+                hora=hoy.time(),
+            )
+
+            for linea in lineas_para_documento:
+                Dte_Productos.objects.create(
+                    dte=doc_nuevo,
+                    productoTalla=linea['productoTalla'],
+                    descripcion=f"[AJUSTE -{linea['cantidad_ajustada']}] {linea['descripcion']}",
+                    costo=linea['costo'],
+                    sobreprecio=linea['sobreprecio'],
+                    precio=linea['precio'],
+                    stock=linea['cantidad_ajustada'],
+                    activo=True,
+                )
+
+            try:
+                if dte.receptor:
+                    sucursal_destino = None
+                    mov = Movimientos_Producto.objects.filter(
+                        dte=dte, concepto='TRASPASO_SALIDA'
+                    ).first()
+                    if mov:
+                        sucursal_destino = mov.sucursal_destino
+                    NotificacionDTE.objects.create(
+                        dte=dte,
+                        empresa_receptora=dte.receptor,
+                        sucursal=sucursal_destino,
+                        sucursal_reportante=dte.sucursal,
+                        tipo='CORRECCION_RECEPCION',
+                        titulo=f"DTE #{dte.numero_documento} ajustado por emisor",
+                        mensaje=(
+                            f"La sucursal emisora ({dte.sucursal.alias}) ajusto el DTE #{dte.numero_documento}. "
+                            f"Se retiraron {diferencial_unidades} unidad(es). "
+                            f"Documento de trazabilidad: {tipo_doc_nuevo} #{numero_nuevo}. "
+                            f"Motivo: {motivo}"
+                        ),
+                        usuario_que_proceso=request.user,
+                    )
+            except Exception:
+                # No cortar la operacion si la notificacion falla
+                pass
+
+            logger.info(
+                "Ajuste DTE emisor: dte=%s tipo_doc_original=%s doc_trazador=%s#%s unidades_retiradas=%s diferencial_neto=%s usuario=%s",
+                dte.id,
+                tipo_doc_original,
+                tipo_doc_nuevo,
+                numero_nuevo,
+                diferencial_unidades,
+                diferencial_neto,
+                usuario,
+            )
+
+            return JsonResponse({
+                'success': True,
+                'message': f'Ajuste aplicado. Documento generado: {tipo_doc_nuevo} #{numero_nuevo}',
+                'dte_id': dte.id,
+                'doc_trazador': {
+                    'id': doc_nuevo.id,
+                    'tipo_documento': tipo_doc_nuevo,
+                    'numero_documento': numero_nuevo,
+                    'es_nota_credito': es_facturable,
+                    'monto_neto': float(diferencial_neto),
+                    'monto_con_iva': float(total_dif),
+                    'unidades': diferencial_unidades,
+                },
+                'dte_actualizado': {
+                    'monto_neto': float(nuevo_neto),
+                    'monto_con_iva': float(nuevo_con_iva),
+                    'unidades_productos': int(nuevas_unidades),
+                },
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse(
+            {'success': False, 'error': f'Error al ajustar DTE: {e}'},
+            status=500,
+        )
 
 
 # ========== VISTAS PARA REGULARIZACIÓN DE RECEPCIONES ==========
@@ -21578,18 +22024,22 @@ def cargar_dte_ventas(request):
             
             # ✅ NUEVO: Obtener información de NC y documento afectado
             es_nota_credito = dte.es_nota_credito or dte.tipo_documento in ['NOTA_CREDITO', 'NOTA DE CREDITO']
+            es_ajuste_traspaso = dte.tipo_documento == 'AJUSTE TRASPASO'
             documento_afectado_numero = None
             documento_afectado_id = None
+            documento_afectado_tipo = None
             nc_asociadas = []
-            
-            # Si es NC, obtener el documento original
-            if es_nota_credito and dte.documento_afectado:
+            ajustes_asociados = []
+
+            # Si referencia a otro DTE (NC o AJUSTE TRASPASO), mostrar el original
+            if dte.documento_afectado:
                 documento_afectado_numero = dte.documento_afectado.numero_documento
                 documento_afectado_id = dte.documento_afectado.id
-            
-            # Si NO es NC, buscar NC asociadas a este documento
+                documento_afectado_tipo = dte.documento_afectado.tipo_documento
+
+            # Si NO es NC/AJUSTE, buscar documentos hijos asociados
             total_nc_acumulado = 0
-            if not es_nota_credito:
+            if not es_nota_credito and not es_ajuste_traspaso:
                 nc_qs = Dte.objects.filter(
                     documento_afectado=dte,
                     es_nota_credito=True,
@@ -21598,6 +22048,16 @@ def cargar_dte_ventas(request):
                 nc_list = list(nc_qs.values('id', 'numero_documento', 'monto_con_iva', 'fecha_emision'))
                 nc_asociadas = nc_list
                 total_nc_acumulado = sum(float(nc.get('monto_con_iva', 0)) for nc in nc_list)
+
+                # Tambien incluir ajustes de traspaso (no facturables) como hijos
+                ajustes_qs = Dte.objects.filter(
+                    documento_afectado=dte,
+                    tipo_documento='AJUSTE TRASPASO',
+                    estado_dte__in=['EMITIDO', 'ACEPTADO']
+                )
+                ajustes_asociados = list(ajustes_qs.values(
+                    'id', 'numero_documento', 'unidades_productos', 'fecha_emision', 'motivo_nc'
+                ))
 
             # Buscar si la NC proviene de una devolución al cliente
             origen_devolucion = None
@@ -21635,9 +22095,12 @@ def cargar_dte_ventas(request):
                 'unidades_productos': dte.unidades_productos,
                 # ✅ NUEVO: Campos para asociación visual NC ↔ Factura
                 'es_nota_credito': es_nota_credito,
+                'es_ajuste_traspaso': es_ajuste_traspaso,
                 'documento_afectado_numero': documento_afectado_numero,
                 'documento_afectado_id': documento_afectado_id,
+                'documento_afectado_tipo': documento_afectado_tipo,
                 'nc_asociadas': nc_asociadas,
+                'ajustes_asociados': ajustes_asociados,
                 'total_nc_acumulado': total_nc_acumulado,
                 'origen_devolucion': origen_devolucion,
             })

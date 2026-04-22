@@ -19,6 +19,7 @@ TIPO_DOCUMENTO_CHOICES = [
     ('TICKET CAMBIO', 'Ticket de Cambio'),
     ('TRASPASO', 'Traspaso'),
     ('AJUSTE', 'Ajuste de Inventario'),
+    ('AJUSTE TRASPASO', 'Ajuste de Traspaso (emisor)'),
 ]
 
 ESTADO_PAGO_CHOICES = [

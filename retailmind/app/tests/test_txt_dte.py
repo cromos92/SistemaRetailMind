@@ -541,6 +541,61 @@ class TestObservacionCompactaRespeta90Chars(TestCase):
         self.assertIn('TBK:791', campo_obs)
 
 
+class TestObservacionFacturaMinimalista(TestCase):
+    """
+    Factura (33/34) y Guía (52) deben imprimir solo 'monto en letras + Total
+    Productos' en la línea de observación. No deben filtrarse V:/T:/D:/Dc:/
+    pagos ni el texto libre de `observaciones` / `observaciones_adicionales`
+    del ticket. Eso queda reservado para Boleta.
+    """
+
+    def _extraer_linea_observacion_factura(self, txt):
+        """Campo 4 (índice 3) de la última línea útil del TXT."""
+        lineas_util = [l for l in txt.split('\n') if l and l not in ('~', '\\')]
+        return lineas_util[-1].split('|')[3]
+
+    def test_factura_observacion_solo_letras_y_total_productos(self):
+        datos = _datos_factura_base()
+        datos['emisor']['correlativo_ticket'] = '1001'
+        datos['emisor']['metodos_pago'] = 'EFECTIVO: $119000'
+        datos['observaciones'] = 'Gracias por su compra'
+        datos['observaciones_adicionales'] = 'Entrega en bodega'
+        datos['detalle'] = [{
+            'codigo': 'SKU001', 'nombre': 'Producto A', 'descripcion': '',
+            'cantidad': 2, 'unidad': 'UN', 'precio_unitario': 50000,
+            'monto_item': 100000,
+        }]
+        txt = generar_txt_dte_acepta(datos)
+        obs = self._extraer_linea_observacion_factura(txt)
+
+        self.assertIn('PESOS', obs)
+        self.assertIn('Total Productos: 2', obs)
+        self.assertNotIn('V:', obs)
+        self.assertNotIn('T:1001', obs)
+        self.assertNotIn('EFE', obs)
+        self.assertNotIn('Gracias por su compra', obs)
+        self.assertNotIn('Entrega en bodega', obs)
+
+    def test_guia_despacho_observacion_solo_letras_y_total_productos(self):
+        datos = _datos_factura_base()
+        datos['documento']['tipo_documento'] = 52
+        datos['emisor']['correlativo_ticket'] = '2002'
+        datos['emisor']['metodos_pago'] = 'EFECTIVO: $119000'
+        datos['detalle'] = [{
+            'codigo': 'SKU002', 'nombre': 'Producto B', 'descripcion': '',
+            'cantidad': 5, 'unidad': 'UN', 'precio_unitario': 23800,
+            'monto_item': 119000,
+        }]
+        txt = generar_txt_dte_acepta(datos)
+        obs = self._extraer_linea_observacion_factura(txt)
+
+        self.assertIn('PESOS', obs)
+        self.assertIn('Total Productos: 5', obs)
+        self.assertNotIn('V:', obs)
+        self.assertNotIn('T:2002', obs)
+        self.assertNotIn('EFE', obs)
+
+
 class TestValidacionLargosSII(TestCase):
     """El helper truncar_campo_sii trunca y emite warning."""
 

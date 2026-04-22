@@ -692,7 +692,24 @@
                 <h5 class="modal-title text-white" id="modalArqueoLabel" style="font-weight:600;">
                     <i class="ri-calculator-line me-2"></i>Arqueo de Caja — <span id="fechaArqueoModal"></span>
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <div class="d-flex align-items-center gap-2">
+                    <!--
+                        Botón de recálculo manual de teóricos desde los DTEs
+                        del día. Sólo tiene sentido cuando el arqueo está
+                        asociado a un id persistido; en arqueos ABIERTOS el
+                        servidor ya recalcula solo al abrir. Visibilidad por
+                        `_arqueoPuedeRecalcular` (admin/administración).
+                    -->
+                    <button type="button"
+                            id="btnRecalcularTeoricos"
+                            class="btn btn-sm btn-outline-light d-none"
+                            title="Vuelve a calcular los montos que el sistema espera leyendo los DTE y Tickets del día. Útil si modificaste fechas desde Gestión de Documentos."
+                            onclick="recalcularTeoricosArqueoActual()">
+                        <span id="spinnerRecalcTeoricos" class="spinner-border spinner-border-sm me-1" role="status" style="display:none;"></span>
+                        <i class="ri-refresh-line me-1"></i>Recalcular desde DTEs
+                    </button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
             </div>
 
             <!-- Indicador de Pasos del Wizard -->
@@ -1182,9 +1199,23 @@
                             <div class="card-body p-2">
                                 <table class="table table-sm table-borderless mb-0 resumen-table">
                                     <tbody>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">BOLETA ELECT.</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="totalboletaelectronica">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">FACTURA</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="totalfactura">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">NOTAS CRÉDITO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="totalnotascredito">$0</span></td></tr>
+                                        <tr>
+                                            <td class="text-muted" style="font-size:.75rem;">BOLETA ELECT. <span class="text-muted" style="font-size:.65rem;">(<span id="cantBoletaElectronica">0</span>)</span></td>
+                                            <td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="totalboletaelectronica">$0</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted" style="font-size:.75rem;">BOLETA PAPEL <span class="text-muted" style="font-size:.65rem;">(<span id="cantBoletaPapel">0</span>)</span></td>
+                                            <td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="totalboletapapel">$0</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted" style="font-size:.75rem;">FACTURA <span class="text-muted" style="font-size:.65rem;">(<span id="cantFactura">0</span>)</span></td>
+                                            <td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="totalfactura">$0</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted" style="font-size:.75rem;">FACT. EXENTA <span class="text-muted" style="font-size:.65rem;">(<span id="cantFacturaExenta">0</span>)</span></td>
+                                            <td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="totalfacturaexenta">$0</span></td>
+                                        </tr>
+                                        <tr><td class="text-muted" style="font-size:.75rem;">NOTAS CRÉDITO <span class="text-muted" style="font-size:.65rem;">(<span id="cantNotasCredito">0</span>)</span></td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="totalnotascredito">$0</span></td></tr>
                                         <tr><td class="text-muted ps-3" style="font-size:.68rem;">NC Efect.</td><td class="text-end" style="font-size:.72rem;font-family:monospace;"><span id="totalncefectivo">$0</span></td></tr>
                                         <tr><td class="text-muted ps-3" style="font-size:.68rem;">NC Transf.</td><td class="text-end" style="font-size:.72rem;font-family:monospace;"><span id="totalnctransferencia">$0</span></td></tr>
                                     </tbody>
@@ -2289,10 +2320,26 @@ function continuarArqueo(arqueoId) {
                 arqueoActual = { id:arqueoId, fecha:r.arqueo.fecha_arqueo, arqueo:r.arqueo };
                 abrirModalArqueo(); cargarDatosArqueoExistente(r.arqueo);
                 aplicarModoSoloLectura(false);
+                avisarRecalculoAuto(r.arqueo);
             } else mostrarError('Error: ' + r.error);
         },
         error:function(xhr){mostrarLoading(false);mostrarError('Error: '+xhr.responseText);}
     });
+}
+
+// Aviso no-intrusivo cuando el servidor re-snapshoteó los teóricos al
+// abrir un arqueo en curso. El usuario sabe que los montos que el sistema
+// espera se pusieron al día desde los DTEs (útil luego de editar fechas
+// en /ventas/documentos).
+function avisarRecalculoAuto(arqueo) {
+    if (arqueo && arqueo.recalculo_auto_aplicado) {
+        Swal.fire({
+            toast:true, position:'top-end', icon:'info',
+            title:'Teóricos actualizados',
+            text:'Se recalcularon los montos esperados a partir de los DTEs del día.',
+            showConfirmButton:false, timer:4000, timerProgressBar:true,
+        });
+    }
 }
 
 function abrirModalArqueo() {
@@ -2357,7 +2404,92 @@ function abrirModalArqueo() {
     calcularTotalExpressFisico();
     calcularDiferenciasTransbank();
     cambiarPasoArqueo(1);
+    // Mostrar/ocultar botón "Recalcular desde DTEs" según permisos y
+    // disponibilidad de id persistido. Para cajero/vendedor se oculta: en
+    // arqueos abiertos el backend ya recalcula solo en cada lectura, y en
+    // arqueos cerrados sólo admin puede tocar el snapshot. Cuando el
+    // arqueo recién se creó (`arqueoActual.arqueo` todavía undefined) se
+    // usa el flag `es_supervisor` del contexto de la vista.
+    const flagBack = (arqueoActual && arqueoActual.arqueo && arqueoActual.arqueo.puede_recalcular_manual === true);
+    const flagCtx = ({% if es_supervisor %}true{% else %}false{% endif %});
+    const puedeRecalcularManual = flagBack || flagCtx;
+    if (arqueoActual && arqueoActual.id && puedeRecalcularManual) {
+        $('#btnRecalcularTeoricos').removeClass('d-none');
+    } else {
+        $('#btnRecalcularTeoricos').addClass('d-none');
+    }
     $('#modalArqueo').modal('show');
+}
+
+// ========== RECÁLCULO MANUAL DE TEÓRICOS ==========
+// Re-snapshotea los `total_*_teorico` del arqueo abierto leyendo de nuevo
+// los DTE y tickets del día. Se usa cuando el admin corrige la fecha de
+// un DTE en /ventas/documentos y necesita que el arqueo del día viejo /
+// nuevo refleje el cambio.
+function recalcularTeoricosArqueoActual() {
+    if (!arqueoActual || !arqueoActual.id) {
+        mostrarError('No hay un arqueo cargado');
+        return;
+    }
+    const arqueoId = arqueoActual.id;
+    const estadoActual = (arqueoActual.arqueo && arqueoActual.arqueo.estado) || 'ABIERTO';
+
+    const estaAbierto = ['ABIERTO','CON_DIFERENCIAS'].includes(estadoActual);
+    const confirmar = () => estaAbierto
+        ? Promise.resolve({isConfirmed:true, value:''})
+        : Swal.fire({
+            icon:'warning', title:'Recalcular arqueo cerrado',
+            html:'Vas a re-snapshotear los totales teóricos de un arqueo en estado <strong>' + estadoActual + '</strong>. '
+               + 'Quedará registrado en la bitácora del arqueo.<br><br>'
+               + '<strong>Razón (opcional):</strong>',
+            input:'text', inputPlaceholder:'Ej: se corrigió fecha de DTE 12345',
+            showCancelButton:true, confirmButtonText:'Recalcular', cancelButtonText:'Cancelar',
+            confirmButtonColor:'#0066FF',
+        });
+
+    confirmar().then(res => {
+        if (!res.isConfirmed) return;
+        const razon = (res.value || '').trim();
+        $('#spinnerRecalcTeoricos').show();
+        $('#btnRecalcularTeoricos').prop('disabled', true);
+        $.ajax({
+            url:`/app/api/arqueo/${arqueoId}/recalcular-teoricos/`,
+            method:'POST',
+            headers:{'X-CSRFToken':getCookie('csrftoken'),'Content-Type':'application/json'},
+            data: JSON.stringify({razon: razon}),
+            success:function(r){
+                $('#spinnerRecalcTeoricos').hide();
+                $('#btnRecalcularTeoricos').prop('disabled', false);
+                if (!r.success) { mostrarError(r.error || 'No se pudo recalcular'); return; }
+                // Recargar el modal con los valores frescos. Lo hacemos
+                // volviendo a pedir `obtener_arqueo_detalle` en vez de
+                // pintar con la respuesta, para reaprovechar toda la
+                // lógica de carga (resumen, diferencias, depósitos, etc.)
+                $.ajax({ url:`/app/api/arqueo/${arqueoId}/`, method:'GET',
+                    success:function(rd){
+                        if (!rd.success) { mostrarError(rd.error || 'Error al recargar'); return; }
+                        const estadoEra = estadoActual;
+                        arqueoActual = { id:arqueoId, fecha:rd.arqueo.fecha_arqueo, arqueo:rd.arqueo };
+                        cargarDatosArqueoExistente(rd.arqueo);
+                        const soloLec = rd.arqueo.estado !== 'ABIERTO';
+                        aplicarModoSoloLectura(soloLec, rd.arqueo.estado);
+                        if (r.hay_cambios) {
+                            mostrarExito('Teóricos actualizados desde los DTEs del día.');
+                        } else {
+                            mostrarInfo('Ya estaban al día. Sin cambios.');
+                        }
+                    }
+                });
+            },
+            error:function(xhr){
+                $('#spinnerRecalcTeoricos').hide();
+                $('#btnRecalcularTeoricos').prop('disabled', false);
+                let msg = 'Error al recalcular';
+                try { msg = JSON.parse(xhr.responseText).error || msg; } catch(e){}
+                mostrarError(msg);
+            }
+        });
+    });
 }
 
 // ========== FUNCIONES DE TRANSBANK ==========
@@ -2819,6 +2951,7 @@ function verDetalleArqueo(id) {
                 abrirModalArqueo();
                 cargarDatosArqueoExistente(r.arqueo);
                 aplicarModoSoloLectura(esSoloLectura, estadoArqueo);
+                avisarRecalculoAuto(r.arqueo);
             } else mostrarError('Error: ' + r.error);
         },
         error:function(xhr){mostrarLoading(false);mostrarError('Error: '+xhr.responseText);}
@@ -2879,9 +3012,10 @@ function abrirResumenCaja() {
 
 function limpiarCamposCuadratura() {
     ['visa','debito','presto','hites','efectivo','transferencia','nota_credito','nc_efectivo','nc_transferencia','convenio','credito_trabajador','credito_externo',
-     'falabella','paris','ripley','mercadopago','klap','totalboletaelectronica','totalfactura','totalnotascredito','totalncefectivo','totalnctransferencia',
+     'falabella','paris','ripley','mercadopago','klap','totalboletaelectronica','totalboletapapel','totalfactura','totalfacturaexenta','totalnotascredito','totalncefectivo','totalnctransferencia',
      'ventatotal','totalefectivo','totaltbk','totalcomercial','totalinternet',
      'sum_tarjetas','sum_efectivo','sum_internet'].forEach(c => $(`#${c}`).text('$0'));
+    ['cantBoletaElectronica','cantBoletaPapel','cantFactura','cantFacturaExenta','cantNotasCredito'].forEach(c => $(`#${c}`).text('0'));
 }
 
 function buscarCuadratura() {
@@ -2925,9 +3059,27 @@ function cargarDatosCuadratura(c) {
     $('#falabella').text(fmCLP(c.total_falabella||0)); $('#paris').text(fmCLP(c.total_paris||0));
     $('#ripley').text(fmCLP(c.total_ripley||0)); $('#mercadopago').text(fmCLP(c.total_mercadopago||0));
     $('#klap').text(fmCLP(c.total_klap||0));
-    $('#totalboletaelectronica').text(fmCLP(c.total_boletas_electronicas||0));
-    $('#totalfactura').text(fmCLP(c.total_facturas||0)); $('#totalnotascredito').text(fmCLP(c.total_notas_credito||0));
+    // Documentos (referencia): usamos los totales `_display` que suman
+    // el monto de TODOS los DTEs del día (con o sin ticket asociado), así
+    // el usuario ve el monto emitido por tipo de documento aunque el dinero
+    // ya esté contabilizado por el lado del ticket. Fallback a los `total_*`
+    // deduplicados por si el backend viejo aún no envía los `_display`.
+    const beDisplay = (c.total_boletas_electronicas_display ?? c.total_boletas_electronicas) || 0;
+    const bpDisplay = (c.total_boletas_papel_display ?? c.total_boletas_papel) || 0;
+    const facDisplay = (c.total_facturas_display ?? c.total_facturas) || 0;
+    const facExDisplay = (c.total_facturas_exentas_display ?? c.total_facturas_exentas) || 0;
+    $('#totalboletaelectronica').text(fmCLP(beDisplay));
+    $('#totalboletapapel').text(fmCLP(bpDisplay));
+    $('#totalfactura').text(fmCLP(facDisplay));
+    $('#totalfacturaexenta').text(fmCLP(facExDisplay));
+    $('#totalnotascredito').text(fmCLP(c.total_notas_credito||0));
     $('#totalncefectivo').text(fmCLP(c.total_nc_efectivo||0)); $('#totalnctransferencia').text(fmCLP(c.total_nc_transferencia||0));
+    // Contadores por tipo de documento
+    $('#cantBoletaElectronica').text(c.cantidad_boletas_electronicas||0);
+    $('#cantBoletaPapel').text(c.cantidad_boletas_papel||0);
+    $('#cantFactura').text(c.cantidad_facturas||0);
+    $('#cantFacturaExenta').text(c.cantidad_facturas_exentas||0);
+    $('#cantNotasCredito').text(c.cantidad_notas_credito||0);
 
     // --- Sumas por módulo (calculadas desde raw data, no del API total) ---
     const sumTarjetas = (c.total_visa_mc_amex||0) + (c.total_tarjeta_debito||0) + (c.total_presto||0) + (c.total_hites||0);
@@ -2961,8 +3113,17 @@ async function imprimirResumenTermica() {
         tarjetas_comerciales:$('#sum_efectivo').text(), venta_internet:$('#sum_internet').text(), venta_total:$('#ventatotal').text(),
         visa:$('#visa').text(), debito:$('#debito').text(), presto:$('#presto').text(), hites:$('#hites').text(),
         falabella:$('#falabella').text(), paris:$('#paris').text(), ripley:$('#ripley').text(), mercadopago:$('#mercadopago').text(), klap:$('#klap').text(),
-        transferencia:$('#transferencia').text(), boletas_electronicas:$('#totalboletaelectronica').text(),
-        facturas:$('#totalfactura').text(), notas_credito:$('#totalnotascredito').text(),
+        transferencia:$('#transferencia').text(),
+        boletas_electronicas:$('#totalboletaelectronica').text(),
+        boletas_papel:$('#totalboletapapel').text(),
+        facturas:$('#totalfactura').text(),
+        facturas_exentas:$('#totalfacturaexenta').text(),
+        notas_credito:$('#totalnotascredito').text(),
+        cant_boletas_electronicas:$('#cantBoletaElectronica').text(),
+        cant_boletas_papel:$('#cantBoletaPapel').text(),
+        cant_facturas:$('#cantFactura').text(),
+        cant_facturas_exentas:$('#cantFacturaExenta').text(),
+        cant_notas_credito:$('#cantNotasCredito').text(),
         empresa:'{{ sucursal_actual.empresa.nombre|default:""|escapejs }}',
         sucursal:'{{ sucursal_actual.alias|escapejs }}' };
     if (typeof QZ_CONFIG !== 'undefined' && QZ_CONFIG.habilitado) {
@@ -3009,9 +3170,11 @@ function generarContenidoTermica(d) {
     ${d.transferencia!=='$0'?`<tr><td class="metodo">TRANSFERENCIA:</td><td class="monto">${d.transferencia}</td></tr>`:''}
     </table></div><div class="linea"></div>
     <div class="seccion"><div class="subtitulo">DOCUMENTOS</div><table>
-    ${d.boletas_electronicas!=='$0'?`<tr><td class="metodo">BOLETAS ELEC.:</td><td class="monto">${d.boletas_electronicas}</td></tr>`:''}
-    ${d.facturas!=='$0'?`<tr><td class="metodo">FACTURAS:</td><td class="monto">${d.facturas}</td></tr>`:''}
-    ${d.notas_credito!=='$0'?`<tr><td class="metodo">NOTAS CREDITO:</td><td class="monto">${d.notas_credito}</td></tr>`:''}
+    ${d.boletas_electronicas!=='$0'?`<tr><td class="metodo">BOLETAS ELEC. (${d.cant_boletas_electronicas||0}):</td><td class="monto">${d.boletas_electronicas}</td></tr>`:''}
+    ${d.boletas_papel!=='$0'?`<tr><td class="metodo">BOLETAS PAPEL (${d.cant_boletas_papel||0}):</td><td class="monto">${d.boletas_papel}</td></tr>`:''}
+    ${d.facturas!=='$0'?`<tr><td class="metodo">FACTURAS (${d.cant_facturas||0}):</td><td class="monto">${d.facturas}</td></tr>`:''}
+    ${d.facturas_exentas!=='$0'?`<tr><td class="metodo">FACT. EXENTAS (${d.cant_facturas_exentas||0}):</td><td class="monto">${d.facturas_exentas}</td></tr>`:''}
+    ${d.notas_credito!=='$0'?`<tr><td class="metodo">NOTAS CREDITO (${d.cant_notas_credito||0}):</td><td class="monto">${d.notas_credito}</td></tr>`:''}
     </table></div><div class="linea-doble"></div>
     <div class="total centro">VENTA TOTAL: ${d.venta_total}</div><div class="linea-doble"></div>
     <div class="centro fecha-hora">Impreso: ${new Date().toLocaleString('es-CL')}</div>
@@ -3590,15 +3753,28 @@ function _generarEscPosCuadratura(datos) {
     }
 
     /* ── DOCUMENTOS (solo si hay montos) ───────────────────────── */
-    const hayD = [datos.boletas_electronicas, datos.facturas, datos.notas_credito].some(v => v && v !== '$0');
+    const hayD = [
+        datos.boletas_electronicas,
+        datos.boletas_papel,
+        datos.facturas,
+        datos.facturas_exentas,
+        datos.notas_credito,
+    ].some(v => v && v !== '$0');
     if (hayD) {
         c.push(_EP.BOLD_ON);
         c.push(_pL('DOCUMENTOS', _COLS) + _N);
         c.push(_EP.BOLD_OFF);
         c.push(_sep('-'));
-        if (datos.boletas_electronicas && datos.boletas_electronicas !== '$0') c.push(_col2('BOLETAS ELEC.:', datos.boletas_electronicas));
-        if (datos.facturas             && datos.facturas             !== '$0') c.push(_col2('FACTURAS:', datos.facturas));
-        if (datos.notas_credito        && datos.notas_credito        !== '$0') c.push(_col2('NOTAS CREDITO:', datos.notas_credito));
+        if (datos.boletas_electronicas && datos.boletas_electronicas !== '$0')
+            c.push(_col2('BOLETAS ELEC. (' + (datos.cant_boletas_electronicas||0) + '):', datos.boletas_electronicas));
+        if (datos.boletas_papel && datos.boletas_papel !== '$0')
+            c.push(_col2('BOLETAS PAPEL (' + (datos.cant_boletas_papel||0) + '):', datos.boletas_papel));
+        if (datos.facturas && datos.facturas !== '$0')
+            c.push(_col2('FACTURAS (' + (datos.cant_facturas||0) + '):', datos.facturas));
+        if (datos.facturas_exentas && datos.facturas_exentas !== '$0')
+            c.push(_col2('FACT. EXENTAS (' + (datos.cant_facturas_exentas||0) + '):', datos.facturas_exentas));
+        if (datos.notas_credito && datos.notas_credito !== '$0')
+            c.push(_col2('NOTAS CREDITO (' + (datos.cant_notas_credito||0) + '):', datos.notas_credito));
         c.push(_sep('-'));
     }
 

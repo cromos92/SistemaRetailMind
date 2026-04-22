@@ -7506,8 +7506,10 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                     select.append(`<option value="${dte.id}">${dte.text}${fecha}</option>`);
                 });
             }
-            // Inicializar Select2 para DTE
-            try { select.select2('destroy'); } catch(e) {}
+            // Inicializar Select2 para DTE (solo destruir si ya estaba)
+            if (select.hasClass('select2-hidden-accessible')) {
+                try { select.select2('destroy'); } catch(e) { /* ignore */ }
+            }
             select.select2({
                 width: '100%',
                 dropdownParent: $('#modalProductoManual'),

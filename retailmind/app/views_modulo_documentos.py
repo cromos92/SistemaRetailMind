@@ -2691,30 +2691,11 @@ def generar_txt_dte_acepta(datos):
         logger.warning(f"⚠️ Error al convertir monto a letras: {e}")
         monto_letras = f"{int(monto_total)} PESOS"
     
+    # Observación de Factura (33/34) y Guía (52): solo monto en letras + Total
+    # Productos. No se incluye V:/T:/D:/Dc:/pagos ni el texto libre de
+    # ticket.observaciones, a diferencia de la Boleta (ver generar_txt_boleta_acepta).
     total_productos = sum(int(item.get('cantidad') or 0) for item in datos.get('detalle', []))
-    observaciones_generales = _extraer_observaciones_humanas(
-        datos.get('observaciones_adicionales') or datos.get('observaciones') or ''
-    )
-    observaciones_generales = limpiar_texto(observaciones_generales, 200)
-
-    # Observación compacta (≤90 chars) con vendedor/ticket/descuento/pagos.
-    # Vendedor y ticket también viajan como Referencias VEN/SET más arriba,
-    # pero se incluyen acá también porque ese es el texto que se imprime en
-    # el recuadro de observación de la factura física (Acepta no renderiza
-    # Referencias en la impresión). `incluir_dte=False` porque el folio ya
-    # se repite en el encabezado impreso de la factura.
-    observacion_compacta = construir_observacion_compacta(
-        datos, max_len=90, incluir_dte=False
-    )
-
-    info_partes = [f"{monto_letras}  total Productos: {total_productos}"]
-    if observacion_compacta:
-        info_partes.append(observacion_compacta)
-    if tipo_doc == 33 and observaciones_generales:
-        info_partes.append(observaciones_generales)
-
-    info_texto = '  '.join(info_partes)
-    info_texto = limpiar_texto(info_texto, 1000)
+    info_texto = limpiar_texto(f"{monto_letras}  Total Productos: {total_productos}", 1000)
     
     # ✅ CORRECCIÓN: Línea final con formato correcto
     # Formato real: vendedor|||observacion  |||||||impresora|4|}
@@ -3191,6 +3172,36 @@ def generar_txt_desde_dte_existente(request):
         if movimiento_con_destino:
             sucursal_destino = movimiento_con_destino.sucursal_destino
         
+        # Para Boleta (39/41) la observación del TXT lleva V:/T:/D:/Dc:/pagos,
+        # así que reconstruimos código de vendedor, correlativo de ticket y
+        # métodos de pago desde el Ticket asociado y Dte_Detalle_Pago. Para
+        # Factura (33/34) y Guía (52) estos datos se ignoran en el generador,
+        # así que no vale la pena pagar las queries.
+        ticket_asoc = None
+        metodos_pago_texto = ''
+        if tipo_numerico in (39, 41):
+            from .models import Ticket
+            ticket_asoc = Ticket.objects.filter(
+                folio_dte=dte.numero_documento, sucursal=dte.sucursal
+            ).select_related('vendedor').first()
+
+            pagos_str = []
+            for p in dte.dte_asociado.all():
+                partes = [f"{p.metodo_pago}: ${p.monto:,}"]
+                if p.tipo_tarjeta:
+                    partes.append(f"Tarj: {p.tipo_tarjeta}")
+                if p.voucher:
+                    partes.append(f"Auth: {p.voucher}")
+                if p.notas:
+                    partes.append(' '.join(str(p.notas).split())[:80])
+                pagos_str.append(' - '.join(partes))
+            metodos_pago_texto = ' | '.join(pagos_str)
+
+        codigo_vendedor_boleta = (
+            ticket_asoc.vendedor.codigo_vendedor
+            if (ticket_asoc and ticket_asoc.vendedor) else None
+        )
+
         # Construir diccionario de datos desde el DTE
         # ✅ Aplicar limpiar_texto para eliminar acentos y caracteres especiales
         datos = {
@@ -3211,7 +3222,9 @@ def generar_txt_desde_dte_existente(request):
                 'direccion': limpiar_texto((dte.sucursal.direccion if dte.sucursal else '') or (dte.emisor.direccion if dte.emisor else '') or ''),
                 'comuna': limpiar_texto((dte.sucursal.comuna if dte.sucursal else '') or (dte.emisor.comuna if dte.emisor else '') or ''),
                 'ciudad': limpiar_texto((dte.sucursal.ciudad if dte.sucursal else '') or (dte.emisor.ciudad if dte.emisor else '') or ''),
-                'codigo_vendedor': limpiar_texto(dte.responsable or 'USUARIO'),
+                'codigo_vendedor': limpiar_texto(codigo_vendedor_boleta or dte.responsable or 'USUARIO'),
+                'correlativo_ticket': ticket_asoc.correlativo if ticket_asoc else '',
+                'metodos_pago': limpiar_texto(metodos_pago_texto),
                 'sucursal': limpiar_texto(dte.sucursal.alias if dte.sucursal else ''),
                 'telefono': dte.emisor.contacto1 or '',
                 'nombre_impresora_boleta': getattr(dte.sucursal, 'nombre_impresora_boleta', 'boleta') if dte.sucursal else 'boleta',
