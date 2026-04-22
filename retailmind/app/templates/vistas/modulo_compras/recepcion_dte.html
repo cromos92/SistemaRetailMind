@@ -1975,8 +1975,22 @@ $(document).ready(function() {
     modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleDocumento'));
     modalProblema = new bootstrap.Modal(document.getElementById('modalDetalleProblema'));
 
-    $('#btnRefresh').on('click', () => cargarRecepciones(true));
-    $('#filterEstadoDte, #filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => { paginaActual = 1; cargarRecepciones(); });
+    $('#btnRefresh').on('click', () => {
+        if (window.modoEmitidos) {
+            paginaActual = 1;
+            cargarEmitidos();
+        } else {
+            cargarRecepciones(true);
+        }
+    });
+    $('#filterEstadoDte, #filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => {
+        paginaActual = 1;
+        if (window.modoEmitidos) {
+            cargarEmitidos();
+        } else {
+            cargarRecepciones();
+        }
+    });
     $('#btnPrev').on('click', () => cambiarPagina(-1));
     $('#btnNext').on('click', () => cambiarPagina(1));
     $('#btnConfirmarRecepcion').on('click', confirmarRecepcion);
@@ -2366,7 +2380,11 @@ function cambiarPagina(delta) {
     const nuevaPagina = paginaActual + delta;
     if (nuevaPagina < 1 || nuevaPagina > totalPaginas) return;
     paginaActual = nuevaPagina;
-    cargarRecepciones();
+    if (window.modoEmitidos) {
+        cargarEmitidos();
+    } else {
+        cargarRecepciones();
+    }
 }
 
 function verDetalle(id) {
@@ -4648,36 +4666,12 @@ $(document).ready(function () {
     $('#btnModoRecibidos').on('click', () => cambiarModoVista(false));
     $('#btnModoEmitidos').on('click', () => cambiarModoVista(true));
 
-    // Refresh respeta el modo activo
-    $('#btnRefresh').on('click', function () {
-        if (window.modoEmitidos) {
-            paginaActual = 1;
-            cargarEmitidos();
-        }
-        // Si no es modoEmitidos, el handler original ya corre cargarRecepciones(true)
-    });
-
-    // Filtros cambian segun modo
-    $('#filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', function () {
-        if (window.modoEmitidos) {
-            paginaActual = 1;
-            cargarEmitidos();
-        }
-    });
-
-    // Paginacion en modo emisor
-    $('#btnPrev').on('click', function () {
-        if (window.modoEmitidos && paginaActual > 1) {
-            paginaActual -= 1;
-            cargarEmitidos();
-        }
-    });
-    $('#btnNext').on('click', function () {
-        if (window.modoEmitidos && paginaActual < totalPaginas) {
-            paginaActual += 1;
-            cargarEmitidos();
-        }
-    });
+    // Nota: los handlers de #btnRefresh, filtros, #btnPrev y #btnNext
+    // ya estan definidos arriba en el bloque principal y detectan
+    // window.modoEmitidos para despachar a cargarEmitidos() o
+    // cargarRecepciones(). No los volvemos a registrar aqui para
+    // evitar que se disparen dos cargas en paralelo (bug de paginado
+    // en el modo "Emitidos por mi").
 
     // Abrir modal de ajuste
     $(document).on('click', '.btn-abrir-ajuste', function () {
