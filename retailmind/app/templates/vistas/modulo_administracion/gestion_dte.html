@@ -1176,11 +1176,20 @@
             <button class="nexo-action-btn success" title="Registrar pago" onclick="registrarPago(${dte.id || 0})">
                 <i class="bi bi-cash-coin"></i>
             </button>` : ''}
-            {% if es_admin %}
-            ${['FACTURA_ELECTRONICA', 'FACTURA_EXENTA', 'BOLETA_ELECTRONICA', 'GUIA_DESPACHO', 'NOTA_CREDITO', 'NOTA DE CREDITO'].includes(dte.tipo_documento) ? `
+            {% if puede_descargar_txt_dte %}
+            ${[
+                'FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
+                'FACTURA EXENTA', 'FACTURA_EXENTA',
+                'BOLETA ELECTRONICA', 'BOLETA_ELECTRONICA',
+                'GUIA', 'GUIA DESPACHO', 'GUIA_DESPACHO',
+                'NOTA DE CREDITO', 'NOTA_CREDITO',
+                'NOTA DE DEBITO', 'NOTA_DEBITO'
+            ].includes(dte.tipo_documento) ? `
             <button class="nexo-action-btn warning" title="Descargar TXT Acepta" onclick="descargarTXTAcepta(${dte.id || 0}, '${dte.tipo_documento}', '${dte.numero_documento}')">
                 <i class="bi bi-file-earmark-text"></i>
             </button>` : ''}
+            {% endif %}
+            {% if es_admin %}
             ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' && (dte.monto_con_iva - (dte.total_nc_acumulado || 0)) > 0 ? `
             <button class="nexo-action-btn danger" title="Generar NC para ${dte.tipo_documento}" onclick="anularDocumento(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}', ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})">
                 <i class="bi bi-x-circle"></i>

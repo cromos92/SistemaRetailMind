@@ -3120,7 +3120,24 @@ def generar_txt_desde_dte_existente(request):
                 'success': False,
                 'error': 'ID de DTE requerido'
             }, status=400)
-        
+
+        # Autorización: permiso granular "dte_descargar_txt".
+        # Este endpoint también se expone desde la UI para roles no
+        # administradores, por lo que revalidamos siempre en backend.
+        from app.models.permisos import PermisoRol
+        sucursal_actual_id = (
+            request.session.get('sucursalActual')
+            or request.session.get('idSucursalActual')
+        )
+        if not PermisoRol.tiene_permiso(
+            request.user, 'dte_descargar_txt', 'puede_ver',
+            sucursal_id=sucursal_actual_id,
+        ):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permiso para descargar el TXT Acepta de DTE'
+            }, status=403)
+
         # Obtener el DTE
         dte = get_object_or_404(Dte, id=dte_id)
         
@@ -3202,6 +3219,27 @@ def generar_txt_desde_dte_existente(request):
             if (ticket_asoc and ticket_asoc.vendedor) else None
         )
 
+        # --- Guía de Despacho: detectar si es traspaso interno ---
+        # Indicador de traslado SII (campo 6 del IdDoc en el TXT):
+        #   1 = Operación constituye venta
+        #   5 = Traslado interno (entre sucursales/bodegas)
+        # Para DTEs distintos a GUIA el indicador es ignorado, pero
+        # lo fijamos coherentemente igual.
+        es_traspaso_interno = (
+            tipo_numerico == 52 and (
+                dte.tipo_transaccion == 'TRASPASO'
+                # Mismo emisor/receptor también implica traspaso interno.
+                or (dte.receptor_id and dte.receptor_id == dte.emisor_id)
+                # Hay un movimiento con sucursal destino y sin facturación
+                # externa explícita.
+                or (sucursal_destino is not None and dte.tipo_transaccion != 'VENTA')
+            )
+        )
+        if tipo_numerico == 52:
+            ind_traslado_valor = 5 if es_traspaso_interno else 1
+        else:
+            ind_traslado_valor = 1
+
         # Construir diccionario de datos desde el DTE
         # ✅ Aplicar limpiar_texto para eliminar acentos y caracteres especiales
         datos = {
@@ -3211,6 +3249,8 @@ def generar_txt_desde_dte_existente(request):
                 'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
                 'fecha_vencimiento': dte.fecha_vencimiento.strftime('%Y-%m-%d') if dte.fecha_vencimiento else '',
                 'forma_pago': 1 if dte.fecha_vencimiento == dte.fecha_emision else 2,
+                'tipo_despacho': 2,  # Por cuenta del emisor (default operativo)
+                'ind_traslado': ind_traslado_valor,
                 'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
             },
             'emisor': {

@@ -55,12 +55,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-ROLES_AJUSTE_DTE_EMISOR = {'administrador', 'administracion', 'jefe_local'}
-
-
 def _obtener_rol_usuario(user):
-    """Devuelve el rol del usuario activo. Usa Usuario.rol y cae a
-    EmpresaUser solo si el AUTH_USER_MODEL no lo tiene definido."""
+    """Devuelve el rol del usuario activo. Usa Usuario.rol (AUTH_USER_MODEL) y
+    cae a EmpresaUser solo si el modelo de usuario no tiene ese atributo."""
     if user is None or not getattr(user, 'is_authenticated', False):
         return ''
     rol = getattr(user, 'rol', '') or ''
@@ -75,19 +72,29 @@ def _obtener_rol_usuario(user):
     return ''
 
 
-def _rol_puede_ajustar_dte_emisor(rol):
-    if not rol:
+def _puede_ajustar_dte_emisor(user, sucursal_id):
+    """True si el usuario puede ajustar DTEs emitidos (sistema de permisos
+    oficial: codigo 'recepcion_dte' + puede_aprobar)."""
+    try:
+        return PermisoRol.tiene_permiso(
+            usuario=user,
+            codigo_opcion='recepcion_dte',
+            tipo_permiso='puede_aprobar',
+            sucursal_id=sucursal_id,
+        )
+    except Exception:
         return False
-    return (rol or '').strip().lower() in ROLES_AJUSTE_DTE_EMISOR
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
 def recepcion_dte(request):
     """Vista web para la recepción de traspasos internos."""
     user_rol = _obtener_rol_usuario(request.user)
+    sucursal_id = request.session.get('idSucursalActual')
     return render(request, 'vistas/modulo_compras/recepcion_dte.html', {
         'user_rol': user_rol,
-        'puede_ajustar_emitidos': _rol_puede_ajustar_dte_emisor(user_rol),
+        'puede_ajustar_emitidos': _puede_ajustar_dte_emisor(request.user, sucursal_id),
     })
 
 
@@ -1788,6 +1795,7 @@ def editar_dte_traspaso_api(request):
 # ========== AJUSTE DE DTE POR EMISOR (ANTES DE RECEPCION) ==========
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_GET
 def emitidos_pendientes_api(request):
     """
@@ -1800,13 +1808,6 @@ def emitidos_pendientes_api(request):
             return JsonResponse(
                 {'success': False, 'error': 'No hay sucursal activa en la sesion.'},
                 status=400,
-            )
-
-        rol = _obtener_rol_usuario(request.user)
-        if not _rol_puede_ajustar_dte_emisor(rol):
-            return JsonResponse(
-                {'success': False, 'error': 'No tienes permiso para ver los DTEs emitidos en modo ajuste.'},
-                status=403,
             )
 
         pagina = max(int(request.GET.get('pagina', 1) or 1), 1)
@@ -1884,6 +1885,7 @@ def emitidos_pendientes_api(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 def ajustar_dte_emisor_api(request):
     """
@@ -1927,13 +1929,6 @@ def ajustar_dte_emisor_api(request):
     if not sucursal_actual_id:
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesion.'}, status=400)
     sucursal_actual_id = int(sucursal_actual_id)
-
-    rol = _obtener_rol_usuario(request.user)
-    if not _rol_puede_ajustar_dte_emisor(rol):
-        return JsonResponse(
-            {'success': False, 'error': 'No tienes permiso para ajustar DTEs emitidos.'},
-            status=403,
-        )
 
     from decimal import Decimal
     from .models.dte import NotificacionDTE
@@ -11182,6 +11177,7 @@ def obtener_recepciones_producto(request, producto_id):
 
 
 @login_required
+@requiere_permiso('gestion_producto', 'puede_editar')
 @require_POST
 def actualizar_atributos_compra_producto(request, producto_id):
     """
@@ -21631,10 +21627,24 @@ def generar_ticket_html(ticket_data):
 @login_required
 def gestion_dte(request):
     """Vista para mostrar la página de gestión de DTEs de venta"""
-    # Determinar si el usuario es administrador
     es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+
+    # Permiso granular para ver/usar el botón "Descargar TXT Acepta".
+    # Se controla desde la pantalla de permisos; por defecto sólo lo
+    # tiene el rol administrador (ver migración 0145). El endpoint
+    # backend que genera el TXT también valida este permiso.
+    sucursal_actual_id = (
+        request.session.get('sucursalActual')
+        or request.session.get('idSucursalActual')
+    )
+    puede_descargar_txt_dte = PermisoRol.tiene_permiso(
+        request.user, 'dte_descargar_txt', 'puede_ver',
+        sucursal_id=sucursal_actual_id,
+    )
+
     return render(request, 'vistas/modulo_administracion/gestion_dte.html', {
-        'es_admin': es_admin
+        'es_admin': es_admin,
+        'puede_descargar_txt_dte': puede_descargar_txt_dte,
     })
 
 

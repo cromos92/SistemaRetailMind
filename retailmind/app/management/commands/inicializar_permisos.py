@@ -127,6 +127,9 @@ class Command(BaseCommand):
             ('gestion_cotizaciones', 'Gesti?n Cotizaciones', 'gestion_cotizaciones', None, 'ri-file-text-line', 5),
             ('gestion_correlativos', 'Gesti?n Correlativos', None, '/app/documentos/gestion-correlativos/', 'ri-file-list-3-line', 6),
             ('gestion_creditos', 'Gesti?n Cr?ditos', None, '/app/documentos/gestion-creditos/', 'ri-bank-card-line', 7),
+            # Permiso granular: controla el bot?n "Descargar TXT Acepta"
+            # en la pantalla Gesti?n DTE y el endpoint que genera el TXT.
+            ('dte_descargar_txt', 'Descargar TXT Acepta de DTE', None, None, 'bi-file-earmark-text', 8),
         ]
         
         for item in opciones:
