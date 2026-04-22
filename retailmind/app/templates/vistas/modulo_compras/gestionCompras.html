@@ -2952,15 +2952,18 @@ const GestionCompras = (function() {
         function cargarAtributosParaSelects() {
             const selectors = ['#selectMarcaManual', '#selectColorManual', '#selectGeneroManual', '#selectTallaManual'];
 
-            // Destruir Select2 existentes y limpiar
+            // Destruir Select2 existentes y limpiar SOLO los contenedores de
+            // estos selects. OJO: no usar $('#modalProductoManual .select2-container').remove()
+            // porque eso también barre el contenedor visual del DTE y
+            // al reabrir el modal el campo DTE aparece oculto.
             selectors.forEach(function(sel) {
                 try {
                     if ($(sel).hasClass('select2-hidden-accessible')) {
                         $(sel).select2('destroy');
                     }
                 } catch(e) { /* ignore */ }
+                $(sel).next('.select2-container').remove();
             });
-            $('#modalProductoManual .select2-container').remove();
             selectors.forEach(function(sel) {
                 $(sel).empty().append('<option value="">Cargando...</option>');
             });
@@ -3010,8 +3013,9 @@ const GestionCompras = (function() {
                         $(sel).select2('destroy');
                     }
                 } catch(e) { /* ignore */ }
+                // Limpieza localizada (no tocar el contenedor del DTE).
+                $(sel).next('.select2-container').remove();
             });
-            $('#modalProductoManual .select2-container').remove();
 
             const select2Config = {
                 width: '100%',
@@ -7476,6 +7480,9 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                 select.select2('destroy');
             }
         } catch(e) { /* ignore */ }
+        // Eliminar un contenedor visual huérfano (puede quedar tras
+        // reabrir el modal para otra compra si otra limpieza lo barrió).
+        select.next('.select2-container').remove();
         select.empty().append('<option value="">Cargando DTEs...</option>');
 
         if (!proveedorId) {
@@ -7510,6 +7517,7 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             if (select.hasClass('select2-hidden-accessible')) {
                 try { select.select2('destroy'); } catch(e) { /* ignore */ }
             }
+            select.next('.select2-container').remove();
             select.select2({
                 width: '100%',
                 dropdownParent: $('#modalProductoManual'),

@@ -1466,6 +1466,17 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
+                <!-- Banner: ajuste previo del emisor -->
+                <div id="bannerAjustePrevio" class="alert alert-warning d-none mb-3" style="border-left: 4px solid #e69a00;">
+                    <div class="d-flex align-items-start">
+                        <i class="bi bi-exclamation-triangle-fill fs-4 me-2 text-warning"></i>
+                        <div class="flex-grow-1">
+                            <strong>Atención: este DTE fue ajustado por el emisor antes del despacho.</strong>
+                            <div class="small mt-1" id="bannerAjustePrevioDetalle"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Info del Documento y Búsqueda -->
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -2231,11 +2242,25 @@ function renderTablaRecepciones() {
             ? `<br><small class="text-danger"><i class="bi bi-chat-left-text me-1"></i>${doc.referencias.substring(0, 80)}${doc.referencias.length > 80 ? '...' : ''}</small>`
             : '';
 
+        // Indicador NC/Ajuste previo por el emisor
+        let indicadorAjuste = '';
+        const ajustes = Array.isArray(doc.ajustes_previos) ? doc.ajustes_previos : [];
+        if (ajustes.length > 0) {
+            const totalUds = ajustes.reduce((s, a) => s + (Number(a.unidades) || 0), 0);
+            const numerosNC = ajustes.filter(a => a.es_nota_credito).map(a => '#' + a.numero_documento);
+            const numerosAjuste = ajustes.filter(a => !a.es_nota_credito).map(a => '#' + a.numero_documento);
+            const partes = [];
+            if (numerosNC.length) partes.push(`<span class="badge bg-danger me-1" title="NC: ${numerosNC.join(', ')}"><i class="bi bi-receipt-cutoff"></i> ${numerosNC.length} NC</span>`);
+            if (numerosAjuste.length) partes.push(`<span class="badge bg-warning text-dark me-1" title="Ajuste de traspaso: ${numerosAjuste.join(', ')}"><i class="bi bi-pencil-square"></i> ${numerosAjuste.length} Ajuste${numerosAjuste.length > 1 ? 's' : ''}</span>`);
+            indicadorAjuste = `<div class="mt-1">${partes.join('')} <small class="text-muted">(-${totalUds} uds)</small></div>`;
+        }
+
         tbody.append(`
             <tr data-id="${doc.id}" class="${config.rowClass}">
                 <td>
                     <div class="fw-bold">${badgeTipo} Nº ${doc.numero_documento}</div>
                     <small class="text-muted">${doc.observaciones || doc.referencias || ''}</small>
+                    ${indicadorAjuste}
                 </td>
                 <td>
                     <strong>${doc.sucursal_origen}</strong>
@@ -2365,7 +2390,30 @@ function llenarDetalleDocumento(doc) {
     $('#detalleEmisor').text(doc.emisor || '-');
     $('#detalleOrigen').text(doc.sucursal_origen || '-');
     $('#detalleFechaEmision').text(new Date(doc.fecha_emision).toLocaleDateString('es-CL'));
-    
+
+    // Banner de ajuste previo del emisor
+    const ajustes = Array.isArray(doc.ajustes_previos) ? doc.ajustes_previos : [];
+    if (ajustes.length > 0) {
+        const detalleHtml = ajustes.map(a => {
+            const tipoBadge = a.es_nota_credito
+                ? '<span class="badge bg-danger">NC</span>'
+                : '<span class="badge bg-warning text-dark">Ajuste</span>';
+            const montoStr = a.monto_con_iva
+                ? ` · $${Number(a.monto_con_iva).toLocaleString('es-CL')} IVA inc.`
+                : '';
+            const motivoStr = a.motivo ? ` · <em>${a.motivo}</em>` : '';
+            return `<div class="mb-1">
+                ${tipoBadge} <strong>${a.tipo_documento} #${a.numero_documento}</strong>
+                <span class="text-muted">${a.fecha_emision}</span>
+                · ${a.unidades} uds retiradas${montoStr}${motivoStr}
+            </div>`;
+        }).join('');
+        $('#bannerAjustePrevioDetalle').html(detalleHtml);
+        $('#bannerAjustePrevio').removeClass('d-none');
+    } else {
+        $('#bannerAjustePrevio').addClass('d-none');
+    }
+
     // Limpiar búsqueda y observaciones
     $('#buscarProductoModal').val('');
     $('#observacionesGenerales').val('');
@@ -4547,6 +4595,28 @@ function confirmarAjusteEmisor() {
             const doc = resp.doc_trazador || {};
             bootstrap.Modal.getInstance(document.getElementById('modalAjustarDteEmisor')).hide();
 
+            let extraHtml = '';
+            if (doc.es_nota_credito) {
+                if (doc.archivo_txt_url) {
+                    extraHtml = `
+                        <div class="alert alert-success mt-3 mb-0 text-start small">
+                            <i class="bi bi-file-earmark-text me-1"></i>
+                            <strong>TXT Acepta generado.</strong>
+                            <a href="${doc.archivo_txt_url}" download class="btn btn-success btn-sm ms-2">
+                                <i class="bi bi-download me-1"></i>Descargar TXT
+                            </a>
+                        </div>
+                    `;
+                } else if (doc.error_txt) {
+                    extraHtml = `
+                        <div class="alert alert-warning mt-3 mb-0 text-start small">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            <strong>NC generada</strong> pero no se pudo crear el TXT Acepta: ${doc.error_txt}
+                        </div>
+                    `;
+                }
+            }
+
             Swal.fire({
                 icon: 'success',
                 title: 'Ajuste aplicado',
@@ -4558,6 +4628,7 @@ function confirmarAjusteEmisor() {
                         <li><strong>Unidades retiradas:</strong> ${doc.unidades}</li>
                         <li><strong>Monto neto:</strong> ${_ajusteFormatearPesos(doc.monto_neto)}</li>
                     </ul>
+                    ${extraHtml}
                 `,
                 confirmButtonText: 'Entendido',
             }).then(() => {

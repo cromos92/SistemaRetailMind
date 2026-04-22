@@ -55,7 +55,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-ROLES_AJUSTE_DTE_EMISOR = {'administrador', 'administracion', 'gerencia', 'bodega'}
+ROLES_AJUSTE_DTE_EMISOR = {'administrador', 'administracion', 'jefe_local'}
+
+
+def _obtener_rol_usuario(user):
+    """Devuelve el rol del usuario activo. Usa Usuario.rol y cae a
+    EmpresaUser solo si el AUTH_USER_MODEL no lo tiene definido."""
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return ''
+    rol = getattr(user, 'rol', '') or ''
+    if rol:
+        return rol
+    try:
+        eu = EmpresaUser.objects.filter(user=user, active=True).first()
+        if eu and getattr(eu, 'rol', None):
+            return eu.rol
+    except Exception:
+        pass
+    return ''
 
 
 def _rol_puede_ajustar_dte_emisor(rol):
@@ -67,13 +84,7 @@ def _rol_puede_ajustar_dte_emisor(rol):
 @login_required
 def recepcion_dte(request):
     """Vista web para la recepción de traspasos internos."""
-    user_rol = ''
-    try:
-        eu = EmpresaUser.objects.filter(user=request.user, active=True).first()
-        if eu:
-            user_rol = eu.rol or ''
-    except Exception:
-        pass
+    user_rol = _obtener_rol_usuario(request.user)
     return render(request, 'vistas/modulo_compras/recepcion_dte.html', {
         'user_rol': user_rol,
         'puede_ajustar_emitidos': _rol_puede_ajustar_dte_emisor(user_rol),
@@ -157,8 +168,33 @@ def recepciones_pendientes_api(request):
         items = []
         total_unidades_pagina = 0
 
+        # Pre-cargar todos los ajustes/NCs vinculados a los DTEs de la pagina en 1 sola query
+        dte_ids_pagina = [d.id for d in page_obj.object_list]
+        ajustes_por_dte = {}
+        if dte_ids_pagina:
+            docs_vinculados_qs = Dte.objects.filter(
+                documento_afectado_id__in=dte_ids_pagina,
+                estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            ).values(
+                'id', 'documento_afectado_id', 'tipo_documento', 'numero_documento',
+                'monto_con_iva', 'unidades_productos', 'motivo_nc', 'fecha_emision',
+                'es_nota_credito',
+            )
+            for row in docs_vinculados_qs:
+                ajustes_por_dte.setdefault(row['documento_afectado_id'], []).append({
+                    'id': row['id'],
+                    'tipo_documento': row['tipo_documento'],
+                    'numero_documento': row['numero_documento'],
+                    'monto_con_iva': float(row['monto_con_iva'] or 0),
+                    'unidades': row['unidades_productos'] or 0,
+                    'motivo': (row.get('motivo_nc') or '').strip(),
+                    'fecha_emision': row['fecha_emision'].strftime('%d/%m/%Y') if row['fecha_emision'] else '',
+                    'es_nota_credito': bool(row['es_nota_credito']),
+                })
+
         for dte in page_obj.object_list:
-            detalles_queryset = dte.dte_productos.select_related('productoTalla__producto')
+            # Solo productos activos (no los anulados por ajuste del emisor)
+            detalles_queryset = dte.dte_productos.filter(activo=True).select_related('productoTalla__producto')
 
             movimientos_salida = [
                 mov for mov in dte.dte_movimientos.all()
@@ -210,6 +246,8 @@ def recepciones_pendientes_api(request):
             total_unidades_doc = sum(resumen_tallas.values())
             total_unidades_pagina += total_unidades_doc
 
+            ajustes_del_dte = ajustes_por_dte.get(dte.id, [])
+
             items.append({
                 'id': dte.id,
                 'numero_documento': dte.numero_documento,
@@ -229,6 +267,8 @@ def recepciones_pendientes_api(request):
                 'total_unidades': total_unidades_doc,
                 'referencias': dte.referencias or '',
                 'observaciones': movimiento_origen.observaciones or '',
+                'ajustes_previos': ajustes_del_dte,
+                'tiene_ajuste_previo': bool(ajustes_del_dte),
             })
 
         hoy = timezone.localdate()
@@ -1762,8 +1802,7 @@ def emitidos_pendientes_api(request):
                 status=400,
             )
 
-        eu = EmpresaUser.objects.filter(user=request.user, active=True).first()
-        rol = (eu.rol if eu else '') or ''
+        rol = _obtener_rol_usuario(request.user)
         if not _rol_puede_ajustar_dte_emisor(rol):
             return JsonResponse(
                 {'success': False, 'error': 'No tienes permiso para ver los DTEs emitidos en modo ajuste.'},
@@ -1889,8 +1928,7 @@ def ajustar_dte_emisor_api(request):
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesion.'}, status=400)
     sucursal_actual_id = int(sucursal_actual_id)
 
-    eu = EmpresaUser.objects.filter(user=request.user, active=True).first()
-    rol = (eu.rol if eu else '') or ''
+    rol = _obtener_rol_usuario(request.user)
     if not _rol_puede_ajustar_dte_emisor(rol):
         return JsonResponse(
             {'success': False, 'error': 'No tienes permiso para ajustar DTEs emitidos.'},
@@ -1949,7 +1987,7 @@ def ajustar_dte_emisor_api(request):
 
             dte_productos = list(
                 Dte_Productos.objects
-                .select_for_update()
+                .select_for_update(of=('self',))
                 .filter(id__in=ajustes_por_id.keys(), dte=dte, activo=True)
                 .select_related('productoTalla__producto')
             )
@@ -2150,6 +2188,109 @@ def ajustar_dte_emisor_api(request):
                 usuario,
             )
 
+            # ========================================================
+            # Generar TXT Acepta cuando el documento trazador es NC real
+            # ========================================================
+            archivo_txt_url = None
+            error_txt = None
+            if es_facturable:
+                try:
+                    from .views_modulo_documentos import generar_txt_dte_acepta, limpiar_texto
+                    import os
+                    from django.conf import settings as dj_settings
+
+                    mapa_tipo_sii_original = {
+                        'FACTURA ELECTRONICA': '33',
+                        'FACTURA_ELECTRONICA': '33',
+                        'BOLETA ELECTRONICA': '39',
+                        'BOLETA_ELECTRONICA': '39',
+                    }
+                    tipo_sii_ref = mapa_tipo_sii_original.get(tipo_doc_original, '33')
+
+                    sucursal_destino_nc = None
+                    mov_destino = dte.dte_movimientos.filter(
+                        sucursal_destino__isnull=False
+                    ).select_related('sucursal_destino').first()
+                    if mov_destino:
+                        sucursal_destino_nc = mov_destino.sucursal_destino
+
+                    datos_txt = {
+                        'documento': {
+                            'tipo_documento': '61',  # Nota de Credito
+                            'folio': str(numero_nuevo),
+                            'fecha_emision': doc_nuevo.fecha_emision.strftime('%Y-%m-%d'),
+                            'fecha_vencimiento': doc_nuevo.fecha_vencimiento.strftime('%Y-%m-%d'),
+                            'tipo_despacho': '2',
+                            'ind_traslado': '1',
+                            'forma_pago': '1',
+                        },
+                        'emisor': {
+                            'rut': doc_nuevo.emisor.rut if doc_nuevo.emisor else '',
+                            'razon_social': limpiar_texto(doc_nuevo.emisor.razon_social if doc_nuevo.emisor else ''),
+                            'giro': limpiar_texto((doc_nuevo.emisor.giro if doc_nuevo.emisor and doc_nuevo.emisor.giro else '') or 'COMERCIALIZADORA'),
+                            'acteco': doc_nuevo.emisor.acteco if doc_nuevo.emisor else '',
+                            'direccion': limpiar_texto((doc_nuevo.sucursal.direccion if doc_nuevo.sucursal else '') or (doc_nuevo.emisor.direccion if doc_nuevo.emisor else '') or ''),
+                            'comuna': limpiar_texto((doc_nuevo.sucursal.comuna if doc_nuevo.sucursal else '') or (doc_nuevo.emisor.comuna if doc_nuevo.emisor else '') or ''),
+                            'ciudad': limpiar_texto((doc_nuevo.sucursal.ciudad if doc_nuevo.sucursal else '') or (doc_nuevo.emisor.ciudad if doc_nuevo.emisor else '') or ''),
+                            'sucursal': limpiar_texto(doc_nuevo.sucursal.alias if doc_nuevo.sucursal else ''),
+                            'codigo_vendedor': limpiar_texto(usuario),
+                            'nombre_impresora_boleta': getattr(doc_nuevo.sucursal, 'nombre_impresora_boleta', 'boleta') if doc_nuevo.sucursal else 'boleta',
+                            'nombre_impresora_factura': getattr(doc_nuevo.sucursal, 'nombre_impresora_factura', 'factura') if doc_nuevo.sucursal else 'factura',
+                        },
+                        'receptor': {
+                            'rut': doc_nuevo.receptor.rut if doc_nuevo.receptor else '',
+                            'codigo_interno': str(doc_nuevo.receptor.id) if doc_nuevo.receptor else '',
+                            'razon_social': limpiar_texto(doc_nuevo.receptor.razon_social if doc_nuevo.receptor else 'SIN RAZON SOCIAL'),
+                            'giro': limpiar_texto((doc_nuevo.receptor.giro if doc_nuevo.receptor and doc_nuevo.receptor.giro else '') or 'COMERCIALIZADORA'),
+                            'contacto': limpiar_texto(doc_nuevo.receptor.contacto1 if (doc_nuevo.receptor and getattr(doc_nuevo.receptor, 'contacto1', None)) else ''),
+                            'direccion': limpiar_texto(sucursal_destino_nc.direccion if sucursal_destino_nc else (doc_nuevo.receptor.direccion if doc_nuevo.receptor else '')),
+                            'comuna': limpiar_texto(doc_nuevo.receptor.comuna if doc_nuevo.receptor else ''),
+                            'ciudad': limpiar_texto(doc_nuevo.receptor.ciudad if doc_nuevo.receptor else ''),
+                        },
+                        'totales': {
+                            'monto_neto': int(diferencial_neto),
+                            'monto_exento': 0,
+                            'iva': int(iva_dif),
+                            'monto_total': int(total_dif),
+                        },
+                        'detalle': [],
+                        'referencias': [{
+                            'tipo_documento': tipo_sii_ref,
+                            'folio': str(dte.numero_documento),
+                            'fecha': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
+                            'razon': '1',  # 1 = anula documento
+                        }],
+                    }
+
+                    for linea in lineas_para_documento:
+                        talla_obj = linea['productoTalla']
+                        datos_txt['detalle'].append({
+                            'codigo': limpiar_texto(str(talla_obj.sku) if talla_obj else ''),
+                            'sku': limpiar_texto(str(talla_obj.sku) if talla_obj else ''),
+                            'nombre': limpiar_texto(talla_obj.producto.articulo if (talla_obj and talla_obj.producto) else ''),
+                            'descripcion': limpiar_texto(linea['descripcion'] or ''),
+                            'cantidad': int(linea['cantidad_ajustada']),
+                            'unidad': 'UN',
+                            'precio_unitario': int(linea['precio'] or 0),
+                            'monto_item': int((linea['cantidad_ajustada'] or 0) * (linea['precio'] or 0)),
+                            'indicador_exencion': '',
+                        })
+
+                    contenido_txt = generar_txt_dte_acepta(datos_txt)
+
+                    txt_dir = os.path.join(dj_settings.MEDIA_ROOT, 'documentos_electronicos', 'nc')
+                    os.makedirs(txt_dir, exist_ok=True)
+                    nombre_archivo = f'NC_{numero_nuevo}_{hoy.strftime("%Y%m%d_%H%M%S")}.txt'
+                    ruta_archivo = os.path.join(txt_dir, nombre_archivo)
+                    with open(ruta_archivo, 'w', encoding='utf-8') as f:
+                        f.write(contenido_txt)
+
+                    archivo_txt_url = f'/media/documentos_electronicos/nc/{nombre_archivo}'
+                    logger.info("TXT Acepta generado para NC #%s: %s", numero_nuevo, nombre_archivo)
+                except Exception as e_txt:
+                    error_txt = str(e_txt)
+                    logger.warning("Fallo al generar TXT Acepta NC #%s: %s", numero_nuevo, error_txt)
+
             return JsonResponse({
                 'success': True,
                 'message': f'Ajuste aplicado. Documento generado: {tipo_doc_nuevo} #{numero_nuevo}',
@@ -2162,6 +2303,8 @@ def ajustar_dte_emisor_api(request):
                     'monto_neto': float(diferencial_neto),
                     'monto_con_iva': float(total_dif),
                     'unidades': diferencial_unidades,
+                    'archivo_txt_url': archivo_txt_url,
+                    'error_txt': error_txt,
                 },
                 'dte_actualizado': {
                     'monto_neto': float(nuevo_neto),
