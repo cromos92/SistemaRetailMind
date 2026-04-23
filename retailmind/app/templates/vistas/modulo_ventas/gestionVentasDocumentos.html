@@ -1720,7 +1720,7 @@ document.addEventListener('DOMContentLoaded', function() {
         referenciaEl.dataset.monto = totalDte;
         referenciaEl.textContent = formatearMoneda(totalDte);
 
-        pintarTablaPagosEditar(doc.metodos_pago || [], doc.tipo);
+        pintarTablaPagosEditar(doc.pagos_raw || doc.metodos_pago || [], doc.tipo);
         aplicarPermisosFormularioEdicion(doc.tipo);
         configurarSelectorTipoDte(doc.tipo, doc.estado);
 
@@ -2092,6 +2092,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success && data.documento && data.documento.pagos) {
                     documento.metodos_pago = data.documento.pagos;
+                    documento.pagos_raw = data.documento.pagos_raw || data.documento.pagos;
                     cargarDetalleCompleto(documento);
                 }
             })

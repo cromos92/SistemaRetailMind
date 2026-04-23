@@ -2,7 +2,159 @@
 Utilidades centralizadas para permisos y filtrado de sucursales.
 El flag is_superuser de Django NO otorga privilegios. Solo importa el sistema de roles y permisos.
 """
-from .models import Sucursal, EmpresaUser, PermisoUsuario, PermisoRol
+from calendar import monthrange
+from datetime import timedelta
+
+from django.utils import timezone
+
+from .models import (
+    Sucursal,
+    EmpresaUser,
+    PermisoUsuario,
+    PermisoRol,
+    ConfiguracionPermisoGlobal,
+)
+
+
+ARQUEO_RANGO_DEFAULTS = {
+    'cajero': {'tipo': 'dias', 'valor': 2},
+    'vendedor': {'tipo': 'dias', 'valor': 2},
+    'jefe_local': {'tipo': 'dias', 'valor': 3},
+    'administracion': {'tipo': 'dias', 'valor': 30},
+    'administrador': {'tipo': 'dias', 'valor': 30},
+}
+
+
+def _normalizar_tipo_rango_arqueo(tipo):
+    return tipo if tipo in {'dias', 'meses'} else 'dias'
+
+
+def _normalizar_valor_rango_arqueo(valor, valor_default):
+    try:
+        valor_int = int(valor)
+    except (TypeError, ValueError):
+        valor_int = int(valor_default)
+    return max(1, valor_int)
+
+
+def _clave_rango_arqueo(rol, sufijo):
+    return f'ARQUEO_RANGO_{(rol or "sin_rol").upper()}_{sufijo}'
+
+
+def restar_meses_fecha(fecha_base, meses):
+    """
+    Resta meses calendario preservando el día cuando sea posible.
+    Si el mes destino no tiene ese día, usa el último día válido.
+    """
+    if meses <= 0:
+        return fecha_base
+
+    total_meses = fecha_base.year * 12 + (fecha_base.month - 1) - meses
+    anio = total_meses // 12
+    mes = total_meses % 12 + 1
+    ultimo_dia = monthrange(anio, mes)[1]
+    dia = min(fecha_base.day, ultimo_dia)
+    return fecha_base.replace(year=anio, month=mes, day=dia)
+
+
+def formatear_rango_arqueo(tipo, valor):
+    unidad = 'día' if valor == 1 else 'días'
+    if tipo == 'meses':
+        unidad = 'mes' if valor == 1 else 'meses'
+    return f'{valor} {unidad}'
+
+
+def calcular_fecha_minima_rango_arqueo(fecha_referencia, tipo, valor):
+    tipo_normalizado = _normalizar_tipo_rango_arqueo(tipo)
+    valor_normalizado = _normalizar_valor_rango_arqueo(valor, 1)
+
+    if tipo_normalizado == 'meses':
+        return restar_meses_fecha(fecha_referencia, valor_normalizado)
+    return fecha_referencia - timedelta(days=valor_normalizado)
+
+
+def obtener_configuracion_rango_arqueo(rol, fecha_referencia=None):
+    """
+    Obtiene la configuración vigente del rango permitido para crear arqueos
+    históricos según rol. La configuración se guarda en
+    `ConfiguracionPermisoGlobal` para administrarse desde permisos.
+    """
+    fecha_ref = fecha_referencia or timezone.localdate()
+    defaults = ARQUEO_RANGO_DEFAULTS.get(rol or '', ARQUEO_RANGO_DEFAULTS['cajero'])
+
+    clave_tipo = _clave_rango_arqueo(rol, 'TIPO')
+    clave_valor = _clave_rango_arqueo(rol, 'VALOR')
+
+    tipo_config = ConfiguracionPermisoGlobal.objects.filter(
+        clave=clave_tipo,
+        activo=True,
+    ).first()
+    valor_config = ConfiguracionPermisoGlobal.objects.filter(
+        clave=clave_valor,
+        activo=True,
+    ).first()
+
+    tipo = _normalizar_tipo_rango_arqueo(
+        tipo_config.get_valor() if tipo_config else defaults['tipo']
+    )
+    valor = _normalizar_valor_rango_arqueo(
+        valor_config.get_valor() if valor_config else defaults['valor'],
+        defaults['valor'],
+    )
+    fecha_minima = calcular_fecha_minima_rango_arqueo(fecha_ref, tipo, valor)
+
+    return {
+        'rol': rol,
+        'tipo': tipo,
+        'valor': valor,
+        'label': formatear_rango_arqueo(tipo, valor),
+        'fecha_minima': fecha_minima,
+        'dias_equivalentes': max((fecha_ref - fecha_minima).days, 0),
+        'clave_tipo': clave_tipo,
+        'clave_valor': clave_valor,
+    }
+
+
+def guardar_configuracion_rango_arqueo(rol, tipo, valor, usuario=None):
+    """
+    Persiste la configuración del rango de arqueo para un rol.
+    """
+    if rol not in dict(PermisoRol.ROLES_CHOICES):
+        raise ValueError('Rol no válido para configurar rango de arqueo')
+
+    defaults = ARQUEO_RANGO_DEFAULTS.get(rol, ARQUEO_RANGO_DEFAULTS['cajero'])
+    tipo_normalizado = _normalizar_tipo_rango_arqueo(tipo)
+    valor_normalizado = _normalizar_valor_rango_arqueo(valor, defaults['valor'])
+    label = formatear_rango_arqueo(tipo_normalizado, valor_normalizado)
+
+    ConfiguracionPermisoGlobal.objects.update_or_create(
+        clave=_clave_rango_arqueo(rol, 'TIPO'),
+        defaults={
+            'valor': tipo_normalizado,
+            'descripcion': (
+                f'Unidad del rango histórico permitido para crear arqueos '
+                f'del rol {rol}.'
+            ),
+            'tipo_dato': 'string',
+            'activo': True,
+            'usuario_modificacion': usuario,
+        },
+    )
+    ConfiguracionPermisoGlobal.objects.update_or_create(
+        clave=_clave_rango_arqueo(rol, 'VALOR'),
+        defaults={
+            'valor': str(valor_normalizado),
+            'descripcion': (
+                f'Cantidad del rango histórico permitido para crear arqueos '
+                f'del rol {rol}. Configuración actual: {label}.'
+            ),
+            'tipo_dato': 'integer',
+            'activo': True,
+            'usuario_modificacion': usuario,
+        },
+    )
+
+    return obtener_configuracion_rango_arqueo(rol)
 
 
 def obtener_sucursales_usuario(usuario):

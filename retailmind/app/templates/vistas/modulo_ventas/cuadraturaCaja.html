@@ -449,7 +449,7 @@
                                 <!-- Boton siempre visible para arqueo de dias anteriores -->
                                 <button type="button" class="btn btn-outline-warning btn-sm mt-2" onclick="crearArqueoFechaPasada()" style="font-size:.8rem;">
                                     <i class="ri-calendar-event-line me-1"></i>Arqueo de dia anterior
-                                    <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">{{ dias_tolerancia_arqueo }}d</span>
+                                    <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">{{ rango_arqueo_label }}</span>
                                 </button>
                             </div>
                         </div>
@@ -1860,6 +1860,8 @@ const esSupervisor    = {{ es_supervisor|yesno:"true,false" }};
 const esCajero        = {{ es_cajero|yesno:"true,false" }};
 const puedeReabrir    = {{ puede_reabrir|yesno:"true,false" }};
 const diasToleranciaArqueo = {{ dias_tolerancia_arqueo }};
+const rangoArqueoLabel = '{{ rango_arqueo_label|escapejs }}';
+const fechaMinimaArqueo = '{{ fecha_minima_arqueo|escapejs }}';
 
 // Esperar jQuery
 function waitForJQuery(callback) {
@@ -3046,26 +3048,25 @@ function limpiarFiltros() {
 function crearArqueoFechaPasada() {
     const hoy = new Date();
     const hoyStr = hoy.toISOString().split('T')[0];
-    // Calcular fecha mínima permitida según tolerancia del rol
-    const fechaMin = new Date(hoy);
-    fechaMin.setDate(fechaMin.getDate() - diasToleranciaArqueo);
-    const fechaMinStr = fechaMin.toISOString().split('T')[0];
+    const fechaMinStr = fechaMinimaArqueo;
+    const fechaMin = new Date(`${fechaMinStr}T12:00:00`);
     // Default: ayer
     const ayer = new Date(hoy);
     ayer.setDate(ayer.getDate() - 1);
     const ayerStr = ayer.toISOString().split('T')[0];
+    const fechaDefault = ayerStr < fechaMinStr ? fechaMinStr : ayerStr;
 
     Swal.fire({ title:'Crear Arqueo de Fecha Anterior',
-        html:`<div class="text-start"><div class="alert alert-info mb-3"><i class="ri-information-line me-2"></i>Puede crear arqueos de los últimos <strong>${diasToleranciaArqueo} días</strong>.</div>
+        html:`<div class="text-start"><div class="alert alert-info mb-3"><i class="ri-information-line me-2"></i>Puede crear arqueos dentro del rango configurado para su rol: <strong>${rangoArqueoLabel}</strong>.</div>
             <label class="form-label fw-bold">Seleccione la fecha:</label>
-            <input type="date" id="fechaArqueoPasado" class="form-control form-control-lg text-center" value="${ayerStr}" min="${fechaMinStr}" max="${hoyStr}">
+            <input type="date" id="fechaArqueoPasado" class="form-control form-control-lg text-center" value="${fechaDefault}" min="${fechaMinStr}" max="${hoyStr}">
             <small class="text-muted mt-1 d-block">Rango: ${fechaMin.toLocaleDateString('es-CL')} a ${hoy.toLocaleDateString('es-CL')}</small></div>`,
         showCancelButton:true, confirmButtonText:'<i class="ri-add-circle-line me-1"></i>Crear Arqueo', cancelButtonText:'Cancelar', confirmButtonColor:'#FFB020',
         preConfirm:()=>{
             const f=document.getElementById('fechaArqueoPasado').value;
             if(!f){Swal.showValidationMessage('Seleccione una fecha');return false;}
             if(f>hoyStr){Swal.showValidationMessage('No puede crear arqueos futuros');return false;}
-            if(f<fechaMinStr){Swal.showValidationMessage('Fuera del rango permitido ('+diasToleranciaArqueo+' días)');return false;}
+            if(f<fechaMinStr){Swal.showValidationMessage('Fuera del rango permitido ('+rangoArqueoLabel+')');return false;}
             return f;
         }
     }).then(r => { if(r.isConfirmed&&r.value) crearArqueoParaFecha(r.value); });

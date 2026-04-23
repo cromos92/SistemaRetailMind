@@ -4105,13 +4105,13 @@ def regularizar_producto_api(request):
                             },
                             'receptor': {
                                 'rut': nota_credito.receptor.rut if nota_credito.receptor else '',
-                                'codigo_interno': nota_credito.receptor.codigo if nota_credito.receptor else '',
+                                'codigo_interno': str(nota_credito.receptor.id) if nota_credito.receptor else '',
                                 'razon_social': limpiar_texto(nota_credito.receptor.razon_social if nota_credito.receptor else ''),
                                 'giro': limpiar_texto(nota_credito.receptor.giro if nota_credito.receptor else ''),
-                                'contacto': limpiar_texto(nota_credito.receptor.contacto if nota_credito.receptor else ''),
+                                'contacto': limpiar_texto(nota_credito.receptor.contacto1 if (nota_credito.receptor and nota_credito.receptor.contacto1) else ''),
                                 'direccion': limpiar_texto(sucursal_destino_nc.direccion if sucursal_destino_nc else (nota_credito.receptor.direccion if nota_credito.receptor else '')),
-                                'comuna': limpiar_texto(nota_credito.receptor.comuna if nota_credito.receptor else ''),
-                                'ciudad': limpiar_texto(nota_credito.receptor.ciudad if nota_credito.receptor else '')
+                                'comuna': limpiar_texto((sucursal_destino_nc.comuna if sucursal_destino_nc else None) or (nota_credito.receptor.comuna if nota_credito.receptor else '')),
+                                'ciudad': limpiar_texto((sucursal_destino_nc.ciudad if sucursal_destino_nc else None) or (nota_credito.receptor.ciudad if nota_credito.receptor else ''))
                             },
                             'totales': {
                                 'monto_neto': int(total_neto),
@@ -4759,7 +4759,15 @@ def regularizar_dte_masivo(request):
             try:
                 from .views_modulo_documentos import generar_txt_dte_acepta, limpiar_texto
                 
-                # Preparar datos para generar TXT - ✅ Aplicar limpiar_texto para eliminar acentos y Ñ
+                # Buscar sucursal_destino del DTE original para usar su dirección en el receptor
+                sucursal_destino_nc = None
+                mov_destino = dte_original.dte_movimientos.filter(
+                    sucursal_destino__isnull=False
+                ).select_related('sucursal_destino').first()
+                if mov_destino:
+                    sucursal_destino_nc = mov_destino.sucursal_destino
+                
+                # Preparar datos para generar TXT
                 datos_txt = {
                     'documento': {
                         'tipo_documento': '61',  # Nota de Crédito
@@ -4775,7 +4783,6 @@ def regularizar_dte_masivo(request):
                         'razon_social': limpiar_texto(nota_credito.emisor.razon_social if nota_credito.emisor else 'SIN RAZON SOCIAL'),
                         'giro': limpiar_texto(nota_credito.emisor.giro if (nota_credito.emisor and nota_credito.emisor.giro) else 'COMERCIALIZADORA'),
                         'acteco': nota_credito.emisor.acteco if nota_credito.emisor else '',
-                        # Dirección/comuna/ciudad de la SUCURSAL del NC, fallback a empresa emisora.
                         'direccion': limpiar_texto((nota_credito.sucursal.direccion if nota_credito.sucursal else '') or (nota_credito.emisor.direccion if nota_credito.emisor else '') or ''),
                         'comuna': limpiar_texto((nota_credito.sucursal.comuna if nota_credito.sucursal else '') or (nota_credito.emisor.comuna if nota_credito.emisor else '') or ''),
                         'ciudad': limpiar_texto((nota_credito.sucursal.ciudad if nota_credito.sucursal else '') or (nota_credito.emisor.ciudad if nota_credito.emisor else '') or ''),
@@ -4790,9 +4797,9 @@ def regularizar_dte_masivo(request):
                         'razon_social': limpiar_texto(nota_credito.receptor.razon_social if nota_credito.receptor else 'SIN RAZON SOCIAL'),
                         'giro': limpiar_texto(nota_credito.receptor.giro if (nota_credito.receptor and nota_credito.receptor.giro) else 'COMERCIALIZADORA'),
                         'contacto': limpiar_texto(nota_credito.receptor.contacto1 if (nota_credito.receptor and nota_credito.receptor.contacto1) else ''),
-                        'direccion': limpiar_texto(nota_credito.receptor.direccion if nota_credito.receptor else ''),
-                        'comuna': limpiar_texto(nota_credito.receptor.comuna if nota_credito.receptor else ''),
-                        'ciudad': limpiar_texto(nota_credito.receptor.ciudad if nota_credito.receptor else '')
+                        'direccion': limpiar_texto(sucursal_destino_nc.direccion if sucursal_destino_nc else (nota_credito.receptor.direccion if nota_credito.receptor else '')),
+                        'comuna': limpiar_texto((sucursal_destino_nc.comuna if sucursal_destino_nc else None) or (nota_credito.receptor.comuna if nota_credito.receptor else '')),
+                        'ciudad': limpiar_texto((sucursal_destino_nc.ciudad if sucursal_destino_nc else None) or (nota_credito.receptor.ciudad if nota_credito.receptor else ''))
                     },
                     'totales': {
                         'monto_neto': int(monto_neto_total),
@@ -19914,7 +19921,6 @@ def emision_dte(request):
     """
     Vista principal para la emisión de DTE
     """
-    # Obtener datos de sesión para mostrar en el template
     context = {}
     
     sucursal_id = request.session.get('idSucursalActual')
@@ -19925,12 +19931,21 @@ def emision_dte(request):
             sucursal_actual = Sucursal.objects.select_related('empresa').get(id=sucursal_id)
             context['sucursal_actual'] = sucursal_actual
             context['empresa_actual'] = sucursal_actual.empresa
-            # Pasar el alias de la sucursal para validaciones de despacho interno
             context['alias_sucursal'] = sucursal_actual.alias
         except Sucursal.DoesNotExist:
             context['sucursal_actual'] = None
             context['empresa_actual'] = None
             context['alias_sucursal'] = ''
+
+    puede_por_txt = PermisoRol.tiene_permiso(
+        request.user, 'dte_descargar_txt', 'puede_ver',
+        sucursal_id=sucursal_id,
+    )
+    puede_por_emision = PermisoRol.tiene_permiso(
+        request.user, 'emision_dte', 'puede_ver',
+        sucursal_id=sucursal_id,
+    )
+    context['puede_descargar_txt_dte'] = puede_por_txt or puede_por_emision
     
     return render(request, 'vistas/modulo_documentos/emisionDTE.html', context)
 
@@ -19956,6 +19971,16 @@ def emision_dte_concepto(request):
             context['sucursal_actual'] = None
             context['empresa_actual'] = None
             context['alias_sucursal'] = ''
+
+    puede_por_txt = PermisoRol.tiene_permiso(
+        request.user, 'dte_descargar_txt', 'puede_ver',
+        sucursal_id=sucursal_id,
+    )
+    puede_por_emision = PermisoRol.tiene_permiso(
+        request.user, 'emision_dte', 'puede_ver',
+        sucursal_id=sucursal_id,
+    )
+    context['puede_descargar_txt_dte'] = puede_por_txt or puede_por_emision
 
     return render(request, 'vistas/modulo_documentos/emisionDTEConcepto.html', context)
 

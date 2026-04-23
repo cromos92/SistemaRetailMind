@@ -1401,6 +1401,7 @@ _ABREV_METODO_PAGO = {
     'CHEQUE': 'CHQ',
     'TARJETA_COMERCIAL': 'TCC',
     'VENTA_INTERNET': 'WEB',
+    'VENTA_POR_INTERNET': 'WEB',
     'ORDEN_COMPRA': 'OC',
     'CONVENIO': 'CNV',
     'CREDITO_TRABAJADOR': 'CRT',
@@ -1417,9 +1418,9 @@ def _resumir_metodos_pago(metodos_pago_texto, max_len=60):
     $791 - Terminal: XYZ"─ y devuelve un resumen compacto tipo
     "EFE:100 TBK:791".
 
-    Descarta voucher/auth/terminal/notas porque esa info ya vive en
-    `Dte_Detalle_Pago.notas` y no hace falta arrastrarla al TXT (era una de
-    las razones por las que la glosa explotaba los 90 chars del XSD).
+    Regla especial: en `Venta por Internet` sí se conserva la plataforma y el
+    voucher/pedido de forma compacta, porque son el dato operativo que el
+    usuario necesita ver en la boleta.
     """
     if not metodos_pago_texto:
         return ''
@@ -1440,6 +1441,34 @@ def _resumir_metodos_pago(metodos_pago_texto, max_len=60):
             # Fallback: 3 primeras letras alfabéticas del nombre.
             alfa = re.sub(r'[^A-Z]', '', nombre)
             abrev = alfa[:3] if alfa else nombre[:3]
+        if nombre in ('VENTA_INTERNET', 'VENTA_POR_INTERNET'):
+            plataforma = ''
+            voucher = ''
+
+            m_plataforma = re.search(r'-\s*Tarj:\s*([^|]+)', trozo, re.IGNORECASE)
+            if m_plataforma:
+                plataforma = limpiar_texto(m_plataforma.group(1).split(' - ')[0].strip(), 20)
+
+            m_voucher = re.search(r'-\s*Auth:\s*([^|]+)', trozo, re.IGNORECASE)
+            if m_voucher:
+                voucher = limpiar_texto(m_voucher.group(1).split(' - ')[0].strip(), 20)
+
+            token = abrev
+            if plataforma:
+                plataforma_token = re.sub(r'[^A-Z0-9]', '', plataforma.upper())[:6]
+                if plataforma_token:
+                    token = f"{token}-{plataforma_token}"
+
+            token = f"{token}:{monto}"
+
+            if voucher:
+                voucher_token = re.sub(r'[^A-Z0-9-]', '', voucher.upper())[:12]
+                if voucher_token:
+                    token = f"{token}#{voucher_token}"
+
+            partes.append(token)
+            continue
+
         partes.append(f"{abrev}:{monto}")
     resumen = ' '.join(partes)
     if len(resumen) > max_len:
@@ -2532,19 +2561,20 @@ def generar_txt_dte_acepta(datos):
     
     # ===== LÍNEA 2: DATOS DEL EMISOR =====
     emisor = datos['emisor']
-    # ✅ Usar alias de sucursal en lugar de codigo_vendedor
-    alias_sucursal = limpiar_texto(emisor.get('sucursal', ''), 60) or emisor.get('codigo_vendedor', '') or 'USUARIO'
+    alias_sucursal = limpiar_texto(emisor.get('sucursal', ''), 20)
+    vendedor_impresion = limpiar_texto(emisor.get('vendedor_impresion', ''), 60)
+    emisor_impresion = vendedor_impresion or alias_sucursal or emisor.get('codigo_vendedor', '') or 'USUARIO'
     linea2 = [
         formatear_rut(emisor.get('rut', '')),
         limpiar_texto(emisor.get('razon_social', ''), 100),
         limpiar_texto(emisor.get('giro', ''), 80),
         str(emisor.get('acteco', '')),
-        limpiar_texto(emisor.get('sucursal', ''), 20),
+        alias_sucursal,
         str(emisor.get('codigo_sucursal', '')),
         limpiar_texto(emisor.get('direccion', ''), 60),
         limpiar_texto(emisor.get('comuna', ''), 20),
         limpiar_texto(emisor.get('ciudad', ''), 20),
-        alias_sucursal,  # ✅ CAMBIO: Usar alias de sucursal
+        emisor_impresion,
         '}'  # ✅ CIERRE CON }
     ]
     lineas.append(separador.join(linea2))
@@ -2693,8 +2723,13 @@ def generar_txt_dte_acepta(datos):
     lineas.append('~')
     
     # ===== LÍNEA INFORMACIÓN ADICIONAL =====
-    # ✅ Usar alias de sucursal en lugar de código vendedor
-    vendedor_codigo = datos.get('emisor', {}).get('sucursal', '') or datos.get('emisor', {}).get('codigo_vendedor', '') or 'USUARIO'
+    vendedor_codigo = limpiar_texto(
+        datos.get('emisor', {}).get('vendedor_impresion', '')
+        or datos.get('emisor', {}).get('sucursal', '')
+        or datos.get('emisor', {}).get('codigo_vendedor', '')
+        or 'USUARIO',
+        60,
+    )
     monto_total = totales.get('monto_total', 0)
     
     # Convertir monto a letras (COMPLETO)
@@ -3141,18 +3176,23 @@ def generar_txt_desde_dte_existente(request):
                 'error': 'ID de DTE requerido'
             }, status=400)
 
-        # Autorización: permiso granular "dte_descargar_txt".
-        # Este endpoint también se expone desde la UI para roles no
-        # administradores, por lo que revalidamos siempre en backend.
+        # Autorización: permiso granular "dte_descargar_txt" O permiso
+        # de emisión "emision_dte". Cualquier usuario que pueda emitir
+        # DTEs también puede descargar el TXT resultante.
         from app.models.permisos import PermisoRol
         sucursal_actual_id = (
             request.session.get('sucursalActual')
             or request.session.get('idSucursalActual')
         )
-        if not PermisoRol.tiene_permiso(
+        puede_por_txt = PermisoRol.tiene_permiso(
             request.user, 'dte_descargar_txt', 'puede_ver',
             sucursal_id=sucursal_actual_id,
-        ):
+        )
+        puede_por_emision = PermisoRol.tiene_permiso(
+            request.user, 'emision_dte', 'puede_ver',
+            sucursal_id=sucursal_actual_id,
+        )
+        if not puede_por_txt and not puede_por_emision:
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene permiso para descargar el TXT Acepta de DTE'

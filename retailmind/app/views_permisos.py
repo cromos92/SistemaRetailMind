@@ -10,7 +10,11 @@ from django.views.decorators.http import require_http_methods
 from .models import ModuloSistema, OpcionMenu, PermisoRol, ConfiguracionPermisoGlobal, PermisoSucursal, PermisoUsuario, Sucursal, EmpresaUser
 from users.models import Usuario
 from .decorators import solo_administrador
-from .utils_permisos import obtener_sucursales_usuario
+from .utils_permisos import (
+    obtener_sucursales_usuario,
+    obtener_configuracion_rango_arqueo,
+    guardar_configuracion_rango_arqueo,
+)
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
 from django.utils import timezone
@@ -144,6 +148,7 @@ def obtener_permisos_rol(request):
         'success': True,
         'rol': rol,
         'limite_descuento': limite_descuento,
+        'configuracion_arqueo': obtener_configuracion_rango_arqueo(rol),
         'modulos': modulos_data
     })
 
@@ -219,12 +224,15 @@ def guardar_permisos_masivos(request):
         rol = data.get('rol')
         permisos_data = data.get('permisos', [])
         limite_descuento = data.get('limite_descuento')
+        configuracion_arqueo = data.get('configuracion_arqueo') or {}
         
         if not rol:
             return JsonResponse({
                 'error': True,
                 'mensaje': 'Rol no especificado'
             }, status=400)
+
+        config_arqueo_guardada = None
         
         # Validar límite de descuento y convertir a Decimal
         if limite_descuento is not None:
@@ -306,16 +314,37 @@ def guardar_permisos_masivos(request):
                     puede_aprobar=False
                 )
                 permisos_creados += 1
+
+        if configuracion_arqueo:
+            try:
+                config_arqueo_guardada = guardar_configuracion_rango_arqueo(
+                    rol=rol,
+                    tipo=configuracion_arqueo.get('tipo'),
+                    valor=configuracion_arqueo.get('valor'),
+                    usuario=request.user,
+                )
+            except ValueError as exc:
+                return JsonResponse({
+                    'error': True,
+                    'mensaje': str(exc),
+                }, status=400)
+        else:
+            config_arqueo_guardada = obtener_configuracion_rango_arqueo(rol)
         
         # Convertir Decimal a float para JSON
         limite_para_json = float(limite_efectivo)
         
         return JsonResponse({
             'success': True,
-            'mensaje': f'Permisos guardados correctamente (Límite descuento: {limite_para_json}%)',
+            'mensaje': (
+                'Permisos guardados correctamente '
+                f'(Límite descuento: {limite_para_json}% | '
+                f'Rango arqueo: {config_arqueo_guardada["label"]})'
+            ),
             'creados': permisos_creados,
             'actualizados': permisos_actualizados,
-            'limite_descuento_guardado': limite_para_json
+            'limite_descuento_guardado': limite_para_json,
+            'configuracion_arqueo_guardada': config_arqueo_guardada,
         })
     
     except json.JSONDecodeError:
@@ -390,6 +419,13 @@ def copiar_permisos_rol(request):
             else:
                 permisos_omitidos += 1
         
+        guardar_configuracion_rango_arqueo(
+            rol=rol_destino,
+            tipo=obtener_configuracion_rango_arqueo(rol_origen)['tipo'],
+            valor=obtener_configuracion_rango_arqueo(rol_origen)['valor'],
+            usuario=request.user,
+        )
+
         return JsonResponse({
             'success': True,
             'mensaje': f'Permisos copiados de {rol_origen} a {rol_destino}',

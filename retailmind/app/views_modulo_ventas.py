@@ -43,6 +43,7 @@ from .utils_ventas import (
     ONLY_DTE_PAGO,
     ONLY_TICKET_PRODUCTO_POS,
 )
+from .utils_permisos import obtener_configuracion_rango_arqueo
 
 # Caching del módulo ventas (Redis / LocMem, ver app.cache_utils)
 from .cache_utils import cache_ventas_json
@@ -2272,14 +2273,31 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     
     # Crear DTE con todos los campos requeridos
     from datetime import timedelta
+    import json as _json
+
+    # 1=Contado (pago inmediato), 2=Crédito (pago diferido)
+    METODOS_CREDITO_DTE = {'CREDITO_TRABAJADOR', 'CREDITO_EXTERNO', 'CONVENIO', 'ORDEN_COMPRA'}
+    forma_pago_dte = None
+    try:
+        notas_ticket = _json.loads(ticket.observaciones_adicionales or '{}')
+        if isinstance(notas_ticket, dict) and notas_ticket.get('condicion_pago_dte') in (1, 2):
+            forma_pago_dte = int(notas_ticket['condicion_pago_dte'])
+    except (TypeError, ValueError):
+        forma_pago_dte = None
+    if forma_pago_dte is None:
+        metodos_ticket = set(ticket.pagos.values_list('metodo_pago', flat=True))
+        forma_pago_dte = 2 if metodos_ticket & METODOS_CREDITO_DTE else 1
+
+    dias_credito_dte = 30 if (not es_boleta and forma_pago_dte == 2) else 0
+    fecha_vencimiento_dte = ticket.fecha + timedelta(days=dias_credito_dte) if dias_credito_dte else ticket.fecha
     
     dte = Dte.objects.create(
         numero_documento=int(correlativo_dte),
         tipo_documento=tipo_dte,
         tipo_transaccion='VENTA_PUBLICO',
         fecha_emision=ticket.fecha,
-        fecha_vencimiento=ticket.fecha + timedelta(days=30),
-        diasCredito=0,
+        fecha_vencimiento=fecha_vencimiento_dte,
+        diasCredito=dias_credito_dte,
         bultos=1,
         unidades_productos=sum(tp.stock for tp in ticket.ticket_productos.all()),
         emisor=ticket.sucursal.empresa,
@@ -2515,7 +2533,8 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     'tipo_documento': 39 if es_boleta else 33,  # 39=Boleta, 33=Factura
                     'folio': dte.numero_documento,
                     'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
-                    'forma_pago': 1,  # Contado
+                    'forma_pago': forma_pago_dte,
+                    'fecha_vencimiento': fecha_vencimiento_dte.strftime('%Y-%m-%d'),
                     'ind_servicio': 3,  # Venta y servicios (para boleta)
                     'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
                 },
@@ -2532,6 +2551,9 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     'ciudad': limpiar_texto((ticket.sucursal.ciudad if ticket.sucursal else '') or empresa.ciudad or ''),
                     'codigo_vendedor': limpiar_texto(ticket.vendedor.codigo_vendedor if ticket.vendedor else 'VENDEDOR'),
                     'nombre_vendedor': limpiar_texto(ticket.vendedor.nombre if ticket.vendedor else 'Sin vendedor'),
+                    'vendedor_impresion': limpiar_texto(
+                        ticket.vendedor.nombre if ticket.vendedor else (ticket.responsable or 'VENDEDOR')
+                    ),
                     'metodos_pago': limpiar_texto(metodos_pago_texto),
                     'correlativo_ticket': ticket.correlativo,
                     'telefono': empresa.contacto1 or '',
@@ -2559,6 +2581,26 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                 'observaciones': ticket.observaciones or '',
                 'observaciones_adicionales': ticket.observaciones_adicionales or ''
             }
+
+            if not es_boleta:
+                referencias_txt = []
+                referencias_modelo = ticket.referencias.all()
+                if referencias_modelo.exists():
+                    for ref in referencias_modelo:
+                        referencias_txt.append({
+                            'tipo_documento': ref.tipo_documento,
+                            'folio': ref.folio,
+                            'fecha': ref.fecha.strftime('%Y-%m-%d'),
+                            'razon': '',
+                        })
+                elif ticket.referencia_tipo and ticket.referencia_folio:
+                    referencias_txt.append({
+                        'tipo_documento': ticket.referencia_tipo,
+                        'folio': ticket.referencia_folio,
+                        'fecha': ticket.referencia_fecha.strftime('%Y-%m-%d') if ticket.referencia_fecha else '',
+                        'razon': '',
+                    })
+                datos_txt['referencias'] = referencias_txt
             
             for prod_txt in productos_txt:
                 sku_str = str(prod_txt.get('sku', ''))
@@ -3832,6 +3874,7 @@ def listar_documentos_ventas(request):
             for pago in dte.dte_asociado.all():
                 total_pagos += pago.monto or 0
                 metodos_pago_raw.append({
+                    'id': pago.id,
                     'metodo': pago.metodo_pago,
                     'metodo_display': obtener_nombre_metodo_pago(pago.metodo_pago),
                     'monto': pago.monto,
@@ -3885,6 +3928,7 @@ def listar_documentos_ventas(request):
                 'created_at': created_at_dte,
                 'productos': productos,
                 'metodos_pago': metodos_pago,
+                'pagos_raw': metodos_pago_raw,
                 'total_productos': len(productos),
                 'metodos_pago_str': formatear_metodos_pago_str(metodos_pago),
             })
@@ -4535,6 +4579,7 @@ def detalle_documento_venta(request, documento_id):
                 'vendedor': documento.vendedor.nombre if documento.vendedor else '',
                 'productos': productos,
                 'pagos': pagos,
+                'pagos_raw': pagos_raw,
                 'totales': {
                     'neto': documento.monto_neto,
                     'iva': documento.monto_con_iva - documento.monto_neto,
@@ -5221,13 +5266,9 @@ def cuadratura_caja(request):
     # Permiso de reabrir: administrador (siempre) o jefe_local/administracion (con tolerancia)
     puede_reabrir = rol_usuario in ['administrador', 'jefe_local', 'administracion']
 
-    # Tolerancia de días para crear arqueos hacia atrás
-    if rol_usuario in ('cajero', 'vendedor'):
-        dias_tolerancia_arqueo = 2
-    elif rol_usuario == 'jefe_local':
-        dias_tolerancia_arqueo = 3
-    else:
-        dias_tolerancia_arqueo = 30  # admin/administración: hasta 30 días
+    # Rango configurable para crear arqueos históricos
+    config_rango_arqueo = obtener_configuracion_rango_arqueo(rol_usuario)
+    dias_tolerancia_arqueo = config_rango_arqueo['dias_equivalentes']
 
     # Permisos granulares de edición de DTE (3 campos x 4 tipos).
     # Se reutiliza el mismo helper que usa Gestión de Documentos para que
@@ -5243,6 +5284,10 @@ def cuadratura_caja(request):
         'puede_reabrir': puede_reabrir,
         'rol_usuario': rol_usuario or 'sin_rol',
         'dias_tolerancia_arqueo': dias_tolerancia_arqueo,
+        'rango_arqueo_tipo': config_rango_arqueo['tipo'],
+        'rango_arqueo_valor': config_rango_arqueo['valor'],
+        'rango_arqueo_label': config_rango_arqueo['label'],
+        'fecha_minima_arqueo': config_rango_arqueo['fecha_minima'].strftime('%Y-%m-%d'),
         'qz_config': _get_qz_config(sucursal_actual_id),
         # Flags por campo (se evalúan además por tipo de DTE en runtime).
         'puede_editar_fecha_dte': permisos_dte['campo']['fecha'],
@@ -5398,18 +5443,17 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             elif metodo == 'VENTA_INTERNET':
                 cuadratura_data['total_venta_internet'] += monto
                 # ✅ Clasificar por tipo_tarjeta (igual que con DTEs)
-                if 'FALABELLA' in tipo_tarjeta:
+                if 'FALABELLA' in tipo_tarjeta or 'WALMART' in tipo_tarjeta:
                     cuadratura_data['total_falabella'] += monto
                 elif 'PARIS' in tipo_tarjeta:
                     cuadratura_data['total_paris'] += monto
                 elif 'RIPLEY' in tipo_tarjeta:
                     cuadratura_data['total_ripley'] += monto
-                elif 'MERCADO' in tipo_tarjeta or 'MERCADOPAGO' in tipo_tarjeta:
+                elif 'MERCADO' in tipo_tarjeta or 'MERCADOPAGO' in tipo_tarjeta or 'SHOPIFY' in tipo_tarjeta:
                     cuadratura_data['total_mercadopago'] += monto
                 elif 'KLAP' in tipo_tarjeta:
                     cuadratura_data['total_klap'] += monto
                 else:
-                    # Si no tiene tipo_tarjeta específico, va a MercadoPago por defecto
                     cuadratura_data['total_mercadopago'] += monto
     
     # ========== PROCESAR DTEs (FACTURAS/BOLETAS ELECTRÓNICAS) ==========
@@ -5576,13 +5620,13 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 elif metodo_upper == 'VENTA_INTERNET':
                     cuadratura_data['total_venta_internet'] += monto
                     # Clasificar por tipo_tarjeta
-                    if 'FALABELLA' in tarjeta_upper:
+                    if 'FALABELLA' in tarjeta_upper or 'WALMART' in tarjeta_upper:
                         cuadratura_data['total_falabella'] += monto
                     elif 'PARIS' in tarjeta_upper:
                         cuadratura_data['total_paris'] += monto
                     elif 'RIPLEY' in tarjeta_upper:
                         cuadratura_data['total_ripley'] += monto
-                    elif 'MERCADO' in tarjeta_upper:
+                    elif 'MERCADO' in tarjeta_upper or 'SHOPIFY' in tarjeta_upper:
                         cuadratura_data['total_mercadopago'] += monto
                     elif 'KLAP' in tarjeta_upper:
                         cuadratura_data['total_klap'] += monto
@@ -8440,21 +8484,21 @@ def crear_arqueo(request):
                 'error': 'No puede crear arqueos para fechas futuras'
             })
 
-        dias_atras = (hoy - fecha_obj).days
         rol_usuario = getattr(request.user, 'rol', None)
+        config_rango_arqueo = obtener_configuracion_rango_arqueo(
+            rol_usuario,
+            fecha_referencia=hoy,
+        )
 
-        # Tolerancia por rol: cajero/vendedor=2 días, jefe_local=3, admin/administración=sin límite
-        if rol_usuario in ('cajero', 'vendedor'):
-            max_dias = 2
-        elif rol_usuario == 'jefe_local':
-            max_dias = 3
-        else:  # administrador, administracion
-            max_dias = 0  # sin límite
-
-        if max_dias > 0 and dias_atras > max_dias:
+        if fecha_obj < config_rango_arqueo['fecha_minima']:
             return JsonResponse({
                 'success': False,
-                'error': f'Solo puede crear arqueos de los últimos {max_dias} días. Han pasado {dias_atras} días.'
+                'error': (
+                    'Solo puede crear arqueos dentro del rango configurado '
+                    f'para su rol ({config_rango_arqueo["label"]}). '
+                    'La fecha mínima permitida es '
+                    f'{config_rango_arqueo["fecha_minima"].strftime("%d/%m/%Y")}.'
+                )
             })
 
         # Verificar si ya existe un arqueo para esta fecha
@@ -11652,7 +11696,10 @@ def crear_cambio_devolucion(request):
                         sucursal_supervisor = getattr(supervisor, 'sucursal', None)
                 except Exception:
                     pass
-                es_cross_branch = sucursal_supervisor and sucursal_supervisor.id != sucursal.id
+                # bool() explícito: si sucursal_supervisor es None, "None and ..." da None,
+                # lo que rompe los BooleanField NOT NULL (es_cross_branch en RegistroAutorizacion
+                # y es_autorizacion_cross_branch en CambioDevolucion).
+                es_cross_branch = bool(sucursal_supervisor and sucursal_supervisor.id != sucursal.id)
 
             # Crear registro de autorización con trazabilidad completa
             registro_auth = None

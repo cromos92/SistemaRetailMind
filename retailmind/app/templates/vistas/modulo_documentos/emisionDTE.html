@@ -5433,7 +5433,6 @@ function procesarEmision() {
             }
 
             if (response.success) {
-                // ✅ GENERAR TXT AUTOMÁTICAMENTE para Factura o Guía
                 if (selectedConcept === 'factura' || selectedConcept === 'guia') {
                     descargarTXTAcepta(response.dte_id, selectedConcept, response.numero_documento);
                 } else {

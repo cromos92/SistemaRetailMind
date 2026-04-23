@@ -311,6 +311,60 @@ class TestParserFactura(TestCase):
         self.assertEqual(dr['valor_dr'], 5000)
 
 
+class TestFacturaFormaPagoYReferencias(TestCase):
+    """Factura debe respetar forma de pago, referencias y vendedor impreso."""
+
+    def test_factura_con_credito_y_referencias(self):
+        datos = _datos_factura_base()
+        datos['documento']['forma_pago'] = 2
+        datos['documento']['fecha_vencimiento'] = '2026-05-07'
+        datos['referencias'] = [{
+            'tipo_documento': '801',
+            'folio': 'OC-123',
+            'fecha': '2026-04-01',
+            'razon': 'Orden de compra',
+        }]
+        datos['detalle'] = [{
+            'codigo': 'SKU010',
+            'nombre': 'Producto Ref',
+            'descripcion': '',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 100000,
+            'monto_item': 100000,
+        }]
+
+        txt = generar_txt_dte_acepta(datos)
+        lineas = txt.split('\n')
+        encabezado = lineas[0].split('|')
+
+        self.assertEqual(encabezado[6], '2')
+        self.assertEqual(encabezado[7], '2026-05-07')
+        self.assertIn('801|| OC-123 | 2026-04-01|Orden de compra|}', txt)
+
+    def test_factura_puede_imprimir_vendedor_pos(self):
+        datos = _datos_factura_base()
+        datos['emisor']['vendedor_impresion'] = 'Juan Perez'
+        datos['detalle'] = [{
+            'codigo': 'SKU011',
+            'nombre': 'Producto Vendedor',
+            'descripcion': '',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 100000,
+            'monto_item': 100000,
+        }]
+
+        txt = generar_txt_dte_acepta(datos)
+        lineas = txt.split('\n')
+        emisor_linea = lineas[1].split('|')
+        lineas_util = [l for l in lineas if l and l not in ('~', '\\')]
+        linea_final = lineas_util[-1].split('|')
+
+        self.assertEqual(emisor_linea[9], 'Juan Perez')
+        self.assertEqual(linea_final[0], 'Juan Perez')
+
+
 class TestParserBoleta(TestCase):
     """Parser lee correctamente una boleta (sin campos descuento en detalle)."""
 
@@ -539,6 +593,23 @@ class TestObservacionCompactaRespeta90Chars(TestCase):
         self.assertIn('T:1001', campo_obs)
         self.assertIn('EFE:100', campo_obs)
         self.assertIn('TBK:791', campo_obs)
+
+    def test_observacion_boleta_incluye_venta_internet_con_plataforma_y_voucher(self):
+        datos = _datos_boleta_base()
+        datos['emisor']['metodos_pago'] = (
+            'Venta por Internet: $119000 - Tarj: Mercado Pago - Auth: ORD-123456'
+        )
+        datos['detalle'] = [{
+            'codigo': 'POL-02', 'nombre': 'Poleron', 'descripcion': '',
+            'cantidad': 1, 'unidad': 'UN', 'precio_unitario': 119000,
+            'monto_item': 119000,
+        }]
+
+        txt = generar_txt_boleta_acepta(datos)
+        lineas_util = [l for l in txt.split('\n') if l and l not in ('~', '\\')]
+        campo_obs = lineas_util[-1].split('|')[3]
+
+        self.assertIn('WEB-MERCAD:119000#ORD-123456', campo_obs)
 
 
 class TestObservacionFacturaMinimalista(TestCase):

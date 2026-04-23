@@ -326,6 +326,24 @@
         font-weight: 700;
     }
 
+    .config-arqueo-card {
+        background: linear-gradient(135deg, rgba(255, 176, 32, 0.14) 0%, rgba(255, 176, 32, 0.05) 100%);
+        border: 2px solid var(--nexo-warning);
+        border-radius: var(--nexo-radius-lg);
+        padding: 20px 24px;
+        margin-bottom: 24px;
+    }
+
+    .config-arqueo-card h5 {
+        color: #9A6400;
+        font-weight: 600;
+    }
+
+    .config-arqueo-help {
+        font-size: 0.8rem;
+        color: var(--nexo-gray-700);
+    }
+
     /* ========== MODULE CARDS ========== */
     .modulo-card {
         background: var(--nexo-white);
@@ -1143,6 +1161,49 @@
                                 </div>
                             </div>
 
+                            <div class="config-arqueo-card">
+                                <div class="row align-items-center g-3">
+                                    <div class="col-lg-6">
+                                        <h5 class="mb-2">
+                                            <i class="ri-calendar-check-line me-2"></i>
+                                            Rango Histórico de Arqueo
+                                        </h5>
+                                        <p class="mb-2 text-muted small">
+                                            Define cuánto tiempo hacia atrás puede crear arqueos este rol en
+                                            Cuadratura y Arqueo.
+                                        </p>
+                                        <div class="config-arqueo-help">
+                                            Puede configurarse en días o en meses. Ejemplos: 7 días, 1 mes, 3 meses.
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="row g-2 align-items-center">
+                                            <div class="col-sm-5">
+                                                <label for="tipoRangoArqueo" class="form-label fw-semibold mb-1">Unidad</label>
+                                                <select id="tipoRangoArqueo" class="form-select limite-descuento-input" style="font-size:1rem;padding:10px 12px;">
+                                                    <option value="dias">Días</option>
+                                                    <option value="meses">Meses</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-sm-4">
+                                                <label for="valorRangoArqueo" class="form-label fw-semibold mb-1">Cantidad</label>
+                                                <input
+                                                    type="number"
+                                                    class="form-control limite-descuento-input"
+                                                    id="valorRangoArqueo"
+                                                    min="1"
+                                                    step="1"
+                                                    placeholder="1">
+                                            </div>
+                                            <div class="col-sm-3 text-center">
+                                                <label class="form-label fw-semibold mb-1 d-block">Resultado</label>
+                                                <span class="limite-badge" id="badgeRangoArqueo" style="font-size:1rem;padding:12px 16px;">2 días</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Users by Role Section -->
                             <div class="users-by-role" id="usuariosRolSection" style="display: none;">
                                 <h6>
@@ -1798,6 +1859,21 @@ let permisosModificados = {};
 let usuariosRolActual = [];
 let hayModificaciones = false;
 
+function formatearRangoArqueo(tipo, valor) {
+    const valorNum = parseInt(valor, 10) || 1;
+    if (tipo === 'meses') {
+        return `${valorNum} ${valorNum === 1 ? 'mes' : 'meses'}`;
+    }
+    return `${valorNum} ${valorNum === 1 ? 'día' : 'días'}`;
+}
+
+function actualizarBadgeRangoArqueo() {
+    const tipo = document.getElementById('tipoRangoArqueo').value || 'dias';
+    const valor = Math.max(1, parseInt(document.getElementById('valorRangoArqueo').value, 10) || 1);
+    document.getElementById('valorRangoArqueo').value = valor;
+    document.getElementById('badgeRangoArqueo').textContent = formatearRangoArqueo(tipo, valor);
+}
+
 // Load permissions when role is selected
 document.getElementById('rolSelector').addEventListener('change', function() {
     const rol = this.value;
@@ -1848,6 +1924,11 @@ function cargarPermisosRol(rol) {
                     inputLimite.classList.add('border-warning');
                     inputLimite.classList.remove('border-success');
                 }
+
+                const configArqueo = data.configuracion_arqueo || { tipo: 'dias', valor: 2, label: '2 días' };
+                document.getElementById('tipoRangoArqueo').value = configArqueo.tipo || 'dias';
+                document.getElementById('valorRangoArqueo').value = configArqueo.valor || 1;
+                document.getElementById('badgeRangoArqueo').textContent = configArqueo.label || formatearRangoArqueo(configArqueo.tipo, configArqueo.valor);
                 
                 renderizarPermisos(data.modulos);
                 document.getElementById('mensajeInicial').style.display = 'none';
@@ -2387,12 +2468,27 @@ document.getElementById('limiteDescuento').addEventListener('input', function() 
     }
 });
 
+document.getElementById('tipoRangoArqueo').addEventListener('change', actualizarBadgeRangoArqueo);
+document.getElementById('valorRangoArqueo').addEventListener('input', actualizarBadgeRangoArqueo);
+
 // Save all changes
 document.getElementById('btnGuardarTodo').addEventListener('click', function() {
     const limiteDescuento = parseFloat(document.getElementById('limiteDescuento').value) || 0;
+    const tipoRangoArqueo = document.getElementById('tipoRangoArqueo').value || 'dias';
+    const valorRangoArqueo = parseInt(document.getElementById('valorRangoArqueo').value, 10) || 0;
     
     if (limiteDescuento < 0 || limiteDescuento > 100) {
         Swal.fire('Error', 'El límite de descuento debe estar entre 0 y 100', 'error');
+        return;
+    }
+
+    if (!['dias', 'meses'].includes(tipoRangoArqueo)) {
+        Swal.fire('Error', 'La unidad del rango de arqueo no es válida', 'error');
+        return;
+    }
+
+    if (valorRangoArqueo < 1) {
+        Swal.fire('Error', 'La cantidad del rango de arqueo debe ser mayor o igual a 1', 'error');
         return;
     }
     
@@ -2402,10 +2498,13 @@ document.getElementById('btnGuardarTodo').addEventListener('click', function() {
         didOpen: () => { Swal.showLoading(); }
     });
     
-    guardarConfiguracion(limiteDescuento);
+    guardarConfiguracion(limiteDescuento, {
+        tipo: tipoRangoArqueo,
+        valor: valorRangoArqueo
+    });
 });
 
-function guardarConfiguracion(limiteDescuento) {
+function guardarConfiguracion(limiteDescuento, configuracionArqueo) {
     // Collect all permissions
     const todosPermisos = [];
     const opcionesVistas = new Set();
@@ -2436,7 +2535,8 @@ function guardarConfiguracion(limiteDescuento) {
         body: JSON.stringify({
             rol: rolActual,
             permisos: todosPermisos,
-            limite_descuento: limiteDescuento
+            limite_descuento: limiteDescuento,
+            configuracion_arqueo: configuracionArqueo
         })
     })
     .then(response => {
@@ -2470,6 +2570,12 @@ function guardarConfiguracion(limiteDescuento) {
                     inputLimite.classList.add('border-warning');
                     inputLimite.classList.remove('border-success');
                 }
+            }
+
+            if (data.configuracion_arqueo_guardada) {
+                document.getElementById('tipoRangoArqueo').value = data.configuracion_arqueo_guardada.tipo;
+                document.getElementById('valorRangoArqueo').value = data.configuracion_arqueo_guardada.valor;
+                document.getElementById('badgeRangoArqueo').textContent = data.configuracion_arqueo_guardada.label;
             }
             
             Swal.fire({
