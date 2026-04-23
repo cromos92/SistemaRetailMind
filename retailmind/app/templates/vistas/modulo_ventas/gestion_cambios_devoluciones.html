@@ -1562,6 +1562,11 @@
         font-weight: 600;
         padding: 0.3rem 0.5rem;
         height: 36px;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .motivo-inline-bar select.border-warning {
+        border-color: #ffc107 !important;
+        box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.35);
     }
 
     /* ========== POS NAV BAR BOTONES ========== */
@@ -1579,6 +1584,8 @@
     }
     #footer-hint {
         font-size: 0.78rem;
+        color: #b45309;
+        font-weight: 600;
     }
 
     /* ========== INFO-TICKET RESULT CARD ========== */
@@ -2782,7 +2789,7 @@
                     </div>
 
                     <div class="d-flex gap-1 align-items-center">
-                        <span id="footer-hint" class="text-muted fst-italic d-none d-lg-inline" style="font-size:0.72rem;">Busca un documento</span>
+                        <span id="footer-hint" class="text-muted fst-italic" style="font-size:0.72rem;">Busca un documento</span>
                         <button type="button" class="btn btn-primary btn-sm"
                                 id="btn-siguiente" onclick="siguientePaso(event)" disabled>
                             Continuar <i class="ri-arrow-right-line ms-1"></i>
@@ -5012,6 +5019,23 @@ function siguientePaso(event) {
     } else if (pasoActual === 2) {
         console.log('  → PASO 2 → PASO 3');
         
+        // Verificar requisitos previos (faltantes del footer)
+        const faltantes = window._faltantesPaso2 || [];
+        if (faltantes.length > 0) {
+            const listaHtml = faltantes.map(f => `<li>${f}</li>`).join('');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Faltan datos para continuar',
+                html: `<p>Complete los siguientes campos antes de continuar:</p><ul class="text-start">${listaHtml}</ul>`,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#0d6efd'
+            });
+            if (!$('#select-motivo-principal').val()) {
+                $('#select-motivo-principal').focus();
+            }
+            return;
+        }
+        
         // Validar selección
         if (!validarSeleccionProductos()) {
             console.log('  ❌ Validación de productos falló');
@@ -5348,9 +5372,11 @@ function actualizarVistaPreviaTotales() {
 
 /**
  * Habilita el botón "Ver Resumen" en paso 2 sólo cuando se cumplen los
- * requisitos mínimos. Si faltan datos, lo deja clickable pero con tooltip
- * explicando exactamente qué falta (así el usuario no se confunde si al
- * hacer click sólo sale un SweetAlert genérico).
+ * requisitos mínimos. Si faltan datos muestra un hint visible y resalta
+ * los campos pendientes (motivo, escaneo, productos nuevos).
+ * El botón SIEMPRE queda habilitado para que el usuario pueda hacer click
+ * y recibir un SweetAlert explicativo en lugar de quedar bloqueado sin
+ * saber por qué.
  */
 function actualizarEstadoBotonVerResumen() {
     // Sólo aplica al paso 2
@@ -5376,16 +5402,29 @@ function actualizarEstadoBotonVerResumen() {
 
     const $btn = $('#btn-siguiente');
     const $hint = $('#footer-hint');
+    const $motivo = $('#select-motivo-principal');
+
+    // Guardar faltantes para usarlos en siguientePaso
+    window._faltantesPaso2 = faltantes;
+
     if (faltantes.length === 0) {
         $btn.prop('disabled', false)
             .attr('title', 'Continuar al resumen')
             .removeClass('btn-outline-secondary').addClass('btn-primary');
         $hint.hide();
+        $motivo.removeClass('border-warning');
     } else {
-        $btn.prop('disabled', true)
+        // Dejar el botón HABILITADO pero con estilo atenuado
+        $btn.prop('disabled', false)
             .attr('title', 'Falta: ' + faltantes.join(', '))
-            .removeClass('btn-outline-secondary');
+            .removeClass('btn-outline-secondary').addClass('btn-primary');
         $hint.text('Falta: ' + faltantes.join(', ')).show();
+        // Resaltar motivo si es el campo pendiente
+        if (!motivo) {
+            $motivo.addClass('border-warning');
+        } else {
+            $motivo.removeClass('border-warning');
+        }
     }
 }
 

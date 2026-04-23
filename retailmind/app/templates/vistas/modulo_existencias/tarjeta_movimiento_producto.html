@@ -1,0 +1,274 @@
+{% load static %}
+{% load permisos_tags %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="ri-file-list-3-line text-primary me-2"></i>Tarjeta de Movimiento por Producto</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item active">Tarjeta de Movimiento</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- Buscador -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold">SKU del Producto</label>
+                                    <input type="text" id="inputSku" class="form-control" placeholder="Ingrese SKU..." autofocus>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label fw-semibold">Fecha Desde</label>
+                                    <input type="date" id="inputFechaDesde" class="form-control">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label fw-semibold">Fecha Hasta</label>
+                                    <input type="date" id="inputFechaHasta" class="form-control">
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-primary w-100" onclick="buscarMovimientos()">
+                                        <i class="ri-search-line me-1"></i> Buscar
+                                    </button>
+                                </div>
+                                <div class="col-md-3 text-end">
+                                    <button class="btn btn-outline-success" onclick="exportarExcel()" id="btnExportar" style="display:none;">
+                                        <i class="ri-file-excel-2-line me-1"></i> Exportar Excel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info del Producto -->
+            <div class="row mb-3" id="productoInfo" style="display:none;">
+                <div class="col-12">
+                    <div class="card border-primary">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <h6 class="text-muted mb-1">Artículo</h6>
+                                    <p class="fw-bold mb-0" id="pArticulo">-</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6 class="text-muted mb-1">SKU / Talla</h6>
+                                    <p class="fw-bold mb-0"><span id="pSku">-</span> / <span id="pTalla">-</span></p>
+                                </div>
+                                <div class="col-md-2">
+                                    <h6 class="text-muted mb-1">Marca</h6>
+                                    <p class="fw-bold mb-0" id="pMarca">-</p>
+                                </div>
+                                <div class="col-md-2">
+                                    <h6 class="text-muted mb-1">Stock Actual</h6>
+                                    <p class="fw-bold mb-0 fs-5 text-primary" id="pStock">-</p>
+                                </div>
+                                <div class="col-md-2">
+                                    <h6 class="text-muted mb-1">Precio Venta</h6>
+                                    <p class="fw-bold mb-0 fs-5 text-success" id="pPrecio">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resumen KPIs -->
+            <div class="row mb-3" id="resumenKpi" style="display:none;">
+                <div class="col-md-3">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <p class="text-uppercase fw-medium text-muted mb-0">Total Movimientos</p>
+                                    <h4 class="fs-22 fw-semibold mb-0" id="kpiTotal">0</h4>
+                                </div>
+                                <div class="avatar-sm flex-shrink-0">
+                                    <span class="avatar-title bg-info-subtle rounded fs-3"><i class="ri-arrow-left-right-line text-info"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <p class="text-uppercase fw-medium text-muted mb-0">Total Ingresos</p>
+                                    <h4 class="fs-22 fw-semibold mb-0 text-success" id="kpiIngresos">0</h4>
+                                </div>
+                                <div class="avatar-sm flex-shrink-0">
+                                    <span class="avatar-title bg-success-subtle rounded fs-3"><i class="ri-add-circle-line text-success"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <p class="text-uppercase fw-medium text-muted mb-0">Total Egresos</p>
+                                    <h4 class="fs-22 fw-semibold mb-0 text-danger" id="kpiEgresos">0</h4>
+                                </div>
+                                <div class="avatar-sm flex-shrink-0">
+                                    <span class="avatar-title bg-danger-subtle rounded fs-3"><i class="ri-indeterminate-circle-line text-danger"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card card-animate">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <p class="text-uppercase fw-medium text-muted mb-0">Saldo Final</p>
+                                    <h4 class="fs-22 fw-semibold mb-0 text-primary" id="kpiSaldo">0</h4>
+                                </div>
+                                <div class="avatar-sm flex-shrink-0">
+                                    <span class="avatar-title bg-primary-subtle rounded fs-3"><i class="ri-stack-line text-primary"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Movimientos -->
+            <div class="row" id="tablaContainer" style="display:none;">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="ri-list-check me-2"></i>Detalle de Movimientos</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover table-striped align-middle" id="tablaMovimientos">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Hora</th>
+                                            <th>Tipo</th>
+                                            <th>Concepto</th>
+                                            <th class="text-end">Cantidad</th>
+                                            <th class="text-end">Saldo</th>
+                                            <th class="text-end">Costo</th>
+                                            <th class="text-end">Precio</th>
+                                            <th>Origen</th>
+                                            <th>Destino</th>
+                                            <th>Responsable</th>
+                                            <th>Referencia</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyMovimientos"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+const CSRF_TOKEN = '{{ csrf_token }}';
+let movimientosData = [];
+
+function buscarMovimientos() {
+    const sku = document.getElementById('inputSku').value.trim();
+    if (!sku) { alert('Ingrese un SKU'); return; }
+    const desde = document.getElementById('inputFechaDesde').value;
+    const hasta = document.getElementById('inputFechaHasta').value;
+    let url = `/app/api/tarjeta-movimiento/?sku=${encodeURIComponent(sku)}`;
+    if (desde) url += `&fecha_desde=${desde}`;
+    if (hasta) url += `&fecha_hasta=${hasta}`;
+
+    fetch(url).then(r => r.json()).then(data => {
+        if (!data.success) { alert(data.error); return; }
+        movimientosData = data.movimientos;
+        renderProducto(data.producto);
+        renderResumen(data.resumen);
+        renderTabla(data.movimientos);
+        document.getElementById('productoInfo').style.display = '';
+        document.getElementById('resumenKpi').style.display = '';
+        document.getElementById('tablaContainer').style.display = '';
+        document.getElementById('btnExportar').style.display = '';
+    }).catch(e => alert('Error: ' + e.message));
+}
+
+function renderProducto(p) {
+    document.getElementById('pArticulo').textContent = p.articulo;
+    document.getElementById('pSku').textContent = p.sku;
+    document.getElementById('pTalla').textContent = p.talla;
+    document.getElementById('pMarca').textContent = p.marca;
+    document.getElementById('pStock').textContent = p.stock_actual;
+    document.getElementById('pPrecio').textContent = '$' + Number(p.precio_venta).toLocaleString('es-CL');
+}
+
+function renderResumen(r) {
+    document.getElementById('kpiTotal').textContent = r.total_movimientos;
+    document.getElementById('kpiIngresos').textContent = '+' + r.total_ingresos;
+    document.getElementById('kpiEgresos').textContent = '-' + r.total_egresos;
+    document.getElementById('kpiSaldo').textContent = r.saldo_final;
+}
+
+function renderTabla(movimientos) {
+    const tbody = document.getElementById('tbodyMovimientos');
+    tbody.innerHTML = '';
+    movimientos.forEach(m => {
+        const tipoClass = m.tipo_movimiento === 'INGRESO' ? 'text-success' : m.tipo_movimiento === 'EGRESO' ? 'text-danger' : 'text-info';
+        const cantClass = m.cantidad > 0 ? 'text-success fw-bold' : m.cantidad < 0 ? 'text-danger fw-bold' : '';
+        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : m.referencia || '-';
+        tbody.innerHTML += `<tr>
+            <td>${m.fecha}</td>
+            <td>${m.hora}</td>
+            <td><span class="badge bg-${m.tipo_movimiento === 'INGRESO' ? 'success' : m.tipo_movimiento === 'EGRESO' ? 'danger' : 'info'}-subtle ${tipoClass}">${m.tipo_movimiento}</span></td>
+            <td>${m.concepto_display}</td>
+            <td class="text-end ${cantClass}">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
+            <td class="text-end fw-bold">${m.saldo}</td>
+            <td class="text-end">$${Number(m.costo).toLocaleString('es-CL')}</td>
+            <td class="text-end">$${Number(m.precio).toLocaleString('es-CL')}</td>
+            <td>${m.sucursal_origen}</td>
+            <td>${m.sucursal_destino}</td>
+            <td>${m.responsable}</td>
+            <td>${ref}</td>
+        </tr>`;
+    });
+}
+
+function exportarExcel() {
+    if (!movimientosData.length) return;
+    let csv = 'Fecha,Hora,Tipo,Concepto,Cantidad,Saldo,Costo,Precio,Origen,Destino,Responsable,Referencia\n';
+    movimientosData.forEach(m => {
+        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `Ticket #${m.ticket_correlativo}` : m.referencia || '';
+        csv += `${m.fecha},${m.hora},${m.tipo_movimiento},${m.concepto_display},${m.cantidad},${m.saldo},${m.costo},${m.precio},${m.sucursal_origen},${m.sucursal_destino},${m.responsable},"${ref}"\n`;
+    });
+    const blob = new Blob(['\uFEFF' + csv], {type: 'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `tarjeta_movimiento_${document.getElementById('inputSku').value}.csv`;
+    a.click();
+}
+
+document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') buscarMovimientos(); });
+</script>

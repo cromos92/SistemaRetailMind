@@ -1,0 +1,285 @@
+{% load static %}
+{% load permisos_tags %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+    .timeline-item { position: relative; padding-left: 40px; margin-bottom: 1.5rem; }
+    .timeline-item::before { content: ''; position: absolute; left: 15px; top: 28px; bottom: -24px; width: 2px; background: #e9ecef; }
+    .timeline-item:last-child::before { display: none; }
+    .timeline-icon { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; z-index: 1; }
+    .tab-pane .table { margin-bottom: 0; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="ri-route-line text-primary me-2"></i>Trazabilidad Completa de Producto</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item active">Trazabilidad</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- Buscador -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">SKU del Producto</label>
+                                    <input type="text" id="inputSku" class="form-control form-control-lg" placeholder="Ingrese SKU para trazabilidad completa..." autofocus>
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-primary btn-lg w-100" onclick="buscarTrazabilidad()">
+                                        <i class="ri-search-line me-1"></i> Buscar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Producto -->
+            <div id="contenidoTrazabilidad" style="display:none;">
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card border-primary">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-2">
+                                        <h6 class="text-muted mb-1">Artículo</h6>
+                                        <p class="fw-bold mb-0" id="pArticulo">-</p>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <h6 class="text-muted mb-1">SKU / Talla</h6>
+                                        <p class="fw-bold mb-0"><span id="pSku">-</span> / <span id="pTalla">-</span></p>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <h6 class="text-muted mb-1">Marca</h6>
+                                        <p class="fw-bold mb-0" id="pMarca">-</p>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <h6 class="text-muted mb-1">Categoría</h6>
+                                        <p class="fw-bold mb-0" id="pCategoria">-</p>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <h6 class="text-muted mb-1">Stock</h6>
+                                        <p class="fw-bold fs-5 text-primary mb-0" id="pStock">-</p>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <h6 class="text-muted mb-1">Costo</h6>
+                                        <p class="fw-bold mb-0" id="pCosto">-</p>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <h6 class="text-muted mb-1">Sobreprecio</h6>
+                                        <p class="fw-bold mb-0" id="pSobreprecio">-</p>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <h6 class="text-muted mb-1">Precio Venta</h6>
+                                        <p class="fw-bold fs-5 text-success mb-0" id="pPrecio">-</p>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <h6 class="text-muted mb-1">Sucursal / Creación</h6>
+                                        <p class="fw-bold mb-0"><span id="pSucursal">-</span><br><small class="text-muted" id="pFechaCreacion">-</small></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabTimeline"><i class="ri-time-line me-1"></i>Timeline</a></li>
+                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabMovimientos"><i class="ri-arrow-left-right-line me-1"></i>Movimientos <span class="badge bg-info ms-1" id="badgeMov">0</span></a></li>
+                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabLotes"><i class="ri-stack-line me-1"></i>Lotes FIFO <span class="badge bg-success ms-1" id="badgeLotes">0</span></a></li>
+                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabTraspasos"><i class="ri-truck-line me-1"></i>Traspasos <span class="badge bg-warning ms-1" id="badgeTraspasos">0</span></a></li>
+                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPrecios"><i class="ri-price-tag-3-line me-1"></i>Historial Precios <span class="badge bg-purple ms-1" id="badgePrecios">0</span></a></li>
+                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPendientes"><i class="ri-time-line me-1"></i>Pendientes <span class="badge bg-danger ms-1" id="badgePendientes">0</span></a></li>
+                                </ul>
+                            </div>
+                            <div class="card-body">
+                                <div class="tab-content">
+                                    <!-- Timeline -->
+                                    <div class="tab-pane active" id="tabTimeline">
+                                        <div id="timelineContainer" style="max-height: 600px; overflow-y: auto;"></div>
+                                    </div>
+                                    <!-- Movimientos -->
+                                    <div class="tab-pane" id="tabMovimientos">
+                                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                            <table class="table table-hover table-sm table-striped"><thead class="table-light sticky-top"><tr>
+                                                <th>Fecha</th><th>Hora</th><th>Tipo</th><th>Concepto</th><th class="text-end">Cantidad</th><th class="text-end">Costo</th><th>Origen</th><th>Destino</th><th>Responsable</th><th>Ref</th><th>Estado</th>
+                                            </tr></thead><tbody id="tbodyMovimientos"></tbody></table>
+                                        </div>
+                                    </div>
+                                    <!-- Lotes -->
+                                    <div class="tab-pane" id="tabLotes">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover table-sm"><thead class="table-light"><tr>
+                                                <th>Fecha Ingreso</th><th>N° Lote</th><th class="text-end">Inicial</th><th class="text-end">Disponible</th><th class="text-end">Costo</th><th class="text-end">Precio</th><th>% Consumido</th><th>Estado</th>
+                                            </tr></thead><tbody id="tbodyLotes"></tbody></table>
+                                        </div>
+                                    </div>
+                                    <!-- Traspasos -->
+                                    <div class="tab-pane" id="tabTraspasos">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover table-sm"><thead class="table-light"><tr>
+                                                <th>#</th><th>Fecha</th><th>Origen</th><th>Destino</th><th>Estado</th><th class="text-end">Solicitada</th><th class="text-end">Recibida</th><th class="text-end">Costo</th>
+                                            </tr></thead><tbody id="tbodyTraspasos"></tbody></table>
+                                        </div>
+                                    </div>
+                                    <!-- Precios -->
+                                    <div class="tab-pane" id="tabPrecios">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover table-sm"><thead class="table-light"><tr>
+                                                <th>Fecha</th><th>Tipo</th><th class="text-end">Anterior</th><th class="text-end">Nuevo</th><th>Usuario</th><th>Motivo</th>
+                                            </tr></thead><tbody id="tbodyPrecios"></tbody></table>
+                                        </div>
+                                    </div>
+                                    <!-- Pendientes -->
+                                    <div class="tab-pane" id="tabPendientes">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover table-sm"><thead class="table-light"><tr>
+                                                <th>Fecha</th><th>Origen</th><th>Destino</th><th class="text-end">Cantidad</th><th class="text-end">Despachada</th><th class="text-end">Restante</th><th>Estado</th>
+                                            </tr></thead><tbody id="tbodyPendientes"></tbody></table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+function buscarTrazabilidad() {
+    const sku = document.getElementById('inputSku').value.trim();
+    if (!sku) { alert('Ingrese un SKU'); return; }
+    fetch(`/app/api/trazabilidad-producto/?sku=${encodeURIComponent(sku)}`)
+        .then(r => r.json()).then(data => {
+            if (!data.success) { alert(data.error); return; }
+            renderProductoInfo(data.producto);
+            renderTimeline(data.timeline);
+            renderMovimientos(data.movimientos);
+            renderLotes(data.lotes);
+            renderTraspasos(data.traspasos);
+            renderPrecios(data.historial_precios);
+            renderPendientes(data.pendientes_despacho);
+            document.getElementById('badgeMov').textContent = data.movimientos.length;
+            document.getElementById('badgeLotes').textContent = data.lotes.length;
+            document.getElementById('badgeTraspasos').textContent = data.traspasos.length;
+            document.getElementById('badgePrecios').textContent = data.historial_precios.length;
+            document.getElementById('badgePendientes').textContent = data.pendientes_despacho.length;
+            document.getElementById('contenidoTrazabilidad').style.display = '';
+        }).catch(e => alert('Error: ' + e.message));
+}
+
+function renderProductoInfo(p) {
+    document.getElementById('pArticulo').textContent = p.articulo;
+    document.getElementById('pSku').textContent = p.sku;
+    document.getElementById('pTalla').textContent = p.talla;
+    document.getElementById('pMarca').textContent = p.marca;
+    document.getElementById('pCategoria').textContent = p.categoria;
+    document.getElementById('pStock').textContent = p.stock_actual;
+    document.getElementById('pCosto').textContent = '$' + Number(p.costo).toLocaleString('es-CL');
+    document.getElementById('pSobreprecio').textContent = '$' + Number(p.sobreprecio).toLocaleString('es-CL');
+    document.getElementById('pPrecio').textContent = '$' + Number(p.precio_venta).toLocaleString('es-CL');
+    document.getElementById('pSucursal').textContent = p.sucursal;
+    document.getElementById('pFechaCreacion').textContent = p.fecha_creacion;
+}
+
+function renderTimeline(items) {
+    const container = document.getElementById('timelineContainer');
+    if (!items.length) { container.innerHTML = '<div class="text-center text-muted py-4">Sin eventos</div>'; return; }
+    let html = '';
+    items.forEach(t => {
+        html += `<div class="timeline-item">
+            <div class="timeline-icon" style="background:${t.color};"><i class="${t.icono}" style="font-size:11px;"></i></div>
+            <div class="card card-body p-2 mb-0">
+                <div class="d-flex justify-content-between">
+                    <strong>${t.titulo}</strong>
+                    <small class="text-muted">${t.fecha} ${t.hora || ''}</small>
+                </div>
+                <small>${t.detalle}</small>
+                ${t.responsable ? `<small class="text-muted">Por: ${t.responsable}</small>` : ''}
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function renderMovimientos(items) {
+    const tbody = document.getElementById('tbodyMovimientos');
+    tbody.innerHTML = items.map(m => {
+        const badge = m.tipo === 'INGRESO' ? 'success' : m.tipo === 'EGRESO' ? 'danger' : 'info';
+        const ref = m.dte_folio ? `DTE #${m.dte_folio}` : m.ticket_correlativo ? `T #${m.ticket_correlativo}` : m.referencia || '-';
+        return `<tr><td>${m.fecha}</td><td>${m.hora}</td><td><span class="badge bg-${badge}-subtle text-${badge}">${m.tipo}</span></td>
+            <td>${m.concepto}</td><td class="text-end ${m.cantidad > 0 ? 'text-success' : 'text-danger'} fw-bold">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
+            <td class="text-end">$${Number(m.costo).toLocaleString('es-CL')}</td>
+            <td>${m.origen}</td><td>${m.destino}</td><td>${m.responsable}</td><td>${ref}</td>
+            <td><span class="badge bg-${m.estado === 'COMPLETADO' ? 'success' : 'warning'}-subtle">${m.estado}</span></td></tr>`;
+    }).join('');
+}
+
+function renderLotes(items) {
+    const tbody = document.getElementById('tbodyLotes');
+    tbody.innerHTML = items.map(l => {
+        const estado = l.agotado ? '<span class="badge bg-danger">Agotado</span>' : l.activo ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>';
+        return `<tr><td>${l.fecha_ingreso}</td><td>${l.numero_lote}</td>
+            <td class="text-end">${l.cantidad_inicial}</td><td class="text-end fw-bold">${l.cantidad_disponible}</td>
+            <td class="text-end">$${Number(l.costo_unitario).toLocaleString('es-CL')}</td>
+            <td class="text-end">$${Number(l.precio_venta).toLocaleString('es-CL')}</td>
+            <td><div class="progress" style="height:18px;"><div class="progress-bar" style="width:${l.porcentaje_consumido}%;">${l.porcentaje_consumido}%</div></div></td>
+            <td>${estado}</td></tr>`;
+    }).join('');
+}
+
+function renderTraspasos(items) {
+    const tbody = document.getElementById('tbodyTraspasos');
+    tbody.innerHTML = items.map(t => {
+        const badge = {PENDIENTE:'warning',APROBADO:'info',EN_TRANSITO:'primary',RECIBIDO:'success',RECHAZADO:'danger',ANULADO:'secondary'}[t.estado] || 'secondary';
+        return `<tr><td>${t.numero}</td><td>${t.fecha}</td><td>${t.origen}</td><td>${t.destino}</td>
+            <td><span class="badge bg-${badge}">${t.estado}</span></td>
+            <td class="text-end">${t.cantidad_solicitada}</td><td class="text-end">${t.cantidad_recibida || '-'}</td>
+            <td class="text-end">$${Number(t.costo).toLocaleString('es-CL')}</td></tr>`;
+    }).join('');
+}
+
+function renderPrecios(items) {
+    const tbody = document.getElementById('tbodyPrecios');
+    tbody.innerHTML = items.map(p => `<tr><td>${p.fecha}</td><td>${p.tipo}</td>
+        <td class="text-end">$${Number(p.valor_anterior).toLocaleString('es-CL')}</td>
+        <td class="text-end fw-bold">$${Number(p.valor_nuevo).toLocaleString('es-CL')}</td>
+        <td>${p.usuario}</td><td>${p.motivo || '-'}</td></tr>`).join('');
+}
+
+function renderPendientes(items) {
+    const tbody = document.getElementById('tbodyPendientes');
+    tbody.innerHTML = items.map(p => `<tr><td>${p.fecha}</td><td>${p.origen}</td><td>${p.destino}</td>
+        <td class="text-end">${p.cantidad}</td><td class="text-end">${p.despachada}</td>
+        <td class="text-end fw-bold">${p.restante}</td><td>${p.estado}</td></tr>`).join('');
+}
+
+document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') buscarTrazabilidad(); });
+</script>

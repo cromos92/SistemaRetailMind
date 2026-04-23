@@ -1093,6 +1093,7 @@ def limpiar_texto(texto, max_length=None):
     
     # === REEMPLAZAR CARACTERES DE CONTROL ===
     texto = texto.replace('|', '')  # El pipe es el separador de Acepta
+    texto = texto.replace('#', '')  # Puede confundir al parser de Acepta
     texto = texto.replace('\n', ' ')
     texto = texto.replace('\r', ' ')
     texto = texto.replace('\t', ' ')
@@ -2343,26 +2344,21 @@ def generar_txt_boleta_acepta(datos):
     lineas.append('~')
     
     # ===== DESCUENTOS / RECARGOS GLOBALES (Tabla 4 Boleta) =====
-    # Debe ir ANTES de observaciones en formato Acepta
+    # GUARD: NO emitir esta sección para boletas (39/41). La sección extra
+    # de `~` rompe el parser de Acepta para boletas, causando que el archivo
+    # quede como .tmp y no se envíe a impresión. Los descuentos de boleta
+    # deben distribuirse en monto_item de cada línea de detalle ANTES de
+    # llegar aquí (ver generar_dte_desde_ticket en views_modulo_ventas.py).
     descuentos_recargos = datos.get('descuentos_recargos', [])
     descuento_global = totales.get('descuento_global', 0)
 
-    if descuentos_recargos:
-        for dr in descuentos_recargos:
-            linea_dr = separador.join([
-                str(dr.get('tpo_mov', 'D')),
-                limpiar_texto(str(dr.get('glosa_dr', 'Descuento')), 45),
-                str(dr.get('tpo_valor', '$')),
-                formatear_monto(dr.get('valor_dr', 0)),
-                str(dr.get('ind_exe_dr', '')) if dr.get('ind_exe_dr') else '',
-                '}'
-            ])
-            lineas.append(linea_dr)
-        lineas.append('~')
-    elif descuento_global and descuento_global > 0:
-        linea_desc = separador.join(['D', 'Descuento Global', '$', formatear_monto(descuento_global), '', '}'])
-        lineas.append(linea_desc)
-        lineas.append('~')
+    if descuentos_recargos or (descuento_global and descuento_global > 0):
+        logger.warning(
+            "generar_txt_boleta_acepta recibio descuentos_recargos o "
+            "descuento_global. Se IGNORAN para mantener la estructura de "
+            "secciones (~) compatible con Acepta. El descuento debe estar "
+            "distribuido en los monto_item del detalle."
+        )
     
     # ===== OBSERVACIÓN (monto en letras + resumen compacto) =====
     # Se alinea con la glosa de factura: "<MONTO_EN_LETRAS>  V:NICK2 T:179522 EFE:100 TBK:791"

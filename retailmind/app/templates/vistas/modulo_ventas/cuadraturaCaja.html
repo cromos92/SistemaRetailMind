@@ -1418,7 +1418,7 @@
                         <thead>
                             <tr>
                                 <th style="width:55px;">Hora</th>
-                                <th style="width:70px;">Origen</th>
+                                <th style="width:100px;">Documento</th>
                                 <th style="width:80px;">N°</th>
                                 <th>Cliente</th>
                                 <th style="width:140px;">Método</th>
@@ -1441,7 +1441,7 @@
             </div>
             <div class="modal-footer py-2">
                 <small class="text-muted me-auto" id="leyendaPermisosDetalle" style="font-size:.7rem;">
-                    <i class="ri-information-line me-1"></i>Las fechas editables dependen de sus permisos por tipo de DTE.
+                    <i class="ri-information-line me-1"></i>Las fechas editables dependen de sus permisos por tipo de DTE. Tickets sin DTE no permiten edición de fecha.
                 </small>
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal"><i class="ri-close-line me-1"></i>Cerrar</button>
             </div>
@@ -1525,6 +1525,9 @@
     </div>
 </div>
 
+{% endif %}
+
+{% if es_cajero or es_supervisor %}
 <!-- =====================================================================
      MODAL: DECLARAR DEPÓSITO (CAJERO) - Mejorado con tipo medio y comprobante
      ===================================================================== -->
@@ -1649,6 +1652,9 @@
     </div>
 </div>
 
+{% endif %}
+
+{% if es_supervisor %}
 <!-- =====================================================================
      MODAL: DEPÓSITO MULTI-DÍA
      ===================================================================== -->
@@ -3528,16 +3534,31 @@ function _pintarTablaDetalle(items) {
 }
 
 function _filaDetalleHTML(it, idx) {
-    const origenBadge = it.origen === 'TICKET'
-        ? '<span class="badge bg-info" style="font-size:.65rem;">TICKET</span>'
-        : '<span class="badge bg-dark" style="font-size:.65rem;">DTE</span>';
+    // --- Columna "Documento": muestra tipo DTE como principal y ticket como secundario ---
+    let docCell;
+    if (it.dte) {
+        const tipoBadge = _badgeClaseTipoDte(it.dte.tipo);
+        docCell = `
+            <span class="badge ${tipoBadge}" style="font-size:.65rem;">${_abreviarTipoDte(it.dte.tipo)}</span>
+            ${it.ticket_correlativo ? `<div class="text-muted" style="font-size:.6rem;">Ticket #${it.ticket_correlativo}</div>` : ''}
+        `;
+    } else if (it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET') {
+        docCell = `
+            <span class="badge bg-warning text-dark" style="font-size:.63rem;" title="Ticket tiene tipo ${it.tipo_dte_ticket} pero no se encontró el DTE asociado">
+                <i class="ri-alert-line"></i> ${_abreviarTipoDte(it.tipo_dte_ticket)}
+            </span>
+            <div class="text-muted" style="font-size:.6rem;">Ticket #${it.ticket_correlativo || it.correlativo}</div>
+            <div class="text-danger" style="font-size:.55rem;">Sin DTE</div>
+        `;
+    } else {
+        docCell = `
+            <span class="badge bg-secondary" style="font-size:.65rem;">TICKET</span>
+            <div class="text-muted" style="font-size:.6rem;">#${it.ticket_correlativo || it.correlativo}</div>
+        `;
+    }
 
     let dteCell = '<span class="text-muted">—</span>';
     if (it.dte) {
-        // Si hay drift entre Ticket.fecha (por la que apareció en este
-        // día de cuadratura) y DTE.fecha_emision, lo señalizamos para
-        // que el operador entienda por qué este pago aparece "en otra
-        // fecha" y pueda usar el botón Sincronizar.
         const driftBadge = it.drift_fecha
             ? `<span class="badge bg-danger ms-1" style="font-size:.6rem;" title="La fecha del Ticket (${it.ticket_fecha}) NO coincide con la fecha de emisión del DTE (${it.dte.fecha_emision}). Usa Sincronizar para mover el ticket al día correcto.">⚠ Drift</span>`
             : '';
@@ -3550,11 +3571,15 @@ function _filaDetalleHTML(it, idx) {
                 </div>
             </div>
         `;
+    } else if (it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET' && it.tipo_dte_ticket !== '') {
+        dteCell = `
+            <span class="text-warning" style="font-size:.7rem;" title="Este ticket debería tener un DTE tipo ${it.tipo_dte_ticket} pero no se encontró en el sistema">
+                <i class="ri-alert-line"></i> No encontrado
+            </span>
+        `;
     }
 
-    // Construcción de acciones. Pueden coexistir 2 botones:
-    //   - "Editar fecha"   (cambia DTE.fecha_emision; se propaga al ticket)
-    //   - "Sincronizar"    (sólo cuando hay drift y el usuario tiene permiso)
+    // Construcción de acciones
     const acciones = [];
     if (it.dte && it.permisos && it.permisos.editar_fecha) {
         acciones.push(`
@@ -3578,20 +3603,20 @@ function _filaDetalleHTML(it, idx) {
     if (acciones.length) {
         accionesCell = `<div class="d-flex gap-1 justify-content-center">${acciones.join('')}</div>`;
     } else if (!it.dte) {
-        accionesCell = '<span class="text-muted" style="font-size:.7rem;">—</span>';
+        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin DTE asociado: no hay fecha de emisión que editar">Sin DTE</span>';
     } else if (!PERMISOS_RESUMEN.puede_editar_algun_dte) {
-        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin permiso">Sin permiso</span>';
+        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin permiso de edición de DTEs">Sin permiso</span>';
     } else {
-        accionesCell = `<span class="text-muted" style="font-size:.68rem;" title="No autorizado para ${it.dte.tipo}">Sin permiso (${_abreviarTipoDte(it.dte.tipo)})</span>`;
+        accionesCell = `<span class="text-muted" style="font-size:.68rem;" title="No autorizado para editar ${it.dte.tipo}">Sin permiso (${_abreviarTipoDte(it.dte.tipo)})</span>`;
     }
 
     const tarjetaVoucher = [it.tipo_tarjeta, it.voucher].filter(Boolean).join(' · ') || '—';
-    const filaClase = it.drift_fecha ? 'table-warning' : '';
+    const filaClase = it.drift_fecha ? 'table-warning' : (!it.dte && it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET' ? 'table-light' : '');
 
     return `
         <tr class="${filaClase}" data-idx="${idx}" data-dte-id="${it.dte ? it.dte.id : ''}" data-ticket-id="${it.ticket_id || ''}">
             <td>${it.hora || '—'}</td>
-            <td>${origenBadge}</td>
+            <td>${docCell}</td>
             <td class="fw-bold">#${it.correlativo || '—'}</td>
             <td class="text-truncate" style="max-width:220px;" title="${(it.cliente || '').replace(/"/g, '&quot;')}">${it.cliente || '—'}${it.cliente_rut ? `<div class="text-muted" style="font-size:.65rem;">${it.cliente_rut}</div>` : ''}</td>
             <td><span class="badge badge-categoria ${_badgeClaseCategoria(it.categoria)}">${it.metodo_pago_display}</span></td>
@@ -3601,6 +3626,16 @@ function _filaDetalleHTML(it, idx) {
             <td class="text-center">${accionesCell}</td>
         </tr>
     `;
+}
+
+function _badgeClaseTipoDte(tipo) {
+    const t = (tipo || '').toUpperCase().trim();
+    if (t.includes('BOLETA ELECTRONICA')) return 'bg-success';
+    if (t.includes('BOLETA PAPEL')) return 'bg-success bg-opacity-75';
+    if (t.includes('FACTURA')) return 'bg-primary';
+    if (t.includes('NOTA DE CREDITO')) return 'bg-danger';
+    if (t.includes('GUIA')) return 'bg-info';
+    return 'bg-secondary';
 }
 
 function _abreviarTipoDte(tipo) {

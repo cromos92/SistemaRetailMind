@@ -474,13 +474,16 @@ class TestNmbItemOverflowVaADscItem(TestCase):
             self.fail("No se encontró la línea de detalle en el TXT generado")
 
 
-class TestBoletaConDescuentoIncluyeDscRcgGlobal(TestCase):
+class TestBoletaConDescuentoNOEmiteDscRcgGlobal(TestCase):
     """
-    Boleta con descuento agregado debe emitir el bloque DscRcgGlobal
-    (tabla 4 de boleta Acepta) y la observación debe mencionar el monto.
+    Boleta con descuento NO debe emitir el bloque DscRcgGlobal (tabla 4).
+    La sección extra de ~ rompe el parser de Acepta para boletas tipo 39,
+    causando archivos .tmp y ausencia de impresión automática.
+    Los descuentos deben distribuirse en monto_item antes de llegar al
+    generador; si llegan como descuentos_recargos se ignoran con warning.
     """
 
-    def test_linea_descuento_global_en_boleta(self):
+    def test_boleta_ignora_descuentos_recargos(self):
         datos = _datos_boleta_base()
         datos['detalle'] = [{
             'codigo': 'POL-01',
@@ -488,7 +491,7 @@ class TestBoletaConDescuentoIncluyeDscRcgGlobal(TestCase):
             'descripcion': '',
             'cantidad': 1,
             'unidad': 'UN',
-            'precio_unitario': 8000,   # precio ya rebajado (boleta)
+            'precio_unitario': 8000,
             'monto_item': 8000,
         }]
         datos['descuentos_recargos'] = [{
@@ -499,8 +502,32 @@ class TestBoletaConDescuentoIncluyeDscRcgGlobal(TestCase):
         }]
         txt = generar_txt_boleta_acepta(datos)
 
-        # La línea de descuento global debe aparecer
-        self.assertIn('D|Descuento|$|2000|', txt)
+        self.assertNotIn('D|Descuento|$|2000|', txt)
+
+    def test_boleta_con_descuento_tiene_3_separadores(self):
+        """Boleta siempre debe tener exactamente 3 separadores ~."""
+        datos = _datos_boleta_base()
+        datos['detalle'] = [{
+            'codigo': 'POL-01',
+            'nombre': 'Polera Azul',
+            'descripcion': '',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 8000,
+            'monto_item': 6000,
+        }]
+        datos['descuentos_recargos'] = [{
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento',
+            'tpo_valor': '$',
+            'valor_dr': 2000,
+        }]
+        txt = generar_txt_boleta_acepta(datos)
+        separadores = [l for l in txt.split('\n') if l.strip() == '~']
+        self.assertEqual(
+            len(separadores), 3,
+            f"Boleta debe tener 3 separadores ~, tiene {len(separadores)}. TXT:\n{txt}",
+        )
 
     def test_observacion_boleta_incluye_monto_descuento(self):
         datos = _datos_boleta_base()
@@ -520,9 +547,6 @@ class TestBoletaConDescuentoIncluyeDscRcgGlobal(TestCase):
             'valor_dr': 2000,
         }]
         txt = generar_txt_boleta_acepta(datos)
-        # La observación compacta usa "Dc:<monto>" en vez de "Descuento: $2,000"
-        # para respetar el tope de 90 chars del XSD (RazonRef). Ver
-        # construir_observacion_compacta() en views_modulo_documentos.py.
         self.assertIn('Dc:2000', txt)
 
 

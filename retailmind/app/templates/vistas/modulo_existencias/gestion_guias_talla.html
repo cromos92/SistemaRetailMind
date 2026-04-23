@@ -1,0 +1,917 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+    .guias-container { padding: 20px; }
+    .page-header-guias {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 24px 28px;
+        margin-bottom: 24px;
+        color: white;
+    }
+    .page-header-guias h4 { margin: 0; font-weight: 700; font-size: 1.5rem; }
+    .page-header-guias .subtitle { opacity: 0.85; font-size: 0.9rem; margin-top: 4px; }
+    .stats-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .stat-card {
+        background: white;
+        border-radius: 10px;
+        padding: 16px 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        flex: 1;
+        min-width: 160px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    .stat-card .stat-icon {
+        width: 46px; height: 46px;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.4rem;
+    }
+    .stat-card .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat-card .stat-label { font-size: 0.78rem; color: #888; margin-top: 2px; }
+    .filters-bar {
+        background: white;
+        border-radius: 10px;
+        padding: 16px 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .filters-bar input, .filters-bar select {
+        padding: 8px 14px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.9rem;
+    }
+    .filters-bar input:focus, .filters-bar select:focus {
+        border-color: #667eea;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(102,126,234,0.15);
+    }
+    .filters-bar .search-input {
+        flex: 1;
+        min-width: 200px;
+        border: 2px solid #667eea;
+        background: #f5f7ff;
+    }
+    .guia-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 16px;
+        transition: box-shadow 0.2s, transform 0.15s;
+        border-left: 4px solid #667eea;
+    }
+    .guia-card:hover {
+        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        transform: translateY(-1px);
+    }
+    .guia-card .guia-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+    }
+    .guia-card .guia-title { font-size: 1.05rem; font-weight: 700; color: #333; }
+    .guia-card .guia-marca {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .guia-card .guia-meta { font-size: 0.8rem; color: #888; margin-bottom: 10px; }
+    .guia-card .tallas-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .guia-card .talla-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        background: #f0f2ff;
+        color: #4c5ebd;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .guia-card .btn-actions { display: flex; gap: 6px; }
+    .guia-card .btn-action {
+        width: 32px; height: 32px;
+        border: none;
+        border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 0.9rem;
+    }
+    .btn-edit { background: #e8f4fd; color: #3498db; }
+    .btn-edit:hover { background: #3498db; color: white; }
+    .btn-delete { background: #fde8e8; color: #e74c3c; }
+    .btn-delete:hover { background: #e74c3c; color: white; }
+    .btn-copy { background: #e8fdf0; color: #2ecc71; }
+    .btn-copy:hover { background: #2ecc71; color: white; }
+
+    .tallas-table {
+        width: 100%;
+        font-size: 0.82rem;
+        margin-top: 10px;
+        border-collapse: collapse;
+    }
+    .tallas-table th {
+        background: #f8f9fa;
+        padding: 6px 10px;
+        text-align: center;
+        font-weight: 700;
+        color: #555;
+        border-bottom: 2px solid #dee2e6;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+    .tallas-table td {
+        padding: 5px 10px;
+        text-align: center;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .tallas-table tr:hover td { background: #f5f7ff; }
+    .marcas-sin-guia-section {
+        background: white;
+        border-radius: 10px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-left: 4px solid #ff9800;
+    }
+    .marcas-sin-guia-section .section-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: #e65100;
+        margin-bottom: 14px;
+    }
+    .marcas-sin-guia-section .section-title .badge-count {
+        background: #ff9800;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.72rem;
+    }
+    .marcas-sin-guia-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .marcas-sin-guia-row select {
+        flex: 1;
+        min-width: 220px;
+        padding: 9px 14px;
+        border: 2px solid #ffcc80;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background: #fffaf0;
+        transition: border-color 0.2s;
+    }
+    .marcas-sin-guia-row select:focus {
+        border-color: #ff9800;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(255,152,0,0.15);
+    }
+    .marcas-sin-guia-row .btn-crear-desde-marca {
+        padding: 9px 18px;
+        background: linear-gradient(135deg, #ff9800, #f57c00);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    .marcas-sin-guia-row .btn-crear-desde-marca:hover {
+        background: linear-gradient(135deg, #f57c00, #e65100);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255,152,0,0.3);
+    }
+    .marcas-sin-guia-row .btn-crear-desde-marca:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    .stat-card.clickable { cursor: pointer; transition: all 0.2s; }
+    .stat-card.clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+
+    /* Modal styles */
+    #modalCrearGuia .modal-dialog { max-width: 800px; }
+    #modalCrearGuia .modal-content { border-radius: 14px; overflow: hidden; }
+    #modalCrearGuia .modal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+    }
+    #modalCrearGuia .modal-header .btn-close { filter: invert(1); }
+    .talla-input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .talla-input-row input {
+        flex: 1;
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        text-align: center;
+    }
+    .talla-input-row input:focus { border-color: #667eea; outline: none; box-shadow: 0 0 0 2px rgba(102,126,234,0.15); }
+    .btn-remove-row {
+        width: 28px; height: 28px;
+        border: none;
+        border-radius: 6px;
+        background: #fde8e8;
+        color: #e74c3c;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+    }
+    .btn-remove-row:hover { background: #e74c3c; color: white; }
+    .view-toggle { display: flex; gap: 4px; }
+    .view-toggle button {
+        padding: 6px 12px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #666;
+        font-size: 0.85rem;
+    }
+    .view-toggle button.active { background: #667eea; color: white; border-color: #667eea; }
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+    .empty-state i { font-size: 3rem; color: #ddd; margin-bottom: 12px; }
+    .collapsed-tallas .tallas-detail { display: none; }
+    .collapsed-tallas .tallas-preview { display: block; }
+    .expanded-tallas .tallas-detail { display: block; }
+    .expanded-tallas .tallas-preview { display: none; }
+    .guia-card .toggle-detail {
+        background: none;
+        border: none;
+        color: #667eea;
+        cursor: pointer;
+        font-size: 0.8rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+    .guia-card .toggle-detail:hover { background: #f0f2ff; }
+
+    .skeleton-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        border-left: 4px solid #e0e0e0;
+    }
+    .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s infinite;
+        border-radius: 4px;
+    }
+    @keyframes skeleton-loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    @keyframes highlightPulse {
+        0% { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        50% { box-shadow: 0 0 0 4px rgba(255,152,0,0.3), 0 2px 8px rgba(0,0,0,0.08); }
+        100% { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    }
+</style>
+
+<div class="page-content">
+        <div class="guias-container">
+            <!-- Header -->
+            <div class="page-header-guias d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h4><i class="ri-ruler-line me-2"></i>Gestión de Guías de Talla</h4>
+                    <div class="subtitle">Administra las guías de talla del sistema. Son globales (compartidas por todos los usuarios).</div>
+                </div>
+                <button class="btn btn-light btn-sm fw-bold" onclick="abrirModalCrear()">
+                    <i class="ri-add-line me-1"></i> Nueva Guía
+                </button>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #e8edff; color: #667eea;">
+                        <i class="ri-ruler-line"></i>
+                    </div>
+                    <div>
+                        <div class="stat-value" id="statTotal">-</div>
+                        <div class="stat-label">Guías totales</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #e8f8f0; color: #2ecc71;">
+                        <i class="ri-shopping-bag-line"></i>
+                    </div>
+                    <div>
+                        <div class="stat-value" id="statMarcas">-</div>
+                        <div class="stat-label">Marcas con guía</div>
+                    </div>
+                </div>
+                <div class="stat-card clickable" onclick="scrollToMarcasSinGuia()" title="Ver marcas sin guía">
+                    <div class="stat-icon" style="background: #fff3e0; color: #ff9800;">
+                        <i class="ri-alert-line"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="stat-value" id="statSinGuia">-</div>
+                            <span id="statSinGuiaTag" style="display:none;background:#ff9800;color:white;padding:1px 7px;border-radius:8px;font-size:0.68rem;font-weight:600;">Pendientes</span>
+                        </div>
+                        <div class="stat-label">Marcas sin guía</div>
+                        <div style="margin-top:6px;">
+                            <div style="background:#f0f0f0;border-radius:4px;height:5px;overflow:hidden;">
+                                <div id="barraCobertura" style="height:100%;background:linear-gradient(90deg,#2ecc71,#27ae60);border-radius:4px;transition:width 0.5s ease;width:0%;"></div>
+                            </div>
+                            <div style="font-size:0.68rem;color:#999;margin-top:2px;" id="textCobertura">-</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #fce4ec; color: #e91e63;">
+                        <i class="ri-links-line"></i>
+                    </div>
+                    <div>
+                        <div class="stat-value" id="statProductos">-</div>
+                        <div class="stat-label">Productos vinculados</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Marcas sin guía -->
+            <div class="marcas-sin-guia-section" id="seccionMarcasSinGuia" style="display:none;">
+                <div class="section-title">
+                    <i class="ri-alert-line"></i>
+                    Marcas con productos pero sin guía de talla
+                    <span class="badge-count" id="badgeMarcasSinGuia">0</span>
+                </div>
+                <div class="marcas-sin-guia-row">
+                    <select id="selectMarcaSinGuia">
+                        <option value="">Seleccionar marca pendiente...</option>
+                    </select>
+                    <button class="btn-crear-desde-marca" id="btnCrearDesdeMarca" disabled onclick="crearGuiaParaMarcaSeleccionada()">
+                        <i class="ri-add-line me-1"></i> Crear Guía
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filters-bar">
+                <input type="text" class="search-input" id="inputBuscar" placeholder="Buscar por nombre o marca..." autocomplete="off">
+                <select id="selectFiltroMarca" style="min-width: 180px;">
+                    <option value="">Todas las marcas</option>
+                </select>
+                <div class="view-toggle">
+                    <button class="active" id="btnVistaCompacta" onclick="cambiarVista('compacta')" title="Vista compacta">
+                        <i class="ri-list-check"></i>
+                    </button>
+                    <button id="btnVistaDetallada" onclick="cambiarVista('detallada')" title="Vista detallada">
+                        <i class="ri-layout-grid-line"></i>
+                    </button>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="cargarGuias()" title="Recargar">
+                    <i class="ri-refresh-line"></i>
+                </button>
+            </div>
+
+            <!-- Lista de guías -->
+            <div id="listaGuias">
+                <div class="skeleton-card"><div class="skeleton" style="height:18px;width:40%;margin-bottom:8px;"></div><div class="skeleton" style="height:14px;width:60%;margin-bottom:6px;"></div><div class="skeleton" style="height:30px;width:100%;"></div></div>
+                <div class="skeleton-card"><div class="skeleton" style="height:18px;width:35%;margin-bottom:8px;"></div><div class="skeleton" style="height:14px;width:55%;margin-bottom:6px;"></div><div class="skeleton" style="height:30px;width:100%;"></div></div>
+            </div>
+        </div>
+    </div>
+
+<!-- Modal Crear / Editar Guía -->
+<div class="modal fade" id="modalCrearGuia" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalCrearGuiaTitle">
+                    <i class="ri-add-line me-1"></i> Nueva Guía de Talla
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="guiaEditId" value="">
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold">Marca *</label>
+                        <select class="form-select" id="selectMarcaGuia">
+                            <option value="">Seleccionar marca...</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold">Nombre de la guía *</label>
+                        <input type="text" class="form-control" id="inputNombreGuia" placeholder="Ej: Zapatillas Running">
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label fw-bold mb-0">Tallas</label>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="agregarFilaTalla()">
+                        <i class="ri-add-line me-1"></i> Agregar fila
+                    </button>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <div class="talla-input-row" style="margin-bottom: 8px;">
+                        <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">CL</div>
+                        <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">US</div>
+                        <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">EU</div>
+                        <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">UK</div>
+                        <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">BR</div>
+                        <div style="flex:1;text-align:center;font-weight:700;font-size:0.75rem;color:#888;">CM</div>
+                        <div style="width:28px;"></div>
+                    </div>
+                    <div id="tallasInputContainer">
+                        <!-- Rows dinámicas -->
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="agregarRangoTallas()">
+                        <i class="ri-magic-line me-1"></i> Generar rango rápido
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnGuardarGuia" onclick="guardarGuia()">
+                    <i class="ri-save-line me-1"></i> Guardar Guía
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Rango Rápido -->
+<div class="modal fade" id="modalRangoRapido" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Generar rango de tallas CL</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label fw-bold">Desde</label>
+                    <input type="number" class="form-control" id="rangoDesde" value="35" min="1" max="60">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-bold">Hasta</label>
+                    <input type="number" class="form-control" id="rangoHasta" value="44" min="1" max="60">
+                </div>
+                <div>
+                    <label class="form-label fw-bold">Incremento</label>
+                    <select class="form-select" id="rangoIncremento">
+                        <option value="0.5">0.5</option>
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="aplicarRango()">Aplicar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+
+<script>
+const ID_ATRIBUTO_MARCA = {{ id_atributo_marca }};
+let guiasData = [];
+let vistaActual = 'compacta';
+let debounceTimer = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    cargarMarcas();
+    cargarGuias();
+    document.getElementById('inputBuscar').addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(cargarGuias, 300);
+    });
+    document.getElementById('selectFiltroMarca').addEventListener('change', cargarGuias);
+});
+
+function cargarMarcas() {
+    fetch(`/app/opciones_atributo/?atributo_id=${ID_ATRIBUTO_MARCA}`)
+    .then(r => r.json())
+    .then(data => {
+        const opciones = data.opciones || data;
+        const selectFiltro = document.getElementById('selectFiltroMarca');
+        const selectModal = document.getElementById('selectMarcaGuia');
+        selectModal.innerHTML = '<option value="">Seleccionar marca...</option>';
+        (Array.isArray(opciones) ? opciones : []).forEach(m => {
+            const id = m.id || m.value;
+            const val = m.valor || m.text || m.nombre;
+            selectFiltro.innerHTML += `<option value="${id}">${val}</option>`;
+            selectModal.innerHTML += `<option value="${id}">${val}</option>`;
+        });
+    })
+    .catch(err => console.error('Error cargando marcas:', err));
+}
+
+function cargarGuias() {
+    const q = document.getElementById('inputBuscar').value.trim();
+    const marca = document.getElementById('selectFiltroMarca').value;
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (marca) params.set('marca', marca);
+
+    fetch(`/app/api/guias-talla-completas/?${params}`)
+    .then(r => r.json())
+    .then(data => {
+        guiasData = data.guias || [];
+        renderGuias();
+        renderStats(data);
+        renderMarcasSinGuia(data.marcas_sin_guia || []);
+    })
+    .catch(err => {
+        console.error('Error cargando guías:', err);
+        document.getElementById('listaGuias').innerHTML =
+            '<div class="empty-state"><i class="ri-error-warning-line d-block"></i>Error al cargar las guías</div>';
+    });
+}
+
+function renderStats(data) {
+    const guias = data.guias || [];
+    const sinGuia = (data.marcas_sin_guia || []).length;
+    document.getElementById('statTotal').textContent = guias.length;
+    const marcasConGuia = new Set(guias.map(g => g.marca_id)).size;
+    document.getElementById('statMarcas').textContent = marcasConGuia;
+    document.getElementById('statSinGuia').textContent = sinGuia;
+    const totalProd = guias.reduce((sum, g) => sum + (g.total_productos || 0), 0);
+    document.getElementById('statProductos').textContent = totalProd;
+
+    const tag = document.getElementById('statSinGuiaTag');
+    tag.style.display = sinGuia > 0 ? 'inline-block' : 'none';
+
+    const totalMarcas = marcasConGuia + sinGuia;
+    const pct = totalMarcas > 0 ? Math.round((marcasConGuia / totalMarcas) * 100) : 100;
+    document.getElementById('barraCobertura').style.width = pct + '%';
+    document.getElementById('textCobertura').textContent = `Cobertura: ${pct}% (${marcasConGuia} de ${totalMarcas} marcas)`;
+}
+
+function renderMarcasSinGuia(marcas) {
+    const sec = document.getElementById('seccionMarcasSinGuia');
+    const select = document.getElementById('selectMarcaSinGuia');
+    const btn = document.getElementById('btnCrearDesdeMarca');
+    const badge = document.getElementById('badgeMarcasSinGuia');
+
+    if (!marcas.length) {
+        sec.style.display = 'none';
+        return;
+    }
+    sec.style.display = 'block';
+    badge.textContent = marcas.length;
+
+    select.innerHTML = '<option value="">Seleccionar marca pendiente...</option>';
+    marcas.forEach(m => {
+        select.innerHTML += `<option value="${m.id}" data-nombre="${m.nombre}">${m.nombre}</option>`;
+    });
+
+    select.onchange = function() {
+        btn.disabled = !this.value;
+    };
+}
+
+function scrollToMarcasSinGuia() {
+    const sec = document.getElementById('seccionMarcasSinGuia');
+    if (sec.style.display !== 'none') {
+        sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        sec.style.animation = 'none';
+        sec.offsetHeight;
+        sec.style.animation = 'highlightPulse 1s ease';
+    }
+}
+
+function crearGuiaParaMarcaSeleccionada() {
+    const select = document.getElementById('selectMarcaSinGuia');
+    const marcaId = select.value;
+    const marcaNombre = select.options[select.selectedIndex].dataset.nombre || '';
+    if (!marcaId) return;
+    abrirModalCrearParaMarca(marcaId, marcaNombre);
+}
+
+function renderGuias() {
+    const container = document.getElementById('listaGuias');
+    if (!guiasData.length) {
+        container.innerHTML = '<div class="empty-state"><i class="ri-ruler-line d-block"></i><p>No se encontraron guías de talla</p></div>';
+        return;
+    }
+
+    let agrupadas = {};
+    guiasData.forEach(g => {
+        const key = g.marca_nombre || 'Sin Marca';
+        if (!agrupadas[key]) agrupadas[key] = [];
+        agrupadas[key].push(g);
+    });
+
+    let html = '';
+    for (const [marca, guias] of Object.entries(agrupadas)) {
+        html += `<div class="mb-3">
+            <h6 class="fw-bold text-muted mb-2" style="font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">
+                <i class="ri-price-tag-3-line me-1"></i>${marca} (${guias.length})
+            </h6>`;
+        guias.forEach(g => {
+            html += renderGuiaCard(g);
+        });
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function renderGuiaCard(g) {
+    const esDetallada = vistaActual === 'detallada';
+    const claseExpand = esDetallada ? 'expanded-tallas' : 'collapsed-tallas';
+
+    let tallasPreview = '';
+    if (g.tallas && g.tallas.length) {
+        tallasPreview = g.tallas.map(t => {
+            const val = t.cl || t.us || t.eu || '-';
+            return `<span class="talla-badge">${val}</span>`;
+        }).join('');
+    }
+
+    let tallasTable = '';
+    if (g.tallas && g.tallas.length) {
+        tallasTable = `<table class="tallas-table">
+            <thead><tr><th>CL</th><th>US</th><th>EU</th><th>UK</th><th>BR</th><th>CM</th></tr></thead>
+            <tbody>`;
+        g.tallas.forEach(t => {
+            tallasTable += `<tr>
+                <td>${t.cl || '-'}</td><td>${t.us || '-'}</td><td>${t.eu || '-'}</td>
+                <td>${t.uk || '-'}</td><td>${t.br || '-'}</td><td>${t.cm || '-'}</td>
+            </tr>`;
+        });
+        tallasTable += '</tbody></table>';
+    }
+
+    return `<div class="guia-card ${claseExpand}">
+        <div class="guia-header">
+            <div>
+                <div class="guia-title">
+                    ${g.nombre}
+                    <span class="guia-marca ms-2">${g.marca_nombre}</span>
+                </div>
+                <div class="guia-meta">
+                    ${g.tallas ? g.tallas.length : 0} tallas
+                    &middot; ${g.total_productos || 0} producto${g.total_productos !== 1 ? 's' : ''}
+                    &middot; Creada: ${g.fecha_creacion || '-'}
+                </div>
+            </div>
+            <div class="btn-actions">
+                <button class="btn-action toggle-detail" onclick="toggleDetalle(this)" title="Ver/ocultar detalle">
+                    <i class="ri-eye-line"></i>
+                </button>
+                <button class="btn-action btn-copy" onclick="duplicarGuia(${g.id})" title="Duplicar">
+                    <i class="ri-file-copy-line"></i>
+                </button>
+                <button class="btn-action btn-edit" onclick="editarGuia(${g.id})" title="Editar">
+                    <i class="ri-pencil-line"></i>
+                </button>
+                <button class="btn-action btn-delete" onclick="eliminarGuia(${g.id}, '${g.nombre.replace(/'/g, "\\'")}')" title="Eliminar">
+                    <i class="ri-delete-bin-line"></i>
+                </button>
+            </div>
+        </div>
+        <div class="tallas-preview">
+            <div class="tallas-grid">${tallasPreview || '<span style="color:#ccc;">Sin tallas</span>'}</div>
+        </div>
+        <div class="tallas-detail">${tallasTable}</div>
+    </div>`;
+}
+
+function toggleDetalle(btn) {
+    const card = btn.closest('.guia-card');
+    card.classList.toggle('collapsed-tallas');
+    card.classList.toggle('expanded-tallas');
+}
+
+function cambiarVista(tipo) {
+    vistaActual = tipo;
+    document.getElementById('btnVistaCompacta').classList.toggle('active', tipo === 'compacta');
+    document.getElementById('btnVistaDetallada').classList.toggle('active', tipo === 'detallada');
+    renderGuias();
+}
+
+function abrirModalCrear() {
+    document.getElementById('guiaEditId').value = '';
+    document.getElementById('selectMarcaGuia').value = '';
+    document.getElementById('inputNombreGuia').value = '';
+    document.getElementById('tallasInputContainer').innerHTML = '';
+    document.getElementById('modalCrearGuiaTitle').innerHTML = '<i class="ri-add-line me-1"></i> Nueva Guía de Talla';
+    for (let i = 0; i < 5; i++) agregarFilaTalla();
+    new bootstrap.Modal(document.getElementById('modalCrearGuia')).show();
+}
+
+function abrirModalCrearParaMarca(marcaId, marcaNombre) {
+    abrirModalCrear();
+    setTimeout(() => {
+        document.getElementById('selectMarcaGuia').value = marcaId;
+        document.getElementById('inputNombreGuia').focus();
+    }, 300);
+}
+
+function agregarFilaTalla(datos) {
+    const container = document.getElementById('tallasInputContainer');
+    const row = document.createElement('div');
+    row.className = 'talla-input-row';
+    row.innerHTML = `
+        <input type="text" placeholder="-" class="talla-cl" value="${(datos && datos.cl) || ''}">
+        <input type="text" placeholder="-" class="talla-us" value="${(datos && datos.us) || ''}">
+        <input type="text" placeholder="-" class="talla-eu" value="${(datos && datos.eu) || ''}">
+        <input type="text" placeholder="-" class="talla-uk" value="${(datos && datos.uk) || ''}">
+        <input type="text" placeholder="-" class="talla-br" value="${(datos && datos.br) || ''}">
+        <input type="text" placeholder="-" class="talla-cm" value="${(datos && datos.cm) || ''}">
+        <button type="button" class="btn-remove-row" onclick="this.parentElement.remove()"><i class="ri-close-line"></i></button>
+    `;
+    container.appendChild(row);
+    if (!datos) row.querySelector('.talla-cl').focus();
+}
+
+function agregarRangoTallas() {
+    new bootstrap.Modal(document.getElementById('modalRangoRapido')).show();
+}
+
+function aplicarRango() {
+    const desde = parseFloat(document.getElementById('rangoDesde').value);
+    const hasta = parseFloat(document.getElementById('rangoHasta').value);
+    const inc = parseFloat(document.getElementById('rangoIncremento').value);
+    if (isNaN(desde) || isNaN(hasta) || isNaN(inc) || inc <= 0 || desde > hasta) {
+        Swal.fire('Error', 'Rango inválido', 'error');
+        return;
+    }
+    document.getElementById('tallasInputContainer').innerHTML = '';
+    for (let i = desde; i <= hasta; i += inc) {
+        const val = Number.isInteger(i) ? i.toString() : i.toFixed(1);
+        agregarFilaTalla({ cl: val });
+    }
+    bootstrap.Modal.getInstance(document.getElementById('modalRangoRapido')).hide();
+}
+
+function recopilarTallas() {
+    const rows = document.querySelectorAll('#tallasInputContainer .talla-input-row');
+    const tallas = [];
+    rows.forEach(row => {
+        const cl = row.querySelector('.talla-cl').value.trim();
+        const us = row.querySelector('.talla-us').value.trim();
+        const eu = row.querySelector('.talla-eu').value.trim();
+        const uk = row.querySelector('.talla-uk').value.trim();
+        const br = row.querySelector('.talla-br').value.trim();
+        const cm = row.querySelector('.talla-cm').value.trim();
+        if (cl || us || eu || uk || br || cm) {
+            tallas.push({ cl, us, eu, uk, br, cm });
+        }
+    });
+    return tallas;
+}
+
+function guardarGuia() {
+    const id = document.getElementById('guiaEditId').value;
+    const marca = document.getElementById('selectMarcaGuia').value;
+    const nombre = document.getElementById('inputNombreGuia').value.trim();
+    const tallas = recopilarTallas();
+
+    if (!marca) { Swal.fire('Atención', 'Selecciona una marca', 'warning'); return; }
+    if (!nombre) { Swal.fire('Atención', 'Ingresa un nombre para la guía', 'warning'); return; }
+    if (!tallas.length) { Swal.fire('Atención', 'Agrega al menos una talla', 'warning'); return; }
+
+    const btn = document.getElementById('btnGuardarGuia');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
+
+    const formData = new FormData();
+    if (id) formData.append('id', id);
+    formData.append('marca', marca);
+    formData.append('nombre', nombre);
+    formData.append('tallas', JSON.stringify(tallas));
+
+    fetch('/app/crear_guia_talla/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-save-line me-1"></i> Guardar Guía';
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalCrearGuia')).hide();
+            Swal.fire({ icon: 'success', title: id ? 'Guía actualizada' : 'Guía creada', text: data.text || nombre, timer: 1800, showConfirmButton: false });
+            cargarGuias();
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo guardar', 'error');
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-save-line me-1"></i> Guardar Guía';
+        Swal.fire('Error', 'Error de conexión', 'error');
+    });
+}
+
+function editarGuia(id) {
+    fetch(`/app/guia_talla_detalle/${id}/`)
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('guiaEditId').value = id;
+        document.getElementById('selectMarcaGuia').value = data.marca;
+        document.getElementById('inputNombreGuia').value = data.nombre;
+        document.getElementById('modalCrearGuiaTitle').innerHTML = '<i class="ri-pencil-line me-1"></i> Editar Guía de Talla';
+        document.getElementById('tallasInputContainer').innerHTML = '';
+        (data.tallas || []).forEach(t => agregarFilaTalla(t));
+        if (!data.tallas || !data.tallas.length) agregarFilaTalla();
+        new bootstrap.Modal(document.getElementById('modalCrearGuia')).show();
+    })
+    .catch(err => Swal.fire('Error', 'No se pudo cargar la guía', 'error'));
+}
+
+function duplicarGuia(id) {
+    const guia = guiasData.find(g => g.id === id);
+    if (!guia) return;
+    document.getElementById('guiaEditId').value = '';
+    document.getElementById('selectMarcaGuia').value = guia.marca_id;
+    document.getElementById('inputNombreGuia').value = guia.nombre + ' (copia)';
+    document.getElementById('modalCrearGuiaTitle').innerHTML = '<i class="ri-file-copy-line me-1"></i> Duplicar Guía de Talla';
+    document.getElementById('tallasInputContainer').innerHTML = '';
+    (guia.tallas || []).forEach(t => agregarFilaTalla(t));
+    new bootstrap.Modal(document.getElementById('modalCrearGuia')).show();
+}
+
+function eliminarGuia(id, nombre) {
+    Swal.fire({
+        title: 'Eliminar guía',
+        html: `¿Estás seguro de eliminar la guía <b>${nombre}</b>?<br><small class="text-muted">Esta acción no se puede deshacer.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e74c3c',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (result.isConfirmed) {
+            const formData = new FormData();
+            formData.append('id', id);
+            fetch('/app/eliminar_guia_talla/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Eliminada', timer: 1500, showConfirmButton: false });
+                    cargarGuias();
+                } else {
+                    Swal.fire('Error', data.error || 'No se pudo eliminar', 'error');
+                }
+            });
+        }
+    });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>

@@ -3244,11 +3244,12 @@ function confirmarRecepcion() {
         });
     } else {
         // No hay productos desmarcados, recepción normal completa
+        const totalUnidadesOK = productosMarcadosOK.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
         Swal.fire({
             title: '✅ Confirmar Recepción Completa',
             html: `
                 <div class="text-start">
-                    <p>Vas a recepcionar <strong>${productosMarcadosOK.length}</strong> productos en perfecto estado.</p>
+                    <p>Vas a recepcionar <strong>${totalUnidadesOK}</strong> unidades (<strong>${productosMarcadosOK.length}</strong> líneas de producto) en perfecto estado.</p>
                     <div class="alert alert-success">
                         <i class="bi bi-check-circle-fill me-2"></i>
                         Todos los productos están marcados como <strong>OK</strong>

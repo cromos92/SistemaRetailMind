@@ -49,6 +49,10 @@ URL_PERMISO_MAP = {
     '/app/gestion-inventarios/': 'gestion_inventarios',
     '/app/etiquetas-zebra/': 'gestion_etiquetas_zebra',
     '/app/buscar-productos-sucursal/': 'buscar_productos_sucursal',
+    '/app/tarjeta-movimiento/': 'tarjeta_movimiento_producto',
+    '/app/despacho-sucursales/': 'despacho_sucursales',
+    '/app/trazabilidad-producto/': 'trazabilidad_producto',
+    '/app/precios-costos/': 'modificacion_precios_costos',
     
     # Compras
     '/app/verGestionCompras/': 'gestion_compras',

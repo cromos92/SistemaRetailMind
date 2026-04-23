@@ -2634,16 +2634,39 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             suma_items_txt = sum(d['monto_item'] for d in datos_txt['detalle'])
 
             if descuento_efectivo > 0:
-                datos_txt['descuentos_recargos'] = [{
-                    'tpo_mov': 'D',
-                    'glosa_dr': 'Descuento',
-                    'tpo_valor': '$',
-                    'valor_dr': descuento_efectivo,
-                }]
                 total_correcto = suma_items_txt - descuento_efectivo
+
+                if es_boleta:
+                    # Boletas: distribuir descuento proporcionalmente en monto_item
+                    # de cada línea. Acepta no soporta la sección DscRcgGlobal
+                    # (tabla 4) en boletas tipo 39/41 — la sección extra de `~`
+                    # causa que el archivo quede como .tmp y no se imprima.
+                    descuento_acumulado = 0
+                    items = datos_txt['detalle']
+                    for i, item in enumerate(items):
+                        if i < len(items) - 1:
+                            proporcion = item['monto_item'] / suma_items_txt
+                            rebaja = round(descuento_efectivo * proporcion)
+                            descuento_acumulado += rebaja
+                        else:
+                            rebaja = descuento_efectivo - descuento_acumulado
+                        item['monto_item'] = item['monto_item'] - rebaja
+                    print(
+                        f"TXT Boleta: Descuento ${descuento_efectivo:,} distribuido en {len(items)} items. "
+                        f"Items orig: ${suma_items_txt:,}, Total: ${total_correcto:,}"
+                    )
+                else:
+                    # Facturas: usar DscRcgGlobal (tabla 3) normalmente.
+                    datos_txt['descuentos_recargos'] = [{
+                        'tpo_mov': 'D',
+                        'glosa_dr': 'Descuento',
+                        'tpo_valor': '$',
+                        'valor_dr': descuento_efectivo,
+                    }]
+                    print(f"TXT Factura: Descuento ${descuento_efectivo:,} aplicado. Items: ${suma_items_txt:,}, Total: ${total_correcto:,}")
+
                 if total_correcto > 0:
                     datos_txt['totales']['monto_total'] = total_correcto
-                print(f"TXT: Descuento ${descuento_efectivo:,} aplicado. Items: ${suma_items_txt:,}, Total: ${total_correcto:,}")
             elif suma_items_txt > int(total) and int(total) > 0:
                 # Red de seguridad: items > total DTE. Antes generábamos una
                 # línea de descuento fantasma aquí, pero eso ocultaba el bug
@@ -3838,6 +3861,26 @@ def listar_documentos_ventas(request):
 
         from datetime import time as dt_time
         documentos_paginados = []
+
+        # Batch-lookup: tickets vinculados a los DTEs de esta página
+        # para poder mostrar el correlativo del ticket en el modal.
+        ticket_map_by_folio = {}
+        folios_pagina = [dte.numero_documento for dte in dtes_pagina if dte.numero_documento]
+        if folios_pagina:
+            tickets_vinculados = (
+                Ticket.objects
+                .filter(
+                    sucursal_id=sucursal_id,
+                    folio_dte__in=folios_pagina,
+                    estado='PAGADO',
+                )
+                .only('correlativo', 'folio_dte', 'tipo_dte', 'hora', 'fecha')
+            )
+            for tk in tickets_vinculados:
+                key = tk.folio_dte
+                if key not in ticket_map_by_folio:
+                    ticket_map_by_folio[key] = tk
+
         for dte in dtes_pagina:
             productos = []
             subtotal_bruto = 0
@@ -3909,6 +3952,7 @@ def listar_documentos_ventas(request):
                 'tipo': dte.tipo_documento,
                 'tipo_documento': dte.tipo_documento,
                 'numero': dte.numero_documento,
+                'numero_documento': dte.numero_documento,
                 'fecha': dte.fecha_emision,
                 'cliente_nombre': dte.receptor.nombre if dte.receptor else 'Sin nombre',
                 'cliente_rut': dte.receptor.rut if dte.receptor else '',
@@ -3925,12 +3969,19 @@ def listar_documentos_ventas(request):
                 'monto_neto': int(dte.monto_neto or 0),
                 'descuento': descuento_efectivo,
                 'estado': estado_display,
+                'estado_dte': dte.estado_dte,
+                'hora': dte.hora.strftime('%H:%M') if dte.hora else '',
                 'created_at': created_at_dte,
                 'productos': productos,
                 'metodos_pago': metodos_pago,
                 'pagos_raw': metodos_pago_raw,
                 'total_productos': len(productos),
                 'metodos_pago_str': formatear_metodos_pago_str(metodos_pago),
+                'ticket_correlativo': (
+                    ticket_map_by_folio[dte.numero_documento].correlativo
+                    if dte.numero_documento in ticket_map_by_folio else None
+                ),
+                'observaciones': getattr(dte, 'referencias', '') or '',
             })
 
         return JsonResponse({
@@ -4496,6 +4547,18 @@ def detalle_documento_venta(request, documento_id):
         else:  # DTE (Factura/Boleta)
             documento = get_object_or_404(Dte, id=documento_id)
             
+            # Buscar ticket vinculado para mostrar el correlativo
+            ticket_vinculado = (
+                Ticket.objects
+                .filter(
+                    sucursal=documento.sucursal,
+                    folio_dte=documento.numero_documento,
+                    estado='PAGADO',
+                )
+                .only('correlativo', 'hora', 'fecha')
+                .first()
+            )
+            
             # Obtener productos del DTE
             productos = []
             for dp in documento.dte_productos.select_related('productoTalla__producto').all():
@@ -4567,9 +4630,13 @@ def detalle_documento_venta(request, documento_id):
             
             detalle = {
                 'tipo': 'FACTURA' if 'FACTURA' in documento.tipo_documento else 'BOLETA',
+                'tipo_documento': documento.tipo_documento,
                 'numero': documento.numero_documento,
+                'numero_documento': documento.numero_documento,
                 'fecha': documento.fecha_emision,
+                'hora': documento.hora.strftime('%H:%M') if documento.hora else '',
                 'estado': documento.estado_dte,
+                'ticket_correlativo': ticket_vinculado.correlativo if ticket_vinculado else None,
                 'cliente': {
                     'nombre': documento.receptor.nombre if documento.receptor else '',
                     'rut': documento.receptor.rut if documento.receptor else '',
@@ -6057,11 +6124,6 @@ def obtener_detalle_cuadratura_metodos_pago(request):
             if tipo_obj:
                 dte = dtes_por_folio_tipo.get((ticket.folio_dte, tipo_obj))
             if dte is None:
-                # Fallback: match sólo por folio. Útil para tickets
-                # legacy que no declaran `tipo_dte`. Si ese match cae
-                # en un tipo "raro" (ej: NOTA DE DEBITO) y el ticket sí
-                # declara un tipo BOLETA/FACTURA, lo descartamos para no
-                # cruzar registros incompatibles.
                 candidato = dtes_por_folio.get(ticket.folio_dte)
                 if candidato is not None and tipo_obj is None:
                     dte = candidato
@@ -6073,15 +6135,12 @@ def obtener_detalle_cuadratura_metodos_pago(request):
         permisos_item = _permisos_para_dte(dte)
         hora_str = ticket.hora.strftime('%H:%M') if ticket.hora else ''
         ticket_fecha_str = ticket.fecha.strftime('%Y-%m-%d') if ticket.fecha else None
-        # Drift: el ticket vive en una fecha distinta a la del DTE
-        # asociado. Suele ocurrir cuando se editó la fecha del DTE
-        # desde Gestión de Documentos antes de que la propagación al
-        # ticket existiera, o si una sincronización falló. Lo marcamos
-        # explícitamente para que el frontend pueda ofrecer el botón
-        # "Sincronizar fecha al DTE".
         drift_fecha = bool(
             dte and ticket.fecha and ticket.fecha != dte.fecha_emision
         )
+        # Tipo de documento esperado según el ticket (para mostrar en
+        # el frontend incluso cuando no hay DTE vinculado).
+        tipo_dte_ticket = _tipo_dte_objetivo(ticket) or (ticket.tipo_dte or '').upper().strip()
         for pago in ticket.pagos.all():
             metodo = (pago.metodo_pago or '').upper()
             cat = _categoria_metodo_pago(metodo)
@@ -6089,7 +6148,9 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                 'origen': 'TICKET',
                 'pago_id': pago.id,
                 'ticket_id': ticket.id,
+                'ticket_correlativo': ticket.correlativo,
                 'ticket_fecha': ticket_fecha_str,
+                'tipo_dte_ticket': tipo_dte_ticket,
                 'dte_id': dte.id if dte else None,
                 'correlativo': ticket.correlativo,
                 'hora': hora_str,
@@ -6154,7 +6215,9 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                 'origen': 'DTE',
                 'pago_id': pago.id,
                 'ticket_id': None,
+                'ticket_correlativo': None,
                 'ticket_fecha': None,
+                'tipo_dte_ticket': (dte.tipo_documento or '').upper().strip(),
                 'dte_id': dte.id,
                 'correlativo': dte.numero_documento,
                 'hora': hora_str,

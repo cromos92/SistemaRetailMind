@@ -1289,6 +1289,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
                 <td>
                     <span class="fw-medium">#${doc.numero}</span>
+                    ${doc.ticket_correlativo ? `<div class="text-muted" style="font-size:9px;">Tk #${doc.ticket_correlativo}</div>` : ''}
                 </td>
                 <td>${formatearFecha(doc.fecha)}</td>
                 <td style="width:170px;max-width:180px;">
@@ -2050,13 +2051,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Actualizar título del modal
         const tituloElement = document.getElementById('tituloDetalleCompleto');
         if (tituloElement) {
-            // Obtener datos del documento con fallbacks
             const tipo = documento.tipo || 'DOCUMENTO';
             const numero = documento.numero || documento.numero_documento || documento.correlativo || 'S/N';
             const cliente = documento.cliente_nombre || documento.receptor_nombre || 'Sin cliente';
+            const ticketRef = documento.ticket_correlativo ? ` · Ticket #${documento.ticket_correlativo}` : '';
             
-            // Construir título
-            const titulo = `${tipo} #${numero} - ${cliente}`;
+            const titulo = `${tipo} #${numero} - ${cliente}${ticketRef}`;
             
             tituloElement.innerHTML = `
                 <i class="${obtenerIconoTipo(tipo)} me-2"></i> 
@@ -2093,6 +2093,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success && data.documento && data.documento.pagos) {
                     documento.metodos_pago = data.documento.pagos;
                     documento.pagos_raw = data.documento.pagos_raw || data.documento.pagos;
+                    if (data.documento.ticket_correlativo) {
+                        documento.ticket_correlativo = data.documento.ticket_correlativo;
+                    }
+                    if (data.documento.tipo_documento) {
+                        documento.tipo_documento = data.documento.tipo_documento;
+                    }
+                    if (data.documento.hora) {
+                        documento.hora = data.documento.hora;
+                    }
                     cargarDetalleCompleto(documento);
                 }
             })
@@ -2113,6 +2122,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const resumenPagos = (doc.metodos_pago || [])
             .map(p => `${p.metodo_display || p.metodo} ${formatearMoneda(p.monto || 0)}`)
             .join(' &nbsp;·&nbsp; ');
+        const ticketCorrelativoTag = doc.ticket_correlativo
+            ? `<span class="badge bg-info bg-opacity-25 text-info ms-2" style="font-size:9px;vertical-align:middle;">Ticket #${doc.ticket_correlativo}</span>`
+            : '';
+        const horaTag = doc.hora
+            ? `<span style="font-size:9px;opacity:.7;"><i class="ri-time-line me-1"></i>${doc.hora}</span>`
+            : '';
         return `
             <!-- Header compacto -->
             <div style="background: linear-gradient(135deg, #0066FF 0%, #1A1A2E 100%); color: white;" class="px-3 py-2">
@@ -2122,9 +2137,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div>
                             <span class="fw-bold" style="font-size:.95rem;">
                                 ${doc.tipo} <span style="opacity:.6;">#${doc.numero || doc.numero_documento || doc.correlativo || 'S/N'}</span>
+                                ${ticketCorrelativoTag}
                             </span>
                             <div style="font-size:10px;opacity:.7;">
-                                ${formatearFecha(doc.fecha)} · ${doc.cliente_nombre || 'Sin nombre'} · <span class="badge ${obtenerClaseEstado(doc.estado)}" style="font-size:8px;vertical-align:middle;">${doc.estado}</span>
+                                ${formatearFecha(doc.fecha)} ${horaTag ? '· ' + doc.hora : ''} · ${doc.cliente_nombre || 'Sin nombre'} · <span class="badge ${obtenerClaseEstado(doc.estado)}" style="font-size:8px;vertical-align:middle;">${doc.estado}</span>
+                                ${doc.estado_dte && doc.estado_dte !== doc.estado ? ` <span style="opacity:.5;">(${doc.estado_dte})</span>` : ''}
                             </div>
                         </div>
                     </div>
@@ -2140,8 +2157,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="d-flex flex-wrap gap-3">
                     <span><i class="ri-id-card-line me-1"></i>${doc.cliente_rut || '—'}</span>
                     ${(doc.cliente_giro && doc.cliente_giro !== 'No especificado') ? `<span><i class="ri-building-line me-1"></i>${doc.cliente_giro}</span>` : ''}
+                    ${doc.cliente_direccion ? `<span><i class="ri-map-pin-line me-1"></i>${doc.cliente_direccion}${doc.cliente_comuna ? ', ' + doc.cliente_comuna : ''}</span>` : ''}
                     <span><i class="ri-user-star-line me-1"></i>${doc.vendedor_nombre || '—'}</span>
                     <span><i class="ri-bank-card-line me-1"></i>${resumenPagos || doc.metodos_pago_str || '—'}</span>
+                    ${doc.ticket_correlativo ? `<span class="fw-semibold"><i class="ri-ticket-line me-1"></i>Ticket #${doc.ticket_correlativo}</span>` : ''}
                 </div>
             </div>
 

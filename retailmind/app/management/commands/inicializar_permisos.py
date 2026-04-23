@@ -173,6 +173,10 @@ class Command(BaseCommand):
             ('gestion_inventarios', 'Gesti?n de Inventarios', 'gestion_inventarios', None, 'ri-clipboard-line', 5),
             ('gestion_etiquetas_zebra', 'Impresi?n Etiquetas Zebra', 'gestion_etiquetas_zebra', None, 'ri-printer-line', 6),
             ('buscar_productos_sucursal', 'Buscar Producto Sucursal', 'buscar_productos_sucursal', None, 'ri-search-line', 7),
+            ('tarjeta_movimiento_producto', 'Tarjeta Movimiento Producto', 'tarjeta_movimiento_producto', None, 'ri-file-list-3-line', 8),
+            ('despacho_sucursales', 'Despacho a Sucursales', 'despacho_todas_sucursales', None, 'ri-truck-line', 9),
+            ('trazabilidad_producto', 'Trazabilidad Completa', 'trazabilidad_producto', None, 'ri-route-line', 10),
+            ('modificacion_precios_costos', 'Modificaci?n Precios y Costos', 'modificacion_precios_costos', None, 'ri-money-dollar-circle-line', 11),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -419,7 +423,6 @@ class Command(BaseCommand):
                     'puede_editar': True,
                     'puede_eliminar': True,
                     'puede_exportar': True,
-                    'puede_aprobar': True,
                 }
             )
         
@@ -444,6 +447,8 @@ class Command(BaseCommand):
             # Existencias
             'gestion_producto', 'edicion_rapida_precios', 'revisar_cambios_precios', 'movimientos_producto',
             'gestion_inventarios', 'gestion_etiquetas_zebra', 'buscar_productos_sucursal',
+            'tarjeta_movimiento_producto', 'despacho_sucursales', 'trazabilidad_producto',
+            'modificacion_precios_costos',
             # Compras
             'gestion_compras', 'gestion_dte_compras', 'prediccion_compras',
             # Ecommerce
@@ -472,7 +477,6 @@ class Command(BaseCommand):
                     'puede_editar': True,
                     'puede_eliminar': False,  # No puede eliminar
                     'puede_exportar': True,
-                    'puede_aprobar': True,
                 }
             )
         
@@ -502,7 +506,6 @@ class Command(BaseCommand):
             # Determinar permisos seg?n la opci?n
             puede_crear = opcion.codigo in ['ticket_venta', 'pos_dashboard', 'crear_requerimiento']
             puede_editar = opcion.codigo in ['cuadratura_caja']
-            puede_aprobar = False
             
             PermisoRol.objects.get_or_create(
                 rol='cajero',
@@ -513,7 +516,6 @@ class Command(BaseCommand):
                     'puede_editar': puede_editar,
                     'puede_eliminar': False,
                     'puede_exportar': False,
-                    'puede_aprobar': puede_aprobar,
                 }
             )
         
@@ -551,7 +553,6 @@ class Command(BaseCommand):
                     'puede_editar': False,
                     'puede_eliminar': False,
                     'puede_exportar': False,
-                    'puede_aprobar': False,
                 }
             )
         

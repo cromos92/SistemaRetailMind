@@ -12121,12 +12121,30 @@ def api_dte_trazabilidad(request, dte_id):
             'observaciones': (m.observaciones or '')[:200],
         })
 
+    # --- Historial de cambios de folio ---
+    from .models.dte import HistorialCambioFolioDte
+    cambios_folio = []
+    historial_qs = HistorialCambioFolioDte.objects.filter(
+        dte_id__in=dte_ids_mov
+    ).order_by('-fecha_cambio')[:20]
+    for h in historial_qs:
+        cambios_folio.append({
+            'dte_id': h.dte_id,
+            'folio_anterior': h.folio_anterior,
+            'folio_nuevo': h.folio_nuevo,
+            'motivo': h.motivo,
+            'usuario': h.usuario_nombre or '',
+            'fecha': h.fecha_cambio.strftime('%Y-%m-%d %H:%M') if h.fecha_cambio else None,
+            'refs_actualizadas': len(h.referencias_actualizadas or []),
+        })
+
     return JsonResponse({
         'success': True,
         'dte': dte_info,
         'padre': {'compras': padre_compras},
         'hijos': hijos,
         'movimientos': {'por_sucursal': list(por_sucursal.values())},
+        'cambios_folio': cambios_folio,
     })
 
 
@@ -13184,6 +13202,68 @@ def guias_talla_list(request):
     data = [{'id': g.id, 'text': str(g)} for g in guias]
     print(f"📋 Datos a enviar: {data}")
     return JsonResponse(data, safe=False)
+
+
+@login_required
+def ver_guias_talla(request):
+    """Vista para gestionar todas las guías de talla del sistema."""
+    try:
+        marca_attr = Productos_Atributos.objects.get(nombre__iexact='Marca')
+    except Productos_Atributos.DoesNotExist:
+        marca_attr = None
+    return render(request, 'vistas/modulo_existencias/gestion_guias_talla.html', {
+        'id_atributo_marca': marca_attr.id if marca_attr else 0,
+    })
+
+
+@login_required
+def api_guias_talla_completas(request):
+    """Retorna todas las guías de talla con items, marca y conteo de productos."""
+    marca_id = request.GET.get('marca')
+    buscar = request.GET.get('q', '').strip()
+
+    qs = GuiaTalla.objects.select_related('marca').prefetch_related('items').annotate(
+        total_productos=Count('productos_principales')
+    ).order_by('marca__valor', 'nombre')
+
+    if marca_id and str(marca_id).isdigit():
+        qs = qs.filter(marca_id=marca_id)
+
+    if buscar:
+        qs = qs.filter(Q(nombre__icontains=buscar) | Q(marca__valor__icontains=buscar))
+
+    data = []
+    for g in qs:
+        items = list(g.items.order_by('orden').values('cl', 'us', 'eu', 'uk', 'br', 'cm'))
+        data.append({
+            'id': g.id,
+            'nombre': g.nombre,
+            'marca_id': g.marca_id,
+            'marca_nombre': g.marca.valor if g.marca else '',
+            'total_productos': g.total_productos,
+            'fecha_creacion': g.fecha_creacion.strftime('%d/%m/%Y') if g.fecha_creacion else '',
+            'tallas': items,
+            'resumen_tallas': ', '.join(
+                filter(None, [it.get('cl') or it.get('us') or it.get('eu') for it in items])
+            ),
+        })
+
+    marcas_con_guias = set(GuiaTalla.objects.values_list('marca_id', flat=True))
+    marca_attr = Productos_Atributos.objects.filter(nombre__iexact='Marca').first()
+    marcas_sin_guia = []
+    if marca_attr:
+        todas_marcas = AtributoOpcion.objects.filter(atributo=marca_attr).order_by('valor')
+        for m in todas_marcas:
+            if m.id not in marcas_con_guias:
+                tiene_productos = Producto.objects.filter(atributo1=m).exists()
+                if tiene_productos:
+                    marcas_sin_guia.append({'id': m.id, 'nombre': m.valor})
+
+    return JsonResponse({
+        'guias': data,
+        'marcas_sin_guia': marcas_sin_guia,
+        'total': len(data),
+    })
 
 
 # =====================================================================
@@ -20070,11 +20150,28 @@ def emitir_dte_concepto(request):
             )
             dias_credito_final = dias_credito if es_credito else 0
 
-            referencias_texto = f"DTE por concepto (sin mercadería)"
-            if observaciones:
-                referencias_texto += f". {observaciones}"
-
             es_nc = tipo_documento == 'NOTA DE CREDITO'
+
+            if es_nc and referencia:
+                referencias_json = json.dumps([{
+                    'tipo_documento': int(referencia.get('tipo_documento', 33)),
+                    'folio': str(referencia.get('folio', '')),
+                    'fecha': str(referencia.get('fecha', '')),
+                    'razon': str(referencia.get('razon', '1')),
+                }])
+            else:
+                referencias_json = f"DTE por concepto (sin mercadería)"
+                if observaciones:
+                    referencias_json += f". {observaciones}"
+
+            doc_afectado = None
+            if es_nc and referencia:
+                folio_ref = str(referencia.get('folio', ''))
+                if folio_ref:
+                    doc_afectado = Dte.objects.filter(
+                        numero_documento=folio_ref,
+                        emisor=emisor,
+                    ).order_by('-fecha_emision').first()
 
             dte = Dte.objects.create(
                 emisor=emisor,
@@ -20092,9 +20189,10 @@ def emitir_dte_concepto(request):
                 bultos=0,
                 unidades_productos=0,
                 tipo_transaccion='VENTA',
-                referencias=referencias_texto,
+                referencias=referencias_json,
                 sucursal=sucursal,
                 es_nota_credito=es_nc,
+                documento_afectado=doc_afectado,
             )
 
             for item in detalle_conceptos:
@@ -23474,6 +23572,165 @@ def anular_factura_dte(request):
     response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
     return response
+
+@login_required
+@require_POST
+def editar_folio_dte(request):
+    """
+    Edita el folio (numero_documento) de un DTE y actualiza en cascada:
+      - Movimientos de stock (observaciones)
+      - Referencias JSON en DTEs que apuntan a este documento
+      - Historial de cambios (HistorialCambioFolioDte)
+    """
+    try:
+        body = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    dte_id = body.get('dte_id')
+    nuevo_folio = body.get('nuevo_folio')
+    motivo = (body.get('motivo') or '').strip()
+
+    if not dte_id or nuevo_folio is None:
+        return JsonResponse({'success': False, 'error': 'Se requiere dte_id y nuevo_folio'}, status=400)
+
+    try:
+        nuevo_folio = int(nuevo_folio)
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': 'El folio debe ser un número entero'}, status=400)
+
+    if nuevo_folio <= 0:
+        return JsonResponse({'success': False, 'error': 'El folio debe ser mayor a 0'}, status=400)
+
+    if not motivo:
+        return JsonResponse({'success': False, 'error': 'Debe indicar un motivo para el cambio de folio'}, status=400)
+
+    es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+    if not es_admin:
+        return JsonResponse({'success': False, 'error': 'Solo administradores pueden editar folios'}, status=403)
+
+    try:
+        dte = Dte.objects.select_related('emisor', 'sucursal').get(id=dte_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado'}, status=404)
+
+    empresa_actual_id = request.session.get('idEmpresaActual')
+    if dte.emisor_id != empresa_actual_id:
+        return JsonResponse({'success': False, 'error': 'Sin permiso sobre este DTE'}, status=403)
+
+    folio_anterior = dte.numero_documento
+    if folio_anterior == nuevo_folio:
+        return JsonResponse({'success': False, 'error': 'El nuevo folio es igual al actual'}, status=400)
+
+    duplicado = Dte.objects.filter(
+        emisor=dte.emisor,
+        tipo_documento=dte.tipo_documento,
+        numero_documento=nuevo_folio,
+        sucursal=dte.sucursal,
+    ).exclude(id=dte.id).exists()
+    if duplicado:
+        return JsonResponse({
+            'success': False,
+            'error': f'Ya existe un {dte.tipo_documento} con folio {nuevo_folio} en esta sucursal'
+        }, status=400)
+
+    referencias_actualizadas = []
+
+    with transaction.atomic():
+        dte.numero_documento = nuevo_folio
+        dte.save(update_fields=['numero_documento'])
+
+        # 1) Actualizar observaciones en movimientos de stock
+        movs_actualizados = Movimientos_Producto.objects.filter(dte=dte).exclude(
+            observaciones=''
+        ).exclude(observaciones__isnull=True)
+        for mov in movs_actualizados:
+            old_obs = mov.observaciones or ''
+            new_obs = old_obs.replace(f'#{folio_anterior}', f'#{nuevo_folio}')
+            new_obs = new_obs.replace(str(folio_anterior), str(nuevo_folio))
+            if new_obs != old_obs:
+                mov.observaciones = new_obs
+                mov.save(update_fields=['observaciones'])
+
+        # 2) Actualizar referencias JSON en DTEs que apuntan a este folio
+        #    (ej: el DTE padre guarda en sus NC hijas un JSON con el folio)
+        if dte.es_nota_credito and dte.documento_afectado_id:
+            pass
+
+        dtes_con_refs = Dte.objects.filter(
+            emisor=dte.emisor,
+            referencias__isnull=False,
+        ).exclude(referencias='')
+
+        for otro_dte in dtes_con_refs:
+            texto_original = otro_dte.referencias or ''
+            try:
+                refs_list = json.loads(texto_original)
+                if not isinstance(refs_list, list):
+                    continue
+            except (ValueError, TypeError):
+                continue
+
+            cambio = False
+            for ref in refs_list:
+                if not isinstance(ref, dict):
+                    continue
+                ref_folio = ref.get('folio')
+                if str(ref_folio) == str(folio_anterior):
+                    ref['folio'] = str(nuevo_folio)
+                    cambio = True
+
+            if cambio:
+                otro_dte.referencias = json.dumps(refs_list, ensure_ascii=False)
+                otro_dte.save(update_fields=['referencias'])
+                referencias_actualizadas.append({
+                    'dte_id': otro_dte.id,
+                    'tipo': otro_dte.tipo_documento,
+                    'numero': otro_dte.numero_documento,
+                })
+
+        # 3) Actualizar motivo_nc en DTEs hijos si mencionan el folio
+        hijos = Dte.objects.filter(documento_afectado=dte).exclude(
+            motivo_nc__isnull=True
+        ).exclude(motivo_nc='')
+        for hijo in hijos:
+            old_motivo = hijo.motivo_nc or ''
+            new_motivo = old_motivo.replace(f'#{folio_anterior}', f'#{nuevo_folio}')
+            new_motivo = new_motivo.replace(str(folio_anterior), str(nuevo_folio))
+            if new_motivo != old_motivo:
+                hijo.motivo_nc = new_motivo
+                hijo.save(update_fields=['motivo_nc'])
+
+        # 4) Crear registro de auditoría
+        from .models.dte import HistorialCambioFolioDte
+        ip_cliente = (
+            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR')
+        )
+        HistorialCambioFolioDte.objects.create(
+            dte=dte,
+            folio_anterior=folio_anterior,
+            folio_nuevo=nuevo_folio,
+            motivo=motivo,
+            usuario=request.user,
+            usuario_nombre=request.user.get_full_name() or request.user.username,
+            referencias_actualizadas=referencias_actualizadas,
+            ip_cliente=ip_cliente,
+        )
+
+    logger.info(
+        "[FOLIO] Usuario %s cambió folio DTE #%s: %s → %s (motivo: %s)",
+        request.user.username, dte.id, folio_anterior, nuevo_folio, motivo
+    )
+
+    return JsonResponse({
+        'success': True,
+        'folio_anterior': folio_anterior,
+        'folio_nuevo': nuevo_folio,
+        'referencias_actualizadas': len(referencias_actualizadas),
+        'message': f'Folio actualizado de {folio_anterior} a {nuevo_folio}'
+    })
+
 
 @login_required
 @require_GET

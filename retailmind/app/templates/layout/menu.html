@@ -2263,6 +2263,39 @@
                                         </a>
                                     </li>
                                     {% endif %}
+                                    {% if user|puede_ver_opcion:'tarjeta_movimiento_producto' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'tarjeta_movimiento_producto' %}" class="nav-link" data-key="t-tarjeta-movimiento">
+                                            <i class="ri-file-list-3-line"></i> Tarjeta Movimiento Producto
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'despacho_sucursales' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'despacho_todas_sucursales' %}" class="nav-link" data-key="t-despacho-sucursales">
+                                            <i class="ri-truck-line"></i> Despacho a Sucursales
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'trazabilidad_producto' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'trazabilidad_producto' %}" class="nav-link" data-key="t-trazabilidad-producto">
+                                            <i class="ri-route-line"></i> Trazabilidad Completa
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'modificacion_precios_costos' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'modificacion_precios_costos' %}" class="nav-link" data-key="t-mod-precios-costos">
+                                            <i class="ri-money-dollar-circle-line"></i> Modificación Precios y Costos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'ver_guias_talla' %}" class="nav-link" data-key="t-guias-talla">
+                                            <i class="ri-ruler-line"></i> Guías de Talla
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>

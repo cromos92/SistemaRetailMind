@@ -231,6 +231,25 @@ from .views_modulo_cotizaciones import (
     # Despacho diferido
     asignar_sku_pendiente,
 )
+from .views_modulo_existencias_nuevo import (
+    # Tarjeta de Movimiento por Producto
+    tarjeta_movimiento_producto,
+    api_tarjeta_movimiento,
+    # Despacho a Todas Sucursales
+    despacho_todas_sucursales,
+    api_obtener_sucursales_despacho,
+    api_productos_disponibles_despacho,
+    api_pendientes_despacho_sucursal,
+    api_crear_despacho_masivo,
+    # Trazabilidad Completa
+    trazabilidad_producto,
+    api_trazabilidad_producto,
+    # Modificación de Precios y Costos
+    modificacion_precios_costos,
+    api_buscar_productos_precios,
+    api_modificar_precio_costo,
+    api_modificar_precios_masivo,
+)
 from .views_edicion_productos import (
     # Edición de productos
     obtener_producto_edicion,
@@ -453,6 +472,8 @@ urlpatterns = [
      path('categorias_existentes/', views.categorias_existentes, name='categorias_existentes'),
      path('categoria_guardar/', views.categoria_guardar, name='categoria_guardar'),
      path('guias_talla/', views.guias_talla_list, name='guias_talla'),
+     path('ver_guias_talla/', views.ver_guias_talla, name='ver_guias_talla'),
+     path('api/guias-talla-completas/', views.api_guias_talla_completas, name='api_guias_talla_completas'),
      path('api/asignar-guia-talla-producto/', views.asignar_guia_talla_producto, name='asignar_guia_talla_producto'),
      path('crear_guia_talla/', views.crear_guia_talla, name='crear_guia_talla'),
      path('guia_talla_detalle/<int:id>/', views.guia_talla_detalle, name='guia_talla_detalle'),
@@ -729,6 +750,7 @@ urlpatterns = [
     # === Gestión de DTEs ===
     path('documentos/gestion-dte/', views.gestion_dte, name='gestion_dte'),
     path('documentos/anular-factura/', views.anular_factura_dte, name='anular_factura_dte'),
+    path('documentos/editar-folio-dte/', views.editar_folio_dte, name='editar_folio_dte'),
     path('documentos/api/cargar-dte-ventas/', views.cargar_dte_ventas, name='cargar_dte_ventas'),
     path('documentos/api/dte/<int:dte_id>/', views.detalle_dte, name='detalle_dte'),
     path('detalle_dte/<int:dte_id>/', views.vista_detalle_dte, name='vista_detalle_dte'),  # Vista HTML
@@ -977,6 +999,28 @@ urlpatterns = [
     path('documentos/importar-txt-acepta/', views_modulo_documentos.importar_txt_acepta_api, name='importar_txt_acepta_api'),
 
     # ========== MÓDULO DE REPORTE DE EXISTENCIAS ==========
+
+    # ========== TARJETA DE MOVIMIENTO POR PRODUCTO ==========
+    path('tarjeta-movimiento/', tarjeta_movimiento_producto, name='tarjeta_movimiento_producto'),
+    path('api/tarjeta-movimiento/', api_tarjeta_movimiento, name='api_tarjeta_movimiento'),
+
+    # ========== DESPACHO A TODAS SUCURSALES ==========
+    path('despacho-sucursales/', despacho_todas_sucursales, name='despacho_todas_sucursales'),
+    path('api/despacho/sucursales/', api_obtener_sucursales_despacho, name='api_obtener_sucursales_despacho'),
+    path('api/despacho/productos/', api_productos_disponibles_despacho, name='api_productos_disponibles_despacho'),
+    path('api/despacho/pendientes/', api_pendientes_despacho_sucursal, name='api_pendientes_despacho_sucursal'),
+    path('api/despacho/crear-masivo/', api_crear_despacho_masivo, name='api_crear_despacho_masivo'),
+
+    # ========== TRAZABILIDAD COMPLETA DE PRODUCTO ==========
+    path('trazabilidad-producto/', trazabilidad_producto, name='trazabilidad_producto'),
+    path('api/trazabilidad-producto/', api_trazabilidad_producto, name='api_trazabilidad_producto'),
+
+    # ========== MODIFICACIÓN DE PRECIOS Y COSTOS ==========
+    path('precios-costos/', modificacion_precios_costos, name='modificacion_precios_costos'),
+    path('api/precios-costos/buscar/', api_buscar_productos_precios, name='api_buscar_productos_precios'),
+    path('api/precios-costos/modificar/', api_modificar_precio_costo, name='api_modificar_precio_costo'),
+    path('api/precios-costos/modificar-masivo/', api_modificar_precios_masivo, name='api_modificar_precios_masivo'),
+
     path('reportes/existencias/', views.ver_reporte_existencias, name='ver_reporte_existencias'),
     path('api/obtener-existencias/', views.obtener_existencias_reporte, name='obtener_existencias_reporte'),
     path('api/exportar-existencias-excel/', views.exportar_existencias_excel, name='exportar_existencias_excel'),

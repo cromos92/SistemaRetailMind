@@ -84,6 +84,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'app.middleware_session_timeout.SessionTimeoutMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'app.middleware_permisos.PermisosMenuMiddleware',  # Verificación de permisos de menú
@@ -411,12 +412,15 @@ if not _logs_dir.exists():
 
 # Configuración de seguridad / sesiones
 PASSWORD_RESET_TIMEOUT = 86400  # 24 horas
-SESSION_COOKIE_AGE = 604800     # 7 días (dev-friendly; ajustar en producción)
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-# SESSION_SAVE_EVERY_REQUEST=True genera un UPDATE a django_session en cada
-# AJAX del POS. Con POS táctil eso son cientos de UPDATES innecesarios por
-# turno. El SESSION_COOKIE_AGE largo se encarga del refresh automático cuando
-# se accede a la sesión (Django lo renueva al tocar request.session).
+SESSION_COOKIE_AGE = int(os.environ.get('SESSION_COOKIE_AGE', 28800))  # 8 h (un turno)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = os.environ.get(
+    'SESSION_EXPIRE_AT_BROWSER_CLOSE', 'True'
+).lower() == 'true'
+# Inactividad máxima (segundos). El middleware SessionTimeoutMiddleware
+# cierra la sesión si el usuario no interactúa en este periodo.
+SESSION_INACTIVITY_TIMEOUT = int(os.environ.get('SESSION_INACTIVITY_TIMEOUT', 3600))
+# Throttle de escritura del timestamp de actividad (evita UPDATE en cada AJAX del POS).
+SESSION_ACTIVITY_THROTTLE = int(os.environ.get('SESSION_ACTIVITY_THROTTLE', 300))
 SESSION_SAVE_EVERY_REQUEST = False
 
 # ========== CACHES ==========

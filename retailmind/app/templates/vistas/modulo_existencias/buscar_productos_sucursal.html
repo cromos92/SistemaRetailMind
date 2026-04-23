@@ -9,6 +9,17 @@
    NEXO POS — Búsqueda de Productos (optimizado 15")
    Resoluciones objetivo: 1024×768 · 1280×800 · 1366×768
    ============================================================ */
+
+/* Prevent horizontal scroll at every level */
+html, body,
+#layout-wrapper,
+.main-content,
+.page-content,
+.container-fluid {
+    overflow-x: hidden !important;
+    max-width: 100vw;
+}
+
 :root {
     --np-primary:       #0066FF;
     --np-primary-dk:    #0052CC;
@@ -48,6 +59,7 @@
     flex-direction: column;
     gap: 0.5rem;
     min-height: calc(100vh - 80px);
+    overflow-x: hidden;
 }
 
 /* ===== Header compacto ===== */
@@ -233,6 +245,14 @@ kbd.sc {
     color: #fff !important;
 }
 .select2-container { width: 100% !important; }
+.select2-container .select2-dropdown {
+    max-width: calc(100vw - 2rem);
+    box-sizing: border-box;
+}
+.select2-container--open .select2-dropdown {
+    right: auto;
+    left: 0;
+}
 
 /* ===== Panel de resultados ===== */
 .pos-results-panel {
@@ -1054,7 +1074,7 @@ $(document).ready(function () {
         }
         const cfg = {
             allowClear: true,
-            width: '100%',
+            width: 'resolve',
             language: {
                 noResults: () => 'Sin resultados',
                 searching: () => 'Buscando...'
@@ -1065,8 +1085,18 @@ $(document).ready(function () {
         $('#color_select').select2({ ...cfg, placeholder: 'Todos los colores' });
         $('#genero_select').select2({ ...cfg, placeholder: 'Todos los géneros' });
         $('#categoria_select').select2({ ...cfg, placeholder: 'Todas las categorías' });
+
+        $('.select2-container').css('width', '100%');
     }
-    initSelect2();
+
+    /* Fix: prevent any horizontal scroll caused by Select2 dropdowns */
+    $(document).on('select2:open', function () {
+        setTimeout(function () {
+            document.documentElement.scrollLeft = 0;
+            document.body.scrollLeft = 0;
+            window.scrollTo(0, window.scrollY);
+        }, 0);
+    });
 
     /* ---------- Toggle filtros avanzados ---------- */
     $('#btnToggleFiltros').on('click', function () {

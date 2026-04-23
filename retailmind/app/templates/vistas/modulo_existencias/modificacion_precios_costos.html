@@ -1,0 +1,329 @@
+{% load static %}
+{% load permisos_tags %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="ri-price-tag-3-line text-primary me-2"></i>Modificación de Precios y Costos</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item active">Modificación Precios/Costos</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+                <!-- Panel Izquierdo: Búsqueda -->
+                <div class="col-lg-7">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="ri-search-line me-2"></i>Buscar Productos</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group mb-3">
+                                <input type="text" id="inputBuscar" class="form-control" placeholder="Buscar por SKU, artículo o descripción (mín 2 caracteres)...">
+                                <button class="btn btn-primary" onclick="buscarProductos()"><i class="ri-search-line"></i> Buscar</button>
+                            </div>
+                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                <table class="table table-hover table-sm align-middle">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Artículo</th>
+                                            <th>Marca</th>
+                                            <th class="text-end">Costo</th>
+                                            <th class="text-end">Sobreprecio</th>
+                                            <th class="text-end">Precio Venta</th>
+                                            <th class="text-end">Margen %</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyProductos">
+                                        <tr><td colspan="7" class="text-center text-muted">Busque productos para modificar</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edición Masiva -->
+                    <div class="card" id="edicionMasivaCard" style="display:none;">
+                        <div class="card-header bg-warning bg-opacity-10">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0"><i class="ri-edit-2-line me-2 text-warning"></i>Edición Masiva</h5>
+                                <span class="badge bg-warning" id="badgeMasivos">0 productos</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-sm">
+                                    <thead class="table-light"><tr>
+                                        <th>Artículo</th><th class="text-end">Costo</th><th class="text-end">Sobreprecio</th><th class="text-end">Precio</th><th></th>
+                                    </tr></thead>
+                                    <tbody id="tbodyMasivos"></tbody>
+                                </table>
+                            </div>
+                            <div class="mb-3 mt-3">
+                                <label class="form-label">Motivo del cambio masivo</label>
+                                <input type="text" id="inputMotivoMasivo" class="form-control" placeholder="Ej: Ajuste de temporada, cambio de proveedor...">
+                            </div>
+                            <button class="btn btn-warning w-100" onclick="aplicarCambiosMasivos()">
+                                <i class="ri-check-double-line me-1"></i> Aplicar Cambios Masivos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel Derecho: Editor Individual -->
+                <div class="col-lg-5">
+                    <div class="card border-primary" id="editorCard" style="display:none;">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0 text-white"><i class="ri-edit-line me-2"></i>Editar Precios y Costos</h5>
+                        </div>
+                        <div class="card-body">
+                            <input type="hidden" id="editProductoId">
+                            <div class="mb-3">
+                                <h6 class="fw-bold" id="editArticulo">-</h6>
+                                <small class="text-muted" id="editMarca">-</small>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Costo Actual</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" id="editCostoActual" class="form-control" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-primary">Nuevo Costo</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" id="editCostoNuevo" class="form-control" oninput="recalcularMargen()">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Sobreprecio Actual</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" id="editSobreprecioActual" class="form-control" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-primary">Nuevo Sobreprecio</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" id="editSobreprecioNuevo" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Precio Venta Actual</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" id="editPrecioActual" class="form-control" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-primary">Nuevo Precio Venta</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" id="editPrecioNuevo" class="form-control" oninput="recalcularMargen()">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Margen calculado -->
+                            <div class="mt-3 p-3 bg-light rounded">
+                                <div class="d-flex justify-content-between">
+                                    <span>Margen actual:</span>
+                                    <strong id="margenActual">0%</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Margen nuevo:</span>
+                                    <strong class="text-primary" id="margenNuevo">0%</strong>
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <label class="form-label">Motivo del cambio</label>
+                                <input type="text" id="editMotivo" class="form-control" placeholder="Razón del cambio de precios...">
+                            </div>
+
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" id="checkTodasSucursales">
+                                <label class="form-check-label" for="checkTodasSucursales">
+                                    Aplicar a todas las sucursales con el mismo artículo
+                                </label>
+                            </div>
+
+                            <!-- Tallas del producto -->
+                            <div class="mt-3" id="tallasContainer" style="display:none;">
+                                <h6>Variaciones (SKUs)</h6>
+                                <div id="tallasLista"></div>
+                            </div>
+
+                            <div class="d-flex gap-2 mt-3">
+                                <button class="btn btn-primary flex-grow-1" onclick="guardarCambios()">
+                                    <i class="ri-save-line me-1"></i> Guardar Cambios
+                                </button>
+                                <button class="btn btn-outline-warning" onclick="agregarAMasivo()">
+                                    <i class="ri-add-line me-1"></i> Agregar a Masivo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+const CSRF_TOKEN = '{{ csrf_token }}';
+let productosMasivos = [];
+
+async function buscarProductos() {
+    const q = document.getElementById('inputBuscar').value.trim();
+    if (q.length < 2) { alert('Ingrese al menos 2 caracteres'); return; }
+    const resp = await fetch(`/app/api/precios-costos/buscar/?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    const tbody = document.getElementById('tbodyProductos');
+    if (!data.success || !data.productos.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Sin resultados</td></tr>';
+        return;
+    }
+    tbody.innerHTML = data.productos.map(p => {
+        const margenClass = p.margen_porcentaje >= 50 ? 'text-success' : p.margen_porcentaje >= 30 ? 'text-info' : 'text-danger';
+        return `<tr style="cursor:pointer;" onclick='seleccionarProducto(${JSON.stringify(p)})'>
+            <td><strong>${p.articulo}</strong><br><small class="text-muted">${p.descripcion}</small></td>
+            <td>${p.marca}</td>
+            <td class="text-end">$${Number(p.costo).toLocaleString('es-CL')}</td>
+            <td class="text-end">$${Number(p.sobreprecio).toLocaleString('es-CL')}</td>
+            <td class="text-end fw-bold">$${Number(p.precio_venta).toLocaleString('es-CL')}</td>
+            <td class="text-end ${margenClass}">${p.margen_porcentaje}%</td>
+            <td><button class="btn btn-sm btn-primary"><i class="ri-edit-line"></i></button></td>
+        </tr>`;
+    }).join('');
+}
+
+function seleccionarProducto(p) {
+    document.getElementById('editorCard').style.display = '';
+    document.getElementById('editProductoId').value = p.id;
+    document.getElementById('editArticulo').textContent = p.articulo;
+    document.getElementById('editMarca').textContent = `${p.marca} | ${p.categoria}`;
+    document.getElementById('editCostoActual').value = p.costo;
+    document.getElementById('editCostoNuevo').value = p.costo;
+    document.getElementById('editSobreprecioActual').value = p.sobreprecio;
+    document.getElementById('editSobreprecioNuevo').value = p.sobreprecio;
+    document.getElementById('editPrecioActual').value = p.precio_venta;
+    document.getElementById('editPrecioNuevo').value = p.precio_venta;
+    if (p.costo > 0) {
+        document.getElementById('margenActual').textContent = p.margen_porcentaje + '%';
+    }
+    recalcularMargen();
+    if (p.tallas && p.tallas.length) {
+        document.getElementById('tallasContainer').style.display = '';
+        document.getElementById('tallasLista').innerHTML = p.tallas.map(t =>
+            `<span class="badge bg-light text-dark border me-1 mb-1">SKU: ${t.sku} | Talla: ${t.talla} | Stock: ${t.stock}</span>`
+        ).join('');
+    } else {
+        document.getElementById('tallasContainer').style.display = 'none';
+    }
+}
+
+function recalcularMargen() {
+    const costo = parseInt(document.getElementById('editCostoNuevo').value) || 0;
+    const precio = parseInt(document.getElementById('editPrecioNuevo').value) || 0;
+    const margen = costo > 0 ? ((precio - costo) / costo * 100).toFixed(1) : 0;
+    document.getElementById('margenNuevo').textContent = margen + '%';
+}
+
+async function guardarCambios() {
+    const id = document.getElementById('editProductoId').value;
+    if (!id) return;
+    const motivo = document.getElementById('editMotivo').value;
+    if (!motivo) { alert('Ingrese un motivo para el cambio'); return; }
+    const payload = {
+        producto_id: parseInt(id),
+        costo: parseInt(document.getElementById('editCostoNuevo').value),
+        sobreprecio: parseInt(document.getElementById('editSobreprecioNuevo').value),
+        precio_venta: parseInt(document.getElementById('editPrecioNuevo').value),
+        motivo: motivo,
+        aplicar_todas_sucursales: document.getElementById('checkTodasSucursales').checked,
+    };
+    const resp = await fetch('/app/api/precios-costos/modificar/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+        body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (data.success) {
+        alert(data.mensaje + '\n' + (data.cambios || []).join('\n'));
+        buscarProductos();
+    } else {
+        alert('Error: ' + data.error);
+    }
+}
+
+function agregarAMasivo() {
+    const id = parseInt(document.getElementById('editProductoId').value);
+    if (!id) return;
+    if (productosMasivos.find(p => p.producto_id === id)) { alert('Ya está en la lista masiva'); return; }
+    productosMasivos.push({
+        producto_id: id,
+        articulo: document.getElementById('editArticulo').textContent,
+        costo: parseInt(document.getElementById('editCostoNuevo').value),
+        sobreprecio: parseInt(document.getElementById('editSobreprecioNuevo').value),
+        precio_venta: parseInt(document.getElementById('editPrecioNuevo').value),
+    });
+    renderMasivos();
+}
+
+function renderMasivos() {
+    const card = document.getElementById('edicionMasivaCard');
+    if (!productosMasivos.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    document.getElementById('badgeMasivos').textContent = productosMasivos.length + ' productos';
+    const tbody = document.getElementById('tbodyMasivos');
+    tbody.innerHTML = productosMasivos.map((p, idx) => `<tr>
+        <td>${p.articulo}</td>
+        <td class="text-end"><input type="number" class="form-control form-control-sm" value="${p.costo}" onchange="productosMasivos[${idx}].costo=parseInt(this.value)" style="width:80px;"></td>
+        <td class="text-end"><input type="number" class="form-control form-control-sm" value="${p.sobreprecio}" onchange="productosMasivos[${idx}].sobreprecio=parseInt(this.value)" style="width:80px;"></td>
+        <td class="text-end"><input type="number" class="form-control form-control-sm" value="${p.precio_venta}" onchange="productosMasivos[${idx}].precio_venta=parseInt(this.value)" style="width:80px;"></td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="productosMasivos.splice(${idx},1); renderMasivos();"><i class="ri-close-line"></i></button></td>
+    </tr>`).join('');
+}
+
+async function aplicarCambiosMasivos() {
+    if (!productosMasivos.length) return;
+    const motivo = document.getElementById('inputMotivoMasivo').value;
+    if (!motivo) { alert('Ingrese un motivo para los cambios masivos'); return; }
+    if (!confirm(`¿Aplicar cambios a ${productosMasivos.length} productos?`)) return;
+    const resp = await fetch('/app/api/precios-costos/modificar-masivo/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+        body: JSON.stringify({ productos: productosMasivos, motivo }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+        alert(data.mensaje);
+        productosMasivos = [];
+        renderMasivos();
+        buscarProductos();
+    } else {
+        alert('Error: ' + data.error);
+    }
+}
+
+document.getElementById('inputBuscar').addEventListener('keydown', e => { if (e.key === 'Enter') buscarProductos(); });
+</script>

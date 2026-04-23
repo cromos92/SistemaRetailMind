@@ -1319,9 +1319,6 @@
             <button class="nexo-action-btn info" title="Ver detalles" onclick="verDetalleDTE(${dte.id || 0})">
                 <i class="bi bi-eye"></i>
             </button>
-            <button class="nexo-action-btn primary" title="Imprimir" onclick="imprimirDTE(${dte.id || 0})">
-                <i class="bi bi-printer"></i>
-            </button>
             ${dte.estado_pago !== 'PAGADO' ? `
             <button class="nexo-action-btn success" title="Registrar pago" onclick="registrarPago(${dte.id || 0})">
                 <i class="bi bi-cash-coin"></i>
@@ -1343,6 +1340,10 @@
             ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' && (dte.monto_con_iva - (dte.total_nc_acumulado || 0)) > 0 ? `
             <button class="nexo-action-btn danger" title="Generar NC para ${dte.tipo_documento}" onclick="anularDocumento(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}', ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})">
                 <i class="bi bi-x-circle"></i>
+            </button>` : ''}
+            ${['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento) ? `
+            <button class="nexo-action-btn warning" title="Editar folio NC" onclick="editarFolioNC(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}')">
+                <i class="bi bi-pencil-square"></i>
             </button>` : ''}
             {% endif %}
             <button class="nexo-action-btn btn-ver-trazabilidad" data-dte-id="${dte.id || 0}" title="Ver trazabilidad (compras origen, NC hijos, movimientos)">
@@ -1499,10 +1500,6 @@
         });
     }
 
-    function imprimirDTE(dteId) {
-        Swal.fire('Info', `Imprimir DTE ${dteId}`, 'info');
-    }
-
     function registrarPago(dteId) {
         Swal.fire('Info', `Registrar pago para DTE ${dteId}`, 'info');
     }
@@ -1523,6 +1520,109 @@
                 }
             });
         }, 500);
+    }
+
+    // Función para editar folio de NC
+    async function editarFolioNC(dteId, folioActual, tipoDocumento) {
+        const { value: formValues } = await Swal.fire({
+            title: '<i class="bi bi-pencil-square text-warning"></i> Editar Folio NC',
+            html: `
+                <div class="text-start">
+                    <p class="small text-muted mb-3">
+                        Editando <strong>${tipoDocumento}</strong> #<strong>${folioActual}</strong>
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nuevo Folio</label>
+                        <input type="number" id="swal-nuevo-folio" class="form-control" 
+                               value="${folioActual}" min="1" placeholder="Ingrese el nuevo número de folio">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Motivo del cambio <span class="text-danger">*</span></label>
+                        <input type="text" id="swal-motivo-folio" class="form-control" 
+                               placeholder="Ej: Corrección de folio por error de digitación" maxlength="200">
+                    </div>
+                    <div class="alert alert-warning py-2 small mt-3 mb-0">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Se actualizarán automáticamente las referencias, movimientos de stock y la trazabilidad asociada.
+                    </div>
+                </div>`,
+            width: '500px',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Guardar cambio',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0066FF',
+            cancelButtonColor: '#6c757d',
+            focusConfirm: false,
+            preConfirm: () => {
+                const nuevoFolio = document.getElementById('swal-nuevo-folio').value;
+                const motivo = document.getElementById('swal-motivo-folio').value.trim();
+                if (!nuevoFolio || parseInt(nuevoFolio) <= 0) {
+                    Swal.showValidationMessage('Ingrese un folio válido');
+                    return false;
+                }
+                if (!motivo) {
+                    Swal.showValidationMessage('El motivo es obligatorio');
+                    return false;
+                }
+                if (parseInt(nuevoFolio) === parseInt(folioActual)) {
+                    Swal.showValidationMessage('El nuevo folio debe ser diferente al actual');
+                    return false;
+                }
+                return { nuevo_folio: parseInt(nuevoFolio), motivo };
+            }
+        });
+
+        if (!formValues) return;
+
+        try {
+            Swal.fire({
+                title: 'Actualizando folio...',
+                html: 'Actualizando referencias y trazabilidad',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            const response = await fetch('/app/documentos/editar-folio-dte/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    dte_id: dteId,
+                    nuevo_folio: formValues.nuevo_folio,
+                    motivo: formValues.motivo
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Error al actualizar el folio');
+            }
+
+            let htmlExtra = '';
+            if (data.referencias_actualizadas > 0) {
+                htmlExtra = `<br><small class="text-muted">${data.referencias_actualizadas} referencia(s) actualizada(s) en otros documentos</small>`;
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Folio actualizado',
+                html: `<p>El folio se cambió de <strong>#${data.folio_anterior}</strong> a <strong>#${data.folio_nuevo}</strong></p>${htmlExtra}`,
+                confirmButtonColor: '#0066FF'
+            });
+
+            cargarDTEs(currentPageDTE, currentSearchDTE);
+
+        } catch (error) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: error.message || 'No se pudo actualizar el folio',
+                confirmButtonColor: '#dc3545'
+            });
+        }
     }
 
     // ✅ Función para descargar TXT de Acepta (solo Admin)

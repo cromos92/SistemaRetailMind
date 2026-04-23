@@ -1,0 +1,330 @@
+{% load static %}
+{% load permisos_tags %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="ri-truck-line text-primary me-2"></i>Despacho a Sucursales</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item active">Despacho Sucursales</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+                <!-- Panel Izquierdo: Búsqueda y productos -->
+                <div class="col-lg-7">
+                    <!-- Pendientes de Despacho -->
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0"><i class="ri-time-line me-2 text-warning"></i>Pendientes de Despacho</h5>
+                            <button class="btn btn-sm btn-outline-primary" onclick="cargarPendientes()"><i class="ri-refresh-line"></i> Actualizar</button>
+                        </div>
+                        <div class="card-body" id="pendientesContainer">
+                            <div class="text-center text-muted py-3">Cargando pendientes...</div>
+                        </div>
+                    </div>
+
+                    <!-- Búsqueda de Productos -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="ri-search-line me-2"></i>Buscar Productos para Despachar</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group mb-3">
+                                <input type="text" id="inputBuscar" class="form-control" placeholder="Buscar por SKU, artículo o descripción...">
+                                <button class="btn btn-primary" onclick="buscarProductos()"><i class="ri-search-line"></i></button>
+                            </div>
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-hover table-sm align-middle">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>SKU</th>
+                                            <th>Artículo</th>
+                                            <th>Talla</th>
+                                            <th class="text-end">Stock</th>
+                                            <th class="text-center">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyProductos">
+                                        <tr><td colspan="5" class="text-center text-muted">Busque productos para despachar</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel Derecho: Carrito de Despacho -->
+                <div class="col-lg-5">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0 text-white"><i class="ri-shopping-cart-2-line me-2"></i>Carrito de Despacho</h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Selector Sucursal Destino -->
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Sucursal Destino</label>
+                                <select id="selectSucursal" class="form-select">
+                                    <option value="">-- Seleccionar Sucursal --</option>
+                                </select>
+                            </div>
+
+                            <!-- Items del carrito -->
+                            <div id="carritoItems" style="max-height: 350px; overflow-y: auto;">
+                                <div class="text-center text-muted py-3">Agregue productos al carrito</div>
+                            </div>
+
+                            <hr>
+
+                            <!-- Resumen -->
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-bold">Total items:</span>
+                                <span class="fw-bold" id="totalItems">0</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-3">
+                                <span class="fw-bold">Total unidades:</span>
+                                <span class="fw-bold text-primary" id="totalUnidades">0</span>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Observaciones</label>
+                                <textarea id="inputObservaciones" class="form-control" rows="2" placeholder="Observaciones del despacho..."></textarea>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success flex-grow-1" onclick="agregarAlDespachoMasivo()">
+                                    <i class="ri-add-line me-1"></i> Agregar a Despacho Masivo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Despachos acumulados -->
+                    <div class="card border-warning" id="despachosMasivos" style="display:none;">
+                        <div class="card-header bg-warning bg-opacity-10">
+                            <h5 class="card-title mb-0"><i class="ri-stack-line me-2 text-warning"></i>Despachos a Enviar</h5>
+                        </div>
+                        <div class="card-body" id="despachosMasivosBody"></div>
+                        <div class="card-footer">
+                            <button class="btn btn-primary w-100 btn-lg" onclick="enviarTodosDespachos()">
+                                <i class="ri-send-plane-line me-2"></i> Enviar Todos los Despachos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+const CSRF_TOKEN = '{{ csrf_token }}';
+let carrito = [];
+let despachosMasivos = [];
+let sucursalesDisponibles = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    cargarSucursales();
+    cargarPendientes();
+});
+
+async function cargarSucursales() {
+    const resp = await fetch('/app/api/despacho/sucursales/');
+    const data = await resp.json();
+    if (data.success) {
+        sucursalesDisponibles = data.sucursales;
+        const select = document.getElementById('selectSucursal');
+        data.sucursales.forEach(s => {
+            select.innerHTML += `<option value="${s.id}">${s.alias} - ${s.direccion || ''}</option>`;
+        });
+    }
+}
+
+async function cargarPendientes() {
+    const container = document.getElementById('pendientesContainer');
+    const resp = await fetch('/app/api/despacho/pendientes/');
+    const data = await resp.json();
+    if (!data.success || !data.pendientes_por_sucursal.length) {
+        container.innerHTML = '<div class="text-center text-muted py-2">No hay pendientes de despacho</div>';
+        return;
+    }
+    let html = '';
+    data.pendientes_por_sucursal.forEach(suc => {
+        html += `<div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0"><i class="ri-store-2-line me-1 text-primary"></i>${suc.alias}</h6>
+                <span class="badge bg-warning">${suc.total_unidades} unidades</span>
+            </div>
+            <div class="table-responsive"><table class="table table-sm table-bordered mb-0">
+                <thead class="table-light"><tr><th>SKU</th><th>Artículo</th><th>Talla</th><th class="text-end">Restante</th><th></th></tr></thead>
+                <tbody>`;
+        suc.items.forEach(item => {
+            html += `<tr>
+                <td><code>${item.sku}</code></td><td>${item.articulo}</td><td>${item.talla}</td>
+                <td class="text-end fw-bold">${item.cantidad_restante}</td>
+                <td class="text-center"><button class="btn btn-sm btn-outline-primary" onclick="agregarPendienteAlCarrito('${item.sku}', ${item.cantidad_restante}, ${suc.sucursal_id})"><i class="ri-add-line"></i></button></td>
+            </tr>`;
+        });
+        html += '</tbody></table></div></div>';
+    });
+    container.innerHTML = html;
+}
+
+async function buscarProductos() {
+    const q = document.getElementById('inputBuscar').value.trim();
+    if (!q) return;
+    const resp = await fetch(`/app/api/despacho/productos/?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    const tbody = document.getElementById('tbodyProductos');
+    if (!data.success || !data.productos.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sin resultados</td></tr>';
+        return;
+    }
+    tbody.innerHTML = '';
+    data.productos.forEach(p => {
+        tbody.innerHTML += `<tr>
+            <td><code>${p.sku}</code></td>
+            <td>${p.articulo}<br><small class="text-muted">${p.marca}</small></td>
+            <td>${p.talla}</td>
+            <td class="text-end fw-bold">${p.stock}</td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-primary" onclick="agregarAlCarrito(${p.producto_talla_id}, '${p.sku}', '${p.articulo.replace(/'/g, "\\'")}', '${p.talla}', ${p.stock})">
+                    <i class="ri-add-line"></i>
+                </button>
+            </td>
+        </tr>`;
+    });
+}
+
+function agregarAlCarrito(ptId, sku, articulo, talla, stockMax) {
+    const existe = carrito.find(c => c.producto_talla_id === ptId);
+    if (existe) { alert('Ya está en el carrito'); return; }
+    carrito.push({ producto_talla_id: ptId, sku, articulo, talla, stock_max: stockMax, cantidad: 1 });
+    renderCarrito();
+}
+
+function agregarPendienteAlCarrito(sku, cantidad, sucursalId) {
+    document.getElementById('selectSucursal').value = sucursalId;
+    const inputBuscar = document.getElementById('inputBuscar');
+    inputBuscar.value = sku;
+    buscarProductos();
+}
+
+function renderCarrito() {
+    const container = document.getElementById('carritoItems');
+    if (!carrito.length) {
+        container.innerHTML = '<div class="text-center text-muted py-3">Agregue productos al carrito</div>';
+        document.getElementById('totalItems').textContent = '0';
+        document.getElementById('totalUnidades').textContent = '0';
+        return;
+    }
+    let html = '';
+    carrito.forEach((item, idx) => {
+        html += `<div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
+            <div class="flex-grow-1">
+                <strong>${item.articulo}</strong><br>
+                <small class="text-muted">SKU: ${item.sku} | Talla: ${item.talla}</small>
+            </div>
+            <input type="number" class="form-control form-control-sm" style="width:70px;" min="1" max="${item.stock_max}" value="${item.cantidad}"
+                onchange="actualizarCantidad(${idx}, this.value)">
+            <button class="btn btn-sm btn-outline-danger" onclick="quitarDelCarrito(${idx})"><i class="ri-delete-bin-line"></i></button>
+        </div>`;
+    });
+    container.innerHTML = html;
+    document.getElementById('totalItems').textContent = carrito.length;
+    document.getElementById('totalUnidades').textContent = carrito.reduce((a, b) => a + b.cantidad, 0);
+}
+
+function actualizarCantidad(idx, val) {
+    const cant = Math.min(Math.max(1, parseInt(val) || 1), carrito[idx].stock_max);
+    carrito[idx].cantidad = cant;
+    renderCarrito();
+}
+
+function quitarDelCarrito(idx) {
+    carrito.splice(idx, 1);
+    renderCarrito();
+}
+
+function agregarAlDespachoMasivo() {
+    const sucId = document.getElementById('selectSucursal').value;
+    if (!sucId) { alert('Seleccione una sucursal destino'); return; }
+    if (!carrito.length) { alert('Agregue productos al carrito'); return; }
+    const suc = sucursalesDisponibles.find(s => s.id == sucId);
+    despachosMasivos.push({
+        sucursal_destino_id: parseInt(sucId),
+        sucursal_alias: suc ? suc.alias : 'Sucursal ' + sucId,
+        items: [...carrito],
+    });
+    carrito = [];
+    renderCarrito();
+    renderDespachosMasivos();
+}
+
+function renderDespachosMasivos() {
+    const container = document.getElementById('despachosMasivosBody');
+    const card = document.getElementById('despachosMasivos');
+    if (!despachosMasivos.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    let html = '';
+    despachosMasivos.forEach((d, idx) => {
+        const totalUn = d.items.reduce((a, b) => a + b.cantidad, 0);
+        html += `<div class="mb-2 p-2 border rounded bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <strong><i class="ri-store-2-line me-1"></i>${d.sucursal_alias}</strong>
+                <div>
+                    <span class="badge bg-primary me-1">${d.items.length} items / ${totalUn} uds</span>
+                    <button class="btn btn-sm btn-outline-danger" onclick="quitarDespacho(${idx})"><i class="ri-close-line"></i></button>
+                </div>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function quitarDespacho(idx) {
+    despachosMasivos.splice(idx, 1);
+    renderDespachosMasivos();
+}
+
+async function enviarTodosDespachos() {
+    if (!despachosMasivos.length) { alert('No hay despachos para enviar'); return; }
+    if (!confirm(`¿Enviar ${despachosMasivos.length} despachos?`)) return;
+    const payload = {
+        despachos: despachosMasivos.map(d => ({
+            sucursal_destino_id: d.sucursal_destino_id,
+            items: d.items.map(i => ({ producto_talla_id: i.producto_talla_id, cantidad: i.cantidad })),
+        })),
+        observaciones: document.getElementById('inputObservaciones').value,
+    };
+    const resp = await fetch('/app/api/despacho/crear-masivo/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+        body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (data.success) {
+        alert(data.mensaje);
+        despachosMasivos = [];
+        renderDespachosMasivos();
+        cargarPendientes();
+    } else {
+        alert('Error: ' + data.error);
+    }
+}
+
+document.getElementById('inputBuscar').addEventListener('keydown', e => { if (e.key === 'Enter') buscarProductos(); });
+</script>

@@ -837,14 +837,6 @@
         color: #7C3AED;
     }
 
-    .permiso-item[data-tipo="puede_aprobar"].active {
-        background: rgba(6, 182, 212, 0.1);
-        border-color: #06B6D4;
-    }
-    .permiso-item[data-tipo="puede_aprobar"].active label {
-        color: #06B6D4;
-    }
-
     /* ========== UNSAVED CHANGES INDICATOR ========== */
     .unsaved-indicator {
         position: fixed;
@@ -917,7 +909,6 @@
     .summary-badge.editar { background: rgba(255,176,32,0.12); color: #CC8C00; }
     .summary-badge.eliminar { background: rgba(255,77,77,0.12); color: #CC3D3D; }
     .summary-badge.exportar { background: rgba(124,58,237,0.1); color: #7C3AED; }
-    .summary-badge.aprobar { background: rgba(6,182,212,0.1); color: #06B6D4; }
 
     /* ========== RESPONSIVE ========== */
     @media (max-width: 992px) {
@@ -1231,7 +1222,6 @@
                                 <span class="summary-badge editar"><i class="ri-edit-line"></i> Editar: <strong id="sumEditar">0</strong></span>
                                 <span class="summary-badge eliminar"><i class="ri-delete-bin-line"></i> Eliminar: <strong id="sumEliminar">0</strong></span>
                                 <span class="summary-badge exportar"><i class="ri-download-line"></i> Exportar: <strong id="sumExportar">0</strong></span>
-                                <span class="summary-badge aprobar"><i class="ri-check-double-line"></i> Aprobar: <strong id="sumAprobar">0</strong></span>
                             </div>
 
                             <!-- Quick Actions -->
@@ -1254,9 +1244,6 @@
                                 </button>
                                 <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_exportar', true)">
                                     <i class="ri-download-line me-1"></i> Marcar todos Exportar
-                                </button>
-                                <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_aprobar', true)">
-                                    <i class="ri-check-double-line me-1"></i> Marcar todos Aprobar
                                 </button>
                                 <button type="button" class="quick-action-btn" onclick="desmarcarTodos()" style="background: #FF4D4D; color: white; border-color: #FF4D4D;">
                                     <i class="ri-close-line me-1"></i> Desmarcar todos
@@ -2111,9 +2098,6 @@ function renderizarPermisos(modulos) {
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarModulo(${modulo.id}, 'puede_exportar', true)" title="Marcar Exportar">
                             <i class="ri-download-line"></i>
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarModulo(${modulo.id}, 'puede_aprobar', true)" title="Marcar Aprobar">
-                            <i class="ri-check-double-line"></i>
-                        </button>
                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="desmarcarModulo(${modulo.id})" title="Desmarcar todo">
                             <i class="ri-close-line"></i>
                         </button>
@@ -2204,14 +2188,6 @@ function renderizarOpcion(opcion, esSubopcion) {
                            ${permisos.puede_exportar ? 'checked' : ''}>
                     <label for="exportar-${opcion.id}"><i class="ri-download-line me-1"></i>Exportar</label>
                 </div>
-                <div class="permiso-item ${permisos.puede_aprobar ? 'active' : ''}" data-tipo="puede_aprobar" title="Puede aprobar operaciones (cambios de precio, devoluciones, etc.)">
-                    <input type="checkbox" class="permiso-check" 
-                           id="aprobar-${opcion.id}"
-                           data-opcion-id="${opcion.id}" 
-                           data-permiso="puede_aprobar"
-                           ${permisos.puede_aprobar ? 'checked' : ''}>
-                    <label for="aprobar-${opcion.id}"><i class="ri-check-double-line me-1"></i>Aprobar</label>
-                </div>
             </div>
         </div>
     `;
@@ -2247,8 +2223,8 @@ function actualizarResumenPermisos() {
     if (!summary) return;
     summary.style.display = 'flex';
     
-    const tipos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
-    const ids = ['sumVer', 'sumCrear', 'sumEditar', 'sumEliminar', 'sumExportar', 'sumAprobar'];
+    const tipos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar'];
+    const ids = ['sumVer', 'sumCrear', 'sumEditar', 'sumEliminar', 'sumExportar'];
     
     tipos.forEach((tipo, i) => {
         const total = document.querySelectorAll(`.permiso-check[data-permiso="${tipo}"]`).length;
@@ -2303,7 +2279,7 @@ function actualizarTodosContadoresModulos() {
 
 // Quick action: SELECCIONAR TODOS los permisos de TODA la página
 function seleccionarTodosPermisos() {
-    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
+    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar'];
     
     tiposPermisos.forEach(tipo => {
         document.querySelectorAll(`[data-permiso="${tipo}"]`).forEach(checkbox => {
@@ -2320,14 +2296,14 @@ function seleccionarTodosPermisos() {
         });
     });
     
-    toastr.success('Se seleccionaron TODOS los permisos (Ver, Crear, Editar, Eliminar, Exportar, Aprobar)', 'Permisos Completos', {timeOut: 3000});
+    toastr.success('Se seleccionaron TODOS los permisos (Ver, Crear, Editar, Eliminar, Exportar)', 'Permisos Completos', {timeOut: 3000});
 }
 
 // ========== FUNCIONES POR MÓDULO ==========
 
 // Seleccionar TODOS los permisos de un módulo específico
 function seleccionarTodoModulo(moduloId) {
-    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
+    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar'];
     const moduloContainer = document.getElementById(`modulo-${moduloId}`);
     
     if (!moduloContainer) return;
@@ -2379,7 +2355,7 @@ function marcarModulo(moduloId, tipo, valor) {
 
 // Desmarcar TODOS los permisos de un módulo específico
 function desmarcarModulo(moduloId) {
-    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
+    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar'];
     const moduloContainer = document.getElementById(`modulo-${moduloId}`);
     
     if (!moduloContainer) return;
@@ -3742,8 +3718,8 @@ function renderPermisosUsuario(modulos) {
     const container = document.getElementById('modulosPermisosUsuarioContainer');
     let html = '';
 
-    const tipos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
-    const tiposLabel = {'puede_ver': 'Ver', 'puede_crear': 'Crear', 'puede_editar': 'Editar', 'puede_eliminar': 'Eliminar', 'puede_exportar': 'Exportar', 'puede_aprobar': 'Aprobar'};
+    const tipos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar'];
+    const tiposLabel = {'puede_ver': 'Ver', 'puede_crear': 'Crear', 'puede_editar': 'Editar', 'puede_eliminar': 'Eliminar', 'puede_exportar': 'Exportar'};
 
     modulos.forEach(modulo => {
         html += `<div class="modulo-card mb-3">

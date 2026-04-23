@@ -103,7 +103,6 @@ def obtener_permisos_rol(request):
                     'puede_editar': permiso.puede_editar if permiso else False,
                     'puede_eliminar': permiso.puede_eliminar if permiso else False,
                     'puede_exportar': permiso.puede_exportar if permiso else False,
-                    'puede_aprobar': permiso.puede_aprobar if permiso else False,
                 }
             }
             
@@ -127,7 +126,6 @@ def obtener_permisos_rol(request):
                             'puede_editar': permiso_sub.puede_editar if permiso_sub else False,
                             'puede_eliminar': permiso_sub.puede_eliminar if permiso_sub else False,
                             'puede_exportar': permiso_sub.puede_exportar if permiso_sub else False,
-                            'puede_aprobar': permiso_sub.puede_aprobar if permiso_sub else False,
                         }
                     })
                 
@@ -286,7 +284,6 @@ def guardar_permisos_masivos(request):
                 permiso.puede_editar = permisos_valores.get('puede_editar', False)
                 permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
                 permiso.puede_exportar = permisos_valores.get('puede_exportar', False)
-                permiso.puede_aprobar = permisos_valores.get('puede_aprobar', False)
                 
                 # Siempre actualizar límite de descuento
                 permiso.limite_descuento_porcentaje = limite_efectivo
@@ -310,8 +307,7 @@ def guardar_permisos_masivos(request):
                     puede_crear=False,
                     puede_editar=False,
                     puede_eliminar=False,
-                    puede_exportar=False,
-                    puede_aprobar=False
+                    puede_exportar=False
                 )
                 permisos_creados += 1
 
@@ -408,7 +404,6 @@ def copiar_permisos_rol(request):
                 permiso_destino.puede_editar = permiso_origen.puede_editar
                 permiso_destino.puede_eliminar = permiso_origen.puede_eliminar
                 permiso_destino.puede_exportar = permiso_origen.puede_exportar
-                permiso_destino.puede_aprobar = permiso_origen.puede_aprobar
                 permiso_destino.limite_descuento_porcentaje = limite_descuento_origen
                 permiso_destino.save()
                 
@@ -485,7 +480,6 @@ def estadisticas_permisos(request):
             'puede_editar': permisos_rol.filter(puede_editar=True).count(),
             'puede_eliminar': permisos_rol.filter(puede_eliminar=True).count(),
             'puede_exportar': permisos_rol.filter(puede_exportar=True).count(),
-            'puede_aprobar': permisos_rol.filter(puede_aprobar=True).count(),
             'total_opciones': total_opciones,
             'cobertura': round((permisos_rol.count() / total_opciones * 100) if total_opciones > 0 else 0, 1)
         })
@@ -589,7 +583,6 @@ def obtener_permisos_sucursal(request):
                     'puede_editar': permiso.puede_editar if permiso else True,
                     'puede_eliminar': permiso.puede_eliminar if permiso else False,
                     'puede_exportar': permiso.puede_exportar if permiso else True,
-                    'puede_aprobar': permiso.puede_aprobar if permiso else False,
                 },
                 'notas': permiso.notas if permiso else ''
             }
@@ -613,7 +606,6 @@ def obtener_permisos_sucursal(request):
                             'puede_editar': permiso_sub.puede_editar if permiso_sub else True,
                             'puede_eliminar': permiso_sub.puede_eliminar if permiso_sub else False,
                             'puede_exportar': permiso_sub.puede_exportar if permiso_sub else True,
-                            'puede_aprobar': permiso_sub.puede_aprobar if permiso_sub else False,
                         },
                         'notas': permiso_sub.notas if permiso_sub else ''
                     })
@@ -693,7 +685,6 @@ def guardar_permisos_sucursal(request):
             permiso.puede_editar = permisos_valores.get('puede_editar', True)
             permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
             permiso.puede_exportar = permisos_valores.get('puede_exportar', True)
-            permiso.puede_aprobar = permisos_valores.get('puede_aprobar', False)
             permiso.notas = notas
             
             permiso.save()
@@ -776,7 +767,6 @@ def copiar_permisos_sucursal(request):
                 permiso_destino.puede_editar = permiso_origen.puede_editar
                 permiso_destino.puede_eliminar = permiso_origen.puede_eliminar
                 permiso_destino.puede_exportar = permiso_origen.puede_exportar
-                permiso_destino.puede_aprobar = permiso_origen.puede_aprobar
                 permiso_destino.notas = f"Copiado de {sucursal_origen.alias}"
                 permiso_destino.save()
                 
@@ -1022,7 +1012,6 @@ def exportar_permisos_rol(request):
                     'puede_editar': permiso.puede_editar,
                     'puede_eliminar': permiso.puede_eliminar,
                     'puede_exportar': permiso.puede_exportar,
-                    'puede_aprobar': permiso.puede_aprobar,
                 }
             })
         
@@ -1084,7 +1073,6 @@ def exportar_todos_permisos(request):
                         'puede_editar': permiso.puede_editar,
                         'puede_eliminar': permiso.puede_eliminar,
                         'puede_exportar': permiso.puede_exportar,
-                        'puede_aprobar': permiso.puede_aprobar,
                     }
                 })
             
@@ -1267,7 +1255,6 @@ def _importar_permisos_rol(rol, permisos_data, limite_descuento, sobrescribir):
                 permiso.puede_editar = permisos_valores.get('puede_editar', False)
                 permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
                 permiso.puede_exportar = permisos_valores.get('puede_exportar', False)
-                permiso.puede_aprobar = permisos_valores.get('puede_aprobar', False)
                 permiso.limite_descuento_porcentaje = limite_descuento
                 permiso.save()
                 
@@ -1314,7 +1301,6 @@ def exportar_permisos_sucursal(request):
                     'puede_editar': permiso.puede_editar,
                     'puede_eliminar': permiso.puede_eliminar,
                     'puede_exportar': permiso.puede_exportar,
-                    'puede_aprobar': permiso.puede_aprobar,
                 },
                 'notas': permiso.notas
             })
@@ -1423,7 +1409,6 @@ def importar_permisos_sucursal(request):
                     permiso.puede_editar = permisos_valores.get('puede_editar', True)
                     permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
                     permiso.puede_exportar = permisos_valores.get('puede_exportar', True)
-                    permiso.puede_aprobar = permisos_valores.get('puede_aprobar', False)
                     permiso.notas = f"Importado: {notas}" if notas else "Importado desde archivo"
                     permiso.save()
                     
@@ -1526,7 +1511,6 @@ def obtener_permisos_usuario(request):
                     'puede_editar': permiso_rol.puede_editar if permiso_rol else False,
                     'puede_eliminar': permiso_rol.puede_eliminar if permiso_rol else False,
                     'puede_exportar': permiso_rol.puede_exportar if permiso_rol else False,
-                    'puede_aprobar': permiso_rol.puede_aprobar if permiso_rol else False,
                 },
                 'overrides': {
                     'puede_ver': override.puede_ver if override else None,
@@ -1534,7 +1518,6 @@ def obtener_permisos_usuario(request):
                     'puede_editar': override.puede_editar if override else None,
                     'puede_eliminar': override.puede_eliminar if override else None,
                     'puede_exportar': override.puede_exportar if override else None,
-                    'puede_aprobar': override.puede_aprobar if override else None,
                 },
                 'notas': override.notas if override else '',
             }
@@ -1555,7 +1538,6 @@ def obtener_permisos_usuario(request):
                             'puede_editar': sub_rol.puede_editar if sub_rol else False,
                             'puede_eliminar': sub_rol.puede_eliminar if sub_rol else False,
                             'puede_exportar': sub_rol.puede_exportar if sub_rol else False,
-                            'puede_aprobar': sub_rol.puede_aprobar if sub_rol else False,
                         },
                         'overrides': {
                             'puede_ver': sub_override.puede_ver if sub_override else None,
@@ -1563,7 +1545,6 @@ def obtener_permisos_usuario(request):
                             'puede_editar': sub_override.puede_editar if sub_override else None,
                             'puede_eliminar': sub_override.puede_eliminar if sub_override else None,
                             'puede_exportar': sub_override.puede_exportar if sub_override else None,
-                            'puede_aprobar': sub_override.puede_aprobar if sub_override else None,
                         },
                         'notas': sub_override.notas if sub_override else '',
                     })
@@ -1641,7 +1622,6 @@ def guardar_permisos_usuario(request):
             permiso.puede_editar = overrides.get('puede_editar')
             permiso.puede_eliminar = overrides.get('puede_eliminar')
             permiso.puede_exportar = overrides.get('puede_exportar')
-            permiso.puede_aprobar = overrides.get('puede_aprobar')
             permiso.puede_ver_todas_sucursales = ve_todas_sucursales
             permiso.notas = item.get('notas', '')
             permiso.save()
@@ -1732,7 +1712,6 @@ def copiar_permisos_usuario(request):
             p_dest.puede_editar = p_orig.puede_editar
             p_dest.puede_eliminar = p_orig.puede_eliminar
             p_dest.puede_exportar = p_orig.puede_exportar
-            p_dest.puede_aprobar = p_orig.puede_aprobar
             p_dest.puede_ver_todas_sucursales = p_orig.puede_ver_todas_sucursales
             p_dest.notas = f"Copiado de usuario ID {origen_id}"
             p_dest.save()

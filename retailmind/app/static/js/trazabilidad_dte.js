@@ -172,6 +172,31 @@
             </div>`;
     }
 
+    function renderCambiosFolio(cambios) {
+        if (!cambios || !cambios.length) {
+            return '';
+        }
+        const filas = cambios.map(c => `
+            <tr>
+                <td><small>${c.fecha || '-'}</small></td>
+                <td><strong>${c.folio_anterior}</strong> → <strong>${c.folio_nuevo}</strong></td>
+                <td><small>${c.usuario || '-'}</small></td>
+                <td><small>${(c.motivo || '').substring(0, 100)}</small></td>
+                <td class="text-center">${c.refs_actualizadas > 0 ? `<span class="badge bg-info">${c.refs_actualizadas}</span>` : '-'}</td>
+            </tr>`).join('');
+        return `
+            <div class="mb-4">
+                <h6 class="text-warning"><i class="bi bi-pencil-square me-1"></i>Cambios de folio</h6>
+                <table class="table table-sm table-striped mb-0">
+                    <thead class="table-light"><tr>
+                        <th>Fecha</th><th>Folio</th><th>Usuario</th>
+                        <th>Motivo</th><th class="text-center">Refs actualizadas</th>
+                    </tr></thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>`;
+    }
+
     function render(data) {
         const body = document.getElementById('trazModalBody');
         if (!body) return;
@@ -187,6 +212,7 @@
                 <h6 class="text-danger"><i class="bi bi-arrow-down-circle me-1"></i>Documentos hijos (NC / Ajustes)</h6>
                 ${renderHijos(data.hijos)}
             </div>
+            ${renderCambiosFolio(data.cambios_folio)}
             <div>
                 <h6 class="text-info"><i class="bi bi-box-arrow-in-right me-1"></i>Movimientos de stock asociados</h6>
                 ${renderMovimientos(data.movimientos)}
