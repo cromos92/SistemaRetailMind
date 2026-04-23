@@ -22,7 +22,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 # Importar funciones necesarias desde views.py
 from .views import obtener_siguiente_correlativo, obtener_correlativo_existente, consumir_stock_fifo
@@ -6100,12 +6100,15 @@ def obtener_detalle_cuadratura_metodos_pago(request):
 
     def _permisos_para_dte(dte_obj):
         """Retorna flags {editar_fecha, editar_numero, editar_pago} sobre
-        un DTE, combinando permisos de campo con permisos del tipo DTE."""
+        un DTE, combinando permisos de campo con permisos del tipo DTE.
+        Para tickets sin DTE, `editar_fecha_ticket` indica si el usuario
+        puede mover el ticket a otra fecha."""
         if not dte_obj:
             return {
                 'editar_fecha': False,
                 'editar_numero': False,
                 'editar_pago': False,
+                'editar_fecha_ticket': bool(flags_campo.get('fecha')),
             }
         tipo_up = (dte_obj.tipo_documento or '').upper().strip()
         tipo_ok = flags_tipo.get(tipo_up, False)
@@ -6115,6 +6118,7 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                 flags_campo.get('numero_documento') and tipo_ok
             ),
             'editar_pago': bool(flags_campo.get('pago') and tipo_ok),
+            'editar_fecha_ticket': False,
         }
 
     for ticket in tickets_qs:
@@ -6455,6 +6459,120 @@ def sincronizar_fecha_ticket_dte(request):
             fecha_anterior.strftime('%Y-%m-%d') if fecha_anterior else None
         ),
         'fecha_nueva': dte.fecha_emision.strftime('%Y-%m-%d'),
+    })
+
+
+@login_required
+@require_POST
+def editar_fecha_ticket_sin_dte(request):
+    """
+    Permite cambiar `Ticket.fecha` de un ticket que NO tiene DTE asociado
+    (tipo_dte == 'TICKET' o sin folio_dte).
+
+    Caso de uso: tickets con pagos por tarjeta que quedaron en un día
+    incorrecto porque en un flujo anterior se modificó la fecha del DTE
+    pero no la de los métodos de pago (ticket sin DTE). El usuario
+    necesita moverlos al día correcto para que la cuadratura cuadre.
+
+    Body JSON:
+        { "ticket_id": 456, "nueva_fecha": "2026-04-15" }
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'})
+
+    ticket_id = data.get('ticket_id')
+    nueva_fecha_str = data.get('nueva_fecha')
+    if not ticket_id or not nueva_fecha_str:
+        return JsonResponse({
+            'success': False,
+            'error': 'Se requiere ticket_id y nueva_fecha',
+        })
+
+    try:
+        nueva_fecha = datetime.strptime(nueva_fecha_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return JsonResponse({
+            'success': False,
+            'error': 'Formato de fecha inválido (se espera YYYY-MM-DD)',
+        })
+
+    sucursal_id = get_sucursal_id(request)
+    if not sucursal_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'No hay sucursal seleccionada',
+        })
+
+    permisos = permisos_edicion_dte_context(request.user, sucursal_id)
+    if not permisos.get('campo', {}).get('fecha'):
+        return JsonResponse({
+            'success': False,
+            'error': 'No tiene permisos para editar fechas',
+        }, status=403)
+
+    with transaction.atomic():
+        ticket = (
+            Ticket.objects
+            .select_for_update()
+            .filter(pk=ticket_id, sucursal_id=sucursal_id, estado='PAGADO')
+            .first()
+        )
+        if not ticket:
+            return JsonResponse({
+                'success': False,
+                'error': 'Ticket no encontrado o no está pagado',
+            })
+
+        if ticket.fecha == nueva_fecha:
+            return JsonResponse({
+                'success': True,
+                'mensaje': 'La fecha ya era la indicada',
+                'cambio': False,
+                'ticket_id': ticket.id,
+                'fecha': nueva_fecha_str,
+            })
+
+        fecha_anterior = ticket.fecha
+        Ticket.objects.filter(pk=ticket.pk).update(fecha=nueva_fecha)
+
+        try:
+            fechas_a_revisar = {fecha_anterior, nueva_fecha}
+            arqueos_qs = ArqueoCaja.objects.filter(
+                sucursal_id=sucursal_id,
+                fecha_arqueo__in=fechas_a_revisar,
+            ).exclude(estado='ABIERTO')
+            for arq in arqueos_qs:
+                ObservacionArqueo.objects.create(
+                    arqueo=arq,
+                    usuario=request.user,
+                    tipo='SISTEMA',
+                    texto=(
+                        f'Cambio de fecha del Ticket #{ticket.correlativo}'
+                        f' (sin DTE). '
+                        f'Fecha: '
+                        f'{fecha_anterior.strftime("%d/%m/%Y") if fecha_anterior else "—"}'
+                        f' → {nueva_fecha.strftime("%d/%m/%Y")}. '
+                        'Los teóricos del arqueo pueden requerir recálculo.'
+                    ),
+                    visible_para_cajera=True,
+                )
+        except Exception:
+            pass
+
+    return JsonResponse({
+        'success': True,
+        'mensaje': (
+            f'Ticket #{ticket.correlativo} movido al '
+            f'{nueva_fecha.strftime("%d/%m/%Y")}.'
+        ),
+        'cambio': True,
+        'ticket_id': ticket.id,
+        'fecha_anterior': (
+            fecha_anterior.strftime('%Y-%m-%d') if fecha_anterior else None
+        ),
+        'fecha_nueva': nueva_fecha_str,
     })
 
 

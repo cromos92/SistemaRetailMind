@@ -1333,6 +1333,122 @@
         box-shadow: 0 -6px 18px rgba(13, 110, 253, 0.12);
         width: 100%;
     }
+
+    /* ========== FLOATING ACTION BAR (inside modal-body) ========== */
+    #floating-action-bar {
+        position: sticky;
+        bottom: 0;
+        z-index: 30;
+        background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, #ffffff 30%);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-top: 2px solid var(--nexo-primary);
+        box-shadow: 0 -8px 24px rgba(13, 110, 253, 0.18);
+        padding: 10px 16px;
+        margin: 0 -16px;
+        width: calc(100% + 32px);
+    }
+    #floating-action-bar .fab-summary {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+        font-size: 0.82rem;
+    }
+    #floating-action-bar .fab-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.78rem;
+    }
+    #floating-action-bar .fab-chip-out {
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+    }
+    #floating-action-bar .fab-chip-in {
+        background: #f0fdf4;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+    }
+    #floating-action-bar .fab-chip-diff {
+        background: #fffbeb;
+        color: #d97706;
+        border: 1px solid #fde68a;
+    }
+    #floating-action-bar .fab-chip-diff.positivo {
+        background: #fef2f2; color: #dc2626; border-color: #fecaca;
+    }
+    #floating-action-bar .fab-chip-diff.negativo {
+        background: #f0fdf4; color: #16a34a; border-color: #bbf7d0;
+    }
+    #floating-action-bar .fab-chip-diff.cero {
+        background: #f1f5f9; color: #64748b; border-color: #cbd5e1;
+    }
+    #floating-action-bar .fab-buttons {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    #floating-action-bar .fab-btn-primary {
+        flex: 1;
+        min-height: 48px;
+        font-size: 1rem;
+        font-weight: 700;
+        border-radius: 10px;
+        border: none;
+        color: #fff;
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        box-shadow: 0 4px 14px rgba(13, 110, 253, 0.35);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    #floating-action-bar .fab-btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(13, 110, 253, 0.5);
+    }
+    #floating-action-bar .fab-btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    #floating-action-bar .fab-btn-primary.fab-btn-success {
+        background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+        box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35);
+    }
+    #floating-action-bar .fab-btn-primary.fab-btn-success:hover {
+        box-shadow: 0 6px 20px rgba(22, 163, 74, 0.5);
+    }
+    #floating-action-bar .fab-btn-secondary {
+        min-height: 48px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 0 20px;
+        border: 2px solid #cbd5e1;
+        background: #fff;
+        color: #475569;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    #floating-action-bar .fab-btn-secondary:hover {
+        border-color: #94a3b8;
+        background: #f8fafc;
+    }
+    #floating-action-bar .fab-hint {
+        text-align: center;
+        font-size: 0.72rem;
+        color: #b45309;
+        font-weight: 600;
+        margin-top: 4px;
+    }
     #modal-nav-bar .mnb-nav {
         min-height: 58px;
         padding: 10px 16px;
@@ -2739,10 +2855,46 @@
                     </div>
                 </div>
 
+                <!-- FLOATING ACTION BAR — Always visible at bottom of scroll -->
+                <div id="floating-action-bar">
+                    <div class="fab-summary" id="fab-summary">
+                        <span class="fab-chip fab-chip-out">
+                            <i class="ri-arrow-go-back-line"></i>
+                            Devuelve: <strong id="fab-count-out">0</strong> prod.
+                            (<span id="fab-monto-out">$0</span>)
+                        </span>
+                        <i class="ri-arrow-right-line" style="color:#94a3b8;"></i>
+                        <span class="fab-chip fab-chip-in">
+                            <i class="ri-shopping-bag-3-line"></i>
+                            Recibe: <strong id="fab-count-in">0</strong> prod.
+                            (<span id="fab-monto-in">$0</span>)
+                        </span>
+                        <span class="fab-chip fab-chip-diff cero" id="fab-chip-diff">
+                            <i class="ri-exchange-dollar-line"></i>
+                            Diferencia: <strong id="fab-diff">$0</strong>
+                        </span>
+                    </div>
+                    <div class="fab-buttons">
+                        <button type="button" class="fab-btn-secondary" id="fab-btn-anterior"
+                                onclick="pasoAnterior(event)" style="display:none;">
+                            <i class="ri-arrow-left-line me-1"></i> Anterior
+                        </button>
+                        <button type="button" class="fab-btn-primary" id="fab-btn-principal"
+                                onclick="fabAccionPrincipal(event)" disabled>
+                            <i class="ri-arrow-right-circle-fill me-1"></i>
+                            <span id="fab-btn-texto">Continuar</span>
+                        </button>
+                        <button type="button" class="fab-btn-primary fab-btn-success" id="fab-btn-crear"
+                                onclick="crearCambioDevolucion(event)" style="display:none;">
+                            <i class="ri-check-double-line me-1"></i> Crear Solicitud
+                        </button>
+                    </div>
+                    <div class="fab-hint" id="fab-hint" style="display:none;"></div>
+                </div>
+
 
             </div>
-            <!-- NAV BAR FIJO: fuera del modal-body, flex-shrink:0 siempre visible -->
-            <div id="modal-nav-bar">
+            <div id="modal-nav-bar" style="display:none !important;">
                 <!-- Resumen financiero — visible solo en paso 3 -->
                 <div id="footer-resumen" class="mnb-resumen" style="display:none;">
                     <span class="fr-chip">
@@ -3449,6 +3601,7 @@ $(document).ready(function() {
     actualizarStepper();
     resetResumenLateral();
     actualizarChipTipoOperacion();
+    actualizarFloatingBar();
     
     // Establecer fecha actual por defecto
     const hoy = new Date().toISOString().split('T')[0];
@@ -3488,6 +3641,7 @@ function configurarEventos() {
     // Motivo principal: actualizar en vivo el estado de "Ver Resumen"
     $('#select-motivo-principal').on('change', function() {
         actualizarEstadoBotonVerResumen();
+        actualizarFloatingBar();
     });
 
     // Products can only be selected via scanning - no manual "select all"
@@ -4483,6 +4637,9 @@ function resetearFormularioNuevoCambio() {
     $('#count-escaneados').text('0');
     
     // Ocultar sección de productos nuevos
+    // Restaurar pasos visibles
+    $('#paso-buscar-ticket').show();
+    actualizarFloatingBar();
 }
 
 function buscarDocumentoParaCambio(event) {
@@ -4607,6 +4764,7 @@ function buscarDocumentoParaCambio(event) {
                     $('#btn-siguiente').prop('disabled', false).removeClass('btn-outline-secondary').addClass('btn-primary');
                     $('#footer-hint').hide();
                     $('#btn-continuar-inline').show().addClass('show-animated');
+                    actualizarFloatingBar();
                     setTimeout(() => {
                         $('#btn-siguiente').addClass('show-animated');
                         // Llevar el foco al botón del footer para que el usuario lo vea y pueda presionar Enter
@@ -4865,6 +5023,8 @@ function limpiarBusqueda() {
     $('#info-ticket').slideUp(200);
     
     $('#paso-seleccionar-productos').hide();
+    $('#paso-resumen').hide();
+    pasoActual = 1;
     $('#btn-siguiente').prop('disabled', true).removeClass('show-animated').html('Continuar <i class="ri-arrow-right-line ms-1"></i>');
     $('#btn-continuar-inline').removeClass('show-animated').hide();
     $('#footer-hint').show();
@@ -4874,6 +5034,8 @@ function limpiarBusqueda() {
     
     // Desbloquear cierre del modal
     window.desbloquearCierreModal();
+    
+    actualizarFloatingBar();
     
     // Mostrar mensaje informativo
     Swal.fire({
@@ -5016,10 +5178,12 @@ function siguientePaso(event) {
         
         console.log('  ✅ Paso 2 mostrado correctamente');
         console.log('  → pasoActual ahora es:', pasoActual);
+        actualizarFloatingBar();
     } else if (pasoActual === 2) {
         console.log('  → PASO 2 → PASO 3');
-        
-        // Verificar requisitos previos (faltantes del footer)
+
+        // Recalcular faltantes en tiempo real (no usar cache)
+        actualizarEstadoBotonVerResumen();
         const faltantes = window._faltantesPaso2 || [];
         if (faltantes.length > 0) {
             const listaHtml = faltantes.map(f => `<li>${f}</li>`).join('');
@@ -5035,7 +5199,7 @@ function siguientePaso(event) {
             }
             return;
         }
-        
+
         // Validar selección
         if (!validarSeleccionProductos()) {
             console.log('  ❌ Validación de productos falló');
@@ -5044,10 +5208,16 @@ function siguientePaso(event) {
         
         console.log('  ✅ Validación exitosa, mostrando resumen');
         
-        // Ir al paso 3
+        // Ir al paso 3: ocultar pasos anteriores y mostrar resumen
         pasoActual = 3;
+        $('#paso-buscar-ticket').hide();
+        $('#paso-seleccionar-productos').hide();
         $('#paso-resumen').show();
-        generarResumen();
+        try {
+            generarResumen();
+        } catch (e) {
+            console.error('Error en generarResumen:', e);
+        }
         $('#btn-siguiente').hide();
         $('#btn-crear-cambio').show();
         $('#btn-anterior').show();
@@ -5055,9 +5225,14 @@ function siguientePaso(event) {
         $('#footer-resumen').css('display', 'flex');
         actualizarStepper();
         actualizarFooterPaso();
+
+        // Scroll al inicio del resumen
+        const modalBody = document.querySelector('#modalNuevoCambio .modal-body');
+        if (modalBody) modalBody.scrollTop = 0;
         
         console.log('  ✅ Paso 3 (resumen) mostrado');
         console.log('  → pasoActual ahora es:', pasoActual);
+        actualizarFloatingBar();
     }
     
     console.log('🔵 ========== FIN siguientePaso() ==========');
@@ -5095,11 +5270,14 @@ function pasoAnterior(event) {
         actualizarFooterPaso();
         
         console.log('✅ Regresado al paso 1');
+        actualizarFloatingBar();
     } else if (pasoActual === 3) {
         console.log('  → Volver al paso 2');
         
         pasoActual = 2;
         $('#paso-resumen').hide();
+        $('#paso-buscar-ticket').show();
+        $('#paso-seleccionar-productos').show();
         $('#btn-siguiente').show().prop('disabled', false)
             .html('Ver Resumen <i class="ri-arrow-right-circle-fill ms-1"></i>');
         $('#btn-crear-cambio').hide();
@@ -5117,6 +5295,7 @@ function pasoAnterior(event) {
         actualizarFooterPaso();
         
         console.log('✅ Regresado al paso 2');
+        actualizarFloatingBar();
     }
 }
 
@@ -5368,6 +5547,7 @@ function actualizarVistaPreviaTotales() {
 
     // Habilitar/deshabilitar "Ver Resumen" según requisitos del paso 2
     actualizarEstadoBotonVerResumen();
+    actualizarFloatingBar();
 }
 
 /**
@@ -5425,6 +5605,100 @@ function actualizarEstadoBotonVerResumen() {
         } else {
             $motivo.removeClass('border-warning');
         }
+    }
+}
+
+// ─── FLOATING ACTION BAR ──────────────────────────────────────────────────────
+
+function fabAccionPrincipal(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    siguientePaso(event);
+}
+
+function actualizarFloatingBar() {
+    const $fab = $('#floating-action-bar');
+    const $summary = $('#fab-summary');
+    const $btnAnterior = $('#fab-btn-anterior');
+    const $btnPrincipal = $('#fab-btn-principal');
+    const $btnCrear = $('#fab-btn-crear');
+    const $hint = $('#fab-hint');
+    const $texto = $('#fab-btn-texto');
+
+    if (pasoActual === 1) {
+        $summary.hide();
+        $btnAnterior.hide();
+        $btnPrincipal.show().prop('disabled', !ticketActual);
+        $btnCrear.hide();
+        $texto.html('Continuar al Paso 2 <i class="ri-arrow-right-line ms-1"></i>');
+        if (!ticketActual) {
+            $hint.text('Busque un documento de venta para continuar').show();
+        } else {
+            $hint.hide();
+        }
+    } else if (pasoActual === 2) {
+        $summary.show();
+        $btnAnterior.show();
+        $btnPrincipal.show();
+        $btnCrear.hide();
+        $texto.html('<i class="ri-eye-line me-1"></i> Ver Resumen');
+
+        actualizarFabResumen();
+
+        const faltantes = window._faltantesPaso2 || [];
+        if (faltantes.length > 0) {
+            $hint.text('Falta: ' + faltantes.join(', ')).show();
+        } else {
+            $hint.hide();
+        }
+        $btnPrincipal.prop('disabled', false);
+    } else if (pasoActual === 3) {
+        $summary.show();
+        $btnAnterior.show();
+        $btnPrincipal.hide();
+        $btnCrear.show();
+        $hint.hide();
+
+        actualizarFabResumen();
+    }
+}
+
+function actualizarFabResumen() {
+    if (!ticketActual || !ticketActual.productos) return;
+
+    let montoOut = 0, countOut = 0, montoIn = 0, countIn = 0;
+
+    ticketActual.productos.forEach((p, i) => {
+        if ($(`#check-producto-${i}`).is(':checked')) {
+            const cant = parseInt($(`#cantidad-producto-${i}`).val()) || 0;
+            montoOut += cant * (p.precio_unitario || 0);
+            countOut += cant;
+        }
+    });
+
+    productosNuevos.forEach(p => {
+        const cant = p.cantidad || 0;
+        montoIn += cant * (p.precio_venta || 0);
+        countIn += cant;
+    });
+
+    const diff = montoIn - montoOut;
+
+    $('#fab-count-out').text(countOut);
+    $('#fab-monto-out').text('$' + formatearNumero(montoOut));
+    $('#fab-count-in').text(countIn);
+    $('#fab-monto-in').text('$' + formatearNumero(montoIn));
+
+    const $chipDiff = $('#fab-chip-diff');
+    $chipDiff.removeClass('positivo negativo cero');
+    if (diff > 0) {
+        $chipDiff.addClass('positivo');
+        $('#fab-diff').text('+$' + formatearNumero(diff));
+    } else if (diff < 0) {
+        $chipDiff.addClass('negativo');
+        $('#fab-diff').text('-$' + formatearNumero(Math.abs(diff)));
+    } else {
+        $chipDiff.addClass('cero');
+        $('#fab-diff').text('$0');
     }
 }
 
@@ -5521,6 +5795,13 @@ function mostrarResultadosBusquedaProductos(productos) {
             timer: 2500,
             showConfirmButton: false
         });
+        return;
+    }
+
+    // Auto-agregar si solo hay 1 resultado exacto
+    if (productos.length === 1) {
+        agregarProductoNuevo(productos[0]);
+        $('#input-buscar-producto').val('').focus();
         return;
     }
 

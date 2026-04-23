@@ -3646,6 +3646,15 @@ function _filaDetalleHTML(it, idx) {
             </button>
         `);
     }
+    if (!it.dte && it.ticket_id && it.permisos && it.permisos.editar_fecha_ticket) {
+        acciones.push(`
+            <button type="button" class="btn btn-outline-info btn-editar-fecha"
+                    onclick="iniciarEdicionFechaTicket(${it.ticket_id}, '${it.ticket_fecha || ''}', this)"
+                    title="Mover este ticket (sin DTE) a otra fecha">
+                <i class="ri-calendar-edit-line"></i> Mover fecha
+            </button>
+        `);
+    }
     let accionesCell;
     if (acciones.length) {
         accionesCell = `<div class="d-flex gap-1 justify-content-center">${acciones.join('')}</div>`;
@@ -3790,6 +3799,85 @@ async function confirmarEdicionFechaDte(dteId, fechaAnterior, btnEl) {
         const msg = err.responseJSON && err.responseJSON.error
             ? err.responseJSON.error
             : 'No se pudo actualizar la fecha';
+        mostrarError(msg);
+    }
+}
+
+/**
+ * Muestra un input date inline para mover un ticket SIN DTE a otra fecha.
+ */
+function iniciarEdicionFechaTicket(ticketId, fechaActual, btnEl) {
+    const $btn = $(btnEl);
+    const $tr = $btn.closest('tr');
+    $tr.addClass('fila-editando');
+
+    const $td = $btn.closest('td');
+    $td.html(`
+        <div class="d-flex gap-1 align-items-center justify-content-center">
+            <input type="date" class="form-control form-control-sm" value="${fechaActual}" style="max-width:120px;font-size:.72rem;padding:.1rem .3rem;" id="inputFechaEditTicket${ticketId}">
+            <button type="button" class="btn btn-success btn-sm py-0 px-1" title="Guardar" onclick="confirmarEdicionFechaTicket(${ticketId}, '${fechaActual}', this)"><i class="ri-check-line"></i></button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" title="Cancelar" onclick="cancelarEdicionFechaTicket(${ticketId}, '${fechaActual}', this)"><i class="ri-close-line"></i></button>
+        </div>
+    `);
+}
+
+function cancelarEdicionFechaTicket(ticketId, fechaActual, btnEl) {
+    const $tr = $(btnEl).closest('tr');
+    $tr.removeClass('fila-editando');
+    const $td = $(btnEl).closest('td');
+    $td.html(`
+        <button type="button" class="btn btn-outline-info btn-editar-fecha"
+                onclick="iniciarEdicionFechaTicket(${ticketId}, '${fechaActual}', this)"
+                title="Mover este ticket (sin DTE) a otra fecha">
+            <i class="ri-calendar-edit-line"></i> Mover fecha
+        </button>
+    `);
+}
+
+async function confirmarEdicionFechaTicket(ticketId, fechaAnterior, btnEl) {
+    const $tr = $(btnEl).closest('tr');
+    const nueva = $(`#inputFechaEditTicket${ticketId}`).val();
+    if (!nueva) { mostrarError('Ingrese una fecha válida'); return; }
+
+    if (nueva === fechaAnterior) {
+        cancelarEdicionFechaTicket(ticketId, fechaAnterior, btnEl);
+        return;
+    }
+
+    const confirm = await Swal.fire({
+        icon: 'warning',
+        title: '¿Mover ticket a otra fecha?',
+        html: `Se moverá el ticket y sus pagos del <strong>${fechaAnterior}</strong> al <strong>${nueva}</strong>.<br>
+               <small class="text-muted">Este ticket no tiene DTE asociado.</small><br><br>
+               <small>Si existen arqueos cerrados en las fechas afectadas, sus teóricos pueden requerir recálculo.</small>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, mover',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+        const r = await $.ajax({
+            url: '/app/api/cuadratura/editar-fecha-ticket/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            data: JSON.stringify({ ticket_id: ticketId, nueva_fecha: nueva }),
+        });
+        if (!r.success) { mostrarError(r.error || 'Error al mover ticket'); return; }
+
+        mostrarExito(r.mensaje || `Ticket movido al ${nueva}`);
+
+        $tr.removeClass('fila-editando');
+        recargarDetalleMetodosPago();
+        if (typeof generarCuadratura === 'function') generarCuadratura();
+        if (typeof cargarArqueos === 'function') {
+            try { cargarArqueos(); } catch(e) {}
+        }
+    } catch (err) {
+        const msg = err.responseJSON && err.responseJSON.error
+            ? err.responseJSON.error
+            : 'No se pudo mover el ticket';
         mostrarError(msg);
     }
 }
