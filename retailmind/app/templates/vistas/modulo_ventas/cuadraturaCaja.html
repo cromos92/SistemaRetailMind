@@ -3533,35 +3533,62 @@ function _filaDetalleHTML(it, idx) {
 
     let dteCell = '<span class="text-muted">—</span>';
     if (it.dte) {
+        // Si hay drift entre Ticket.fecha (por la que apareció en este
+        // día de cuadratura) y DTE.fecha_emision, lo señalizamos para
+        // que el operador entienda por qué este pago aparece "en otra
+        // fecha" y pueda usar el botón Sincronizar.
+        const driftBadge = it.drift_fecha
+            ? `<span class="badge bg-danger ms-1" style="font-size:.6rem;" title="La fecha del Ticket (${it.ticket_fecha}) NO coincide con la fecha de emisión del DTE (${it.dte.fecha_emision}). Usa Sincronizar para mover el ticket al día correcto.">⚠ Drift</span>`
+            : '';
         dteCell = `
             <div class="dte-tag">
-                <span class="tipo">${_abreviarTipoDte(it.dte.tipo)}</span> #${it.dte.folio}
+                <span class="tipo">${_abreviarTipoDte(it.dte.tipo)}</span> #${it.dte.folio}${driftBadge}
                 <div class="text-muted" style="font-size:.68rem;">
                     Emisión: <span class="fecha-dte" data-dte-id="${it.dte.id}">${it.dte.fecha_emision}</span>
+                    ${it.ticket_fecha && it.drift_fecha ? `<span class="text-danger ms-1" title="Fecha del ticket">· Ticket: ${it.ticket_fecha}</span>` : ''}
                 </div>
             </div>
         `;
     }
 
-    let accionesCell = '<span class="text-muted" style="font-size:.7rem;">—</span>';
+    // Construcción de acciones. Pueden coexistir 2 botones:
+    //   - "Editar fecha"   (cambia DTE.fecha_emision; se propaga al ticket)
+    //   - "Sincronizar"    (sólo cuando hay drift y el usuario tiene permiso)
+    const acciones = [];
     if (it.dte && it.permisos && it.permisos.editar_fecha) {
-        accionesCell = `
+        acciones.push(`
             <button type="button" class="btn btn-outline-primary btn-editar-fecha"
                     onclick="iniciarEdicionFechaDte(${it.dte.id}, '${it.dte.fecha_emision}', this)"
-                    title="Editar fecha de emisión del DTE">
+                    title="Editar fecha de emisión del DTE (se propaga al ticket)">
                 <i class="ri-calendar-edit-line"></i> Editar fecha
             </button>
-        `;
-    } else if (it.dte && !PERMISOS_RESUMEN.puede_editar_algun_dte) {
+        `);
+    }
+    if (it.dte && it.drift_fecha && it.permisos && it.permisos.editar_fecha) {
+        acciones.push(`
+            <button type="button" class="btn btn-warning btn-editar-fecha"
+                    onclick="sincronizarFechaTicketDte(${it.dte.id}, ${it.ticket_id || 'null'}, '${it.dte.fecha_emision}', '${it.ticket_fecha || ''}', this)"
+                    title="Mover el ticket a la fecha del DTE sin tocar el DTE">
+                <i class="ri-refresh-line"></i> Sync
+            </button>
+        `);
+    }
+    let accionesCell;
+    if (acciones.length) {
+        accionesCell = `<div class="d-flex gap-1 justify-content-center">${acciones.join('')}</div>`;
+    } else if (!it.dte) {
+        accionesCell = '<span class="text-muted" style="font-size:.7rem;">—</span>';
+    } else if (!PERMISOS_RESUMEN.puede_editar_algun_dte) {
         accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin permiso">Sin permiso</span>';
-    } else if (it.dte) {
+    } else {
         accionesCell = `<span class="text-muted" style="font-size:.68rem;" title="No autorizado para ${it.dte.tipo}">Sin permiso (${_abreviarTipoDte(it.dte.tipo)})</span>`;
     }
 
     const tarjetaVoucher = [it.tipo_tarjeta, it.voucher].filter(Boolean).join(' · ') || '—';
+    const filaClase = it.drift_fecha ? 'table-warning' : '';
 
     return `
-        <tr data-idx="${idx}" data-dte-id="${it.dte ? it.dte.id : ''}">
+        <tr class="${filaClase}" data-idx="${idx}" data-dte-id="${it.dte ? it.dte.id : ''}" data-ticket-id="${it.ticket_id || ''}">
             <td>${it.hora || '—'}</td>
             <td>${origenBadge}</td>
             <td class="fw-bold">#${it.correlativo || '—'}</td>
@@ -3623,16 +3650,26 @@ async function confirmarEdicionFechaDte(dteId, fechaAnterior, btnEl) {
     const $tr = $(btnEl).closest('tr');
     const nueva = $(`#inputFechaEditDte${dteId}`).val();
     if (!nueva) { mostrarError('Ingrese una fecha válida'); return; }
-    if (nueva === fechaAnterior) { cancelarEdicionFechaDte(dteId, fechaAnterior, btnEl); return; }
+
+    // OJO: NO hacemos early-return cuando `nueva === fechaAnterior`.
+    // El backend `editar_dte_boleta_papel` propaga SIEMPRE la fecha al
+    // ticket vinculado (incluso cuando no cambió en el DTE), lo que
+    // sirve para reparar drift entre Ticket.fecha y Dte.fecha_emision
+    // que viene de flujos antiguos.
+    const sinCambio = (nueva === fechaAnterior);
+
+    const html = sinCambio
+        ? `<small class="text-muted">La fecha del DTE no cambia (${nueva}), pero se forzará la propagación al ticket vinculado por si su fecha está desincronizada.</small>`
+        : `Se actualizará la fecha del DTE y, si hay ticket vinculado, también la del ticket.<br>
+           <small class="text-muted">${fechaAnterior} → <strong>${nueva}</strong></small><br><br>
+           <small>Si existen arqueos cerrados en las fechas afectadas, sus teóricos pueden requerir recálculo.</small>`;
 
     const confirm = await Swal.fire({
         icon: 'warning',
-        title: '¿Cambiar fecha de emisión?',
-        html: `Se actualizará la fecha del DTE y, si hay ticket vinculado, también la del ticket.<br>
-               <small class="text-muted">${fechaAnterior} → <strong>${nueva}</strong></small><br><br>
-               <small>Si existen arqueos cerrados en las fechas afectadas, sus teóricos pueden requerir recálculo.</small>`,
+        title: sinCambio ? '¿Forzar propagación al ticket?' : '¿Cambiar fecha de emisión?',
+        html,
         showCancelButton: true,
-        confirmButtonText: 'Sí, actualizar',
+        confirmButtonText: sinCambio ? 'Sí, sincronizar' : 'Sí, actualizar',
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#0066FF',
     });
@@ -3647,21 +3684,17 @@ async function confirmarEdicionFechaDte(dteId, fechaAnterior, btnEl) {
         });
         if (!r.success) { mostrarError(r.error || 'Error al actualizar'); return; }
 
-        mostrarExito(`Fecha del DTE actualizada a ${nueva}`);
-
-        // Actualizar el item en el cache local para reflejarlo en UI
-        _detalleItemsCache.forEach(it => {
-            if (it.dte && it.dte.id === dteId) {
-                it.dte.fecha_emision = r.documento.fecha_emision || nueva;
-            }
-        });
+        mostrarExito(sinCambio
+            ? 'Ticket sincronizado con la fecha del DTE'
+            : `Fecha del DTE actualizada a ${nueva}`);
 
         $tr.removeClass('fila-editando');
-        // Repintamos la tabla completa manteniendo los filtros activos.
-        aplicarFiltrosDetalle();
+        // Re-fetch real del detalle para que los items movidos a otra
+        // fecha desaparezcan/aparezcan según corresponda.
+        recargarDetalleMetodosPago();
 
         // Refrescar el Resumen de Caja detrás (los totales por método
-        // pueden haber cambiado si el DTE se movió de día).
+        // pueden haber cambiado si el DTE/ticket se movió de día).
         if (typeof generarCuadratura === 'function') {
             generarCuadratura();
         }
@@ -3674,6 +3707,49 @@ async function confirmarEdicionFechaDte(dteId, fechaAnterior, btnEl) {
         const msg = err.responseJSON && err.responseJSON.error
             ? err.responseJSON.error
             : 'No se pudo actualizar la fecha';
+        mostrarError(msg);
+    }
+}
+
+/**
+ * Sincroniza la fecha del Ticket con la fecha de emisión del DTE.
+ * Útil cuando hay drift: el DTE ya tiene la fecha correcta pero el
+ * Ticket quedó en otra fecha (por una edición histórica que no se
+ * propagó). NO modifica el DTE, sólo el Ticket.
+ */
+async function sincronizarFechaTicketDte(dteId, ticketId, fechaDte, fechaTicket, btnEl) {
+    const confirm = await Swal.fire({
+        icon: 'question',
+        title: '¿Sincronizar fecha del ticket con el DTE?',
+        html: `El ticket pasará del <strong>${fechaTicket || '—'}</strong> al <strong>${fechaDte}</strong>.<br>
+               <small class="text-muted">No se modifica el DTE.</small><br><br>
+               <small>Recuerda que si hay arqueos cerrados en las fechas afectadas, sus teóricos pueden requerir recálculo.</small>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, sincronizar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FFA500',
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+        const r = await $.ajax({
+            url: '/app/api/cuadratura/sincronizar-fecha-ticket-dte/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            data: JSON.stringify({ dte_id: dteId, ticket_id: ticketId }),
+        });
+        if (!r.success) { mostrarError(r.error || 'Error al sincronizar'); return; }
+        mostrarExito(r.mensaje || 'Ticket sincronizado');
+
+        recargarDetalleMetodosPago();
+        if (typeof generarCuadratura === 'function') generarCuadratura();
+        if (typeof cargarArqueos === 'function') {
+            try { cargarArqueos(); } catch(e) {}
+        }
+    } catch (err) {
+        const msg = err.responseJSON && err.responseJSON.error
+            ? err.responseJSON.error
+            : 'No se pudo sincronizar';
         mostrarError(msg);
     }
 }

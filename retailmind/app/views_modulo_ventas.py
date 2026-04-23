@@ -5821,6 +5821,25 @@ def generar_cuadratura_caja(request):
 
 # ========== DETALLE DE MÉTODOS DE PAGO PARA RESUMEN DE CAJA ==========
 
+# Mapeo Ticket.tipo_dte (con guiones bajos, snake_case histórico) →
+# Dte.tipo_documento (con espacios, formato "BOLETA ELECTRONICA"). Se
+# usa para desambiguar el match folio_dte ↔ DTE cuando varios DTEs de
+# distintos tipos comparten un mismo `numero_documento` en la misma
+# sucursal (caso real visto: NOTA DE DEBITO #1 vs BOLETA #1, etc).
+_TIPO_DTE_TICKET_A_DTE = {
+    'BOLETA': 'BOLETA PAPEL',
+    'BOLETA_PAPEL': 'BOLETA PAPEL',
+    'BOLETA_ELECTRONICA': 'BOLETA ELECTRONICA',
+    'FACTURA_ELECTRONICA': 'FACTURA ELECTRONICA',
+    'FACTURA_EXENTA': 'FACTURA EXENTA',
+}
+
+
+def _tipo_dte_objetivo(ticket) -> str | None:
+    """Tipo de DTE esperado según `ticket.tipo_dte`. None si es TICKET puro."""
+    return _TIPO_DTE_TICKET_A_DTE.get((ticket.tipo_dte or '').upper().strip())
+
+
 # Mapa código método de pago → categoría lógica que usa el modal
 # "Resumen de Caja" (tarjetas, efectivo, internet). Se calcula una sola
 # vez a nivel de módulo para no recomputarlo en cada request.
@@ -5919,10 +5938,17 @@ def obtener_detalle_cuadratura_metodos_pago(request):
         .order_by('hora', 'id')
     )
 
-    # Resolver DTEs vinculados a los tickets del día (match por folio_dte).
-    # Se resuelve en batch para evitar N+1.
+    # Resolver DTEs vinculados a los tickets del día.
+    # Se indexan por (folio, tipo_documento) para evitar el bug de cruzar
+    # un Ticket BOLETA_ELECTRONICA con folio_dte=1 contra una NOTA DE
+    # DEBITO #1 cualquiera de la misma sucursal. La preferencia para
+    # match es:
+    #   1) Coincidencia exacta (folio + tipo_dte_objetivo del ticket)
+    #   2) Coincidencia sólo por folio si el ticket no declara tipo_dte
+    #      o el tipo no está en el mapa.
     folios_tickets = [t.folio_dte for t in tickets_qs if t.folio_dte]
-    dtes_por_folio = {}
+    dtes_por_folio_tipo: dict[tuple, object] = {}
+    dtes_por_folio: dict[int, object] = {}
     if folios_tickets:
         dtes_vinc_qs = (
             Dte.objects
@@ -5936,10 +5962,9 @@ def obtener_detalle_cuadratura_metodos_pago(request):
             )
         )
         for d in dtes_vinc_qs:
-            # Puede haber más de un DTE con el mismo folio si hay tipos
-            # distintos (raro, pero posible): preferimos el EMITIDO/ACEPTADO.
-            key = d.numero_documento
-            existente = dtes_por_folio.get(key)
+            tipo_up = (d.tipo_documento or '').upper().strip()
+            key_compuesta = (d.numero_documento, tipo_up)
+            existente = dtes_por_folio_tipo.get(key_compuesta)
             if (
                 existente is None
                 or (
@@ -5947,7 +5972,18 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                     and d.estado_dte in ('EMITIDO', 'ACEPTADO')
                 )
             ):
-                dtes_por_folio[key] = d
+                dtes_por_folio_tipo[key_compuesta] = d
+            # Fallback por folio (preferir el EMITIDO/ACEPTADO, igual
+            # que antes para no romper tickets sin tipo_dte declarado).
+            existente2 = dtes_por_folio.get(d.numero_documento)
+            if (
+                existente2 is None
+                or (
+                    existente2.estado_dte not in ('EMITIDO', 'ACEPTADO')
+                    and d.estado_dte in ('EMITIDO', 'ACEPTADO')
+                )
+            ):
+                dtes_por_folio[d.numero_documento] = d
 
     items = []
 
@@ -5971,9 +6007,37 @@ def obtener_detalle_cuadratura_metodos_pago(request):
         }
 
     for ticket in tickets_qs:
-        dte = dtes_por_folio.get(ticket.folio_dte) if ticket.folio_dte else None
+        dte = None
+        if ticket.folio_dte:
+            tipo_obj = _tipo_dte_objetivo(ticket)
+            if tipo_obj:
+                dte = dtes_por_folio_tipo.get((ticket.folio_dte, tipo_obj))
+            if dte is None:
+                # Fallback: match sólo por folio. Útil para tickets
+                # legacy que no declaran `tipo_dte`. Si ese match cae
+                # en un tipo "raro" (ej: NOTA DE DEBITO) y el ticket sí
+                # declara un tipo BOLETA/FACTURA, lo descartamos para no
+                # cruzar registros incompatibles.
+                candidato = dtes_por_folio.get(ticket.folio_dte)
+                if candidato is not None and tipo_obj is None:
+                    dte = candidato
+                elif (
+                    candidato is not None
+                    and (candidato.tipo_documento or '').upper().strip() == tipo_obj
+                ):
+                    dte = candidato
         permisos_item = _permisos_para_dte(dte)
         hora_str = ticket.hora.strftime('%H:%M') if ticket.hora else ''
+        ticket_fecha_str = ticket.fecha.strftime('%Y-%m-%d') if ticket.fecha else None
+        # Drift: el ticket vive en una fecha distinta a la del DTE
+        # asociado. Suele ocurrir cuando se editó la fecha del DTE
+        # desde Gestión de Documentos antes de que la propagación al
+        # ticket existiera, o si una sincronización falló. Lo marcamos
+        # explícitamente para que el frontend pueda ofrecer el botón
+        # "Sincronizar fecha al DTE".
+        drift_fecha = bool(
+            dte and ticket.fecha and ticket.fecha != dte.fecha_emision
+        )
         for pago in ticket.pagos.all():
             metodo = (pago.metodo_pago or '').upper()
             cat = _categoria_metodo_pago(metodo)
@@ -5981,6 +6045,7 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                 'origen': 'TICKET',
                 'pago_id': pago.id,
                 'ticket_id': ticket.id,
+                'ticket_fecha': ticket_fecha_str,
                 'dte_id': dte.id if dte else None,
                 'correlativo': ticket.correlativo,
                 'hora': hora_str,
@@ -5999,6 +6064,7 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                     'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
                     'estado': dte.estado_dte,
                 } if dte else None,
+                'drift_fecha': drift_fecha,
                 'permisos': permisos_item,
             })
 
@@ -6044,6 +6110,7 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                 'origen': 'DTE',
                 'pago_id': pago.id,
                 'ticket_id': None,
+                'ticket_fecha': None,
                 'dte_id': dte.id,
                 'correlativo': dte.numero_documento,
                 'hora': hora_str,
@@ -6062,6 +6129,7 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                     'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
                     'estado': dte.estado_dte,
                 },
+                'drift_fecha': False,
                 'permisos': permisos_item,
             })
 
@@ -6100,6 +6168,186 @@ def obtener_detalle_cuadratura_metodos_pago(request):
             'campo': flags_campo,
             'tipo': flags_tipo,
         },
+    })
+
+
+@login_required
+@require_POST
+def sincronizar_fecha_ticket_dte(request):
+    """
+    Sincroniza `Ticket.fecha` con `Dte.fecha_emision` cuando hay drift.
+
+    Caso de uso: en un flujo histórico se editó la fecha del DTE desde
+    Gestión de Documentos pero no se propagó al ticket vinculado, así
+    que la cuadratura del día sigue mostrando esos pagos en la fecha
+    "vieja" del ticket. Este endpoint usa `.update()` para evitar el
+    `auto_now=True` del campo `Ticket.fecha`.
+
+    Permisos: requiere `dte_editar_fecha` + permiso del tipo de DTE
+    (mismo criterio que `editar_dte_boleta_papel`). Por seguridad sólo
+    actúa cuando hay drift real (ticket.fecha != dte.fecha_emision).
+
+    Body JSON:
+        { "dte_id": 123 }   o   { "ticket_id": 456 }
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'})
+
+    dte_id = data.get('dte_id')
+    ticket_id = data.get('ticket_id')
+    if not dte_id and not ticket_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Se requiere dte_id o ticket_id',
+        })
+
+    sucursal_id = get_sucursal_id(request)
+    if not sucursal_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'No hay sucursal seleccionada',
+        })
+
+    with transaction.atomic():
+        # Cargar el DTE (vía ticket si no llegó dte_id)
+        if not dte_id:
+            ticket = (
+                Ticket.objects
+                .select_for_update()
+                .filter(pk=ticket_id, sucursal_id=sucursal_id)
+                .first()
+            )
+            if not ticket:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Ticket no encontrado',
+                })
+            if not ticket.folio_dte:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Este ticket no tiene DTE asociado',
+                })
+            tipo_obj = _TIPO_DTE_TICKET_A_DTE.get(
+                (ticket.tipo_dte or '').upper().strip()
+            )
+            qs = Dte.objects.filter(
+                sucursal_id=sucursal_id,
+                numero_documento=ticket.folio_dte,
+            )
+            if tipo_obj:
+                qs = qs.filter(tipo_documento=tipo_obj)
+            dte = qs.first()
+            if not dte:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se encontró el DTE asociado al ticket',
+                })
+        else:
+            dte = (
+                Dte.objects
+                .select_for_update()
+                .filter(pk=dte_id, sucursal_id=sucursal_id)
+                .first()
+            )
+            if not dte:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'DTE no encontrado',
+                })
+
+        # Validar permiso (campo fecha + tipo del DTE)
+        if not puede_editar_campo_dte(
+            request.user, 'fecha', dte.tipo_documento,
+            sucursal_id=sucursal_id,
+        ):
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    f'No tiene permisos para editar fecha en {dte.tipo_documento}'
+                ),
+            }, status=403)
+
+        # Localizar ticket vinculado por (sucursal, folio, tipo) — preferimos
+        # el match por tipo para evitar cruces con otros tipos.
+        # Mapeo inverso: Dte.tipo_documento → Ticket.tipo_dte
+        tipo_dte_inv = {v: k for k, v in _TIPO_DTE_TICKET_A_DTE.items()}
+        tipo_ticket_obj = tipo_dte_inv.get(
+            (dte.tipo_documento or '').upper().strip()
+        )
+        ticket_qs = Ticket.objects.select_for_update().filter(
+            sucursal_id=dte.sucursal_id,
+            folio_dte=dte.numero_documento,
+        )
+        ticket = None
+        if tipo_ticket_obj:
+            ticket = ticket_qs.filter(tipo_dte=tipo_ticket_obj).first()
+        if ticket is None:
+            ticket = ticket_qs.first()
+        if not ticket:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontró ticket vinculado al DTE',
+            })
+
+        if ticket.fecha == dte.fecha_emision:
+            return JsonResponse({
+                'success': True,
+                'mensaje': 'Las fechas ya estaban sincronizadas',
+                'cambio': False,
+                'ticket_id': ticket.id,
+                'dte_id': dte.id,
+                'fecha': dte.fecha_emision.strftime('%Y-%m-%d'),
+            })
+
+        fecha_anterior = ticket.fecha
+        # `.update()` para evitar el `auto_now=True` de `Ticket.fecha`.
+        Ticket.objects.filter(pk=ticket.pk).update(
+            fecha=dte.fecha_emision,
+        )
+
+        # Bitácora en arqueos afectados (origen y destino), si hay alguno
+        # cerrado o con diferencias en esas fechas.
+        try:
+            fechas_a_revisar = {fecha_anterior, dte.fecha_emision}
+            arqueos_qs = ArqueoCaja.objects.filter(
+                sucursal_id=dte.sucursal_id,
+                fecha_arqueo__in=fechas_a_revisar,
+            ).exclude(estado='ABIERTO')
+            for arq in arqueos_qs:
+                ObservacionArqueo.objects.create(
+                    arqueo=arq,
+                    usuario=request.user,
+                    tipo='SISTEMA',
+                    texto=(
+                        f'Sincronización de fecha del Ticket #{ticket.correlativo}'
+                        f' con DTE #{dte.numero_documento} ({dte.tipo_documento}). '
+                        f'Fecha ticket: '
+                        f'{fecha_anterior.strftime("%d/%m/%Y") if fecha_anterior else "—"}'
+                        f' → {dte.fecha_emision.strftime("%d/%m/%Y")}. '
+                        'Los teóricos del arqueo pueden requerir recálculo.'
+                    ),
+                    visible_para_cajera=True,
+                )
+        except Exception:
+            # La bitácora no es bloqueante.
+            pass
+
+    return JsonResponse({
+        'success': True,
+        'mensaje': (
+            f'Ticket #{ticket.correlativo} movido al '
+            f'{dte.fecha_emision.strftime("%d/%m/%Y")} '
+            '(según fecha de emisión del DTE).'
+        ),
+        'cambio': True,
+        'ticket_id': ticket.id,
+        'dte_id': dte.id,
+        'fecha_anterior': (
+            fecha_anterior.strftime('%Y-%m-%d') if fecha_anterior else None
+        ),
+        'fecha_nueva': dte.fecha_emision.strftime('%Y-%m-%d'),
     })
 
 
