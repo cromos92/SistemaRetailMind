@@ -287,6 +287,71 @@
     .resumen-total-item { padding: .4rem .5rem; background: #fff; border-radius: var(--nexo-radius-md); }
     #modalResumenCaja .card-header { padding: .3rem .6rem !important; }
     #modalResumenCaja .card-body { padding: .4rem !important; }
+
+    /* Filas clicables del Resumen de Caja (abren detalle por método) */
+    #modalResumenCaja .resumen-table tr.row-detalle {
+        cursor: pointer;
+        transition: background-color .15s ease;
+    }
+    #modalResumenCaja .resumen-table tr.row-detalle:hover {
+        background-color: var(--nexo-primary-light);
+    }
+    #modalResumenCaja .resumen-table tr.row-detalle td:first-child::after {
+        content: '\f0a9';
+        font-family: 'remixicon';
+        font-size: .65rem;
+        margin-left: .3rem;
+        color: var(--nexo-primary);
+        opacity: .5;
+    }
+
+    /* ========== MODAL DETALLE MÉTODOS DE PAGO ========== */
+    #modalDetalleMetodosPago .tabla-detalle-pago th,
+    #modalDetalleMetodosPago .tabla-detalle-pago td {
+        font-size: .78rem;
+        padding: .35rem .5rem;
+        vertical-align: middle;
+    }
+    #modalDetalleMetodosPago .tabla-detalle-pago th {
+        background: var(--nexo-gray-100);
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        text-transform: uppercase;
+        font-size: .68rem;
+        letter-spacing: .02em;
+    }
+    #modalDetalleMetodosPago .badge-categoria {
+        font-size: .65rem;
+        padding: .2rem .45rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+    }
+    #modalDetalleMetodosPago .subtotales-metodo {
+        background: var(--nexo-gray-100);
+        border-left: 3px solid var(--nexo-primary);
+        padding: .4rem .6rem;
+        margin: .4rem 0;
+        border-radius: var(--nexo-radius-sm);
+        font-size: .78rem;
+    }
+    #modalDetalleMetodosPago .btn-editar-fecha {
+        padding: .15rem .4rem;
+        font-size: .72rem;
+        line-height: 1.2;
+    }
+    #modalDetalleMetodosPago .dte-tag {
+        font-family: monospace;
+        font-size: .72rem;
+        color: var(--nexo-gray-700);
+    }
+    #modalDetalleMetodosPago .dte-tag .tipo {
+        color: var(--nexo-primary);
+        font-weight: 600;
+    }
+    #modalDetalleMetodosPago .fila-editando {
+        background: #fff8e1 !important;
+    }
 </style>
 
 <div class="page-content">
@@ -1136,36 +1201,38 @@
                     <div class="col-md-4">
                         <!-- Tarjetas Comerciales -->
                         <div class="card mb-2">
-                            <div class="card-header py-1 px-2 bg-primary">
+                            <div class="card-header py-1 px-2 bg-primary d-flex align-items-center justify-content-between">
                                 <small class="text-white fw-bold"><i class="ri-bank-card-line me-1"></i>Tarjetas</small>
+                                <button type="button" class="btn btn-sm btn-light py-0 px-2" style="font-size:.68rem;" title="Ver detalle de todos los pagos con tarjeta" onclick="abrirDetalleMetodosPago('tarjetas')"><i class="ri-search-eye-line"></i> Detalle</button>
                             </div>
                             <div class="card-body p-2">
                                 <table class="table table-sm table-borderless mb-0 resumen-table">
                                     <tbody>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">VISA-MC-AMEX</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="visa">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">REDCOMPRA DÉB.</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="debito">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">PRESTO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="presto">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">HITES</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="hites">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_CREDITO,TBK_CREDITO_POS,TBK_POS_INTEGRADO,TBK_MANUAL" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">VISA-MC-AMEX</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="visa">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_DEBITO,TBK_DEBITO_POS,TBK_PREPAGO_POS" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">REDCOMPRA DÉB.</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="debito">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="PRESTO" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">PRESTO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="presto">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="HITES" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">HITES</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="hites">$0</span></td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                         <!-- Efectivo y Otros -->
                         <div class="card">
-                            <div class="card-header py-1 px-2 bg-success">
+                            <div class="card-header py-1 px-2 bg-success d-flex align-items-center justify-content-between">
                                 <small class="text-white fw-bold"><i class="ri-money-dollar-circle-line me-1"></i>Efectivo y Otros</small>
+                                <button type="button" class="btn btn-sm btn-light py-0 px-2" style="font-size:.68rem;" title="Ver detalle de efectivo y equivalentes" onclick="abrirDetalleMetodosPago('efectivo')"><i class="ri-search-eye-line"></i> Detalle</button>
                             </div>
                             <div class="card-body p-2">
                                 <table class="table table-sm table-borderless mb-0 resumen-table">
                                     <tbody>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">EFECTIVO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-success);"><span id="efectivo">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">TRANSFERENCIA</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="transferencia">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="EFECTIVO" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">EFECTIVO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-success);"><span id="efectivo">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="TRANSFERENCIA" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">TRANSFERENCIA</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="transferencia">$0</span></td></tr>
                                         <tr><td class="text-muted" style="font-size:.75rem;">NC TOTAL</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="nota_credito">$0</span></td></tr>
                                         <tr><td class="text-muted ps-3" style="font-size:.68rem;">NC Efectivo Caja</td><td class="text-end" style="font-size:.75rem;font-family:monospace;color:var(--nexo-danger);"><span id="nc_efectivo">$0</span></td></tr>
                                         <tr><td class="text-muted ps-3" style="font-size:.68rem;">NC Transferencia</td><td class="text-end" style="font-size:.75rem;font-family:monospace;color:var(--nexo-info);"><span id="nc_transferencia">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">CONVENIO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="convenio">$0</span></td></tr>
-                                        <tr><td style="font-size:.75rem;color:var(--nexo-primary);">CRÉD. TRABAJADOR</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-primary);"><span id="credito_trabajador">$0</span></td></tr>
-                                        <tr><td style="font-size:.75rem;color:var(--nexo-warning);">CRÉD. EXTERNO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-warning);"><span id="credito_externo">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="CONVENIO" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">CONVENIO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="convenio">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_TRABAJADOR" title="Ver detalle"><td style="font-size:.75rem;color:var(--nexo-primary);">CRÉD. TRABAJADOR</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-primary);"><span id="credito_trabajador">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_EXTERNO" title="Ver detalle"><td style="font-size:.75rem;color:var(--nexo-warning);">CRÉD. EXTERNO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-warning);"><span id="credito_externo">$0</span></td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1176,17 +1243,18 @@
                     <div class="col-md-4">
                         <!-- Venta Internet -->
                         <div class="card mb-2">
-                            <div class="card-header py-1 px-2 bg-warning">
+                            <div class="card-header py-1 px-2 bg-warning d-flex align-items-center justify-content-between">
                                 <small class="fw-bold" style="color:var(--nexo-gray-900);"><i class="ri-global-line me-1"></i>Venta Internet</small>
+                                <button type="button" class="btn btn-sm btn-light py-0 px-2" style="font-size:.68rem;" title="Ver detalle de venta internet" onclick="abrirDetalleMetodosPago('internet')"><i class="ri-search-eye-line"></i> Detalle</button>
                             </div>
                             <div class="card-body p-2">
                                 <table class="table table-sm table-borderless mb-0 resumen-table">
                                     <tbody>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">WALMART</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="falabella">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">PARIS</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="paris">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">RIPLEY</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="ripley">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">SHOPIFY</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="mercadopago">$0</span></td></tr>
-                                        <tr><td class="text-muted" style="font-size:.75rem;">KLAP</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="klap">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="WALMART,FALABELLA" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">WALMART</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="falabella">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="PARIS" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">PARIS</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="paris">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="RIPLEY" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">RIPLEY</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="ripley">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO,SHOPIFY" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">SHOPIFY</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="mercadopago">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="KLAP" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">KLAP</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="klap">$0</span></td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1292,6 +1360,89 @@
                 </div>
             </div>
             <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal"><i class="ri-close-line me-1"></i>Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- =====================================================================
+     MODAL: DETALLE DE MÉTODOS DE PAGO (abierto desde Resumen de Caja)
+     ===================================================================== -->
+<div class="modal fade" id="modalDetalleMetodosPago" tabindex="-1" aria-labelledby="modalDetalleMetodosPagoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary py-2">
+                <h6 class="modal-title text-white mb-0" id="modalDetalleMetodosPagoLabel" style="font-weight:600;">
+                    <i class="ri-list-unordered me-2"></i>Detalle Métodos de Pago
+                    <span id="detalleMetodosSubtitulo" class="opacity-75 ms-2" style="font-size:.8rem;font-weight:400;"></span>
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-3">
+
+                <!-- Filtros superiores -->
+                <div class="d-flex flex-wrap gap-2 align-items-end mb-3 pb-2" style="border-bottom:1px solid var(--nexo-gray-200);">
+                    <div>
+                        <label class="form-label mb-1" style="font-size:.7rem;">Categoría</label>
+                        <select class="form-select form-select-sm" id="filtroCategoriaDetalle" style="width:160px;" onchange="recargarDetalleMetodosPago()">
+                            <option value="todo">Todos</option>
+                            <option value="tarjetas">Tarjetas</option>
+                            <option value="efectivo">Efectivo y Otros</option>
+                            <option value="internet">Venta Internet</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label mb-1" style="font-size:.7rem;">Método específico</label>
+                        <select class="form-select form-select-sm" id="filtroMetodoDetalle" style="width:220px;" onchange="aplicarFiltrosDetalle()">
+                            <option value="">Todos los métodos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label mb-1" style="font-size:.7rem;">Tipo tarjeta / marca</label>
+                        <input type="text" class="form-control form-control-sm" id="filtroTipoTarjetaDetalle" placeholder="ej: HITES, WALMART" style="width:180px;" oninput="aplicarFiltrosDetalle()">
+                    </div>
+                    <div class="ms-auto d-flex gap-2">
+                        <span class="badge bg-secondary" id="contadorItemsDetalle" style="font-size:.7rem;">0 ítems</span>
+                        <span class="badge bg-primary" id="totalItemsDetalle" style="font-size:.7rem;font-family:monospace;">$0</span>
+                    </div>
+                </div>
+
+                <!-- Subtotales por método -->
+                <div id="contenedorSubtotales" class="mb-2"></div>
+
+                <!-- Tabla de detalle -->
+                <div class="table-responsive">
+                    <table class="table table-sm tabla-detalle-pago mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:55px;">Hora</th>
+                                <th style="width:70px;">Origen</th>
+                                <th style="width:80px;">N°</th>
+                                <th>Cliente</th>
+                                <th style="width:140px;">Método</th>
+                                <th style="width:120px;">Tarjeta/Voucher</th>
+                                <th style="width:200px;">DTE Asociado</th>
+                                <th class="text-end" style="width:110px;">Monto</th>
+                                <th class="text-center" style="width:110px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaDetalleMetodosPago">
+                            <tr><td colspan="9" class="text-center text-muted py-4">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="estadoCargaDetalle" style="display:none;" class="text-center py-3">
+                    <div class="spinner-border text-primary mb-2" role="status"></div>
+                    <p class="text-muted mb-0" style="font-size:.85rem;">Cargando detalle...</p>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <small class="text-muted me-auto" id="leyendaPermisosDetalle" style="font-size:.7rem;">
+                    <i class="ri-information-line me-1"></i>Las fechas editables dependen de sus permisos por tipo de DTE.
+                </small>
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal"><i class="ri-close-line me-1"></i>Cerrar</button>
             </div>
         </div>
@@ -3185,6 +3336,354 @@ function generarContenidoTermica(d) {
 
 function fmCLP(v) { return '$' + parseInt(v||0).toLocaleString('es-CL'); }
 function formatearMoneda(v) { return fmCLP(v); }
+
+
+// ========== DETALLE DE MÉTODOS DE PAGO ==========
+// Estos flags vienen del context de la vista `cuadratura_caja`. Aunque el
+// backend aplica permisos por tipo de DTE en cada ítem (flag `permisos`
+// dentro del item) mantenemos estas banderas globales para decidir si
+// mostrar el botón "Editar" (al menos en algún tipo) y como mensaje en
+// la leyenda del modal.
+const PERMISOS_RESUMEN = {
+    puede_editar_fecha: {% if puede_editar_fecha_dte %}true{% else %}false{% endif %},
+    puede_editar_numero: {% if puede_editar_numero_dte %}true{% else %}false{% endif %},
+    puede_editar_pago: {% if puede_editar_pago_dte %}true{% else %}false{% endif %},
+    puede_editar_algun_dte: {% if puede_editar_algun_dte %}true{% else %}false{% endif %},
+};
+
+// Cache del último batch de items cargados. Se usa para filtrar en
+// cliente por método / tipo_tarjeta sin volver a pegarle al backend.
+let _detalleItemsCache = [];
+let _detalleCategoriaActual = 'todo';
+let _detalleFiltroPrevio = {};  // {metodos: ['TARJETA_CREDITO', ...], tipoTarjeta: 'HITES'}
+
+function _labelCategoria(cat) {
+    const L = {
+        tarjetas: 'Tarjetas',
+        efectivo: 'Efectivo y Otros',
+        internet: 'Venta Internet',
+        otros: 'Otros',
+        todo: 'Todos',
+    };
+    return L[cat] || cat;
+}
+
+function _badgeClaseCategoria(cat) {
+    const M = {
+        tarjetas: 'bg-primary',
+        efectivo: 'bg-success',
+        internet: 'bg-warning text-dark',
+        otros: 'bg-secondary',
+    };
+    return M[cat] || 'bg-secondary';
+}
+
+/**
+ * Abre el modal de detalle. Si se pasa `contextoFila` (desde
+ * `abrirDetalleDesdeFila`) preselecciona los filtros por método y/o
+ * tipo_tarjeta definidos en el `<tr>` clickeado.
+ */
+function abrirDetalleMetodosPago(categoria, contextoFila) {
+    const fecha = $('#fechaCuadratura').val();
+    if (!fecha) { mostrarError('Seleccione una fecha en el Resumen de Caja'); return; }
+
+    _detalleCategoriaActual = categoria || 'todo';
+    _detalleFiltroPrevio = contextoFila || {};
+
+    $('#filtroCategoriaDetalle').val(_detalleCategoriaActual);
+    $('#filtroTipoTarjetaDetalle').val(
+        (contextoFila && contextoFila.tipoTarjeta) || ''
+    );
+
+    const fechaLegible = new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL');
+    $('#detalleMetodosSubtitulo').text(`— ${_labelCategoria(_detalleCategoriaActual)} · ${fechaLegible}`);
+
+    $('#modalDetalleMetodosPago').modal('show');
+    recargarDetalleMetodosPago();
+}
+
+/**
+ * Handler del click en filas del Resumen de Caja.
+ * Lee `data-categoria`, `data-metodos` y `data-tipo-tarjeta` del <tr>.
+ */
+function abrirDetalleDesdeFila(tr) {
+    const $tr = $(tr);
+    const cat = $tr.data('categoria') || 'todo';
+    const metodos = ($tr.data('metodos') || '').toString().split(',').map(s=>s.trim()).filter(Boolean);
+    const tipoTarjeta = ($tr.data('tipo-tarjeta') || '').toString().trim();
+    abrirDetalleMetodosPago(cat, { metodos, tipoTarjeta });
+}
+
+function recargarDetalleMetodosPago() {
+    const fecha = $('#fechaCuadratura').val();
+    if (!fecha) return;
+    _detalleCategoriaActual = $('#filtroCategoriaDetalle').val() || 'todo';
+    $('#estadoCargaDetalle').show();
+    $('#tablaDetalleMetodosPago').html('<tr><td colspan="9" class="text-center text-muted py-4">Cargando...</td></tr>');
+    $('#contenedorSubtotales').empty();
+
+    $.ajax({
+        url: '/app/api/cuadratura/detalle-metodos-pago/',
+        method: 'GET',
+        data: { fecha: fecha, categoria: _detalleCategoriaActual },
+        success: function(r) {
+            $('#estadoCargaDetalle').hide();
+            if (!r.success) { mostrarError('Error: ' + (r.error || 'sin detalle')); return; }
+            _detalleItemsCache = r.items || [];
+            _popularSelectMetodos(r.totales_por_metodo || []);
+            _pintarSubtotales(r.totales_por_metodo || []);
+            aplicarFiltrosDetalle();
+        },
+        error: function(xhr) {
+            $('#estadoCargaDetalle').hide();
+            mostrarError('Error al cargar detalle: ' + (xhr.responseText || xhr.status));
+        }
+    });
+}
+
+function _popularSelectMetodos(totales) {
+    const $sel = $('#filtroMetodoDetalle');
+    const actual = $sel.val();
+    $sel.empty().append('<option value="">Todos los métodos</option>');
+    // Ordenar por display
+    totales.slice().sort((a, b) => (a.metodo_pago_display || '').localeCompare(b.metodo_pago_display || ''))
+        .forEach(t => {
+            $sel.append(`<option value="${t.metodo_pago}">${t.metodo_pago_display} — ${fmCLP(t.total)}</option>`);
+        });
+
+    // Preselección desde click en fila (si sólo hay 1 método asociado).
+    const metodosPrevios = (_detalleFiltroPrevio.metodos || []);
+    if (metodosPrevios.length === 1) {
+        $sel.val(metodosPrevios[0]);
+    } else if (actual) {
+        $sel.val(actual);
+    }
+}
+
+function _pintarSubtotales(totales) {
+    if (!totales || !totales.length) { $('#contenedorSubtotales').empty(); return; }
+    const total = totales.reduce((a, t) => a + (t.total || 0), 0);
+    const cant  = totales.reduce((a, t) => a + (t.cantidad || 0), 0);
+    const html = `
+        <div class="subtotales-metodo">
+            <div class="d-flex justify-content-between align-items-center">
+                <strong><i class="ri-bar-chart-line me-1"></i>Subtotales por método</strong>
+                <span class="text-muted" style="font-size:.7rem;">${cant} pagos · ${fmCLP(total)} total</span>
+            </div>
+            <div class="mt-1 d-flex flex-wrap gap-1">
+                ${totales.map(t => `
+                    <span class="badge ${_badgeClaseCategoria(t.categoria)}" style="font-size:.7rem;font-weight:500;">
+                        ${t.metodo_pago_display}: ${fmCLP(t.total)} <small class="opacity-75">(${t.cantidad})</small>
+                    </span>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    $('#contenedorSubtotales').html(html);
+}
+
+/**
+ * Filtra `_detalleItemsCache` en cliente por (método específico,
+ * substring de tipo_tarjeta, pre-filtros de la fila clickeada) y
+ * repinta la tabla.
+ */
+function aplicarFiltrosDetalle() {
+    const metodoSel = ($('#filtroMetodoDetalle').val() || '').toUpperCase();
+    const tipoTarjFiltro = ($('#filtroTipoTarjetaDetalle').val() || '').toUpperCase().trim();
+    const metodosPrevios = (_detalleFiltroPrevio.metodos || []).map(s => s.toUpperCase());
+
+    let items = _detalleItemsCache.slice();
+
+    if (metodoSel) {
+        items = items.filter(it => (it.metodo_pago || '').toUpperCase() === metodoSel);
+    } else if (metodosPrevios.length) {
+        items = items.filter(it => metodosPrevios.includes((it.metodo_pago || '').toUpperCase()));
+    }
+
+    if (tipoTarjFiltro) {
+        // Soporta lista separada por comas (OR) p.ej. "WALMART,FALABELLA"
+        const partes = tipoTarjFiltro.split(',').map(s => s.trim()).filter(Boolean);
+        items = items.filter(it => {
+            const tt = (it.tipo_tarjeta || '').toUpperCase();
+            return partes.some(p => tt.includes(p));
+        });
+    }
+
+    _pintarTablaDetalle(items);
+
+    const total = items.reduce((a, it) => a + (it.monto || 0), 0);
+    $('#contadorItemsDetalle').text(`${items.length} ítems`);
+    $('#totalItemsDetalle').text(fmCLP(total));
+}
+
+function _pintarTablaDetalle(items) {
+    const $tbody = $('#tablaDetalleMetodosPago').empty();
+    if (!items.length) {
+        $tbody.html('<tr><td colspan="9" class="text-center text-muted py-4">Sin pagos para los filtros seleccionados</td></tr>');
+        return;
+    }
+    const rows = items.map((it, idx) => _filaDetalleHTML(it, idx)).join('');
+    $tbody.html(rows);
+}
+
+function _filaDetalleHTML(it, idx) {
+    const origenBadge = it.origen === 'TICKET'
+        ? '<span class="badge bg-info" style="font-size:.65rem;">TICKET</span>'
+        : '<span class="badge bg-dark" style="font-size:.65rem;">DTE</span>';
+
+    let dteCell = '<span class="text-muted">—</span>';
+    if (it.dte) {
+        dteCell = `
+            <div class="dte-tag">
+                <span class="tipo">${_abreviarTipoDte(it.dte.tipo)}</span> #${it.dte.folio}
+                <div class="text-muted" style="font-size:.68rem;">
+                    Emisión: <span class="fecha-dte" data-dte-id="${it.dte.id}">${it.dte.fecha_emision}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    let accionesCell = '<span class="text-muted" style="font-size:.7rem;">—</span>';
+    if (it.dte && it.permisos && it.permisos.editar_fecha) {
+        accionesCell = `
+            <button type="button" class="btn btn-outline-primary btn-editar-fecha"
+                    onclick="iniciarEdicionFechaDte(${it.dte.id}, '${it.dte.fecha_emision}', this)"
+                    title="Editar fecha de emisión del DTE">
+                <i class="ri-calendar-edit-line"></i> Editar fecha
+            </button>
+        `;
+    } else if (it.dte && !PERMISOS_RESUMEN.puede_editar_algun_dte) {
+        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin permiso">Sin permiso</span>';
+    } else if (it.dte) {
+        accionesCell = `<span class="text-muted" style="font-size:.68rem;" title="No autorizado para ${it.dte.tipo}">Sin permiso (${_abreviarTipoDte(it.dte.tipo)})</span>`;
+    }
+
+    const tarjetaVoucher = [it.tipo_tarjeta, it.voucher].filter(Boolean).join(' · ') || '—';
+
+    return `
+        <tr data-idx="${idx}" data-dte-id="${it.dte ? it.dte.id : ''}">
+            <td>${it.hora || '—'}</td>
+            <td>${origenBadge}</td>
+            <td class="fw-bold">#${it.correlativo || '—'}</td>
+            <td class="text-truncate" style="max-width:220px;" title="${(it.cliente || '').replace(/"/g, '&quot;')}">${it.cliente || '—'}${it.cliente_rut ? `<div class="text-muted" style="font-size:.65rem;">${it.cliente_rut}</div>` : ''}</td>
+            <td><span class="badge badge-categoria ${_badgeClaseCategoria(it.categoria)}">${it.metodo_pago_display}</span></td>
+            <td class="text-muted" style="font-size:.72rem;">${tarjetaVoucher}</td>
+            <td>${dteCell}</td>
+            <td class="text-end fw-bold font-monospace">${fmCLP(it.monto)}</td>
+            <td class="text-center">${accionesCell}</td>
+        </tr>
+    `;
+}
+
+function _abreviarTipoDte(tipo) {
+    const M = {
+        'BOLETA ELECTRONICA': 'BOL.E',
+        'BOLETA PAPEL': 'BOL.P',
+        'FACTURA ELECTRONICA': 'FAC.E',
+        'FACTURA EXENTA': 'FAC.EX',
+        'NOTA DE CREDITO': 'NC',
+        'GUIA DESPACHO': 'GD',
+    };
+    return M[(tipo || '').toUpperCase().trim()] || tipo || '—';
+}
+
+/**
+ * Muestra un input date inline para editar la fecha del DTE asociado.
+ * Usa el endpoint `editar_dte_boleta_papel` (ya existente, con la
+ * matriz de permisos campo × tipo).
+ */
+function iniciarEdicionFechaDte(dteId, fechaActual, btnEl) {
+    const $btn = $(btnEl);
+    const $tr = $btn.closest('tr');
+    $tr.addClass('fila-editando');
+
+    const $td = $btn.closest('td');
+    $td.html(`
+        <div class="d-flex gap-1 align-items-center justify-content-center">
+            <input type="date" class="form-control form-control-sm" value="${fechaActual}" style="max-width:120px;font-size:.72rem;padding:.1rem .3rem;" id="inputFechaEditDte${dteId}">
+            <button type="button" class="btn btn-success btn-sm py-0 px-1" title="Guardar" onclick="confirmarEdicionFechaDte(${dteId}, '${fechaActual}', this)"><i class="ri-check-line"></i></button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" title="Cancelar" onclick="cancelarEdicionFechaDte(${dteId}, '${fechaActual}', this)"><i class="ri-close-line"></i></button>
+        </div>
+    `);
+}
+
+function cancelarEdicionFechaDte(dteId, fechaActual, btnEl) {
+    const $tr = $(btnEl).closest('tr');
+    $tr.removeClass('fila-editando');
+    const $td = $(btnEl).closest('td');
+    $td.html(`
+        <button type="button" class="btn btn-outline-primary btn-editar-fecha"
+                onclick="iniciarEdicionFechaDte(${dteId}, '${fechaActual}', this)">
+            <i class="ri-calendar-edit-line"></i> Editar fecha
+        </button>
+    `);
+}
+
+async function confirmarEdicionFechaDte(dteId, fechaAnterior, btnEl) {
+    const $tr = $(btnEl).closest('tr');
+    const nueva = $(`#inputFechaEditDte${dteId}`).val();
+    if (!nueva) { mostrarError('Ingrese una fecha válida'); return; }
+    if (nueva === fechaAnterior) { cancelarEdicionFechaDte(dteId, fechaAnterior, btnEl); return; }
+
+    const confirm = await Swal.fire({
+        icon: 'warning',
+        title: '¿Cambiar fecha de emisión?',
+        html: `Se actualizará la fecha del DTE y, si hay ticket vinculado, también la del ticket.<br>
+               <small class="text-muted">${fechaAnterior} → <strong>${nueva}</strong></small><br><br>
+               <small>Si existen arqueos cerrados en las fechas afectadas, sus teóricos pueden requerir recálculo.</small>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, actualizar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+        const r = await $.ajax({
+            url: '/app/api/ventas/editar-boleta-papel/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+            data: JSON.stringify({ documento_id: dteId, fecha_emision: nueva }),
+        });
+        if (!r.success) { mostrarError(r.error || 'Error al actualizar'); return; }
+
+        mostrarExito(`Fecha del DTE actualizada a ${nueva}`);
+
+        // Actualizar el item en el cache local para reflejarlo en UI
+        _detalleItemsCache.forEach(it => {
+            if (it.dte && it.dte.id === dteId) {
+                it.dte.fecha_emision = r.documento.fecha_emision || nueva;
+            }
+        });
+
+        $tr.removeClass('fila-editando');
+        // Repintamos la tabla completa manteniendo los filtros activos.
+        aplicarFiltrosDetalle();
+
+        // Refrescar el Resumen de Caja detrás (los totales por método
+        // pueden haber cambiado si el DTE se movió de día).
+        if (typeof generarCuadratura === 'function') {
+            generarCuadratura();
+        }
+        // Refrescar historial de arqueos (las fechas pueden haber
+        // afectado los teóricos).
+        if (typeof cargarArqueos === 'function') {
+            try { cargarArqueos(); } catch(e) {}
+        }
+    } catch (err) {
+        const msg = err.responseJSON && err.responseJSON.error
+            ? err.responseJSON.error
+            : 'No se pudo actualizar la fecha';
+        mostrarError(msg);
+    }
+}
+
+// Wire up clicks de filas del Resumen de Caja (delegation sobre el body
+// del modal, así se engancha aunque las filas se reconstruyan).
+$(document).on('click', '#modalResumenCaja .row-detalle', function() {
+    abrirDetalleDesdeFila(this);
+});
+
 
 // ========== AUXILIARES ==========
 function mostrarLoading(s) { if(s) $('#loadingOverlay').css('display','flex'); else $('#loadingOverlay').hide(); }

@@ -2007,7 +2007,15 @@
 </div>
 
 {% include '../../layout/footer.html' %}
+<script src="{% static 'js/trazabilidad_dte.js' %}"></script>
 <script>
+    // Delegación global para botones de trazabilidad dentro de esta vista.
+    $(document).on('click', '.btn-ver-trazabilidad', function () {
+        const dteId = parseInt($(this).data('dte-id'), 10);
+        if (window.TrazabilidadDTE && dteId) {
+            window.TrazabilidadDTE.abrir(dteId);
+        }
+    });
 
     // Función para obtener cookies (necesaria para CSRF token)
     function getCookie(name) {
@@ -2751,6 +2759,9 @@
         <a class="btn btn-sm btn-outline-primary" href="/app/verGestionCompras/?buscar=${encodeURIComponent(dte.nombre || '')}" title="Ver compras de ${dte.nombre || 'este proveedor'}">
             <i class="bi bi-cart" style="font-size: 1.1rem;"></i>
         </a>
+        <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${dte.id || 0}" title="Ver trazabilidad (compras origen, NC hijos, movimientos)">
+            <i class="bi bi-diagram-3" style="font-size: 1.1rem;"></i>
+        </button>
     </div>
 </td>
 

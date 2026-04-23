@@ -1131,8 +1131,11 @@
                                 <button type="button" class="btn btn-outline-primary active" id="btnModoRecibidos" title="DTEs dirigidos a esta sucursal (para recepcionar)">
                                     <i class="bi bi-box-arrow-in-down me-1"></i>Recibidos
                                 </button>
-                                <button type="button" class="btn btn-outline-warning" id="btnModoEmitidos" title="DTEs emitidos por esta sucursal y aún no recepcionados">
+                                <button type="button" class="btn btn-outline-warning" id="btnModoEmitidos" title="DTEs emitidos y aún no recepcionados">
                                     <i class="bi bi-box-arrow-up me-1"></i>Emitidos por mí
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" id="btnModoRecepcionados" title="Despachos ya recepcionados por el destino. Permite emitir NC post-recepción">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Despachados recepcionados
                                 </button>
                             </div>
                             {% endif %}
@@ -1976,8 +1979,10 @@ $(document).ready(function() {
     modalProblema = new bootstrap.Modal(document.getElementById('modalDetalleProblema'));
 
     $('#btnRefresh').on('click', () => {
-        if (window.modoEmitidos) {
-            paginaActual = 1;
+        paginaActual = 1;
+        if (window.modoVista === 'recepcionados') {
+            cargarRecepcionados();
+        } else if (window.modoVista === 'emitidos') {
             cargarEmitidos();
         } else {
             cargarRecepciones(true);
@@ -1985,7 +1990,9 @@ $(document).ready(function() {
     });
     $('#filterEstadoDte, #filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => {
         paginaActual = 1;
-        if (window.modoEmitidos) {
+        if (window.modoVista === 'recepcionados') {
+            cargarRecepcionados();
+        } else if (window.modoVista === 'emitidos') {
             cargarEmitidos();
         } else {
             cargarRecepciones();
@@ -2380,7 +2387,9 @@ function cambiarPagina(delta) {
     const nuevaPagina = paginaActual + delta;
     if (nuevaPagina < 1 || nuevaPagina > totalPaginas) return;
     paginaActual = nuevaPagina;
-    if (window.modoEmitidos) {
+    if (window.modoVista === 'recepcionados') {
+        cargarRecepcionados();
+    } else if (window.modoVista === 'emitidos') {
         cargarEmitidos();
     } else {
         cargarRecepciones();
@@ -4348,9 +4357,12 @@ function confirmarCorreccionEmisor() {
 }
 
 // =====================================================================
-// MODO EMISOR: toggle "Emitidos por mi" y modal de ajuste
+// MODO EMISOR: toggles "Emitidos por mi" / "Despachados recepcionados"
+// y modal de ajuste (pre y post recepción, endpoint unificado).
 // =====================================================================
-window.modoEmitidos = false;
+// modoVista: 'recibidos' | 'emitidos' | 'recepcionados'
+window.modoVista = 'recibidos';
+window.modoEmitidos = false; // compat legacy (true si estamos en 'emitidos' o 'recepcionados')
 window.emitidosData = [];
 window.ajusteDteActual = null;
 
@@ -4359,18 +4371,36 @@ function _ajusteFormatearPesos(v) {
     return '$' + n.toLocaleString('es-CL');
 }
 
-function cambiarModoVista(nuevoModoEmitidos) {
-    if (window.modoEmitidos === nuevoModoEmitidos) return;
-    window.modoEmitidos = nuevoModoEmitidos;
-    if (nuevoModoEmitidos) {
-        $('#btnModoRecibidos').removeClass('active');
+function cambiarModoVista(nuevoModoEmitidos, modo) {
+    // Soporta llamadas antiguas (boolean) y nuevas (string modo)
+    if (typeof modo === 'string') {
+        if (window.modoVista === modo) return;
+        window.modoVista = modo;
+    } else {
+        const modoNuevo = nuevoModoEmitidos ? 'emitidos' : 'recibidos';
+        if (window.modoVista === modoNuevo) return;
+        window.modoVista = modoNuevo;
+    }
+
+    window.modoEmitidos = (window.modoVista !== 'recibidos');
+
+    $('#btnModoRecibidos, #btnModoEmitidos, #btnModoRecepcionados').removeClass('active');
+
+    if (window.modoVista === 'emitidos') {
         $('#btnModoEmitidos').addClass('active');
         $('#tituloSeccionDocumentos').text('DTEs emitidos por mi sucursal');
         $('#subtituloSeccionDocumentos').text('DTEs que emitiste y todavía no fueron recepcionados. Podés reducir cantidades o quitar productos.');
         $('#filterEstadoDte').closest('.col-md-3').hide();
+        paginaActual = 1;
         cargarEmitidos();
+    } else if (window.modoVista === 'recepcionados') {
+        $('#btnModoRecepcionados').addClass('active');
+        $('#tituloSeccionDocumentos').text('Despachos ya recepcionados por el destino');
+        $('#subtituloSeccionDocumentos').html('La mercadería ya está en la sucursal destino. Emitir una NC <strong>descuenta stock del destino</strong> y lo <strong>reingresa al origen</strong>.');
+        $('#filterEstadoDte').closest('.col-md-3').hide();
+        paginaActual = 1;
+        cargarRecepcionados();
     } else {
-        $('#btnModoEmitidos').removeClass('active');
         $('#btnModoRecibidos').addClass('active');
         $('#tituloSeccionDocumentos').text('Documentos de Traspaso');
         $('#subtituloSeccionDocumentos').text('Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal');
@@ -4381,6 +4411,24 @@ function cambiarModoVista(nuevoModoEmitidos) {
 }
 
 function cargarEmitidos() {
+    _cargarListadoEmisor({
+        url: '/app/dte/emitidos_pendientes/',
+        spinnerClass: 'text-warning',
+        mensajeCargando: 'Cargando DTEs emitidos pendientes...',
+        renderFn: renderTablaEmitidos,
+    });
+}
+
+function cargarRecepcionados() {
+    _cargarListadoEmisor({
+        url: '/app/dte/emitidos_recepcionados/',
+        spinnerClass: 'text-danger',
+        mensajeCargando: 'Cargando despachos ya recepcionados...',
+        renderFn: renderTablaRecepcionados,
+    });
+}
+
+function _cargarListadoEmisor(opts) {
     const filtros = {
         tipo_documento: $('#filterTipoDocumento').val(),
         fecha_inicio: $('#filterFechaInicio').val(),
@@ -4391,25 +4439,25 @@ function cargarEmitidos() {
     $('#recepcionesBody').html(`
         <tr>
             <td colspan="7" class="text-center py-4">
-                <div class="spinner-border text-warning" role="status"></div>
-                <p class="mt-2 mb-0 text-muted">Cargando DTEs emitidos pendientes...</p>
+                <div class="spinner-border ${opts.spinnerClass}" role="status"></div>
+                <p class="mt-2 mb-0 text-muted">${opts.mensajeCargando}</p>
             </td>
         </tr>
     `);
 
     $.ajax({
-        url: '/app/dte/emitidos_pendientes/',
+        url: opts.url,
         method: 'GET',
         data: filtros,
         dataType: 'json',
     }).done(resp => {
         if (!resp || !resp.success) {
-            Swal.fire('Error', (resp && resp.error) || 'No se pudieron cargar los DTEs emitidos.', 'error');
+            Swal.fire('Error', (resp && resp.error) || 'No se pudieron cargar los DTEs.', 'error');
             return;
         }
         window.emitidosData = resp.items || [];
         totalPaginas = resp.total_paginas || 1;
-        renderTablaEmitidos();
+        opts.renderFn();
         actualizarPaginacion();
     }).fail(xhr => {
         const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Error inesperado';
@@ -4450,20 +4498,96 @@ function renderTablaEmitidos() {
                     <button class="btn btn-sm btn-warning btn-abrir-ajuste" data-dte-id="${d.id}">
                         <i class="bi bi-pencil-square me-1"></i>Ajustar
                     </button>
+                    <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${d.id}" title="Ver trazabilidad">
+                        <i class="bi bi-diagram-3"></i>
+                    </button>
                 </td>
             </tr>
         `);
     });
 }
 
-function abrirModalAjusteEmisor(dteId) {
+function renderTablaRecepcionados() {
+    const tbody = $('#recepcionesBody');
+    tbody.empty();
+    if (!window.emitidosData.length) {
+        tbody.append(`
+            <tr><td colspan="7">
+                <div class="empty-state">
+                    <i class="bi bi-boxes"></i>
+                    <h5 class="mt-2">Sin despachos recepcionados</h5>
+                    <p class="text-muted">No hay DTEs de traspaso ya recepcionados por sus destinos. Cuando una sucursal recepcione un despacho tuyo, aparecerá aquí.</p>
+                </div>
+            </td></tr>
+        `);
+        return;
+    }
+
+    window.emitidosData.forEach(d => {
+        const ajustesBadge = d.ajustes_previos
+            ? `<span class="badge bg-info text-white ms-1" title="NC/ajustes ya emitidos sobre este DTE">${d.ajustes_previos} NC</span>`
+            : '';
+        // Indicador: NCs hijas que no devolvieron stock (bug histórico).
+        const pendienteBadge = (d.ncs_stock_pendiente || 0) > 0
+            ? `<span class="badge bg-warning text-dark ms-1"
+                     title="Hay ${d.ncs_stock_pendiente} NC(s) hijas de este DTE que no devolvieron stock. Usar 'Reparar' para corregirlo.">
+                   <i class="bi bi-exclamation-triangle me-1"></i>Stock pendiente
+               </span>`
+            : '';
+        // Botón "Reparar stock": si hay 1 NC pendiente la abre directo;
+        // si hay varias, abre la trazabilidad del padre para elegir cuál.
+        let botonReparar = '';
+        if ((d.ncs_stock_pendiente || 0) === 1 && d.nc_ids_pendientes && d.nc_ids_pendientes.length === 1) {
+            botonReparar = `
+                    <button class="btn btn-sm btn-warning btn-reparar-nc-stock" data-nc-id="${d.nc_ids_pendientes[0]}" title="Reparar stock histórico de la NC hija">
+                        <i class="bi bi-tools me-1"></i>Reparar
+                    </button>`;
+        } else if ((d.ncs_stock_pendiente || 0) > 1) {
+            botonReparar = `
+                    <button class="btn btn-sm btn-warning btn-ver-trazabilidad" data-dte-id="${d.id}" title="Varias NCs hijas pendientes: elegir en trazabilidad">
+                        <i class="bi bi-tools me-1"></i>Reparar (${d.ncs_stock_pendiente})
+                    </button>`;
+        }
+
+        tbody.append(`
+            <tr>
+                <td>
+                    <strong>${d.tipo_documento}</strong>${ajustesBadge}${pendienteBadge}
+                    <br><span class="text-muted">#${d.numero_documento}</span>
+                </td>
+                <td>${d.sucursal_destino || d.receptor || '-'}</td>
+                <td>${d.fecha_emision || '-'}<br><small class="text-muted">Rec: ${d.fecha_recepcion || '-'}</small></td>
+                <td>${d.unidades_productos} uds</td>
+                <td>${_ajusteFormatearPesos(d.monto_con_iva)}</td>
+                <td><span class="badge bg-danger text-white" title="${d.estado_dte}">${d.estado_dte.replace(/_/g, ' ')}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-danger btn-abrir-ajuste" data-dte-id="${d.id}" data-post-recepcion="1" title="Emitir NC post-recepción">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Emitir NC
+                    </button>${botonReparar}
+                    <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${d.id}" title="Ver trazabilidad">
+                        <i class="bi bi-diagram-3"></i>
+                    </button>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+// Recarga la lista activa cuando una NC fue reparada desde el helper global.
+document.addEventListener('nc-stock-reparada', function () {
+    if (window.modoVista === 'recepcionados') cargarRecepcionados();
+    else if (window.modoVista === 'emitidos') cargarEmitidos();
+});
+
+function abrirModalAjusteEmisor(dteId, opciones) {
     const dte = (window.emitidosData || []).find(d => d.id === dteId);
     if (!dte) {
         Swal.fire('Error', 'DTE no encontrado en la lista actual.', 'error');
         return;
     }
 
-    window.ajusteDteActual = dte;
+    const esPostRecepcion = !!(opciones && opciones.postRecepcion) || (window.modoVista === 'recepcionados');
+    window.ajusteDteActual = Object.assign({}, dte, { es_post_recepcion: esPostRecepcion });
 
     $('#ajusteNumero').text('#' + dte.numero_documento);
     $('#ajusteNumeroRef').text('#' + dte.numero_documento);
@@ -4474,38 +4598,112 @@ function abrirModalAjusteEmisor(dteId) {
     $('#ajusteUnidades').text(dte.unidades_productos || 0);
     $('#ajusteMotivo').val('').removeClass('is-invalid');
 
+    // Banner contextual según fase
+    let bannerFase = '';
+    if (esPostRecepcion) {
+        bannerFase = `
+            <div class="alert alert-danger mt-2 small mb-2">
+                <i class="bi bi-exclamation-octagon me-1"></i>
+                <strong>Ajuste POST-RECEPCIÓN.</strong>
+                La mercadería ya está en ${dte.sucursal_destino || 'la tienda destino'}.
+                La NC <strong>descuenta stock del destino</strong> y lo
+                <strong>reingresa al origen</strong>. Si el destino ya vendió
+                parte, el sistema bloqueará el ajuste y deberá regularizar.
+            </div>`;
+    } else {
+        bannerFase = `
+            <div class="alert alert-warning mt-2 small mb-2">
+                <i class="bi bi-info-circle me-1"></i>
+                Ajuste PRE-RECEPCIÓN: el stock vuelve a la sucursal origen.
+            </div>`;
+    }
+    // Insertar/actualizar banner justo antes del motivo, sin romper markup si no existe contenedor.
+    const $motivo = $('#ajusteMotivo');
+    if ($motivo.length) {
+        $motivo.closest('.mb-3, .form-group').find('.banner-fase-ajuste').remove();
+        $motivo.closest('.mb-3, .form-group').prepend(
+            `<div class="banner-fase-ajuste">${bannerFase}</div>`
+        );
+    }
+
+    const colspan = esPostRecepcion ? 7 : 6;
     $('#ajusteProductosBody').html(`
-        <tr><td colspan="6" class="text-center py-3">
-            <div class="spinner-border text-warning spinner-border-sm"></div>
+        <tr><td colspan="${colspan}" class="text-center py-3">
+            <div class="spinner-border ${esPostRecepcion ? 'text-danger' : 'text-warning'} spinner-border-sm"></div>
             <span class="text-muted ms-2">Cargando productos del DTE...</span>
         </td></tr>
     `);
 
+    // Ajustar headers de la tabla del modal para incluir columna "Stock destino" en post-recepción.
+    const $headRow = $('#modalAjustarDteEmisor table thead tr').first();
+    if ($headRow.length) {
+        $headRow.find('th.col-stock-destino').remove();
+        if (esPostRecepcion) {
+            // Insertar "Stock destino" antes de la columna "Cantidad original".
+            const headers = $headRow.find('th');
+            // Heurística: insertar en la posición 3 (después de SKU, Nombre, Talla).
+            const $targetHeader = headers.eq(3);
+            if ($targetHeader.length) {
+                $targetHeader.before('<th class="col-stock-destino text-center" title="Stock actual en la sucursal destino">Stock destino</th>');
+            } else {
+                $headRow.append('<th class="col-stock-destino text-center">Stock destino</th>');
+            }
+        }
+    }
+
     $.get(`/app/api/detalle_dte_completo/${dteId}/`).done(resp => {
-        const productos = (resp && (resp.productos || resp.dte_productos)) || [];
+        const productos = ((resp && resp.productos) || []).filter(p => (p.activo === undefined) || p.activo);
         if (!productos.length) {
             $('#ajusteProductosBody').html(`
-                <tr><td colspan="6" class="text-center text-muted py-3">Sin productos activos en el DTE.</td></tr>
+                <tr><td colspan="${colspan}" class="text-center text-muted py-3">Sin productos activos en el DTE.</td></tr>
             `);
         } else {
-            const filas = productos.filter(p => (p.activo === undefined) || p.activo).map(p => {
+            const filas = productos.map(p => {
                 const dpId = p.id || p.dte_producto_id;
-                const sku = p.sku || (p.productoTalla && p.productoTalla.sku) || '-';
-                const talla = p.talla || (p.productoTalla && p.productoTalla.talla) || '-';
-                const nombre = p.descripcion || p.articulo || p.nombre || '-';
-                const cantidad = parseInt(p.stock || p.cantidad || 0, 10);
+                const sku = p.sku || '-';
+                const talla = p.talla || '-';
+                const nombre = p.descripcion || p.producto || '-';
+                const cantidad = parseInt(p.cantidad || p.stock || 0, 10);
+                const precio = parseFloat(p.precio_unitario || p.precio || 0) || 0;
+                const stockDestino = (p.stock_destino !== null && p.stock_destino !== undefined)
+                    ? parseInt(p.stock_destino, 10)
+                    : null;
+
+                // Límite máximo a devolver en post-recepción: mínimo entre cantidad despachada y stock destino actual
+                const maxDevolver = esPostRecepcion
+                    ? Math.min(cantidad, stockDestino == null ? cantidad : stockDestino)
+                    : cantidad;
+
+                const sinStockDestino = esPostRecepcion && stockDestino !== null && stockDestino < cantidad;
+                const warningStock = sinStockDestino
+                    ? ` <i class="bi bi-exclamation-triangle text-danger ms-1" title="Destino vendió parte del stock. Máximo devolución: ${maxDevolver}"></i>`
+                    : '';
+
+                const colStockDestino = esPostRecepcion
+                    ? `<td class="text-center">
+                           ${stockDestino !== null
+                                ? `<span class="badge ${sinStockDestino ? 'bg-warning text-dark' : 'bg-info text-white'}">${stockDestino}</span>`
+                                : '<span class="text-muted small">-</span>'}
+                       </td>`
+                    : '';
+
                 return `
-                    <tr data-dp-id="${dpId}" data-cantidad-original="${cantidad}" data-precio="${p.precio || 0}">
+                    <tr data-dp-id="${dpId}"
+                        data-cantidad-original="${cantidad}"
+                        data-precio="${precio}"
+                        data-stock-destino="${stockDestino == null ? '' : stockDestino}"
+                        data-max-devolver="${maxDevolver}">
                         <td><small class="font-monospace">${sku}</small></td>
-                        <td><small>${nombre}</small></td>
+                        <td><small>${nombre}${warningStock}</small></td>
                         <td class="text-center"><span class="badge bg-secondary">${talla}</span></td>
+                        ${colStockDestino}
                         <td class="text-center"><strong>${cantidad}</strong></td>
                         <td class="text-center">
                             <input type="number" class="form-control form-control-sm text-center input-ajuste-cantidad"
-                                   min="0" max="${cantidad}" value="${cantidad}" style="width: 95px; display:inline-block;">
+                                   min="${cantidad - maxDevolver}" max="${cantidad}" value="${cantidad}" style="width: 95px; display:inline-block;">
                         </td>
                         <td class="text-center">
-                            <button class="btn btn-sm btn-outline-danger btn-poner-cero" title="Quitar producto (cantidad = 0)">
+                            <button class="btn btn-sm btn-outline-danger btn-poner-cero" title="Devolver el máximo permitido">
                                 <i class="bi bi-x-circle"></i>
                             </button>
                         </td>
@@ -4517,7 +4715,7 @@ function abrirModalAjusteEmisor(dteId) {
         }
     }).fail(() => {
         $('#ajusteProductosBody').html(`
-            <tr><td colspan="6" class="text-center text-danger py-3">
+            <tr><td colspan="${colspan}" class="text-center text-danger py-3">
                 <i class="bi bi-exclamation-triangle"></i> No se pudieron cargar los productos.
             </td></tr>
         `);
@@ -4534,13 +4732,15 @@ function actualizarDiferencialAjuste() {
         const $tr = $(this);
         const cantOriginal = parseInt($tr.data('cantidad-original'), 10) || 0;
         const precio = parseFloat($tr.data('precio')) || 0;
+        const maxDevolver = ($tr.data('max-devolver') !== undefined && $tr.data('max-devolver') !== '')
+            ? parseInt($tr.data('max-devolver'), 10)
+            : cantOriginal;
+        const minNueva = cantOriginal - maxDevolver;
         const $input = $tr.find('.input-ajuste-cantidad');
         let nuevaCant = parseInt($input.val(), 10);
-        if (isNaN(nuevaCant) || nuevaCant < 0) nuevaCant = 0;
-        if (nuevaCant > cantOriginal) {
-            $input.val(cantOriginal);
-            nuevaCant = cantOriginal;
-        }
+        if (isNaN(nuevaCant) || nuevaCant < minNueva) nuevaCant = minNueva;
+        if (nuevaCant > cantOriginal) nuevaCant = cantOriginal;
+        if (String(nuevaCant) !== String($input.val())) $input.val(nuevaCant);
         const dif = cantOriginal - nuevaCant;
         if (dif > 0) {
             difUnidades += dif;
@@ -4578,16 +4778,21 @@ function confirmarAjusteEmisor() {
         return;
     }
 
+    const esPost = !!(window.ajusteDteActual && window.ajusteDteActual.es_post_recepcion);
+    const tituloConfirm = esPost ? '¿Emitir NC post-recepción?' : '¿Confirmar ajuste del DTE?';
+    const htmlConfirm = esPost
+        ? `<p>Se generará una NC vinculada al DTE original.</p>
+           <p class="small text-muted">La mercadería saldrá de <strong>${window.ajusteDteActual.sucursal_destino || 'destino'}</strong> y reingresará a tu bodega de origen. Si hay stock insuficiente en destino el ajuste será bloqueado.</p>`
+        : `<p>Se generará un documento de trazabilidad con los productos retirados.</p>
+           <p class="small text-muted">Esta acción reversa el stock al emisor y notifica al receptor.</p>`;
+
     Swal.fire({
-        title: '¿Confirmar ajuste del DTE?',
-        html: `
-            <p>Se generará un documento de trazabilidad con los productos retirados.</p>
-            <p class="small text-muted">Esta acción reversa el stock al emisor y notifica al receptor.</p>
-        `,
+        title: tituloConfirm,
+        html: htmlConfirm,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#e69a00',
-        confirmButtonText: 'Sí, ajustar',
+        confirmButtonColor: esPost ? '#dc3545' : '#e69a00',
+        confirmButtonText: esPost ? 'Sí, emitir NC' : 'Sí, ajustar',
         cancelButtonText: 'Cancelar',
     }).then(result => {
         if (!result.isConfirmed) return;
@@ -4596,7 +4801,7 @@ function confirmarAjusteEmisor() {
         $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Procesando...');
 
         $.ajax({
-            url: '/app/dte/ajustar_emitido/',
+            url: '/app/dte/ajustar_traspaso/',
             method: 'POST',
             contentType: 'application/json',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
@@ -4635,9 +4840,37 @@ function confirmarAjusteEmisor() {
                 }
             }
 
+            // Feedback concreto del delta de stock por sucursal.
+            let stockHtml = '';
+            const deltas = resp.stock_delta || [];
+            if (deltas.length) {
+                const filas = deltas.map(d => `
+                    <tr>
+                        <td><small class="font-monospace">${d.sku}</small></td>
+                        <td><small>${d.talla || '-'}</small></td>
+                        <td><small>${d.sucursal_alias || d.sucursal_id}</small></td>
+                        <td class="text-end"><strong>${d.stock}</strong></td>
+                    </tr>
+                `).join('');
+                stockHtml = `
+                    <div class="mt-3">
+                        <p class="small mb-1"><strong>Stock actual tras el ajuste:</strong></p>
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead class="table-light"><tr>
+                                <th>SKU</th><th>Talla</th><th>Sucursal</th><th class="text-end">Stock</th>
+                            </tr></thead>
+                            <tbody>${filas}</tbody>
+                        </table>
+                    </div>`;
+            }
+
+            const bannerFase = resp.es_post_recepcion
+                ? '<div class="alert alert-info mt-3 mb-0 small text-start"><i class="bi bi-arrow-counterclockwise me-1"></i> NC <strong>post-recepción</strong>: stock descontado del destino y reingresado al origen.</div>'
+                : '';
+
             Swal.fire({
                 icon: 'success',
-                title: 'Ajuste aplicado',
+                title: resp.es_post_recepcion ? 'NC post-recepción emitida' : 'Ajuste aplicado',
                 html: `
                     <p>${resp.message || 'Ajuste realizado correctamente.'}</p>
                     <ul class="list-unstyled text-start small mb-0">
@@ -4646,11 +4879,18 @@ function confirmarAjusteEmisor() {
                         <li><strong>Unidades retiradas:</strong> ${doc.unidades}</li>
                         <li><strong>Monto neto:</strong> ${_ajusteFormatearPesos(doc.monto_neto)}</li>
                     </ul>
+                    ${bannerFase}
+                    ${stockHtml}
                     ${extraHtml}
                 `,
                 confirmButtonText: 'Entendido',
+                width: deltas.length ? '640px' : undefined,
             }).then(() => {
-                cargarEmitidos();
+                if (window.modoVista === 'recepcionados') {
+                    cargarRecepcionados();
+                } else {
+                    cargarEmitidos();
+                }
             });
         }).fail(xhr => {
             const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Error al aplicar el ajuste.';
@@ -4663,8 +4903,9 @@ function confirmarAjusteEmisor() {
 
 // Wiring de los eventos de modo emisor (no rompe nada si no existen los botones)
 $(document).ready(function () {
-    $('#btnModoRecibidos').on('click', () => cambiarModoVista(false));
-    $('#btnModoEmitidos').on('click', () => cambiarModoVista(true));
+    $('#btnModoRecibidos').on('click', () => cambiarModoVista(false, 'recibidos'));
+    $('#btnModoEmitidos').on('click', () => cambiarModoVista(true, 'emitidos'));
+    $('#btnModoRecepcionados').on('click', () => cambiarModoVista(true, 'recepcionados'));
 
     // Nota: los handlers de #btnRefresh, filtros, #btnPrev y #btnNext
     // ya estan definidos arriba en el bloque principal y detectan
@@ -4676,16 +4917,29 @@ $(document).ready(function () {
     // Abrir modal de ajuste
     $(document).on('click', '.btn-abrir-ajuste', function () {
         const dteId = parseInt($(this).data('dte-id'), 10);
-        abrirModalAjusteEmisor(dteId);
+        const postRecepcion = $(this).data('post-recepcion') === 1 || $(this).data('post-recepcion') === '1';
+        abrirModalAjusteEmisor(dteId, { postRecepcion });
+    });
+
+    // Ver trazabilidad del DTE (compras origen + NC hijos + movimientos)
+    $(document).on('click', '.btn-ver-trazabilidad', function () {
+        const dteId = parseInt($(this).data('dte-id'), 10);
+        if (window.TrazabilidadDTE && dteId) {
+            window.TrazabilidadDTE.abrir(dteId);
+        }
     });
 
     // Input cantidad -> recalcular diferencial
     $(document).on('input', '#ajusteProductosBody .input-ajuste-cantidad', actualizarDiferencialAjuste);
 
-    // Poner en 0 con el boton X
+    // Poner en 0 con el boton X -> lleva al mínimo permitido (respeta stock destino)
     $(document).on('click', '#ajusteProductosBody .btn-poner-cero', function () {
         const $tr = $(this).closest('tr');
-        $tr.find('.input-ajuste-cantidad').val(0);
+        const cantOriginal = parseInt($tr.data('cantidad-original'), 10) || 0;
+        const maxDevolver = ($tr.data('max-devolver') !== undefined && $tr.data('max-devolver') !== '')
+            ? parseInt($tr.data('max-devolver'), 10)
+            : cantOriginal;
+        $tr.find('.input-ajuste-cantidad').val(cantOriginal - maxDevolver);
         actualizarDiferencialAjuste();
     });
 

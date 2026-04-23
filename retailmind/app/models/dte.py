@@ -640,3 +640,56 @@ class DescuentoRecargo(models.Model):
 
     def __str__(self):
         return f"{'Dcto' if self.tpo_mov == 'D' else 'Recargo'} {self.glosa_dr} {self.tpo_valor}{self.valor_dr}"
+
+
+class HistorialCambioFolioDte(models.Model):
+    """Bitácora de cambios de folio (numero_documento) sobre un DTE.
+
+    Cada vez que un usuario con permiso edita el folio de un DTE se crea
+    un registro con el folio anterior, el nuevo, el motivo y la lista de
+    documentos cuyas referencias fueron actualizadas automáticamente
+    (NCs, ajustes de traspaso, referencias textuales en otros DTEs).
+    """
+
+    dte = models.ForeignKey(
+        Dte,
+        on_delete=models.CASCADE,
+        related_name='historial_cambios_folio',
+        help_text='DTE al que se le cambió el folio',
+    )
+    folio_anterior = models.IntegerField(help_text='Número de documento previo al cambio')
+    folio_nuevo = models.IntegerField(help_text='Número de documento después del cambio')
+    motivo = models.TextField(help_text='Motivo declarado por el usuario')
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cambios_folio_dte',
+    )
+    usuario_nombre = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        help_text='Snapshot del usuario al momento del cambio (por si el user se borra)',
+    )
+    fecha_cambio = models.DateTimeField(auto_now_add=True)
+    referencias_actualizadas = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Lista de documentos relacionados cuyas referencias se actualizaron',
+    )
+    ip_cliente = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-fecha_cambio', '-id']
+        verbose_name = 'Historial Cambio de Folio DTE'
+        verbose_name_plural = 'Historial Cambios de Folio DTE'
+        indexes = [
+            models.Index(fields=['dte', '-fecha_cambio'], name='hist_folio_dte_fecha_idx'),
+            models.Index(fields=['folio_anterior'], name='hist_folio_anterior_idx'),
+            models.Index(fields=['folio_nuevo'], name='hist_folio_nuevo_idx'),
+        ]
+
+    def __str__(self):
+        return f"DTE {self.dte_id}: folio {self.folio_anterior} → {self.folio_nuevo}"

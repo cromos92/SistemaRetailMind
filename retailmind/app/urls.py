@@ -34,6 +34,7 @@ from .views_modulo_ventas import (
     # Funciones Cuadratura y Arqueo
     cuadratura_caja,
     generar_cuadratura_caja,
+    obtener_detalle_cuadratura_metodos_pago,
     guardar_cuadratura_completa,
     verificar_cuadratura_existente,
     eliminar_cuadratura,
@@ -585,7 +586,10 @@ urlpatterns = [
     path('dte/cancelar_traspaso/', views.cancelar_dte_traspaso_api, name='cancelar_dte_traspaso_api'),
     path('dte/editar_traspaso/', views.editar_dte_traspaso_api, name='editar_dte_traspaso_api'),
     path('dte/emitidos_pendientes/', views.emitidos_pendientes_api, name='emitidos_pendientes_api'),
+    path('dte/emitidos_recepcionados/', views.emitidos_recepcionados_api, name='emitidos_recepcionados_api'),
     path('dte/ajustar_emitido/', views.ajustar_dte_emisor_api, name='ajustar_dte_emisor_api'),
+    # Alias semántico: mismo endpoint, detecta pre/post recepción automáticamente.
+    path('dte/ajustar_traspaso/', views.ajustar_dte_emisor_api, name='ajustar_traspaso_api'),
     path('regularizar-recepciones/', views.regularizar_recepciones, name='regularizar_recepciones'),
     path('dte/obtener_productos_regularizar/', views.obtener_productos_regularizar, name='obtener_productos_regularizar'),
     path('dte/obtener_solicitudes_recibidas/', views.obtener_solicitudes_recibidas, name='obtener_solicitudes_recibidas'),
@@ -674,6 +678,7 @@ urlpatterns = [
     path('ventas/cuadratura-caja/', cuadratura_caja, name='cuadratura_caja'),
     path('ventas/revision-arqueos/', revision_arqueos, name='revision_arqueos'),
     path('api/cuadratura/generar/', generar_cuadratura_caja, name='generar_cuadratura_caja'),
+    path('api/cuadratura/detalle-metodos-pago/', obtener_detalle_cuadratura_metodos_pago, name='obtener_detalle_cuadratura_metodos_pago'),
     path('api/cuadratura/guardar/', guardar_cuadratura_completa, name='guardar_cuadratura_completa'),
     path('api/cuadratura/verificar-existente/', verificar_cuadratura_existente, name='verificar_cuadratura_existente'),
     path('api/cuadratura/eliminar/<int:arqueo_id>/', eliminar_cuadratura, name='eliminar_cuadratura'),
@@ -726,6 +731,10 @@ urlpatterns = [
     path('documentos/api/dte/<int:dte_id>/', views.detalle_dte, name='detalle_dte'),
     path('detalle_dte/<int:dte_id>/', views.vista_detalle_dte, name='vista_detalle_dte'),  # Vista HTML
     path('api/detalle_dte_completo/<int:dte_id>/', views.api_detalle_dte_completo, name='api_detalle_dte_completo'),  # API completa
+    path('api/dte/<int:dte_id>/trazabilidad/', views.api_dte_trazabilidad, name='api_dte_trazabilidad'),  # Árbol de trazabilidad
+    path('api/dte/ncs_sin_stock/', views.api_ncs_sin_stock, name='api_ncs_sin_stock'),  # Diagnóstico NCs sin movimientos
+    path('dte/<int:nc_id>/reparar_stock/', views.api_reparar_stock_nc, name='api_reparar_stock_nc'),  # Reparación retroactiva
+    path('api/productos/stock/', views.api_stock_productos, name='api_stock_productos'),  # Refresh de stock por SKU
     
     # === Gestión de Correlativos ===
     path('documentos/gestion-correlativos/', views.gestion_correlativos, name='gestion_correlativos'),

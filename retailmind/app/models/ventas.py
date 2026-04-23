@@ -101,6 +101,22 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
 
     # === FIX: Concepto usado en views pero no declarado ===
     ('DEVOLUCION_NC', 'Devolución por Nota de Crédito'),
+
+    # === NC / AJUSTE SOBRE TRASPASO YA RECEPCIONADO ===
+    # Movimientos generados cuando el emisor emite NC / AJUSTE POST sobre
+    # un traspaso que el destino ya recepcionó. Se emite un EGRESO en la
+    # sucursal destino y un INGRESO en la sucursal origen por la misma
+    # cantidad. Se separa de DEVOLUCION_NC para no mezclarlo con el flujo
+    # pre-recepción y preservar trazabilidad en reportes.
+    ('DEVOLUCION_NC_POST_RECEPCION', 'Devolución NC tras recepción'),
+
+    # === REPARACIÓN RETROACTIVA DE NC HISTÓRICAS SIN MOVIMIENTOS ===
+    # Movimientos generados por el barrido de `reparar_stock` sobre NCs
+    # emitidas antes del fix unificado, que quedaron sin los
+    # Movimientos_Producto de ingreso de reversa. Se separa para que los
+    # reportes distingan "reparación retroactiva" de los ingresos
+    # naturales (compras, devoluciones en flujo normal, etc.).
+    ('REPARACION_STOCK_HISTORICO', 'Reparación Stock Histórico (NC sin movimientos)'),
 ]
 
 ESTADO_MOVIMIENTO_CHOICES = [

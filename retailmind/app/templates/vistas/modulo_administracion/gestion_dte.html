@@ -610,6 +610,53 @@
 <div class="page-content">
     <div class="container-fluid">
 
+        <!-- ===================================================================
+             Panel "NCs por reparar": NCs/AJUSTES emitidos antes del fix
+             unificado que no generaron los movimientos de reversa de stock.
+             Si no hay casos, la card queda oculta. Colapsable.
+             =================================================================== -->
+        <div class="nexo-card mb-3" id="cardNcsPorReparar" style="display:none;">
+            <div class="nexo-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h6 class="mb-0">
+                    <i class="bi bi-tools text-warning me-1"></i>
+                    NCs por reparar
+                    <span class="badge bg-warning text-dark ms-2" id="ncsPorRepararCount">0</span>
+                    <small class="text-muted ms-2">(NCs históricas emitidas sin movimientos de reversa de stock)</small>
+                </h6>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" id="btnRefreshNcsReparar" title="Re-analizar">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" id="btnToggleNcsReparar" title="Mostrar / ocultar">
+                        <i class="bi bi-chevron-up"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="nexo-card-body" id="bodyNcsPorReparar">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>NC</th>
+                                <th>DTE padre</th>
+                                <th>Fecha</th>
+                                <th>Origen → Destino</th>
+                                <th>Fase</th>
+                                <th class="text-end">Uds pendientes</th>
+                                <th class="text-end"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaNcsPorRepararBody">
+                            <tr><td colspan="7" class="text-center text-muted py-3">
+                                <div class="spinner-border spinner-border-sm text-warning"></div>
+                                <span class="ms-2">Analizando NCs...</span>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <div class="nexo-card">
             <div class="nexo-card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
                 <h5>
@@ -927,7 +974,110 @@
 
 {% include '../../layout/footer.html' %}
 
+<script src="{% static 'js/trazabilidad_dte.js' %}"></script>
+
 <script>
+    // Delega botones de trazabilidad en cualquier parte de la tabla
+    $(document).on('click', '.btn-ver-trazabilidad', function () {
+        const dteId = parseInt($(this).data('dte-id'), 10);
+        if (window.TrazabilidadDTE && dteId) {
+            window.TrazabilidadDTE.abrir(dteId);
+        }
+    });
+
+    // ================================================================
+    // Panel "NCs por reparar": carga, render y acción de reparación.
+    // ================================================================
+    function _fmtPesos(v) { return '$' + (Number(v) || 0).toLocaleString('es-CL'); }
+
+    function cargarNcsPorReparar() {
+        const body = document.getElementById('tablaNcsPorRepararBody');
+        const card = document.getElementById('cardNcsPorReparar');
+        const badge = document.getElementById('ncsPorRepararCount');
+        if (!body) return;
+        body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">
+            <div class="spinner-border spinner-border-sm text-warning"></div>
+            <span class="ms-2">Analizando NCs...</span>
+        </td></tr>`;
+
+        fetch('/app/api/dte/ncs_sin_stock/?page_size=100', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (!data || !data.success) {
+                    body.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-3">
+                        ${(data && data.error) || 'No se pudo cargar el diagnóstico.'}
+                    </td></tr>`;
+                    card.style.display = '';
+                    return;
+                }
+                const items = data.items || [];
+                badge.textContent = data.total || 0;
+
+                if (!items.length) {
+                    // Nada pendiente: ocultar la card (mejor UX que mostrar vacío).
+                    card.style.display = 'none';
+                    return;
+                }
+                card.style.display = '';
+                body.innerHTML = items.map(i => {
+                    const fase = i.recepcionado
+                        ? '<span class="badge bg-danger text-white">POST-recepción</span>'
+                        : '<span class="badge bg-warning text-dark">PRE-recepción</span>';
+                    return `
+                        <tr>
+                            <td><strong>${i.nc_tipo}</strong><br><small class="text-muted">#${i.nc_numero}</small></td>
+                            <td><strong>${i.dte_padre_tipo}</strong><br><small class="text-muted">#${i.dte_padre_numero}</small></td>
+                            <td><small>${i.nc_fecha || '-'}</small></td>
+                            <td><small>${i.sucursal_origen || '-'} → ${i.sucursal_destino || '-'}</small></td>
+                            <td>${fase}</td>
+                            <td class="text-end"><strong>${i.total_faltantes || 0}</strong> uds</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${i.dte_padre_id}" title="Ver trazabilidad del DTE padre">
+                                    <i class="bi bi-diagram-3"></i>
+                                </button>
+                                <button class="btn btn-sm btn-warning btn-reparar-nc-stock" data-nc-id="${i.nc_id}" title="Reparar stock histórico">
+                                    <i class="bi bi-tools me-1"></i>Reparar
+                                </button>
+                            </td>
+                        </tr>`;
+                }).join('');
+            })
+            .catch(err => {
+                body.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-3">
+                    ${err && err.message}
+                </td></tr>`;
+                card.style.display = '';
+            });
+    }
+
+    // Refrescar a demanda
+    document.addEventListener('DOMContentLoaded', function () {
+        cargarNcsPorReparar();
+
+        const btnRefresh = document.getElementById('btnRefreshNcsReparar');
+        if (btnRefresh) btnRefresh.addEventListener('click', cargarNcsPorReparar);
+
+        const btnToggle = document.getElementById('btnToggleNcsReparar');
+        if (btnToggle) {
+            btnToggle.addEventListener('click', function () {
+                const b = document.getElementById('bodyNcsPorReparar');
+                const icon = btnToggle.querySelector('i');
+                if (!b || !icon) return;
+                const visible = b.style.display !== 'none';
+                b.style.display = visible ? 'none' : '';
+                icon.className = visible ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+            });
+        }
+    });
+
+    // Al reparar una NC, refrescar el listado (evento que dispara el helper).
+    document.addEventListener('nc-stock-reparada', function () {
+        cargarNcsPorReparar();
+    });
+
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -1195,6 +1345,9 @@
                 <i class="bi bi-x-circle"></i>
             </button>` : ''}
             {% endif %}
+            <button class="nexo-action-btn btn-ver-trazabilidad" data-dte-id="${dte.id || 0}" title="Ver trazabilidad (compras origen, NC hijos, movimientos)">
+                <i class="bi bi-diagram-3"></i>
+            </button>
         </div>
     </td>
 </tr>`;
@@ -1731,12 +1884,12 @@
                         <label class="p-2 border rounded" style="cursor:pointer;">
                             <input type="radio" name="tipoAnulacion" value="ANULACION" checked class="me-2">
                             <strong>Anulación misma jornada</strong><br>
-                            <small class="text-muted ms-4">La venta nunca se efectuó o el cliente no pagó. No afecta la cuadratura de caja.</small>
+                            <small class="text-muted ms-4">La venta nunca se efectuó o el cliente no pagó. La NC aparece en el resumen del día como documento emitido, pero <strong>no descuenta del efectivo ni de las transferencias</strong> teóricas.</small>
                         </label>
                         <label class="p-2 border rounded" style="cursor:pointer;">
                             <input type="radio" name="tipoAnulacion" value="DEVOLUCION" class="me-2">
                             <strong>Devolución / anulación posterior</strong><br>
-                            <small class="text-muted ms-4">El cliente ya pagó y se le devuelve el dinero. La NC figurará en la cuadratura de hoy.</small>
+                            <small class="text-muted ms-4">El cliente ya pagó y se le devuelve el dinero. La NC figura en la cuadratura de hoy y <strong>resta</strong> del método de pago elegido (efectivo o transferencia).</small>
                         </label>
                     </div>
 

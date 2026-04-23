@@ -1886,28 +1886,170 @@ def emitidos_pendientes_api(request):
 
 @login_required
 @requiere_permiso('recepcion_dte', 'puede_aprobar')
+@require_GET
+def emitidos_recepcionados_api(request):
+    """
+    Lista DTEs de traspaso emitidos por la sucursal actual que YA fueron
+    recepcionados en destino (total, parcial o con sobrantes) y todavía
+    pueden ser ajustados vía NC/Ajuste POST-RECEPCIÓN.
+
+    Se usa en la vista /app/recepcion-dte/ con el toggle
+    'Despachados recepcionados'.
+    """
+    try:
+        sucursal_actual_id = request.session.get('idSucursalActual')
+        if not sucursal_actual_id:
+            return JsonResponse(
+                {'success': False, 'error': 'No hay sucursal activa en la sesion.'},
+                status=400,
+            )
+
+        pagina = max(int(request.GET.get('pagina', 1) or 1), 1)
+        page_size = 10
+        tipo_documento = (request.GET.get('tipo_documento') or '').strip()
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+
+        ESTADOS_POST_RECEPCION = [
+            'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL',
+            'RECEPCIONADO_SOBRANTE', 'EN_REGULARIZACION',
+        ]
+
+        qs = (
+            Dte.objects
+            .filter(
+                sucursal_id=sucursal_actual_id,
+                tipo_transaccion='TRASPASO',
+                estado_dte__in=ESTADOS_POST_RECEPCION,
+            )
+            .exclude(tipo_documento__in=['NOTA DE CREDITO', 'AJUSTE TRASPASO', 'AJUSTE TRASPASO POST'])
+            .select_related('receptor', 'sucursal')
+            .prefetch_related('dte_movimientos__sucursal_destino')
+            .order_by('-fecha_emision', '-id')
+        )
+
+        if tipo_documento:
+            qs = qs.filter(tipo_documento=tipo_documento)
+        if fecha_inicio:
+            qs = qs.filter(fecha_emision__gte=fecha_inicio)
+        if fecha_fin:
+            qs = qs.filter(fecha_emision__lte=fecha_fin)
+
+        total = qs.count()
+        inicio = (pagina - 1) * page_size
+        items_qs = qs[inicio:inicio + page_size]
+
+        items = []
+        for dte in items_qs:
+            mov_salida = next(
+                (m for m in dte.dte_movimientos.all() if m.concepto == 'TRASPASO_SALIDA'),
+                None,
+            )
+            sucursal_destino_nombre = (
+                mov_salida.sucursal_destino.alias
+                if mov_salida and mov_salida.sucursal_destino
+                else (dte.receptor.nombre if dte.receptor else '-')
+            )
+
+            # Contar NCs ya emitidas sobre este DTE (para UI informativa)
+            ajustes_count = Dte.objects.filter(
+                documento_afectado=dte,
+                estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            ).count()
+
+            # Detectar si alguna NC hija quedó sin los movimientos de
+            # reversa (bug histórico). Se reutiliza el mismo diagnóstico
+            # que usa la pantalla "NCs por reparar".
+            ncs_hijas = Dte.objects.filter(
+                documento_afectado=dte,
+                estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            )
+            ncs_stock_pendiente = 0
+            nc_ids_pendientes = []
+            try:
+                for nc_h in ncs_hijas:
+                    diag = _diagnostico_nc(nc_h)
+                    if diag and not diag.get('ya_reparado'):
+                        ncs_stock_pendiente += 1
+                        nc_ids_pendientes.append(nc_h.id)
+            except Exception:
+                # Nunca romper la vista por un caso borde del diagnóstico.
+                logger.exception("emitidos_recepcionados_api: fallo diagnóstico NC")
+
+            items.append({
+                'id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.tipo_documento,
+                'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '-',
+                'fecha_recepcion': dte.fecha_recepcion.strftime('%d/%m/%Y') if dte.fecha_recepcion else '-',
+                'estado_dte': dte.estado_dte,
+                'receptor': dte.receptor.nombre if dte.receptor else '-',
+                'sucursal_destino': sucursal_destino_nombre,
+                'monto_neto': float(dte.monto_neto or 0),
+                'monto_con_iva': float(dte.monto_con_iva or 0),
+                'unidades_productos': dte.unidades_productos or 0,
+                'es_facturable': dte.tipo_documento in (
+                    'FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
+                    'BOLETA ELECTRONICA', 'BOLETA_ELECTRONICA',
+                ),
+                'ajustes_previos': ajustes_count,
+                'ncs_stock_pendiente': ncs_stock_pendiente,
+                'nc_ids_pendientes': nc_ids_pendientes,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'items': items,
+            'pagina': pagina,
+            'page_size': page_size,
+            'total': total,
+            'total_paginas': (total + page_size - 1) // page_size,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': f'Error: {e}'}, status=500)
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 def ajustar_dte_emisor_api(request):
     """
-    Permite al EMISOR ajustar (reducir o quitar) productos de un DTE de
-    traspaso antes de que el receptor lo recepcione.
+    Endpoint unificado para ajustar/emitir NC sobre un DTE de TRASPASO.
 
-    Flujo por tipo de documento del DTE original:
-    - FACTURA/BOLETA electronica → emite NC por el diferencial monetario.
-    - GUIA / otros no-facturables → crea un Dte tipo 'AJUSTE TRASPASO' que
-      referencia al original (trazabilidad interna, sin impacto SII).
+    Detecta automáticamente si el DTE está en pre-recepción o post-recepción
+    y aplica el flujo adecuado:
 
-    En ambos casos:
-    - Reversa stock al emisor.
-    - Reduce cantidades / desactiva productos en el DTE original.
-    - Recalcula totales del DTE original.
-    - Notifica al receptor.
+    * PRE-RECEPCIÓN (estado_dte='EMITIDO' y fecha_recepcion NULL):
+        - Reversa stock al origen (F+diferencia sobre Producto_Talla de origen).
+        - Ajusta/elimina el movimiento TRASPASO_SALIDA original.
+        - Reduce cantidades / desactiva líneas del DTE original.
+        - Recalcula totales del DTE original.
+
+    * POST-RECEPCIÓN (estado_dte en RECEPCIONADO_* o EN_REGULARIZACION):
+        - Busca Producto_Talla del destino (mismo SKU, producto__sucursal=destino).
+        - Valida que haya stock suficiente en destino (error 409 si no).
+        - Descuenta stock en destino y crea EGRESO
+          `DEVOLUCION_NC_POST_RECEPCION` en destino.
+        - Incrementa stock en origen y crea INGRESO
+          `DEVOLUCION_NC_POST_RECEPCION` en origen.
+        - Preserva intactos los movimientos TRASPASO_SALIDA/TRASPASO_ENTRADA
+          (son hechos históricos).
+        - NO modifica líneas del DTE original; toda la diferencia queda
+          trazada en el documento hijo (NC o AJUSTE TRASPASO POST).
+
+    Flujo por tipo de documento del DTE original (en cualquier caso):
+    - FACTURA/BOLETA electrónica → NC tipo 61 por el diferencial monetario.
+    - GUÍA u otros no-facturables → Dte tipo 'AJUSTE TRASPASO' (pre) o
+      'AJUSTE TRASPASO POST' (post), referenciando al original.
 
     Bloqueos:
-    - estado_dte != 'EMITIDO' → error 409.
-    - fecha_recepcion IS NOT NULL → error 409.
+    - tipo_transaccion != 'TRASPASO' → 400.
+    - estado_dte en ('CANCELADO','ANULADO') → 409.
     - Solo la sucursal emisora puede ajustar.
-    - Solo roles en ROLES_AJUSTE_DTE_EMISOR.
+    - Sólo roles con permiso 'recepcion_dte' → 'puede_aprobar'.
     """
     try:
         data = json.loads(request.body or '{}')
@@ -1952,16 +2094,37 @@ def ajustar_dte_emisor_api(request):
                     {'success': False, 'error': 'Solo la sucursal emisora puede ajustar este DTE.'},
                     status=403,
                 )
-            if dte.estado_dte != 'EMITIDO':
+            if dte.estado_dte in ('CANCELADO', 'ANULADO'):
                 return JsonResponse({
                     'success': False,
-                    'error': f'El DTE ya fue procesado (estado: {dte.estado_dte}). No se puede ajustar.',
+                    'error': f'El DTE está {dte.estado_dte}. No se puede ajustar.',
                 }, status=409)
-            if dte.fecha_recepcion is not None:
+
+            ESTADOS_POST_RECEPCION = {
+                'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL',
+                'RECEPCIONADO_SOBRANTE', 'EN_REGULARIZACION',
+            }
+            es_post_recepcion = (
+                dte.fecha_recepcion is not None
+                or dte.estado_dte in ESTADOS_POST_RECEPCION
+            )
+
+            # Sucursal destino real del traspaso (la que recepciona)
+            sucursal_destino_traspaso = None
+            mov_destino_ref = (
+                Movimientos_Producto.objects
+                .filter(dte=dte, concepto='TRASPASO_SALIDA', sucursal_destino__isnull=False)
+                .select_related('sucursal_destino')
+                .first()
+            )
+            if mov_destino_ref:
+                sucursal_destino_traspaso = mov_destino_ref.sucursal_destino
+
+            if es_post_recepcion and sucursal_destino_traspaso is None:
                 return JsonResponse({
                     'success': False,
-                    'error': 'El DTE ya fue recepcionado por el receptor. No se puede ajustar.',
-                }, status=409)
+                    'error': 'No se pudo identificar la sucursal destino del traspaso. Revise los movimientos asociados.',
+                }, status=400)
 
             ajustes_por_id = {}
             for a in ajustes:
@@ -1992,6 +2155,8 @@ def ajustar_dte_emisor_api(request):
                     'error': 'Alguno de los productos indicados no existe en el DTE o ya fue desactivado.',
                 }, status=400)
 
+            # Movimientos TRASPASO_SALIDA originales (pre-recepcion: los ajustamos;
+            # post-recepcion: los preservamos intactos).
             mov_salida_lookup = {
                 m.ProductoTalla_id: m
                 for m in Movimientos_Producto.objects
@@ -2004,6 +2169,23 @@ def ajustar_dte_emisor_api(request):
             lineas_para_documento = []
             hoy = timezone.now()
             usuario = request.user.username
+
+            # Helper: encuentra el Producto_Talla equivalente en otra sucursal.
+            # Los sistemas replican un Producto_Talla por sucursal con el mismo
+            # SKU; buscamos el del destino para poder descontarle stock en
+            # flujo post-recepción.
+            def _talla_en_sucursal(talla_origen, sucursal):
+                if talla_origen is None or sucursal is None:
+                    return None
+                return (
+                    Producto_Talla.objects
+                    .select_for_update(of=('self',))
+                    .filter(
+                        sku=talla_origen.sku,
+                        producto__sucursal_id=sucursal.id,
+                    )
+                    .first()
+                )
 
             for dp in dte_productos:
                 nueva_cant = ajustes_por_id[dp.id]
@@ -2025,26 +2207,107 @@ def ajustar_dte_emisor_api(request):
                         'error': f'Producto {dp.descripcion} sin talla asociada. No se puede ajustar.',
                     }, status=400)
 
-                Producto_Talla.objects.filter(id=talla.id).update(
-                    stock=F('stock') + diferencia
-                )
+                if es_post_recepcion:
+                    # Buscar Producto_Talla en la sucursal destino para
+                    # descontar stock efectivamente.
+                    talla_destino = _talla_en_sucursal(talla, sucursal_destino_traspaso)
+                    if talla_destino is None:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'No existe el SKU {talla.sku} en la sucursal destino '
+                                f'({sucursal_destino_traspaso.alias}). No se puede descontar stock.'
+                            ),
+                        }, status=409)
+                    # Re-leer stock con lock para validación exacta.
+                    talla_destino_actual = Producto_Talla.objects.only('stock').get(id=talla_destino.id)
+                    stock_destino_actual = int(talla_destino_actual.stock or 0)
+                    if stock_destino_actual < diferencia:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'Stock insuficiente en destino para {dp.descripcion} '
+                                f'(SKU {talla.sku}). Disponible: {stock_destino_actual}, '
+                                f'se intentó devolver: {diferencia}. '
+                                f'Si parte se vendió, el receptor debe regularizar.'
+                            ),
+                            'stock_insuficiente': True,
+                            'sku': talla.sku,
+                            'disponible_destino': stock_destino_actual,
+                            'solicitado': diferencia,
+                        }, status=409)
 
-                mov_salida = mov_salida_lookup.get(talla.id)
-                if mov_salida is not None:
+                    # 1) Egreso en destino
+                    Producto_Talla.objects.filter(id=talla_destino.id).update(
+                        stock=F('stock') - diferencia
+                    )
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=sucursal_destino_traspaso,
+                        sucursal_destino=None,
+                        cantidad=-diferencia,
+                        costo=dp.costo,
+                        sobreprecio=dp.sobreprecio,
+                        precio=dp.precio,
+                        concepto='DEVOLUCION_NC_POST_RECEPCION',
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=(
+                            f'NC post-recepción DTE #{dte.numero_documento}: '
+                            f'salida desde {sucursal_destino_traspaso.alias}'
+                        )[:500],
+                    )
+
+                    # 2) Ingreso en origen
+                    Producto_Talla.objects.filter(id=talla.id).update(
+                        stock=F('stock') + diferencia
+                    )
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla,
+                        sucursal_origen=None,
+                        sucursal_destino=dte.sucursal,
+                        cantidad=diferencia,
+                        costo=dp.costo,
+                        sobreprecio=dp.sobreprecio,
+                        precio=dp.precio,
+                        concepto='DEVOLUCION_NC_POST_RECEPCION',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=(
+                            f'NC post-recepción DTE #{dte.numero_documento}: '
+                            f'reingreso a {dte.sucursal.alias}'
+                        )[:500],
+                    )
+
+                    # En post-recepcion NO modificamos dp.stock ni dp.activo:
+                    # el DTE original queda como evidencia histórica de lo despachado.
+                else:
+                    # Pre-recepcion: suma al Producto_Talla origen y ajusta
+                    # el TRASPASO_SALIDA; nadie recibió nada en destino aún.
+                    Producto_Talla.objects.filter(id=talla.id).update(
+                        stock=F('stock') + diferencia
+                    )
+
+                    mov_salida = mov_salida_lookup.get(talla.id)
+                    if mov_salida is not None:
+                        if nueva_cant == 0:
+                            mov_salida.delete()
+                        else:
+                            mov_salida.cantidad = -nueva_cant
+                            mov_salida.observaciones = (
+                                (mov_salida.observaciones or '')
+                                + f' [AJUSTE {hoy.strftime("%Y-%m-%d %H:%M")} por {usuario}: {cantidad_original}->{nueva_cant}]'
+                            )[:500]
+                            mov_salida.save(update_fields=['cantidad', 'observaciones'])
+
                     if nueva_cant == 0:
-                        mov_salida.delete()
-                    else:
-                        mov_salida.cantidad = -nueva_cant
-                        mov_salida.observaciones = (
-                            (mov_salida.observaciones or '')
-                            + f' [AJUSTE {hoy.strftime("%Y-%m-%d %H:%M")} por {usuario}: {cantidad_original}->{nueva_cant}]'
-                        )[:500]
-                        mov_salida.save(update_fields=['cantidad', 'observaciones'])
-
-                if nueva_cant == 0:
-                    dp.activo = False
-                dp.stock = nueva_cant
-                dp.save(update_fields=['stock', 'activo'])
+                        dp.activo = False
+                    dp.stock = nueva_cant
+                    dp.save(update_fields=['stock', 'activo'])
 
                 precio_unit = Decimal(str(dp.precio or 0))
                 diferencial_neto += Decimal(diferencia) * precio_unit
@@ -2068,27 +2331,42 @@ def ajustar_dte_emisor_api(request):
                     'error': 'Ninguno de los ajustes cambia cantidad efectiva.',
                 }, status=400)
 
-            productos_activos = Dte_Productos.objects.filter(dte=dte, activo=True)
-            nuevo_neto = productos_activos.aggregate(
-                s=Sum(F('stock') * F('precio'))
-            )['s'] or Decimal('0')
-            nuevo_neto = Decimal(nuevo_neto)
-            nuevas_unidades = productos_activos.aggregate(u=Sum('stock'))['u'] or 0
-
             iva_rate = Decimal('0.19')
-            nuevo_con_iva = (nuevo_neto + nuevo_neto * iva_rate).quantize(Decimal('1'))
 
-            dte.monto_neto = nuevo_neto
-            dte.monto_con_iva = nuevo_con_iva
-            dte.unidades_productos = int(nuevas_unidades)
+            if es_post_recepcion:
+                # En post-recepción no modificamos el DTE original (queda como
+                # evidencia histórica). Sólo agregamos trazabilidad textual.
+                nuevo_neto = Decimal(dte.monto_neto or 0)
+                nuevo_con_iva = Decimal(dte.monto_con_iva or 0)
+                nuevas_unidades = int(dte.unidades_productos or 0)
+                registro = (
+                    f"\n[NC POST-RECEPCIÓN] {hoy.strftime('%Y-%m-%d %H:%M')} {usuario}"
+                    f" -{diferencial_unidades} uds (-${int(diferencial_neto):,} neto)."
+                    f" Motivo: {motivo}"
+                )
+                dte.referencias = ((dte.referencias or '') + registro).strip()
+                dte.save(update_fields=['referencias'])
+            else:
+                productos_activos = Dte_Productos.objects.filter(dte=dte, activo=True)
+                nuevo_neto = productos_activos.aggregate(
+                    s=Sum(F('stock') * F('precio'))
+                )['s'] or Decimal('0')
+                nuevo_neto = Decimal(nuevo_neto)
+                nuevas_unidades = productos_activos.aggregate(u=Sum('stock'))['u'] or 0
 
-            registro = (
-                f"\n[AJUSTE EMISOR] {hoy.strftime('%Y-%m-%d %H:%M')} {usuario}"
-                f" -{diferencial_unidades} uds"
-                f" (-${int(diferencial_neto):,} neto). Motivo: {motivo}"
-            )
-            dte.referencias = ((dte.referencias or '') + registro).strip()
-            dte.save(update_fields=['monto_neto', 'monto_con_iva', 'unidades_productos', 'referencias'])
+                nuevo_con_iva = (nuevo_neto + nuevo_neto * iva_rate).quantize(Decimal('1'))
+
+                dte.monto_neto = nuevo_neto
+                dte.monto_con_iva = nuevo_con_iva
+                dte.unidades_productos = int(nuevas_unidades)
+
+                registro = (
+                    f"\n[AJUSTE EMISOR] {hoy.strftime('%Y-%m-%d %H:%M')} {usuario}"
+                    f" -{diferencial_unidades} uds"
+                    f" (-${int(diferencial_neto):,} neto). Motivo: {motivo}"
+                )
+                dte.referencias = ((dte.referencias or '') + registro).strip()
+                dte.save(update_fields=['monto_neto', 'monto_con_iva', 'unidades_productos', 'referencias'])
 
             tipo_doc_original = (dte.tipo_documento or '').upper()
             es_facturable = tipo_doc_original in (
@@ -2099,13 +2377,16 @@ def ajustar_dte_emisor_api(request):
             if es_facturable:
                 tipo_doc_nuevo = 'NOTA DE CREDITO'
             else:
-                tipo_doc_nuevo = 'AJUSTE TRASPASO'
+                # AJUSTE TRASPASO en pre-recepción; en post-recepción usamos un
+                # correlativo separado para diferenciarlo en reportes.
+                tipo_doc_nuevo = 'AJUSTE TRASPASO POST' if es_post_recepcion else 'AJUSTE TRASPASO'
 
             numero_nuevo = obtener_siguiente_correlativo(dte.sucursal, tipo_doc_nuevo)
 
             iva_dif = (diferencial_neto * iva_rate).quantize(Decimal('1'))
             total_dif = (diferencial_neto + iva_dif).quantize(Decimal('1'))
 
+            etiqueta_fase = 'post-recepción' if es_post_recepcion else 'pre-recepción'
             doc_nuevo = Dte.objects.create(
                 emisor=dte.emisor,
                 receptor=dte.receptor,
@@ -2127,7 +2408,7 @@ def ajustar_dte_emisor_api(request):
                 documento_afectado=dte,
                 motivo_nc=motivo,
                 referencias=(
-                    f"Ajuste emisor sobre DTE #{dte.numero_documento} ({tipo_doc_original}). "
+                    f"Ajuste emisor ({etiqueta_fase}) sobre DTE #{dte.numero_documento} ({tipo_doc_original}). "
                     f"{diferencial_unidades} uds retiradas. Motivo: {motivo}"
                 ),
                 hora=hoy.time(),
@@ -2147,21 +2428,16 @@ def ajustar_dte_emisor_api(request):
 
             try:
                 if dte.receptor:
-                    sucursal_destino = None
-                    mov = Movimientos_Producto.objects.filter(
-                        dte=dte, concepto='TRASPASO_SALIDA'
-                    ).first()
-                    if mov:
-                        sucursal_destino = mov.sucursal_destino
                     NotificacionDTE.objects.create(
                         dte=dte,
                         empresa_receptora=dte.receptor,
-                        sucursal=sucursal_destino,
+                        sucursal=sucursal_destino_traspaso,
                         sucursal_reportante=dte.sucursal,
                         tipo='CORRECCION_RECEPCION',
-                        titulo=f"DTE #{dte.numero_documento} ajustado por emisor",
+                        titulo=f"DTE #{dte.numero_documento} ajustado por emisor ({etiqueta_fase})",
                         mensaje=(
-                            f"La sucursal emisora ({dte.sucursal.alias}) ajusto el DTE #{dte.numero_documento}. "
+                            f"La sucursal emisora ({dte.sucursal.alias}) ajustó el DTE #{dte.numero_documento} "
+                            f"({etiqueta_fase}). "
                             f"Se retiraron {diferencial_unidades} unidad(es). "
                             f"Documento de trazabilidad: {tipo_doc_nuevo} #{numero_nuevo}. "
                             f"Motivo: {motivo}"
@@ -2173,7 +2449,8 @@ def ajustar_dte_emisor_api(request):
                 pass
 
             logger.info(
-                "Ajuste DTE emisor: dte=%s tipo_doc_original=%s doc_trazador=%s#%s unidades_retiradas=%s diferencial_neto=%s usuario=%s",
+                "Ajuste DTE emisor (%s): dte=%s tipo_doc_original=%s doc_trazador=%s#%s unidades_retiradas=%s diferencial_neto=%s usuario=%s",
+                etiqueta_fase,
                 dte.id,
                 tipo_doc_original,
                 tipo_doc_nuevo,
@@ -2286,9 +2563,32 @@ def ajustar_dte_emisor_api(request):
                     error_txt = str(e_txt)
                     logger.warning("Fallo al generar TXT Acepta NC #%s: %s", numero_nuevo, error_txt)
 
+            # Delta de stock por SKU/sucursal (para refrescar UI).
+            stock_delta = []
+            skus_tocados = {l['productoTalla'].sku for l in lineas_para_documento}
+            if skus_tocados:
+                sucursales_objetivo = [dte.sucursal_id]
+                if es_post_recepcion and sucursal_destino_traspaso:
+                    sucursales_objetivo.append(sucursal_destino_traspaso.id)
+                tallas_actualizadas = (
+                    Producto_Talla.objects
+                    .filter(sku__in=skus_tocados, producto__sucursal_id__in=sucursales_objetivo)
+                    .select_related('producto', 'producto__sucursal')
+                )
+                for t in tallas_actualizadas:
+                    stock_delta.append({
+                        'sku': t.sku,
+                        'talla': t.talla,
+                        'sucursal_id': t.producto.sucursal_id,
+                        'sucursal_alias': t.producto.sucursal.alias if t.producto.sucursal else None,
+                        'stock': int(t.stock or 0),
+                    })
+
+            mensaje_fase = 'post-recepción' if es_post_recepcion else 'pre-recepción'
             return JsonResponse({
                 'success': True,
-                'message': f'Ajuste aplicado. Documento generado: {tipo_doc_nuevo} #{numero_nuevo}',
+                'message': f'Ajuste aplicado ({mensaje_fase}). Documento generado: {tipo_doc_nuevo} #{numero_nuevo}',
+                'es_post_recepcion': es_post_recepcion,
                 'dte_id': dte.id,
                 'doc_trazador': {
                     'id': doc_nuevo.id,
@@ -2306,6 +2606,7 @@ def ajustar_dte_emisor_api(request):
                     'monto_con_iva': float(nuevo_con_iva),
                     'unidades_productos': int(nuevas_unidades),
                 },
+                'stock_delta': stock_delta,
             })
 
     except Exception as e:
@@ -11471,25 +11772,63 @@ def api_detalle_dte_completo(request, dte_id):
     """API que retorna el detalle completo de un DTE (compras o ventas)"""
     try:
         dte = get_object_or_404(Dte, id=dte_id)
-        
+
+        # Para traspasos, identificar la sucursal destino para cotejar stock.
+        sucursal_destino_traspaso_id = None
+        if dte.tipo_transaccion == 'TRASPASO':
+            mov_destino = (
+                Movimientos_Producto.objects
+                .filter(dte=dte, concepto='TRASPASO_SALIDA', sucursal_destino__isnull=False)
+                .only('sucursal_destino_id')
+                .first()
+            )
+            if mov_destino:
+                sucursal_destino_traspaso_id = mov_destino.sucursal_destino_id
+
         # Obtener productos del DTE
         productos = []
         dte_productos_qs = Dte_Productos.objects.filter(dte=dte).select_related('productoTalla__producto')
-        
+
+        # Pre-cargar stock por SKU en origen y destino (si aplica).
+        skus = [
+            dp.productoTalla.sku for dp in dte_productos_qs
+            if dp.productoTalla
+        ]
+        stock_por_sku = {}
+        if skus:
+            qs_stocks = Producto_Talla.objects.filter(sku__in=skus).select_related('producto')
+            if sucursal_destino_traspaso_id:
+                qs_stocks = qs_stocks.filter(
+                    producto__sucursal_id__in=[dte.sucursal_id, sucursal_destino_traspaso_id]
+                )
+            else:
+                qs_stocks = qs_stocks.filter(producto__sucursal_id=dte.sucursal_id)
+            for t in qs_stocks:
+                stock_por_sku.setdefault(t.sku, {})[t.producto.sucursal_id] = int(t.stock or 0)
+
         if dte_productos_qs.exists():
             for detalle in dte_productos_qs:
                 producto = detalle.productoTalla.producto if detalle.productoTalla else None
                 subtotal = (detalle.precio or 0) * (detalle.stock or 0)
+                sku = detalle.productoTalla.sku if detalle.productoTalla else None
+                stock_origen = stock_por_sku.get(sku, {}).get(dte.sucursal_id) if sku else None
+                stock_destino = (
+                    stock_por_sku.get(sku, {}).get(sucursal_destino_traspaso_id)
+                    if (sku and sucursal_destino_traspaso_id) else None
+                )
                 productos.append({
                     'id': detalle.id,
                     'producto': producto.articulo if producto else detalle.descripcion,
-                    'sku': detalle.productoTalla.sku if detalle.productoTalla else None,
+                    'sku': sku,
                     'talla': detalle.productoTalla.talla if detalle.productoTalla else None,
                     'descripcion': detalle.descripcion,
                     'cantidad': detalle.stock,
                     'precio_unitario': detalle.precio,
                     'subtotal': subtotal,
                     'costo': detalle.costo,
+                    'activo': detalle.activo,
+                    'stock_origen': stock_origen,
+                    'stock_destino': stock_destino,
                 })
         else:
             # Para compras: los productos vienen de Productos_Recepcionados
@@ -11579,6 +11918,909 @@ def api_detalle_dte_completo(request, dte_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@login_required
+@require_GET
+def api_dte_trazabilidad(request, dte_id):
+    """
+    Devuelve el árbol de trazabilidad completo de un DTE.
+
+    Estructura:
+        {
+          "success": true,
+          "dte": { ... },
+          "padre": {  # solo para TRASPASO: la(s) compra(s) origen de los productos
+            "compras": [
+              {"id": 1, "correlativo": 123, "nombre": "...",
+               "fecha": "2025-11-02", "empresa": "...",
+               "skus_aportados": [1234, 5678]},
+              ...
+            ]
+          },
+          "hijos": [
+            {"id": 2, "tipo_documento": "NOTA DE CREDITO",
+             "numero_documento": 10, "es_nota_credito": true,
+             "motivo_nc": "...", "monto_con_iva": 1000,
+             "unidades": 2, "fecha_emision": "2025-12-01"},
+            ...
+          ],
+          "movimientos": {
+             "por_sucursal": [
+               {"sucursal_id": 1, "sucursal_alias": "Casa Matriz",
+                "items": [ ... ]},
+               ...
+             ]
+          }
+        }
+    """
+    from .models import Compras_Producto_Talla
+
+    try:
+        dte = (
+            Dte.objects
+            .select_related('emisor', 'receptor', 'sucursal', 'documento_afectado')
+            .get(id=dte_id)
+        )
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado'}, status=404)
+
+    # --- Datos del DTE ---
+    dte_info = {
+        'id': dte.id,
+        'numero_documento': dte.numero_documento,
+        'tipo_documento': dte.tipo_documento,
+        'estado_dte': dte.estado_dte,
+        'tipo_transaccion': dte.tipo_transaccion,
+        'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else None,
+        'fecha_recepcion': dte.fecha_recepcion.strftime('%Y-%m-%d') if dte.fecha_recepcion else None,
+        'monto_con_iva': float(dte.monto_con_iva or 0),
+        'monto_neto': float(dte.monto_neto or 0),
+        'unidades_productos': dte.unidades_productos or 0,
+        'es_nota_credito': bool(dte.es_nota_credito),
+        'emisor': dte.emisor.nombre if dte.emisor else None,
+        'receptor': dte.receptor.nombre if dte.receptor else None,
+        'sucursal': dte.sucursal.alias if dte.sucursal else None,
+        'sucursal_id': dte.sucursal_id,
+        'documento_afectado': None,
+    }
+    if dte.documento_afectado:
+        dte_info['documento_afectado'] = {
+            'id': dte.documento_afectado.id,
+            'numero_documento': dte.documento_afectado.numero_documento,
+            'tipo_documento': dte.documento_afectado.tipo_documento,
+        }
+
+    # --- Padre: compras que aportaron los Producto_Talla del DTE ---
+    padre_compras = []
+    if dte.tipo_transaccion == 'TRASPASO':
+        producto_talla_ids = list(
+            dte.dte_productos.exclude(productoTalla__isnull=True)
+            .values_list('productoTalla_id', flat=True).distinct()
+        )
+        if producto_talla_ids:
+            compras_items = (
+                Compras_Producto_Talla.objects
+                .filter(producto_talla_id__in=producto_talla_ids)
+                .select_related(
+                    'compra_producto__compras__empresa',
+                    'producto_talla',
+                )
+            )
+            compras_agg = {}
+            for cpt in compras_items:
+                compra = cpt.compra_producto.compras if cpt.compra_producto else None
+                if not compra:
+                    continue
+                skus_aportados = compras_agg.setdefault(compra.id, {
+                    'id': compra.id,
+                    'correlativo': compra.correlativo,
+                    'nombre': compra.nombre,
+                    'empresa': compra.empresa.nombre if compra.empresa else None,
+                    'fecha': compra.fecha.strftime('%Y-%m-%d') if compra.fecha else None,
+                    'estado': compra.estado,
+                    'temporada': compra.temporada,
+                    'skus_aportados': [],
+                })['skus_aportados']
+                if cpt.producto_talla and cpt.producto_talla.sku not in skus_aportados:
+                    skus_aportados.append(cpt.producto_talla.sku)
+            padre_compras = list(compras_agg.values())
+
+    # --- Hijos: todos los DTEs que referencian a este como documento_afectado ---
+    hijos_qs = (
+        Dte.objects
+        .filter(documento_afectado_id=dte.id)
+        .order_by('-fecha_emision', '-id')
+    )
+    hijos = []
+    for h in hijos_qs:
+        # Flag stock_pendiente: True si la NC/AJUSTE no generó los
+        # movimientos de reversa esperados (bug histórico). Se computa con
+        # el mismo servicio que `api_ncs_sin_stock`, pero tolera errores
+        # silenciosamente para no romper la respuesta de trazabilidad si
+        # el diagnóstico falla en un caso borde.
+        stock_pendiente = False
+        faltantes_totales = 0
+        try:
+            diag = _diagnostico_nc(h)
+            if diag and not diag.get('ya_reparado'):
+                stock_pendiente = True
+                faltantes_totales = diag.get('total_faltantes') or 0
+        except Exception:
+            logger.exception("Fallo calculando diagnostico NC hijo %s", h.id)
+        hijos.append({
+            'id': h.id,
+            'tipo_documento': h.tipo_documento,
+            'tipo_transaccion': h.tipo_transaccion,
+            'numero_documento': h.numero_documento,
+            'es_nota_credito': bool(h.es_nota_credito),
+            'motivo_nc': (h.motivo_nc or '').strip()[:200],
+            'monto_con_iva': float(h.monto_con_iva or 0),
+            'monto_neto': float(h.monto_neto or 0),
+            'unidades': h.unidades_productos or 0,
+            'estado_dte': h.estado_dte,
+            'fecha_emision': h.fecha_emision.strftime('%Y-%m-%d') if h.fecha_emision else None,
+            'stock_pendiente': stock_pendiente,
+            'faltantes_totales': faltantes_totales,
+        })
+
+    # --- Movimientos asociados (del DTE y de sus hijos), agrupados por sucursal ---
+    dte_ids_mov = [dte.id] + [h['id'] for h in hijos]
+    movs_qs = (
+        Movimientos_Producto.objects
+        .filter(dte_id__in=dte_ids_mov)
+        .select_related('ProductoTalla', 'sucursal_origen', 'sucursal_destino')
+        .order_by('fecha', 'hora', 'id')
+    )
+
+    por_sucursal = {}
+    for m in movs_qs:
+        # Clasificar el movimiento por la sucursal que "se ve afectada":
+        # EGRESO -> sucursal_origen (o ProductoTalla.producto.sucursal si falta)
+        # INGRESO -> sucursal_destino
+        if m.tipo_movimiento == 'INGRESO':
+            sucursal = m.sucursal_destino
+        else:
+            sucursal = m.sucursal_origen
+        if sucursal is None and m.ProductoTalla and m.ProductoTalla.producto_id:
+            # Intentamos caer al producto -> sucursal si está vacío el mov.
+            try:
+                sucursal_id = m.ProductoTalla.producto.sucursal_id
+                sucursal = None
+                key = ('sin_sucursal_def', sucursal_id)
+            except Exception:
+                sucursal_id = None
+                key = ('sin_sucursal', 0)
+        else:
+            sucursal_id = sucursal.id if sucursal else None
+            key = ('sucursal', sucursal_id)
+
+        grupo = por_sucursal.setdefault(key, {
+            'sucursal_id': sucursal_id,
+            'sucursal_alias': sucursal.alias if sucursal else 'Sin sucursal',
+            'items': [],
+        })
+        grupo['items'].append({
+            'id': m.id,
+            'dte_id': m.dte_id,
+            'fecha': m.fecha.strftime('%Y-%m-%d') if m.fecha else None,
+            'hora': m.hora.strftime('%H:%M') if m.hora else None,
+            'concepto': m.concepto,
+            'tipo_movimiento': m.tipo_movimiento,
+            'cantidad': m.cantidad,
+            'sku': m.ProductoTalla.sku if m.ProductoTalla else None,
+            'sucursal_origen': m.sucursal_origen.alias if m.sucursal_origen else None,
+            'sucursal_destino': m.sucursal_destino.alias if m.sucursal_destino else None,
+            'observaciones': (m.observaciones or '')[:200],
+        })
+
+    return JsonResponse({
+        'success': True,
+        'dte': dte_info,
+        'padre': {'compras': padre_compras},
+        'hijos': hijos,
+        'movimientos': {'por_sucursal': list(por_sucursal.values())},
+    })
+
+
+# =========================================================================
+# REPARACIÓN RETROACTIVA DE NCs HISTÓRICAS SIN MOVIMIENTOS DE STOCK
+# =========================================================================
+
+# Conceptos que cuentan como "reversa" válida sobre el stock cuando
+# se intenta determinar si una NC devolvió stock. Si una NC tiene al
+# menos un INGRESO con alguno de estos conceptos y cantidad suficiente
+# en los Producto_Talla afectados, se considera ya reparada.
+_CONCEPTOS_REVERSA_STOCK = (
+    'ANULACION', 'DEVOLUCION_NC', 'DEVOLUCION_NC_POST_RECEPCION',
+    'REPARACION_STOCK_HISTORICO', 'REGULARIZACION_TRASPASO',
+    'CAMBIO_PRODUCTO_ENTRADA',
+)
+
+# Estados del DTE padre que indican que el destino ya recepcionó
+# (determina el flujo post-recepción vs pre-recepción en la reparación).
+_ESTADOS_POST_RECEPCION = {
+    'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL',
+    'RECEPCIONADO_SOBRANTE', 'EN_REGULARIZACION',
+}
+
+
+def _dte_es_post_recepcion(dte):
+    """Regla unificada: detecta si el DTE padre ya fue recepcionado."""
+    if getattr(dte, 'fecha_recepcion', None) is not None:
+        return True
+    return getattr(dte, 'estado_dte', None) in _ESTADOS_POST_RECEPCION
+
+
+def _sucursal_destino_traspaso(dte):
+    """
+    Retorna la Sucursal destino del traspaso asociado al DTE, mirando
+    el primer Movimientos_Producto TRASPASO_SALIDA con sucursal_destino.
+    """
+    mov = (
+        Movimientos_Producto.objects
+        .filter(dte=dte, concepto='TRASPASO_SALIDA', sucursal_destino__isnull=False)
+        .select_related('sucursal_destino')
+        .first()
+    )
+    return mov.sucursal_destino if mov else None
+
+
+def _diagnostico_nc(nc):
+    """
+    Calcula por cada línea de la NC cuántas unidades ya fueron reversadas
+    en Producto_Talla (vía movimientos de reversa) y cuántas faltan.
+
+    Retorna dict:
+        {
+          'nc_id': ..., 'nc_numero': ..., 'dte_padre_id': ...,
+          'dte_padre_numero': ..., 'dte_padre_tipo': ...,
+          'sucursal_origen_id': ..., 'sucursal_origen': ...,
+          'sucursal_destino_id': ..., 'sucursal_destino': ...,
+          'recepcionado': bool,
+          'ya_reparado': bool,  # hay al menos un REPARACION_STOCK_HISTORICO sobre la NC
+          'lineas': [
+            {'sku': ..., 'talla': ..., 'descripcion': ...,
+             'dte_producto_id': ..., 'productoTalla_id': ...,
+             'cantidad_nc': N,
+             'movimientos_existentes': M,
+             'esperados': N,
+             'faltantes': N - M,
+             'stock_origen_actual': X,
+             'stock_destino_actual': Y or None,
+             'reparable': bool}, ...]
+        }
+
+    `None` si la NC no aplica (p.ej. no apunta a un traspaso).
+    """
+    padre = nc.documento_afectado
+    if padre is None or padre.tipo_transaccion != 'TRASPASO':
+        return None
+
+    sucursal_origen = nc.sucursal or padre.sucursal
+    sucursal_destino = _sucursal_destino_traspaso(padre)
+    es_post = _dte_es_post_recepcion(padre)
+
+    # Idempotencia: ya reparada si hay al menos un movimiento con ese concepto.
+    ya_reparado = Movimientos_Producto.objects.filter(
+        dte=nc, concepto='REPARACION_STOCK_HISTORICO',
+    ).exists()
+
+    # Determinar las líneas relevantes. Preferimos las líneas de la NC
+    # (copia de lo devuelto); si la NC no tiene líneas con productoTalla
+    # (caso legacy de NC parcial con línea genérica), caemos al padre.
+    lineas_nc = list(
+        nc.dte_productos.exclude(productoTalla__isnull=True)
+        .select_related('productoTalla__producto')
+    )
+    usar_padre = False
+    if not lineas_nc:
+        usar_padre = True
+        lineas_nc = list(
+            padre.dte_productos.filter(activo=True)
+            .exclude(productoTalla__isnull=True)
+            .select_related('productoTalla__producto')
+        )
+
+    if not lineas_nc:
+        return None
+
+    # Pre-cargar stock actual por Producto_Talla relevante.
+    skus = {dp.productoTalla.sku for dp in lineas_nc}
+    sucursales_objetivo = [sucursal_origen.id] if sucursal_origen else []
+    if sucursal_destino:
+        sucursales_objetivo.append(sucursal_destino.id)
+    stock_por_sku = {}
+    if skus and sucursales_objetivo:
+        for pt in (
+            Producto_Talla.objects
+            .filter(sku__in=skus, producto__sucursal_id__in=sucursales_objetivo)
+            .select_related('producto')
+        ):
+            stock_por_sku.setdefault(pt.sku, {})[pt.producto.sucursal_id] = int(pt.stock or 0)
+
+    # Movimientos de reversa existentes asociados al DTE padre o a la NC
+    # (el bug histórico es que no existen, pero consideramos por si alguna
+    # reparación parcial ya fue hecha).
+    movs_reversa = (
+        Movimientos_Producto.objects
+        .filter(
+            dte__in=[padre.id, nc.id],
+            concepto__in=_CONCEPTOS_REVERSA_STOCK,
+            tipo_movimiento='INGRESO',
+        )
+        .values('ProductoTalla__sku')
+        .annotate(total=Sum('cantidad'))
+    )
+    movs_por_sku = {row['ProductoTalla__sku']: int(row['total'] or 0) for row in movs_reversa}
+
+    lineas_out = []
+    total_faltantes = 0
+    for dp in lineas_nc:
+        sku = dp.productoTalla.sku
+        cantidad_nc = int(dp.stock or 0)
+        movs_existentes = movs_por_sku.get(sku, 0)
+        faltantes = max(0, cantidad_nc - movs_existentes)
+        if faltantes <= 0:
+            # Esta línea ya fue reparada (o nunca tuvo bug).
+            continue
+        stock_origen = stock_por_sku.get(sku, {}).get(sucursal_origen.id if sucursal_origen else None)
+        stock_destino = (
+            stock_por_sku.get(sku, {}).get(sucursal_destino.id)
+            if sucursal_destino else None
+        )
+        # Reparable si hay stock suficiente en destino (post-rec) o siempre (pre-rec).
+        if es_post:
+            reparable = stock_destino is not None and stock_destino >= faltantes
+        else:
+            reparable = True
+
+        lineas_out.append({
+            'sku': sku,
+            'talla': dp.productoTalla.talla,
+            'descripcion': dp.descripcion,
+            'dte_producto_id': dp.id,
+            'productoTalla_id': dp.productoTalla_id,
+            'cantidad_nc': cantidad_nc,
+            'movimientos_existentes': movs_existentes,
+            'esperados': cantidad_nc,
+            'faltantes': faltantes,
+            'stock_origen_actual': stock_origen,
+            'stock_destino_actual': stock_destino,
+            'reparable': reparable,
+        })
+        total_faltantes += faltantes
+
+    if not lineas_out:
+        return None
+
+    return {
+        'nc_id': nc.id,
+        'nc_numero': nc.numero_documento,
+        'nc_tipo': nc.tipo_documento,
+        'nc_fecha': nc.fecha_emision.strftime('%Y-%m-%d') if nc.fecha_emision else None,
+        'nc_monto': float(nc.monto_con_iva or 0),
+        'dte_padre_id': padre.id,
+        'dte_padre_numero': padre.numero_documento,
+        'dte_padre_tipo': padre.tipo_documento,
+        'dte_padre_estado': padre.estado_dte,
+        'sucursal_origen_id': sucursal_origen.id if sucursal_origen else None,
+        'sucursal_origen': sucursal_origen.alias if sucursal_origen else None,
+        'sucursal_destino_id': sucursal_destino.id if sucursal_destino else None,
+        'sucursal_destino': sucursal_destino.alias if sucursal_destino else None,
+        'recepcionado': es_post,
+        'usar_lineas_padre': usar_padre,
+        'ya_reparado': ya_reparado,
+        'total_faltantes': total_faltantes,
+        'lineas': lineas_out,
+    }
+
+
+def detectar_ncs_sin_stock(empresa_id=None, sucursal_id=None,
+                           fecha_inicio=None, fecha_fin=None,
+                           tipo_documento_padre=None, limit=None):
+    """
+    Recorre las NC/AJUSTE que afectan a un DTE de traspaso y retorna la
+    lista de diagnósticos por cada una que tenga líneas faltantes.
+
+    Parámetros:
+        empresa_id: acota por emisor del DTE padre.
+        sucursal_id: acota por sucursal emisora (nc.sucursal).
+        fecha_inicio/fecha_fin: sobre fecha_emision de la NC.
+        tipo_documento_padre: p.ej. 'GUIA', 'FACTURA ELECTRONICA'.
+        limit: tope de resultados (para paginación simple).
+    """
+    qs = (
+        Dte.objects
+        .filter(documento_afectado__isnull=False)
+        .filter(
+            Q(es_nota_credito=True)
+            | Q(tipo_documento__in=[
+                'NOTA DE CREDITO', 'AJUSTE TRASPASO', 'AJUSTE TRASPASO POST',
+            ])
+        )
+        .filter(documento_afectado__tipo_transaccion='TRASPASO')
+        .exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
+        .select_related('documento_afectado', 'sucursal')
+        .order_by('-fecha_emision', '-id')
+    )
+    if empresa_id:
+        qs = qs.filter(documento_afectado__emisor_id=empresa_id)
+    if sucursal_id:
+        qs = qs.filter(sucursal_id=sucursal_id)
+    if fecha_inicio:
+        qs = qs.filter(fecha_emision__gte=fecha_inicio)
+    if fecha_fin:
+        qs = qs.filter(fecha_emision__lte=fecha_fin)
+    if tipo_documento_padre:
+        qs = qs.filter(documento_afectado__tipo_documento=tipo_documento_padre)
+
+    resultados = []
+    for nc in qs.iterator(chunk_size=200):
+        diag = _diagnostico_nc(nc)
+        if diag and not diag['ya_reparado']:
+            resultados.append(diag)
+            if limit and len(resultados) >= limit:
+                break
+    return resultados
+
+
+@login_required
+@require_GET
+def api_ncs_sin_stock(request):
+    """
+    Lista NCs / AJUSTEs sobre traspasos que no generaron los movimientos
+    de reversa esperados (stock nunca volvió).
+
+    Query params:
+        empresa_id (opcional) — por defecto toma la de la sesión.
+        sucursal_id (opcional) — por defecto toma la de la sesión.
+        fecha_inicio / fecha_fin (opcional, YYYY-MM-DD).
+        tipo_documento_padre (opcional).
+        pagina (opcional, default 1), page_size (default 20).
+    """
+    try:
+        empresa_id = (
+            request.GET.get('empresa_id')
+            or request.session.get('idEmpresaActual')
+        )
+        sucursal_id = request.GET.get('sucursal_id')
+        if sucursal_id == '':
+            sucursal_id = None
+        # Si no se pidió sucursal explícita, por default NO filtramos por
+        # sucursal (el administrador quiere ver todas). El usuario puede
+        # acotar desde el UI.
+        fecha_inicio = request.GET.get('fecha_inicio') or None
+        fecha_fin = request.GET.get('fecha_fin') or None
+        tipo_doc_padre = request.GET.get('tipo_documento_padre') or None
+        pagina = max(int(request.GET.get('pagina', 1) or 1), 1)
+        page_size = min(max(int(request.GET.get('page_size', 20) or 20), 1), 100)
+
+        detectados = detectar_ncs_sin_stock(
+            empresa_id=empresa_id,
+            sucursal_id=sucursal_id,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            tipo_documento_padre=tipo_doc_padre,
+            # No ponemos limit aquí — queremos conteo real para paginar.
+        )
+        total = len(detectados)
+        inicio = (pagina - 1) * page_size
+        items = detectados[inicio:inicio + page_size]
+
+        return JsonResponse({
+            'success': True,
+            'items': items,
+            'total': total,
+            'pagina': pagina,
+            'page_size': page_size,
+            'total_paginas': (total + page_size - 1) // page_size if page_size else 1,
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': f'Error: {e}'}, status=500)
+
+
+def reparar_nc_stock(nc, lineas_solicitadas, usuario, motivo=''):
+    """
+    Aplica la reparación retroactiva a una NC histórica: crea los
+    `Movimientos_Producto` faltantes para que el stock vuelva a quedar
+    consistente con la NC ya emitida.
+
+    Parámetros:
+        nc: instancia Dte con es_nota_credito=True (o AJUSTE TRASPASO).
+        lineas_solicitadas: list[{'sku': int, 'cantidad': int}].
+        usuario: str (username).
+        motivo: str opcional.
+
+    Retorna:
+        (status_code, dict_resultado)
+        status_code: 200 OK, 400 validación, 409 conflicto (idempotencia
+            o stock insuficiente).
+
+    Comportamiento:
+    - Idempotencia: si ya existen movimientos REPARACION_STOCK_HISTORICO
+      para esta NC, retorna 409 con ya_reparado=True (no duplica).
+    - Si el traspaso padre fue recepcionado: EGRESO en destino + INGRESO
+      en origen. Valida stock destino.
+    - Si aún no fue recepcionado: sólo INGRESO en origen.
+    - Todas las operaciones van dentro de una transacción atómica.
+    """
+    from decimal import Decimal as _D
+    from django.db import transaction as _tx
+
+    padre = nc.documento_afectado
+    if padre is None or padre.tipo_transaccion != 'TRASPASO':
+        return 400, {'success': False, 'error': 'La NC no apunta a un traspaso válido.'}
+
+    # Idempotencia fuerte: movimientos con concepto REPARACION_STOCK_HISTORICO
+    # vinculados a esta NC indican que ya fue reparada (al menos parcialmente).
+    if Movimientos_Producto.objects.filter(
+        dte=nc, concepto='REPARACION_STOCK_HISTORICO'
+    ).exists():
+        return 409, {
+            'success': False,
+            'ya_reparado': True,
+            'error': (
+                f'La NC #{nc.numero_documento} ya fue reparada previamente. '
+                f'Si detectas stock faltante, revisá los movimientos '
+                f'REPARACION_STOCK_HISTORICO asociados.'
+            ),
+        }
+
+    if not lineas_solicitadas:
+        return 400, {'success': False, 'error': 'Debe indicar al menos una línea a reparar.'}
+
+    sucursal_origen = nc.sucursal or padre.sucursal
+    if sucursal_origen is None:
+        return 400, {
+            'success': False,
+            'error': 'La NC no tiene sucursal emisora. Imposible determinar origen.',
+        }
+
+    es_post = _dte_es_post_recepcion(padre)
+    sucursal_destino = _sucursal_destino_traspaso(padre) if es_post else None
+    if es_post and sucursal_destino is None:
+        return 400, {
+            'success': False,
+            'error': (
+                'El padre está en estado recepcionado pero no hay movimiento '
+                'TRASPASO_SALIDA que revele la sucursal destino. Revisar manualmente.'
+            ),
+        }
+
+    # Validación: cada línea solicitada debe tener cantidad > 0 y no
+    # exceder los faltantes según el diagnóstico actual.
+    diag = _diagnostico_nc(nc)
+    if diag is None:
+        return 400, {
+            'success': False,
+            'error': 'Esta NC no tiene líneas aptas para reparación.',
+        }
+    faltantes_por_sku = {l['sku']: l['faltantes'] for l in diag['lineas']}
+
+    lineas_normalizadas = []
+    for l in lineas_solicitadas:
+        try:
+            sku = int(l.get('sku'))
+            cant = int(l.get('cantidad'))
+        except (TypeError, ValueError):
+            return 400, {
+                'success': False,
+                'error': 'Línea con formato inválido. Esperado {sku, cantidad}.',
+            }
+        if cant <= 0:
+            return 400, {
+                'success': False,
+                'error': f'La cantidad para SKU {sku} debe ser mayor a 0.',
+            }
+        if sku not in faltantes_por_sku:
+            return 400, {
+                'success': False,
+                'error': (
+                    f'El SKU {sku} no está entre las líneas pendientes de reparación de '
+                    f'la NC #{nc.numero_documento}.'
+                ),
+            }
+        if cant > faltantes_por_sku[sku]:
+            return 400, {
+                'success': False,
+                'error': (
+                    f'El SKU {sku} tiene {faltantes_por_sku[sku]} uds pendientes, '
+                    f'no se pueden reparar {cant}.'
+                ),
+            }
+        lineas_normalizadas.append((sku, cant))
+
+    hoy = timezone.now()
+    skus_set = {s for s, _ in lineas_normalizadas}
+
+    try:
+        with _tx.atomic():
+            # Buscar Producto_Talla en origen y destino (con lock).
+            tallas_origen_qs = (
+                Producto_Talla.objects
+                .select_for_update(of=('self',))
+                .filter(sku__in=skus_set, producto__sucursal_id=sucursal_origen.id)
+                .select_related('producto')
+            )
+            tallas_origen = {t.sku: t for t in tallas_origen_qs}
+
+            tallas_destino = {}
+            if es_post:
+                tallas_destino_qs = (
+                    Producto_Talla.objects
+                    .select_for_update(of=('self',))
+                    .filter(sku__in=skus_set, producto__sucursal_id=sucursal_destino.id)
+                    .select_related('producto')
+                )
+                tallas_destino = {t.sku: t for t in tallas_destino_qs}
+
+            # Validaciones previas.
+            for sku, cant in lineas_normalizadas:
+                if sku not in tallas_origen:
+                    raise ValueError(
+                        f'No se encontró Producto_Talla en origen ({sucursal_origen.alias}) '
+                        f'para SKU {sku}.'
+                    )
+                if es_post:
+                    if sku not in tallas_destino:
+                        raise ValueError(
+                            f'No se encontró Producto_Talla en destino '
+                            f'({sucursal_destino.alias}) para SKU {sku}.'
+                        )
+                    # Releer stock con lock.
+                    stock_dest = int(tallas_destino[sku].stock or 0)
+                    if stock_dest < cant:
+                        return 409, {
+                            'success': False,
+                            'stock_insuficiente': True,
+                            'sku': sku,
+                            'disponible_destino': stock_dest,
+                            'solicitado': cant,
+                            'sugerencia': 'regularizar_con_receptor',
+                            'error': (
+                                f'Stock insuficiente en destino ({sucursal_destino.alias}) '
+                                f'para SKU {sku}: disponible {stock_dest}, '
+                                f'solicitado {cant}. Si parte ya se vendió, coordine '
+                                f'regularización con el receptor.'
+                            ),
+                        }
+
+            # Aplicar movimientos por línea.
+            stock_delta = []
+            total_repuesto = 0
+            for sku, cant in lineas_normalizadas:
+                talla_origen = tallas_origen[sku]
+                precio_ref = 0
+                # Precio de referencia: el del Dte_Productos de la NC o del padre.
+                dp_nc = nc.dte_productos.filter(productoTalla__sku=sku).first()
+                if dp_nc is None:
+                    dp_nc = padre.dte_productos.filter(productoTalla__sku=sku).first()
+                if dp_nc is not None:
+                    precio_ref = int(dp_nc.precio or 0)
+
+                obs_base = (
+                    f'Reparación retroactiva NC #{nc.numero_documento} '
+                    f'sobre DTE #{padre.numero_documento} ({padre.tipo_documento}).'
+                )
+                if motivo:
+                    obs_base += f' Motivo: {motivo}'
+
+                if es_post:
+                    talla_destino = tallas_destino[sku]
+                    # EGRESO en destino.
+                    Producto_Talla.objects.filter(id=talla_destino.id).update(
+                        stock=F('stock') - cant
+                    )
+                    Movimientos_Producto.objects.create(
+                        dte=nc,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=sucursal_destino,
+                        sucursal_destino=None,
+                        cantidad=-cant,
+                        costo=dp_nc.costo if dp_nc else 0,
+                        sobreprecio=dp_nc.sobreprecio if dp_nc else 0,
+                        precio=precio_ref,
+                        concepto='REPARACION_STOCK_HISTORICO',
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=f'{obs_base} EGRESO reparación en destino.'[:500],
+                    )
+                # INGRESO en origen (ambos flujos).
+                Producto_Talla.objects.filter(id=talla_origen.id).update(
+                    stock=F('stock') + cant
+                )
+                Movimientos_Producto.objects.create(
+                    dte=nc,
+                    ProductoTalla=talla_origen,
+                    sucursal_origen=None,
+                    sucursal_destino=sucursal_origen,
+                    cantidad=cant,
+                    costo=dp_nc.costo if dp_nc else 0,
+                    sobreprecio=dp_nc.sobreprecio if dp_nc else 0,
+                    precio=precio_ref,
+                    concepto='REPARACION_STOCK_HISTORICO',
+                    tipo_movimiento='INGRESO',
+                    estado='COMPLETADO',
+                    responsable=usuario,
+                    observaciones=f'{obs_base} INGRESO reparación en origen.'[:500],
+                )
+                total_repuesto += cant
+
+            # Tag en referencias para idempotencia visual y auditoría.
+            tag = (
+                f"\n[REPARACION_STOCK_HISTORICO {hoy.strftime('%Y-%m-%d %H:%M')} "
+                f"{usuario}: +{total_repuesto} uds origen"
+                f"{', -' + str(total_repuesto) + ' uds destino' if es_post else ''}"
+                f"{'. Motivo: ' + motivo if motivo else ''}]"
+            )
+            nc.referencias = ((nc.referencias or '') + tag).strip()
+            nc.save(update_fields=['referencias'])
+
+            # Calcular stock actual para la respuesta.
+            sucursales_resp = [sucursal_origen.id]
+            if es_post:
+                sucursales_resp.append(sucursal_destino.id)
+            for t in (
+                Producto_Talla.objects
+                .filter(sku__in=skus_set, producto__sucursal_id__in=sucursales_resp)
+                .select_related('producto', 'producto__sucursal')
+            ):
+                stock_delta.append({
+                    'sku': t.sku,
+                    'talla': t.talla,
+                    'sucursal_id': t.producto.sucursal_id,
+                    'sucursal_alias': t.producto.sucursal.alias if t.producto.sucursal else None,
+                    'stock': int(t.stock or 0),
+                })
+
+            logger.info(
+                "Reparación NC histórica: nc=%s padre=%s post=%s total_repuesto=%s usuario=%s",
+                nc.id, padre.id, es_post, total_repuesto, usuario,
+            )
+            return 200, {
+                'success': True,
+                'message': (
+                    f'Reparación aplicada sobre NC #{nc.numero_documento}: '
+                    f'{total_repuesto} uds reingresadas al origen'
+                    f'{" y descontadas del destino" if es_post else ""}.'
+                ),
+                'nc_id': nc.id,
+                'es_post_recepcion': es_post,
+                'total_repuesto': total_repuesto,
+                'stock_delta': stock_delta,
+            }
+    except ValueError as ve:
+        return 400, {'success': False, 'error': str(ve)}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return 500, {'success': False, 'error': f'Error al aplicar reparación: {e}'}
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
+@require_http_methods(["POST"])
+def api_reparar_stock_nc(request, nc_id):
+    """
+    Aplica la reparación retroactiva sobre una NC histórica. Body JSON:
+
+        {
+          "lineas": [{"sku": 1234, "cantidad": 3}],
+          "motivo": "Reparación retroactiva: NC original no generó movimientos."
+        }
+
+    Respuestas:
+        200 OK con stock_delta y total_repuesto.
+        400 validación (línea faltante, cantidad inválida, sin stock origen).
+        409 conflicto (ya_reparado o stock_insuficiente en destino).
+    """
+    try:
+        body = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    lineas = body.get('lineas') or []
+    motivo = (body.get('motivo') or '').strip()
+
+    try:
+        nc = Dte.objects.select_related('documento_afectado', 'sucursal').get(id=nc_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'NC no encontrada.'}, status=404)
+
+    # Debe ser una NC / AJUSTE sobre traspaso.
+    es_nc_valida = (
+        bool(nc.es_nota_credito)
+        or nc.tipo_documento in ('NOTA DE CREDITO', 'AJUSTE TRASPASO', 'AJUSTE TRASPASO POST')
+    )
+    if not es_nc_valida:
+        return JsonResponse({
+            'success': False,
+            'error': 'El DTE indicado no es una NC ni un AJUSTE sobre traspaso.',
+        }, status=400)
+
+    # Verificar permiso a nivel sucursal del emisor.
+    empresa_actual_id = request.session.get('idEmpresaActual')
+    if empresa_actual_id and nc.emisor_id and nc.emisor_id != empresa_actual_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Sin permiso sobre esta NC (empresa distinta).',
+        }, status=403)
+
+    status, payload = reparar_nc_stock(
+        nc=nc,
+        lineas_solicitadas=lineas,
+        usuario=request.user.username,
+        motivo=motivo,
+    )
+    return JsonResponse(payload, status=status)
+
+
+@login_required
+@require_GET
+def api_stock_productos(request):
+    """
+    Devuelve el stock actual de Producto_Talla para una lista de SKUs,
+    opcionalmente filtrados por sucursal. Usado por el frontend para
+    refrescar UI después de operaciones que mueven stock (NC, ajustes).
+
+    Query params:
+        skus: lista de SKU separados por coma (requerido)
+        sucursales: lista de ids de Sucursal separados por coma (opcional;
+            si se omite, retorna stock por cada sucursal donde exista el SKU).
+
+    Respuesta:
+        {
+            "success": true,
+            "items": [
+                {"sku": 123, "talla": "M",
+                 "sucursal_id": 1, "sucursal_alias": "Casa Matriz",
+                 "stock": 42},
+                ...
+            ]
+        }
+    """
+    skus_raw = (request.GET.get('skus') or '').strip()
+    if not skus_raw:
+        return JsonResponse({'success': False, 'error': 'Parámetro skus requerido.'}, status=400)
+
+    skus = []
+    for s in skus_raw.split(','):
+        s = s.strip()
+        if not s:
+            continue
+        try:
+            skus.append(int(s))
+        except ValueError:
+            return JsonResponse({'success': False, 'error': f'SKU inválido: {s}'}, status=400)
+
+    qs = Producto_Talla.objects.filter(sku__in=skus).select_related('producto', 'producto__sucursal')
+
+    sucursales_raw = (request.GET.get('sucursales') or '').strip()
+    if sucursales_raw:
+        try:
+            sucursales_ids = [int(x) for x in sucursales_raw.split(',') if x.strip()]
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Parámetro sucursales inválido.'}, status=400)
+        if sucursales_ids:
+            qs = qs.filter(producto__sucursal_id__in=sucursales_ids)
+
+    items = []
+    for t in qs:
+        sucursal = t.producto.sucursal if t.producto else None
+        items.append({
+            'sku': t.sku,
+            'talla': t.talla,
+            'producto_talla_id': t.id,
+            'sucursal_id': sucursal.id if sucursal else None,
+            'sucursal_alias': sucursal.alias if sucursal else None,
+            'stock': int(t.stock or 0),
+        })
+
+    return JsonResponse({'success': True, 'items': items})
 
 
 @require_GET
@@ -19936,10 +21178,28 @@ def emitir_dte(request):
                 talla_id = item.get('talla_id')
                 cantidad = int(item.get('cantidad', 0))
                 precio = int(float(item.get('precio', 0)))  # Convertir a int para compatibilidad con IntegerField
-                
-                talla = Producto_Talla.objects.get(id=talla_id)
+
+                talla = Producto_Talla.objects.select_related('producto').get(id=talla_id)
                 producto = talla.producto
-                
+
+                # ✅ VALIDACIÓN DEFENSIVA: el Producto_Talla elegido debe
+                # pertenecer a la sucursal emisora del DTE. Si no lo es, el
+                # stock se descontaría de otra sucursal y el ajuste posterior
+                # (NC / AJUSTE) aplicaría a un inventario equivocado.
+                # Este error indica un bug de integración en el frontend
+                # (buscador que mezcla SKUs de distintas sucursales).
+                if producto and producto.sucursal_id != sucursal.id:
+                    logger.error(
+                        "emitir_dte: Producto_Talla %s (SKU %s) pertenece a "
+                        "sucursal %s pero se está emitiendo desde sucursal %s.",
+                        talla.id, talla.sku, producto.sucursal_id, sucursal.id,
+                    )
+                    raise ValueError(
+                        f'Producto SKU {talla.sku} no pertenece a la sucursal '
+                        f'emisora ({sucursal.alias}). No se puede despachar un '
+                        f'producto que pertenece a otra sucursal.'
+                    )
+
                 # Guardar sobreprecio tal cual está en el producto (es un DELTA/MARGEN)
                 costo_unitario = producto.costo
                 sobreprecio_unitario = producto.sobreprecio
@@ -20024,6 +21284,12 @@ def emitir_dte(request):
         return JsonResponse({
             'success': False,
             'error': 'Datos JSON inválidos'
+        }, status=400)
+    except ValueError as ve:
+        # Errores de validación semántica (p.ej. SKU de otra sucursal).
+        return JsonResponse({
+            'success': False,
+            'error': str(ve),
         }, status=400)
     except Exception as e:
         return JsonResponse({
@@ -21681,12 +22947,29 @@ def anular_factura_dte(request):
             "dte_id": int,
             "tipo_anulacion": "ANULACION" | "DEVOLUCION",
             "metodo_devolucion": "EFECTIVO_CAJA" | "TRANSFERENCIA_BANCARIA" | "NO_AFECTA_CAJA",
-            "monto_nc": int | null   (si null o == monto original → anulación total)
+            "monto_nc": int | null,
+            "productos_afectados": [  # opcional — NC parcial por línea
+                {"dte_producto_id": int, "cantidad": int},
+                ...
+            ]
         }
 
-    NC parcial: no revierte stock ni marca ANULADO.  Se pueden emitir
-    varias NC parciales hasta cubrir el monto total del documento.
-    NC total (monto_nc == monto restante): revierte stock y marca ANULADO.
+    Modos:
+
+    1) NC TOTAL (sin `productos_afectados`, `monto_nc` == monto restante o null):
+       - Reversa stock de todos los egresos y marca el DTE como ANULADO.
+
+    2) NC PARCIAL POR LÍNEA (con `productos_afectados`):
+       - Reversa stock sólo de las líneas indicadas (en sus cantidades).
+       - Reduce `Dte_Productos.stock` del DTE original y desactiva la línea
+         si queda en cero; recalcula totales del DTE.
+       - Crea en la NC un detalle por cada línea afectada.
+       - El monto de la NC se calcula desde las líneas (monto_nc se ignora).
+       - Si todas las líneas quedan consumidas, marca el DTE como ANULADO.
+
+    3) NC PARCIAL POR MONTO (compatibilidad legacy, sin `productos_afectados`):
+       - No reversa stock, no modifica el DTE. Queda la NC como ajuste
+         contable. Se registra una advertencia en la respuesta.
     """
     import json as _json
     from decimal import Decimal
@@ -21716,6 +22999,7 @@ def anular_factura_dte(request):
     cliente_nombre = body.get('cliente_nombre', '').strip()
     cliente_rut = body.get('cliente_rut', '').strip()
     motivo_anulacion = body.get('motivo', '').strip()
+    productos_afectados_input = body.get('productos_afectados') or []
 
     TIPOS_ANULABLES = [
         'FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
@@ -21752,31 +23036,110 @@ def anular_factura_dte(request):
             'error': f'El documento ya tiene NC por el monto total (${monto_original:,}). No se puede generar otra NC.'
         }, status=400)
 
-    # Determinar monto de la NC
-    monto_nc_solicitado = body.get('monto_nc')
-    if monto_nc_solicitado is not None:
-        try:
-            monto_nc_solicitado = int(monto_nc_solicitado)
-        except (ValueError, TypeError):
-            return JsonResponse({'error': 'Monto NC inválido'}, status=400)
-        if monto_nc_solicitado <= 0:
-            return JsonResponse({'error': 'El monto de la NC debe ser mayor a 0'}, status=400)
-        if monto_nc_solicitado > monto_restante:
+    # ------------------------------------------------------------------
+    # NC PARCIAL POR LÍNEA (productos_afectados): validar y calcular monto
+    # a partir de las líneas indicadas. Cuando viene, se ignora monto_nc.
+    # ------------------------------------------------------------------
+    usa_productos_afectados = bool(productos_afectados_input)
+    lineas_afectadas = []  # [(dp, cantidad_a_devolver)]
+
+    if usa_productos_afectados:
+        ajustes_por_id = {}
+        for a in productos_afectados_input:
+            try:
+                pid = int(a.get('dte_producto_id'))
+                cant = int(a.get('cantidad'))
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'error': 'productos_afectados con formato inválido. Esperado {dte_producto_id, cantidad}.'
+                }, status=400)
+            if cant <= 0:
+                return JsonResponse({
+                    'error': 'La cantidad a devolver por cada producto debe ser mayor a 0.'
+                }, status=400)
+            if pid in ajustes_por_id:
+                return JsonResponse({
+                    'error': f'El producto {pid} aparece duplicado en productos_afectados.'
+                }, status=400)
+            ajustes_por_id[pid] = cant
+
+        dte_productos_map = {
+            dp.id: dp for dp in (
+                dte.dte_productos
+                .filter(id__in=ajustes_por_id.keys(), activo=True)
+                .select_related('productoTalla__producto')
+            )
+        }
+        if len(dte_productos_map) != len(ajustes_por_id):
             return JsonResponse({
-                'error': f'El monto (${monto_nc_solicitado:,}) excede el saldo disponible (${monto_restante:,})'
+                'error': 'Alguno de los productos indicados no existe en el DTE o está inactivo.'
             }, status=400)
+
+        neto_calc = Decimal('0')
+        unidades_calc = 0
+        for pid, cant in ajustes_por_id.items():
+            dp = dte_productos_map[pid]
+            stock_actual = int(dp.stock or 0)
+            if cant > stock_actual:
+                return JsonResponse({
+                    'error': (
+                        f'No se puede devolver {cant} de {dp.descripcion}: '
+                        f'sólo quedan {stock_actual} activas en el DTE.'
+                    ),
+                }, status=400)
+            neto_calc += Decimal(cant) * Decimal(dp.precio or 0)
+            unidades_calc += cant
+            lineas_afectadas.append((dp, cant))
+
+        iva_calc = (neto_calc * Decimal('0.19')).quantize(Decimal('1'))
+        monto_con_iva_calc = int((neto_calc + iva_calc).quantize(Decimal('1')))
+
+        if monto_con_iva_calc > monto_restante:
+            return JsonResponse({
+                'error': (
+                    f'El monto resultante de las líneas seleccionadas '
+                    f'(${monto_con_iva_calc:,}) excede el saldo disponible '
+                    f'de NC sobre este DTE (${monto_restante:,}).'
+                )
+            }, status=400)
+
+        monto_con_iva_nc = monto_con_iva_calc
+        monto_neto_nc = int(neto_calc)
+        unidades_nc = unidades_calc
+        descuento_nc = 0
+        # Determinar si queda todo consumido tras aplicar estas líneas.
+        total_stock_dte = dte.dte_productos.filter(activo=True).aggregate(
+            s=Sum('stock')
+        )['s'] or 0
+        es_anulacion_total = (unidades_calc >= int(total_stock_dte or 0) and
+                              int(total_nc_previas) + monto_con_iva_calc >= monto_original)
     else:
-        monto_nc_solicitado = monto_restante
+        # Determinar monto de la NC (legacy por monto)
+        monto_nc_solicitado = body.get('monto_nc')
+        if monto_nc_solicitado is not None:
+            try:
+                monto_nc_solicitado = int(monto_nc_solicitado)
+            except (ValueError, TypeError):
+                return JsonResponse({'error': 'Monto NC inválido'}, status=400)
+            if monto_nc_solicitado <= 0:
+                return JsonResponse({'error': 'El monto de la NC debe ser mayor a 0'}, status=400)
+            if monto_nc_solicitado > monto_restante:
+                return JsonResponse({
+                    'error': f'El monto (${monto_nc_solicitado:,}) excede el saldo disponible (${monto_restante:,})'
+                }, status=400)
+        else:
+            monto_nc_solicitado = monto_restante
 
-    es_anulacion_total = (monto_nc_solicitado == monto_restante)
+        es_anulacion_total = (monto_nc_solicitado == monto_restante)
 
-    # Calcular neto e IVA proporcional
-    monto_con_iva_nc = monto_nc_solicitado
-    monto_neto_nc = int(round(monto_con_iva_nc / Decimal('1.19')))
-    descuento_nc = 0
-    if es_anulacion_total and int(total_nc_previas) == 0:
-        monto_neto_nc = int(dte.monto_neto)
-        descuento_nc = int(dte.descuento or 0)
+        # Calcular neto e IVA proporcional
+        monto_con_iva_nc = monto_nc_solicitado
+        monto_neto_nc = int(round(monto_con_iva_nc / Decimal('1.19')))
+        unidades_nc = dte.unidades_productos or 0
+        descuento_nc = 0
+        if es_anulacion_total and int(total_nc_previas) == 0:
+            monto_neto_nc = int(dte.monto_neto)
+            descuento_nc = int(dte.descuento or 0)
 
     MAPA_TIPO_SII = {
         'FACTURA ELECTRONICA': 33,
@@ -21811,7 +23174,7 @@ def anular_factura_dte(request):
             fecha_emision=timezone.localdate(),
             fecha_vencimiento=timezone.localdate(),
             bultos=dte.bultos or 0,
-            unidades_productos=dte.unidades_productos or 0,
+            unidades_productos=unidades_nc or 0,
             diasCredito=0,
             estado_dte='EMITIDO',
             estado_pago='PAGADO',
@@ -21839,21 +23202,106 @@ def anular_factura_dte(request):
                 dte=nc, metodo_pago='TRANSFERENCIA', monto=nc.monto_con_iva
             )
 
-        # Copiar productos de la factura a la NC
-        for dp in dte.dte_productos.select_related('productoTalla__producto'):
+        # Detalle de la NC:
+        # - NC parcial por línea: una línea por producto afectado.
+        # - NC total sin productos_afectados: copiar los productos 1:1 del DTE.
+        # - NC parcial por monto (legacy): una línea genérica “Devolución parcial”.
+        if usa_productos_afectados:
+            for dp, cantidad in lineas_afectadas:
+                Dte_Productos.objects.create(
+                    dte=nc,
+                    productoTalla=dp.productoTalla,
+                    descripcion=f"[DEV -{cantidad}] {dp.descripcion}",
+                    costo=dp.costo,
+                    sobreprecio=dp.sobreprecio,
+                    precio=dp.precio,
+                    stock=cantidad,
+                    activo=True,
+                )
+        elif es_anulacion_total:
+            for dp in dte.dte_productos.select_related('productoTalla__producto'):
+                Dte_Productos.objects.create(
+                    dte=nc,
+                    productoTalla=dp.productoTalla,
+                    descripcion=dp.descripcion,
+                    costo=dp.costo,
+                    sobreprecio=dp.sobreprecio,
+                    precio=dp.precio,
+                    stock=dp.stock,
+                    activo=True
+                )
+        else:
+            descripcion_parcial = (
+                f'Devolución parcial - Doc. #{dte.numero_documento} '
+                f'(${int(monto_con_iva_nc):,} de ${monto_original:,})'
+            )
             Dte_Productos.objects.create(
                 dte=nc,
-                productoTalla=dp.productoTalla,
-                descripcion=dp.descripcion,
-                costo=dp.costo,
-                sobreprecio=dp.sobreprecio,
-                precio=dp.precio,
-                stock=dp.stock,
-                activo=True
+                productoTalla=None,
+                descripcion=descripcion_parcial,
+                costo=0,
+                sobreprecio=0,
+                precio=int(monto_con_iva_nc),
+                stock=1,
+                activo=True,
             )
 
-        # Revertir stock y marcar ANULADO solo en anulación total
-        if es_anulacion_total:
+        # Reversar stock por línea en NC parcial con productos_afectados.
+        if usa_productos_afectados:
+            for dp, cantidad in lineas_afectadas:
+                if dp.productoTalla_id:
+                    Producto_Talla.objects.filter(id=dp.productoTalla_id).update(
+                        stock=F('stock') + cantidad
+                    )
+                    Movimientos_Producto.objects.create(
+                        dte=nc,
+                        ProductoTalla=dp.productoTalla,
+                        sucursal_origen=None,
+                        sucursal_destino=dte.sucursal,
+                        cantidad=cantidad,
+                        costo=dp.costo,
+                        sobreprecio=dp.sobreprecio,
+                        precio=dp.precio,
+                        concepto='DEVOLUCION_NC',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=request.user.username,
+                        observaciones=(
+                            f'Devolución parcial NC #{nc.numero_documento} '
+                            f'(DTE #{dte.numero_documento}): {cantidad} uds.'
+                        )[:500],
+                    )
+                # Reducir stock en la línea del DTE original.
+                nuevo_stock = int(dp.stock or 0) - cantidad
+                dp.stock = max(0, nuevo_stock)
+                if dp.stock == 0:
+                    dp.activo = False
+                dp.save(update_fields=['stock', 'activo'])
+
+            # Recalcular totales del DTE original.
+            productos_activos = dte.dte_productos.filter(activo=True)
+            nuevo_neto = productos_activos.aggregate(
+                s=Sum(F('stock') * F('precio'))
+            )['s'] or Decimal('0')
+            nuevas_unidades = productos_activos.aggregate(u=Sum('stock'))['u'] or 0
+            nuevo_con_iva = (Decimal(nuevo_neto) * Decimal('1.19')).quantize(Decimal('1'))
+
+            dte.monto_neto = Decimal(nuevo_neto)
+            dte.monto_con_iva = nuevo_con_iva
+            dte.unidades_productos = int(nuevas_unidades)
+            if int(nuevas_unidades) == 0 or es_anulacion_total:
+                dte.estado_dte = 'ANULADO'
+                dte.save(update_fields=[
+                    'monto_neto', 'monto_con_iva', 'unidades_productos', 'estado_dte'
+                ])
+            else:
+                dte.save(update_fields=[
+                    'monto_neto', 'monto_con_iva', 'unidades_productos'
+                ])
+
+        # Revertir stock y marcar ANULADO en anulación total (flujo clásico,
+        # sin productos_afectados).
+        if es_anulacion_total and not usa_productos_afectados:
             movimientos_original = Movimientos_Producto.objects.filter(
                 dte=dte,
                 tipo_movimiento='EGRESO',
@@ -21894,7 +23342,24 @@ def anular_factura_dte(request):
         'tallas': [], 'cantidad_total': 0, 'precio': 0,
         'monto_total': 0, 'articulo': '', 'marca': '', 'color': ''
     })
+    # Líneas conceptuales (sin productoTalla): usadas en NCs parciales para
+    # representar "Devolución parcial" con el monto exacto de la NC. Van
+    # directo al detalle, sin agrupación por artículo/talla.
+    lineas_conceptuales = []
     for dp in nc.dte_productos.select_related('productoTalla__producto'):
+        if dp.productoTalla is None:
+            lineas_conceptuales.append({
+                'nombre': limpiar_texto(dp.descripcion or 'Devolución'),
+                'descripcion': '',
+                'cantidad': dp.stock or 1,
+                'unidad': 'UN',
+                'precio_unitario': int(dp.precio or 0),
+                'descuento_pct': 0,
+                'monto_descuento': 0,
+                'monto_item': int((dp.stock or 1) * (dp.precio or 0)),
+                'codigo': 'DEVOLUCION',
+            })
+            continue
         producto = dp.productoTalla.producto
         key = producto.articulo
         g = productos_agrupados[key]
@@ -21909,7 +23374,7 @@ def anular_factura_dte(request):
         if not g['color'] and producto.atributo2:
             g['color'] = producto.atributo2.valor
 
-    detalle = []
+    detalle = list(lineas_conceptuales)
     for articulo, g in productos_agrupados.items():
         tallas_str = ' '.join(g['tallas'])
         marca_limpia = limpiar_texto(g['marca'] or '')

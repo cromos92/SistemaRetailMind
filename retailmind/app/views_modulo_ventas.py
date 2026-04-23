@@ -5229,6 +5229,12 @@ def cuadratura_caja(request):
     else:
         dias_tolerancia_arqueo = 30  # admin/administración: hasta 30 días
 
+    # Permisos granulares de edición de DTE (3 campos x 4 tipos).
+    # Se reutiliza el mismo helper que usa Gestión de Documentos para que
+    # el modal "Detalle de Métodos de Pago" del Resumen de Caja muestre
+    # u oculte los controles de edición de fecha por cada DTE asociado.
+    permisos_dte = permisos_edicion_dte_context(request.user, sucursal_actual_id)
+
     context = {
         'sucursal_actual': sucursal_actual,
         'es_administrador': es_administrador,
@@ -5238,6 +5244,14 @@ def cuadratura_caja(request):
         'rol_usuario': rol_usuario or 'sin_rol',
         'dias_tolerancia_arqueo': dias_tolerancia_arqueo,
         'qz_config': _get_qz_config(sucursal_actual_id),
+        # Flags por campo (se evalúan además por tipo de DTE en runtime).
+        'puede_editar_fecha_dte': permisos_dte['campo']['fecha'],
+        'puede_editar_numero_dte': permisos_dte['campo']['numero_documento'],
+        'puede_editar_pago_dte': permisos_dte['campo']['pago'],
+        # Flag global: ¿hay algún par (campo, tipo) habilitado? → controla
+        # si se muestran los botones de "Ver detalle" / "Editar fecha" en
+        # el modal de Resumen de Caja.
+        'puede_editar_algun_dte': permisos_dte['cualquiera'],
     }
     return render(request, 'vistas/modulo_ventas/cuadraturaCaja.html', context)
 
@@ -5406,11 +5420,17 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         folio_dte__isnull=False
     ).values_list('folio_dte', flat=True)
     
+    # Incluimos también NCs con tipo_transaccion='ANULACION': aunque la
+    # política de negocio es que no descuenten del efectivo teórico, el
+    # usuario necesita verlas en el Resumen de Caja como documento emitido
+    # del día (si no la NC "desaparece" del día en que se solicitó).
+    # La clasificación posterior (si descuenta o no efectivo) sigue dependiendo
+    # de si la NC tiene un Dte_Detalle_Pago en EFECTIVO, no del tipo_transaccion.
     dtes_del_dia = Dte.objects.filter(
         sucursal=sucursal,
         fecha_emision=fecha_obj,
         estado_dte__in=['EMITIDO', 'ACEPTADO'],
-        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION']
+        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION']
     ).prefetch_related('dte_asociado')
     
     folios_tickets_set = set(folios_tickets)
@@ -5432,10 +5452,14 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             cuadratura_data['cantidad_notas_credito'] += 1
             pagos_nc = dte.dte_asociado.all()
             tiene_efectivo = pagos_nc.filter(metodo_pago='EFECTIVO').exists()
+            tiene_transferencia = pagos_nc.filter(metodo_pago='TRANSFERENCIA').exists()
             if tiene_efectivo:
                 cuadratura_data['total_nc_efectivo'] += monto_dte
-            else:
+            elif tiene_transferencia:
                 cuadratura_data['total_nc_transferencia'] += monto_dte
+            # else: NC sin Dte_Detalle_Pago (ANULACION / NO_AFECTA_CAJA)
+            # figura en el resumen como documento emitido pero no descuenta
+            # del efectivo ni de la transferencia teóricos.
         elif not tiene_ticket_asociado:
             # Solo contar montos DTE si NO tienen ticket asociado (evita doble conteo)
             if dte.tipo_documento == 'BOLETA ELECTRONICA':
@@ -5478,8 +5502,15 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 cuadratura_data['cantidad_facturas_exentas'] += 1
                 cuadratura_data['total_facturas_exentas_display'] += monto_real
         
-        # Procesar pagos del DTE SOLO si no tiene ticket asociado
-        if not tiene_ticket_asociado:
+        # Procesar pagos del DTE SOLO si no tiene ticket asociado Y no es NC.
+        # Las NC ya se contabilizaron arriba a través de
+        # `total_nc_efectivo` / `total_nc_transferencia`; si volviéramos a
+        # iterar sus `Dte_Detalle_Pago` aquí terminaríamos sumando el monto
+        # de la NC como si fuera un ingreso de caja, y el descuento final
+        # (`total_efectivo -= total_nc_efectivo`) se neutralizaría contra
+        # esa suma dejando el teórico sin cambios — anulando el efecto
+        # esperado de la NC sobre la cuadratura.
+        if not tiene_ticket_asociado and dte.tipo_documento != 'NOTA DE CREDITO':
             for pago in dte.dte_asociado.all():
                 metodo = pago.metodo_pago or ''
                 tipo_tarjeta = pago.tipo_tarjeta or ''
@@ -5577,7 +5608,12 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
 
     # NC en efectivo resta del efectivo teórico de caja
     cuadratura_data['total_efectivo'] -= cuadratura_data['total_nc_efectivo']
-    
+    # NC por transferencia resta del teórico de transferencias (simétrico
+    # al tratamiento del efectivo). Antes sólo se sumaba en total_nc_transferencia
+    # pero nunca se descontaba → el arqueo cerraba con diferencia en transferencia
+    # cada vez que se emitía una NC por devolución vía transferencia.
+    cuadratura_data['total_transferencia'] -= cuadratura_data['total_nc_transferencia']
+
     return cuadratura_data
 
 
@@ -5781,6 +5817,290 @@ def generar_cuadratura_caja(request):
             'success': False,
             'error': f'Error al generar cuadratura: {str(e)}'
         })
+
+
+# ========== DETALLE DE MÉTODOS DE PAGO PARA RESUMEN DE CAJA ==========
+
+# Mapa código método de pago → categoría lógica que usa el modal
+# "Resumen de Caja" (tarjetas, efectivo, internet). Se calcula una sola
+# vez a nivel de módulo para no recomputarlo en cada request.
+_CATEGORIAS_METODO_PAGO = {
+    # Tarjetas Transbank y comerciales
+    'TARJETA_DEBITO': 'tarjetas',
+    'TARJETA_CREDITO': 'tarjetas',
+    'TBK_DEBITO_POS': 'tarjetas',
+    'TBK_CREDITO_POS': 'tarjetas',
+    'TBK_PREPAGO_POS': 'tarjetas',
+    'TBK_POS_INTEGRADO': 'tarjetas',
+    'TBK_MANUAL': 'tarjetas',
+    'TARJETA_COMERCIAL': 'tarjetas',
+    # Efectivo y equivalentes (incluye transferencia, convenio, crédito,
+    # cheque y orden de compra: son los que se agrupan en la tarjeta
+    # "Efectivo y Otros" del Resumen).
+    'EFECTIVO': 'efectivo',
+    'TRANSFERENCIA': 'efectivo',
+    'CHEQUE': 'efectivo',
+    'CONVENIO': 'efectivo',
+    'CREDITO_TRABAJADOR': 'efectivo',
+    'CREDITO_EXTERNO': 'efectivo',
+    'ORDEN_COMPRA': 'efectivo',
+    'OTRO': 'efectivo',
+    # Marketplaces / venta por internet
+    'VENTA_INTERNET': 'internet',
+}
+
+
+def _categoria_metodo_pago(metodo: str | None) -> str:
+    return _CATEGORIAS_METODO_PAGO.get((metodo or '').upper(), 'otros')
+
+
+@login_required
+@require_GET
+def obtener_detalle_cuadratura_metodos_pago(request):
+    """
+    Devuelve el detalle desagregado de pagos del día para el modal
+    "Resumen de Caja — <fecha>".
+
+    Cada ítem corresponde a un `TicketDetallePago` o a un
+    `Dte_Detalle_Pago` (cuando el DTE no tiene ticket vinculado) del día
+    de la sucursal activa, más el DTE asociado resuelto por
+    (sucursal, folio) cuando existe.
+
+    La respuesta incluye por cada ítem un bloque `permisos` indicando
+    qué puede editar el usuario sobre el DTE asociado (fecha, número,
+    pago). El frontend usa estos flags para habilitar/ocultar el botón
+    de edición de fecha por cada fila.
+
+    Query params:
+        fecha      (str, YYYY-MM-DD, requerido)
+        categoria  (opcional: tarjetas | efectivo | internet | todo)
+    """
+    from datetime import datetime as _dt
+
+    fecha_str = (request.GET.get('fecha') or '').strip()
+    categoria = (request.GET.get('categoria') or 'todo').strip().lower()
+    if not fecha_str:
+        return JsonResponse({'success': False, 'error': 'Fecha requerida'})
+
+    try:
+        fecha_obj = _dt.strptime(fecha_str, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Fecha inválida. Formato esperado YYYY-MM-DD',
+        })
+
+    sucursal_id = get_sucursal_id(request)
+    if not sucursal_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'No hay sucursal seleccionada',
+        })
+
+    sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+
+    # Permisos granulares del usuario (se aplican POR DTE según su tipo).
+    permisos_dte = permisos_edicion_dte_context(request.user, sucursal_id)
+    flags_campo = permisos_dte.get('campo', {})
+    flags_tipo = permisos_dte.get('tipo', {})
+
+    # ---------------------------------------------------------------
+    # 1) Pagos desde TICKETS PAGADOS del día (con o sin DTE asociado).
+    # ---------------------------------------------------------------
+    tickets_qs = (
+        Ticket.objects
+        .filter(sucursal=sucursal, fecha=fecha_obj, estado='PAGADO')
+        .prefetch_related('pagos')
+        .only(
+            'id', 'correlativo', 'hora', 'created_at', 'fecha', 'total',
+            'cliente_nombre', 'cliente_rut', 'folio_dte', 'tipo_dte',
+            'sucursal_id',
+        )
+        .order_by('hora', 'id')
+    )
+
+    # Resolver DTEs vinculados a los tickets del día (match por folio_dte).
+    # Se resuelve en batch para evitar N+1.
+    folios_tickets = [t.folio_dte for t in tickets_qs if t.folio_dte]
+    dtes_por_folio = {}
+    if folios_tickets:
+        dtes_vinc_qs = (
+            Dte.objects
+            .filter(
+                sucursal_id=sucursal.id,
+                numero_documento__in=folios_tickets,
+            )
+            .only(
+                'id', 'numero_documento', 'tipo_documento', 'fecha_emision',
+                'estado_dte', 'monto_con_iva', 'sucursal_id',
+            )
+        )
+        for d in dtes_vinc_qs:
+            # Puede haber más de un DTE con el mismo folio si hay tipos
+            # distintos (raro, pero posible): preferimos el EMITIDO/ACEPTADO.
+            key = d.numero_documento
+            existente = dtes_por_folio.get(key)
+            if (
+                existente is None
+                or (
+                    existente.estado_dte not in ('EMITIDO', 'ACEPTADO')
+                    and d.estado_dte in ('EMITIDO', 'ACEPTADO')
+                )
+            ):
+                dtes_por_folio[key] = d
+
+    items = []
+
+    def _permisos_para_dte(dte_obj):
+        """Retorna flags {editar_fecha, editar_numero, editar_pago} sobre
+        un DTE, combinando permisos de campo con permisos del tipo DTE."""
+        if not dte_obj:
+            return {
+                'editar_fecha': False,
+                'editar_numero': False,
+                'editar_pago': False,
+            }
+        tipo_up = (dte_obj.tipo_documento or '').upper().strip()
+        tipo_ok = flags_tipo.get(tipo_up, False)
+        return {
+            'editar_fecha': bool(flags_campo.get('fecha') and tipo_ok),
+            'editar_numero': bool(
+                flags_campo.get('numero_documento') and tipo_ok
+            ),
+            'editar_pago': bool(flags_campo.get('pago') and tipo_ok),
+        }
+
+    for ticket in tickets_qs:
+        dte = dtes_por_folio.get(ticket.folio_dte) if ticket.folio_dte else None
+        permisos_item = _permisos_para_dte(dte)
+        hora_str = ticket.hora.strftime('%H:%M') if ticket.hora else ''
+        for pago in ticket.pagos.all():
+            metodo = (pago.metodo_pago or '').upper()
+            cat = _categoria_metodo_pago(metodo)
+            items.append({
+                'origen': 'TICKET',
+                'pago_id': pago.id,
+                'ticket_id': ticket.id,
+                'dte_id': dte.id if dte else None,
+                'correlativo': ticket.correlativo,
+                'hora': hora_str,
+                'cliente': (ticket.cliente_nombre or '').strip() or 'Cliente General',
+                'cliente_rut': (ticket.cliente_rut or '').strip(),
+                'metodo_pago': metodo,
+                'metodo_pago_display': obtener_nombre_metodo_pago(metodo),
+                'tipo_tarjeta': (pago.tipo_tarjeta or '').strip(),
+                'voucher': (pago.voucher or '').strip(),
+                'monto': int(pago.monto or 0),
+                'categoria': cat,
+                'dte': {
+                    'id': dte.id,
+                    'folio': dte.numero_documento,
+                    'tipo': dte.tipo_documento,
+                    'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
+                    'estado': dte.estado_dte,
+                } if dte else None,
+                'permisos': permisos_item,
+            })
+
+    # ---------------------------------------------------------------
+    # 2) Pagos desde DTEs del día que NO tienen ticket vinculado
+    #    (ej: boletas/facturas emitidas directo). Se evita duplicar los
+    #    pagos cuando el DTE ya aparece por el ticket.
+    # ---------------------------------------------------------------
+    folios_con_ticket = {
+        t.folio_dte for t in tickets_qs if t.folio_dte is not None
+    }
+    dtes_directos_qs = (
+        Dte.objects
+        .filter(
+            sucursal_id=sucursal.id,
+            fecha_emision=fecha_obj,
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+            estado_dte__in=['EMITIDO', 'ACEPTADO'],
+        )
+        .prefetch_related('dte_asociado', 'receptor')
+        .only(
+            'id', 'numero_documento', 'tipo_documento', 'fecha_emision',
+            'hora', 'estado_dte', 'monto_con_iva', 'sucursal_id',
+            'receptor_id',
+        )
+        .order_by('hora', 'id')
+    )
+
+    for dte in dtes_directos_qs:
+        if dte.numero_documento in folios_con_ticket:
+            continue  # Ya contado vía ticket
+        permisos_item = _permisos_para_dte(dte)
+        hora_str = dte.hora.strftime('%H:%M') if dte.hora else ''
+        receptor = getattr(dte, 'receptor', None)
+        cliente_nombre = (
+            (receptor.razon_social if receptor else '') or 'Cliente General'
+        )
+        cliente_rut = (receptor.rut if receptor else '') or ''
+        for pago in dte.dte_asociado.all():
+            metodo = (pago.metodo_pago or '').upper()
+            cat = _categoria_metodo_pago(metodo)
+            items.append({
+                'origen': 'DTE',
+                'pago_id': pago.id,
+                'ticket_id': None,
+                'dte_id': dte.id,
+                'correlativo': dte.numero_documento,
+                'hora': hora_str,
+                'cliente': cliente_nombre,
+                'cliente_rut': cliente_rut,
+                'metodo_pago': metodo,
+                'metodo_pago_display': obtener_nombre_metodo_pago(metodo),
+                'tipo_tarjeta': (pago.tipo_tarjeta or '').strip(),
+                'voucher': (pago.voucher or '').strip(),
+                'monto': int(pago.monto or 0),
+                'categoria': cat,
+                'dte': {
+                    'id': dte.id,
+                    'folio': dte.numero_documento,
+                    'tipo': dte.tipo_documento,
+                    'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
+                    'estado': dte.estado_dte,
+                },
+                'permisos': permisos_item,
+            })
+
+    # Filtro por categoría (opcional)
+    if categoria and categoria != 'todo':
+        items = [it for it in items if it['categoria'] == categoria]
+
+    # Ordenar por hora y luego correlativo
+    items.sort(key=lambda it: (it['hora'] or '', it['correlativo'] or 0))
+
+    # Totales por método (para pintar subtotales en el modal de detalle)
+    totales_por_metodo: dict[str, dict] = {}
+    for it in items:
+        key = it['metodo_pago']
+        bucket = totales_por_metodo.setdefault(
+            key,
+            {
+                'metodo_pago': key,
+                'metodo_pago_display': it['metodo_pago_display'],
+                'categoria': it['categoria'],
+                'cantidad': 0,
+                'total': 0,
+            },
+        )
+        bucket['cantidad'] += 1
+        bucket['total'] += it['monto']
+
+    return JsonResponse({
+        'success': True,
+        'fecha': fecha_str,
+        'categoria': categoria,
+        'items': items,
+        'totales_por_metodo': list(totales_por_metodo.values()),
+        'permisos_usuario': {
+            'cualquier_edicion': bool(permisos_dte.get('cualquiera')),
+            'campo': flags_campo,
+            'tipo': flags_tipo,
+        },
+    })
 
 
 @login_required
@@ -8977,110 +9297,23 @@ def reabrir_arqueo(request):
         arqueo.fecha_cierre = None
         nombre_usuario = request.user.get_full_name() or request.user.username
         arqueo.observaciones = (arqueo.observaciones or '') + f'\n[REABIERTO {timezone.now().strftime("%d/%m/%Y %H:%M")} por {nombre_usuario}] {justificacion}. Estado anterior: {estado_anterior}'
-        
-        # Recalcular totales teóricos incluyendo las nuevas ventas
-        # Esto reutiliza la lógica de generar_cuadratura_caja
-        from datetime import time as dt_time
-        inicio_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.min))
-        fin_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.max))
-        
-        # Resetear totales
-        arqueo.total_efectivo_teorico = 0
-        arqueo.total_tarjeta_debito_teorico = 0
-        arqueo.total_tarjeta_credito_teorico = 0
-        arqueo.total_transbank_teorico = 0
-        arqueo.total_transferencia_teorico = 0
-        arqueo.total_cheque_teorico = 0
-        arqueo.total_convenio_teorico = 0
-        arqueo.total_hites_teorico = 0
-        arqueo.total_tarjetas_comerciales_teorico = 0
-        arqueo.total_venta_internet_teorico = 0
-        arqueo.total_tickets_teorico = 0
-        arqueo.total_boletas_electronicas_teorico = 0
-        arqueo.total_facturas_teorico = 0
-        arqueo.total_notas_credito_teorico = 0
-        
-        # Procesar tickets del día completo
-        tickets_del_dia = Ticket.objects.filter(
-            sucursal=sucursal,
-            fecha=fecha_obj,
-            estado='PAGADO'
-        ).prefetch_related('pagos')
-        
-        for ticket in tickets_del_dia:
-            arqueo.total_tickets_teorico += ticket.total or 0
-            
-            for pago in ticket.pagos.all():
-                metodo = pago.metodo_pago
-                monto = pago.monto or 0
-                
-                if metodo == 'EFECTIVO':
-                    arqueo.total_efectivo_teorico += monto
-                elif metodo == 'TARJETA_DEBITO':
-                    # ✅ TARJETA_DEBITO se considera Transbank (datos migrados y genéricos)
-                    arqueo.total_tarjeta_debito_teorico += monto
-                    arqueo.total_transbank_teorico += monto
-                elif metodo == 'TARJETA_CREDITO':
-                    # ✅ TARJETA_CREDITO se considera Transbank (datos migrados y genéricos)
-                    arqueo.total_tarjeta_credito_teorico += monto
-                    arqueo.total_transbank_teorico += monto
-                elif metodo == 'TBK_DEBITO_POS':
-                    # ✅ Transbank POS Débito
-                    arqueo.total_tarjeta_debito_teorico += monto
-                    arqueo.total_transbank_teorico += monto
-                elif metodo == 'TBK_CREDITO_POS':
-                    # ✅ Transbank POS Crédito
-                    arqueo.total_tarjeta_credito_teorico += monto
-                    arqueo.total_transbank_teorico += monto
-                elif metodo == 'TBK_PREPAGO_POS':
-                    # ✅ Transbank POS Prepago (va a débito por convención)
-                    arqueo.total_tarjeta_debito_teorico += monto
-                    arqueo.total_transbank_teorico += monto
-                elif metodo in ['TBK_POS_INTEGRADO', 'TBK_MANUAL']:
-                    # ✅ Transbank genérico (datos históricos)
-                    arqueo.total_transbank_teorico += monto
-                elif metodo == 'TRANSFERENCIA':
-                    arqueo.total_transferencia_teorico += monto
-                elif metodo == 'CHEQUE':
-                    arqueo.total_cheque_teorico += monto
-                elif metodo == 'CONVENIO':
-                    arqueo.total_convenio_teorico += monto
-                elif metodo == 'TARJETA_COMERCIAL':
-                    arqueo.total_hites_teorico += monto
-                elif metodo == 'VENTA_INTERNET':
-                    arqueo.total_venta_internet_teorico += monto
-        
-        # Procesar DTEs
-        folios_tickets = Ticket.objects.filter(
-            sucursal=sucursal,
-            fecha=fecha_obj
-        ).exclude(folio_dte__isnull=True).values_list('folio_dte', flat=True)
-        
-        dtes_del_dia = Dte.objects.filter(
-            sucursal=sucursal,
-            fecha_emision=fecha_obj  # fecha_emision es DateField, no necesita __date
-        ).exclude(
-            numero_documento__in=folios_tickets
-        ).prefetch_related('dte_asociado')
-        
-        for dte in dtes_del_dia:
-            monto_dte = dte.monto_con_iva or 0
-            
-            if dte.tipo_documento == 'BOLETA ELECTRONICA':
-                arqueo.total_boletas_electronicas_teorico += monto_dte
-            elif dte.tipo_documento == 'FACTURA ELECTRONICA':
-                arqueo.total_facturas_teorico += monto_dte
-            elif dte.tipo_documento == 'NOTA DE CREDITO':
-                arqueo.total_notas_credito_teorico += monto_dte
-                pagos_nc = dte.dte_asociado.all()
-                tiene_efectivo = pagos_nc.filter(metodo_pago='EFECTIVO').exists()
-                if tiene_efectivo:
-                    arqueo.total_efectivo_teorico -= monto_dte
-        
-        # Actualizar totales agregados
-        arqueo.total_tarjetas_comerciales_teorico = arqueo.total_hites_teorico
-        
-        arqueo.save()
+        # Persistir el cambio de estado/observaciones antes de delegar el
+        # recálculo de los teóricos al helper unificado (así
+        # `_recalcular_teoricos_arqueo` trabaja sobre el arqueo ya "abierto").
+        arqueo.save(update_fields=['estado', 'fecha_cierre', 'observaciones'])
+
+        # Recalcular totales teóricos delegando en la misma lógica que usa
+        # la cuadratura de caja (`_calcular_cuadratura_data` a través de
+        # `_recalcular_teoricos_arqueo`). Esto evita tener dos
+        # implementaciones divergentes del cálculo — el bloque manual que
+        # había acá omitía, por ejemplo, `total_nc_transferencia` y el
+        # descuento de transferencia cuando la NC se pagaba por transferencia.
+        _recalcular_teoricos_arqueo(
+            arqueo,
+            usuario=request.user,
+            registrar_bitacora=True,
+            razon=f'reapertura — {justificacion[:80]}',
+        )
         
         return JsonResponse({
             'success': True,

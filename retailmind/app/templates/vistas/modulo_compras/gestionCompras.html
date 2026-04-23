@@ -293,7 +293,6 @@
 }
 @media (max-width: 767.98px) {
     #modalRecepcionProductos .modal-title { font-size: 0.85rem; }
-    .acciones-masivas-bar .input-group { width: 100% !important; }
     #tablaRecepcionProductos { font-size: 0.72rem; }
     #tablaRecepcionProductos th { font-size: 0.65rem !important; padding: 3px 2px !important; }
     #tablaRecepcionProductos td { padding: 2px; }
@@ -488,9 +487,6 @@
     .modal-footer .d-flex.justify-content-between small { text-align: center; }
     .modal-footer .d-flex.justify-content-between .d-flex.gap-2 { width: 100%; justify-content: stretch; }
     .modal-footer .d-flex.justify-content-between .d-flex.gap-2 .btn { flex: 1; }
-
-    .acciones-masivas-bar { padding: 10px 12px; }
-    .acciones-masivas-bar .btn { padding: 6px 10px; font-size: 0.75rem; }
 }
 
 /* --- Mobile portrait (≤576px) --- */
@@ -606,28 +602,6 @@
 }
 
 /* ==================== ESTILOS MEJORADOS MODAL RECEPCION ==================== */
-
-/* Barra de acciones masivas */
-.acciones-masivas-bar {
-    background: linear-gradient(135deg, #1a1a2e 0%, #2d2d44 100%);
-    border-radius: 12px;
-    padding: 16px 20px;
-    margin-bottom: 16px;
-    border: 2px solid rgba(10, 179, 156, 0.3);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
-
-.acciones-masivas-bar .btn {
-    border-radius: 8px;
-    font-weight: 600;
-    padding: 10px 16px;
-    transition: all 0.2s ease;
-}
-
-.acciones-masivas-bar .btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
 
 /* Input de cantidad compacto */
 .input-cantidad-wrapper {
@@ -1933,14 +1907,149 @@
         .recepcion-toolbar .form-select,
         .recepcion-toolbar .btn { font-size: 0.74rem; }
 
-        .acciones-masivas-bar {
-            border-radius: 6px;
-            background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);
-            padding: 4px 6px !important;
+        /* ====== Fila de filtros: TODO EN UNA LÍNEA (CSS Grid) ====== */
+        .toolbar-filtros {
+            display: grid;
+            grid-template-columns:
+                minmax(220px, 1.4fr)   /* Buscar */
+                minmax(180px, 1fr)     /* Estado */
+                minmax(170px, 1fr)     /* Sucursal */
+                auto;                  /* Contador + paginación */
+            gap: 10px;
+            align-items: end;
+            padding: 6px 8px;
+            background: #ffffff;
+            border: 1px solid #e3e6ef;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(64, 81, 137, 0.04);
         }
-        .acciones-masivas-bar .btn { padding: 2px 8px !important; font-size: 0.72rem; }
-        .acciones-masivas-bar .form-control,
-        .acciones-masivas-bar .form-select { font-size: 0.72rem; padding: 2px 6px !important; }
+        .toolbar-filtros .filtro-item {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .toolbar-filtros .filtro-label {
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 2px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .toolbar-filtros .filtro-label i { color: #405189; font-size: 0.78rem; }
+        .toolbar-filtros .input-group-text {
+            padding: 2px 6px;
+            font-size: 0.72rem;
+        }
+        .toolbar-filtros .form-control,
+        .toolbar-filtros .form-select {
+            height: 28px;
+            font-size: 0.74rem;
+        }
+        .toolbar-filtros .filtro-paginacion {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-top: 14px; /* alinear con inputs (que tienen label arriba) */
+            justify-content: flex-end;
+            white-space: nowrap;
+        }
+        .toolbar-filtros .filtro-paginacion .badge {
+            padding: 5px 10px;
+            font-size: 0.7rem;
+        }
+        .toolbar-filtros .filtro-paginacion .btn-group .btn { height: 28px; }
+
+        /* En pantallas muy angostas, permitir que envuelva para no cortar controles */
+        @media (max-width: 900px) {
+            .toolbar-filtros {
+                grid-template-columns: 1fr 1fr;
+            }
+            .toolbar-filtros .filtro-paginacion {
+                grid-column: 1 / -1;
+                padding-top: 4px;
+                justify-content: space-between;
+            }
+        }
+        @media (max-width: 560px) {
+            .toolbar-filtros { grid-template-columns: 1fr; }
+            .toolbar-filtros .filtro-paginacion { grid-column: auto; }
+        }
+
+        /* ====== Modal-body en flex column para que el footer quede sticky ====== */
+        #modalRecepcionProductos .modal-body {
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 90px);
+            gap: 4px;
+        }
+        #modalRecepcionProductos .modal-body > .card {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        #modalRecepcionProductos .modal-body > .card > .card-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #modalRecepcionProductos .modal-body > .card > .card-body > .table-responsive {
+            flex: 1 1 auto;
+            min-height: 180px;
+            max-height: none !important;
+            overflow-y: auto;
+        }
+        #modalRecepcionProductos .modal-body > .card > .card-body > .border-top {
+            flex-shrink: 0;
+            position: sticky;
+            bottom: 0;
+            z-index: 5;
+            background: linear-gradient(180deg, #ffffff 0%, #eef0f3 100%) !important;
+            box-shadow: 0 -4px 10px rgba(64, 81, 137, 0.08);
+            border-top: 2px solid #405189 !important;
+        }
+
+        /* Footer: destaque visual para "rebajados sin confirmar" */
+        #modalRecepcionProductos .stat-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: #f1f3f7;
+            color: #405189;
+            border: 1px solid #dfe3ec;
+        }
+        #modalRecepcionProductos .stat-chip.chip-pendiente { background: #fff8e1; color: #b7791f; border-color: #f6d78a; }
+        #modalRecepcionProductos .stat-chip.chip-sesion {
+            background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 2px 6px rgba(10, 179, 156, 0.35);
+        }
+        #modalRecepcionProductos .stat-chip.chip-recep { background: #e6fff9; color: #099885; border-color: #9fe7db; }
+        #modalRecepcionProductos .stat-chip.chip-costo  { background: #eef3ff; color: #405189; border-color: #c7d1ea; }
+
+        /* ====== Tabla más compacta ====== */
+        #modalRecepcionProductos #tablaRecepcionProductos { font-size: 0.74rem; }
+        #modalRecepcionProductos #tablaRecepcionProductos thead th {
+            padding: 4px 5px !important;
+            font-size: 0.66rem !important;
+            letter-spacing: 0.2px;
+        }
+        #modalRecepcionProductos #tablaRecepcionProductos tbody td { padding: 2px 5px !important; }
+        #modalRecepcionProductos #tablaRecepcionProductos .producto-grupo td { padding: 3px 5px !important; font-size: 0.73rem; }
+        #modalRecepcionProductos #tablaRecepcionProductos .talla-detalle td { padding: 1px 4px !important; font-size: 0.72rem; }
+        #modalRecepcionProductos #tablaRecepcionProductos .badge { font-size: 0.58rem; padding: 0.22em 0.4em; }
 
         #modalRecepcionProductos .table-sm th,
         #modalRecepcionProductos .table-sm td { padding: 3px 5px; }
@@ -2001,12 +2110,6 @@
         #modalRecepcionProductos.modo-sucursal-sel #tablaRecepcionProductos .col-sucursal-sel { display: table-cell; }
         #modalRecepcionProductos.modo-sucursal-sel #tablaRecepcionProductos tbody tr.row-sucursal-sel {
             background-color: rgba(13, 202, 240, 0.18) !important;
-        }
-        #modalRecepcionProductos.modo-sucursal-sel .acciones-masivas-bar {
-            background: linear-gradient(135deg, #0a6ca8 0%, #0c7cbf 100%);
-        }
-        #modalRecepcionProductos.modo-sucursal-sel #btnToggleSucursalSeleccion {
-            background: #ffc107 !important; color: #000 !important; border-color: #ffc107 !important;
         }
         
         #modalRecepcionProductos .input-cantidad-wrapper { position: relative; display: inline-flex; align-items: center; gap: 3px; }
@@ -2139,84 +2242,74 @@
                         
                         <!-- ========== TOOLBAR UNIFICADA ========== -->
                         <div class="recepcion-toolbar mb-1">
-                            <!-- Fila 1: Búsqueda + Vista + Filtro + Paginación -->
-                            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
-                                <div class="input-group input-group-sm" style="max-width: 280px;">
-                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                                    <input type="text" class="form-control border-start-0 ps-0" id="searchRecepcion"
-                                           placeholder="SKU / artículo / marca / color / talla…"
-                                           autocomplete="off"
-                                           title="Escribe para filtrar en tiempo real. Separa términos con espacios para buscar por varios criterios.">
-                                    <button class="btn btn-outline-secondary" type="button" id="btnLimpiarSearchRecepcion" title="Limpiar búsqueda" style="display:none;"><i class="bi bi-x-lg"></i></button>
-                                    <button class="btn btn-primary" type="button" id="btnSearchRecepcion" title="Buscar (Enter)"><i class="bi bi-search"></i></button>
+                            <!-- Fila 1: Filtros en UNA sola línea (grid) -->
+                            <div class="toolbar-filtros mb-1">
+                                <!-- Buscar -->
+                                <div class="filtro-item">
+                                    <label class="filtro-label" for="searchRecepcion">
+                                        <i class="bi bi-search"></i> Buscar
+                                    </label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-upc-scan text-muted"></i></span>
+                                        <input type="text" class="form-control border-start-0 ps-0" id="searchRecepcion"
+                                               placeholder="SKU / artículo / marca / color / talla…"
+                                               autocomplete="off"
+                                               title="Filtra en tiempo real. Separa términos con espacios para combinar criterios.">
+                                        <button class="btn btn-outline-secondary" type="button" id="btnLimpiarSearchRecepcion" title="Limpiar búsqueda" style="display:none;"><i class="bi bi-x-lg"></i></button>
+                                        <button class="btn btn-primary" type="button" id="btnSearchRecepcion" title="Buscar (Enter)"><i class="bi bi-search"></i></button>
+                                    </div>
                                 </div>
-                                <!-- Vista única: agrupada por producto. Checkbox oculto para
-                                     compatibilidad con el resto del JS que consulta
-                                     `$('#vistaAgrupada').is(':checked')`. -->
-                                <input type="checkbox" id="vistaAgrupada" checked style="display:none;">
-                                <select class="form-select form-select-sm" id="filtroEstadoRecepcion"
-                                        style="width: 200px;"
-                                        title="Filtrar por estado de rebaja de stock">
-                                    <option value="">Todo (rebajado y pendiente)</option>
-                                    <option value="pendientes">Pendientes por rebajar</option>
-                                    <option value="rebajados">Ya rebajados (parcial o total)</option>
-                                    <option value="parciales">Sólo parciales</option>
-                                    <option value="completos">Sólo completos</option>
-                                </select>
-                                <div class="input-group input-group-sm" style="width: 190px;" title="Filtrar filas por sucursal destino asignada">
-                                    <span class="input-group-text bg-white py-0 px-2"><i class="bi bi-geo-alt text-info"></i></span>
-                                    <select class="form-select" id="filtroSucursalRecepcion" style="font-size:0.74rem;">
-                                        <option value="">Todas sucursales</option>
-                                        <option value="__sin__">Sin sucursal</option>
+
+                                <!-- Estado -->
+                                <div class="filtro-item">
+                                    <label class="filtro-label" for="filtroEstadoRecepcion">
+                                        <i class="bi bi-funnel-fill"></i> Estado
+                                    </label>
+                                    <select class="form-select form-select-sm" id="filtroEstadoRecepcion"
+                                            title="Filtrar por estado de rebaja de stock">
+                                        <option value="">Todo (rebajado y pendiente)</option>
+                                        <option value="pendientes">Pendientes por rebajar</option>
+                                        <option value="rebajados">Ya rebajados (parcial o total)</option>
+                                        <option value="parciales">Sólo parciales</option>
+                                        <option value="completos">Sólo completos</option>
                                     </select>
                                 </div>
-                                <div class="ms-auto d-flex align-items-center gap-2">
-                                    <span class="badge bg-primary rounded-pill" style="font-size: 0.68rem;">
-                                        <span id="totalProductosRecepcion">0</span> prod.
-                                    </span>
-                                    <div class="btn-group btn-group-sm">
-                                        <button type="button" class="btn btn-outline-secondary py-0 px-1" id="btnPrevPage"><i class="bi bi-chevron-left"></i></button>
-                                        <span class="btn btn-light disabled py-0 px-2" id="pageInfo" style="font-size: 0.68rem;">Pág 1</span>
-                                        <button type="button" class="btn btn-outline-secondary py-0 px-1" id="btnNextPage"><i class="bi bi-chevron-right"></i></button>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Fila 2: Acciones rápidas (compactada) -->
-                            <div class="acciones-masivas-bar">
-                                <div class="d-flex align-items-center gap-1 flex-wrap">
-                                    <!-- Datalist global de facturas (usado por inputs por fila,
-                                         aunque ya no exista el input "Factura global" masivo). -->
-                                    <datalist id="facturas-global-list"></datalist>
-                                    <div class="input-group input-group-sm" style="width: 240px;">
-                                        <span class="input-group-text py-0 px-2" style="font-size:0.7rem;"><i class="bi bi-geo-alt"></i></span>
-                                        <select class="form-select" id="sucursalGlobalMasiva" title="Sucursal destino a aplicar a las filas seleccionadas">
-                                            <option value="">Elegir sucursal...</option>
+
+                                <!-- Sucursal -->
+                                <div class="filtro-item">
+                                    <label class="filtro-label" for="filtroSucursalRecepcion">
+                                        <i class="bi bi-geo-alt-fill"></i> Sucursal
+                                    </label>
+                                    <div class="input-group input-group-sm" title="Filtrar filas por sucursal destino asignada">
+                                        <span class="input-group-text bg-white"><i class="bi bi-shop text-info"></i></span>
+                                        <select class="form-select" id="filtroSucursalRecepcion">
+                                            <option value="">Todas sucursales</option>
+                                            <option value="__sin__">Sin sucursal</option>
                                         </select>
-                                        <button class="btn btn-info text-white" type="button" id="btnToggleSucursalSeleccion" title="Activar modo selección: marca con checkbox las filas donde quieras aplicar esta sucursal">
-                                            <i class="bi bi-check2-square me-1"></i><span class="d-none d-xl-inline">Elegir filas</span>
-                                        </button>
-                                    </div>
-                                    <button type="button" class="btn btn-warning text-dark" id="btnAplicarSucursalSeleccion" style="display: none;" title="Aplicar la sucursal elegida a las filas marcadas">
-                                        <i class="bi bi-geo-alt-fill me-1"></i>Aplicar a <span id="contadorSucursalSel">0</span>
-                                    </button>
-                                    <div class="vr mx-1" style="border-color:rgba(255,255,255,0.2);"></div>
-                                    <button type="button" class="btn btn-outline-light" id="btnExpandirTodos" title="Expandir/colapsar todos los productos">
-                                        <i class="bi bi-arrows-expand"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-light" id="btnLimpiarTodo" title="Borrar todas las cantidades y facturas ingresadas"><i class="bi bi-eraser"></i></button>
-                                    <button type="button" class="btn btn-outline-danger" id="btnToggleEliminar" title="Activar modo para eliminar productos de la compra">
-                                        <i class="bi bi-trash3"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-danger" id="btnEliminarSeleccionados" style="display: none;" title="Eliminar productos seleccionados">
-                                        <i class="bi bi-trash3-fill me-1"></i>(<span id="contadorSeleccionados">0</span>)
-                                    </button>
-                                    <div class="ms-auto d-flex align-items-center gap-2 text-white" style="font-size: 0.7rem;">
-                                        <span><i class="bi bi-hourglass-split text-warning me-1"></i><strong id="quickStatPendientes">0</strong></span>
-                                        <span><i class="bi bi-check-circle text-success me-1"></i><strong id="quickStatIngresados">0</strong></span>
-                                        <span class="badge rounded-pill" style="background: rgba(10,179,156,0.3);"><strong id="quickStatMonto">$0</strong></span>
                                     </div>
                                 </div>
+
+                                <!-- Contador + paginación -->
+                                <div class="filtro-paginacion">
+                                    <span class="badge bg-primary rounded-pill" title="Total de productos que cumplen los filtros">
+                                        <i class="bi bi-box-seam me-1"></i><span id="totalProductosRecepcion">0</span> prod.
+                                    </span>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Paginación">
+                                        <button type="button" class="btn btn-outline-secondary" id="btnPrevPage" title="Página anterior"><i class="bi bi-chevron-left"></i></button>
+                                        <span class="btn btn-light disabled px-2" id="pageInfo" style="font-size: 0.68rem;">Pág 1</span>
+                                        <button type="button" class="btn btn-outline-secondary" id="btnNextPage" title="Página siguiente"><i class="bi bi-chevron-right"></i></button>
+                                    </div>
+                                </div>
+
+                                <!-- Vista única: agrupada por producto. Checkbox oculto
+                                     para compatibilidad con el JS que consulta
+                                     `$('#vistaAgrupada').is(':checked')`. -->
+                                <input type="checkbox" id="vistaAgrupada" checked style="display:none;">
                             </div>
+                            <!-- Datalist global de facturas (usado por los inputs de factura por fila).
+                                 La barra de acciones masivas fue eliminada; el datalist se mantiene oculto
+                                 porque el JS lo usa como fuente del autocompletado. -->
+                            <datalist id="facturas-global-list"></datalist>
                         </div>
                         
                         <!-- Tabla de productos -->
@@ -2252,21 +2345,29 @@
                                     </table>
                                 </div>
                                 
-                                <!-- Footer compacto con totales + progreso -->
-                                <div class="border-top bg-light px-2 py-1" style="border-radius: 0 0 8px 8px;">
-                                    <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size: 0.7rem;">
-                                        <span class="text-muted"><i class="bi bi-hourglass-split text-warning me-1"></i>Pend: <strong id="statPendientes">0</strong></span>
-                                        <span class="text-muted"><i class="bi bi-check-circle text-success me-1"></i>Recep: <strong class="text-success" id="statRecepcionados">0</strong></span>
-                                        <span class="text-muted" title="Total ingresado en esta sesión (incluye todas las páginas)"><i class="bi bi-boxes me-1"></i>Total sesión: <strong id="totalParesRecepcionados">0</strong></span>
-                                        <span class="text-muted" title="Inversión estimada para lo ingresado en esta sesión"><i class="bi bi-cash-stack text-success me-1"></i>Inv sesión: <strong class="text-success" id="totalCostoRecepcionado">$0</strong></span>
-                                        <div class="flex-grow-1 d-flex align-items-center gap-2 ms-1">
-                                            <div class="progress flex-grow-1" style="height: 5px; border-radius: 3px;">
+                                <!-- Footer compacto con totales + progreso (SIEMPRE visible, sticky) -->
+                                <div class="border-top px-2 py-2" style="border-radius: 0 0 8px 8px;">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="stat-chip chip-pendiente" title="Unidades pendientes por rebajar">
+                                            <i class="bi bi-hourglass-split"></i> Pend: <strong id="statPendientes">0</strong>
+                                        </span>
+                                        <span class="stat-chip chip-recep" title="Ya rebajadas (guardadas en base)">
+                                            <i class="bi bi-check-circle"></i> Recep: <strong id="statRecepcionados">0</strong>
+                                        </span>
+                                        <span class="stat-chip chip-sesion" title="Rebajadas en esta sesión pero aún NO confirmadas (se guardan al pulsar «Guardar Recepción»)">
+                                            <i class="bi bi-pencil-square"></i> Sin confirmar: <strong id="totalParesRecepcionados">0</strong>
+                                        </span>
+                                        <span class="stat-chip chip-costo" title="Inversión estimada de lo ingresado en esta sesión">
+                                            <i class="bi bi-cash-stack"></i> Inv: <strong id="totalCostoRecepcionado">$0</strong>
+                                        </span>
+                                        <div class="flex-grow-1 d-flex align-items-center gap-2 ms-1" style="min-width: 140px;">
+                                            <div class="progress flex-grow-1" style="height: 6px; border-radius: 3px;">
                                                 <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
                                                      role="progressbar" id="progresoRecepcionBar"
                                                      style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                                                 </div>
                                             </div>
-                                            <small class="text-muted fw-bold" id="progresoRecepcionPct" style="min-width: 28px;">0%</small>
+                                            <small class="text-muted fw-bold" id="progresoRecepcionPct" style="min-width: 30px; font-size: 0.72rem;">0%</small>
                                         </div>
                                     </div>
                                 </div>
