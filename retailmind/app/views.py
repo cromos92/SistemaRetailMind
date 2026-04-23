@@ -11189,6 +11189,8 @@ def obtener_productos_para_crear(request):
                 'sucursal_destino_id',
                 'sucursal_destino__alias',
                 'compra_producto_talla__talla',
+                'producto_talla_id',
+                'producto_talla__sku',
             )
             .annotate(
                 stock=Sum('stockArribado'),
@@ -11231,7 +11233,13 @@ def obtener_productos_para_crear(request):
                 'tiene_creados': False,
             })
             bucket_suc['stock'] += stock
-            bucket_suc['tallas_resumen'].append({'talla': talla, 'stock': stock})
+            bucket_suc['tallas_resumen'].append({
+                'talla': talla,
+                'stock': stock,
+                'producto_talla_id': row.get('producto_talla_id'),
+                'sku': row.get('producto_talla__sku') or '',
+                'creado': (row.get('count_creados') or 0) > 0,
+            })
             if str(talla).strip() in ('00', '__TOTAL__', ''):
                 bucket_suc['tiene_consolidado'] = True
             if (row.get('count_pendientes') or 0) > 0:
@@ -12881,7 +12889,9 @@ def obtener_recepciones_compra(request, compra_id):
                 'producto_color': cp.atributo2,
                 'talla': rec.compra_producto_talla.talla,
                 'cantidad': rec.stockArribado,
-                'costo': float(cp.costo) if cp.costo else 0
+                'costo': float(cp.costo) if cp.costo else 0,
+                'producto_talla_id': rec.producto_talla_id,
+                'creado': rec.producto_talla_id is not None,
             })
         
         return JsonResponse({
@@ -25770,3 +25780,597 @@ def qz_config_sucursal(request):
         })
     except Sucursal.DoesNotExist:
         return JsonResponse({'habilitado': False, 'impresora': 'EPSON TM-T20II'})
+
+
+# =========================================================================
+# VINCULACIÓN RETROACTIVA: PRODUCTOS EXISTENTES → COMPRA
+# =========================================================================
+
+@require_GET
+@login_required
+def buscar_sku_para_vincular(request):
+    """
+    Busca Producto_Talla por SKU, artículo, marca, color o género.
+    Devuelve candidatos con info completa para que el usuario confirme el match.
+
+    GET params:
+        q           — texto parcial (busca en SKU, artículo, marca, color, género)
+        compra_id   — (opcional) marcar SKUs ya vinculados a esta compra
+        talla       — (opcional) filtrar por talla exacta
+    """
+    q = (request.GET.get('q') or '').strip()
+    if len(q) < 1:
+        return JsonResponse({'success': True, 'results': []})
+
+    compra_id = request.GET.get('compra_id')
+    talla_filtro = (request.GET.get('talla') or '').strip()
+
+    filtro = (
+        Q(sku__icontains=q) |
+        Q(producto__articulo__icontains=q) |
+        Q(producto__atributo1__valor__icontains=q) |
+        Q(producto__atributo2__valor__icontains=q) |
+        Q(producto__atributo3__valor__icontains=q)
+    )
+
+    qs = (
+        Producto_Talla.objects
+        .filter(filtro)
+        .select_related(
+            'producto__atributo1',
+            'producto__atributo2',
+            'producto__atributo3',
+            'producto__categoria',
+            'producto__sucursal',
+        )
+    )
+
+    if talla_filtro:
+        qs = qs.filter(talla__iexact=talla_filtro)
+
+    qs = qs.order_by(
+        Case(
+            When(sku__istartswith=q, then=Value(0)),
+            When(producto__articulo__iexact=q, then=Value(1)),
+            default=Value(2),
+            output_field=IntegerField(),
+        ),
+        'producto__articulo',
+        'talla',
+    )[:60]
+
+    ya_vinculados = set()
+    if compra_id:
+        ya_vinculados = set(
+            Compras_Producto_Talla.objects
+            .filter(compra_producto__compras_id=compra_id, producto_talla__isnull=False)
+            .values_list('producto_talla_id', flat=True)
+        )
+
+    results = []
+    for pt in qs:
+        prod = pt.producto
+        results.append({
+            'producto_talla_id': pt.id,
+            'sku': pt.sku,
+            'talla': pt.talla,
+            'stock': pt.stock if hasattr(pt, 'stock') else 0,
+            'articulo': prod.articulo if prod else '',
+            'marca': prod.atributo1.valor if prod and prod.atributo1 else '',
+            'color': prod.atributo2.valor if prod and prod.atributo2 else '',
+            'genero': prod.atributo3.valor if prod and prod.atributo3 else '',
+            'categoria': prod.categoria.nombre if prod and prod.categoria else '',
+            'sucursal': prod.sucursal.alias if prod and prod.sucursal else '',
+            'ya_vinculado_esta_compra': pt.id in ya_vinculados,
+        })
+
+    return JsonResponse({'success': True, 'results': results, 'total': len(results)})
+
+
+@require_GET
+@login_required
+def items_compra_para_vincular(request):
+    """
+    Devuelve los items de una compra AGRUPADOS por Compras_Producto, indicando
+    para cada talla si ya fue rebajada (tiene Productos_Recepcionados) y si
+    ya tiene producto_talla vinculado.
+
+    Solo devuelve productos que tienen al menos una talla rebajada sin vincular.
+
+    GET params: compra_id (required)
+    """
+    compra_id = request.GET.get('compra_id')
+    if not compra_id:
+        return JsonResponse({'success': False, 'error': 'compra_id requerido'}, status=400)
+
+    compra = get_object_or_404(Compras, id=compra_id)
+
+    cpts = (
+        Compras_Producto_Talla.objects
+        .filter(compra_producto__compras_id=compra_id)
+        .exclude(talla=Compras_Producto_Talla.TALLA_SIN_DESGLOSAR)
+        .select_related('compra_producto', 'producto_talla')
+        .order_by('compra_producto__nombre', 'talla')
+    )
+
+    recepciones_por_cpt = {}
+    cpt_ids = [c.id for c in cpts]
+    if cpt_ids:
+        recs = (
+            Productos_Recepcionados.objects
+            .filter(compra_producto_talla_id__in=cpt_ids)
+            .values('compra_producto_talla_id')
+            .annotate(
+                total_recibido=Sum('stockArribado'),
+                tiene_dte=Count('dte_id'),
+                tiene_pt=Count('producto_talla_id'),
+            )
+        )
+        for r in recs:
+            recepciones_por_cpt[r['compra_producto_talla_id']] = r
+
+    grupos = {}
+    for cpt in cpts:
+        cp = cpt.compra_producto
+        rec = recepciones_por_cpt.get(cpt.id, {})
+        recibido = rec.get('total_recibido', 0)
+        tiene_factura = rec.get('tiene_dte', 0) > 0
+        pt_vinculado = cpt.producto_talla
+
+        talla_info = {
+            'cpt_id': cpt.id,
+            'talla': cpt.talla,
+            'stock': cpt.stock,
+            'recibido': recibido,
+            'tiene_factura': tiene_factura,
+            'vinculado': pt_vinculado is not None,
+            'sku_vinculado': pt_vinculado.sku if pt_vinculado else None,
+            'producto_talla_id': pt_vinculado.id if pt_vinculado else None,
+        }
+
+        if cp.id not in grupos:
+            grupos[cp.id] = {
+                'compra_producto_id': cp.id,
+                'nombre': cp.nombre,
+                'descripcion': cp.descripcion or '',
+                'atributo1': cp.atributo1 or '',
+                'atributo2': cp.atributo2 or '',
+                'atributo3': cp.atributo3 or '',
+                'costo': int(cp.costo or 0),
+                'tallas': [],
+                'total_stock': 0,
+                'total_recibido': 0,
+                'tallas_sin_vincular': 0,
+                'tallas_vinculadas': 0,
+            }
+        g = grupos[cp.id]
+        g['tallas'].append(talla_info)
+        g['total_stock'] += cpt.stock
+        g['total_recibido'] += recibido
+        if recibido > 0 and not pt_vinculado:
+            g['tallas_sin_vincular'] += 1
+        if pt_vinculado:
+            g['tallas_vinculadas'] += 1
+
+    productos = [g for g in grupos.values() if g['tallas_sin_vincular'] > 0]
+
+    facturas_proveedor = list(
+        Dte.objects.filter(
+            tipo_transaccion='COMPRA',
+            emisor=compra.empresa,
+        ).values('id', 'numero_documento', 'monto_con_iva')
+    )
+
+    return JsonResponse({
+        'success': True,
+        'productos': productos,
+        'total_productos': len(productos),
+        'compra_nombre': compra.nombre,
+        'proveedor': compra.empresa.nombre if compra.empresa else '',
+        'facturas': facturas_proveedor,
+    })
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def vincular_productos_retroactivo(request):
+    """
+    Vincula productos ya existentes a una compra retroactivamente.
+    Actualiza Productos_Recepcionados ya rebajados (con factura) para
+    asignarles el producto_talla existente, y setea Compras_Producto_Talla.producto_talla.
+
+    Payload JSON:
+    {
+        "compra_id": <int>,
+        "vinculaciones": [
+            {"cpt_id": <int>, "producto_talla_id": <int>},
+            ...
+        ]
+    }
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    compra_id = data.get('compra_id')
+    vinculaciones = data.get('vinculaciones') or []
+
+    if not compra_id or not vinculaciones:
+        return JsonResponse({
+            'success': False,
+            'error': 'compra_id y vinculaciones son requeridos'
+        }, status=400)
+
+    compra = get_object_or_404(Compras, id=compra_id)
+    usuario = request.session.get('nombreUsuario', request.user.username)
+
+    exitosas = 0
+    errores = []
+    detalle = []
+
+    for v in vinculaciones:
+        cpt_id = v.get('cpt_id')
+        pt_id = v.get('producto_talla_id')
+
+        if not cpt_id or not pt_id:
+            errores.append(f'Datos incompletos: cpt_id={cpt_id}, producto_talla_id={pt_id}')
+            continue
+
+        try:
+            cpt = Compras_Producto_Talla.objects.select_related('compra_producto').get(
+                id=cpt_id, compra_producto__compras=compra
+            )
+        except Compras_Producto_Talla.DoesNotExist:
+            errores.append(f'Item de compra #{cpt_id} no encontrado en compra #{compra_id}')
+            continue
+
+        try:
+            pt = Producto_Talla.objects.select_related('producto').get(id=pt_id)
+        except Producto_Talla.DoesNotExist:
+            errores.append(f'Producto_Talla #{pt_id} no existe')
+            continue
+
+        if cpt.producto_talla_id and cpt.producto_talla_id != pt.id:
+            errores.append(
+                f'{cpt.compra_producto.nombre} talla {cpt.talla}: ya vinculado a SKU '
+                f'{cpt.producto_talla.sku}. Desvincula primero.'
+            )
+            continue
+
+        cpt.producto_talla = pt
+        cpt.unidades_recibidas = cpt.stock
+        cpt.estado_item = 'recibido_completo'
+        cpt.save(update_fields=['producto_talla', 'unidades_recibidas', 'estado_item'])
+
+        recs_actualizadas = Productos_Recepcionados.objects.filter(
+            compra_producto_talla=cpt,
+            producto_talla__isnull=True,
+        ).update(
+            producto_talla=pt,
+            fecha_recepcion=timezone.now(),
+            recepcionado_por=usuario,
+            observaciones=f'Vinculación retroactiva por {usuario}',
+        )
+
+        if recs_actualizadas == 0:
+            ya_vinculada = Productos_Recepcionados.objects.filter(
+                compra_producto_talla=cpt, producto_talla=pt
+            ).exists()
+            if not ya_vinculada:
+                Productos_Recepcionados.objects.create(
+                    compra_producto_talla=cpt,
+                    producto_talla=pt,
+                    stockArribado=cpt.stock,
+                    cantidad_esperada=cpt.stock,
+                    estado='RECEPCIONADO_OK',
+                    observaciones=f'Vinculación retroactiva (sin recepción previa) por {usuario}',
+                    fecha_recepcion=timezone.now(),
+                    recepcionado_por=usuario,
+                )
+
+        exitosas += 1
+        detalle.append({
+            'cpt_id': cpt.id,
+            'nombre': cpt.compra_producto.nombre,
+            'talla': cpt.talla,
+            'sku': pt.sku,
+            'recepciones_actualizadas': recs_actualizadas,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'exitosas': exitosas,
+        'errores': errores,
+        'detalle': detalle,
+        'message': f'{exitosas} producto(s) vinculado(s) retroactivamente a compra "{compra.nombre}".'
+    })
+
+
+# =========================================================================
+# REVERTIR PRODUCTO A PENDIENTE (para recrear corregido)
+# =========================================================================
+
+@require_POST
+@login_required
+@transaction.atomic
+def revertir_producto_a_pendiente(request):
+    """
+    Revierte un producto ya creado a estado "pendiente de crear".
+    Soporta reversión total o parcial por cantidad.
+
+    Desenlaza Productos_Recepcionados (vuelven a pendiente), ajusta
+    movimientos, lotes y stock, conservando toda la trazabilidad de
+    compra/factura/DTE.
+
+    Payload JSON:
+    {
+        "producto_talla_id": <int>,
+        "cantidad": <int|null>,      # null/0 = revertir todo; >0 = parcial
+        "motivo": "texto libre"
+    }
+    """
+    from .models import PendienteDespacho
+
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    pt_id = data.get('producto_talla_id')
+    cantidad_revertir = data.get('cantidad')
+    motivo = (data.get('motivo') or '').strip() or 'Sin motivo especificado'
+    usuario = request.session.get('nombreUsuario', request.user.username)
+
+    if not pt_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'producto_talla_id es requerido'
+        }, status=400)
+
+    try:
+        pt = Producto_Talla.objects.select_related('producto').get(id=pt_id)
+    except Producto_Talla.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Producto_Talla no encontrado'}, status=404)
+
+    producto = pt.producto
+    stock_actual = pt.stock or 0
+
+    if cantidad_revertir and int(cantidad_revertir) > 0:
+        cantidad_revertir = int(cantidad_revertir)
+    else:
+        cantidad_revertir = 0  # 0 = revertir todo
+
+    es_parcial = cantidad_revertir > 0 and cantidad_revertir < stock_actual
+
+    resumen = {
+        'tipo': 'parcial' if es_parcial else 'total',
+        'cantidad_revertida': 0,
+        'recepciones_desenlazadas': 0,
+        'recepciones_divididas': 0,
+        'movimientos_ajustados': 0,
+        'lotes_ajustados': 0,
+        'talla_eliminada': False,
+        'producto_eliminado': False,
+    }
+
+    if es_parcial:
+        # --- REVERSIÓN PARCIAL ---
+        cant_por_desenlazar = cantidad_revertir
+
+        recepciones = list(
+            Productos_Recepcionados.objects.filter(producto_talla=pt)
+            .order_by('-id')
+        )
+
+        for rec in recepciones:
+            if cant_por_desenlazar <= 0:
+                break
+            arr = rec.stockArribado or 0
+            if arr <= cant_por_desenlazar:
+                rec.producto_talla = None
+                rec.observaciones = (rec.observaciones or '') + f' | Revertido parcial ({arr}u) por {usuario}: {motivo}'
+                rec.save(update_fields=['producto_talla', 'observaciones'])
+                cant_por_desenlazar -= arr
+                resumen['recepciones_desenlazadas'] += 1
+            else:
+                nueva_rec = Productos_Recepcionados.objects.create(
+                    compra_producto_talla=rec.compra_producto_talla,
+                    dte=rec.dte,
+                    dte_producto=rec.dte_producto,
+                    producto_talla=None,
+                    stockArribado=cant_por_desenlazar,
+                    cantidad_esperada=cant_por_desenlazar,
+                    estado=rec.estado,
+                    observaciones=f'Split de recepción #{rec.id} - Revertido parcial ({cant_por_desenlazar}u) por {usuario}: {motivo}',
+                    fecha_recepcion=rec.fecha_recepcion,
+                    recepcionado_por=rec.recepcionado_por,
+                    es_reposicion=rec.es_reposicion,
+                    precio_anterior=rec.precio_anterior,
+                    precio_nuevo=rec.precio_nuevo,
+                    sucursal_destino=rec.sucursal_destino,
+                )
+                rec.stockArribado = arr - cant_por_desenlazar
+                rec.save(update_fields=['stockArribado'])
+                cant_por_desenlazar = 0
+                resumen['recepciones_divididas'] += 1
+                resumen['recepciones_desenlazadas'] += 1
+
+        cantidad_efectiva = cantidad_revertir - cant_por_desenlazar
+        resumen['cantidad_revertida'] = cantidad_efectiva
+
+        pt.stock = max(0, stock_actual - cantidad_efectiva)
+        pt.save(update_fields=['stock'])
+
+        if cantidad_efectiva > 0:
+            Movimientos_Producto.objects.create(
+                ProductoTalla=pt,
+                tipo='EGRESO',
+                cantidad=cantidad_efectiva,
+                concepto='REVERSION_PARCIAL',
+                observaciones=f'Reversión parcial de {cantidad_efectiva}u por {usuario}: {motivo}',
+                referencia_externa=f'REVERSION_PARCIAL_{pt.id}',
+                usuario=usuario,
+            )
+            resumen['movimientos_ajustados'] = 1
+
+        lotes = list(
+            LoteProducto.objects.filter(producto_talla=pt, activo=True)
+            .order_by('-id')
+        )
+        cant_lote_ajustar = cantidad_efectiva
+        for lote in lotes:
+            if cant_lote_ajustar <= 0:
+                break
+            disp = lote.cantidad_disponible or 0
+            if disp <= cant_lote_ajustar:
+                lote.cantidad_disponible = 0
+                lote.activo = False
+                lote.save(update_fields=['cantidad_disponible', 'activo'])
+                cant_lote_ajustar -= disp
+            else:
+                lote.cantidad_disponible = disp - cant_lote_ajustar
+                lote.save(update_fields=['cantidad_disponible'])
+                cant_lote_ajustar = 0
+            resumen['lotes_ajustados'] += 1
+
+        cpts = Compras_Producto_Talla.objects.filter(producto_talla=pt)
+        for cpt in cpts:
+            nuevo = max(0, (cpt.unidades_recibidas or 0) - cantidad_efectiva)
+            cpt.unidades_recibidas = nuevo
+            cpt.estado_item = 'recibido_parcial' if nuevo > 0 else 'pendiente'
+            cpt.save(update_fields=['unidades_recibidas', 'estado_item'])
+
+    else:
+        # --- REVERSIÓN TOTAL ---
+        resumen['cantidad_revertida'] = stock_actual
+
+        resumen['recepciones_desenlazadas'] = Productos_Recepcionados.objects.filter(
+            producto_talla=pt
+        ).update(producto_talla=None)
+
+        PendienteDespacho.objects.filter(producto_talla=pt).delete()
+
+        resumen['movimientos_ajustados'] = Movimientos_Producto.objects.filter(
+            ProductoTalla=pt
+        ).count()
+        Movimientos_Producto.objects.filter(ProductoTalla=pt).delete()
+
+        resumen['lotes_ajustados'] = LoteProducto.objects.filter(
+            producto_talla=pt
+        ).count()
+        LoteProducto.objects.filter(producto_talla=pt).delete()
+
+        Compras_Producto_Talla.objects.filter(producto_talla=pt).update(
+            producto_talla=None,
+            estado_item='pendiente',
+        )
+
+        resumen['talla_eliminada'] = True
+        pt.delete()
+
+        restantes = Producto_Talla.objects.filter(producto=producto).count()
+        if restantes == 0:
+            producto.delete()
+            resumen['producto_eliminado'] = True
+
+    logger.info(
+        'REVERTIR_PRODUCTO: usuario=%s producto="%s" talla=%s sku=%s tipo=%s '
+        'cantidad=%s motivo="%s" resumen=%s',
+        usuario, producto.articulo, pt.talla, pt.sku,
+        resumen['tipo'], resumen['cantidad_revertida'], motivo, resumen,
+    )
+
+    if es_parcial:
+        msg = (
+            f'Reversión parcial: {resumen["cantidad_revertida"]}u de talla {pt.talla} '
+            f'(SKU {pt.sku}) revertidas a pendiente. Stock restante: {pt.stock}u.'
+        )
+    else:
+        msg = (
+            f'Talla {pt.talla} (SKU {pt.sku}) de "{producto.articulo}" '
+            f'revertida completamente. {resumen["recepciones_desenlazadas"]} recepción(es) '
+            f'volvieron a pendiente.'
+        )
+
+    return JsonResponse({
+        'success': True,
+        'resumen': resumen,
+        'message': msg,
+    })
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def editar_producto_talla_creado(request):
+    """
+    Corrige talla y/o SKU de un Producto_Talla ya creado sin destruir
+    movimientos ni lotes.
+
+    Payload JSON:
+    {
+        "producto_talla_id": <int>,
+        "nueva_talla": "string",    # opcional
+        "nuevo_sku": "string"       # opcional
+    }
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    pt_id = data.get('producto_talla_id')
+    nueva_talla = (data.get('nueva_talla') or '').strip()
+    nuevo_sku = (data.get('nuevo_sku') or '').strip()
+    usuario = request.session.get('nombreUsuario', request.user.username)
+
+    if not pt_id:
+        return JsonResponse({'success': False, 'error': 'producto_talla_id requerido'}, status=400)
+
+    if not nueva_talla and not nuevo_sku:
+        return JsonResponse({'success': False, 'error': 'Nada que actualizar'}, status=400)
+
+    try:
+        pt = Producto_Talla.objects.select_related('producto').get(id=pt_id)
+    except Producto_Talla.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Producto_Talla no encontrado'}, status=404)
+
+    cambios = []
+    talla_anterior = pt.talla
+    sku_anterior = pt.sku
+
+    if nueva_talla and nueva_talla != pt.talla:
+        pt.talla = nueva_talla
+        cambios.append(f'talla: {talla_anterior} → {nueva_talla}')
+
+        Compras_Producto_Talla.objects.filter(
+            producto_talla=pt
+        ).update(talla=nueva_talla)
+
+    if nuevo_sku and nuevo_sku != pt.sku:
+        existe = Producto_Talla.objects.filter(sku=nuevo_sku).exclude(id=pt.id).exists()
+        if existe:
+            return JsonResponse({
+                'success': False,
+                'error': f'El SKU "{nuevo_sku}" ya existe en otro producto'
+            }, status=409)
+        pt.sku = nuevo_sku
+        cambios.append(f'sku: {sku_anterior} → {nuevo_sku}')
+
+    if not cambios:
+        return JsonResponse({'success': True, 'message': 'Sin cambios', 'cambios': []})
+
+    pt.save()
+
+    logger.info(
+        'EDITAR_PRODUCTO_TALLA: usuario=%s pt_id=%s producto="%s" cambios=[%s]',
+        usuario, pt.id, pt.producto.articulo if pt.producto else '?', '; '.join(cambios),
+    )
+
+    return JsonResponse({
+        'success': True,
+        'cambios': cambios,
+        'message': f'Producto actualizado: {", ".join(cambios)}',
+    })

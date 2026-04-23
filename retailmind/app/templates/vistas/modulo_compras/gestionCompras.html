@@ -554,6 +554,71 @@
     .td-proveedor { max-width: 70px; font-size: 0.72rem; }
     .td-nombre { font-size: 0.72rem; }
     #tablaCompras tbody td { padding: 6px 3px; }
+    .card-header h5 { font-size: 0.88rem; }
+    .card-header .btn { padding: 0.2rem 0.4rem; font-size: 0.68rem; }
+    .card-header .input-group { width: 100px !important; }
+    .pagination-controls .btn-group .btn { font-size: 0.68rem; padding: 0.2rem 0.3rem; }
+    .page-info { min-width: 60px; font-size: 0.65rem; }
+}
+
+/* --- Modal Vincular Retroactivo responsive --- */
+@media (max-width: 767.98px) {
+    #modalVincularRetroactivo .modal-dialog { max-width: 100%; margin: 0.25rem; }
+    #modalVincularRetroactivo .modal-body { padding: 8px !important; }
+    #modalVincularRetroactivo .alert { font-size: .75rem; padding: 6px 10px; }
+    #modalVincularRetroactivo .card-header { font-size: .75rem; padding: 6px 10px; }
+    #modalVincularRetroactivo .card-body { padding: 6px; }
+    #modalVincularRetroactivo .table { font-size: .72rem; }
+    #modalVincularRetroactivo .table th,
+    #modalVincularRetroactivo .table td { padding: 4px 3px; }
+    #modalVincularRetroactivo .input-group-sm .form-control { font-size: .7rem; }
+    #modalVincularRetroactivo .d-flex.justify-content-between { flex-direction: column; gap: 8px; }
+    #modalVincularRetroactivo .input-group[style*="max-width"] { max-width: 100% !important; }
+    #modalVincularRetroactivo .modal-footer { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+    #modalVincularRetroactivo .modal-footer .btn { flex: 1; min-width: 120px; font-size: .78rem; }
+}
+@media (max-width: 575.98px) {
+    #modalVincularRetroactivo .modal-header { padding: 8px 12px !important; }
+    #modalVincularRetroactivo .modal-header .rounded-circle { width: 32px !important; height: 32px !important; }
+    #modalVincularRetroactivo .modal-header h5 { font-size: .88rem; }
+    #modalVincularRetroactivo .modal-header small { font-size: .68rem; }
+    #modalVincularRetroactivo #vincRetro_contenido { max-height: 45vh; }
+    #modalVincularRetroactivo .card { margin-bottom: 8px !important; }
+    #modalVincularRetroactivo .card-header span.fw-bold { font-size: .78rem; }
+}
+
+/* --- Modal Editar Recepcion Compra responsive --- */
+@media (max-width: 767.98px) {
+    #modalEditarRecepcionCompra .modal-dialog { max-width: 100%; margin: 0.25rem; }
+    #modalEditarRecepcionCompra .modal-body { padding: 10px !important; }
+    #modalEditarRecepcionCompra #resumenRecepcionCompra .col-md-3 { flex: 0 0 50%; max-width: 50%; }
+    #modalEditarRecepcionCompra .table { font-size: .78rem; }
+    #modalEditarRecepcionCompra .table th,
+    #modalEditarRecepcionCompra .table td { padding: 6px 4px; }
+}
+@media (max-width: 575.98px) {
+    #modalEditarRecepcionCompra #resumenRecepcionCompra .col-md-3 { flex: 0 0 50%; max-width: 50%; margin-bottom: 6px; }
+    #modalEditarRecepcionCompra #resumenRecepcionCompra .card-body { padding: 8px !important; }
+    #modalEditarRecepcionCompra #resumenRecepcionCompra h5 { font-size: .9rem; }
+    #modalEditarRecepcionCompra #resumenRecepcionCompra small { font-size: .65rem; }
+    #modalEditarRecepcionCompra .table { font-size: .72rem; }
+    #modalEditarRecepcionCompra .btn-revertir-desde-compra { font-size: .65rem; padding: 2px 4px; }
+}
+
+/* --- Tabla compras - mejor scroll horizontal en pantallas pequeñas --- */
+@media (max-width: 575.98px) {
+    #tablaCompras { min-width: 480px; }
+    .table-responsive { -webkit-overflow-scrolling: touch; }
+}
+
+/* --- Botones de acción de compra - vincular responsive --- */
+#tablaCompras .btn-group-sm .btn.btn-soft-purple,
+#tablaCompras .btn-group-sm .vincular-retroactivo {
+    transition: all .2s;
+}
+@media (max-width: 767.98px) {
+    #tablaCompras .btn-group-sm { gap: 1px; }
+    #tablaCompras .btn-group-sm .btn { padding: 2px 4px; font-size: .7rem; }
 }
 
 /* Animaciones suaves */
@@ -1136,13 +1201,13 @@
                             </a>
 
                             <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearCompra">
-                                <i class="bi bi-plus-lg me-1"></i> Nueva Compra
+                                <i class="bi bi-plus-lg me-1"></i> <span class="d-none d-sm-inline">Nueva Compra</span>
                             </button>
                             
                             <!-- Dropdown de Exportar -->
                             <div class="dropdown">
                                 <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-download me-1"></i> Exportar
+                                    <i class="bi bi-download me-1"></i> <span class="d-none d-sm-inline">Exportar</span>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-lg">
                                     <li>
@@ -1237,10 +1302,10 @@
                                 </button>
                             </div>
                             <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
-                                <small class="text-muted">
+                                <small class="text-muted d-none d-md-inline">
                                     <i class="bi bi-lightbulb me-1"></i>Tip: busca productos por nombre, marca, color o talla
                                 </small>
-                                <div class="input-group input-group-sm ms-auto" style="max-width: 260px;" title="Filtra compras con mercadería recepcionada en la sucursal elegida">
+                                <div class="input-group input-group-sm ms-auto" style="max-width: 260px; min-width: 160px;" title="Filtra compras con mercadería recepcionada en la sucursal elegida">
                                     <span class="input-group-text bg-white" style="font-size: .75rem;"><i class="bi bi-geo-alt-fill text-info"></i></span>
                                     <select class="form-select" id="filtroSucursalCompras" style="font-size: .8rem;">
                                         <option value="">Todas las sucursales</option>
@@ -1274,7 +1339,7 @@
                 </div>
 
                 <!-- Tabla de compras -->
-                <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+                <div class="table-responsive" style="max-height: 70vh; overflow-y: auto; -webkit-overflow-scrolling: touch;">
                     <table class="table table-hover align-middle mb-0" id="tablaCompras">
                         <thead class="sticky-top" style="z-index: 2;">
                             <tr>
@@ -2896,6 +2961,76 @@
 </div>
 <!-- container-fluid -->
 </div>
+
+<!-- ==================== MODAL VINCULACIÓN RETROACTIVA ==================== -->
+<div class="modal fade" id="modalVincularRetroactivo" tabindex="-1" aria-labelledby="modalVincularRetroactivoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+            <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%);">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
+                        <i class="bi bi-link-45deg fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0 fw-bold text-white" id="modalVincularRetroactivoLabel">Vincular Productos Existentes</h5>
+                        <small class="opacity-75" id="vincRetro_compraNombre">Vinculación retroactiva a compra</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="alert alert-info d-flex align-items-start gap-2 py-2 mb-3" style="font-size:.82rem;">
+                    <i class="bi bi-info-circle-fill mt-1"></i>
+                    <div>
+                        Muestra solo productos <strong>rebajados con factura</strong> que aún no tienen producto vinculado en el sistema.
+                        Usa <strong>Auto-vincular</strong> para match automático por nombre + talla, o busca manualmente por SKU.
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <div class="d-flex gap-2 align-items-center">
+                        <button class="btn btn-primary btn-sm" id="btnAutoVincular" onclick="vincRetro_autoVincular()">
+                            <i class="bi bi-magic me-1"></i> Auto-vincular
+                        </button>
+                        <span class="badge bg-light text-dark border" id="vincRetro_resumen" style="font-size:.78rem;">Cargando...</span>
+                    </div>
+                    <div class="input-group" style="max-width:320px;">
+                        <input type="text" class="form-control form-control-sm" id="vincRetro_buscarSku" placeholder="Buscar SKU o artículo..." autocomplete="off">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="vincRetro_buscarSkuManual()">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="vincRetro_contenido" style="max-height:55vh;overflow-y:auto;"></div>
+
+                <div id="vincRetro_resultadosBusqueda" class="mt-2" style="display:none;">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white py-1 d-flex justify-content-between align-items-center" style="font-size:.8rem;">
+                            <span><i class="bi bi-search me-1"></i>Resultados de búsqueda</span>
+                            <button class="btn btn-sm btn-light py-0 px-2" onclick="$('#vincRetro_resultadosBusqueda').hide();" style="font-size:.72rem;">Cerrar</button>
+                        </div>
+                        <div class="card-body p-2" style="max-height:250px;overflow-y:auto;">
+                            <div id="vincRetro_busquedaCount" class="mb-1 px-1" style="font-size:.7rem;color:#6c757d;"></div>
+                            <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
+                                <thead><tr><th>SKU</th><th>Artículo</th><th>Talla</th><th>Stock</th><th class="d-none d-md-table-cell">Marca</th><th class="d-none d-md-table-cell">Color</th><th>Sucursal</th><th></th></tr></thead>
+                                <tbody id="vincRetro_tbodyBusqueda"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <span class="me-auto text-muted" style="font-size:.78rem;" id="vincRetro_footerInfo"></span>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn text-white" id="btnConfirmarVinculacion" onclick="vincRetro_confirmar()" style="background:linear-gradient(135deg,#7c3aed,#4c1d95);" disabled>
+                    <i class="bi bi-check-lg me-1"></i> Confirmar Vinculación
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% include '../../layout/footer.html' %}
 <script>
 function showGlobalLoader() {
@@ -5479,6 +5614,10 @@ const GestionCompras = (function() {
                                 data-recepcion-id="${rec.id}" title="Eliminar recepción">
                             <i class="bi bi-trash"></i>
                         </button>
+                        ${rec.creado && rec.producto_talla_id ? `<button class="btn btn-sm btn-outline-warning btn-revertir-desde-compra" 
+                                data-pt-id="${rec.producto_talla_id}" data-nombre="${rec.producto_nombre}" data-talla="${rec.talla}" title="Revertir creación (volver a pendiente)">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>` : ''}
                     </td>
                 </tr>
             `;
@@ -5573,6 +5712,50 @@ const GestionCompras = (function() {
         });
     });
     
+    // Revertir creación de producto desde Editar Recepciones
+    $(document).on('click', '.btn-revertir-desde-compra', function() {
+        const ptId = $(this).data('pt-id');
+        const nombre = $(this).data('nombre') || '';
+        const talla = $(this).data('talla') || '';
+
+        Swal.fire({
+            title: `¿Revertir "${nombre}" (${talla})?`,
+            html: `<p style="font-size:.85rem;">El producto volverá a "Pendiente de crear". Se borrarán movimientos, lotes y stock, pero se <b>conserva la trazabilidad</b> de compra y factura.</p>
+                   <textarea id="swalMotivoRevertirCompra" class="swal2-textarea" placeholder="Motivo de la reversión (obligatorio)" style="font-size:.85rem;"></textarea>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            confirmButtonText: 'Sí, revertir',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const motivo = document.getElementById('swalMotivoRevertirCompra').value.trim();
+                if (!motivo) { Swal.showValidationMessage('Debes ingresar un motivo'); return false; }
+                return motivo;
+            }
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            $.ajax({
+                url: '/app/api/producto/revertir-a-pendiente/',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                data: JSON.stringify({ producto_talla_id: ptId, motivo: result.value }),
+                success: function(r) {
+                    if (r.success) {
+                        Swal.fire({ icon: 'success', title: 'Revertido', html: r.message, timer: 3500, showConfirmButton: true });
+                        const compraId = $('#compraIdRecepcionEditar').val();
+                        if (compraId) cargarRecepcionesCompra(compraId);
+                    } else {
+                        Swal.fire('Error', r.error, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    Swal.fire('Error', xhr.responseJSON?.error || 'Error de servidor', 'error');
+                }
+            });
+        });
+    });
+
     // Guardar cambios en recepciones de compra
     $('#btnGuardarRecepcionCompraEditada').on('click', function() {
         const compraId = $('#compraIdRecepcionEditar').val();
@@ -6551,6 +6734,9 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             ${compra.recepcionado > 0 ? `<a class="btn btn-soft-warning editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}" title="Editar Recepciones">
                 <i class="bi bi-pencil-square"></i>
             </a>` : ''}
+            <a class="btn btn-soft-purple vincular-retroactivo" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}" title="Vincular Productos Existentes" style="color:#7c3aed;border-color:#7c3aed;">
+                <i class="bi bi-link-45deg"></i>
+            </a>
             ${compra.recepcionado > 0 ? `<a class="btn btn-soft-teal" href="/app/verGestionProducto/" title="Crear Productos" style="color:#0ab39c;border-color:#0ab39c;">
                 <i class="bi bi-archive"></i>
             </a>` : ''}
@@ -6567,6 +6753,7 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                 <li><a class="dropdown-item agregar-producto-manual" href="#" data-id="${compra.id}" data-empresa-id="${compra.empresa_id}" data-proveedor-nombre="${compra.proveedor || ''}" data-bs-toggle="modal" data-bs-target="#modalProductoManual"><i class="bi bi-plus me-2 text-info"></i>Agregar Producto</a></li>
                 <li><a class="dropdown-item gestionar-compra" href="#" data-id="${compra.id}"><i class="bi bi-box-seam me-2 text-success"></i>Recepcionar</a></li>
                 ${compra.recepcionado > 0 ? `<li><a class="dropdown-item editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}"><i class="bi bi-pencil-square me-2 text-warning"></i>Editar Recepciones</a></li>` : ''}
+                <li><a class="dropdown-item vincular-retroactivo" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}"><i class="bi bi-link-45deg me-2" style="color:#7c3aed;"></i>Vincular Productos</a></li>
                 ${compra.recepcionado > 0 ? `<li><a class="dropdown-item" href="/app/verGestionProducto/"><i class="bi bi-archive me-2" style="color:#0ab39c;"></i>Crear Productos</a></li>` : ''}
                 ${PUEDE_ELIMINAR_COMPRA ? `<li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item text-danger eliminar-compra" href="#" data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}"><i class="bi bi-trash me-2"></i>Eliminar Compra</a></li>` : ''}
@@ -7729,6 +7916,306 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             timer: 1500,
             showConfirmButton: false
         });
+    });
+
+    // ==================== VINCULACIÓN RETROACTIVA ====================
+    let vincRetro_compraId = null;
+    let vincRetro_productos = [];
+    let vincRetro_asignaciones = {};  // { cpt_id: { producto_talla_id, sku } }
+    let vincRetro_activeCptId = null;
+
+    $(document).on('click', '.vincular-retroactivo', function(e) {
+        e.preventDefault();
+        vincRetro_compraId = $(this).data('id');
+        const nombre = $(this).data('nombre') || '';
+        $('#vincRetro_compraNombre').text(`Compra: ${nombre} (#${vincRetro_compraId})`);
+        vincRetro_asignaciones = {};
+        vincRetro_activeCptId = null;
+        vincRetro_cargarItems();
+        new bootstrap.Modal('#modalVincularRetroactivo').show();
+    });
+
+    function vincRetro_cargarItems() {
+        const cont = $('#vincRetro_contenido');
+        cont.html('<div class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando productos rebajados sin vincular...</div>');
+        $('#btnConfirmarVinculacion').prop('disabled', true);
+
+        $.getJSON('/app/api/compra/items-para-vincular/', { compra_id: vincRetro_compraId }, function(r) {
+            if (!r.success) { cont.html(`<div class="alert alert-danger">${r.error}</div>`); return; }
+            vincRetro_productos = r.productos;
+            if (r.productos.length === 0) {
+                cont.html(`<div class="alert alert-warning mb-0"><i class="bi bi-info-circle me-2"></i>No hay productos rebajados pendientes de vincular en esta compra. Primero debes recepcionar con factura desde la gestión normal.</div>`);
+                return;
+            }
+            vincRetro_renderGrupos();
+        }).fail(function() { cont.html('<div class="alert alert-danger">Error al cargar</div>'); });
+    }
+
+    function vincRetro_renderGrupos() {
+        const cont = $('#vincRetro_contenido');
+        cont.empty();
+        let totalPendientes = 0, totalNuevos = 0;
+
+        vincRetro_productos.forEach(function(prod) {
+            const tallasHtml = prod.tallas.filter(t => t.recibido > 0 && !t.vinculado).map(function(t) {
+                const asignado = vincRetro_asignaciones[t.cpt_id];
+                if (asignado) totalNuevos++;
+                else totalPendientes++;
+
+                return `<tr class="${asignado ? 'table-warning' : ''}">
+                    <td class="text-center">${t.talla}</td>
+                    <td class="text-center">${t.stock}</td>
+                    <td class="text-center">${t.recibido}</td>
+                    <td class="text-center">${t.tiene_factura ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-dash text-muted"></i>'}</td>
+                    <td>${asignado
+                        ? `<span class="text-success fw-semibold">${asignado.sku}</span>
+                           <button class="btn btn-outline-danger btn-sm py-0 px-1 ms-1" onclick="vincRetro_quitarAsignacion(${t.cpt_id})" style="font-size:.6rem;" title="Quitar"><i class="bi bi-x"></i></button>`
+                        : '<span class="text-muted fst-italic">-</span>'
+                    }</td>
+                    <td>
+                        ${!asignado ? `<div class="input-group input-group-sm">
+                            <input type="text" class="form-control vincRetro_skuInput" data-cpt="${t.cpt_id}" placeholder="SKU..." style="font-size:.72rem;">
+                            <button class="btn btn-outline-primary" onclick="vincRetro_buscarParaFila(${t.cpt_id})" style="font-size:.68rem;"><i class="bi bi-search"></i></button>
+                        </div>` : `<span class="badge bg-warning text-dark" style="font-size:.68rem;"><i class="bi bi-arrow-repeat me-1"></i>Por confirmar</span>`}
+                    </td>
+                </tr>`;
+            }).join('');
+
+            const tallasVinculadas = prod.tallas.filter(t => t.vinculado);
+            const tallasVinculadasHtml = tallasVinculadas.length > 0
+                ? `<div class="mt-1" style="font-size:.7rem;color:#198754;"><i class="bi bi-check-lg me-1"></i>${tallasVinculadas.length} talla(s) ya vinculadas: ${tallasVinculadas.map(t => `${t.talla}→${t.sku_vinculado}`).join(', ')}</div>`
+                : '';
+
+            const sinVincular = prod.tallas.filter(t => t.recibido > 0 && !t.vinculado).length;
+            const card = `
+            <div class="card mb-2 border-0 shadow-sm">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#f8f6ff;border-bottom:2px solid #7c3aed20;">
+                    <div>
+                        <span class="fw-bold" style="color:#4c1d95;">${prod.nombre}</span>
+                        <span class="text-muted ms-2" style="font-size:.75rem;">${prod.atributo1 ? prod.atributo1 : ''} ${prod.atributo2 ? '· ' + prod.atributo2 : ''}</span>
+                        <span class="badge bg-secondary ms-2" style="font-size:.68rem;">Costo: $${prod.costo.toLocaleString()}</span>
+                        ${tallasVinculadasHtml}
+                    </div>
+                    <span class="badge ${sinVincular > 0 ? 'bg-warning text-dark' : 'bg-success'}" style="font-size:.72rem;">
+                        ${sinVincular} talla(s) por vincular
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.78rem;">
+                        <thead style="background:#f0f0f0;">
+                            <tr>
+                                <th class="text-center" style="width:60px;">Talla</th>
+                                <th class="text-center" style="width:70px;">Comprado</th>
+                                <th class="text-center" style="width:70px;">Rebajado</th>
+                                <th class="text-center" style="width:60px;">Factura</th>
+                                <th>SKU Asignado</th>
+                                <th style="width:180px;">Buscar</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tallasHtml}</tbody>
+                    </table>
+                </div>
+            </div>`;
+            cont.append(card);
+        });
+
+        $('#vincRetro_resumen').html(
+            `<i class="bi bi-hourglass text-secondary me-1"></i>${totalPendientes} por vincular` +
+            (totalNuevos > 0 ? ` · <i class="bi bi-arrow-repeat text-warning me-1"></i>${totalNuevos} por confirmar` : '')
+        );
+        $('#vincRetro_footerInfo').text(totalNuevos > 0 ? `${totalNuevos} vinculación(es) pendiente(s) de confirmar` : 'Usa Auto-vincular o busca por SKU');
+        $('#btnConfirmarVinculacion').prop('disabled', totalNuevos === 0);
+    }
+
+    function vincRetro_autoVincular() {
+        const sinVincular = [];
+        vincRetro_productos.forEach(p => {
+            p.tallas.filter(t => t.recibido > 0 && !t.vinculado && !vincRetro_asignaciones[t.cpt_id]).forEach(t => {
+                sinVincular.push({ ...t, nombre: p.nombre });
+            });
+        });
+        if (sinVincular.length === 0) {
+            Swal.fire('Info', 'Todos los items ya están vinculados o asignados.', 'info');
+            return;
+        }
+
+        $('#btnAutoVincular').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Buscando...');
+
+        const nombres = [...new Set(sinVincular.map(i => i.nombre))];
+        let busquedas = nombres.map(n => $.getJSON('/app/api/compra/buscar-sku-vincular/', { q: n, compra_id: vincRetro_compraId }));
+
+        Promise.all(busquedas).then(function(resultados) {
+            let matchCount = 0;
+            const todosResultados = resultados.flatMap(r => r.results || []);
+
+            sinVincular.forEach(function(item) {
+                const candidatos = todosResultados.filter(r =>
+                    r.articulo.toLowerCase() === item.nombre.toLowerCase() &&
+                    r.talla.toLowerCase() === item.talla.toLowerCase() &&
+                    !r.ya_vinculado_esta_compra
+                );
+                if (candidatos.length === 1) {
+                    vincRetro_asignaciones[item.cpt_id] = {
+                        producto_talla_id: candidatos[0].producto_talla_id,
+                        sku: candidatos[0].sku,
+                    };
+                    matchCount++;
+                }
+            });
+
+            vincRetro_renderGrupos();
+            const noMatch = sinVincular.length - matchCount;
+            Swal.fire({
+                icon: matchCount > 0 ? 'success' : 'warning',
+                title: `Auto-vinculación: ${matchCount} match(es)`,
+                html: matchCount > 0
+                    ? `Se encontraron <b>${matchCount}</b> coincidencia(s) exacta(s) por nombre + talla.` + (noMatch > 0 ? `<br><small class="text-muted">${noMatch} item(s) requieren vinculación manual por SKU.</small>` : '')
+                    : 'No se encontraron coincidencias exactas. Usa la búsqueda por SKU en cada fila.',
+                timer: 3500,
+                showConfirmButton: matchCount === 0,
+            });
+        }).catch(function() {
+            Swal.fire('Error', 'Error al buscar productos', 'error');
+        }).finally(function() {
+            $('#btnAutoVincular').prop('disabled', false).html('<i class="bi bi-magic me-1"></i> Auto-vincular');
+        });
+    }
+
+    function vincRetro_buscarParaFila(cptId) {
+        vincRetro_activeCptId = cptId;
+        const input = $(`.vincRetro_skuInput[data-cpt="${cptId}"]`);
+        const q = input.val().trim();
+        if (q.length < 1) { Swal.fire('', 'Ingresa al menos 1 caracter', 'info'); return; }
+        vincRetro_ejecutarBusqueda(q);
+    }
+
+    function vincRetro_buscarSkuManual() {
+        vincRetro_activeCptId = null;
+        const q = $('#vincRetro_buscarSku').val().trim();
+        if (q.length < 1) { Swal.fire('', 'Ingresa al menos 1 caracter', 'info'); return; }
+        vincRetro_ejecutarBusqueda(q);
+    }
+
+    function vincRetro_ejecutarBusqueda(q) {
+        const tbodyBusq = $('#vincRetro_tbodyBusqueda');
+        tbodyBusq.html('<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm"></div></td></tr>');
+        $('#vincRetro_resultadosBusqueda').show();
+        $('#vincRetro_busquedaCount').text('Buscando...');
+
+        $.getJSON('/app/api/compra/buscar-sku-vincular/', { q: q, compra_id: vincRetro_compraId }, function(r) {
+            tbodyBusq.empty();
+            if (!r.results || r.results.length === 0) {
+                tbodyBusq.html('<tr><td colspan="8" class="text-muted text-center">Sin resultados para "' + q + '"</td></tr>');
+                $('#vincRetro_busquedaCount').text('0 resultados');
+                return;
+            }
+            $('#vincRetro_busquedaCount').html(`<i class="bi bi-check2 text-success me-1"></i>${r.total || r.results.length} resultado(s) para "<b>${q}</b>"`);
+            r.results.forEach(function(pt) {
+                const stockBadge = pt.stock > 0
+                    ? `<span class="badge bg-success" style="font-size:.65rem;">${pt.stock}</span>`
+                    : `<span class="badge bg-secondary" style="font-size:.65rem;">0</span>`;
+                tbodyBusq.append(`
+                    <tr class="${pt.ya_vinculado_esta_compra ? 'table-success' : ''}">
+                        <td class="fw-semibold">${pt.sku}</td>
+                        <td>${pt.articulo}</td>
+                        <td>${pt.talla}</td>
+                        <td class="text-center">${stockBadge}</td>
+                        <td class="d-none d-md-table-cell">${pt.marca}</td>
+                        <td class="d-none d-md-table-cell">${pt.color || ''}</td>
+                        <td>${pt.sucursal}</td>
+                        <td>
+                            ${pt.ya_vinculado_esta_compra
+                                ? '<span class="badge bg-success" style="font-size:.65rem;">Ya vinculado</span>'
+                                : `<button class="btn btn-sm btn-primary py-0 px-2" onclick="vincRetro_seleccionarPT(${pt.producto_talla_id}, '${pt.sku.replace(/'/g,"\\'")}');" style="font-size:.7rem;"><i class="bi bi-link me-1"></i>Asignar</button>`
+                            }
+                        </td>
+                    </tr>
+                `);
+            });
+        });
+    }
+
+    function vincRetro_seleccionarPT(ptId, sku) {
+        if (vincRetro_activeCptId) {
+            vincRetro_asignaciones[vincRetro_activeCptId] = { producto_talla_id: ptId, sku: sku };
+            vincRetro_renderGrupos();
+            $('#vincRetro_resultadosBusqueda').hide();
+        } else {
+            Swal.fire('', 'Usa el buscador de cada fila para asignar un SKU específico, o usa Auto-vincular.', 'info');
+        }
+    }
+
+    function vincRetro_quitarAsignacion(cptId) {
+        delete vincRetro_asignaciones[cptId];
+        vincRetro_renderGrupos();
+    }
+
+    function vincRetro_confirmar() {
+        const keys = Object.keys(vincRetro_asignaciones);
+        if (keys.length === 0) return;
+
+        Swal.fire({
+            title: `¿Confirmar vinculación de ${keys.length} talla(s)?`,
+            html: `Se vincularán <b>${keys.length}</b> talla(s) a productos existentes.<br>
+                   <small class="text-muted">Las recepciones rebajadas se actualizarán con el producto vinculado. Esto alimenta Trazabilidad DTE y Rendimiento Proveedor.</small>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, vincular',
+            confirmButtonColor: '#7c3aed',
+            cancelButtonText: 'Cancelar',
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+
+            const vinculaciones = keys.map(k => ({
+                cpt_id: parseInt(k),
+                producto_talla_id: vincRetro_asignaciones[k].producto_talla_id,
+            }));
+
+            $('#btnConfirmarVinculacion').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Vinculando...');
+
+            $.ajax({
+                url: '/app/api/compra/vincular-retroactivo/',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                data: JSON.stringify({ compra_id: vincRetro_compraId, vinculaciones: vinculaciones }),
+                success: function(r) {
+                    if (r.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Vinculación exitosa',
+                            html: r.message + (r.errores && r.errores.length > 0
+                                ? `<br><br><small class="text-danger">${r.errores.join('<br>')}</small>` : ''),
+                            timer: 4000,
+                            showConfirmButton: true,
+                        });
+                        vincRetro_asignaciones = {};
+                        vincRetro_cargarItems();
+                        const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+                        cargarComprasPorAnio(anio, currentPageCompras, currentSearchCompras);
+                    } else {
+                        Swal.fire('Error', r.error || 'Error desconocido', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    Swal.fire('Error', xhr.responseJSON?.error || 'Error de servidor', 'error');
+                },
+                complete: function() {
+                    $('#btnConfirmarVinculacion').prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Confirmar Vinculación');
+                }
+            });
+        });
+    }
+
+    $('#vincRetro_buscarSku').on('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); vincRetro_buscarSkuManual(); }
+    });
+
+    $(document).on('keydown', '.vincRetro_skuInput', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            vincRetro_buscarParaFila(parseInt($(this).data('cpt')));
+        }
     });
 
 </script>

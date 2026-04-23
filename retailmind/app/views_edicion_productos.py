@@ -36,7 +36,9 @@ def obtener_producto_desde_talla(request, talla_id):
         return JsonResponse({
             'success': True,
             'producto_id': producto_talla.producto.id,
-            'producto_nombre': producto_talla.producto.articulo
+            'producto_nombre': producto_talla.producto.articulo,
+            'talla': producto_talla.talla,
+            'sku': producto_talla.sku,
         })
         
     except Exception as e:

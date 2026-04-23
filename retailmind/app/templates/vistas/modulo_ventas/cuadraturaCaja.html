@@ -2435,9 +2435,15 @@ function iniciarArqueoHoy() {
                 arqueoActual = { id:r.arqueo_id, fecha:hoy, cuadratura:r.cuadratura };
                 abrirModalArqueo(); verificarEstadoHoy(); cargarArqueos();
             } else if (r.arqueo_id) {
-                Swal.fire({ title:'Ya existe un arqueo', html:'<p>¿Continuar editando el arqueo de hoy?</p>', icon:'info',
-                    showCancelButton:true, confirmButtonText:'Continuar', cancelButtonText:'Cancelar', confirmButtonColor:'#0066FF'
-                }).then(res => { if(res.isConfirmed) continuarArqueo(r.arqueo_id); });
+                const estado = r.estado || '';
+                const esEditable = ['ABIERTO', 'CON_DIFERENCIAS'].includes(estado);
+                if (esEditable) {
+                    Swal.fire({ title:'Ya existe un arqueo', html:'<p>¿Continuar editando el arqueo de hoy?</p>', icon:'info',
+                        showCancelButton:true, confirmButtonText:'Continuar', cancelButtonText:'Cancelar', confirmButtonColor:'#0066FF'
+                    }).then(res => { if(res.isConfirmed) continuarArqueo(r.arqueo_id); });
+                } else {
+                    _ofrecerReabrirOVer(r.arqueo_id, hoy, r.estado_display || estado);
+                }
             } else { mostrarError('Error: ' + r.error); }
         },
         error:function(xhr){mostrarLoading(false);mostrarError('Error: '+xhr.responseText);}
@@ -2477,8 +2483,10 @@ function continuarArqueo(arqueoId) {
             mostrarLoading(false);
             if (r.success) {
                 arqueoActual = { id:arqueoId, fecha:r.arqueo.fecha_arqueo, arqueo:r.arqueo };
+                const estadoArqueo = r.arqueo.estado || 'ABIERTO';
+                const esSoloLectura = !['ABIERTO', 'CON_DIFERENCIAS'].includes(estadoArqueo);
                 abrirModalArqueo(); cargarDatosArqueoExistente(r.arqueo);
-                aplicarModoSoloLectura(false);
+                aplicarModoSoloLectura(esSoloLectura, estadoArqueo);
                 avisarRecalculoAuto(r.arqueo);
             } else mostrarError('Error: ' + r.error);
         },
@@ -3088,12 +3096,51 @@ function crearArqueoParaFecha(fecha) {
                 Swal.fire({title:'Arqueo Creado',text:'¿Completar el arqueo ahora?',icon:'success',showCancelButton:true,confirmButtonText:'Sí, completar',cancelButtonText:'Más tarde',confirmButtonColor:'#0066FF'})
                     .then(res=>{ if(res.isConfirmed) abrirModalArqueo(); cargarArqueos(); });
             } else if (r.arqueo_id) {
-                Swal.fire({title:'Ya existe un arqueo',html:`<p>Fecha: <strong>${new Date(fecha+'T12:00:00').toLocaleDateString('es-CL')}</strong>. ¿Continuar editando?</p>`,icon:'info',showCancelButton:true,confirmButtonText:'Continuar',cancelButtonText:'Cancelar',confirmButtonColor:'#0066FF'})
-                    .then(res=>{ if(res.isConfirmed) continuarArqueo(r.arqueo_id); });
+                const estado = r.estado || '';
+                const esEditable = ['ABIERTO', 'CON_DIFERENCIAS'].includes(estado);
+                if (esEditable) {
+                    Swal.fire({title:'Ya existe un arqueo',html:`<p>Fecha: <strong>${new Date(fecha+'T12:00:00').toLocaleDateString('es-CL')}</strong>. ¿Continuar editando?</p>`,icon:'info',showCancelButton:true,confirmButtonText:'Continuar',cancelButtonText:'Cancelar',confirmButtonColor:'#0066FF'})
+                        .then(res=>{ if(res.isConfirmed) continuarArqueo(r.arqueo_id); });
+                } else {
+                    _ofrecerReabrirOVer(r.arqueo_id, fecha, r.estado_display || estado);
+                }
             } else mostrarError('Error: '+r.error);
         },
         error:function(xhr){mostrarLoading(false);mostrarError('Error: '+xhr.responseText);}
     });
+}
+
+function _ofrecerReabrirOVer(arqueoId, fecha, estadoDisplay) {
+    const fechaDisplay = new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL');
+    const opciones = { showCancelButton: true, cancelButtonText: 'Cancelar' };
+
+    if (puedeReabrir) {
+        Swal.fire({
+            ...opciones,
+            title: 'Arqueo ya cerrado',
+            html: `<p style="font-size:.9rem;">El arqueo del <strong>${fechaDisplay}</strong> está en estado <strong>${estadoDisplay}</strong>.</p>
+                   <p style="font-size:.85rem;color:var(--nexo-gray-700);">Puede reabrirlo para modificarlo o solo ver su detalle.</p>`,
+            icon: 'warning',
+            showDenyButton: true,
+            confirmButtonText: '<i class="ri-lock-unlock-line me-1"></i>Reabrir para editar',
+            denyButtonText: '<i class="ri-eye-line me-1"></i>Solo ver',
+            confirmButtonColor: '#FFB020',
+            denyButtonColor: '#0066FF',
+        }).then(res => {
+            if (res.isConfirmed) reabrirArqueoFecha(fecha);
+            else if (res.isDenied) verDetalleArqueo(arqueoId);
+        });
+    } else {
+        Swal.fire({
+            ...opciones,
+            title: 'Arqueo ya cerrado',
+            html: `<p style="font-size:.9rem;">El arqueo del <strong>${fechaDisplay}</strong> está en estado <strong>${estadoDisplay}</strong>.</p>
+                   <p style="font-size:.85rem;color:var(--nexo-gray-700);">Solicite a un supervisor reabrir el arqueo si necesita modificarlo.</p>`,
+            icon: 'info',
+            confirmButtonText: '<i class="ri-eye-line me-1"></i>Ver detalle',
+            confirmButtonColor: '#0066FF',
+        }).then(res => { if (res.isConfirmed) verDetalleArqueo(arqueoId); });
+    }
 }
 
 function verDetalleArqueo(id) {

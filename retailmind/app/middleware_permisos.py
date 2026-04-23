@@ -28,7 +28,7 @@ URL_PERMISO_MAP = {
     '/app/cambios-devoluciones/': 'cambios_devoluciones',
     '/app/pos-dashboard/': 'pos_dashboard',
     '/app/gestion-ventas-documentos/': 'gestion_documentos_ventas',
-    '/app/cuadratura-caja/': 'cuadratura_caja',
+    '/app/ventas/cuadratura-caja/': 'cuadratura_caja',
     '/app/transbank/': 'pos_transbank',
     
     # Documentos

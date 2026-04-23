@@ -497,6 +497,16 @@ urlpatterns = [
      path('consumir_pendientes_despacho/', views.consumir_pendientes_despacho, name='consumir_pendientes_despacho'),
      path('obtener_recepciones_compra/<int:compra_id>/', views.obtener_recepciones_compra, name='obtener_recepciones_compra'),
      path('actualizar_recepciones_compra/', views.actualizar_recepciones_compra, name='actualizar_recepciones_compra'),
+
+     # === Vinculación retroactiva: productos existentes → compra ===
+     path('api/compra/items-para-vincular/', views.items_compra_para_vincular, name='items_compra_para_vincular'),
+     path('api/compra/buscar-sku-vincular/', views.buscar_sku_para_vincular, name='buscar_sku_para_vincular'),
+     path('api/compra/vincular-retroactivo/', views.vincular_productos_retroactivo, name='vincular_productos_retroactivo'),
+
+     # === Revertir / Editar productos ya creados ===
+     path('api/producto/revertir-a-pendiente/', views.revertir_producto_a_pendiente, name='revertir_producto_a_pendiente'),
+     path('api/producto/editar-talla-creado/', views.editar_producto_talla_creado, name='editar_producto_talla_creado'),
+
      path('app/sku_para_talla/', views.sku_para_talla, name='sku_para_talla'),
      path('verMovimientosProducto/', views.verMovimientosProducto, name='verMovimientosProducto'),
      path('obtener_movimientos_producto/', views.obtener_movimientos_producto, name='obtener_movimientos_producto'),

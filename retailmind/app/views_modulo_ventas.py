@@ -7124,8 +7124,13 @@ def obtener_detalle_arqueo(request, arqueo_id):
 @login_required
 @require_POST
 def agregar_deposito_arqueo(request):
-    """Agregar un depósito bancario a un arqueo existente"""
+    """Agregar un depósito bancario a un arqueo existente (solo supervisores)"""
     try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
+        if not es_supervisor:
+            return JsonResponse({'success': False, 'error': 'No tiene permisos para registrar depósitos directamente. Solo supervisores.'}, status=403)
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         
         arqueo_id = request.POST.get('arqueo_id')
@@ -7221,8 +7226,11 @@ def agregar_deposito_arqueo(request):
 @login_required
 @require_POST
 def eliminar_deposito_bancario(request):
-    """Eliminar un depósito bancario específico"""
+    """Eliminar un depósito bancario específico (solo supervisores o quien lo declaró si aún no está verificado)"""
     try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
+
         data = json.loads(request.body)
         deposito_id = data.get('deposito_id')
         
@@ -7243,7 +7251,16 @@ def eliminar_deposito_bancario(request):
                 'success': False,
                 'error': 'No tiene permisos para eliminar este depósito'
             })
-        
+
+        # Cajeros solo pueden eliminar sus propios depósitos no verificados
+        if not es_supervisor:
+            es_propio = getattr(deposito, 'declarado_por_id', None) == request.user.id
+            if not es_propio or deposito.verificado:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Solo puede eliminar sus propios depósitos no verificados. Solicite a un supervisor.'
+                }, status=403)
+
         arqueo = deposito.arqueo
         monto_eliminado = deposito.monto
         
@@ -7306,6 +7323,10 @@ def declarar_deposito(request):
     Permite múltiples depósitos por arqueo (ej: efectivo + cheque).
     """
     try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ('cajero', 'vendedor', 'jefe_local', 'administracion', 'administrador'):
+            return JsonResponse({'success': False, 'error': 'No tiene permisos para declarar depósitos.'}, status=403)
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
 
         # Soportar tanto JSON como FormData
@@ -7399,6 +7420,10 @@ def finalizar_declaracion(request):
     Transiciona el arqueo de CERRADO/CON_DIFERENCIAS → DEPOSITO_DECLARADO.
     """
     try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        if rol_usuario not in ('cajero', 'vendedor', 'jefe_local', 'administracion', 'administrador'):
+            return JsonResponse({'success': False, 'error': 'No tiene permisos para finalizar declaración de depósitos.'}, status=403)
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         data = json.loads(request.body)
         arqueo_id = data.get('arqueo_id')
@@ -7567,6 +7592,11 @@ def confirmar_deposito(request, deposito_id):
 def obtener_depositos_pendientes(request):
     """Retorna depósitos declarados pero sin verificar para el panel del supervisor."""
     try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
+        if not es_supervisor:
+            return JsonResponse({'success': True, 'depositos': [], 'total': 0})
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         fecha_str = request.GET.get('fecha')
 
@@ -7614,8 +7644,14 @@ def listar_arqueos_para_deposito(request):
     """
     Retorna arqueos de la sucursal que tienen efectivo pendiente de depositar.
     Se usa en el modal de depósito multi-día para elegir qué días incluir.
+    Solo supervisores.
     """
     try:
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
+        if not es_supervisor:
+            return JsonResponse({'success': False, 'error': 'Solo supervisores pueden acceder a depósitos multi-día.'}, status=403)
+
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'Sin sucursal'})
@@ -7653,10 +7689,16 @@ def crear_deposito_multidia(request):
     """
     Crea un GrupoDeposito (1 comprobante bancario) con desglose por día.
     Valida que la suma del desglose coincida con el monto del comprobante.
+    Solo supervisores.
     """
     try:
         import json
         from datetime import datetime
+
+        rol_usuario = getattr(request.user, 'rol', None)
+        es_supervisor = rol_usuario in ['administrador', 'administracion']
+        if not es_supervisor:
+            return JsonResponse({'success': False, 'error': 'Solo supervisores pueden crear depósitos multi-día.'}, status=403)
 
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         if not sucursal_id:
@@ -8574,7 +8616,9 @@ def crear_arqueo(request):
             return JsonResponse({
                 'success': False,
                 'error': f'Ya existe un arqueo para el {fecha_arqueo}',
-                'arqueo_id': arqueo_existente.id
+                'arqueo_id': arqueo_existente.id,
+                'estado': arqueo_existente.estado,
+                'estado_display': arqueo_existente.get_estado_display(),
             })
 
         # Generar cuadratura en tiempo real para obtener los datos

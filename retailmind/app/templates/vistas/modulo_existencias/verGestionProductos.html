@@ -108,9 +108,9 @@
     .crear-seccion .mb-2 { margin-bottom: .4rem !important; }
     /* Tabla de tallas más densa */
     #tablaTallasCrearProducto tbody td,
-    #tablaTallasManual tbody td { padding: 4px 8px !important; font-size: .78rem; }
+    #tablaTallasManual tbody td { padding: 6px 12px !important; font-size: .88rem; }
     #tablaTallasCrearProducto thead th,
-    #tablaTallasManual thead th { padding: 6px 8px !important; }
+    #tablaTallasManual thead th { padding: 8px 12px !important; font-size: .78rem; }
     .crear-seccion-titulo.info { color: #405189; }
     .crear-seccion-titulo.attrs { color: #0ab39c; }
     .crear-seccion-titulo.precios { color: #f0a500; }
@@ -238,7 +238,7 @@
     /* Tabla tallas mejorada */
     #tablaTallasCrearProducto,
     #tablaTallasManual {
-        font-size: .82rem;
+        font-size: .92rem;
         border-radius: 10px;
         overflow: hidden;
     }
@@ -246,16 +246,34 @@
     #tablaTallasManual thead th {
         background: #405189 !important;
         color: #fff !important;
-        font-size: .75rem;
-        padding: 8px 10px;
+        font-size: .82rem;
+        padding: 10px 14px;
         text-transform: uppercase;
         letter-spacing: .3px;
         border: none !important;
     }
     #tablaTallasCrearProducto tbody td,
     #tablaTallasManual tbody td {
-        padding: 6px 10px;
+        padding: 8px 14px;
         vertical-align: middle;
+    }
+    #tablaTallasCrearProducto .badge,
+    #tablaTallasManual .badge {
+        font-size: .88rem;
+        padding: 6px 14px;
+        font-weight: 600;
+        letter-spacing: .3px;
+    }
+    #tablaTallasCrearProducto .sku-display,
+    #tablaTallasManual .sku-display {
+        font-size: .92em !important;
+        padding: 5px 12px !important;
+        min-width: 120px !important;
+        font-weight: 600;
+    }
+    #tablaTallasCrearProducto .form-select,
+    #tablaTallasManual .form-select {
+        font-size: .85rem;
     }
 
     /* Stepper mejorado */
@@ -4498,11 +4516,18 @@ function showError(msg) {
                                 </button>
                             </div>`;
                     } else {
+                        const sucDetalle = JSON.stringify(p.sucursales_detalle || []).replace(/"/g, '&quot;');
                         botonesHtml = `
                             <div class="acciones-cell">
                                 <button class="btn-action completado" data-tip="Ya creado" disabled>
                                     <i class="bi bi-check-lg"></i>
                                 </button>
+                                ${p.producto_talla_id ? `<button class="btn-action btn-revertir-producto" data-pt-id="${p.producto_talla_id}" data-nombre="${p.nombre}" data-sucursales-detalle="${sucDetalle}" data-tip="Revertir a pendiente (recrear)" style="color:#dc3545;">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                                <button class="btn-action btn-editar-talla-creado" data-pt-id="${p.producto_talla_id}" data-nombre="${p.nombre}" data-tip="Editar talla/SKU" style="color:#7c3aed;">
+                                    <i class="bi bi-pencil"></i>
+                                </button>` : ''}
                             </div>`;
                     }
 
@@ -5033,13 +5058,13 @@ function showError(msg) {
             data.tallas.forEach(t => {
                 const fila = `
         <tr>
-            <td><span class="badge bg-secondary">${t.talla}</span></td>
+            <td><span class="badge bg-secondary" style="font-size:.92rem;padding:6px 16px;">${t.talla}</span></td>
             <td>
-                <span class="badge bg-info">${t.stock}</span>
+                <span class="badge bg-info" style="font-size:.92rem;padding:6px 16px;">${t.stock}</span>
                 <input type="hidden" name="stock_${t.talla}" value="${t.stock}">
             </td>
             <td>
-                <code class="sku-display bg-light px-2 py-1 rounded text-dark" style="font-size: 0.85em; display: inline-block; min-width: 80px;" data-talla="${t.talla}">
+                <code class="sku-display bg-light px-3 py-2 rounded text-dark" style="font-size: 0.95em; display: inline-block; min-width: 120px; font-weight: 600;" data-talla="${t.talla}">
                     <i class="bi bi-hourglass-split text-muted"></i> Generando...
                 </code>
                 <input type="hidden" class="sku-generado" name="sku_${t.talla}">
@@ -8510,14 +8535,14 @@ function aplicarModoSinGuiaManual(activar) {
         $tbody.html(`
             <tr class="modo-sin-guia-row" style="background:#fff9e6;">
                 <td>
-                    <input type="text" name="talla[]" class="form-control form-control-sm bg-light" value="00" readonly>
-                    <small class="text-muted d-block" style="font-size:.65rem;">talla única CL</small>
+                    <input type="text" name="talla[]" class="form-control bg-light" value="00" readonly style="font-size:.92rem;">
+                    <small class="text-muted d-block" style="font-size:.7rem;">talla única CL</small>
                 </td>
                 <td>
-                    <input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center" value="${stockTotal || 0}" min="0" required>
+                    <input type="number" name="stock[]" class="form-control stock-input text-center" value="${stockTotal || 0}" min="0" required style="font-size:.92rem;font-weight:600;">
                 </td>
                 <td>
-                    <input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly value="" placeholder="Se generará...">
+                    <input type="text" name="sku[]" class="form-control sku-manual bg-light" readonly value="" placeholder="Se generará..." style="font-size:.92rem;">
                 </td>
                 <td><small class="text-muted"><i class="bi bi-dash"></i></small></td>
             </tr>
@@ -9295,9 +9320,9 @@ function agregarFilaTallaManual() {
     
     const fila = `
         <tr class="talla-nueva">
-            <td><input type="text" name="talla[]" class="form-control form-control-sm" placeholder="Ej: 36, 37, M, L..." required tabindex="-1"></td>
-            <td><input type="number" name="stock[]" class="form-control form-control-sm stock-input text-center" value="0" min="0" required tabindex="${tabIdx}"></td>
-            <td><input type="text" name="sku[]" class="form-control form-control-sm sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1"></td>
+            <td><input type="text" name="talla[]" class="form-control" placeholder="Ej: 36, 37, M, L..." required tabindex="-1" style="font-size:.92rem;"></td>
+            <td><input type="number" name="stock[]" class="form-control stock-input text-center" value="0" min="0" required tabindex="${tabIdx}" style="font-size:.92rem;font-weight:600;"></td>
+            <td><input type="text" name="sku[]" class="form-control sku-manual bg-light" readonly placeholder="Se generará..." tabindex="-1" style="font-size:.92rem;"></td>
             <td>
                 <button type="button" class="btn btn-sm btn-danger btnEliminarTallaManual" title="Eliminar talla" tabindex="-1">
                     <i class="bi bi-x-lg"></i>
@@ -15246,6 +15271,215 @@ $('#btnConfirmarActualizacion').on('click', function() {
         };
 
         _enviarEditarAtributos(compraProductoId, payload, $btn);
+    });
+
+    // ==================== REVERTIR PRODUCTO A PENDIENTE ====================
+    $(document).on('click', '.btn-revertir-producto', function() {
+        const ptId = $(this).data('pt-id');
+        const nombre = $(this).data('nombre') || 'este producto';
+        let sucursalesDetalle = [];
+        try { sucursalesDetalle = JSON.parse($(this).attr('data-sucursales-detalle') || '[]'); } catch(e) {}
+
+        const tallasCreadas = [];
+        sucursalesDetalle.forEach(function(suc) {
+            (suc.tallas_resumen || []).forEach(function(t) {
+                if (t.producto_talla_id && t.creado) {
+                    tallasCreadas.push({
+                        pt_id: t.producto_talla_id,
+                        talla: t.talla,
+                        sku: t.sku || '',
+                        stock: t.stock || 0,
+                        sucursal: suc.sucursal_alias || '',
+                    });
+                }
+            });
+        });
+
+        if (tallasCreadas.length <= 1) {
+            revertirConMotivo(ptId, nombre, tallasCreadas.length === 1 ? tallasCreadas[0].talla : '');
+            return;
+        }
+
+        let checkboxes = tallasCreadas.map((t, i) =>
+            `<label class="d-flex align-items-center gap-2 py-1 px-2 rounded" style="cursor:pointer;background:${i % 2 === 0 ? '#f8f9fa' : '#fff'};">
+                <input type="checkbox" class="form-check-input revertir-talla-check" value="${t.pt_id}" data-stock="${t.stock}" checked style="min-width:18px;">
+                <span class="fw-semibold" style="min-width:40px;">${t.talla}</span>
+                <span class="text-muted" style="font-size:.75rem;">SKU: ${t.sku}</span>
+                <span class="badge bg-info" style="font-size:.65rem;">${t.stock}u</span>
+                <span class="text-muted" style="font-size:.68rem;">${t.sucursal}</span>
+                <input type="number" class="form-control form-control-sm revertir-talla-cantidad ms-auto" 
+                       value="${t.stock}" min="1" max="${t.stock}" data-pt-id="${t.pt_id}"
+                       style="width:65px;font-size:.78rem;text-align:center;" title="Cantidad a revertir (máx ${t.stock})">
+            </label>`
+        ).join('');
+
+        Swal.fire({
+            title: `Revertir "${nombre}"`,
+            html: `<p style="font-size:.85rem;">Selecciona las tallas que deseas revertir a pendiente:</p>
+                   <div class="d-flex justify-content-between mb-2">
+                       <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelectorAll('.revertir-talla-check').forEach(c=>c.checked=true)">Todas</button>
+                       <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelectorAll('.revertir-talla-check').forEach(c=>c.checked=false)">Ninguna</button>
+                   </div>
+                   <div style="max-height:200px;overflow-y:auto;border:1px solid #dee2e6;border-radius:8px;">${checkboxes}</div>
+                   <textarea id="swalMotivoRevertir" class="swal2-textarea mt-3" placeholder="Motivo de la reversión (obligatorio)" style="font-size:.85rem;"></textarea>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            confirmButtonText: 'Revertir seleccionadas',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const motivo = document.getElementById('swalMotivoRevertir').value.trim();
+                if (!motivo) { Swal.showValidationMessage('Debes ingresar un motivo'); return false; }
+                const seleccionadas = [...document.querySelectorAll('.revertir-talla-check:checked')].map(c => {
+                    const ptIdSel = parseInt(c.value);
+                    const maxStock = parseInt(c.dataset.stock) || 0;
+                    const inputCant = document.querySelector(`.revertir-talla-cantidad[data-pt-id="${ptIdSel}"]`);
+                    const cant = inputCant ? Math.min(Math.max(parseInt(inputCant.value) || maxStock, 1), maxStock) : maxStock;
+                    return { pt_id: ptIdSel, cantidad: cant, total: maxStock };
+                });
+                if (seleccionadas.length === 0) { Swal.showValidationMessage('Selecciona al menos una talla'); return false; }
+                return { motivo, items: seleccionadas };
+            }
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            const { motivo, items } = result.value;
+
+            Swal.fire({ title: 'Revirtiendo...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            const promesas = items.map(item =>
+                $.ajax({
+                    url: '/app/api/producto/revertir-a-pendiente/',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                    data: JSON.stringify({
+                        producto_talla_id: item.pt_id,
+                        cantidad: item.cantidad < item.total ? item.cantidad : null,
+                        motivo: motivo,
+                    }),
+                })
+            );
+
+            Promise.all(promesas).then(function(results) {
+                const exitosas = results.filter(r => r.success).length;
+                const mensajes = results.filter(r => r.success).map(r => r.message);
+                Swal.fire({
+                    icon: 'success',
+                    title: `${exitosas} talla(s) revertida(s)`,
+                    html: mensajes.join('<br>'),
+                    timer: 4000,
+                    showConfirmButton: true,
+                });
+                cargarProductosParaCrear();
+            }).catch(function() {
+                Swal.fire('Error', 'Error al revertir algunas tallas', 'error');
+                cargarProductosParaCrear();
+            });
+        });
+    });
+
+    function revertirConMotivo(ptId, nombre, talla) {
+        const tallaInfo = talla ? ` (talla ${talla})` : '';
+        Swal.fire({
+            title: `¿Revertir "${nombre}"${tallaInfo}?`,
+            html: `<p style="font-size:.85rem;">El producto volverá a "Pendiente de crear". Se borrarán movimientos, lotes y stock, pero se <b>conserva la trazabilidad</b> de compra y factura.</p>
+                   <textarea id="swalMotivoRevertir" class="swal2-textarea" placeholder="Motivo de la reversión (obligatorio)" style="font-size:.85rem;"></textarea>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            confirmButtonText: 'Sí, revertir',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const motivo = document.getElementById('swalMotivoRevertir').value.trim();
+                if (!motivo) { Swal.showValidationMessage('Debes ingresar un motivo'); return false; }
+                return motivo;
+            }
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            $.ajax({
+                url: '/app/api/producto/revertir-a-pendiente/',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                data: JSON.stringify({ producto_talla_id: ptId, motivo: result.value }),
+                success: function(r) {
+                    if (r.success) {
+                        Swal.fire({ icon: 'success', title: 'Revertido', html: r.message, timer: 3500, showConfirmButton: true });
+                        cargarProductosParaCrear();
+                    } else {
+                        Swal.fire('Error', r.error, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    Swal.fire('Error', xhr.responseJSON?.error || 'Error de servidor', 'error');
+                }
+            });
+        });
+    }
+
+    // ==================== EDITAR TALLA/SKU DE PRODUCTO CREADO ====================
+    $(document).on('click', '.btn-editar-talla-creado', function() {
+        const ptId = $(this).data('pt-id');
+        const nombre = $(this).data('nombre') || '';
+
+        Swal.fire({
+            title: `Editar "${nombre}"`,
+            html: '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Cargando datos...</div>',
+            showConfirmButton: false,
+            allowOutsideClick: false,
+        });
+
+        $.ajax({
+            url: '/app/productos/obtener-producto-desde-talla/' + ptId + '/',
+            method: 'GET',
+            success: function(r) {
+                if (!r.success) { Swal.fire('Error', r.error || 'No se pudo cargar', 'error'); return; }
+                const tallaActual = r.talla || '';
+                const skuActual = r.sku || '';
+                Swal.fire({
+                    title: `Editar "${nombre}"`,
+                    html: `<div style="text-align:left;font-size:.85rem;">
+                               <label class="form-label fw-semibold">Talla</label>
+                               <input id="swalEditTalla" class="swal2-input" value="${tallaActual}" placeholder="Talla" style="font-size:.85rem;">
+                               <label class="form-label fw-semibold mt-2">SKU</label>
+                               <input id="swalEditSku" class="swal2-input" value="${skuActual}" placeholder="SKU" style="font-size:.85rem;">
+                           </div>`,
+                    showCancelButton: true,
+                    confirmButtonColor: '#7c3aed',
+                    confirmButtonText: 'Guardar',
+                    cancelButtonText: 'Cancelar',
+                    preConfirm: () => {
+                        const nt = document.getElementById('swalEditTalla').value.trim();
+                        const ns = document.getElementById('swalEditSku').value.trim();
+                        if (nt === tallaActual && ns === skuActual) { Swal.showValidationMessage('No hay cambios'); return false; }
+                        return { nueva_talla: nt !== tallaActual ? nt : '', nuevo_sku: ns !== skuActual ? ns : '' };
+                    }
+                }).then(function(result) {
+                    if (!result.isConfirmed || !result.value) return;
+                    $.ajax({
+                        url: '/app/api/producto/editar-talla-creado/',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                        data: JSON.stringify({ producto_talla_id: ptId, ...result.value }),
+                        success: function(r2) {
+                            if (r2.success) {
+                                Swal.fire({ icon: 'success', title: 'Actualizado', html: r2.message, timer: 2500, showConfirmButton: false });
+                                cargarProductosParaCrear();
+                            } else {
+                                Swal.fire('Error', r2.error, 'error');
+                            }
+                        },
+                        error: function(xhr) {
+                            Swal.fire('Error', xhr.responseJSON?.error || 'Error de servidor', 'error');
+                        }
+                    });
+                });
+            },
+            error: function() {
+                Swal.fire('Error', 'No se pudo cargar los datos del producto', 'error');
+            }
+        });
     });
 
 </script>
