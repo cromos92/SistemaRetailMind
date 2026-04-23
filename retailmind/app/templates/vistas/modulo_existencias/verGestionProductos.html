@@ -15280,60 +15280,445 @@ $('#btnConfirmarActualizacion').on('click', function() {
         let sucursalesDetalle = [];
         try { sucursalesDetalle = JSON.parse($(this).attr('data-sucursales-detalle') || '[]'); } catch(e) {}
 
-        const tallasCreadas = [];
+        // Agrupar tallas creadas por sucursal para el layout en tabs.
+        const gruposPorSucursal = [];
         sucursalesDetalle.forEach(function(suc) {
-            (suc.tallas_resumen || []).forEach(function(t) {
-                if (t.producto_talla_id && t.creado) {
-                    tallasCreadas.push({
-                        pt_id: t.producto_talla_id,
-                        talla: t.talla,
-                        sku: t.sku || '',
-                        stock: t.stock || 0,
-                        sucursal: suc.sucursal_alias || '',
-                    });
-                }
-            });
+            const items = (suc.tallas_resumen || [])
+                .filter(t => t.producto_talla_id && t.creado)
+                .map(t => ({
+                    pt_id: t.producto_talla_id,
+                    talla: t.talla,
+                    sku: t.sku || '',
+                    stock: t.stock || 0,
+                }));
+            if (items.length > 0) {
+                gruposPorSucursal.push({
+                    sucursal_id: suc.sucursal_id || 0,
+                    sucursal_alias: suc.sucursal_alias || 'Sin sucursal',
+                    items,
+                });
+            }
         });
+
+        const tallasCreadas = gruposPorSucursal.flatMap(g => g.items);
 
         if (tallasCreadas.length <= 1) {
             revertirConMotivo(ptId, nombre, tallasCreadas.length === 1 ? tallasCreadas[0].talla : '');
             return;
         }
 
-        let checkboxes = tallasCreadas.map((t, i) =>
-            `<label class="d-flex align-items-center gap-2 py-1 px-2 rounded" style="cursor:pointer;background:${i % 2 === 0 ? '#f8f9fa' : '#fff'};">
-                <input type="checkbox" class="form-check-input revertir-talla-check" value="${t.pt_id}" data-stock="${t.stock}" checked style="min-width:18px;">
-                <span class="fw-semibold" style="min-width:40px;">${t.talla}</span>
-                <span class="text-muted" style="font-size:.75rem;">SKU: ${t.sku}</span>
-                <span class="badge bg-info" style="font-size:.65rem;">${t.stock}u</span>
-                <span class="text-muted" style="font-size:.68rem;">${t.sucursal}</span>
-                <input type="number" class="form-control form-control-sm revertir-talla-cantidad ms-auto" 
-                       value="${t.stock}" min="1" max="${t.stock}" data-pt-id="${t.pt_id}"
-                       style="width:65px;font-size:.78rem;text-align:center;" title="Cantidad a revertir (máx ${t.stock})">
-            </label>`
-        ).join('');
+        const esc = (s) => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        const stockTotal = tallasCreadas.reduce((a, t) => a + (t.stock || 0), 0);
+        const usarTabs = gruposPorSucursal.length > 1;
+
+        const renderTallaCard = (t) => `
+            <div class="rv-card" data-pt-id="${t.pt_id}" data-stock-max="${t.stock}" data-sucursal="${esc(t.__suc || '')}">
+                <label class="rv-card-head">
+                    <input type="checkbox" class="rv-check" value="${t.pt_id}" data-stock="${t.stock}" checked>
+                    <div class="rv-talla">${esc(t.talla || '—')}</div>
+                    <div class="rv-meta">
+                        <span class="rv-sku" title="SKU">${esc(t.sku || 's/SKU')}</span>
+                        <span class="rv-stock-badge" title="Stock actual">${t.stock}u</span>
+                    </div>
+                </label>
+                <div class="rv-qty-row">
+                    <div class="rv-qty-label">A revertir</div>
+                    <div class="rv-qty-controls">
+                        <button type="button" class="rv-qty-btn rv-minus" aria-label="Restar">−</button>
+                        <input type="number" class="rv-qty-input"
+                               value="${t.stock}" min="1" max="${t.stock}"
+                               data-pt-id="${t.pt_id}" data-stock-max="${t.stock}">
+                        <button type="button" class="rv-qty-btn rv-plus" aria-label="Sumar">+</button>
+                        <button type="button" class="rv-qty-max" title="Revertir todo (${t.stock}u)">MAX</button>
+                    </div>
+                </div>
+                <div class="rv-progress"><div class="rv-progress-bar" style="width:100%"></div></div>
+                <div class="rv-tag rv-tag-total">Reversión total</div>
+            </div>
+        `;
+
+        let tabsNavHtml = '';
+        let tabsBodyHtml = '';
+        if (usarTabs) {
+            tabsNavHtml = `<div class="rv-tabs" role="tablist">
+                ${gruposPorSucursal.map((g, i) => `
+                    <button type="button" class="rv-tab${i === 0 ? ' active' : ''}"
+                            data-tab="rv-tab-${i}" role="tab">
+                        <span class="rv-tab-name">${esc(g.sucursal_alias)}</span>
+                        <span class="rv-tab-badge" data-badge-for="rv-tab-${i}">${g.items.length}/${g.items.length}</span>
+                    </button>
+                `).join('')}
+            </div>`;
+            tabsBodyHtml = gruposPorSucursal.map((g, i) => `
+                <div class="rv-tabpanel${i === 0 ? ' active' : ''}" id="rv-tab-${i}" role="tabpanel">
+                    <div class="rv-tab-actions">
+                        <span class="rv-tab-hint">${g.items.length} talla(s) en <b>${esc(g.sucursal_alias)}</b></span>
+                        <div class="rv-tab-actions-btns">
+                            <button type="button" class="rv-mini-btn rv-select-tab" data-panel="rv-tab-${i}">Todas</button>
+                            <button type="button" class="rv-mini-btn rv-deselect-tab" data-panel="rv-tab-${i}">Ninguna</button>
+                            <button type="button" class="rv-mini-btn rv-invert-tab" data-panel="rv-tab-${i}">Invertir</button>
+                        </div>
+                    </div>
+                    <div class="rv-grid">
+                        ${g.items.map(it => renderTallaCard({ ...it, __suc: g.sucursal_alias })).join('')}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            const g = gruposPorSucursal[0];
+            tabsBodyHtml = `
+                <div class="rv-tabpanel active" id="rv-tab-0" role="tabpanel">
+                    <div class="rv-tab-actions">
+                        <span class="rv-tab-hint">${g.items.length} talla(s) en <b>${esc(g.sucursal_alias)}</b></span>
+                        <div class="rv-tab-actions-btns">
+                            <button type="button" class="rv-mini-btn rv-select-tab" data-panel="rv-tab-0">Todas</button>
+                            <button type="button" class="rv-mini-btn rv-deselect-tab" data-panel="rv-tab-0">Ninguna</button>
+                            <button type="button" class="rv-mini-btn rv-invert-tab" data-panel="rv-tab-0">Invertir</button>
+                        </div>
+                    </div>
+                    <div class="rv-grid">
+                        ${g.items.map(it => renderTallaCard({ ...it, __suc: g.sucursal_alias })).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        const htmlModal = `
+            <style>
+                .swal2-popup.rv-popup { padding: 0 !important; border-radius: 14px; overflow: hidden; }
+                .swal2-popup.rv-popup .swal2-title { padding: 18px 22px 6px; }
+                .swal2-popup.rv-popup .swal2-html-container { margin: 0; padding: 0 22px 18px; text-align: left; }
+                .rv-subtitle { font-size: .82rem; color: #6c757d; margin: 0 0 10px; }
+                .rv-warning {
+                    display: flex; gap: 10px; align-items: flex-start;
+                    background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+                    border-radius: 10px; padding: 10px 12px; font-size: .78rem; margin-bottom: 12px;
+                }
+                .rv-warning .bi { font-size: 1rem; line-height: 1.2; }
+                .rv-global-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+                .rv-mini-btn {
+                    border: 1px solid #dee2e6; background: #fff; color: #495057;
+                    border-radius: 6px; padding: 4px 10px; font-size: .75rem; cursor: pointer;
+                    transition: all .15s ease;
+                }
+                .rv-mini-btn:hover { background: #f1f3f5; border-color: #adb5bd; }
+                .rv-mini-btn.rv-danger { color: #dc3545; border-color: #f5c2c7; }
+                .rv-mini-btn.rv-danger:hover { background: #f8d7da; }
+                .rv-tabs {
+                    display: flex; gap: 2px; border-bottom: 2px solid #e9ecef;
+                    overflow-x: auto; margin-bottom: 0; padding-bottom: 0;
+                }
+                .rv-tab {
+                    background: transparent; border: 0; border-bottom: 3px solid transparent;
+                    padding: 10px 14px; font-size: .82rem; cursor: pointer; color: #6c757d;
+                    display: flex; gap: 8px; align-items: center; white-space: nowrap;
+                    font-weight: 500; margin-bottom: -2px;
+                }
+                .rv-tab:hover { color: #212529; background: #f8f9fa; }
+                .rv-tab.active { color: #dc3545; border-bottom-color: #dc3545; background: #fff; }
+                .rv-tab-badge {
+                    background: #e9ecef; color: #495057; font-size: .68rem;
+                    padding: 2px 8px; border-radius: 10px; font-weight: 600;
+                }
+                .rv-tab.active .rv-tab-badge { background: #dc3545; color: #fff; }
+                .rv-tabpanel { display: none; padding-top: 10px; }
+                .rv-tabpanel.active { display: block; }
+                .rv-tab-actions {
+                    display: flex; justify-content: space-between; align-items: center;
+                    gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+                }
+                .rv-tab-hint { font-size: .76rem; color: #6c757d; }
+                .rv-tab-actions-btns { display: flex; gap: 4px; }
+                .rv-grid {
+                    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                    gap: 10px; max-height: 360px; overflow-y: auto;
+                    padding: 4px; border: 1px solid #e9ecef; border-radius: 10px; background: #fafbfc;
+                }
+                .rv-card {
+                    background: #fff; border: 1.5px solid #e9ecef; border-radius: 10px;
+                    padding: 10px; transition: all .15s ease; position: relative;
+                }
+                .rv-card:has(.rv-check:checked) { border-color: #dc3545; background: #fff5f5; }
+                .rv-card:has(.rv-check:not(:checked)) { opacity: .55; }
+                .rv-card-head { display: flex; gap: 8px; align-items: center; cursor: pointer; margin: 0; }
+                .rv-check { min-width: 18px; height: 18px; accent-color: #dc3545; cursor: pointer; }
+                .rv-talla {
+                    font-weight: 700; font-size: .95rem; color: #212529;
+                    min-width: 36px;
+                }
+                .rv-meta { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+                .rv-sku {
+                    font-size: .68rem; color: #6c757d; font-family: 'Courier New', monospace;
+                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                }
+                .rv-stock-badge {
+                    font-size: .65rem; background: #e7f5ff; color: #1864ab;
+                    padding: 1px 6px; border-radius: 4px; font-weight: 600; align-self: flex-start;
+                }
+                .rv-qty-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e9ecef; }
+                .rv-qty-label { font-size: .68rem; color: #6c757d; margin-bottom: 4px; }
+                .rv-qty-controls { display: flex; gap: 3px; align-items: center; }
+                .rv-qty-btn {
+                    width: 26px; height: 28px; border: 1px solid #dee2e6; background: #fff;
+                    border-radius: 5px; cursor: pointer; font-size: .85rem; font-weight: 600;
+                    color: #495057; padding: 0; line-height: 1;
+                }
+                .rv-qty-btn:hover { background: #f1f3f5; }
+                .rv-qty-input {
+                    flex: 1; height: 28px; border: 1px solid #dee2e6; border-radius: 5px;
+                    text-align: center; font-size: .82rem; font-weight: 600; padding: 0 4px;
+                    min-width: 40px;
+                }
+                .rv-qty-input:focus { outline: none; border-color: #dc3545; box-shadow: 0 0 0 2px rgba(220,53,69,.15); }
+                .rv-qty-max {
+                    height: 28px; border: 1px solid #dc3545; background: #fff; color: #dc3545;
+                    border-radius: 5px; padding: 0 8px; font-size: .68rem; font-weight: 700;
+                    cursor: pointer; letter-spacing: .3px;
+                }
+                .rv-qty-max:hover { background: #dc3545; color: #fff; }
+                .rv-progress { height: 4px; background: #e9ecef; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+                .rv-progress-bar { height: 100%; background: #dc3545; transition: width .15s ease; }
+                .rv-tag {
+                    display: inline-block; font-size: .62rem; font-weight: 700; letter-spacing: .4px;
+                    padding: 2px 6px; border-radius: 3px; margin-top: 6px; text-transform: uppercase;
+                }
+                .rv-tag-total { background: #dc3545; color: #fff; }
+                .rv-tag-parcial { background: #fd7e14; color: #fff; }
+                .rv-card.is-parcial .rv-tag-total { display: none; }
+                .rv-card:not(.is-parcial) .rv-tag-parcial { display: none; }
+
+                .rv-motivo-wrap { margin-top: 14px; }
+                .rv-motivo-label {
+                    display: flex; justify-content: space-between; align-items: center;
+                    font-size: .78rem; font-weight: 600; color: #495057; margin-bottom: 4px;
+                }
+                .rv-motivo-label .rv-req { color: #dc3545; font-size: .7rem; }
+                .rv-motivo {
+                    width: 100%; min-height: 70px; border: 1.5px solid #dee2e6; border-radius: 8px;
+                    padding: 8px 10px; font-size: .85rem; font-family: inherit; resize: vertical;
+                }
+                .rv-motivo:focus { outline: none; border-color: #dc3545; box-shadow: 0 0 0 2px rgba(220,53,69,.12); }
+
+                .rv-footer {
+                    margin-top: 14px; padding: 12px 14px;
+                    background: linear-gradient(135deg, #fff5f5 0%, #ffe3e3 100%);
+                    border: 1.5px solid #ffc9c9; border-radius: 10px;
+                    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+                }
+                .rv-footer-item { text-align: center; }
+                .rv-footer-item .rv-fv { font-size: 1.35rem; font-weight: 800; color: #c92a2a; line-height: 1; }
+                .rv-footer-item .rv-fl { font-size: .66rem; color: #868e96; text-transform: uppercase; letter-spacing: .5px; margin-top: 3px; }
+                .rv-footer-item .rv-fv small { font-size: .75rem; color: #868e96; font-weight: 500; }
+                @media (max-width: 640px) {
+                    .rv-footer { grid-template-columns: repeat(2, 1fr); }
+                    .rv-grid { grid-template-columns: 1fr; }
+                }
+            </style>
+            <p class="rv-subtitle">Selecciona las tallas que deseas revertir a <b>pendiente de crear</b>. Puedes ajustar la cantidad para hacer reversiones parciales.</p>
+            <div class="rv-warning">
+                <i class="bi bi-shield-check"></i>
+                <div>
+                    <b>Trazabilidad preservada.</b> Sólo se desenlazan las recepciones de las tallas seleccionadas.
+                    La compra, DTE y factura se conservan intactas; no se ven afectados otros productos ya enlazados.
+                </div>
+            </div>
+            <div class="rv-global-actions">
+                <button type="button" class="rv-mini-btn rv-select-all">Seleccionar todas</button>
+                <button type="button" class="rv-mini-btn rv-deselect-all">Ninguna</button>
+                <button type="button" class="rv-mini-btn rv-invert-all">Invertir selección</button>
+                <button type="button" class="rv-mini-btn rv-danger rv-set-max-all">Todas al máximo</button>
+            </div>
+            ${tabsNavHtml}
+            ${tabsBodyHtml}
+            <div class="rv-motivo-wrap">
+                <label class="rv-motivo-label" for="swalMotivoRevertir">
+                    <span>Motivo de la reversión</span>
+                    <span class="rv-req">obligatorio</span>
+                </label>
+                <textarea id="swalMotivoRevertir" class="rv-motivo"
+                          placeholder="Describe por qué se revierte (ej: error de recepción, producto incorrecto, etc.)"></textarea>
+            </div>
+            <div class="rv-footer">
+                <div class="rv-footer-item">
+                    <div class="rv-fv" id="rvFootTallas">0<small>/${tallasCreadas.length}</small></div>
+                    <div class="rv-fl">Tallas sel.</div>
+                </div>
+                <div class="rv-footer-item">
+                    <div class="rv-fv" id="rvFootUnidades">0<small>/${stockTotal}u</small></div>
+                    <div class="rv-fl">Unidades a revertir</div>
+                </div>
+                <div class="rv-footer-item">
+                    <div class="rv-fv" id="rvFootSucursales">0<small>/${gruposPorSucursal.length}</small></div>
+                    <div class="rv-fl">Sucursales</div>
+                </div>
+                <div class="rv-footer-item">
+                    <div class="rv-fv" id="rvFootTipo">—</div>
+                    <div class="rv-fl">Tipo reversión</div>
+                </div>
+            </div>
+        `;
 
         Swal.fire({
             title: `Revertir "${nombre}"`,
-            html: `<p style="font-size:.85rem;">Selecciona las tallas que deseas revertir a pendiente:</p>
-                   <div class="d-flex justify-content-between mb-2">
-                       <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelectorAll('.revertir-talla-check').forEach(c=>c.checked=true)">Todas</button>
-                       <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelectorAll('.revertir-talla-check').forEach(c=>c.checked=false)">Ninguna</button>
-                   </div>
-                   <div style="max-height:200px;overflow-y:auto;border:1px solid #dee2e6;border-radius:8px;">${checkboxes}</div>
-                   <textarea id="swalMotivoRevertir" class="swal2-textarea mt-3" placeholder="Motivo de la reversión (obligatorio)" style="font-size:.85rem;"></textarea>`,
-            icon: 'warning',
+            html: htmlModal,
+            icon: null,
             showCancelButton: true,
             confirmButtonColor: '#dc3545',
-            confirmButtonText: 'Revertir seleccionadas',
+            confirmButtonText: '<i class="bi bi-arrow-counterclockwise"></i> Revertir seleccionadas',
             cancelButtonText: 'Cancelar',
+            width: 780,
+            customClass: { popup: 'rv-popup' },
+            focusConfirm: false,
+            didOpen: () => {
+                const popup = Swal.getPopup();
+                if (!popup) return;
+
+                const updateCardState = (card) => {
+                    const max = parseInt(card.dataset.stockMax) || 0;
+                    const input = card.querySelector('.rv-qty-input');
+                    const bar = card.querySelector('.rv-progress-bar');
+                    const check = card.querySelector('.rv-check');
+                    let val = parseInt(input.value) || 0;
+                    if (val < 1) val = 1;
+                    if (val > max) val = max;
+                    input.value = val;
+                    const pct = max > 0 ? (val / max) * 100 : 0;
+                    bar.style.width = pct + '%';
+                    card.classList.toggle('is-parcial', check.checked && val < max);
+                };
+
+                const updateFooter = () => {
+                    let tallas = 0, unidades = 0, parciales = 0, totales = 0;
+                    const sucSet = new Set();
+                    popup.querySelectorAll('.rv-card').forEach(card => {
+                        const check = card.querySelector('.rv-check');
+                        if (!check.checked) return;
+                        const max = parseInt(card.dataset.stockMax) || 0;
+                        const val = parseInt(card.querySelector('.rv-qty-input').value) || 0;
+                        tallas += 1;
+                        unidades += val;
+                        if (val < max) parciales += 1; else totales += 1;
+                        sucSet.add(card.dataset.sucursal || '');
+                    });
+                    popup.querySelector('#rvFootTallas').innerHTML =
+                        `${tallas}<small>/${tallasCreadas.length}</small>`;
+                    popup.querySelector('#rvFootUnidades').innerHTML =
+                        `${unidades}<small>/${stockTotal}u</small>`;
+                    popup.querySelector('#rvFootSucursales').innerHTML =
+                        `${sucSet.size}<small>/${gruposPorSucursal.length}</small>`;
+                    let tipoTxt = '—';
+                    if (tallas > 0) {
+                        if (parciales > 0 && totales > 0) tipoTxt = 'Mixta';
+                        else if (parciales > 0) tipoTxt = 'Parcial';
+                        else tipoTxt = 'Total';
+                    }
+                    popup.querySelector('#rvFootTipo').textContent = tipoTxt;
+
+                    // badges por tab
+                    popup.querySelectorAll('.rv-tabpanel').forEach(panel => {
+                        const badge = popup.querySelector(`[data-badge-for="${panel.id}"]`);
+                        if (!badge) return;
+                        const cards = panel.querySelectorAll('.rv-card');
+                        const sel = panel.querySelectorAll('.rv-check:checked').length;
+                        badge.textContent = `${sel}/${cards.length}`;
+                    });
+                };
+
+                const refreshAll = () => {
+                    popup.querySelectorAll('.rv-card').forEach(updateCardState);
+                    updateFooter();
+                };
+
+                popup.querySelectorAll('.rv-card').forEach(updateCardState);
+                updateFooter();
+
+                popup.addEventListener('input', (e) => {
+                    if (e.target.classList.contains('rv-qty-input')) {
+                        const card = e.target.closest('.rv-card');
+                        if (card) {
+                            const check = card.querySelector('.rv-check');
+                            if (!check.checked) check.checked = true;
+                            updateCardState(card);
+                            updateFooter();
+                        }
+                    }
+                });
+                popup.addEventListener('change', (e) => {
+                    if (e.target.classList.contains('rv-check')) {
+                        updateCardState(e.target.closest('.rv-card'));
+                        updateFooter();
+                    }
+                });
+                popup.addEventListener('click', (e) => {
+                    const tgt = e.target.closest('.rv-qty-btn, .rv-qty-max, .rv-tab, .rv-select-all, .rv-deselect-all, .rv-invert-all, .rv-set-max-all, .rv-select-tab, .rv-deselect-tab, .rv-invert-tab');
+                    if (!tgt) return;
+
+                    if (tgt.classList.contains('rv-qty-btn')) {
+                        const card = tgt.closest('.rv-card');
+                        const input = card.querySelector('.rv-qty-input');
+                        const step = tgt.classList.contains('rv-plus') ? 1 : -1;
+                        input.value = (parseInt(input.value) || 0) + step;
+                        const check = card.querySelector('.rv-check');
+                        if (!check.checked) check.checked = true;
+                        updateCardState(card);
+                        updateFooter();
+                    } else if (tgt.classList.contains('rv-qty-max')) {
+                        const card = tgt.closest('.rv-card');
+                        const max = parseInt(card.dataset.stockMax) || 0;
+                        card.querySelector('.rv-qty-input').value = max;
+                        card.querySelector('.rv-check').checked = true;
+                        updateCardState(card);
+                        updateFooter();
+                    } else if (tgt.classList.contains('rv-tab')) {
+                        const target = tgt.dataset.tab;
+                        popup.querySelectorAll('.rv-tab').forEach(t => t.classList.toggle('active', t === tgt));
+                        popup.querySelectorAll('.rv-tabpanel').forEach(p => p.classList.toggle('active', p.id === target));
+                    } else if (tgt.classList.contains('rv-select-all')) {
+                        popup.querySelectorAll('.rv-check').forEach(c => c.checked = true);
+                        refreshAll();
+                    } else if (tgt.classList.contains('rv-deselect-all')) {
+                        popup.querySelectorAll('.rv-check').forEach(c => c.checked = false);
+                        refreshAll();
+                    } else if (tgt.classList.contains('rv-invert-all')) {
+                        popup.querySelectorAll('.rv-check').forEach(c => c.checked = !c.checked);
+                        refreshAll();
+                    } else if (tgt.classList.contains('rv-set-max-all')) {
+                        popup.querySelectorAll('.rv-card').forEach(card => {
+                            const max = parseInt(card.dataset.stockMax) || 0;
+                            card.querySelector('.rv-qty-input').value = max;
+                            card.querySelector('.rv-check').checked = true;
+                        });
+                        refreshAll();
+                    } else if (tgt.classList.contains('rv-select-tab')) {
+                        const panel = popup.querySelector('#' + tgt.dataset.panel);
+                        panel.querySelectorAll('.rv-check').forEach(c => c.checked = true);
+                        panel.querySelectorAll('.rv-card').forEach(updateCardState);
+                        updateFooter();
+                    } else if (tgt.classList.contains('rv-deselect-tab')) {
+                        const panel = popup.querySelector('#' + tgt.dataset.panel);
+                        panel.querySelectorAll('.rv-check').forEach(c => c.checked = false);
+                        panel.querySelectorAll('.rv-card').forEach(updateCardState);
+                        updateFooter();
+                    } else if (tgt.classList.contains('rv-invert-tab')) {
+                        const panel = popup.querySelector('#' + tgt.dataset.panel);
+                        panel.querySelectorAll('.rv-check').forEach(c => c.checked = !c.checked);
+                        panel.querySelectorAll('.rv-card').forEach(updateCardState);
+                        updateFooter();
+                    }
+                });
+            },
             preConfirm: () => {
-                const motivo = document.getElementById('swalMotivoRevertir').value.trim();
+                const popup = Swal.getPopup();
+                const motivo = popup.querySelector('#swalMotivoRevertir').value.trim();
                 if (!motivo) { Swal.showValidationMessage('Debes ingresar un motivo'); return false; }
-                const seleccionadas = [...document.querySelectorAll('.revertir-talla-check:checked')].map(c => {
+                if (motivo.length < 5) { Swal.showValidationMessage('El motivo es demasiado corto (mínimo 5 caracteres)'); return false; }
+
+                const seleccionadas = [...popup.querySelectorAll('.rv-check:checked')].map(c => {
                     const ptIdSel = parseInt(c.value);
                     const maxStock = parseInt(c.dataset.stock) || 0;
-                    const inputCant = document.querySelector(`.revertir-talla-cantidad[data-pt-id="${ptIdSel}"]`);
+                    const inputCant = popup.querySelector(`.rv-qty-input[data-pt-id="${ptIdSel}"]`);
                     const cant = inputCant ? Math.min(Math.max(parseInt(inputCant.value) || maxStock, 1), maxStock) : maxStock;
                     return { pt_id: ptIdSel, cantidad: cant, total: maxStock };
                 });

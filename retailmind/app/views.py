@@ -16036,9 +16036,13 @@ def obtener_dtes_por_proveedor(request, proveedor_id):
         print(f"❌ Error en obtener_dtes_por_proveedor: {str(e)}")
         print(traceback.format_exc())
         return JsonResponse({'error': str(e)}, status=500)
+
 def crear_producto_manual(request):
     """
-    Crea un producto manualmente con DTE y proveedor seleccionados
+    Crea un producto manualmente con DTE y proveedor seleccionados.
+    Genera registros en Compras, Compras_Producto, Compras_Producto_Talla,
+    Dte_Productos y Productos_Recepcionados para que las tallas figuren
+    en la compra y queden vinculadas al DTE seleccionado.
     """
     try:
         # Obtener datos del formulario
@@ -16278,6 +16282,106 @@ def crear_producto_manual(request):
                 )
                 print(f"📝 Movimiento registrado para talla {talla_nombre}: +{stock}")
         
+        # ========== REGISTRAR EN COMPRA Y VINCULAR AL DTE ==========
+        compra_creada = None
+        compra_producto_creado = None
+        try:
+            with transaction.atomic():
+                responsable_nombre = request.user.get_full_name() or responsable
+                hoy = timezone.localdate()
+
+                compra_existente = Compras.objects.filter(
+                    empresa=proveedor,
+                    estado__in=['ACTIVA', 'COMPLETADA'],
+                    nombre__startswith='Compra Manual -',
+                    fecha=hoy,
+                ).first()
+
+                if compra_existente:
+                    compra_creada = compra_existente
+                    print(f"📌 Reutilizando compra existente: {compra_creada.nombre} (ID: {compra_creada.id})")
+                else:
+                    correlativo_compra = obtener_siguiente_correlativo(sucursal, 'COMPRA')
+                    nombre_compra = f"Compra Manual - {proveedor.nombre} - {hoy.strftime('%d/%m/%Y')}"
+                    compra_creada = Compras.objects.create(
+                        empresa=proveedor,
+                        nombre=nombre_compra,
+                        correlativo=correlativo_compra,
+                        responsable=responsable_nombre,
+                        temporada='',
+                        fecha=hoy,
+                        estado='COMPLETADA',
+                        tipo='inicial',
+                    )
+                    print(f"🆕 Compra creada: {nombre_compra} (ID: {compra_creada.id})")
+
+                marca_nombre = atributo1_obj.valor if atributo1_obj else ''
+                color_nombre = atributo2_obj.valor if atributo2_obj else ''
+                genero_nombre = atributo3_obj.valor if atributo3_obj else ''
+
+                compra_producto_creado = Compras_Producto.objects.create(
+                    compras=compra_creada,
+                    nombre=articulo,
+                    descripcion=descripcion,
+                    atributo1=marca_nombre,
+                    atributo2=color_nombre,
+                    atributo3=genero_nombre,
+                    atributo4='',
+                    tipo_talla=tipo_talla or 'CL',
+                    costo=int(costo),
+                    precioSugerido=int(precioventa),
+                    sucursal_destino=sucursal,
+                )
+                print(f"🆕 Compra_Producto creado: {articulo} (ID: {compra_producto_creado.id})")
+
+                for talla_nombre, talla_info in tallas_creadas.items():
+                    producto_talla = talla_info['producto_talla']
+                    stock_talla = talla_info['stock']
+
+                    cpt = Compras_Producto_Talla.objects.create(
+                        compra_producto=compra_producto_creado,
+                        stock=stock_talla,
+                        talla=talla_nombre,
+                        producto_talla=producto_talla,
+                        unidades_recibidas=stock_talla,
+                        estado_item='recibido_completo',
+                    )
+                    print(f"   📦 CPT creada: talla={talla_nombre}, stock={stock_talla}")
+
+                    dte_prod = Dte_Productos.objects.create(
+                        dte=dte,
+                        productoTalla=producto_talla,
+                        descripcion=f"{articulo} - Talla {talla_nombre}",
+                        costo=int(costo),
+                        sobreprecio=int(sobreprecio),
+                        precio=int(precioventa),
+                        precio_unitario=int(costo),
+                        monto_item=int(costo) * stock_talla,
+                        stock=stock_talla,
+                    )
+                    print(f"   📄 Dte_Producto creado: {articulo} T{talla_nombre} (ID: {dte_prod.id})")
+
+                    if stock_talla > 0:
+                        Productos_Recepcionados.objects.create(
+                            compra_producto_talla=cpt,
+                            dte=dte,
+                            dte_producto=dte_prod,
+                            producto_talla=producto_talla,
+                            stockArribado=stock_talla,
+                            cantidad_esperada=stock_talla,
+                            estado='RECEPCIONADO_OK',
+                            sucursal_destino=sucursal,
+                            recepcionado_por=responsable_nombre,
+                            fecha_recepcion=timezone.now(),
+                        )
+                        print(f"   ✅ Recepción registrada: talla={talla_nombre}, cantidad={stock_talla}")
+
+        except Exception as e:
+            import traceback
+            print(f"⚠️ Error vinculando a compra/DTE (no crítico): {e}")
+            print(traceback.format_exc())
+            compra_creada = None
+        
         # ========== SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ==========
         # Sincroniza automáticamente Y crea alertas para que las sucursales revisen el cambio
         productos_sincronizados = 0
@@ -16430,6 +16534,8 @@ def crear_producto_manual(request):
             mensaje += f'. {tallas_existentes_count} talla(s) existente(s) actualizada(s)'
         if productos_sincronizados > 0:
             mensaje += f'. Precios sincronizados y alertas enviadas a {len(sucursales_afectadas)} sucursal(es)'
+        if compra_creada:
+            mensaje += f'. Registrado en compra #{compra_creada.correlativo}'
         
         return JsonResponse({
             'success': True,
@@ -16440,7 +16546,8 @@ def crear_producto_manual(request):
             'tallas_nuevas': tallas_nuevas,
             'tallas_existentes': tallas_existentes_count,
             'productos_sincronizados': productos_sincronizados,
-            'sucursales_afectadas': sucursales_afectadas
+            'sucursales_afectadas': sucursales_afectadas,
+            'compra_id': compra_creada.id if compra_creada else None,
         })
         
     except Exception as e:
