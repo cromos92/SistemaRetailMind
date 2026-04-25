@@ -10398,6 +10398,208 @@ def eliminar_recepcion_pendiente(request):
 
 @require_POST
 @transaction.atomic
+def _detectar_bloqueos_eliminacion_producto(tallas_ids, producto_ids):
+    """
+    Detecta condiciones que IMPIDEN borrar un producto y sus tallas porque
+    romperían la trazabilidad o el flujo operativo.
+
+    Retorna `list[dict]` con cada bloqueo encontrado. Lista vacía = OK
+    para borrar. Si hay bloqueos, el caller debe responder 409.
+
+    Las claves de cada bloqueo son:
+        - tipo: identificador de la regla (estable, para que el frontend
+          pueda actuar diferenciadamente).
+        - mensaje: texto humano para mostrar.
+        - cantidad: cuántos registros la disparan.
+        - detalle: lista corta con ejemplos representativos (máx 5 items).
+    """
+    if not tallas_ids:
+        return []
+
+    bloqueos = []
+
+    # 1) DTE TRASPASO en tránsito (emitido + sin recepcionar).
+    #    Si el receptor todavía no recibió y borramos el ProductoTalla,
+    #    los movimientos TRASPASO_SALIDA se borran (CASCADE) y la línea
+    #    Dte_Productos queda con productoTalla=NULL → la guía queda
+    #    inutilizable para `confirmar_recepcion_api`.
+    movs_traspaso_pendientes = (
+        Movimientos_Producto.objects
+        .filter(
+            ProductoTalla_id__in=tallas_ids,
+            concepto='TRASPASO_SALIDA',
+            tipo_movimiento='EGRESO',
+            estado='COMPLETADO',
+            dte__tipo_transaccion='TRASPASO',
+            dte__fecha_recepcion__isnull=True,
+        )
+        .exclude(dte__estado_dte__in=['CANCELADO', 'ANULADO'])
+        .select_related('dte', 'sucursal_destino', 'ProductoTalla')
+    )
+    pendientes_traspaso = list(movs_traspaso_pendientes[:5])
+    total_traspaso = movs_traspaso_pendientes.count()
+    if total_traspaso:
+        bloqueos.append({
+            'tipo': 'TRASPASO_EN_TRANSITO',
+            'mensaje': (
+                f'Hay {total_traspaso} despacho(s) emitido(s) sin recepcionar. '
+                f'Si borras ahora, la sucursal destino no podrá confirmar la guía.'
+            ),
+            'cantidad': total_traspaso,
+            'detalle': [
+                {
+                    'dte_id': m.dte_id,
+                    'numero_documento': m.dte.numero_documento if m.dte else None,
+                    'tipo_documento': m.dte.tipo_documento if m.dte else None,
+                    'sucursal_destino': (
+                        m.sucursal_destino.alias if m.sucursal_destino else None
+                    ),
+                    'sku': m.ProductoTalla.sku if m.ProductoTalla else None,
+                }
+                for m in pendientes_traspaso
+            ],
+        })
+
+    # 2) Tickets POS pendientes (estado PENDIENTE o sin DTE asociado).
+    #    Borrar el ProductoTalla cae en CASCADE sobre Ticket_Productos.
+    tickets_pendientes_qs = (
+        Ticket_Productos.objects
+        .filter(
+            ProductoTalla_id__in=tallas_ids,
+            ticket__estado='PENDIENTE',
+        )
+        .select_related('ticket', 'ProductoTalla')
+    )
+    total_tickets = tickets_pendientes_qs.count()
+    if total_tickets:
+        ejemplos_tickets = list(tickets_pendientes_qs[:5])
+        bloqueos.append({
+            'tipo': 'TICKETS_POS_PENDIENTES',
+            'mensaje': (
+                f'Hay {total_tickets} línea(s) de tickets POS pendientes. '
+                f'Borrar arrastraría las ventas en proceso.'
+            ),
+            'cantidad': total_tickets,
+            'detalle': [
+                {
+                    'ticket_id': tp.ticket_id,
+                    'sku': tp.ProductoTalla.sku if tp.ProductoTalla else None,
+                    'cantidad': tp.stock,
+                }
+                for tp in ejemplos_tickets
+            ],
+        })
+
+    # 3) Pendientes de despacho activos.
+    from .models import PendienteDespacho
+    pendientes_despacho_qs = (
+        PendienteDespacho.objects
+        .filter(
+            producto_talla_id__in=tallas_ids,
+            estado__in=['PENDIENTE', 'PARCIAL'],
+        )
+        .select_related('sucursal_destino', 'producto_talla')
+    )
+    total_pendientes_despacho = pendientes_despacho_qs.count()
+    if total_pendientes_despacho:
+        ejemplos_pd = list(pendientes_despacho_qs[:5])
+        bloqueos.append({
+            'tipo': 'PENDIENTES_DESPACHO',
+            'mensaje': (
+                f'Hay {total_pendientes_despacho} pendiente(s) de despacho '
+                f'activos. Resuélvelos antes de borrar el producto.'
+            ),
+            'cantidad': total_pendientes_despacho,
+            'detalle': [
+                {
+                    'pendiente_id': pd.id,
+                    'sucursal_destino': (
+                        pd.sucursal_destino.alias if pd.sucursal_destino else None
+                    ),
+                    'sku': pd.producto_talla.sku if pd.producto_talla else None,
+                    'cantidad': pd.cantidad,
+                    'cantidad_despachada': pd.cantidad_despachada,
+                }
+                for pd in ejemplos_pd
+            ],
+        })
+
+    # 4) NCs/Ajustes con stock pendiente de aplicar (líneas con faltantes).
+    #    Borrar acá rompería la opción de "Reparar stock histórico".
+    ncs_con_pendientes = []
+    ncs_qs = (
+        Dte.objects
+        .filter(documento_afectado__isnull=False)
+        .filter(
+            Q(es_nota_credito=True)
+            | Q(tipo_documento__in=[
+                'NOTA DE CREDITO', 'AJUSTE TRASPASO', 'AJUSTE TRASPASO POST',
+            ])
+        )
+        .filter(
+            documento_afectado__tipo_transaccion='TRASPASO',
+            dte_productos__productoTalla_id__in=tallas_ids,
+        )
+        .exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
+        .distinct()[:30]
+    )
+    for nc in ncs_qs:
+        diag = _diagnostico_nc(nc)
+        if diag and not diag['ya_reparado']:
+            ncs_con_pendientes.append({
+                'nc_id': nc.id,
+                'nc_numero': nc.numero_documento,
+                'tipo_documento': nc.tipo_documento,
+                'unidades_pendientes': diag.get('total_faltantes', 0),
+            })
+    if ncs_con_pendientes:
+        bloqueos.append({
+            'tipo': 'NC_PENDIENTES_REPARAR',
+            'mensaje': (
+                f'Hay {len(ncs_con_pendientes)} NC/Ajuste con stock no aplicado. '
+                f'Repara stock histórico antes de borrar.'
+            ),
+            'cantidad': len(ncs_con_pendientes),
+            'detalle': ncs_con_pendientes[:5],
+        })
+
+    # 5) Stock > 0 en cualquier sucursal. Borrar mercadería con stock real
+    #    es una destrucción contable; obligamos a moverlo o ajustarlo antes.
+    tallas_con_stock = list(
+        Producto_Talla.objects
+        .filter(id__in=tallas_ids, stock__gt=0)
+        .select_related('producto', 'producto__sucursal')[:5]
+    )
+    total_con_stock = (
+        Producto_Talla.objects
+        .filter(id__in=tallas_ids, stock__gt=0)
+        .count()
+    )
+    if total_con_stock:
+        bloqueos.append({
+            'tipo': 'STOCK_NO_NULO',
+            'mensaje': (
+                f'Hay {total_con_stock} talla(s) con stock > 0. '
+                f'Mueve, vende o ajusta el stock a 0 antes de borrar.'
+            ),
+            'cantidad': total_con_stock,
+            'detalle': [
+                {
+                    'sku': t.sku,
+                    'talla': t.talla,
+                    'stock': int(t.stock or 0),
+                    'sucursal': (
+                        t.producto.sucursal.alias
+                        if t.producto and t.producto.sucursal else None
+                    ),
+                }
+                for t in tallas_con_stock
+            ],
+        })
+
+    return bloqueos
+
+
 def eliminar_producto_todas_sucursales(request):
     """
     Elimina un producto del catálogo en TODAS las sucursales.
@@ -10419,6 +10621,13 @@ def eliminar_producto_todas_sucursales(request):
     tanto, desenlazamos esas recepciones (producto_talla = NULL). Así
     reaparecen como "Pendientes de crear" en la tabla principal y pueden
     re-crearse correctamente después.
+
+    BLOQUEOS (409 si alguno aplica):
+        • TRASPASO_EN_TRANSITO  — DTE traspaso emitido sin recepcionar.
+        • TICKETS_POS_PENDIENTES — ventas POS abiertas con esta talla.
+        • PENDIENTES_DESPACHO   — `PendienteDespacho` PENDIENTE/PARCIAL.
+        • NC_PENDIENTES_REPARAR — NCs con stock no aplicado (faltantes).
+        • STOCK_NO_NULO         — alguna talla con stock > 0.
     """
     try:
         data = json.loads(request.body)
@@ -10455,6 +10664,20 @@ def eliminar_producto_todas_sucursales(request):
         tallas_ids = list(
             Producto_Talla.objects.filter(producto_id__in=producto_ids).values_list('id', flat=True)
         )
+
+        # Bloqueos duros: si hay TRASPASO en tránsito, ventas POS pendientes,
+        # PendienteDespacho activo, NCs sin reparar, o stock > 0 → 409.
+        bloqueos = _detectar_bloqueos_eliminacion_producto(tallas_ids, producto_ids)
+        if bloqueos:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    'No se puede eliminar el producto: hay datos vivos que '
+                    'quedarían huérfanos. Resuélvelos antes de borrar.'
+                ),
+                'bloqueado': True,
+                'bloqueos': bloqueos,
+            }, status=409)
 
         # Contadores previos para el resumen
         total_tallas = len(tallas_ids)
@@ -12793,6 +13016,525 @@ def api_reparar_stock_nc(request, nc_id):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
+@require_http_methods(["POST"])
+def api_crear_skus_destino(request, dte_id):
+    """
+    Replica en la sucursal destino del traspaso los `Producto`/`Producto_Talla`
+    de los SKUs indicados, cuando aún no existen allí. Sirve para habilitar
+    NCs/ajustes post-recepción cuando el destino nunca había recibido el
+    SKU antes (típico cuando el primer despacho falla y se necesita NC sin
+    haber confirmado recepción).
+
+    Body JSON:
+        { "skus": [12345, 23456, ...] }
+
+    El stock destino se crea en 0 — la NC posterior generará el descuento
+    apropiado o quedará pendiente de regularización por el receptor.
+
+    Respuestas:
+        200 OK con `creados`, `existentes`, `errores`.
+        400 validación (DTE no es traspaso, sin SKUs, etc).
+        404 DTE no encontrado.
+    """
+    try:
+        body = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    skus_input = body.get('skus') or []
+    if not isinstance(skus_input, list) or not skus_input:
+        return JsonResponse({
+            'success': False,
+            'error': 'Debe enviar una lista no vacía de SKUs.',
+        }, status=400)
+
+    skus_set = set()
+    for s in skus_input:
+        try:
+            skus_set.add(int(s))
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': f'SKU inválido: {s!r}',
+            }, status=400)
+
+    try:
+        dte = (
+            Dte.objects
+            .select_related('sucursal')
+            .get(id=dte_id)
+        )
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    if dte.tipo_transaccion != 'TRASPASO':
+        return JsonResponse({
+            'success': False,
+            'error': 'Sólo aplica a DTE de traspaso.',
+        }, status=400)
+
+    sucursal_destino = _sucursal_destino_traspaso(dte)
+    if sucursal_destino is None:
+        return JsonResponse({
+            'success': False,
+            'error': 'No se pudo identificar la sucursal destino del traspaso.',
+        }, status=400)
+
+    # Sólo el emisor puede solicitar la replicación.
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    if sucursal_actual_id and dte.sucursal_id != int(sucursal_actual_id):
+        return JsonResponse({
+            'success': False,
+            'error': 'Sólo la sucursal emisora puede replicar SKUs en destino.',
+        }, status=403)
+
+    # Buscar tallas de origen para los SKUs solicitados.
+    tallas_origen = {
+        t.sku: t for t in (
+            Producto_Talla.objects
+            .filter(sku__in=skus_set, producto__sucursal_id=dte.sucursal_id)
+            .select_related('producto')
+        )
+    }
+    tallas_destino_existentes = set(
+        Producto_Talla.objects
+        .filter(sku__in=skus_set, producto__sucursal_id=sucursal_destino.id)
+        .values_list('sku', flat=True)
+    )
+
+    creados = []
+    existentes = []
+    errores = []
+    usuario = request.user.username
+
+    try:
+        with transaction.atomic():
+            for sku in skus_set:
+                if sku in tallas_destino_existentes:
+                    existentes.append(sku)
+                    continue
+                talla_origen = tallas_origen.get(sku)
+                if talla_origen is None:
+                    errores.append({
+                        'sku': sku,
+                        'error': 'No existe en sucursal origen del DTE.',
+                    })
+                    continue
+                producto_origen = talla_origen.producto
+                if producto_origen is None:
+                    errores.append({
+                        'sku': sku,
+                        'error': 'Producto_Talla sin Producto asociado.',
+                    })
+                    continue
+
+                # Reusar Producto existente en destino si hay coincidencia
+                # exacta de articulo + atributos (igual criterio que
+                # confirmar_recepcion_api). Si no, crear uno nuevo.
+                producto_destino_qs = Producto.objects.filter(
+                    articulo=producto_origen.articulo,
+                    sucursal=sucursal_destino,
+                    atributo1=producto_origen.atributo1,
+                    atributo2=producto_origen.atributo2,
+                    atributo3=producto_origen.atributo3,
+                    atributo4=producto_origen.atributo4,
+                ).order_by('id')
+                producto_destino = producto_destino_qs.first()
+                if producto_destino is None:
+                    producto_destino = Producto.objects.create(
+                        articulo=producto_origen.articulo,
+                        sucursal=sucursal_destino,
+                        atributo1=producto_origen.atributo1,
+                        atributo2=producto_origen.atributo2,
+                        atributo3=producto_origen.atributo3,
+                        atributo4=producto_origen.atributo4,
+                        descripcion=producto_origen.descripcion,
+                        categoria=producto_origen.categoria,
+                        costo=producto_origen.costo,
+                        sobreprecio=producto_origen.sobreprecio,
+                        precioventa=producto_origen.precioventa,
+                        precioSugerido=producto_origen.precioSugerido,
+                        tipo_talla=producto_origen.tipo_talla,
+                        guia_talla=producto_origen.guia_talla,
+                    )
+
+                Producto_Talla.objects.create(
+                    producto=producto_destino,
+                    talla=talla_origen.talla,
+                    sku=sku,
+                    stock=0,
+                )
+                creados.append({
+                    'sku': sku,
+                    'talla': talla_origen.talla,
+                    'articulo': producto_origen.articulo,
+                })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al replicar SKUs: {e}',
+        }, status=500)
+
+    logger.info(
+        "Replicación SKUs en destino: dte=%s destino=%s creados=%s existentes=%s errores=%s usuario=%s",
+        dte.id, sucursal_destino.alias, len(creados), len(existentes), len(errores), usuario,
+    )
+
+    return JsonResponse({
+        'success': True,
+        'sucursal_destino': {
+            'id': sucursal_destino.id,
+            'alias': sucursal_destino.alias,
+        },
+        'creados': creados,
+        'existentes': existentes,
+        'errores': errores,
+        'message': (
+            f'{len(creados)} SKU(s) replicados en {sucursal_destino.alias}. '
+            f'{len(existentes)} ya existían'
+            f'{f", {len(errores)} con error" if errores else ""}.'
+        ),
+    })
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
+@require_http_methods(["POST"])
+def api_crear_stock_destino_manual(request, dte_id):
+    """
+    Permite al emisor "forzar" la creación de stock en la sucursal destino
+    de un DTE de TRASPASO sin pasar por el flujo normal de
+    `confirmar_recepcion_api`. Útil cuando el receptor no puede recepcionar
+    (problemas de acceso, recepción retroactiva, etc.) pero la mercadería
+    ya está físicamente en destino.
+
+    Body JSON:
+        {
+            "items": [
+                {"sku": 12345, "stock_final": 5},
+                {"sku": 12346, "stock_final": 3}
+            ],
+            "motivo": "Recepción manual: usuario X en bodega"
+        }
+
+    Validaciones:
+        - DTE debe ser TRASPASO con sucursal_destino identificable.
+        - DTE NO debe tener NC/Ajuste asociado (si tiene, usar el flujo
+          normal de NC en su lugar).
+        - Sólo el emisor puede invocar la acción.
+        - Motivo obligatorio.
+
+    Comportamiento (transacción atómica):
+        1. Por cada item:
+           - Crea `Producto_Talla` en destino si no existe (stock=0).
+           - Calcula delta = stock_final - stock_actual.
+           - Aplica delta a `Producto_Talla.stock` del destino.
+           - Crea `Movimientos_Producto` con concepto
+             `AJUSTE_STOCK_MANUAL_DESTINO`, INGRESO si delta>0,
+             EGRESO si delta<0. Si delta=0 no crea movimiento.
+        2. Marca el DTE como `RECEPCIONADO_COMPLETO` con
+           `fecha_recepcion=hoy` y registra el motivo en `referencias`.
+
+    Respuesta:
+        200 OK con `creados`, `stock_delta`, `dte_estado`.
+        400 / 404 / 409 según el error.
+    """
+    try:
+        body = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    items_input = body.get('items') or []
+    motivo = (body.get('motivo') or '').strip()
+
+    if not isinstance(items_input, list) or not items_input:
+        return JsonResponse({
+            'success': False,
+            'error': 'Debe enviar al menos un item con sku y stock_final.',
+        }, status=400)
+    if not motivo:
+        return JsonResponse({
+            'success': False,
+            'error': 'El motivo es obligatorio para auditoría.',
+        }, status=400)
+
+    items_normalizados = []
+    skus_set = set()
+    for it in items_input:
+        try:
+            sku = int(it.get('sku'))
+            stock_final = int(it.get('stock_final'))
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Item con formato inválido. Esperado {sku, stock_final}.',
+            }, status=400)
+        if stock_final < 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'stock_final no puede ser negativo (sku {sku}).',
+            }, status=400)
+        if sku in skus_set:
+            return JsonResponse({
+                'success': False,
+                'error': f'SKU {sku} duplicado en items.',
+            }, status=400)
+        skus_set.add(sku)
+        items_normalizados.append((sku, stock_final))
+
+    try:
+        dte = (
+            Dte.objects
+            .select_related('sucursal')
+            .get(id=dte_id)
+        )
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    if dte.tipo_transaccion != 'TRASPASO':
+        return JsonResponse({
+            'success': False,
+            'error': 'Sólo aplica a DTE de traspaso.',
+        }, status=400)
+
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    if sucursal_actual_id and dte.sucursal_id != int(sucursal_actual_id):
+        return JsonResponse({
+            'success': False,
+            'error': 'Sólo la sucursal emisora puede crear stock en destino.',
+        }, status=403)
+
+    sucursal_destino = _sucursal_destino_traspaso(dte)
+    if sucursal_destino is None:
+        return JsonResponse({
+            'success': False,
+            'error': 'No se pudo identificar la sucursal destino del traspaso.',
+        }, status=400)
+
+    # Bloqueo: si el DTE ya tiene NC/Ajuste, el emisor debería usar el
+    # flujo de NC en lugar de "Crear stock". Mezclarlos lleva a stock
+    # inconsistente.
+    tiene_hijos = (
+        Dte.objects
+        .filter(documento_afectado=dte)
+        .exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
+        .exists()
+    )
+    if tiene_hijos:
+        return JsonResponse({
+            'success': False,
+            'error': (
+                'Este DTE ya tiene NC/Ajuste asociado. Usa el flujo de NC '
+                'para corregir cantidades, no la creación manual de stock.'
+            ),
+        }, status=409)
+
+    if dte.estado_dte in ('CANCELADO', 'ANULADO'):
+        return JsonResponse({
+            'success': False,
+            'error': f'El DTE está {dte.estado_dte}. No se puede crear stock.',
+        }, status=409)
+
+    usuario = request.user.username
+    hoy_dt = timezone.now()
+    creados = []
+    actualizados = []
+    movimientos_resumen = []
+    delta_total = 0
+
+    try:
+        with transaction.atomic():
+            # Pre-cargar tallas existentes en destino con lock.
+            tallas_destino = {
+                t.sku: t for t in (
+                    Producto_Talla.objects
+                    .select_for_update(of=('self',))
+                    .filter(
+                        sku__in=skus_set,
+                        producto__sucursal_id=sucursal_destino.id,
+                    )
+                    .select_related('producto')
+                )
+            }
+            # Pre-cargar tallas en origen (necesitamos referencia para
+            # crear el Producto en destino si falta).
+            tallas_origen = {
+                t.sku: t for t in (
+                    Producto_Talla.objects
+                    .filter(
+                        sku__in=skus_set,
+                        producto__sucursal_id=dte.sucursal_id,
+                    )
+                    .select_related('producto')
+                )
+            }
+
+            for sku, stock_final in items_normalizados:
+                talla_destino = tallas_destino.get(sku)
+                creada_ahora = False
+
+                if talla_destino is None:
+                    # Crear Producto_Talla en destino reusando atributos
+                    # del origen (igual a confirmar_recepcion_api).
+                    talla_origen = tallas_origen.get(sku)
+                    if talla_origen is None:
+                        transaction.set_rollback(True)
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'SKU {sku} no existe en sucursal origen del '
+                                f'DTE. No se puede replicar.'
+                            ),
+                        }, status=400)
+                    producto_origen = talla_origen.producto
+
+                    producto_destino = (
+                        Producto.objects.filter(
+                            articulo=producto_origen.articulo,
+                            sucursal=sucursal_destino,
+                            atributo1=producto_origen.atributo1,
+                            atributo2=producto_origen.atributo2,
+                            atributo3=producto_origen.atributo3,
+                            atributo4=producto_origen.atributo4,
+                        ).order_by('id').first()
+                    )
+                    if producto_destino is None:
+                        producto_destino = Producto.objects.create(
+                            articulo=producto_origen.articulo,
+                            sucursal=sucursal_destino,
+                            atributo1=producto_origen.atributo1,
+                            atributo2=producto_origen.atributo2,
+                            atributo3=producto_origen.atributo3,
+                            atributo4=producto_origen.atributo4,
+                            descripcion=producto_origen.descripcion,
+                            categoria=producto_origen.categoria,
+                            costo=producto_origen.costo,
+                            sobreprecio=producto_origen.sobreprecio,
+                            precioventa=producto_origen.precioventa,
+                            precioSugerido=producto_origen.precioSugerido,
+                            tipo_talla=producto_origen.tipo_talla,
+                            guia_talla=producto_origen.guia_talla,
+                        )
+                    talla_destino = Producto_Talla.objects.create(
+                        producto=producto_destino,
+                        talla=talla_origen.talla,
+                        sku=sku,
+                        stock=0,
+                    )
+                    creada_ahora = True
+
+                stock_actual = int(talla_destino.stock or 0)
+                delta = stock_final - stock_actual
+
+                if delta != 0:
+                    Producto_Talla.objects.filter(id=talla_destino.id).update(
+                        stock=F('stock') + delta
+                    )
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=dte.sucursal if delta > 0 else sucursal_destino,
+                        sucursal_destino=sucursal_destino if delta > 0 else None,
+                        cantidad=delta,
+                        costo=talla_destino.producto.costo if talla_destino.producto else 0,
+                        sobreprecio=(
+                            talla_destino.producto.sobreprecio
+                            if talla_destino.producto else 0
+                        ),
+                        precio=(
+                            talla_destino.producto.precioventa
+                            if talla_destino.producto else 0
+                        ),
+                        concepto='AJUSTE_STOCK_MANUAL_DESTINO',
+                        tipo_movimiento='INGRESO' if delta > 0 else 'EGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=(
+                            f'Creación manual stock destino DTE '
+                            f'#{dte.numero_documento} (sku {sku}): '
+                            f'{stock_actual}→{stock_final}. Motivo: {motivo}'
+                        )[:500],
+                    )
+
+                movimientos_resumen.append({
+                    'sku': sku,
+                    'talla': talla_destino.talla,
+                    'stock_anterior': stock_actual,
+                    'stock_final': stock_final,
+                    'delta': delta,
+                    'creada_ahora': creada_ahora,
+                })
+                if creada_ahora:
+                    creados.append(sku)
+                else:
+                    actualizados.append(sku)
+                delta_total += delta
+
+            # Marcar el DTE como recepcionado (manualmente).
+            dte.estado_dte = 'RECEPCIONADO_COMPLETO'
+            dte.fecha_recepcion = timezone.localdate()
+            registro = (
+                f"\n[STOCK MANUAL DESTINO] {hoy_dt.strftime('%Y-%m-%d %H:%M')} "
+                f"{usuario} → {sucursal_destino.alias}: "
+                f"{len(items_normalizados)} item(s), delta total {delta_total:+d}. "
+                f"Motivo: {motivo}"
+            )
+            dte.referencias = ((dte.referencias or '') + registro).strip()
+            dte.save(update_fields=['estado_dte', 'fecha_recepcion', 'referencias'])
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al crear stock: {e}',
+        }, status=500)
+
+    # Stock final por SKU para refresco de UI.
+    stock_delta = []
+    for t in (
+        Producto_Talla.objects
+        .filter(sku__in=skus_set, producto__sucursal_id=sucursal_destino.id)
+        .select_related('producto', 'producto__sucursal')
+    ):
+        stock_delta.append({
+            'sku': t.sku,
+            'talla': t.talla,
+            'sucursal_id': t.producto.sucursal_id,
+            'sucursal_alias': t.producto.sucursal.alias if t.producto.sucursal else None,
+            'stock': int(t.stock or 0),
+        })
+
+    logger.info(
+        "Crear stock manual destino: dte=%s destino=%s items=%s delta_total=%s usuario=%s motivo=%r",
+        dte.id, sucursal_destino.alias,
+        len(items_normalizados), delta_total, usuario, motivo,
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message': (
+            f'{len(items_normalizados)} item(s) procesados en '
+            f'{sucursal_destino.alias} (delta {delta_total:+d}). '
+            f'DTE marcado RECEPCIONADO_COMPLETO.'
+        ),
+        'dte_id': dte.id,
+        'dte_estado': dte.estado_dte,
+        'fecha_recepcion': dte.fecha_recepcion.strftime('%Y-%m-%d'),
+        'sucursal_destino': {
+            'id': sucursal_destino.id,
+            'alias': sucursal_destino.alias,
+        },
+        'creados': creados,
+        'actualizados': actualizados,
+        'movimientos': movimientos_resumen,
+        'stock_delta': stock_delta,
+    })
+
+
+@login_required
 @require_GET
 def api_stock_productos(request):
     """
@@ -12905,6 +13647,108 @@ def obtener_recepciones_compra(request, compra_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@login_required
+def obtener_pendientes_compra(request, compra_id):
+    """
+    Returns Compras_Producto_Talla items that still have units pending to be received
+    (stock > unidades_recibidas), excluding the synthetic __TOTAL__ row.
+    """
+    try:
+        compra = get_object_or_404(Compras, id=compra_id)
+
+        qs = Compras_Producto_Talla.objects.filter(
+            compra_producto__compras=compra
+        ).exclude(
+            talla=Compras_Producto_Talla.TALLA_SIN_DESGLOSAR
+        ).select_related('compra_producto').order_by(
+            'compra_producto__nombre', 'talla'
+        )
+
+        resultado = []
+        for pt in qs:
+            pendiente_qty = max(0, pt.stock - pt.unidades_recibidas)
+            if pendiente_qty <= 0:
+                continue
+            cp = pt.compra_producto
+            tiene_recepcion = Productos_Recepcionados.objects.filter(
+                compra_producto_talla=pt
+            ).exists()
+            resultado.append({
+                'id': pt.id,
+                'compra_producto_id': cp.id,
+                'producto_nombre': cp.nombre,
+                'producto_marca': cp.atributo1 or '',
+                'producto_color': cp.atributo2 or '',
+                'talla': pt.talla,
+                'stock_pedido': pt.stock,
+                'unidades_recibidas': pt.unidades_recibidas,
+                'pendiente': pendiente_qty,
+                'estado_item': pt.estado_item,
+                'costo': float(cp.costo) if cp.costo else 0,
+                'puede_eliminar': not tiene_recepcion and pt.unidades_recibidas == 0,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'pendientes': resultado,
+            'total_pedido': sum(p['stock_pedido'] for p in resultado),
+            'total_pendiente': sum(p['pendiente'] for p in resultado),
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def eliminar_pendientes_compra_masivo(request):
+    """
+    Bulk-deletes Compras_Producto_Talla items that have never been received
+    (unidades_recibidas == 0 and no linked Productos_Recepcionados).
+    """
+    try:
+        data = json.loads(request.body)
+        ids = data.get('ids', [])
+        if not ids:
+            return JsonResponse({'success': False, 'error': 'No se proporcionaron IDs'}, status=400)
+
+        eliminados = 0
+        errores = []
+
+        for pt_id in ids:
+            try:
+                pt = Compras_Producto_Talla.objects.get(id=pt_id)
+                if pt.unidades_recibidas > 0:
+                    errores.append(
+                        f'Talla {pt.talla} de "{pt.compra_producto.nombre}" tiene recepciones parciales.'
+                    )
+                    continue
+                if Productos_Recepcionados.objects.filter(compra_producto_talla=pt).exists():
+                    errores.append(
+                        f'Talla {pt.talla} de "{pt.compra_producto.nombre}" ya tiene recepciones registradas.'
+                    )
+                    continue
+                pt.delete()
+                eliminados += 1
+            except Compras_Producto_Talla.DoesNotExist:
+                errores.append(f'Item ID {pt_id} no encontrado.')
+
+        mensaje = f'{eliminados} item(s) eliminado(s) correctamente.'
+        if errores:
+            mensaje += ' Omitidos: ' + '; '.join(errores[:5])
+
+        return JsonResponse({
+            'success': True,
+            'eliminados': eliminados,
+            'errores': errores,
+            'message': mensaje,
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @require_POST
@@ -23261,6 +24105,28 @@ def anular_factura_dte(request):
     if dte.emisor_id != empresa_actual_id:
         return JsonResponse({'error': 'Sin permiso sobre este DTE'}, status=403)
 
+    # ------------------------------------------------------------------
+    # Detección TRASPASO: cuando el DTE original es FACTURA/BOLETA pero
+    # tipo_transaccion='TRASPASO' (despacho a otra sucursal), la reversa
+    # de stock debe ir a destino/origen — no a la sucursal emisora.
+    # Sin esto, la NC inflaba stock origen y dejaba stock fantasma en
+    # destino, además de marcar el DTE como ANULADO (lo que lo sacaba
+    # del listado del receptor).
+    # ------------------------------------------------------------------
+    es_traspaso = (dte.tipo_transaccion == 'TRASPASO')
+    es_post_recepcion_traspaso = False
+    sucursal_destino_traspaso = None
+    if es_traspaso:
+        sucursal_destino_traspaso = _sucursal_destino_traspaso(dte)
+        es_post_recepcion_traspaso = _dte_es_post_recepcion(dte)
+        if es_post_recepcion_traspaso and sucursal_destino_traspaso is None:
+            return JsonResponse({
+                'error': (
+                    'No se pudo identificar la sucursal destino del traspaso. '
+                    'Revise los movimientos asociados al DTE.'
+                ),
+            }, status=400)
+
     # Calcular cuánto ya se ha creditado con NCs anteriores
     total_nc_previas = Dte.objects.filter(
         documento_afectado=dte,
@@ -23486,16 +24352,123 @@ def anular_factura_dte(request):
                 activo=True,
             )
 
-        # Reversar stock por línea en NC parcial con productos_afectados.
-        if usa_productos_afectados:
+        # ============================================================
+        # Reversa de stock: dos caminos según tipo_transaccion.
+        # - VENTA normal: stock vuelve a la sucursal emisora.
+        # - TRASPASO: depende de pre/post recepción (helper TRASPASO).
+        # ============================================================
+        usuario = request.user.username
+        if es_traspaso:
+            # Aplica lógica equivalente a `ajustar_dte_emisor_api` pero
+            # sin crear un doc trazador adicional (la NC ya se creó arriba).
+            # No marca el DTE original como ANULADO ni desactiva líneas en
+            # post-recepción → el receptor sigue viendo la trayectoria.
             for dp, cantidad in lineas_afectadas:
-                if dp.productoTalla_id:
-                    Producto_Talla.objects.filter(id=dp.productoTalla_id).update(
+                talla = dp.productoTalla
+                if talla is None:
+                    continue
+
+                if es_post_recepcion_traspaso:
+                    # Buscar Producto_Talla del destino (con lock).
+                    talla_destino = (
+                        Producto_Talla.objects
+                        .select_for_update(of=('self',))
+                        .filter(
+                            sku=talla.sku,
+                            producto__sucursal_id=sucursal_destino_traspaso.id,
+                        )
+                        .first()
+                    )
+                    if talla_destino is None:
+                        # set_rollback(True) marca la transacción para rollback
+                        # al salir del `with`, así NO queda la NC creada arriba.
+                        transaction.set_rollback(True)
+                        return JsonResponse({
+                            'error': (
+                                f'No existe el SKU {talla.sku} en la sucursal destino '
+                                f'({sucursal_destino_traspaso.alias}). No se puede descontar '
+                                f'stock para emitir la NC. Use "Crear en destino" desde el '
+                                f'modal Detalle DTE.'
+                            ),
+                            'sku_faltante_destino': True,
+                            'sku': talla.sku,
+                            'sucursal_destino_id': sucursal_destino_traspaso.id,
+                            'sucursal_destino_alias': sucursal_destino_traspaso.alias,
+                        }, status=409)
+
+                    talla_destino_actual = Producto_Talla.objects.only('stock').get(id=talla_destino.id)
+                    stock_destino_actual = int(talla_destino_actual.stock or 0)
+                    if stock_destino_actual < cantidad:
+                        transaction.set_rollback(True)
+                        return JsonResponse({
+                            'error': (
+                                f'Stock insuficiente en destino para {dp.descripcion} '
+                                f'(SKU {talla.sku}). Disponible: {stock_destino_actual}, '
+                                f'se intentó devolver: {cantidad}. '
+                                f'Si parte ya se vendió, el receptor debe regularizar.'
+                            ),
+                            'stock_insuficiente': True,
+                            'sku': talla.sku,
+                            'disponible_destino': stock_destino_actual,
+                            'solicitado': cantidad,
+                        }, status=409)
+
+                    # 1) EGRESO en destino (sale del receptor).
+                    Producto_Talla.objects.filter(id=talla_destino.id).update(
+                        stock=F('stock') - cantidad
+                    )
+                    Movimientos_Producto.objects.create(
+                        dte=nc,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=sucursal_destino_traspaso,
+                        sucursal_destino=None,
+                        cantidad=-cantidad,
+                        costo=dp.costo,
+                        sobreprecio=dp.sobreprecio,
+                        precio=dp.precio,
+                        concepto='DEVOLUCION_NC_POST_RECEPCION',
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=(
+                            f'NC #{nc.numero_documento} sobre DTE #{dte.numero_documento} '
+                            f'({dte.tipo_documento}): salida desde {sucursal_destino_traspaso.alias}'
+                        )[:500],
+                    )
+
+                    # 2) INGRESO en origen (vuelve al emisor).
+                    Producto_Talla.objects.filter(id=talla.id).update(
                         stock=F('stock') + cantidad
                     )
                     Movimientos_Producto.objects.create(
                         dte=nc,
-                        ProductoTalla=dp.productoTalla,
+                        ProductoTalla=talla,
+                        sucursal_origen=None,
+                        sucursal_destino=dte.sucursal,
+                        cantidad=cantidad,
+                        costo=dp.costo,
+                        sobreprecio=dp.sobreprecio,
+                        precio=dp.precio,
+                        concepto='DEVOLUCION_NC_POST_RECEPCION',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=(
+                            f'NC #{nc.numero_documento} sobre DTE #{dte.numero_documento} '
+                            f'({dte.tipo_documento}): reingreso a {dte.sucursal.alias}'
+                        )[:500],
+                    )
+                    # POST-RECEPCION: NO modificar dp.stock ni dp.activo.
+                    # Preserva el DTE como evidencia histórica de lo despachado.
+                else:
+                    # PRE-RECEPCION: el receptor todavía no recibió nada.
+                    # Devolver stock a origen y ajustar el TRASPASO_SALIDA.
+                    Producto_Talla.objects.filter(id=talla.id).update(
+                        stock=F('stock') + cantidad
+                    )
+                    Movimientos_Producto.objects.create(
+                        dte=nc,
+                        ProductoTalla=talla,
                         sucursal_origen=None,
                         sucursal_destino=dte.sucursal,
                         cantidad=cantidad,
@@ -23505,74 +24478,149 @@ def anular_factura_dte(request):
                         concepto='DEVOLUCION_NC',
                         tipo_movimiento='INGRESO',
                         estado='COMPLETADO',
-                        responsable=request.user.username,
+                        responsable=usuario,
                         observaciones=(
-                            f'Devolución parcial NC #{nc.numero_documento} '
-                            f'(DTE #{dte.numero_documento}): {cantidad} uds.'
+                            f'NC #{nc.numero_documento} sobre DTE #{dte.numero_documento} '
+                            f'({dte.tipo_documento}): reversa pre-recepción a {dte.sucursal.alias}'
                         )[:500],
                     )
-                # Reducir stock en la línea del DTE original.
-                nuevo_stock = int(dp.stock or 0) - cantidad
-                dp.stock = max(0, nuevo_stock)
-                if dp.stock == 0:
-                    dp.activo = False
-                dp.save(update_fields=['stock', 'activo'])
+                    # Ajustar el movimiento TRASPASO_SALIDA original para que
+                    # refleje las nuevas cantidades efectivamente despachadas.
+                    mov_salida = (
+                        Movimientos_Producto.objects
+                        .select_for_update()
+                        .filter(
+                            dte=dte,
+                            ProductoTalla=talla,
+                            concepto='TRASPASO_SALIDA',
+                            tipo_movimiento='EGRESO',
+                        )
+                        .first()
+                    )
+                    if mov_salida is not None:
+                        nueva_cant_salida = abs(mov_salida.cantidad) - cantidad
+                        if nueva_cant_salida <= 0:
+                            mov_salida.delete()
+                        else:
+                            mov_salida.cantidad = -nueva_cant_salida
+                            mov_salida.observaciones = (
+                                (mov_salida.observaciones or '')
+                                + f' [NC #{nc.numero_documento}: -{cantidad}]'
+                            )[:500]
+                            mov_salida.save(update_fields=['cantidad', 'observaciones'])
+                    # Reducir stock en la línea del DTE original.
+                    nuevo_stock = int(dp.stock or 0) - cantidad
+                    dp.stock = max(0, nuevo_stock)
+                    if dp.stock == 0:
+                        dp.activo = False
+                    dp.save(update_fields=['stock', 'activo'])
 
-            # Recalcular totales del DTE original.
-            productos_activos = dte.dte_productos.filter(activo=True)
-            nuevo_neto = productos_activos.aggregate(
-                s=Sum(F('stock') * F('precio'))
-            )['s'] or Decimal('0')
-            nuevas_unidades = productos_activos.aggregate(u=Sum('stock'))['u'] or 0
-            nuevo_con_iva = (Decimal(nuevo_neto) * Decimal('1.19')).quantize(Decimal('1'))
+            # Recalcular totales del DTE original solo en pre-recepción
+            # (en post-recepción el DTE conserva los montos originales).
+            if not es_post_recepcion_traspaso:
+                productos_activos = dte.dte_productos.filter(activo=True)
+                nuevo_neto = productos_activos.aggregate(
+                    s=Sum(F('stock') * F('precio'))
+                )['s'] or Decimal('0')
+                nuevas_unidades = productos_activos.aggregate(u=Sum('stock'))['u'] or 0
+                nuevo_con_iva = (Decimal(nuevo_neto) * Decimal('1.19')).quantize(Decimal('1'))
 
-            dte.monto_neto = Decimal(nuevo_neto)
-            dte.monto_con_iva = nuevo_con_iva
-            dte.unidades_productos = int(nuevas_unidades)
-            if int(nuevas_unidades) == 0 or es_anulacion_total:
-                dte.estado_dte = 'ANULADO'
-                dte.save(update_fields=[
-                    'monto_neto', 'monto_con_iva', 'unidades_productos', 'estado_dte'
-                ])
-            else:
+                dte.monto_neto = Decimal(nuevo_neto)
+                dte.monto_con_iva = nuevo_con_iva
+                dte.unidades_productos = int(nuevas_unidades)
                 dte.save(update_fields=[
                     'monto_neto', 'monto_con_iva', 'unidades_productos'
                 ])
+            # IMPORTANTE: TRASPASO nunca se marca como ANULADO automáticamente
+            # — eso lo sacaba del listado del receptor. La trazabilidad queda
+            # en la NC y en el campo `referencias` del DTE.
 
-        # Revertir stock y marcar ANULADO en anulación total (flujo clásico,
-        # sin productos_afectados).
-        if es_anulacion_total and not usa_productos_afectados:
-            movimientos_original = Movimientos_Producto.objects.filter(
-                dte=dte,
-                tipo_movimiento='EGRESO',
-            ).select_related('ProductoTalla')
+        else:
+            # ----------- VENTA NORMAL (no traspaso) -----------
+            # Reversar stock por línea en NC parcial con productos_afectados.
+            if usa_productos_afectados:
+                for dp, cantidad in lineas_afectadas:
+                    if dp.productoTalla_id:
+                        Producto_Talla.objects.filter(id=dp.productoTalla_id).update(
+                            stock=F('stock') + cantidad
+                        )
+                        Movimientos_Producto.objects.create(
+                            dte=nc,
+                            ProductoTalla=dp.productoTalla,
+                            sucursal_origen=None,
+                            sucursal_destino=dte.sucursal,
+                            cantidad=cantidad,
+                            costo=dp.costo,
+                            sobreprecio=dp.sobreprecio,
+                            precio=dp.precio,
+                            concepto='DEVOLUCION_NC',
+                            tipo_movimiento='INGRESO',
+                            estado='COMPLETADO',
+                            responsable=usuario,
+                            observaciones=(
+                                f'Devolución parcial NC #{nc.numero_documento} '
+                                f'(DTE #{dte.numero_documento}): {cantidad} uds.'
+                            )[:500],
+                        )
+                    nuevo_stock = int(dp.stock or 0) - cantidad
+                    dp.stock = max(0, nuevo_stock)
+                    if dp.stock == 0:
+                        dp.activo = False
+                    dp.save(update_fields=['stock', 'activo'])
 
-            for mov in movimientos_original:
-                cantidad_revertir = abs(mov.cantidad)
-                if cantidad_revertir > 0 and mov.ProductoTalla_id:
-                    Producto_Talla.objects.filter(id=mov.ProductoTalla_id).update(
-                        stock=F('stock') + cantidad_revertir
-                    )
-                    Movimientos_Producto.objects.create(
-                        dte=nc,
-                        ProductoTalla=mov.ProductoTalla,
-                        sucursal_origen=mov.sucursal_origen,
-                        sucursal_destino=mov.sucursal_destino,
-                        cantidad=cantidad_revertir,
-                        costo=mov.costo,
-                        sobreprecio=mov.sobreprecio,
-                        precio=mov.precio,
-                        concepto='ANULACION',
-                        tipo_movimiento='INGRESO',
-                        estado='COMPLETADO',
-                        responsable=request.user.username,
-                        observaciones=f'Anulación DTE #{dte.numero_documento} → NC #{nc.numero_documento}'
-                    )
+                productos_activos = dte.dte_productos.filter(activo=True)
+                nuevo_neto = productos_activos.aggregate(
+                    s=Sum(F('stock') * F('precio'))
+                )['s'] or Decimal('0')
+                nuevas_unidades = productos_activos.aggregate(u=Sum('stock'))['u'] or 0
+                nuevo_con_iva = (Decimal(nuevo_neto) * Decimal('1.19')).quantize(Decimal('1'))
 
-            movimientos_original.update(estado='CANCELADO')
+                dte.monto_neto = Decimal(nuevo_neto)
+                dte.monto_con_iva = nuevo_con_iva
+                dte.unidades_productos = int(nuevas_unidades)
+                if int(nuevas_unidades) == 0 or es_anulacion_total:
+                    dte.estado_dte = 'ANULADO'
+                    dte.save(update_fields=[
+                        'monto_neto', 'monto_con_iva', 'unidades_productos', 'estado_dte'
+                    ])
+                else:
+                    dte.save(update_fields=[
+                        'monto_neto', 'monto_con_iva', 'unidades_productos'
+                    ])
 
-            dte.estado_dte = 'ANULADO'
-            dte.save(update_fields=['estado_dte'])
+            # Anulación total clásica (sin productos_afectados).
+            if es_anulacion_total and not usa_productos_afectados:
+                movimientos_original = Movimientos_Producto.objects.filter(
+                    dte=dte,
+                    tipo_movimiento='EGRESO',
+                ).select_related('ProductoTalla')
+
+                for mov in movimientos_original:
+                    cantidad_revertir = abs(mov.cantidad)
+                    if cantidad_revertir > 0 and mov.ProductoTalla_id:
+                        Producto_Talla.objects.filter(id=mov.ProductoTalla_id).update(
+                            stock=F('stock') + cantidad_revertir
+                        )
+                        Movimientos_Producto.objects.create(
+                            dte=nc,
+                            ProductoTalla=mov.ProductoTalla,
+                            sucursal_origen=mov.sucursal_origen,
+                            sucursal_destino=mov.sucursal_destino,
+                            cantidad=cantidad_revertir,
+                            costo=mov.costo,
+                            sobreprecio=mov.sobreprecio,
+                            precio=mov.precio,
+                            concepto='ANULACION',
+                            tipo_movimiento='INGRESO',
+                            estado='COMPLETADO',
+                            responsable=usuario,
+                            observaciones=f'Anulación DTE #{dte.numero_documento} → NC #{nc.numero_documento}'
+                        )
+
+                movimientos_original.update(estado='CANCELADO')
+
+                dte.estado_dte = 'ANULADO'
+                dte.save(update_fields=['estado_dte'])
 
     # 6. Construir datos para TXT NC
     from collections import defaultdict
@@ -23852,12 +24900,25 @@ def editar_folio_dte(request):
 @login_required
 @require_GET
 def detalle_dte(request, dte_id):
-    """Retorna el detalle de un DTE de ventas, con productos y pagos"""
+    """Retorna el detalle de un DTE de ventas, con productos y pagos.
+
+    Si el DTE es TRASPASO, agrega:
+      - sucursal_destino del traspaso (alias del receptor de stock).
+      - documento_afectado (cuando este DTE es NC/AJUSTE).
+      - documentos_hijos: TODAS las NC y AJUSTE TRASPASO/POST asociadas.
+      - productos[*].existe_en_destino y stock_destino_actual (replica
+        del Producto_Talla por SKU en la sucursal destino).
+      - productos[*].diagnostico_nc (faltantes según `_diagnostico_nc`
+        cuando este DTE es NC; o agregado de hijos cuando es padre).
+      - skus_faltantes_destino: lista de SKUs del DTE que aún no existen
+        en la sucursal destino, para habilitar creación masiva.
+      - totales_nc: agregados de unidades por reparar a nivel DTE.
+    """
     try:
         from django.db.models import Prefetch
 
         dte = (Dte.objects
-               .select_related('receptor', 'emisor', 'sucursal', 'vendedor')
+               .select_related('receptor', 'emisor', 'sucursal', 'vendedor', 'documento_afectado')
                .prefetch_related(
                    Prefetch('dte_productos', queryset=Dte_Productos.objects.select_related('productoTalla__producto')),
                    Prefetch('dte_asociado', queryset=Dte_Detalle_Pago.objects.all())
@@ -23873,16 +24934,133 @@ def detalle_dte(request, dte_id):
         if dte.sucursal_id != empresa_user.sucursal_id:
             return JsonResponse({'success': False, 'error': 'No tienes permiso para ver este DTE'}, status=403)
 
+        es_traspaso = dte.tipo_transaccion == 'TRASPASO'
+
+        # ----- TRASPASO: sucursal destino + diagnostico NC por SKU -----
+        sucursal_destino = _sucursal_destino_traspaso(dte) if es_traspaso else None
+
+        # Stock por SKU/sucursal (origen + destino) y SKUs faltantes en destino.
+        skus_dte = {
+            dp.productoTalla.sku for dp in dte.dte_productos.all()
+            if dp.productoTalla
+        }
+        stock_origen_por_sku = {}
+        stock_destino_por_sku = {}
+        skus_faltantes_destino = []
+        if es_traspaso and skus_dte:
+            sucursales_objetivo = [dte.sucursal_id]
+            if sucursal_destino:
+                sucursales_objetivo.append(sucursal_destino.id)
+            tallas_existentes = {}
+            for pt in (
+                Producto_Talla.objects
+                .filter(sku__in=skus_dte, producto__sucursal_id__in=sucursales_objetivo)
+                .select_related('producto')
+            ):
+                tallas_existentes.setdefault(pt.sku, set()).add(pt.producto.sucursal_id)
+                if pt.producto.sucursal_id == dte.sucursal_id:
+                    stock_origen_por_sku[pt.sku] = int(pt.stock or 0)
+                if sucursal_destino and pt.producto.sucursal_id == sucursal_destino.id:
+                    stock_destino_por_sku[pt.sku] = int(pt.stock or 0)
+
+            if sucursal_destino:
+                for dp in dte.dte_productos.all():
+                    if not dp.productoTalla:
+                        continue
+                    sku = dp.productoTalla.sku
+                    sucursales_con_sku = tallas_existentes.get(sku, set())
+                    if sucursal_destino.id not in sucursales_con_sku:
+                        skus_faltantes_destino.append({
+                            'sku': sku,
+                            'talla': dp.productoTalla.talla,
+                            'descripcion': dp.descripcion,
+                            'articulo': (
+                                dp.productoTalla.producto.articulo
+                                if dp.productoTalla.producto else ''
+                            ),
+                            'cantidad': dp.stock or 0,
+                        })
+
+        # ----- Documentos hijos (NC + AJUSTES) cuando este DTE es padre -----
+        es_nota_credito = bool(dte.es_nota_credito) or dte.tipo_documento in [
+            'NOTA DE CREDITO', 'NOTA_CREDITO',
+        ]
+        es_ajuste_traspaso = dte.tipo_documento in [
+            'AJUSTE TRASPASO', 'AJUSTE TRASPASO POST',
+        ]
+
+        documentos_hijos = []
+        if not es_nota_credito and not es_ajuste_traspaso:
+            hijos_qs = (
+                Dte.objects
+                .filter(documento_afectado=dte)
+                .order_by('-fecha_emision', '-id')
+            )
+            for hijo in hijos_qs:
+                documentos_hijos.append({
+                    'id': hijo.id,
+                    'tipo_documento': hijo.tipo_documento,
+                    'numero_documento': hijo.numero_documento,
+                    'fecha_emision': hijo.fecha_emision.strftime('%d/%m/%Y') if hijo.fecha_emision else None,
+                    'monto_con_iva': float(hijo.monto_con_iva or 0),
+                    'unidades_productos': int(hijo.unidades_productos or 0),
+                    'estado_dte': hijo.estado_dte,
+                    'es_nota_credito': bool(hijo.es_nota_credito),
+                    'motivo': (hijo.motivo_nc or '').strip(),
+                })
+
+        # ----- Diagnóstico de líneas con NC pendiente de aplicar a stock -----
+        # Si este DTE es NC -> diagnóstico directo.
+        # Si este DTE es padre -> agregar faltantes por SKU sumando todos los hijos.
+        faltantes_por_sku = {}  # sku -> {'cantidad_nc', 'reversado', 'faltantes', 'reparable'}
+        diag_self = None
+        ya_reparado_self = False
+        if (es_nota_credito or es_ajuste_traspaso) and dte.documento_afectado_id:
+            diag_self = _diagnostico_nc(dte)
+            if diag_self:
+                ya_reparado_self = bool(diag_self.get('ya_reparado'))
+                for ln in diag_self['lineas']:
+                    faltantes_por_sku[ln['sku']] = {
+                        'cantidad_nc': ln['cantidad_nc'],
+                        'reversado': ln['movimientos_existentes'],
+                        'faltantes': ln['faltantes'],
+                        'reparable': ln['reparable'],
+                    }
+        elif es_traspaso:
+            hijos_dtes = Dte.objects.filter(
+                documento_afectado=dte,
+            ).filter(
+                Q(es_nota_credito=True)
+                | Q(tipo_documento__in=['NOTA DE CREDITO', 'AJUSTE TRASPASO', 'AJUSTE TRASPASO POST'])
+            ).exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
+            for hijo in hijos_dtes:
+                d = _diagnostico_nc(hijo)
+                if not d:
+                    continue
+                for ln in d['lineas']:
+                    bucket = faltantes_por_sku.setdefault(ln['sku'], {
+                        'cantidad_nc': 0,
+                        'reversado': 0,
+                        'faltantes': 0,
+                        'reparable': True,
+                    })
+                    bucket['cantidad_nc'] += ln['cantidad_nc']
+                    bucket['reversado'] += ln['movimientos_existentes']
+                    bucket['faltantes'] += ln['faltantes']
+                    bucket['reparable'] = bucket['reparable'] and bool(ln['reparable'])
+
+        # ----- Productos enriquecidos -----
         productos = []
         total_detalle = 0
         for detalle in dte.dte_productos.all():
             producto = detalle.productoTalla.producto if detalle.productoTalla else None
             subtotal = (detalle.precio or 0) * (detalle.stock or 0)
             total_detalle += subtotal
-            productos.append({
+            sku = detalle.productoTalla.sku if detalle.productoTalla else None
+            row = {
                 'id': detalle.id,
                 'producto': producto.articulo if producto else detalle.descripcion,
-                'sku': detalle.productoTalla.sku if detalle.productoTalla else None,
+                'sku': sku,
                 'talla': detalle.productoTalla.talla if detalle.productoTalla else None,
                 'descripcion': detalle.descripcion,
                 'cantidad': detalle.stock,
@@ -23890,7 +25068,21 @@ def detalle_dte(request, dte_id):
                 'subtotal': subtotal,
                 'costo': detalle.costo,
                 'sobreprecio': detalle.sobreprecio,
-            })
+                'activo': bool(detalle.activo) if hasattr(detalle, 'activo') else True,
+            }
+            if es_traspaso:
+                row['stock_origen_actual'] = stock_origen_por_sku.get(sku)
+                row['existe_en_destino'] = (
+                    sucursal_destino is not None
+                    and sku is not None
+                    and sku in stock_destino_por_sku
+                )
+                row['stock_destino_actual'] = stock_destino_por_sku.get(sku)
+                if sku is not None and sku in faltantes_por_sku:
+                    row['diagnostico_nc'] = faltantes_por_sku[sku]
+                else:
+                    row['diagnostico_nc'] = None
+            productos.append(row)
 
         pagos = []
         total_pagado = 0
@@ -23912,12 +25104,42 @@ def detalle_dte(request, dte_id):
 
         saldo = float(dte.monto_con_iva) - float(total_pagado)
 
+        # Totales de NC pendientes (sólo TRASPASO).
+        totales_nc = None
+        if es_traspaso:
+            unidades_nc_total = sum(b['cantidad_nc'] for b in faltantes_por_sku.values())
+            unidades_pendientes = sum(b['faltantes'] for b in faltantes_por_sku.values())
+            unidades_reparadas = max(0, unidades_nc_total - unidades_pendientes)
+            totales_nc = {
+                'unidades_nc': unidades_nc_total,
+                'unidades_reparadas': unidades_reparadas,
+                'unidades_pendientes': unidades_pendientes,
+                'tiene_pendientes': unidades_pendientes > 0,
+                'ya_reparado_self': ya_reparado_self,
+            }
+
+        documento_afectado = None
+        if dte.documento_afectado_id:
+            padre = dte.documento_afectado
+            documento_afectado = {
+                'id': padre.id,
+                'tipo_documento': padre.tipo_documento,
+                'numero_documento': padre.numero_documento,
+                'fecha_emision': padre.fecha_emision.strftime('%d/%m/%Y') if padre.fecha_emision else None,
+                'monto_con_iva': float(padre.monto_con_iva or 0),
+                'estado_dte': padre.estado_dte,
+            }
+
         return JsonResponse({
             'success': True,
             'dte': {
                 'id': dte.id,
                 'numero_documento': dte.numero_documento,
                 'tipo_documento': dte.tipo_documento,
+                'tipo_transaccion': dte.tipo_transaccion,
+                'es_traspaso': es_traspaso,
+                'es_nota_credito': es_nota_credito,
+                'es_ajuste_traspaso': es_ajuste_traspaso,
                 'estado_dte': dte.estado_dte,
                 'estado_pago': dte.estado_pago,
                 'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else None,
@@ -23931,7 +25153,13 @@ def detalle_dte(request, dte_id):
                 'monto_con_iva': float(dte.monto_con_iva),
                 'descuento': float(dte.descuento),
                 'referencias': dte.referencias,
+                'motivo_nc': dte.motivo_nc,
                 'sucursal': dte.sucursal.alias if dte.sucursal else None,
+                'sucursal_id': dte.sucursal_id,
+                'sucursal_destino': (
+                    {'id': sucursal_destino.id, 'alias': sucursal_destino.alias}
+                    if sucursal_destino else None
+                ),
                 'vendedor': dte.vendedor.nombre if dte.vendedor else None,
                 'receptor': {
                     'nombre': dte.receptor.nombre if dte.receptor else '',
@@ -23951,6 +25179,10 @@ def detalle_dte(request, dte_id):
             },
             'productos': productos,
             'pagos': pagos,
+            'documento_afectado': documento_afectado,
+            'documentos_hijos': documentos_hijos,
+            'skus_faltantes_destino': skus_faltantes_destino,
+            'totales_nc': totales_nc,
             'totales': {
                 'total_detalle': total_detalle,
                 'total_pagado': total_pagado,
@@ -23961,6 +25193,8 @@ def detalle_dte(request, dte_id):
     except Dte.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'DTE no encontrado'}, status=404)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'success': False, 'error': f'Error al obtener el DTE: {str(e)}'}, status=500)
 
 
@@ -24111,14 +25345,30 @@ def cargar_dte_ventas(request):
                         'metodo_devolucion': cambio_nc.get_metodo_devolucion_display(),
                     }
             
+            # Para TRASPASO: identificar sucursal destino y si ya está
+            # recepcionado (define cuándo habilitar "Crear stock manual").
+            es_traspaso_dte = (dte.tipo_transaccion == 'TRASPASO')
+            sucursal_destino_info = None
+            if es_traspaso_dte:
+                suc_destino = _sucursal_destino_traspaso(dte)
+                if suc_destino:
+                    sucursal_destino_info = {
+                        'id': suc_destino.id,
+                        'alias': suc_destino.alias,
+                    }
+
             items.append({
                 'id': dte.id,
                 'receptor_nombre': dte.receptor.nombre if dte.receptor else 'Sin receptor',
                 'receptor_rut': dte.receptor.rut if dte.receptor else '',
                 'numero_documento': dte.numero_documento,
                 'tipo_documento': dte.tipo_documento,
+                'tipo_transaccion': dte.tipo_transaccion,
+                'es_traspaso': es_traspaso_dte,
+                'sucursal_destino': sucursal_destino_info,
                 'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y'),
                 'fecha_vencimiento': dte.fecha_vencimiento.strftime('%d/%m/%Y') if dte.fecha_vencimiento else '',
+                'fecha_recepcion': dte.fecha_recepcion.strftime('%d/%m/%Y') if dte.fecha_recepcion else None,
                 'monto_con_iva': float(dte.monto_con_iva),
                 'monto_neto': float(dte.monto_neto),
                 'descuento': float(dte.descuento),

@@ -758,6 +758,91 @@
     </div>
 </div>
 
+<!-- Modal Crear Stock Destino Manual -->
+<div class="modal fade nexo-modal" id="modalCrearStockDestino" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white;">
+                <h5 class="modal-title">
+                    <i class="bi bi-box-arrow-in-down me-2"></i>
+                    Crear stock en destino
+                    <span id="crearStockDteNumero" class="header-badge ms-2">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 mb-3 small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Esta acción <strong>crea o ajusta stock manualmente</strong> en la sucursal destino sin pasar
+                    por el flujo normal de recepción. Úsala sólo cuando el receptor no puede confirmar la guía
+                    pero la mercadería ya está físicamente en destino.
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <div class="nexo-info-row">
+                            <span class="nexo-info-label">Sucursal destino</span>
+                            <span id="crearStockSucursalDestino" class="nexo-info-value fw-bold">-</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="nexo-info-row">
+                            <span class="nexo-info-label">Estado actual DTE</span>
+                            <span id="crearStockEstadoDTE" class="nexo-badge nexo-badge-secondary">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="nexo-table-wrapper mb-3">
+                    <table class="table nexo-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Talla</th>
+                                <th>Producto</th>
+                                <th class="text-end">Despachado</th>
+                                <th class="text-end">Stock destino actual</th>
+                                <th class="text-end" style="width: 130px;">Stock final destino</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crearStockItemsBody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-3">
+                                    <div class="spinner-border spinner-border-sm me-2"></div>Cargando productos del DTE...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mb-2">
+                    <label for="crearStockMotivo" class="form-label fw-bold small">
+                        <i class="bi bi-pencil me-1"></i>Motivo <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" id="crearStockMotivo" class="form-control"
+                           placeholder="Ej: Recepción manual coordinada con bodega central por falla de sistema"
+                           maxlength="250">
+                </div>
+
+                <div id="crearStockResumen" class="alert alert-warning py-2 small mt-3 d-none">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Al confirmar, el DTE quedará marcado como <strong>RECEPCIONADO_COMPLETO</strong>
+                    con fecha de hoy y se generarán movimientos
+                    <code>AJUSTE_STOCK_MANUAL_DESTINO</code> por cada SKU con cambio.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <button type="button" class="nexo-btn" id="btnConfirmarCrearStock" style="background: var(--nexo-accent); color: white;">
+                    <i class="bi bi-check-circle me-1"></i>Aplicar y recepcionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Detalle DTE -->
 <div class="modal fade nexo-modal" id="modalDetalleDTE" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -870,9 +955,31 @@
                     </div>
                 </div>
 
+                <!-- Banner: documento padre cuando este DTE es NC/AJUSTE -->
+                <div id="detalleDocumentoAfectadoBox" class="alert alert-info py-2 mb-3 d-none">
+                    <i class="bi bi-link-45deg me-2"></i>
+                    Esta NC/Ajuste afecta a
+                    <strong id="detalleDocAfectadoTexto">-</strong>
+                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" id="btnVerDocAfectado">
+                        <i class="bi bi-eye me-1"></i>Ver padre
+                    </button>
+                </div>
+
+                <!-- Banner: TRASPASO con sucursal destino -->
+                <div id="detalleDestinoTraspasoBox" class="alert alert-secondary py-2 mb-3 d-none">
+                    <i class="bi bi-truck me-2"></i>
+                    Traspaso a sucursal destino:
+                    <strong id="detalleSucursalDestinoTexto">-</strong>
+                    <span id="detalleEstadoTraspaso" class="badge bg-secondary ms-2">-</span>
+                </div>
+
                 <div class="mb-4">
                     <h6 class="nexo-info-box-title mb-3">
                         <i class="bi bi-box-seam me-2"></i>Productos Asociados
+                        <span id="detalleProductosBadgeFaltantes" class="badge bg-warning text-dark ms-2 d-none">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            <span id="detalleProductosBadgeFaltantesTexto">0</span> con NC pendiente
+                        </span>
                     </h6>
                     <div class="nexo-table-wrapper">
                         <table class="table nexo-table align-middle mb-0">
@@ -884,14 +991,103 @@
                                     <th class="text-end">Cantidad</th>
                                     <th class="text-end">Precio Unit.</th>
                                     <th class="text-end">Subtotal</th>
+                                    <th class="text-end traspaso-only d-none">Stock destino</th>
+                                    <th class="text-end traspaso-only d-none">NC aplicada</th>
                                 </tr>
                             </thead>
                             <tbody id="detalleProductosBody">
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-3">Sin productos asociados</td>
+                                    <td colspan="8" class="text-center text-muted py-3">Sin productos asociados</td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- Sección: NC y Ajustes Asociados (sólo TRASPASO o si hay hijos) -->
+                <div id="detalleHijosSection" class="mb-4 d-none">
+                    <h6 class="nexo-info-box-title mb-3">
+                        <i class="bi bi-receipt-cutoff me-2"></i>
+                        NC y Ajustes Asociados
+                        <span id="detalleHijosCount" class="badge bg-secondary ms-2">0</span>
+                    </h6>
+                    <div class="nexo-table-wrapper">
+                        <table class="table nexo-table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Folio</th>
+                                    <th>Fecha</th>
+                                    <th class="text-end">Unidades</th>
+                                    <th class="text-end">Monto</th>
+                                    <th>Estado</th>
+                                    <th>Motivo</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detalleHijosBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sección: NC pendientes de aplicar a stock -->
+                <div id="detalleNcPendientesSection" class="mb-4 d-none">
+                    <div class="alert alert-warning py-3">
+                        <div class="d-flex align-items-start">
+                            <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+                            <div class="flex-grow-1">
+                                <strong>NC con stock no aplicado</strong>
+                                <div class="small text-muted mt-1">
+                                    Hay
+                                    <strong id="detalleNcPendientesUds">0</strong>
+                                    unidades de NC que aún no se descontaron del stock real.
+                                    Esto pasa con NCs históricas que no generaron movimientos
+                                    de reversa.
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-warning btn-reparar-nc-stock" id="btnRepararNcDesdeDetalle">
+                                <i class="bi bi-tools me-1"></i>Reparar stock
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección: Productos faltantes en sucursal destino -->
+                <div id="detalleSkusFaltantesSection" class="mb-4 d-none">
+                    <div class="alert alert-danger py-3">
+                        <div class="d-flex align-items-start mb-2">
+                            <i class="bi bi-x-octagon-fill me-2 mt-1"></i>
+                            <div class="flex-grow-1">
+                                <strong>SKUs no replicados en sucursal destino</strong>
+                                <div class="small mt-1">
+                                    Estos SKUs aparecen en el DTE pero no existen como producto
+                                    en la sucursal destino. Mientras falten, no se pueden hacer
+                                    NC/ajustes post-recepción.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="nexo-table-wrapper mt-2">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;">
+                                            <input type="checkbox" id="chkFaltantesAll" checked>
+                                        </th>
+                                        <th>SKU</th>
+                                        <th>Talla</th>
+                                        <th>Producto</th>
+                                        <th class="text-end">Uds. en DTE</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detalleSkusFaltantesBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="mt-2 text-end">
+                            <button type="button" class="btn btn-sm btn-danger" id="btnCrearSkusDestino">
+                                <i class="bi bi-plus-circle me-1"></i>
+                                Crear seleccionados en destino
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -982,6 +1178,278 @@
         const dteId = parseInt($(this).data('dte-id'), 10);
         if (window.TrazabilidadDTE && dteId) {
             window.TrazabilidadDTE.abrir(dteId);
+        }
+    });
+
+    // ================================================================
+    // Modal Detalle DTE — handlers de las secciones nuevas
+    // ================================================================
+
+    // Abrir detalle del padre desde la NC.
+    $(document).on('click', '#btnVerDocAfectado', function () {
+        const dteId = parseInt($(this).data('dte-id'), 10);
+        if (dteId && typeof verDetalleDTE === 'function') {
+            verDetalleDTE(dteId);
+        }
+    });
+
+    // Ver detalle de un hijo (NC / AJUSTE) desde la tabla de hijos.
+    $(document).on('click', '.btn-ver-hijo-dte', function () {
+        const dteId = parseInt($(this).data('dte-id'), 10);
+        if (dteId && typeof verDetalleDTE === 'function') {
+            verDetalleDTE(dteId);
+        }
+    });
+
+    // Toggle "seleccionar todos" en la tabla de SKUs faltantes.
+    $(document).on('change', '#chkFaltantesAll', function () {
+        const checked = this.checked;
+        $('.chk-sku-faltante').prop('checked', checked);
+    });
+
+    // ================================================================
+    // Modal "Crear stock destino manual" (acción rápida desde la fila)
+    // ================================================================
+    let modalCrearStockInstance = null;
+
+    function _ensureModalCrearStock() {
+        if (!modalCrearStockInstance) {
+            const el = document.getElementById('modalCrearStockDestino');
+            if (el) modalCrearStockInstance = new bootstrap.Modal(el);
+        }
+        return modalCrearStockInstance;
+    }
+
+    $(document).on('click', '.btn-crear-stock-destino', async function () {
+        const dteId = parseInt($(this).data('dte-id'), 10);
+        if (!dteId) return;
+
+        $('#btnConfirmarCrearStock').data('dte-id', dteId);
+        $('#crearStockDteNumero').text('#' + dteId);
+        $('#crearStockMotivo').val('');
+        $('#crearStockResumen').addClass('d-none');
+        $('#crearStockItemsBody').html(`<tr><td colspan="6" class="text-center text-muted py-3">
+            <div class="spinner-border spinner-border-sm me-2"></div>Cargando productos del DTE...
+        </td></tr>`);
+
+        const modal = _ensureModalCrearStock();
+        if (modal) modal.show();
+
+        try {
+            const resp = await fetch(`/app/documentos/api/dte/${dteId}/`, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' },
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudo obtener detalle.');
+
+            const dte = data.dte;
+            $('#crearStockDteNumero').text(`#${dte.numero_documento || dteId}`);
+            $('#crearStockSucursalDestino').text(dte.sucursal_destino ? dte.sucursal_destino.alias : '—');
+            const estadoBadge = document.getElementById('crearStockEstadoDTE');
+            if (estadoBadge) {
+                estadoBadge.textContent = dte.estado_dte || '-';
+                estadoBadge.className = 'nexo-badge ' + (
+                    dte.estado_dte && dte.estado_dte.startsWith('RECEPCIONADO') ? 'nexo-badge-success' :
+                    dte.estado_dte === 'EMITIDO' ? 'nexo-badge-warning' : 'nexo-badge-secondary'
+                );
+            }
+
+            if (!dte.es_traspaso) {
+                $('#crearStockItemsBody').html(`<tr><td colspan="6" class="text-center text-danger py-3">
+                    Este DTE no es un traspaso. La acción no aplica.
+                </td></tr>`);
+                $('#btnConfirmarCrearStock').prop('disabled', true);
+                return;
+            }
+            if (!dte.sucursal_destino) {
+                $('#crearStockItemsBody').html(`<tr><td colspan="6" class="text-center text-danger py-3">
+                    No se identificó sucursal destino. Revisa los movimientos del DTE.
+                </td></tr>`);
+                $('#btnConfirmarCrearStock').prop('disabled', true);
+                return;
+            }
+
+            const productos = data.productos || [];
+            if (!productos.length) {
+                $('#crearStockItemsBody').html(`<tr><td colspan="6" class="text-center text-muted py-3">
+                    El DTE no tiene productos.
+                </td></tr>`);
+                $('#btnConfirmarCrearStock').prop('disabled', true);
+                return;
+            }
+
+            const rows = productos.filter(p => p.sku).map(p => {
+                const stockDestino = p.existe_en_destino ? (p.stock_destino_actual ?? 0) : null;
+                const stockDestinoCell = stockDestino === null
+                    ? `<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>No existe</span>`
+                    : `<span class="${stockDestino <= 0 ? 'text-warning fw-bold' : ''}">${stockDestino}</span>`;
+                const stockFinalDefault = p.cantidad ?? 0;
+                return `<tr data-sku="${p.sku}">
+                    <td><code>${p.sku}</code></td>
+                    <td><span class="badge bg-info text-dark">${p.talla ?? '-'}</span></td>
+                    <td>${p.producto || p.descripcion || '-'}</td>
+                    <td class="text-end">${p.cantidad ?? 0}</td>
+                    <td class="text-end">${stockDestinoCell}</td>
+                    <td class="text-end">
+                        <input type="number" min="0" class="form-control form-control-sm input-stock-final"
+                               style="text-align: right;" value="${stockFinalDefault}">
+                    </td>
+                </tr>`;
+            }).join('');
+            $('#crearStockItemsBody').html(rows || `<tr><td colspan="6" class="text-center text-muted py-3">
+                Sin SKUs válidos en el DTE.
+            </td></tr>`);
+            $('#crearStockResumen').removeClass('d-none');
+            $('#btnConfirmarCrearStock').prop('disabled', false);
+        } catch (e) {
+            $('#crearStockItemsBody').html(`<tr><td colspan="6" class="text-center text-danger py-3">
+                ${e.message || 'Error al cargar el DTE.'}
+            </td></tr>`);
+            $('#btnConfirmarCrearStock').prop('disabled', true);
+        }
+    });
+
+    $(document).on('click', '#btnConfirmarCrearStock', async function () {
+        const btn = this;
+        const dteId = parseInt($(btn).data('dte-id'), 10);
+        if (!dteId) return;
+
+        const motivo = $('#crearStockMotivo').val().trim();
+        if (!motivo) {
+            Swal.fire('Atención', 'Debes ingresar un motivo para la auditoría.', 'warning');
+            $('#crearStockMotivo').focus();
+            return;
+        }
+
+        const items = [];
+        $('#crearStockItemsBody tr[data-sku]').each(function () {
+            const sku = parseInt($(this).data('sku'), 10);
+            const stockFinal = parseInt($(this).find('.input-stock-final').val(), 10);
+            if (sku && !isNaN(stockFinal) && stockFinal >= 0) {
+                items.push({ sku, stock_final: stockFinal });
+            }
+        });
+        if (!items.length) {
+            Swal.fire('Atención', 'No hay items válidos para enviar.', 'warning');
+            return;
+        }
+
+        const confirmacion = await Swal.fire({
+            title: '¿Confirmar creación manual de stock?',
+            html: `Se aplicarán <strong>${items.length}</strong> ajuste(s) en destino y el DTE quedará marcado como <strong>RECEPCIONADO_COMPLETO</strong>.<br/><small class="text-muted">No se puede deshacer.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, aplicar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#00b894',
+        });
+        if (!confirmacion.isConfirmed) return;
+
+        const htmlOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Aplicando...`;
+
+        try {
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+            const resp = await fetch(`/app/api/dte/${dteId}/crear_stock_destino_manual/`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrf,
+                },
+                body: JSON.stringify({ items, motivo }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudo aplicar.');
+
+            Swal.fire({
+                title: 'Stock creado',
+                html: `${data.message}<br/><small>Creados: ${(data.creados || []).length}, actualizados: ${(data.actualizados || []).length}</small>`,
+                icon: 'success',
+            });
+
+            const modal = _ensureModalCrearStock();
+            if (modal) modal.hide();
+
+            // Refrescar la tabla del listado para mostrar el nuevo estado del DTE.
+            if (typeof cargarDTEs === 'function') cargarDTEs();
+        } catch (e) {
+            Swal.fire('Error', e.message || 'No se pudo aplicar.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = htmlOriginal;
+        }
+    });
+
+    // Crear SKUs faltantes en sucursal destino (replicación masiva).
+    $(document).on('click', '#btnCrearSkusDestino', async function () {
+        const btn = this;
+        const dteId = parseInt($(btn).data('dte-id'), 10);
+        if (!dteId) return;
+
+        const skus = $('.chk-sku-faltante:checked').map(function () {
+            return parseInt(this.value, 10);
+        }).get().filter(s => !!s);
+
+        if (!skus.length) {
+            Swal.fire('Atención', 'Selecciona al menos un SKU para replicar.', 'warning');
+            return;
+        }
+
+        const confirmacion = await Swal.fire({
+            title: '¿Replicar SKUs en destino?',
+            html: `Se crearán <strong>${skus.length}</strong> Producto/Producto_Talla en la sucursal destino con stock <strong>0</strong>.<br/><small class="text-muted">Esto NO mueve stock — sólo habilita futuras NC/ajustes post-recepción.</small>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, replicar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545',
+        });
+        if (!confirmacion.isConfirmed) return;
+
+        const htmlOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Replicando...`;
+
+        try {
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+            const resp = await fetch(`/app/api/dte/${dteId}/crear_skus_destino/`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrf,
+                },
+                body: JSON.stringify({ skus }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                throw new Error(data.error || 'No se pudo replicar.');
+            }
+
+            Swal.fire({
+                title: 'Replicación completada',
+                html: `${data.message}` + (
+                    (data.errores && data.errores.length)
+                        ? `<br/><br/><small class="text-danger">Errores: ${data.errores.map(e => `SKU ${e.sku}: ${e.error}`).join('<br/>')}</small>`
+                        : ''
+                ),
+                icon: data.errores && data.errores.length ? 'warning' : 'success',
+            });
+
+            // Refrescar el modal para que la sección de faltantes se oculte.
+            verDetalleDTE(dteId);
+        } catch (e) {
+            Swal.fire('Error', (e && e.message) || 'No se pudo replicar.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = htmlOriginal;
         }
     });
 
@@ -1346,6 +1814,10 @@
                 <i class="bi bi-pencil-square"></i>
             </button>` : ''}
             {% endif %}
+            ${dte.es_traspaso && dte.sucursal_destino && (!dte.nc_asociadas || dte.nc_asociadas.length === 0) && (!dte.ajustes_asociados || dte.ajustes_asociados.length === 0) && dte.estado_dte !== 'ANULADO' && dte.estado_dte !== 'CANCELADO' ? `
+            <button class="nexo-action-btn btn-crear-stock-destino" style="background: var(--nexo-accent); color: white;" title="Crear stock manualmente en sucursal destino (${dte.sucursal_destino.alias})" data-dte-id="${dte.id || 0}">
+                <i class="bi bi-box-arrow-in-down"></i>
+            </button>` : ''}
             <button class="nexo-action-btn btn-ver-trazabilidad" data-dte-id="${dte.id || 0}" title="Ver trazabilidad (compras origen, NC hijos, movimientos)">
                 <i class="bi bi-diagram-3"></i>
             </button>
@@ -1450,10 +1922,61 @@
                 $('#detalleTotalPagado').text(formatearMoneda(totales.total_pagado));
                 $('#detalleSaldoPendiente').text(formatearMoneda(totales.saldo_pendiente));
 
+                // ===== TRASPASO: banners + columnas extra =====
+                const esTraspaso = !!dte.es_traspaso;
+                const sucursalDestino = dte.sucursal_destino;
+                const totalesNc = response.totales_nc;
+                const docAfectado = response.documento_afectado;
+                const documentosHijos = response.documentos_hijos || [];
+                const skusFaltantes = response.skus_faltantes_destino || [];
+
+                $('.traspaso-only').toggleClass('d-none', !esTraspaso);
+
+                if (docAfectado) {
+                    $('#detalleDocAfectadoTexto').text(`${docAfectado.tipo_documento} #${docAfectado.numero_documento}`);
+                    $('#btnVerDocAfectado').data('dte-id', docAfectado.id);
+                    $('#detalleDocumentoAfectadoBox').removeClass('d-none');
+                } else {
+                    $('#detalleDocumentoAfectadoBox').addClass('d-none');
+                }
+
+                if (esTraspaso && sucursalDestino) {
+                    $('#detalleSucursalDestinoTexto').text(sucursalDestino.alias);
+                    let estado = 'Pendiente recepción';
+                    let cls = 'bg-warning text-dark';
+                    if (dte.fecha_recepcion) { estado = `Recepcionado ${dte.fecha_recepcion}`; cls = 'bg-success'; }
+                    if (dte.estado_dte === 'ANULADO') { estado = 'Anulado'; cls = 'bg-danger'; }
+                    $('#detalleEstadoTraspaso').text(estado).attr('class', `badge ${cls} ms-2`);
+                    $('#detalleDestinoTraspasoBox').removeClass('d-none');
+                } else {
+                    $('#detalleDestinoTraspasoBox').addClass('d-none');
+                }
+
                 const productosBody = $('#detalleProductosBody');
                 productosBody.empty();
                 if (productos && productos.length) {
+                    let countConFaltantes = 0;
                     productos.forEach(item => {
+                        let stockDestinoCell = '';
+                        let ncCell = '';
+                        if (esTraspaso) {
+                            if (item.existe_en_destino === false) {
+                                stockDestinoCell = `<td class="text-end traspaso-only"><span class="badge bg-danger" title="No existe Producto_Talla en sucursal destino"><i class="bi bi-x-circle me-1"></i>No existe</span></td>`;
+                            } else {
+                                const stockDest = item.stock_destino_actual ?? '-';
+                                const cls = (Number(stockDest) || 0) <= 0 ? 'text-warning fw-bold' : 'text-muted';
+                                stockDestinoCell = `<td class="text-end traspaso-only ${cls}">${stockDest}</td>`;
+                            }
+                            const diag = item.diagnostico_nc;
+                            if (diag && diag.faltantes > 0) {
+                                countConFaltantes++;
+                                ncCell = `<td class="text-end traspaso-only"><span class="badge bg-warning text-dark" title="NC: ${diag.cantidad_nc} | Reversado: ${diag.reversado} | Pendiente: ${diag.faltantes}"><i class="bi bi-hourglass-split me-1"></i>${diag.faltantes} pdte</span></td>`;
+                            } else if (diag) {
+                                ncCell = `<td class="text-end traspaso-only"><span class="badge bg-success" title="NC aplicada al stock"><i class="bi bi-check-circle me-1"></i>OK</span></td>`;
+                            } else {
+                                ncCell = `<td class="text-end traspaso-only text-muted">-</td>`;
+                            }
+                        }
                         productosBody.append(`
                             <tr>
                                 <td class="text-start">${item.producto || item.descripcion || '-'}</td>
@@ -1462,11 +1985,82 @@
                                 <td class="text-end">${item.cantidad ?? 0}</td>
                                 <td class="text-end">${formatearMoneda(item.precio_unitario)}</td>
                                 <td class="text-end"><strong>${formatearMoneda(item.subtotal)}</strong></td>
+                                ${stockDestinoCell}
+                                ${ncCell}
                             </tr>
                         `);
                     });
+                    if (countConFaltantes > 0) {
+                        $('#detalleProductosBadgeFaltantesTexto').text(countConFaltantes);
+                        $('#detalleProductosBadgeFaltantes').removeClass('d-none');
+                    } else {
+                        $('#detalleProductosBadgeFaltantes').addClass('d-none');
+                    }
                 } else {
-                    productosBody.html('<tr><td colspan="6" class="text-center text-muted py-3">Sin productos asociados</td></tr>');
+                    productosBody.html('<tr><td colspan="8" class="text-center text-muted py-3">Sin productos asociados</td></tr>');
+                    $('#detalleProductosBadgeFaltantes').addClass('d-none');
+                }
+
+                // ===== Sección: NC y Ajustes Asociados =====
+                const hijosBody = $('#detalleHijosBody');
+                hijosBody.empty();
+                if (documentosHijos.length) {
+                    $('#detalleHijosCount').text(documentosHijos.length);
+                    documentosHijos.forEach(h => {
+                        const estadoCls = h.estado_dte === 'ANULADO' ? 'bg-danger'
+                            : h.estado_dte === 'CANCELADO' ? 'bg-secondary'
+                            : 'bg-info text-dark';
+                        const tipoCls = h.es_nota_credito ? 'bg-warning text-dark' : 'bg-secondary';
+                        hijosBody.append(`
+                            <tr>
+                                <td><span class="badge ${tipoCls}">${h.tipo_documento}</span></td>
+                                <td><strong>#${h.numero_documento}</strong></td>
+                                <td><small>${h.fecha_emision || '-'}</small></td>
+                                <td class="text-end">${h.unidades_productos}</td>
+                                <td class="text-end">${formatearMoneda(h.monto_con_iva)}</td>
+                                <td><span class="badge ${estadoCls}">${h.estado_dte}</span></td>
+                                <td><small class="text-muted">${(h.motivo || '').substring(0, 80)}${(h.motivo || '').length > 80 ? '…' : ''}</small></td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary btn-ver-hijo-dte" data-dte-id="${h.id}">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `);
+                    });
+                    $('#detalleHijosSection').removeClass('d-none');
+                } else {
+                    $('#detalleHijosSection').addClass('d-none');
+                }
+
+                // ===== Sección: NC pendientes de aplicar a stock =====
+                if (totalesNc && totalesNc.tiene_pendientes && (dte.es_nota_credito || dte.es_ajuste_traspaso)) {
+                    $('#detalleNcPendientesUds').text(totalesNc.unidades_pendientes);
+                    $('#btnRepararNcDesdeDetalle').attr('data-nc-id', dte.id);
+                    $('#detalleNcPendientesSection').removeClass('d-none');
+                } else {
+                    $('#detalleNcPendientesSection').addClass('d-none');
+                }
+
+                // ===== Sección: SKUs faltantes en destino =====
+                const skusBody = $('#detalleSkusFaltantesBody');
+                skusBody.empty();
+                if (esTraspaso && skusFaltantes.length) {
+                    skusFaltantes.forEach(s => {
+                        skusBody.append(`
+                            <tr>
+                                <td><input type="checkbox" class="chk-sku-faltante" value="${s.sku}" checked></td>
+                                <td><code>${s.sku}</code></td>
+                                <td><span class="badge bg-info text-dark">${s.talla || '-'}</span></td>
+                                <td>${s.articulo || s.descripcion || '-'}</td>
+                                <td class="text-end">${s.cantidad}</td>
+                            </tr>
+                        `);
+                    });
+                    $('#btnCrearSkusDestino').data('dte-id', dte.id);
+                    $('#detalleSkusFaltantesSection').removeClass('d-none');
+                } else {
+                    $('#detalleSkusFaltantesSection').addClass('d-none');
                 }
 
                 const pagosBody = $('#detallePagosBody');

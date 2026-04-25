@@ -599,3 +599,561 @@ class ReparacionNcHistoricaTest(TestCase):
             dte=nc, concepto='REPARACION_STOCK_HISTORICO',
         ).count()
         self.assertEqual(movs_post_1, movs_post_2)
+
+
+# =========================================================================
+# Tests para `anular_factura_dte` cuando el DTE original es un TRASPASO.
+#
+# Bug histórico: la NC sobre FACTURA/BOLETA de TRASPASO usaba la lógica de
+# venta normal, lo que (a) inflaba stock origen sin descontar destino y
+# (b) marcaba el DTE como ANULADO, sacándolo del listado del receptor.
+# =========================================================================
+class AnularFacturaDteTraspasoTest(TestCase):
+    def setUp(self):
+        self.user = crear_usuario(rol='administrador')
+        self.empresa = crear_empresa()
+        self.sucursal_origen = crear_sucursal(self.empresa, alias='ORIGEN')
+        self.sucursal_destino = crear_sucursal(self.empresa, alias='DESTINO')
+        crear_empresa_user(self.user, self.empresa, self.sucursal_origen)
+
+        _, self.talla_origen = crear_producto_con_talla(
+            self.sucursal_origen, articulo='Zap Test', sku=5001, stock=10,
+        )
+        crear_correlativo(self.sucursal_origen, tipo_dte='NOTA DE CREDITO')
+
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal_origen.id
+        session['idEmpresaActual'] = self.empresa.id
+        session.save()
+
+    def _post_anular(self, dte_id, productos_afectados=None, motivo='Test anulación'):
+        body = {
+            'dte_id': dte_id,
+            'tipo_anulacion': 'ANULACION',
+            'metodo_devolucion': 'NO_AFECTA_CAJA',
+            'motivo': motivo,
+        }
+        if productos_afectados is not None:
+            body['productos_afectados'] = productos_afectados
+        return self.client.post(
+            '/app/documentos/anular-factura/',
+            data=json.dumps(body),
+            content_type='application/json',
+        )
+
+    def test_nc_traspaso_post_recepcion_descuenta_destino_y_no_anula(self):
+        """
+        Bugfix: NC sobre TRASPASO post-recepción debe descontar stock del
+        destino y reponerlo en origen, SIN marcar el DTE original como
+        ANULADO ni desactivar líneas (para que el receptor lo siga viendo).
+        """
+        # Replicar SKU en destino con 5 unidades (simula recepción).
+        _, talla_destino = crear_producto_con_talla(
+            self.sucursal_destino, articulo='Zap Test D', sku=5001, stock=5,
+        )
+        dte, dp = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5,
+            tipo_documento='FACTURA ELECTRONICA',
+        )
+        # Marcar como recepcionado.
+        from django.utils import timezone as tz
+        dte.estado_dte = 'RECEPCIONADO_COMPLETO'
+        dte.fecha_recepcion = tz.localdate()
+        dte.save(update_fields=['estado_dte', 'fecha_recepcion'])
+
+        self.talla_origen.refresh_from_db()
+        talla_destino.refresh_from_db()
+        stock_origen_antes = self.talla_origen.stock   # 5
+        stock_destino_antes = talla_destino.stock      # 5
+
+        resp = self._post_anular(
+            dte.id,
+            productos_afectados=[{'dte_producto_id': dp.id, 'cantidad': 3}],
+            motivo='Devolución parcial',
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        # Stock: destino bajó 3, origen subió 3.
+        self.talla_origen.refresh_from_db()
+        talla_destino.refresh_from_db()
+        self.assertEqual(self.talla_origen.stock, stock_origen_antes + 3)
+        self.assertEqual(talla_destino.stock, stock_destino_antes - 3)
+
+        # DTE original NO marcado ANULADO; línea sigue activa.
+        dte.refresh_from_db()
+        dp.refresh_from_db()
+        self.assertEqual(dte.estado_dte, 'RECEPCIONADO_COMPLETO')
+        self.assertNotEqual(dte.estado_dte, 'ANULADO')
+        self.assertTrue(dp.activo)
+        self.assertEqual(dp.stock, 5)  # post-recepción no modifica stock del DTE
+
+        # Movimientos correctos: EGRESO destino + INGRESO origen.
+        nc = Dte.objects.filter(documento_afectado=dte, es_nota_credito=True).first()
+        self.assertIsNotNone(nc)
+        movs = Movimientos_Producto.objects.filter(
+            dte=nc, concepto='DEVOLUCION_NC_POST_RECEPCION',
+        )
+        self.assertEqual(movs.count(), 2)
+        egreso = movs.filter(tipo_movimiento='EGRESO').first()
+        ingreso = movs.filter(tipo_movimiento='INGRESO').first()
+        self.assertEqual(egreso.ProductoTalla_id, talla_destino.id)
+        self.assertEqual(ingreso.ProductoTalla_id, self.talla_origen.id)
+        self.assertEqual(abs(egreso.cantidad), 3)
+        self.assertEqual(ingreso.cantidad, 3)
+
+    def test_nc_traspaso_post_recepcion_sin_sku_destino_devuelve_409(self):
+        """
+        Cuando el SKU no existe en sucursal destino, la NC devuelve 409 con
+        sku_faltante_destino=True (el frontend ofrece crear_skus_destino).
+        """
+        # NO se crea Producto_Talla en destino → el SKU sólo existe en origen.
+        dte, dp = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5,
+            tipo_documento='FACTURA ELECTRONICA',
+        )
+        from django.utils import timezone as tz
+        dte.estado_dte = 'RECEPCIONADO_COMPLETO'
+        dte.fecha_recepcion = tz.localdate()
+        dte.save(update_fields=['estado_dte', 'fecha_recepcion'])
+
+        resp = self._post_anular(
+            dte.id,
+            productos_afectados=[{'dte_producto_id': dp.id, 'cantidad': 2}],
+        )
+        self.assertEqual(resp.status_code, 409, resp.content)
+        data = resp.json()
+        self.assertTrue(data.get('sku_faltante_destino'))
+        self.assertEqual(data.get('sku'), self.talla_origen.sku)
+
+        # Nada se modificó: ni stock, ni DTE, ni NC creada.
+        self.talla_origen.refresh_from_db()
+        self.assertEqual(self.talla_origen.stock, 5)  # sigue post-traspaso
+        dte.refresh_from_db()
+        self.assertNotEqual(dte.estado_dte, 'ANULADO')
+        self.assertFalse(
+            Dte.objects.filter(documento_afectado=dte, es_nota_credito=True).exists()
+        )
+
+    def test_nc_traspaso_pre_recepcion_repone_origen_y_no_anula(self):
+        """
+        NC sobre TRASPASO pre-recepción: stock vuelve a origen, dp.stock se
+        reduce, pero el DTE NO se marca como ANULADO (el receptor lo sigue
+        viendo si quedan líneas activas).
+        """
+        dte, dp = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5,
+            tipo_documento='FACTURA ELECTRONICA',
+        )
+        # Pre-recepción: sin fecha_recepcion, estado EMITIDO.
+
+        self.talla_origen.refresh_from_db()
+        stock_origen_antes = self.talla_origen.stock  # 5
+
+        resp = self._post_anular(
+            dte.id,
+            productos_afectados=[{'dte_producto_id': dp.id, 'cantidad': 2}],
+            motivo='Quito 2 antes de recepción',
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        self.talla_origen.refresh_from_db()
+        self.assertEqual(self.talla_origen.stock, stock_origen_antes + 2)
+
+        # dp se redujo a 3, sigue activo.
+        dp.refresh_from_db()
+        self.assertEqual(dp.stock, 3)
+        self.assertTrue(dp.activo)
+
+        # DTE NO se marca ANULADO.
+        dte.refresh_from_db()
+        self.assertNotEqual(dte.estado_dte, 'ANULADO')
+
+        # NC creada con movimiento DEVOLUCION_NC.
+        nc = Dte.objects.filter(documento_afectado=dte, es_nota_credito=True).first()
+        self.assertIsNotNone(nc)
+        movs = Movimientos_Producto.objects.filter(
+            dte=nc, concepto='DEVOLUCION_NC',
+        )
+        self.assertEqual(movs.count(), 1)
+
+
+# =========================================================================
+# Tests para `api_crear_skus_destino`: replicación de SKUs en sucursal destino.
+# =========================================================================
+class CrearSkusDestinoTest(TestCase):
+    def setUp(self):
+        self.user = crear_usuario(rol='administrador')
+        self.empresa = crear_empresa()
+        self.sucursal_origen = crear_sucursal(self.empresa, alias='ORIGEN')
+        self.sucursal_destino = crear_sucursal(self.empresa, alias='DESTINO')
+        crear_empresa_user(self.user, self.empresa, self.sucursal_origen)
+
+        _, self.talla_origen = crear_producto_con_talla(
+            self.sucursal_origen, articulo='Zap Replicar', sku=6001, stock=10,
+        )
+
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal_origen.id
+        session['idEmpresaActual'] = self.empresa.id
+        session.save()
+
+    def test_crear_sku_destino_replica_producto_talla_con_stock_cero(self):
+        dte, _ = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=3,
+        )
+        # Antes: sin Producto_Talla en destino.
+        self.assertFalse(
+            Producto_Talla.objects.filter(
+                sku=6001, producto__sucursal=self.sucursal_destino,
+            ).exists()
+        )
+
+        with _patch_permiso_aprobar(), _patch_permiso_helper():
+            resp = self.client.post(
+                f'/app/api/dte/{dte.id}/crear_skus_destino/',
+                data=json.dumps({'skus': [6001]}),
+                content_type='application/json',
+            )
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['creados']), 1)
+        self.assertEqual(data['creados'][0]['sku'], 6001)
+
+        # Después: existe Producto_Talla en destino con stock=0.
+        talla_destino = Producto_Talla.objects.filter(
+            sku=6001, producto__sucursal=self.sucursal_destino,
+        ).first()
+        self.assertIsNotNone(talla_destino)
+        self.assertEqual(talla_destino.stock, 0)
+        # Producto en destino conserva costo / sobreprecio / precio del origen.
+        self.assertEqual(talla_destino.producto.articulo, 'Zap Replicar')
+
+    def test_crear_sku_destino_idempotente_si_ya_existe(self):
+        # Crear talla en destino previamente.
+        crear_producto_con_talla(
+            self.sucursal_destino, articulo='Zap Replicar D', sku=6001, stock=2,
+        )
+        dte, _ = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=3,
+        )
+
+        with _patch_permiso_aprobar(), _patch_permiso_helper():
+            resp = self.client.post(
+                f'/app/api/dte/{dte.id}/crear_skus_destino/',
+                data=json.dumps({'skus': [6001]}),
+                content_type='application/json',
+            )
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertEqual(len(data['creados']), 0)
+        self.assertIn(6001, data['existentes'])
+
+        # Stock destino no se tocó.
+        talla = Producto_Talla.objects.get(
+            sku=6001, producto__sucursal=self.sucursal_destino,
+        )
+        self.assertEqual(talla.stock, 2)
+
+
+# =========================================================================
+# Tests para `detalle_dte` enriquecido: documentos_hijos, sucursal_destino,
+# skus_faltantes_destino, totales_nc.
+# =========================================================================
+class DetalleDteEnriquecidoTest(TestCase):
+    def setUp(self):
+        self.user = crear_usuario(rol='administrador')
+        self.empresa = crear_empresa()
+        self.sucursal_origen = crear_sucursal(self.empresa, alias='ORIGEN')
+        self.sucursal_destino = crear_sucursal(self.empresa, alias='DESTINO')
+        crear_empresa_user(self.user, self.empresa, self.sucursal_origen)
+
+        _, self.talla_origen = crear_producto_con_talla(
+            self.sucursal_origen, articulo='Zap Detalle', sku=7001, stock=10,
+        )
+
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal_origen.id
+        session['idEmpresaActual'] = self.empresa.id
+        session.save()
+
+    def test_detalle_dte_traspaso_marca_skus_faltantes_destino(self):
+        # SKU sólo existe en origen — destino no tiene Producto_Talla.
+        dte, _ = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=3,
+        )
+
+        resp = self.client.get(f'/app/documentos/api/dte/{dte.id}/')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertTrue(data['dte']['es_traspaso'])
+        self.assertEqual(data['dte']['sucursal_destino']['alias'], 'DESTINO')
+
+        # SKU 7001 aparece como faltante en destino.
+        faltantes = data['skus_faltantes_destino']
+        self.assertEqual(len(faltantes), 1)
+        self.assertEqual(faltantes[0]['sku'], 7001)
+
+        # Producto en lista marcado existe_en_destino=False.
+        prod = data['productos'][0]
+        self.assertFalse(prod['existe_en_destino'])
+
+    def test_detalle_dte_padre_lista_documentos_hijos(self):
+        dte, _ = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=3,
+        )
+        # Crear un hijo NC manual (igual que en TrazabilidadApiTest).
+        hijo = Dte.objects.create(
+            emisor=self.empresa, receptor=self.empresa,
+            numero_documento=9501, tipo_documento='NOTA DE CREDITO',
+            monto_neto=1000, monto_con_iva=1190,
+            estado_pago='PAGADO', estado_dte='EMITIDO',
+            responsable='x', fecha_emision='2025-01-02',
+            fecha_vencimiento='2025-01-02', diasCredito=0,
+            bultos=0, unidades_productos=1,
+            tipo_transaccion='ANULACION', sucursal=self.sucursal_origen,
+            es_nota_credito=True, documento_afectado=dte,
+            motivo_nc='NC test detalle',
+        )
+
+        resp = self.client.get(f'/app/documentos/api/dte/{dte.id}/')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        hijos_ids = [h['id'] for h in data['documentos_hijos']]
+        self.assertIn(hijo.id, hijos_ids)
+
+
+# =========================================================================
+# Tests para `eliminar_producto_todas_sucursales`: bloqueos de seguridad.
+#
+# Antes del fix, borrar un producto desde gestionProductos arrastraba en
+# CASCADE los movimientos TRASPASO_SALIDA, los Ticket_Productos y los
+# LoteProducto, dejando los DTE huérfanos. Ahora bloquea con 409 si hay
+# datos operativos vivos.
+# =========================================================================
+class EliminarProductoBloqueosTest(TestCase):
+    def setUp(self):
+        self.user = crear_usuario(rol='administrador')
+        self.empresa = crear_empresa()
+        self.sucursal_origen = crear_sucursal(self.empresa, alias='ORIGEN')
+        self.sucursal_destino = crear_sucursal(self.empresa, alias='DESTINO')
+        crear_empresa_user(self.user, self.empresa, self.sucursal_origen)
+
+        self.producto, self.talla = crear_producto_con_talla(
+            self.sucursal_origen, articulo='Zap Eliminar', sku=8001, stock=0,
+        )
+
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal_origen.id
+        session['idEmpresaActual'] = self.empresa.id
+        session.save()
+
+    def _post_eliminar(self, producto_id):
+        return self.client.post(
+            '/app/eliminar_producto_todas_sucursales/',
+            data=json.dumps({'producto_id': producto_id}),
+            content_type='application/json',
+        )
+
+    def test_bloquea_si_traspaso_pendiente_de_recepcion(self):
+        # Crear DTE TRASPASO con movimiento TRASPASO_SALIDA, sin recepcionar.
+        # Stock arranca en 0 para evitar disparar el bloqueo STOCK_NO_NULO.
+        Producto_Talla.objects.filter(id=self.talla.id).update(stock=10)
+        dte, _ = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla, cantidad=5,
+        )
+        # _crear_traspaso baja stock a 5 → forzamos a 0 para aislar el test.
+        Producto_Talla.objects.filter(id=self.talla.id).update(stock=0)
+
+        resp = self._post_eliminar(self.producto.id)
+        self.assertEqual(resp.status_code, 409, resp.content)
+        data = resp.json()
+        self.assertTrue(data['bloqueado'])
+        tipos = [b['tipo'] for b in data['bloqueos']]
+        self.assertIn('TRASPASO_EN_TRANSITO', tipos)
+
+        # No se borró el producto.
+        self.assertTrue(Producto.objects.filter(id=self.producto.id).exists())
+        self.assertTrue(Producto_Talla.objects.filter(id=self.talla.id).exists())
+
+    def test_bloquea_si_stock_mayor_a_cero(self):
+        Producto_Talla.objects.filter(id=self.talla.id).update(stock=3)
+
+        resp = self._post_eliminar(self.producto.id)
+        self.assertEqual(resp.status_code, 409, resp.content)
+        data = resp.json()
+        tipos = [b['tipo'] for b in data['bloqueos']]
+        self.assertIn('STOCK_NO_NULO', tipos)
+
+        # Producto y talla intactos.
+        self.assertTrue(Producto_Talla.objects.filter(id=self.talla.id).exists())
+
+    def test_permite_borrar_sin_movimientos_ni_stock(self):
+        # Stock 0, sin DTE ni tickets ni pendientes.
+        Producto_Talla.objects.filter(id=self.talla.id).update(stock=0)
+
+        resp = self._post_eliminar(self.producto.id)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertTrue(data['success'])
+
+        # Borrado efectivo.
+        self.assertFalse(Producto.objects.filter(id=self.producto.id).exists())
+        self.assertFalse(Producto_Talla.objects.filter(id=self.talla.id).exists())
+
+
+# =========================================================================
+# Tests para `api_crear_stock_destino_manual`: recepción manual de TRASPASO
+# sin pasar por confirmar_recepcion_api ni emitir NC.
+# =========================================================================
+class CrearStockDestinoManualTest(TestCase):
+    def setUp(self):
+        self.user = crear_usuario(rol='administrador')
+        self.empresa = crear_empresa()
+        self.sucursal_origen = crear_sucursal(self.empresa, alias='ORIGEN')
+        self.sucursal_destino = crear_sucursal(self.empresa, alias='DESTINO')
+        crear_empresa_user(self.user, self.empresa, self.sucursal_origen)
+
+        _, self.talla_origen = crear_producto_con_talla(
+            self.sucursal_origen, articulo='Zap Manual', sku=9001, stock=10,
+        )
+
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal_origen.id
+        session['idEmpresaActual'] = self.empresa.id
+        session.save()
+
+    def _post(self, dte_id, items, motivo='Recepción manual test'):
+        return self.client.post(
+            f'/app/api/dte/{dte_id}/crear_stock_destino_manual/',
+            data=json.dumps({'items': items, 'motivo': motivo}),
+            content_type='application/json',
+        )
+
+    def test_crea_talla_destino_aplica_stock_y_marca_recepcionado(self):
+        dte, _ = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5,
+        )
+        # Destino sin Producto_Talla del SKU.
+        self.assertFalse(
+            Producto_Talla.objects.filter(
+                sku=9001, producto__sucursal=self.sucursal_destino,
+            ).exists()
+        )
+
+        with _patch_permiso_aprobar(), _patch_permiso_helper():
+            resp = self._post(dte.id, [{'sku': 9001, 'stock_final': 5}])
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['dte_estado'], 'RECEPCIONADO_COMPLETO')
+        self.assertEqual(data['sucursal_destino']['alias'], 'DESTINO')
+
+        # Talla creada en destino con stock=5.
+        talla_dest = Producto_Talla.objects.get(
+            sku=9001, producto__sucursal=self.sucursal_destino,
+        )
+        self.assertEqual(talla_dest.stock, 5)
+
+        # Movimiento AJUSTE_STOCK_MANUAL_DESTINO INGRESO con cantidad=5.
+        movs = Movimientos_Producto.objects.filter(
+            dte=dte, concepto='AJUSTE_STOCK_MANUAL_DESTINO',
+        )
+        self.assertEqual(movs.count(), 1)
+        mov = movs.first()
+        self.assertEqual(mov.tipo_movimiento, 'INGRESO')
+        self.assertEqual(mov.cantidad, 5)
+
+        # DTE actualizado.
+        dte.refresh_from_db()
+        self.assertEqual(dte.estado_dte, 'RECEPCIONADO_COMPLETO')
+        self.assertIsNotNone(dte.fecha_recepcion)
+        self.assertIn('STOCK MANUAL DESTINO', dte.referencias or '')
+
+    def test_bloquea_si_dte_ya_tiene_nc(self):
+        dte, _ = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5,
+        )
+        # Crear NC hija (cualquier estado vivo).
+        Dte.objects.create(
+            emisor=self.empresa, receptor=self.empresa,
+            numero_documento=9999, tipo_documento='NOTA DE CREDITO',
+            monto_neto=1000, monto_con_iva=1190,
+            estado_pago='PAGADO', estado_dte='EMITIDO',
+            responsable='x', fecha_emision='2025-01-02',
+            fecha_vencimiento='2025-01-02', diasCredito=0,
+            bultos=0, unidades_productos=1,
+            tipo_transaccion='ANULACION', sucursal=self.sucursal_origen,
+            es_nota_credito=True, documento_afectado=dte,
+            motivo_nc='NC previa',
+        )
+
+        with _patch_permiso_aprobar(), _patch_permiso_helper():
+            resp = self._post(dte.id, [{'sku': 9001, 'stock_final': 5}])
+
+        self.assertEqual(resp.status_code, 409, resp.content)
+        data = resp.json()
+        self.assertFalse(data['success'])
+        self.assertIn('NC', data['error'])
+
+        # No se creó talla en destino ni movimiento manual.
+        self.assertFalse(
+            Producto_Talla.objects.filter(
+                sku=9001, producto__sucursal=self.sucursal_destino,
+            ).exists()
+        )
+        self.assertFalse(
+            Movimientos_Producto.objects.filter(
+                dte=dte, concepto='AJUSTE_STOCK_MANUAL_DESTINO',
+            ).exists()
+        )
+
+    def test_decremento_genera_movimiento_egreso(self):
+        # Talla destino existe con stock=10.
+        _, talla_dest = crear_producto_con_talla(
+            self.sucursal_destino, articulo='Zap Manual D', sku=9001, stock=10,
+        )
+        dte, _ = _crear_traspaso(
+            self.sucursal_origen, self.sucursal_destino,
+            self.talla_origen, cantidad=5,
+        )
+
+        with _patch_permiso_aprobar(), _patch_permiso_helper():
+            resp = self._post(dte.id, [{'sku': 9001, 'stock_final': 4}])
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        talla_dest.refresh_from_db()
+        self.assertEqual(talla_dest.stock, 4)
+
+        movs = Movimientos_Producto.objects.filter(
+            dte=dte, concepto='AJUSTE_STOCK_MANUAL_DESTINO',
+        )
+        self.assertEqual(movs.count(), 1)
+        mov = movs.first()
+        self.assertEqual(mov.tipo_movimiento, 'EGRESO')
+        self.assertEqual(mov.cantidad, -6)  # 4 - 10 = -6

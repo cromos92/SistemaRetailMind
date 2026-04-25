@@ -2593,141 +2593,251 @@
 
         <!-- ========== MODAL EDITAR RECEPCIÓN DE COMPRA ========== -->
         <div class="modal fade" id="modalEditarRecepcionCompra" tabindex="-1" aria-labelledby="modalEditarRecepcionCompraLabel" aria-hidden="true">
-            <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                 <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+
+                    <!-- Header -->
                     <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #f0a500 0%, #e67e00 100%);">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
-                                <i class="bi bi-pencil-square fs-4"></i>
+                        <div class="d-flex align-items-center gap-2 gap-md-3 flex-grow-1 min-w-0">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
+                                <i class="bi bi-pencil-square fs-5"></i>
                             </div>
-                            <div>
-                                <h5 class="modal-title mb-0 fw-bold text-white" id="modalEditarRecepcionCompraLabel">
-                                    <i class="bi bi-pencil-square me-2"></i>Editar Recepciones - <span id="nombreCompraRecepcion"></span>
+                            <div class="min-w-0">
+                                <h5 class="modal-title mb-0 fw-bold text-white text-truncate" id="modalEditarRecepcionCompraLabel">
+                                    Editar Recepciones — <span id="nombreCompraRecepcion"></span>
                                 </h5>
-                                <small class="opacity-75 text-white">Modifica o elimina las recepciones existentes</small>
+                                <small class="opacity-75 text-white d-none d-sm-inline">Recepciones registradas y unidades pendientes de recibir</small>
                             </div>
                         </div>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <button type="button" class="btn-close btn-close-white ms-2 flex-shrink-0" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body p-4" style="background: #f8f9fa;">
+
+                    <!-- Body -->
+                    <div class="modal-body p-3 p-md-4" style="background: #f8f9fa;">
                         <input type="hidden" id="compraIdRecepcionEditar" value="">
-                        
-                        <!-- Alerta informativa -->
-                        <div class="alert alert-warning border-0 mb-4" style="border-radius: 12px;">
-                            <i class="bi bi-exclamation-triangle me-2"></i>
-                            <strong>Nota:</strong> Aquí puedes editar las cantidades o eliminar recepciones ya registradas. 
-                            Los cambios afectarán el inventario y los totales de la compra.
-                        </div>
-                        
-                        <!-- Resumen de Recepción -->
-                        <div class="row mb-4" id="resumenRecepcionCompra">
-                            <div class="col-md-3">
-                                <div class="card border-0" style="background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%); border-radius: 12px;">
-                                    <div class="card-body text-center py-3">
-                                        <i class="bi bi-receipt text-primary fs-4 mb-2"></i>
-                                        <h5 class="mb-0" id="totalDtesRecepcionCompra">0</h5>
-                                        <small class="text-muted">Facturas Usadas</small>
+
+                        <!-- Resumen compacto (siempre visible) -->
+                        <div class="row g-2 mb-3" id="resumenRecepcionCompra">
+                            <div class="col-6 col-md-3">
+                                <div class="card border-0 h-100" style="background: linear-gradient(135deg, #e8eaf6, #c5cae9); border-radius: 10px;">
+                                    <div class="card-body text-center py-2 px-2">
+                                        <i class="bi bi-receipt text-primary mb-1 d-block"></i>
+                                        <h6 class="mb-0 fw-bold" id="totalDtesRecepcionCompra">0</h6>
+                                        <small class="text-muted" style="font-size:.72rem;">Facturas</small>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="card border-0" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); border-radius: 12px;">
-                                    <div class="card-body text-center py-3">
-                                        <i class="bi bi-box-seam text-success fs-4 mb-2"></i>
-                                        <h5 class="mb-0" id="totalUnidadesRecepcionCompra">0</h5>
-                                        <small class="text-muted">Total Unidades</small>
+                            <div class="col-6 col-md-3">
+                                <div class="card border-0 h-100" style="background: linear-gradient(135deg, #e0f2f1, #b2dfdb); border-radius: 10px;">
+                                    <div class="card-body text-center py-2 px-2">
+                                        <i class="bi bi-check2-circle text-success mb-1 d-block"></i>
+                                        <h6 class="mb-0 fw-bold" id="totalUnidadesRecepcionCompra">0</h6>
+                                        <small class="text-muted" style="font-size:.72rem;">Recibidas</small>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="card border-0" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-radius: 12px;">
-                                    <div class="card-body text-center py-3">
-                                        <i class="bi bi-tags text-warning fs-4 mb-2"></i>
-                                        <h5 class="mb-0" id="totalProductosRecepcionCompra">0</h5>
-                                        <small class="text-muted">Productos</small>
+                            <div class="col-6 col-md-3">
+                                <div class="card border-0 h-100" style="background: linear-gradient(135deg, #fff3e0, #ffe0b2); border-radius: 10px;">
+                                    <div class="card-body text-center py-2 px-2">
+                                        <i class="bi bi-hourglass-split text-warning mb-1 d-block"></i>
+                                        <h6 class="mb-0 fw-bold" id="totalPendienteRecepcionCompra">0</h6>
+                                        <small class="text-muted" style="font-size:.72rem;">Pendientes</small>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="card border-0" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border-radius: 12px;">
-                                    <div class="card-body text-center py-3">
-                                        <i class="bi bi-currency-dollar text-danger fs-4 mb-2"></i>
-                                        <h5 class="mb-0" id="valorTotalRecepcionCompra">$0</h5>
-                                        <small class="text-muted">Valor Total (Costo)</small>
+                            <div class="col-6 col-md-3">
+                                <div class="card border-0 h-100" style="background: linear-gradient(135deg, #fce4ec, #f8bbd9); border-radius: 10px;">
+                                    <div class="card-body text-center py-2 px-2">
+                                        <i class="bi bi-currency-dollar text-danger mb-1 d-block"></i>
+                                        <h6 class="mb-0 fw-bold" id="valorTotalRecepcionCompra">$0</h6>
+                                        <small class="text-muted" style="font-size:.72rem;">Valor (Costo)</small>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Cargando -->
+
+                        <!-- Spinner global de carga -->
                         <div id="loadingRecepcionCompra" class="text-center py-5">
-                            <div class="spinner-border text-warning" role="status">
-                                <span class="visually-hidden">Cargando...</span>
-                            </div>
-                            <p class="mt-3 text-muted">Cargando recepciones de la compra...</p>
+                            <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Cargando...</span></div>
+                            <p class="mt-3 text-muted">Cargando datos de la compra...</p>
                         </div>
-                        
-                        <!-- Tabla de Recepciones -->
-                        <div id="tablaRecepcionesCompraContainer" style="display: none;">
-                            <!-- Buscador -->
-                            <div class="mb-3">
-                                <div class="input-group">
-                                    <span class="input-group-text bg-white border-end-0" style="border-color: #f0a500;">
-                                        <i class="bi bi-search" style="color: #f0a500;"></i>
-                                    </span>
-                                    <input type="text" class="form-control border-start-0" id="searchRecepcionCompra" 
-                                           placeholder="Buscar por producto, talla o factura..." 
-                                           style="border-color: #f0a500;">
-                                    <button class="btn btn-warning text-dark" type="button" id="btnClearSearchRecepcionCompra">
-                                        <i class="bi bi-x-lg"></i>
+
+                        <!-- TABS -->
+                        <div id="tabsRecepcionWrapper" style="display:none;">
+                            <ul class="nav nav-tabs nav-fill mb-0" id="tabsRecepcionCompra" role="tablist"
+                                style="border-bottom: 2px solid #dee2e6;">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active fw-semibold px-2 px-md-3"
+                                            id="tabRecepcionadoBtn"
+                                            data-bs-toggle="tab"
+                                            data-bs-target="#contentRecepcionado"
+                                            type="button" role="tab">
+                                        <i class="bi bi-check-circle-fill me-1 text-success"></i>
+                                        <span class="d-none d-sm-inline">Lo </span>Recepcionado
+                                        <span class="badge bg-success ms-1" id="badgeRecepcionado">0</span>
                                     </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-semibold px-2 px-md-3"
+                                            id="tabPendienteBtn"
+                                            data-bs-toggle="tab"
+                                            data-bs-target="#contentPendiente"
+                                            type="button" role="tab">
+                                        <i class="bi bi-hourglass-split me-1 text-warning"></i>
+                                        Pendiente<span class="d-none d-sm-inline"> por Recepcionar</span>
+                                        <span class="badge bg-warning text-dark ms-1" id="badgePendiente">0</span>
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content bg-white border border-top-0 rounded-bottom p-3"
+                                 id="tabsRecepcionCompraContent"
+                                 style="border-radius: 0 0 12px 12px !important;">
+
+                                <!-- ===== TAB 1: LO RECEPCIONADO ===== -->
+                                <div class="tab-pane fade show active" id="contentRecepcionado" role="tabpanel">
+                                    <div class="alert alert-warning border-0 py-2 mb-3" style="border-radius: 8px; font-size: .85rem;">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        Edita cantidades o elimina recepciones ya registradas. Los cambios afectan el inventario.
+                                    </div>
+
+                                    <!-- Buscador recepcionado -->
+                                    <div class="mb-3">
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-white" style="border-color:#f0a500;">
+                                                <i class="bi bi-search" style="color:#f0a500;"></i>
+                                            </span>
+                                            <input type="text" class="form-control" id="searchRecepcionCompra"
+                                                   placeholder="Buscar por nombre, marca, color, talla o factura…"
+                                                   style="border-color:#f0a500; border-left:none;">
+                                            <button class="btn btn-outline-warning btn-sm" type="button" id="btnClearSearchRecepcionCompra" title="Limpiar">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tabla recepcionado -->
+                                    <div id="tablaRecepcionesCompraContainer">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover table-sm align-middle" id="tablaRecepcionesCompra">
+                                                <thead style="background: linear-gradient(135deg, #405189, #364574); color:#fff;">
+                                                    <tr>
+                                                        <th class="text-nowrap"><i class="bi bi-receipt me-1"></i>Factura</th>
+                                                        <th><i class="bi bi-box me-1"></i>Producto</th>
+                                                        <th class="text-center"><i class="bi bi-rulers me-1"></i>Talla</th>
+                                                        <th class="text-center d-none d-md-table-cell"><i class="bi bi-archive me-1"></i>Original</th>
+                                                        <th class="text-center"><i class="bi bi-pencil me-1"></i>Cantidad</th>
+                                                        <th class="text-center d-none d-md-table-cell"><i class="bi bi-currency-dollar me-1"></i>Subtotal</th>
+                                                        <th class="text-center"><i class="bi bi-gear me-1"></i></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="tbodyRecepcionesCompra"></tbody>
+                                                <tfoot class="table-light fw-semibold">
+                                                    <tr>
+                                                        <td colspan="3" class="text-end">Totales:</td>
+                                                        <td class="text-center d-none d-md-table-cell" id="totalCantidadOriginalCompra">0</td>
+                                                        <td class="text-center" id="totalCantidadEditadaCompra">0</td>
+                                                        <td class="text-center d-none d-md-table-cell" id="totalValorRecepcionCompra">$0</td>
+                                                        <td></td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <!-- Sin recepciones -->
+                                    <div id="sinRecepcionesCompraMsg" class="text-center py-4" style="display:none;">
+                                        <i class="bi bi-inbox text-muted" style="font-size:3rem;"></i>
+                                        <h6 class="text-muted mt-2">Sin recepciones registradas</h6>
+                                        <p class="text-muted small">Esta compra no tiene recepciones registradas aún.</p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table table-hover table-striped" id="tablaRecepcionesCompra">
-                                    <thead class="table-dark" style="background: linear-gradient(135deg, #405189 0%, #364574 100%);">
-                                        <tr>
-                                            <th><i class="bi bi-receipt me-1"></i>Factura</th>
-                                            <th><i class="bi bi-box me-1"></i>Producto</th>
-                                            <th><i class="bi bi-rulers me-1"></i>Talla</th>
-                                            <th class="text-center"><i class="bi bi-archive me-1"></i>Cantidad Original</th>
-                                            <th class="text-center"><i class="bi bi-pencil me-1"></i>Nueva Cantidad</th>
-                                            <th class="text-center"><i class="bi bi-currency-dollar me-1"></i>Subtotal</th>
-                                            <th class="text-center"><i class="bi bi-gear me-1"></i>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tbodyRecepcionesCompra">
-                                        <!-- Se llenará dinámicamente -->
-                                    </tbody>
-                                    <tfoot class="table-light">
-                                        <tr>
-                                            <th colspan="3" class="text-end">Totales:</th>
-                                            <th class="text-center" id="totalCantidadOriginalCompra">0</th>
-                                            <th class="text-center" id="totalCantidadEditadaCompra">0</th>
-                                            <th class="text-center" id="totalValorRecepcionCompra">$0</th>
-                                            <th></th>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <!-- Sin datos -->
-                        <div id="sinRecepcionesCompraMsg" class="text-center py-5" style="display: none;">
-                            <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
-                            <h5 class="text-muted mt-3">No hay recepciones para esta compra</h5>
-                            <p class="text-muted">Esta compra no tiene recepciones registradas.</p>
-                        </div>
-                        
-                    </div>
-                    <div class="modal-footer border-0 py-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
-                        <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal" style="border-radius: 10px;">
-                            <i class="bi bi-x-circle me-1"></i>Cancelar
+
+                                <!-- ===== TAB 2: PENDIENTE POR RECEPCIONAR ===== -->
+                                <div class="tab-pane fade" id="contentPendiente" role="tabpanel">
+                                    <div class="d-flex flex-column flex-sm-row gap-2 align-items-start align-items-sm-center mb-3">
+                                        <!-- Buscador pendiente -->
+                                        <div class="input-group input-group-sm flex-grow-1">
+                                            <span class="input-group-text bg-white" style="border-color:#f0a500;">
+                                                <i class="bi bi-search" style="color:#f0a500;"></i>
+                                            </span>
+                                            <input type="text" class="form-control" id="searchPendienteCompra"
+                                                   placeholder="Buscar por nombre, marca, color o talla…"
+                                                   style="border-color:#f0a500; border-left:none;">
+                                            <button class="btn btn-outline-warning btn-sm" type="button" id="btnClearSearchPendienteCompra" title="Limpiar">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </div>
+                                        <!-- Botón eliminar masivo -->
+                                        <button class="btn btn-danger btn-sm flex-shrink-0 d-none"
+                                                id="btnEliminarPendientesSeleccionados"
+                                                style="border-radius: 8px; white-space: nowrap;">
+                                            <i class="bi bi-trash me-1"></i>
+                                            Eliminar seleccionados
+                                            <span class="badge bg-light text-danger ms-1" id="badgeSeleccionadosPendiente">0</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Tabla pendientes -->
+                                    <div id="tablaPendientesCompraContainer">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover table-sm align-middle" id="tablaPendientesCompra">
+                                                <thead style="background: linear-gradient(135deg, #e67e00, #b85e00); color:#fff;">
+                                                    <tr>
+                                                        <th style="width:36px;">
+                                                            <div class="form-check mb-0">
+                                                                <input class="form-check-input" type="checkbox" id="checkAllPendientes" title="Seleccionar todos los eliminables">
+                                                            </div>
+                                                        </th>
+                                                        <th><i class="bi bi-box me-1"></i>Producto</th>
+                                                        <th class="text-center"><i class="bi bi-rulers me-1"></i>Talla</th>
+                                                        <th class="text-center d-none d-sm-table-cell">Pedido</th>
+                                                        <th class="text-center d-none d-sm-table-cell">Recibido</th>
+                                                        <th class="text-center"><i class="bi bi-hourglass me-1"></i>Pendiente</th>
+                                                        <th class="text-center d-none d-md-table-cell">Estado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="tbodyPendientesCompra"></tbody>
+                                                <tfoot class="table-light fw-semibold">
+                                                    <tr>
+                                                        <td colspan="2" class="text-end">Totales:</td>
+                                                        <td class="text-center d-none d-sm-table-cell" id="totalPedidoPendienteCompra">0</td>
+                                                        <td class="text-center d-none d-sm-table-cell" id="totalRecibidoPendienteCompra">0</td>
+                                                        <td class="text-center" id="totalUnidadesPendienteCompra">0</td>
+                                                        <td class="d-none d-md-table-cell"></td>
+                                                        <td></td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <!-- Sin pendientes -->
+                                    <div id="sinPendientesCompraMsg" class="text-center py-4" style="display:none;">
+                                        <i class="bi bi-check-circle text-success" style="font-size:3rem;"></i>
+                                        <h6 class="text-success mt-2">¡Todo recepcionado!</h6>
+                                        <p class="text-muted small">No hay ítems pendientes por recepcionar en esta compra.</p>
+                                    </div>
+                                </div>
+
+                            </div><!-- /tab-content -->
+                        </div><!-- /tabsRecepcionWrapper -->
+
+                    </div><!-- /modal-body -->
+
+                    <!-- Footer -->
+                    <div class="modal-footer border-0 py-2 py-md-3 flex-wrap gap-2"
+                         style="background: linear-gradient(135deg, #f8f9fa, #e9ecef);">
+                        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal" style="border-radius:8px;">
+                            <i class="bi bi-x-circle me-1"></i>Cerrar
                         </button>
-                        <button type="button" class="btn btn-warning px-4 text-dark" id="btnGuardarRecepcionCompraEditada" style="border-radius: 10px;">
-                            <i class="bi bi-check-circle me-1"></i>Guardar Cambios
-                        </button>
+                        <div class="ms-auto d-flex gap-2 flex-wrap justify-content-end">
+                            <button type="button" class="btn btn-warning btn-sm px-3 text-dark" id="btnGuardarRecepcionCompraEditada" style="border-radius:8px;">
+                                <i class="bi bi-check-circle me-1"></i>Guardar Cambios
+                            </button>
+                        </div>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -3078,6 +3188,8 @@ const GestionCompras = (function() {
         recepcionarCompra: '/app/compra/recepcionar/',
         eliminarProductoCompra: '/app/eliminar_producto_compra/',
         limpiarProductosCompra: '/app/limpiar_productos_compra/',
+        obtenerPendientesCompra: '/app/obtener_pendientes_compra/',
+        eliminarPendientesMasivo: '/app/eliminar_pendientes_compra_masivo/',
     };
     // Centralizar AJAX POST
     function ajaxPost(url, data, success, error) {
@@ -5491,189 +5603,368 @@ const GestionCompras = (function() {
         $('#compraIdRecepcionEditar').val(compraId);
         $('#nombreCompraRecepcion').text(nombreCompra || `Compra #${compraId}`);
         
-        // Limpiar búsqueda y recepciones anteriores
+        // Limpiar estado
         $('#searchRecepcionCompra').val('');
+        $('#searchPendienteCompra').val('');
         recepcionesCompraOriginales = [];
+        pendientesCompraOriginales = [];
         
-        // Mostrar loading, ocultar tabla y mensaje
+        // Reset tabs al primero
+        const tabRecepcionado = document.getElementById('tabRecepcionadoBtn');
+        if (tabRecepcionado) {
+            const bsTab = new bootstrap.Tab(tabRecepcionado);
+            bsTab.show();
+        }
+
+        // Mostrar spinner, ocultar tabs
         $('#loadingRecepcionCompra').show();
-        $('#tablaRecepcionesCompraContainer').hide();
+        $('#tabsRecepcionWrapper').hide();
         $('#sinRecepcionesCompraMsg').hide();
-        
+        $('#sinPendientesCompraMsg').hide();
+
         // Mostrar modal
         const modal = new bootstrap.Modal(document.getElementById('modalEditarRecepcionCompra'));
         modal.show();
         
-        // Cargar datos de recepciones
-        cargarRecepcionesCompra(compraId);
-    }
-    
-    // Función para cargar recepciones de una compra
-    function cargarRecepcionesCompra(compraId) {
-        $.ajax({
-            url: `/app/obtener_recepciones_compra/${compraId}/`,
-            type: 'GET',
-            success: function(response) {
-                $('#loadingRecepcionCompra').hide();
-                
-                if (response.success && response.recepciones.length > 0) {
-                    mostrarRecepcionesCompraEnTabla(response);
-                    $('#tablaRecepcionesCompraContainer').show();
-                } else {
-                    $('#sinRecepcionesCompraMsg').show();
-                }
-            },
-            error: function(xhr) {
-                $('#loadingRecepcionCompra').hide();
-                $('#sinRecepcionesCompraMsg').show();
-                console.error('Error al cargar recepciones:', xhr);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'No se pudieron cargar las recepciones de la compra'
-                });
-            }
+        // Cargar datos en paralelo
+        Promise.all([
+            cargarRecepcionesCompra(compraId),
+            cargarPendientesCompra(compraId)
+        ]).finally(function() {
+            $('#loadingRecepcionCompra').hide();
+            $('#tabsRecepcionWrapper').show();
         });
     }
     
-    // Variable para almacenar las recepciones originales
+    // --- Cargar recepciones (tab 1) ---
     let recepcionesCompraOriginales = [];
-    
-    // Función para mostrar recepciones en la tabla
-    function mostrarRecepcionesCompraEnTabla(response, filtro = '') {
-        // Guardar recepciones originales si es la primera carga
+
+    function cargarRecepcionesCompra(compraId) {
+        return $.ajax({
+            url: `/app/obtener_recepciones_compra/${compraId}/`,
+            type: 'GET',
+            success: function(response) {
+                if (response.success && response.recepciones && response.recepciones.length > 0) {
+                    mostrarRecepcionesCompraEnTabla(response);
+                    $('#sinRecepcionesCompraMsg').hide();
+                } else {
+                    recepcionesCompraOriginales = [];
+                    $('#tbodyRecepcionesCompra').empty();
+                    $('#sinRecepcionesCompraMsg').show();
+                    $('#badgeRecepcionado').text(0);
+                    // reset summary
+                    $('#totalDtesRecepcionCompra').text(0);
+                    $('#totalUnidadesRecepcionCompra').text(0);
+                    $('#valorTotalRecepcionCompra').text('$0');
+                }
+            },
+            error: function(xhr) {
+                console.error('Error al cargar recepciones:', xhr);
+            }
+        });
+    }
+
+    // --- Cargar pendientes (tab 2) ---
+    let pendientesCompraOriginales = [];
+
+    function cargarPendientesCompra(compraId) {
+        return $.ajax({
+            url: `/app/obtener_pendientes_compra/${compraId}/`,
+            type: 'GET',
+            success: function(response) {
+                if (response.success && response.pendientes && response.pendientes.length > 0) {
+                    mostrarPendientesCompraEnTabla(response);
+                    $('#sinPendientesCompraMsg').hide();
+                } else {
+                    pendientesCompraOriginales = [];
+                    $('#tbodyPendientesCompra').empty();
+                    $('#sinPendientesCompraMsg').show();
+                    $('#badgePendiente').text(0);
+                    $('#totalPendienteRecepcionCompra').text(0);
+                }
+            },
+            error: function(xhr) {
+                console.error('Error al cargar pendientes:', xhr);
+            }
+        });
+    }
+
+    // --- Render tab 1: Recepcionado ---
+    function mostrarRecepcionesCompraEnTabla(response, filtro) {
+        if (filtro === undefined) filtro = '';
         if (response.recepciones) {
             recepcionesCompraOriginales = response.recepciones;
         }
-        
-        // Aplicar filtro si existe
+
         let recepciones = recepcionesCompraOriginales;
         if (filtro) {
-            const filtroLower = filtro.toLowerCase();
-            recepciones = recepcionesCompraOriginales.filter(rec => 
-                (rec.producto_nombre && rec.producto_nombre.toLowerCase().includes(filtroLower)) ||
-                (rec.producto_marca && rec.producto_marca.toLowerCase().includes(filtroLower)) ||
-                (rec.producto_color && rec.producto_color.toLowerCase().includes(filtroLower)) ||
-                (rec.talla && rec.talla.toLowerCase().includes(filtroLower)) ||
-                (rec.dte_numero && rec.dte_numero.toLowerCase().includes(filtroLower))
+            const f = filtro.toLowerCase();
+            recepciones = recepcionesCompraOriginales.filter(rec =>
+                (rec.producto_nombre  && rec.producto_nombre.toLowerCase().includes(f)) ||
+                (rec.producto_marca   && rec.producto_marca.toLowerCase().includes(f))  ||
+                (rec.producto_color   && rec.producto_color.toLowerCase().includes(f))  ||
+                (rec.talla            && rec.talla.toLowerCase().includes(f))            ||
+                (rec.dte_numero       && rec.dte_numero.toLowerCase().includes(f))
             );
         }
-        
+
         const tbody = $('#tbodyRecepcionesCompra');
         tbody.empty();
-        
+
         if (recepciones.length === 0) {
             tbody.append(`<tr><td colspan="7" class="text-center text-muted py-4">
-                <i class="bi bi-search me-2"></i>No se encontraron resultados para "${filtro}"
+                <i class="bi bi-search me-2"></i>Sin resultados${filtro ? ` para "${filtro}"` : ''}
             </td></tr>`);
+            $('#badgeRecepcionado').text(0);
             return;
         }
-        
+
         let totalUnidades = 0;
         let totalDtes = new Set();
-        let productosSet = new Set();
         let valorTotal = 0;
-        
+
         recepciones.forEach(rec => {
             totalUnidades += rec.cantidad;
             if (rec.dte_numero) totalDtes.add(rec.dte_numero);
-            productosSet.add(rec.producto_nombre);
-            
             const subtotal = rec.cantidad * (rec.costo || 0);
             valorTotal += subtotal;
-            
-            const fila = `
+
+            tbody.append(`
                 <tr data-recepcion-id="${rec.id}" data-cantidad-original="${rec.cantidad}">
-                    <td>
-                        ${rec.dte_numero 
+                    <td class="text-nowrap">
+                        ${rec.dte_numero
                             ? `<span class="badge bg-primary"><i class="bi bi-receipt me-1"></i>${rec.dte_numero}</span>`
-                            : '<span class="text-muted"><i class="bi bi-dash-circle me-1"></i>Sin Factura</span>'
+                            : '<span class="text-muted small"><i class="bi bi-dash-circle me-1"></i>S/F</span>'
                         }
                     </td>
                     <td>
-                        <strong>${rec.producto_nombre || '-'}</strong>
-                        <br><small class="text-muted">${rec.producto_marca || ''} ${rec.producto_color || ''}</small>
+                        <span class="fw-semibold">${rec.producto_nombre || '-'}</span>
+                        <br><small class="text-muted">${[rec.producto_marca, rec.producto_color].filter(Boolean).join(' · ')}</small>
                     </td>
-                    <td>
-                        <span class="badge bg-secondary">${rec.talla}</span>
-                    </td>
-                    <td class="text-center">
-                        <span class="badge bg-info">${rec.cantidad}</span>
-                    </td>
+                    <td class="text-center"><span class="badge bg-secondary">${rec.talla}</span></td>
+                    <td class="text-center d-none d-md-table-cell"><span class="badge bg-info">${rec.cantidad}</span></td>
                     <td class="text-center">
                         <input type="number" class="form-control form-control-sm text-center input-cantidad-editar-compra"
                                value="${rec.cantidad}" min="0" max="9999"
                                data-recepcion-id="${rec.id}" data-costo="${rec.costo || 0}"
-                               style="width: 80px; display: inline-block;">
+                               style="width:72px; display:inline-block;">
                     </td>
-                    <td class="text-center subtotal-recepcion-compra">
-                        $${subtotal.toLocaleString()}
-                    </td>
-                    <td class="text-center">
-                        <button class="btn btn-sm btn-outline-danger btn-eliminar-recepcion-compra" 
+                    <td class="text-center d-none d-md-table-cell subtotal-recepcion-compra">$${subtotal.toLocaleString('es-CL')}</td>
+                    <td class="text-center text-nowrap">
+                        <button class="btn btn-sm btn-outline-danger btn-eliminar-recepcion-compra"
                                 data-recepcion-id="${rec.id}" title="Eliminar recepción">
                             <i class="bi bi-trash"></i>
                         </button>
-                        ${rec.creado && rec.producto_talla_id ? `<button class="btn btn-sm btn-outline-warning btn-revertir-desde-compra" 
-                                data-pt-id="${rec.producto_talla_id}" data-nombre="${rec.producto_nombre}" data-talla="${rec.talla}" title="Revertir creación (volver a pendiente)">
+                        ${rec.creado && rec.producto_talla_id ? `<button class="btn btn-sm btn-outline-warning btn-revertir-desde-compra ms-1"
+                                data-pt-id="${rec.producto_talla_id}" data-nombre="${rec.producto_nombre}" data-talla="${rec.talla}" title="Revertir a pendiente">
                             <i class="bi bi-arrow-counterclockwise"></i>
                         </button>` : ''}
                     </td>
                 </tr>
-            `;
-            tbody.append(fila);
+            `);
         });
-        
-        // Actualizar resumen
+
+        $('#badgeRecepcionado').text(recepciones.length);
         $('#totalDtesRecepcionCompra').text(totalDtes.size);
         $('#totalUnidadesRecepcionCompra').text(totalUnidades);
-        $('#totalProductosRecepcionCompra').text(productosSet.size);
-        $('#valorTotalRecepcionCompra').text('$' + valorTotal.toLocaleString());
-        
-        // Actualizar totales de tabla
+        $('#valorTotalRecepcionCompra').text('$' + valorTotal.toLocaleString('es-CL'));
         actualizarTotalesRecepcionCompra();
     }
-    
-    // Evento de búsqueda en modal editar recepción
+
+    // --- Render tab 2: Pendientes ---
+    function mostrarPendientesCompraEnTabla(response, filtro) {
+        if (filtro === undefined) filtro = '';
+        if (response.pendientes) {
+            pendientesCompraOriginales = response.pendientes;
+        }
+
+        let pendientes = pendientesCompraOriginales;
+        if (filtro) {
+            const f = filtro.toLowerCase();
+            pendientes = pendientesCompraOriginales.filter(p =>
+                (p.producto_nombre && p.producto_nombre.toLowerCase().includes(f)) ||
+                (p.producto_marca  && p.producto_marca.toLowerCase().includes(f))  ||
+                (p.producto_color  && p.producto_color.toLowerCase().includes(f))  ||
+                (p.talla           && p.talla.toLowerCase().includes(f))
+            );
+        }
+
+        const tbody = $('#tbodyPendientesCompra');
+        tbody.empty();
+        $('#checkAllPendientes').prop('checked', false).prop('indeterminate', false);
+        actualizarBtnEliminarPendientes();
+
+        if (pendientes.length === 0) {
+            tbody.append(`<tr><td colspan="7" class="text-center text-muted py-4">
+                <i class="bi bi-search me-2"></i>Sin resultados${filtro ? ` para "${filtro}"` : ''}
+            </td></tr>`);
+            $('#badgePendiente').text(0);
+            $('#totalPendienteRecepcionCompra').text(0);
+            return;
+        }
+
+        let totalPedido = 0, totalRecibido = 0, totalPendiente = 0;
+
+        const estadoBadge = {
+            pendiente: '<span class="badge bg-secondary">Pendiente</span>',
+            recibido_parcial: '<span class="badge bg-warning text-dark">Parcial</span>',
+            recibido_completo: '<span class="badge bg-success">Completo</span>',
+            cancelado: '<span class="badge bg-danger">Cancelado</span>',
+        };
+
+        pendientes.forEach(p => {
+            totalPedido    += p.stock_pedido;
+            totalRecibido  += p.unidades_recibidas;
+            totalPendiente += p.pendiente;
+
+            const puedeEliminar = p.puede_eliminar;
+            const checkHtml = puedeEliminar
+                ? `<input class="form-check-input check-pendiente-item" type="checkbox" data-id="${p.id}">`
+                : `<span title="Tiene recepciones parciales" class="text-muted"><i class="bi bi-lock-fill"></i></span>`;
+
+            tbody.append(`
+                <tr data-pt-id="${p.id}" data-puede-eliminar="${puedeEliminar ? '1' : '0'}">
+                    <td><div class="form-check mb-0">${checkHtml}</div></td>
+                    <td>
+                        <span class="fw-semibold">${p.producto_nombre || '-'}</span>
+                        <br><small class="text-muted">${[p.producto_marca, p.producto_color].filter(Boolean).join(' · ')}</small>
+                    </td>
+                    <td class="text-center"><span class="badge bg-secondary">${p.talla}</span></td>
+                    <td class="text-center d-none d-sm-table-cell">${p.stock_pedido}</td>
+                    <td class="text-center d-none d-sm-table-cell">${p.unidades_recibidas}</td>
+                    <td class="text-center"><span class="badge bg-warning text-dark">${p.pendiente}</span></td>
+                    <td class="text-center d-none d-md-table-cell">${estadoBadge[p.estado_item] || p.estado_item}</td>
+                </tr>
+            `);
+        });
+
+        $('#badgePendiente').text(pendientes.length);
+        $('#totalPendienteRecepcionCompra').text(totalPendiente);
+        $('#totalPedidoPendienteCompra').text(totalPedido);
+        $('#totalRecibidoPendienteCompra').text(totalRecibido);
+        $('#totalUnidadesPendienteCompra').text(totalPendiente);
+    }
+
+    // --- Búsqueda tab 1 ---
     $('#searchRecepcionCompra').on('input', function() {
-        const filtro = $(this).val().trim();
-        mostrarRecepcionesCompraEnTabla({}, filtro);
+        mostrarRecepcionesCompraEnTabla({}, $(this).val().trim());
     });
-    
-    // Limpiar búsqueda
     $('#btnClearSearchRecepcionCompra').on('click', function() {
         $('#searchRecepcionCompra').val('');
         mostrarRecepcionesCompraEnTabla({}, '');
     });
-    
-    // Función para actualizar totales cuando cambian las cantidades
+
+    // --- Búsqueda tab 2 ---
+    $('#searchPendienteCompra').on('input', function() {
+        mostrarPendientesCompraEnTabla({}, $(this).val().trim());
+    });
+    $('#btnClearSearchPendienteCompra').on('click', function() {
+        $('#searchPendienteCompra').val('');
+        mostrarPendientesCompraEnTabla({}, '');
+    });
+
+    // --- Select-all pendientes ---
+    $(document).on('change', '#checkAllPendientes', function() {
+        const checked = $(this).prop('checked');
+        $('#tbodyPendientesCompra .check-pendiente-item').prop('checked', checked);
+        actualizarBtnEliminarPendientes();
+    });
+
+    $(document).on('change', '.check-pendiente-item', function() {
+        const total     = $('#tbodyPendientesCompra .check-pendiente-item').length;
+        const checkedN  = $('#tbodyPendientesCompra .check-pendiente-item:checked').length;
+        $('#checkAllPendientes')
+            .prop('checked', total > 0 && checkedN === total)
+            .prop('indeterminate', checkedN > 0 && checkedN < total);
+        actualizarBtnEliminarPendientes();
+    });
+
+    function actualizarBtnEliminarPendientes() {
+        const n = $('#tbodyPendientesCompra .check-pendiente-item:checked').length;
+        const btn = $('#btnEliminarPendientesSeleccionados');
+        if (n > 0) {
+            btn.removeClass('d-none');
+            $('#badgeSeleccionadosPendiente').text(n);
+        } else {
+            btn.addClass('d-none');
+        }
+    }
+
+    // --- Eliminar masivo pendientes ---
+    $(document).on('click', '#btnEliminarPendientesSeleccionados', function() {
+        const ids = [];
+        $('#tbodyPendientesCompra .check-pendiente-item:checked').each(function() {
+            ids.push(parseInt($(this).data('id')));
+        });
+        if (!ids.length) return;
+
+        Swal.fire({
+            title: `¿Eliminar ${ids.length} ítem(s) pendiente(s)?`,
+            html: `<p class="text-muted small">Solo se eliminarán los ítems que <strong>nunca han sido recepcionados</strong>.<br>Esta acción no puede deshacerse.</p>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+
+            Swal.fire({ title: 'Eliminando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            $.ajax({
+                url: '/app/eliminar_pendientes_compra_masivo/',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': GestionCompras.getCookie('csrftoken') },
+                data: JSON.stringify({ ids: ids }),
+                success: function(resp) {
+                    Swal.close();
+                    if (resp.success) {
+                        Swal.fire({ icon: 'success', title: '¡Listo!', text: resp.message, timer: 2500, showConfirmButton: false });
+                        const compraId = $('#compraIdRecepcionEditar').val();
+                        if (compraId) {
+                            cargarPendientesCompra(compraId);
+                            cargarRecepcionesCompra(compraId);
+                        }
+                    } else {
+                        Swal.fire('Error', resp.error, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    Swal.close();
+                    Swal.fire('Error', xhr.responseJSON?.error || 'Error de servidor', 'error');
+                }
+            });
+        });
+    });
+
+    // --- Totales recepcionado ---
     function actualizarTotalesRecepcionCompra() {
         let totalOriginal = 0;
-        let totalEditado = 0;
-        let valorTotal = 0;
-        
+        let totalEditado  = 0;
+        let valorTotal    = 0;
+
         $('#tbodyRecepcionesCompra tr').each(function() {
             const cantidadOriginal = parseInt($(this).data('cantidad-original')) || 0;
-            const cantidadEditada = parseInt($(this).find('.input-cantidad-editar-compra').val()) || 0;
-            const costo = parseFloat($(this).find('.input-cantidad-editar-compra').data('costo')) || 0;
-            
+            const cantidadEditada  = parseInt($(this).find('.input-cantidad-editar-compra').val()) || 0;
+            const costo            = parseFloat($(this).find('.input-cantidad-editar-compra').data('costo')) || 0;
+
             totalOriginal += cantidadOriginal;
-            totalEditado += cantidadEditada;
-            
-            // Actualizar subtotal de la fila
+            totalEditado  += cantidadEditada;
+
             const subtotal = cantidadEditada * costo;
-            valorTotal += subtotal;
-            $(this).find('.subtotal-recepcion-compra').text('$' + subtotal.toLocaleString());
+            valorTotal    += subtotal;
+            $(this).find('.subtotal-recepcion-compra').text('$' + subtotal.toLocaleString('es-CL'));
         });
-        
+
         $('#totalCantidadOriginalCompra').text(totalOriginal);
         $('#totalCantidadEditadaCompra').text(totalEditado);
-        $('#totalValorRecepcionCompra').text('$' + valorTotal.toLocaleString());
+        $('#totalValorRecepcionCompra').text('$' + valorTotal.toLocaleString('es-CL'));
         $('#totalUnidadesRecepcionCompra').text(totalEditado);
-        $('#valorTotalRecepcionCompra').text('$' + valorTotal.toLocaleString());
+        $('#valorTotalRecepcionCompra').text('$' + valorTotal.toLocaleString('es-CL'));
     }
-    
-    // Evento para actualizar totales al cambiar cantidad
+
     $(document).on('input', '.input-cantidad-editar-compra', function() {
         actualizarTotalesRecepcionCompra();
     });
@@ -5744,7 +6035,10 @@ const GestionCompras = (function() {
                     if (r.success) {
                         Swal.fire({ icon: 'success', title: 'Revertido', html: r.message, timer: 3500, showConfirmButton: true });
                         const compraId = $('#compraIdRecepcionEditar').val();
-                        if (compraId) cargarRecepcionesCompra(compraId);
+                        if (compraId) {
+                            cargarRecepcionesCompra(compraId);
+                            cargarPendientesCompra(compraId);
+                        }
                     } else {
                         Swal.fire('Error', r.error, 'error');
                     }
@@ -5815,6 +6109,11 @@ const GestionCompras = (function() {
                         title: 'Error',
                         text: response.error || 'No se pudieron guardar los cambios'
                     });
+                    // Reload both tabs so state stays consistent
+                    if (compraId) {
+                        cargarRecepcionesCompra(compraId);
+                        cargarPendientesCompra(compraId);
+                    }
                 }
             },
             error: function(xhr) {

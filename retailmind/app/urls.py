@@ -498,7 +498,9 @@ urlpatterns = [
      path('pendientes_despacho/', views.pendientes_despacho, name='pendientes_despacho'),
      path('consumir_pendientes_despacho/', views.consumir_pendientes_despacho, name='consumir_pendientes_despacho'),
      path('obtener_recepciones_compra/<int:compra_id>/', views.obtener_recepciones_compra, name='obtener_recepciones_compra'),
+     path('obtener_pendientes_compra/<int:compra_id>/', views.obtener_pendientes_compra, name='obtener_pendientes_compra'),
      path('actualizar_recepciones_compra/', views.actualizar_recepciones_compra, name='actualizar_recepciones_compra'),
+     path('eliminar_pendientes_compra_masivo/', views.eliminar_pendientes_compra_masivo, name='eliminar_pendientes_compra_masivo'),
 
      # === Vinculación retroactiva: productos existentes → compra ===
      path('api/compra/items-para-vincular/', views.items_compra_para_vincular, name='items_compra_para_vincular'),
@@ -772,6 +774,8 @@ urlpatterns = [
     path('api/dte/<int:dte_id>/trazabilidad/', views.api_dte_trazabilidad, name='api_dte_trazabilidad'),  # Árbol de trazabilidad
     path('api/dte/ncs_sin_stock/', views.api_ncs_sin_stock, name='api_ncs_sin_stock'),  # Diagnóstico NCs sin movimientos
     path('dte/<int:nc_id>/reparar_stock/', views.api_reparar_stock_nc, name='api_reparar_stock_nc'),  # Reparación retroactiva
+    path('api/dte/<int:dte_id>/crear_skus_destino/', views.api_crear_skus_destino, name='api_crear_skus_destino'),  # Replica SKUs faltantes en sucursal destino
+    path('api/dte/<int:dte_id>/crear_stock_destino_manual/', views.api_crear_stock_destino_manual, name='api_crear_stock_destino_manual'),  # Recepción manual de TRASPASO sin NC
     path('api/productos/stock/', views.api_stock_productos, name='api_stock_productos'),  # Refresh de stock por SKU
     
     # === Gestión de Correlativos ===
