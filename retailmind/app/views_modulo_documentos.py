@@ -1976,45 +1976,81 @@ def parsear_txt_acepta(contenido_txt):
                     'codigo': _campo_o_none(c[9]) if len(c) > 9 else None,
                 })
 
-    # Seccion 2: descuentos/recargos globales (factura) o observaciones (boleta)
+    def _parse_descuento_recargo(c):
+        """Detecta si una línea parseada es un D/R y devuelve el dict normalizado.
+
+        Soporta dos formatos:
+          - Antiguo: <D|R>|glosa|<$|%>|valor|ind_exe|}
+          - Nuevo (canónico Acepta/SII): <NroLinDR>|<D|R>|glosa|<$|%>|valor|ind_exe|}
+
+        Returns:
+            dict | None: Datos del descuento/recargo, o None si la línea no lo es.
+        """
+        if not c:
+            return None
+        first = (c[0] or '').strip() if len(c) > 0 else ''
+        # Nuevo formato con número de línea al inicio.
+        if first.isdigit() and len(c) > 1 and (c[1] or '').strip() in ('D', 'R'):
+            return {
+                'tpo_mov': c[1].strip(),
+                'glosa_dr': _campo_o_none(c[2]) if len(c) > 2 else None,
+                'tpo_valor': _campo_o_none(c[3]) if len(c) > 3 else None,
+                'valor_dr': _campo_o_none(c[4]) if len(c) > 4 else None,
+                'ind_exe_dr': _campo_o_none(c[5]) if len(c) > 5 else None,
+            }
+        # Formato antiguo sin número de línea.
+        if first in ('D', 'R'):
+            return {
+                'tpo_mov': first,
+                'glosa_dr': _campo_o_none(c[1]) if len(c) > 1 else None,
+                'tpo_valor': _campo_o_none(c[2]) if len(c) > 2 else None,
+                'valor_dr': _campo_o_none(c[3]) if len(c) > 3 else None,
+                'ind_exe_dr': _campo_o_none(c[4]) if len(c) > 4 else None,
+            }
+        return None
+
+    # Seccion 2: descuentos/recargos globales (factura) o observación (boleta).
+    # En boleta los descuentos vienen DESPUÉS de la observación (sección 3+),
+    # por eso aquí solo aceptamos D/R cuando no se pisó la observación todavía.
     if len(secciones) > 2:
         for linea in secciones[2]:
             c = split_campos(linea)
             if not c:
                 continue
-            tpo_mov = (c[0] or '').strip() if len(c) > 0 else ''
-            if tpo_mov in ('D', 'R'):
-                resultado['descuentos_recargos'].append({
-                    'tpo_mov': tpo_mov,
-                    'glosa_dr': _campo_o_none(c[1]) if len(c) > 1 else None,
-                    'tpo_valor': _campo_o_none(c[2]) if len(c) > 2 else None,
-                    'valor_dr': _campo_o_none(c[3]) if len(c) > 3 else None,
-                    'ind_exe_dr': _campo_o_none(c[4]) if len(c) > 4 else None,
-                })
+            dr = _parse_descuento_recargo(c)
+            if dr is not None:
+                resultado['descuentos_recargos'].append(dr)
             else:
                 resultado['observaciones'] = linea
 
-    # Secciones restantes: referencias, observaciones
+    # Secciones restantes: referencias, observaciones, descuentos (boleta).
     for sec_idx in range(3, len(secciones)):
         for linea in secciones[sec_idx]:
             c = split_campos(linea)
             if not c:
                 continue
             first = (c[0] or '').strip() if c else ''
+            # Referencia SII (TpoDocRef numérico del catálogo).
             if first.isdigit() and int(first) in (33, 34, 39, 41, 52, 61):
+                # Cuidado: en boletas, esta sección puede ser DscRcgGlobal con
+                # NroLinDR. Diferenciamos mirando el segundo campo: si es D/R
+                # es un descuento/recargo, no una referencia.
+                segundo = (c[1] or '').strip() if len(c) > 1 else ''
+                if segundo in ('D', 'R'):
+                    dr = _parse_descuento_recargo(c)
+                    if dr is not None:
+                        resultado['descuentos_recargos'].append(dr)
+                        continue
                 resultado['referencias'].append({
                     'tipo_documento': _campo_o_none(c[0]),
                     'folio': _campo_o_none(c[2]) if len(c) > 2 else None,
                     'fecha': _campo_o_none(c[3]) if len(c) > 3 else None,
                 })
-            elif first in ('D', 'R'):
-                resultado['descuentos_recargos'].append({
-                    'tpo_mov': first,
-                    'glosa_dr': _campo_o_none(c[1]) if len(c) > 1 else None,
-                    'tpo_valor': _campo_o_none(c[2]) if len(c) > 2 else None,
-                    'valor_dr': _campo_o_none(c[3]) if len(c) > 3 else None,
-                    'ind_exe_dr': _campo_o_none(c[4]) if len(c) > 4 else None,
-                })
+                continue
+
+            dr = _parse_descuento_recargo(c)
+            if dr is not None:
+                resultado['descuentos_recargos'].append(dr)
             elif not resultado['observaciones'] and len(c) >= 3:
                 resultado['observaciones'] = linea
 
@@ -2342,24 +2378,11 @@ def generar_txt_boleta_acepta(datos):
     
     # ===== SEPARADOR =====
     lineas.append('~')
-    
-    # ===== DESCUENTOS / RECARGOS GLOBALES (Tabla 4 Boleta) =====
-    # GUARD: NO emitir esta sección para boletas (39/41). La sección extra
-    # de `~` rompe el parser de Acepta para boletas, causando que el archivo
-    # quede como .tmp y no se envíe a impresión. Los descuentos de boleta
-    # deben distribuirse en monto_item de cada línea de detalle ANTES de
-    # llegar aquí (ver generar_dte_desde_ticket en views_modulo_ventas.py).
-    descuentos_recargos = datos.get('descuentos_recargos', [])
-    descuento_global = totales.get('descuento_global', 0)
 
-    if descuentos_recargos or (descuento_global and descuento_global > 0):
-        logger.warning(
-            "generar_txt_boleta_acepta recibio descuentos_recargos o "
-            "descuento_global. Se IGNORAN para mantener la estructura de "
-            "secciones (~) compatible con Acepta. El descuento debe estar "
-            "distribuido en los monto_item del detalle."
-        )
-    
+    # NOTA: La sección DscRcgGlobal (Tabla 4) en boletas Acepta va DESPUÉS de la
+    # observación, no antes (a diferencia de factura). Por eso aquí no se emite;
+    # se construye más abajo, después de la línea de observación.
+
     # ===== OBSERVACIÓN (monto en letras + resumen compacto) =====
     # Se alinea con la glosa de factura: "<MONTO_EN_LETRAS>  V:NICK2 T:179522 EFE:100 TBK:791"
     # El monto en letras lo imprime Acepta en el recuadro de observación de
@@ -2379,10 +2402,15 @@ def generar_txt_boleta_acepta(datos):
         monto_letras_boleta = f"{int(totales.get('monto_total', 0) or 0)} PESOS"
 
     observacion_compacta_b = construir_observacion_compacta(datos, max_len=90)
-    partes_obs_b = [monto_letras_boleta]
+    partes_obs_b = [limpiar_texto(monto_letras_boleta, 160)]
     if observacion_compacta_b:
+        # observacion_compacta_b ya viene limpia (no tiene acentos ni pipes);
+        # NO pasar por limpiar_texto para preservar separadores como '#'
+        # usados en los resúmenes de pago web (WEB-MERCAD:119000#ORD-123456).
         partes_obs_b.append(observacion_compacta_b)
-    observacion = limpiar_texto('  '.join(partes_obs_b), 200)
+    observacion = '  '.join(partes_obs_b)
+    if len(observacion) > 200:
+        observacion = observacion[:200]
 
     linea_obs = [
         vendedor_codigo,
@@ -2394,13 +2422,48 @@ def generar_txt_boleta_acepta(datos):
         '}'
     ]
     lineas.append(separador.join(linea_obs))
-    
-    # ===== SEPARADOR =====
+
+    # ===== DESCUENTOS / RECARGOS GLOBALES (Tabla 4 Boleta) =====
+    # Formato Acepta para boletas (39/41):
+    #   <NroLinDR>|<D|R>|<glosa>|<$|%>|<valor>|}
+    # Esta sección va DESPUÉS de la observación y, si está presente, agrega
+    # un separador `~` adicional antes del cierre `\\`. Si no hay descuentos
+    # ni recargos, NO se emite (boleta queda con sus 3 separadores habituales).
+    #
+    # Compatibilidad: si llega `descuentos_recargos` con la forma antigua o un
+    # `descuento_global` en totales, se acepta como descuento único.
+    descuentos_recargos_b = list(datos.get('descuentos_recargos') or [])
+    descuento_global_b = int(totales.get('descuento_global', 0) or 0)
+    if not descuentos_recargos_b and descuento_global_b > 0:
+        descuentos_recargos_b = [{
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento',
+            'tpo_valor': '$',
+            'valor_dr': descuento_global_b,
+        }]
+
+    if descuentos_recargos_b:
+        # Separador entre observación y bloque de descuentos.
+        lineas.append('~')
+        # NroLinDR es secuencial dentro del set DR (1..N) según XSD SII.
+        for nro, dr in enumerate(descuentos_recargos_b, start=1):
+            tpo_mov = str(dr.get('tpo_mov', 'D')).upper()
+            if tpo_mov not in ('D', 'R'):
+                tpo_mov = 'D'
+            tpo_valor = str(dr.get('tpo_valor', '$'))
+            if tpo_valor not in ('$', '%'):
+                tpo_valor = '$'
+            glosa = limpiar_texto(str(dr.get('glosa_dr', 'Descuento')), 45)
+            valor = formatear_monto(dr.get('valor_dr', 0))
+            linea_dr = separador.join([str(nro), tpo_mov, glosa, tpo_valor, valor, '}'])
+            lineas.append(linea_dr)
+
+    # ===== SEPARADOR FINAL =====
     lineas.append('~')
 
     # ===== CIERRE =====
     lineas.append('\\')
-    
+
     return '\n'.join(lineas)
 
 
@@ -2658,24 +2721,40 @@ def generar_txt_dte_acepta(datos):
     # ===== PRIMER SEPARADOR =====
     lineas.append('~')
     
-    # ===== DESCUENTOS / RECARGOS GLOBALES (Tabla 3) =====
-    descuentos_recargos = datos.get('descuentos_recargos', [])
+    # ===== DESCUENTOS / RECARGOS GLOBALES (Tabla 3 - Factura/NC/Guía) =====
+    # Formato Acepta/SII para facturas (33/34/52/61):
+    #   {TpoMov}|{GlosaDR}|{TpoValor}|{ValorDR}|{IndExeDR}|{CodRef}|}
+    # DIFERENTE al de boleta (39/41) que lleva NroLinDR al inicio.
+    # Ejemplo oficial Acepta: D|Descuento|$|10|1||}
+    descuentos_recargos = list(datos.get('descuentos_recargos') or [])
     descuento_global = totales.get('descuento_global', 0)
+    if not descuentos_recargos and descuento_global and descuento_global > 0:
+        descuentos_recargos = [{
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento',
+            'tpo_valor': '$',
+            'valor_dr': descuento_global,
+            'ind_exe_dr': '',
+        }]
 
-    if descuentos_recargos:
-        for dr in descuentos_recargos:
-            linea_dr = separador.join([
-                str(dr.get('tpo_mov', 'D')),
-                limpiar_texto(str(dr.get('glosa_dr', 'Descuento')), 45),
-                str(dr.get('tpo_valor', '$')),
-                formatear_monto(dr.get('valor_dr', 0)),
-                str(dr.get('ind_exe_dr', '')) if dr.get('ind_exe_dr') else '',
-                '}'
-            ])
-            lineas.append(linea_dr)
-    elif descuento_global and descuento_global > 0:
-        linea_descuento = separador.join(['D', 'Descuento', '$', formatear_monto(descuento_global), '1', '}'])
-        lineas.append(linea_descuento)
+    for dr in descuentos_recargos:
+        tpo_mov = str(dr.get('tpo_mov', 'D')).upper()
+        if tpo_mov not in ('D', 'R'):
+            tpo_mov = 'D'
+        tpo_valor = str(dr.get('tpo_valor', '$'))
+        if tpo_valor not in ('$', '%'):
+            tpo_valor = '$'
+        ind_exe = str(dr.get('ind_exe_dr', '')) if dr.get('ind_exe_dr') else ''
+        linea_dr = separador.join([
+            tpo_mov,
+            limpiar_texto(str(dr.get('glosa_dr', 'Descuento')), 45),
+            tpo_valor,
+            formatear_monto(dr.get('valor_dr', 0)),
+            ind_exe,
+            '',  # CodReferencia vacío (campo 6 del formato Acepta)
+            '}',
+        ])
+        lineas.append(linea_dr)
 
     lineas.append('~')
     
@@ -2903,20 +2982,20 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         nombre_limpio = f"{articulo_limpio} {marca_limpia} {talla_limpia}".strip()
         
         # Precios almacenados en BD son IVA-inclusive (precio de venta al público).
-        # - Facturas: requieren valores NETO (sin IVA) por línea; el IVA se muestra en los totales.
-        # - Boletas: usan precio IVA-inclusive. El formato Acepta para boletas no tiene campo
-        #   de descuento por línea (INT1|cod||nom||qty|UN|precio|monto|}), por lo que se debe
-        #   usar el precio unitario YA descontado para mantener precio × qty == monto.
+        # Política unificada: el descuento NO se aplica por línea, va como
+        # DscRcgGlobal (Tabla 3 factura / Tabla 4 boleta) para que aparezca
+        # impreso como "Descuento: $XXX". precio_unitario y monto_item son
+        # el precio ORIGINAL (sin descontar).
+        # - Facturas: requieren NETO por línea (BD está IVA-inclusive → /1.19).
+        # - Boletas: usan precio IVA-inclusive tal cual.
         if 'FACTURA' in tipo_dte:
-            precio_unitario_txt   = int(round(Decimal(item.precio) / Decimal('1.19')))
-            monto_descuento_txt   = int(round(Decimal(item.descuento_unitario * item.stock) / Decimal('1.19'))) if item.descuento_unitario else 0
-            monto_item_txt        = int(round(Decimal(item.subtotal) / Decimal('1.19')))
+            precio_unitario_txt = int(round(Decimal(item.precio) / Decimal('1.19')))
+            monto_item_txt = int(round(Decimal(item.precio * item.stock) / Decimal('1.19')))
         else:
-            # Para boletas: precio unitario con descuento aplicado para que precio×qty = monto
-            precio_unitario_txt   = item.precio - item.descuento_unitario  # precio neto de descuento
-            monto_descuento_txt   = 0  # no aplica en formato boleta (no hay campo dedicado)
-            monto_item_txt        = item.subtotal  # (precio - descuento) × qty, IVA-inclusive
-        
+            precio_unitario_txt = int(item.precio)
+            monto_item_txt = int(item.precio * item.stock)
+        monto_descuento_txt = 0  # se reporta como DscRcgGlobal global, no por línea
+
         detalle.append({
             'codigo': limpiar_texto(producto.articulo or f'PROD{producto.id}'),
             'sku': limpiar_texto(str(producto_talla.sku) if producto_talla.sku else ''),
@@ -2925,9 +3004,9 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
             'cantidad': item.stock,
             'unidad': 'UN',
             'precio_unitario': precio_unitario_txt,
-            'descuento_pct': float(item.porcentaje_descuento) if item.porcentaje_descuento else 0,
+            'descuento_pct': 0,
             'monto_descuento': monto_descuento_txt,
-            'monto_item': monto_item_txt
+            'monto_item': monto_item_txt,
         })
     
     # Calcular totales
@@ -2940,11 +3019,10 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
     iva = total_con_iva - neto
     total = total_con_iva
     
-    # Calcular descuento agregado (a nivel ticket) para reportarlo en la
-    # observación y, en boleta, como línea DscRcgGlobal informativa.
-    # Nota: el precio_unitario / monto_item de cada línea ya refleja el
-    # descuento en boleta (precio - dto) y en factura (desc_monto por línea),
-    # por lo tanto `descuento_global` NO se resta de nuevo al monto_total.
+    # Descuento agregado a nivel ticket (BRUTO IVA-inclusive — se almacena así).
+    # Política nueva: el descuento se reporta como una línea DscRcgGlobal,
+    # NO se distribuye en cada item. El monto_item de cada línea queda al
+    # precio original; el total final = sum(items) - descuento.
     descuento_items_agregado = sum(
         (tp.descuento_unitario or 0) * tp.stock
         for tp in ticket.ticket_productos.all()
@@ -2952,13 +3030,20 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
     descuento_ticket_manual = int(ticket.descuento or 0)
     descuento_total_ticket = descuento_items_agregado if descuento_items_agregado > 0 else descuento_ticket_manual
 
+    # Para factura, los montos de la sección DscRcgGlobal van en NETO (sin IVA);
+    # para boleta van IVA-inclusive (mismas unidades que el precio impreso).
+    if 'FACTURA' in tipo_dte:
+        valor_dr_para_dte = int(round(Decimal(descuento_total_ticket) / Decimal('1.19'))) if descuento_total_ticket else 0
+    else:
+        valor_dr_para_dte = int(descuento_total_ticket)
+
     totales = {
         'monto_neto': neto,
         'monto_exento': 0,
         'tasa_iva': 19,
         'iva': iva,
         'monto_total': total,
-        'descuento_global': descuento_total_ticket,  # Informativo; ya absorbido en monto_total
+        'descuento_global': 0,  # se emite como descuentos_recargos, no como global suelto
     }
 
     # Preparar referencias (sistema nuevo de múltiples referencias)
@@ -2984,15 +3069,17 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         })
 
     # Poblar descuentos/recargos globales si hay descuento aplicado al ticket.
-    # Se genera una sola línea D|Descuento|$|monto|...|} que sale antes de
-    # la observación en el TXT (formato Acepta).
+    # Se genera una sola línea con formato Acepta:
+    #   - Factura (33/34): <NroLinDR>|D|Descuento|$|<neto>|<ind_exe>|}  (tabla 3)
+    #   - Boleta  (39/41): <NroLinDR>|D|Descuento|$|<bruto>|}            (tabla 4)
+    # El monto se pasa en las unidades correctas (NETO o BRUTO) según el DTE.
     descuentos_recargos = []
-    if descuento_total_ticket > 0:
+    if valor_dr_para_dte > 0:
         descuentos_recargos.append({
             'tpo_mov': 'D',
             'glosa_dr': 'Descuento',
             'tpo_valor': '$',
-            'valor_dr': descuento_total_ticket,
+            'valor_dr': valor_dr_para_dte,
         })
 
     # Estructura completa para generar TXT

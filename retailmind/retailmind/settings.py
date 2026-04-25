@@ -611,3 +611,15 @@ CORS_ALLOW_HEADERS = [
     "x-request-timestamp",
     "x-api-key",
 ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AllConnected — notificación de cambios de stock
+# ─────────────────────────────────────────────────────────────────────────────
+# URL del webhook de AllConnected que recibe actualizaciones de stock.
+# Vacío = deshabilitado (no se notifica).
+ALLCONNECTED_WEBHOOK_URL = os.environ.get('ALLCONNECTED_WEBHOOK_URL', '')
+# ID del canal origen en AllConnected que representa a RetailMind.
+# Cada empresa puede tener un canal distinto; se configura por empresa en la
+# tabla Canal de AllConnected. Este es el ID por defecto.
+ALLCONNECTED_CANAL_ORIGEN_ID = int(os.environ.get('ALLCONNECTED_CANAL_ORIGEN_ID', '0') or '0')

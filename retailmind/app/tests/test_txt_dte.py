@@ -225,7 +225,8 @@ class TestDescuentoGlobalPorcentaje(TestCase):
             'ind_exe_dr': None,
         }]
         txt = generar_txt_dte_acepta(datos)
-        self.assertIn('D|Dcto 10%|%|10|', txt)
+        # Formato factura: D|glosa|%|10||}  (sin NroLinDR, con CodRef vacío)
+        self.assertIn('D|Dcto 10%|%|10|||}', txt)
 
 
 class TestDescuentoGlobalMonto(TestCase):
@@ -246,7 +247,9 @@ class TestDescuentoGlobalMonto(TestCase):
             'ind_exe_dr': 1,
         }]
         txt = generar_txt_dte_acepta(datos)
-        self.assertIn('D|Descuento Fijo|$|5000|1|}', txt)
+        # Formato factura: D|glosa|$|5000|1||} — IndExeDR=1, CodRef vacío (6 campos)
+        # Mismo formato que ejemplo oficial Acepta: D|Descuento|$|10|1||}
+        self.assertIn('D|Descuento Fijo|$|5000|1||}', txt)
 
 
 class TestRecargoGlobal(TestCase):
@@ -267,7 +270,8 @@ class TestRecargoGlobal(TestCase):
             'ind_exe_dr': None,
         }]
         txt = generar_txt_dte_acepta(datos)
-        self.assertIn('R|Recargo envio|$|3000|', txt)
+        # Formato factura: R|glosa|$|3000||}  (sin NroLinDR, con CodRef vacío)
+        self.assertIn('R|Recargo envio|$|3000|||}', txt)
 
 
 class TestParserFactura(TestCase):
@@ -474,16 +478,16 @@ class TestNmbItemOverflowVaADscItem(TestCase):
             self.fail("No se encontró la línea de detalle en el TXT generado")
 
 
-class TestBoletaConDescuentoNOEmiteDscRcgGlobal(TestCase):
+class TestBoletaConDescuentoEmiteDscRcgGlobal(TestCase):
     """
-    Boleta con descuento NO debe emitir el bloque DscRcgGlobal (tabla 4).
-    La sección extra de ~ rompe el parser de Acepta para boletas tipo 39,
-    causando archivos .tmp y ausencia de impresión automática.
-    Los descuentos deben distribuirse en monto_item antes de llegar al
-    generador; si llegan como descuentos_recargos se ignoran con warning.
+    Boleta con descuento DEBE emitir el bloque DscRcgGlobal (tabla 4).
+    La sección va DESPUÉS de las observaciones, con el número de línea al
+    inicio: {num}|D|glosa|$|valor|}  Ejemplo: 1|D|Descuento|$|2000|}
+    El precio unitario y monto_item de cada línea INT1 usa el precio COMPLETO
+    (sin descontar); Acepta calcula: sum(items) - sum(descuentos) = total.
     """
 
-    def test_boleta_ignora_descuentos_recargos(self):
+    def test_boleta_emite_linea_descuento_global(self):
         datos = _datos_boleta_base()
         datos['detalle'] = [{
             'codigo': 'POL-01',
@@ -501,11 +505,11 @@ class TestBoletaConDescuentoNOEmiteDscRcgGlobal(TestCase):
             'valor_dr': 2000,
         }]
         txt = generar_txt_boleta_acepta(datos)
+        # La línea de descuento aparece con número de secuencia al inicio
+        self.assertIn('1|D|Descuento|$|2000|}', txt)
 
-        self.assertNotIn('D|Descuento|$|2000|', txt)
-
-    def test_boleta_con_descuento_tiene_3_separadores(self):
-        """Boleta siempre debe tener exactamente 3 separadores ~."""
+    def test_boleta_con_descuento_tiene_4_separadores(self):
+        """Boleta con descuentos tiene 4 separadores ~."""
         datos = _datos_boleta_base()
         datos['detalle'] = [{
             'codigo': 'POL-01',
@@ -514,7 +518,7 @@ class TestBoletaConDescuentoNOEmiteDscRcgGlobal(TestCase):
             'cantidad': 1,
             'unidad': 'UN',
             'precio_unitario': 8000,
-            'monto_item': 6000,
+            'monto_item': 8000,
         }]
         datos['descuentos_recargos'] = [{
             'tpo_mov': 'D',
@@ -525,8 +529,54 @@ class TestBoletaConDescuentoNOEmiteDscRcgGlobal(TestCase):
         txt = generar_txt_boleta_acepta(datos)
         separadores = [l for l in txt.split('\n') if l.strip() == '~']
         self.assertEqual(
+            len(separadores), 4,
+            f"Boleta con descuento debe tener 4 separadores ~, tiene {len(separadores)}. TXT:\n{txt}",
+        )
+
+    def test_boleta_sin_descuento_tiene_3_separadores(self):
+        """Boleta sin descuentos mantiene 3 separadores ~ (retrocompatibilidad)."""
+        datos = _datos_boleta_base()
+        datos['detalle'] = [{
+            'codigo': 'POL-01',
+            'nombre': 'Polera Azul',
+            'descripcion': '',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 8000,
+            'monto_item': 8000,
+        }]
+        txt = generar_txt_boleta_acepta(datos)
+        separadores = [l for l in txt.split('\n') if l.strip() == '~']
+        self.assertEqual(
             len(separadores), 3,
-            f"Boleta debe tener 3 separadores ~, tiene {len(separadores)}. TXT:\n{txt}",
+            f"Boleta sin descuento debe tener 3 separadores ~, tiene {len(separadores)}. TXT:\n{txt}",
+        )
+
+    def test_boleta_descuento_va_despues_de_observacion(self):
+        """La línea DscRcgGlobal debe aparecer DESPUÉS de la observación."""
+        datos = _datos_boleta_base()
+        datos['detalle'] = [{
+            'codigo': 'POL-01',
+            'nombre': 'Polera Azul',
+            'descripcion': '',
+            'cantidad': 1,
+            'unidad': 'UN',
+            'precio_unitario': 8000,
+            'monto_item': 8000,
+        }]
+        datos['descuentos_recargos'] = [{
+            'tpo_mov': 'D',
+            'glosa_dr': 'Descuento',
+            'tpo_valor': '$',
+            'valor_dr': 2000,
+        }]
+        txt = generar_txt_boleta_acepta(datos)
+        # La línea de descuento debe venir después de la línea de observación
+        pos_descuento = txt.find('1|D|Descuento|$|2000|}')
+        pos_impresora = txt.find('boleta')  # nombre de impresora en obs
+        self.assertGreater(
+            pos_descuento, pos_impresora,
+            "La línea DscRcgGlobal debe aparecer DESPUÉS de las observaciones.",
         )
 
     def test_observacion_boleta_incluye_monto_descuento(self):
@@ -585,6 +635,19 @@ class TestObservacionCompactaRespeta90Chars(TestCase):
     maxLength del XSD SII (RazonRef / TermPagoGlosa).
     """
 
+    def _extraer_obs_boleta(self, txt):
+        """
+        Extrae el campo 4 (índice 3) de la línea de observación de una boleta.
+        Busca la primera línea con 9+ campos (obs) en lugar de asumir posición
+        final, ya que la sección DscRcgGlobal puede venir después de la obs.
+        """
+        lineas_util = [l for l in txt.split('\n') if l and l not in ('~', '\\')]
+        for linea in reversed(lineas_util):
+            campos = linea.split('|')
+            if len(campos) >= 9:
+                return campos[3]
+        return ''
+
     def test_observacion_compacta_boleta(self):
         datos = _datos_boleta_base()
         datos['emisor']['metodos_pago'] = (
@@ -602,12 +665,7 @@ class TestObservacionCompactaRespeta90Chars(TestCase):
         }]
         txt = generar_txt_boleta_acepta(datos)
 
-        # Línea de observación = última línea útil (antes del último ~\).
-        lineas_util = [l for l in txt.split('\n') if l and l not in ('~', '\\')]
-        linea_obs = lineas_util[-1]
-
-        # Campo 4 de la línea de observación es la glosa compacta (índice 3).
-        campo_obs = linea_obs.split('|')[3]
+        campo_obs = self._extraer_obs_boleta(txt)
         self.assertLessEqual(
             len(campo_obs), 90,
             f"Observación compacta excede 90 chars: {campo_obs!r}",

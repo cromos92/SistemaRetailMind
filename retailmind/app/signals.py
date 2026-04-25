@@ -72,6 +72,32 @@ def marcar_para_reevaluacion(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Movimientos_Producto)
+def notificar_stock_a_allconnected(sender, instance, created, **kwargs):
+    """
+    Cada vez que se registra un movimiento de stock (venta, devolución,
+    ajuste, recepción), notifica a AllConnected con el nuevo stock del SKU.
+    La notificación va en un thread daemon — no bloquea la caja.
+    """
+    if not created:
+        return
+    pt = instance.ProductoTalla
+    if not pt:
+        return
+    try:
+        from .stock_notifier import notificar_cambio_stock
+        notificar_cambio_stock(
+            sku=str(pt.sku),
+            nuevo_stock=int(pt.stock or 0),
+        )
+    except Exception:
+        # Nunca romper la venta por un fallo de notificación
+        logger.exception(
+            "Error notificando stock a AllConnected para SKU %s",
+            getattr(pt, 'sku', '?'),
+        )
+
+
+@receiver(post_save, sender=Movimientos_Producto)
 def registrar_ingreso_stock(sender, instance, created, **kwargs):
     """Registra primer ingreso de temporada en StockInicialTemporada."""
     if not created:

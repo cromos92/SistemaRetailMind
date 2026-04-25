@@ -285,6 +285,83 @@ class StockPorSkusView(APIView):
 
 
 # ──────────────────────────────────────────────
+# Endpoint 3c — Stock GLOBAL por empresa (suma de todas las sucursales)
+# GET /api/stock/global/?rut_empresa=XX-X[&skus=A,B,C]
+# ──────────────────────────────────────────────
+
+class StockGlobalView(APIView):
+    """
+    Retorna stock TOTAL por SKU sumando TODAS las sucursales de la empresa.
+    Opcionalmente filtra por una lista de SKUs (CSV).
+
+    Usado por AllConnected para actualizar stock en marketplaces externos
+    (Shopify, Paris, Ripley, Walmart, etc.) donde se publica un stock
+    unificado que no distingue sucursales.
+
+    Cada canal en AllConnected tiene `rut_empresa` que identifica la empresa
+    en RetailMind. La suma se resuelve en una sola query SQL.
+
+    Respuesta:
+    {
+      "success": true,
+      "data": [
+        {"sku": "4810070", "stock_total": 15},
+        {"sku": "4810071", "stock_total": 8}
+      ],
+      "total": 2,
+      "rut_empresa": "76104936-4"
+    }
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    def get(self, request):
+        from django.db.models import Sum
+
+        rut = request.query_params.get('rut_empresa', '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'El parámetro rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        skus_raw = request.query_params.get('skus', '').strip()
+        skus_list = [s.strip() for s in skus_raw.split(',') if s.strip()]
+
+        qs = (
+            Producto_Talla.objects
+            .filter(producto__sucursal__empresa__rut=rut)
+        )
+        if skus_list:
+            qs = qs.filter(sku__in=skus_list)
+
+        # Una sola query: GROUP BY sku, SUM(stock)
+        aggregated = (
+            qs
+            .values('sku')
+            .annotate(stock_total=Sum('stock'))
+            .order_by('sku')
+        )
+
+        data = [
+            {'sku': str(row['sku']), 'stock_total': int(row['stock_total'] or 0)}
+            for row in aggregated
+        ]
+
+        logger.info(
+            f"[external/stock/global] rut={rut} skus_filter={len(skus_list)} → {len(data)} SKUs"
+        )
+        return Response({
+            'success': True,
+            'data': data,
+            'total': len(data),
+            'rut_empresa': rut,
+            'error': None,
+        })
+
+
+# ──────────────────────────────────────────────
 # Endpoint 4 — Health check (sin auth)
 # GET /api/health/
 # ──────────────────────────────────────────────
@@ -530,18 +607,25 @@ class PreciosActualesView(APIView):
 
 class NovedadesView(APIView):
     """
-    Retorna productos/SKUs creados o modificados recientemente.
-    Usado por AllConnected para detectar nueva mercadería sin un full sync.
+    Retorna productos/SKUs creados O MODIFICADOS recientemente.
+    Usado por AllConnected para detectar nueva mercadería y cambios de
+    precio/stock/costo sin hacer un full sync.
 
-    Si `desde` se omite, devuelve los últimos 7 días.
-    Filtra por Producto.fecha_creacion cuando existe, o hace fallback
-    a los productos actuales.
+    Un producto aparece como novedad si cumple CUALQUIERA de:
+      - Producto.fecha_creacion >= desde  (producto nuevo)
+      - Producto.fecha_actualizacion >= desde  (precio/costo cambió, ej. recepción de compra)
+      - Producto_Talla.updated_at >= desde  (stock cambió, ej. movimiento de inventario)
+
+    Parámetros:
+      rut_empresa (obligatorio)
+      desde (YYYY-MM-DD, default: últimos 7 días)
     """
     authentication_classes = [ApiKeyAuthentication]
     permission_classes = [ApiKeyPermission]
 
     def get(self, request):
         from datetime import timedelta
+        from django.db.models import Q
 
         rut = request.query_params.get('rut_empresa', '').strip()
         if not rut:
@@ -567,29 +651,50 @@ class NovedadesView(APIView):
 
         logger.info(f"[external/novedades] rut={rut} desde={desde}")
 
-        qs = Producto.objects.filter(sucursal__empresa__rut=rut)
+        # Productos de la empresa
+        base_qs = Producto.objects.filter(sucursal__empresa__rut=rut)
+
+        # 1. Productos creados o actualizados desde la fecha
+        filtro_producto = Q()
         if hasattr(Producto, 'fecha_creacion'):
-            qs = qs.filter(fecha_creacion__date__gte=desde)
+            filtro_producto |= Q(fecha_creacion__date__gte=desde)
+        if hasattr(Producto, 'fecha_actualizacion'):
+            filtro_producto |= Q(fecha_actualizacion__date__gte=desde)
+
+        productos_tocados = base_qs.filter(filtro_producto)
+
+        # 2. Productos cuyas tallas tuvieron movimiento de stock
+        productos_con_stock_nuevo = set()
+        if hasattr(Producto_Talla, 'updated_at'):
+            tallas_tocadas = (
+                Producto_Talla.objects
+                .filter(
+                    producto__sucursal__empresa__rut=rut,
+                    updated_at__date__gte=desde,
+                )
+                .values_list('producto_id', flat=True)
+                .distinct()
+            )
+            productos_con_stock_nuevo = set(tallas_tocadas)
+
+        # Combinar: IDs de productos tocados por cualquier vía
+        ids_tocados = set(productos_tocados.values_list('id', flat=True))
+        ids_tocados |= productos_con_stock_nuevo
+        qs_final = base_qs.filter(id__in=ids_tocados) if ids_tocados else base_qs.none()
 
         rows = list(
             Producto_Talla.objects
-            .filter(producto__in=qs)
-            .values(
-                'sku', 'talla', 'stock',
-                'producto__articulo',
-                'producto__descripcion',
-                'producto__atributo1__valor',
-                'producto__atributo2__valor',
-                'producto__costo',
-                'producto__precioventa',
-                'producto__sucursal__alias',
-            )
+            .filter(producto__in=qs_final)
+            .values(*_VALUES_FIELDS)
         )
 
         productos = agrupar_por_producto(rows)
         serializer = ProductoExternalSerializer(productos, many=True)
 
-        logger.info(f"[external/novedades] rut={rut} desde={desde} → {len(productos)} productos")
+        logger.info(
+            f"[external/novedades] rut={rut} desde={desde} → "
+            f"{len(productos)} productos (creados/actualizados={len(ids_tocados)})"
+        )
         return Response({
             'success': True,
             'data': serializer.data,

@@ -2505,10 +2505,15 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                             nombre_producto = producto.articulo if producto else str(sku)
                     
                     if not es_boleta:
+                        # Factura: precio completo neto por unidad; el descuento
+                        # va como DscRcgGlobal (tabla 3) para que aparezca como
+                        # línea visible en el documento. monto_item = precio_neto × qty.
                         precio_unitario_txt = int(round(Decimal(tp.precio) / Decimal('1.19')))
-                        monto_descuento_txt = int(round(Decimal(tp.descuento_unitario * tp.stock) / Decimal('1.19'))) if tp.descuento_unitario else 0
-                        monto_item_txt = int(round(Decimal(tp.subtotal) / Decimal('1.19')))
+                        monto_descuento_txt = 0  # el descuento se muestra en DscRcgGlobal
+                        monto_item_txt = precio_unitario_txt * tp.stock
                     else:
+                        # Boleta: precio IVA-inclusive completo; el descuento va
+                        # como DscRcgGlobal (tabla 4) después de las observaciones.
                         precio_unitario_txt = tp.precio
                         monto_descuento_txt = 0
                         monto_item_txt = tp.precio * tp.stock
@@ -2519,7 +2524,7 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                         'descripcion': '',
                         'cantidad': tp.stock,
                         'precio_unitario': precio_unitario_txt,
-                        'descuento_pct': float(tp.porcentaje_descuento) if tp.porcentaje_descuento else 0,
+                        'descuento_pct': 0,          # el descuento va en DscRcgGlobal
                         'monto_descuento': monto_descuento_txt,
                         'total': monto_item_txt
                     })
@@ -2631,52 +2636,30 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             )
             descuento_efectivo = descuento_items  # solo líneas; no arrastrar stale
 
-            suma_items_txt = sum(d['monto_item'] for d in datos_txt['detalle'])
-
             if descuento_efectivo > 0:
-                total_correcto = suma_items_txt - descuento_efectivo
-
+                # Boleta (39/41): DscRcgGlobal en monto IVA-inclusive — la sección
+                # tabla 4 va DESPUÉS de las observaciones (formato Acepta oficial).
+                # Factura (33/34): DscRcgGlobal en monto NETO — tabla 3, antes de
+                # referencias. El monto_item de cada línea usa precio completo neto
+                # para que sum(items) - dcto_neto = monto_neto del header.
                 if es_boleta:
-                    # Boletas: distribuir descuento proporcionalmente en monto_item
-                    # de cada línea. Acepta no soporta la sección DscRcgGlobal
-                    # (tabla 4) en boletas tipo 39/41 — la sección extra de `~`
-                    # causa que el archivo quede como .tmp y no se imprima.
-                    descuento_acumulado = 0
-                    items = datos_txt['detalle']
-                    for i, item in enumerate(items):
-                        if i < len(items) - 1:
-                            proporcion = item['monto_item'] / suma_items_txt
-                            rebaja = round(descuento_efectivo * proporcion)
-                            descuento_acumulado += rebaja
-                        else:
-                            rebaja = descuento_efectivo - descuento_acumulado
-                        item['monto_item'] = item['monto_item'] - rebaja
-                    print(
-                        f"TXT Boleta: Descuento ${descuento_efectivo:,} distribuido en {len(items)} items. "
-                        f"Items orig: ${suma_items_txt:,}, Total: ${total_correcto:,}"
-                    )
+                    valor_dr = descuento_efectivo  # IVA-inclusive
                 else:
-                    # Facturas: usar DscRcgGlobal (tabla 3) normalmente.
-                    datos_txt['descuentos_recargos'] = [{
-                        'tpo_mov': 'D',
-                        'glosa_dr': 'Descuento',
-                        'tpo_valor': '$',
-                        'valor_dr': descuento_efectivo,
-                    }]
-                    print(f"TXT Factura: Descuento ${descuento_efectivo:,} aplicado. Items: ${suma_items_txt:,}, Total: ${total_correcto:,}")
+                    valor_dr = int(round(Decimal(descuento_efectivo) / Decimal('1.19')))  # neto
 
-                if total_correcto > 0:
-                    datos_txt['totales']['monto_total'] = total_correcto
-            elif suma_items_txt > int(total) and int(total) > 0:
-                # Red de seguridad: items > total DTE. Antes generábamos una
-                # línea de descuento fantasma aquí, pero eso ocultaba el bug
-                # real (ticket.total stale). Preferimos CORREGIR el total
-                # del DTE para que coincida con la suma real de items.
+                datos_txt['descuentos_recargos'] = [{
+                    'tpo_mov': 'D',
+                    'glosa_dr': 'Descuento',
+                    'tpo_valor': '$',
+                    'valor_dr': valor_dr,
+                }]
                 print(
-                    f"⚠️ TXT: Items sum (${suma_items_txt:,}) > DTE total (${int(total):,}). "
-                    f"Corrigiendo monto_total a suma de items (no se genera línea de descuento)."
+                    f"TXT {'Boleta' if es_boleta else 'Factura'}: Descuento "
+                    f"${descuento_efectivo:,} IVA-incl → valor_dr={valor_dr:,} "
+                    f"({'IVA-incl' if es_boleta else 'neto'}) como DscRcgGlobal."
                 )
-                datos_txt['totales']['monto_total'] = suma_items_txt
+                # monto_total ya es correcto (int(total) = ticket.total = monto
+                # descontado IVA-inclusive). NO se sobreescribe aquí.
             
             # Generar TXT
             contenido_txt = generar_txt_dte_acepta(datos_txt)
@@ -3683,11 +3666,15 @@ def listar_documentos_ventas(request):
         monto_max = int(monto_max_raw) if monto_max_raw.isdigit() else None
 
         # === SOLO DTEs (Facturas/Boletas Electrónicas) ===
+        # Se excluyen los descartados: la eliminación lógica de un DTE
+        # (gestionVentasDocumentos) los marca como `descartado=True` y
+        # debe sacarlos del listado y de las KPIs derivadas.
         dtes_filtrados = (
             Dte.objects
             .filter(
                 sucursal_id=sucursal_id,
                 tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+                descartado=False,
             )
             .select_related('vendedor', 'receptor')
         )
@@ -4748,6 +4735,234 @@ def anular_documento_venta(request):
 
 @login_required
 @require_POST
+def eliminar_documento_venta(request):
+    """
+    Elimina (soft delete) un DTE desde gestión de documentos de ventas:
+
+    1. Marca el DTE como ``descartado=True`` y ``estado_dte='ANULADO'``.
+       - El listado de documentos lo filtra (`descartado=False`).
+       - La cuadratura de caja lo filtra (mismo criterio).
+
+    2. Devuelve a bodega el stock vendido. La fuente del stock depende del
+       vínculo:
+         - Si el DTE tiene un Ticket vinculado (`Ticket.folio_dte ==
+           Dte.numero_documento`), recorremos `Ticket_Productos` y
+           devolvemos cada `ProductoTalla.stock`.
+         - Si no hay ticket, recorremos `Dte_Productos` (sólo los que
+           tengan `productoTalla` no nulo).
+       Por cada línea se crea un `Movimientos_Producto` con
+       ``concepto='DEVOLUCION_CLIENTE'`` y ``tipo_movimiento='INGRESO'`` con
+       ``referencia_externa='ELIMINACION_DTE_<numero>'`` para mantener
+       trazabilidad del stock devuelto.
+
+    3. Si hay ticket vinculado, lo marca como ``estado='ANULADO'`` (queda
+       fuera de tickets pagados de la cuadratura).
+
+    Restricción: solo administradores (`request.user.rol == 'administrador'`).
+    El soft delete deja el DTE en BD para auditoría / reversión manual con
+    `restaurar_dte`.
+
+    Body esperado::
+
+        { "documento_id": 123, "motivo": "Texto opcional" }
+    """
+    try:
+        data = json.loads(request.body or '{}')
+        documento_id = data.get('documento_id')
+        motivo = (data.get('motivo') or '').strip()[:200]
+
+        if not documento_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de documento requerido'
+            })
+
+        # Solo administradores pueden eliminar.
+        rol_usuario = getattr(request.user, 'rol', '') or ''
+        if rol_usuario != 'administrador':
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo los administradores pueden eliminar documentos'
+            }, status=403)
+
+        # Trazabilidad de quién y cuándo descartó.
+        responsable = (
+            request.user.get_full_name()
+            or request.user.username
+            or 'Sistema'
+        )
+
+        with transaction.atomic():
+            dte = (
+                Dte.objects
+                .select_for_update()
+                .filter(id=documento_id)
+                .first()
+            )
+            if not dte:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Documento no encontrado'
+                })
+
+            if dte.descartado:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El documento ya fue eliminado'
+                })
+
+            referencia = f'ELIMINACION_DTE_{dte.numero_documento}'
+            obs_base = (
+                f'Eliminación DTE #{dte.numero_documento} '
+                f'({dte.tipo_documento}) por {responsable}'
+                + (f'. Motivo: {motivo}' if motivo else '')
+            )
+
+            ticket_vinculado = None
+            if dte.numero_documento:
+                ticket_vinculado = (
+                    Ticket.objects
+                    .select_for_update()
+                    .filter(
+                        sucursal_id=dte.sucursal_id,
+                        folio_dte=dte.numero_documento,
+                    )
+                    .first()
+                )
+
+            stock_devuelto = []  # [{sku, cantidad}, ...]
+            movimientos_creados = 0
+
+            if ticket_vinculado:
+                # Caso 1: el stock fue descontado al pagar el ticket; lo
+                # devolvemos por las líneas del ticket (mismas SKUs / cant.).
+                productos_ticket = (
+                    Ticket_Productos.objects
+                    .filter(idTicket=ticket_vinculado)
+                    .select_related('ProductoTalla', 'ProductoTalla__producto')
+                )
+                for tp in productos_ticket:
+                    if tp.ProductoTalla is None or not tp.stock:
+                        continue
+                    pt = tp.ProductoTalla
+                    pt.stock = (pt.stock or 0) + int(tp.stock)
+                    pt.save(update_fields=['stock'])
+
+                    Movimientos_Producto.objects.create(
+                        ticket=ticket_vinculado,
+                        ProductoTalla=pt,
+                        sucursal_destino=ticket_vinculado.sucursal,
+                        cantidad=int(tp.stock),
+                        costo=(
+                            pt.producto.costo if pt.producto else 0
+                        ),
+                        precio=int(tp.precio or 0),
+                        concepto='DEVOLUCION_CLIENTE',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=responsable,
+                        observaciones=obs_base,
+                        referencia_externa=referencia,
+                    )
+                    movimientos_creados += 1
+                    stock_devuelto.append({
+                        'sku': getattr(pt, 'sku', '') or '',
+                        'cantidad': int(tp.stock),
+                    })
+
+                # Anular ticket: lo saca de la cuadratura
+                # (Ticket queries filtran por estado='PAGADO').
+                if ticket_vinculado.estado != 'ANULADO':
+                    ticket_vinculado.estado = 'ANULADO'
+                    ticket_vinculado.save(update_fields=['estado'])
+            else:
+                # Caso 2: DTE sin ticket vinculado (factura emitida directa,
+                # NC, etc.). Devolvemos por Dte_Productos.
+                productos_dte = (
+                    Dte_Productos.objects
+                    .filter(dte=dte)
+                    .select_related('productoTalla', 'productoTalla__producto')
+                )
+                for dp in productos_dte:
+                    pt = dp.productoTalla
+                    if pt is None or not dp.stock:
+                        # Líneas manuales / sin SKU: nada que devolver.
+                        continue
+                    pt.stock = (pt.stock or 0) + int(dp.stock)
+                    pt.save(update_fields=['stock'])
+
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=pt,
+                        sucursal_destino=dte.sucursal,
+                        cantidad=int(dp.stock),
+                        costo=int(dp.costo or 0),
+                        sobreprecio=int(dp.sobreprecio or 0),
+                        precio=int(dp.precio or 0),
+                        concepto='DEVOLUCION_CLIENTE',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=responsable,
+                        observaciones=obs_base,
+                        referencia_externa=referencia,
+                    )
+                    movimientos_creados += 1
+                    stock_devuelto.append({
+                        'sku': getattr(pt, 'sku', '') or '',
+                        'cantidad': int(dp.stock),
+                    })
+
+            # Soft delete del DTE: lo saca del listado y de la cuadratura.
+            # `estado_dte='ANULADO'` reforzaría el filtro existente en otros
+            # módulos que aún no respetan `descartado`.
+            dte.descartado = True
+            dte.fecha_descarte = timezone.now()
+            dte.descartado_por = responsable[:100]
+            dte.motivo_descarte = (
+                motivo[:200]
+                if motivo
+                else f'Eliminado desde gestión de documentos por {responsable}'
+            )[:200]
+            dte.estado_dte = 'ANULADO'
+            dte.save(update_fields=[
+                'descartado',
+                'fecha_descarte',
+                'descartado_por',
+                'motivo_descarte',
+                'estado_dte',
+            ])
+
+        return JsonResponse({
+            'success': True,
+            'message': (
+                f'DTE #{dte.numero_documento} eliminado. '
+                f'Stock devuelto: {len(stock_devuelto)} línea(s).'
+            ),
+            'documento': {
+                'id': dte.id,
+                'tipo_documento': dte.tipo_documento,
+                'numero_documento': dte.numero_documento,
+            },
+            'ticket_anulado': bool(ticket_vinculado),
+            'ticket_id': ticket_vinculado.id if ticket_vinculado else None,
+            'movimientos_creados': movimientos_creados,
+            'stock_devuelto': stock_devuelto,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al eliminar documento: {str(e)}'
+        })
+
+
+@login_required
+@require_POST
 def editar_dte_boleta_papel(request):
     """
     Edita campos puntuales de un DTE aplicando permisos granulares.
@@ -4852,6 +5067,10 @@ def editar_dte_boleta_papel(request):
                     'error': '`pagos` debe ser una lista'
                 })
             metodos_validos = {c for c, _ in METODO_PAGO_TICKET_CHOICES}
+            # Para VENTA_INTERNET la plataforma se persiste en
+            # `Dte_Detalle_Pago.tipo_tarjeta` y el N° de pedido en `voucher`.
+            # Se exigen ambos para mantener la trazabilidad operativa
+            # (módulo de cuadratura clasifica por plataforma).
             for idx, item in enumerate(pagos_raw):
                 if not isinstance(item, dict):
                     return JsonResponse({
@@ -4877,7 +5096,47 @@ def editar_dte_boleta_papel(request):
                         'success': False,
                         'error': f'Pago #{idx + 1}: monto no puede ser negativo'
                     })
-                pagos_payload.append({'id': pago_id, 'metodo_pago': metodo, 'monto': monto})
+
+                # `tipo_tarjeta` y `voucher` son opcionales para la mayoría
+                # de los métodos pero obligatorios cuando es VENTA_INTERNET
+                # (plataforma + N° de pedido). Si no vienen en el payload
+                # los dejamos en None → "no tocar" al aplicar.
+                tipo_tarjeta_in = item.get('tipo_tarjeta', None)
+                voucher_in = item.get('voucher', None)
+                tipo_tarjeta_val = (
+                    str(tipo_tarjeta_in).strip()
+                    if tipo_tarjeta_in is not None else None
+                )
+                voucher_val = (
+                    str(voucher_in).strip()
+                    if voucher_in is not None else None
+                )
+
+                if metodo == 'VENTA_INTERNET':
+                    if not tipo_tarjeta_val:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'Pago #{idx + 1}: Venta por Internet requiere '
+                                'plataforma (Mercado Pago, Falabella, Paris…)'
+                            )
+                        })
+                    if not voucher_val:
+                        return JsonResponse({
+                            'success': False,
+                            'error': (
+                                f'Pago #{idx + 1}: Venta por Internet requiere '
+                                'N° de pedido / voucher'
+                            )
+                        })
+
+                pagos_payload.append({
+                    'id': pago_id,
+                    'metodo_pago': metodo,
+                    'monto': monto,
+                    'tipo_tarjeta': tipo_tarjeta_val,
+                    'voucher': voucher_val,
+                })
 
         sucursal_id_sesion = get_sucursal_id(request)
 
@@ -5034,6 +5293,27 @@ def editar_dte_boleta_papel(request):
                     obj = pagos_por_id[item['id']]
                     obj.metodo_pago = item['metodo_pago']
                     obj.monto = item['monto']
+
+                    # Si el método final NO es VENTA_INTERNET y el cliente
+                    # mandó valores nuevos, los aceptamos tal cual; si
+                    # cambió a un método que no usa plataforma/voucher
+                    # limpiamos para que la trazabilidad quede consistente
+                    # (ej: pasar de VENTA_INTERNET → EFECTIVO no debería
+                    # dejar la plataforma "Mercado Pago" colgando).
+                    if 'tipo_tarjeta' in item:
+                        if item['metodo_pago'] == 'VENTA_INTERNET':
+                            obj.tipo_tarjeta = item['tipo_tarjeta'] or None
+                        elif item['tipo_tarjeta'] is not None:
+                            obj.tipo_tarjeta = item['tipo_tarjeta'] or None
+                        else:
+                            obj.tipo_tarjeta = None
+                    if 'voucher' in item:
+                        if item['metodo_pago'] == 'VENTA_INTERNET':
+                            obj.voucher = item['voucher'] or None
+                        elif item['voucher'] is not None:
+                            obj.voucher = item['voucher'] or None
+                        else:
+                            obj.voucher = None
                     pagos_actualizar.append(obj)
 
             # Aplicar cambios ----------------------------------------------
@@ -5111,7 +5391,9 @@ def editar_dte_boleta_papel(request):
                 dte.save(update_fields=update_fields)
 
             for obj in pagos_actualizar:
-                obj.save(update_fields=['metodo_pago', 'monto'])
+                obj.save(update_fields=[
+                    'metodo_pago', 'monto', 'tipo_tarjeta', 'voucher',
+                ])
 
             # Propagar al Ticket vinculado (si existe) para mantener la
             # consistencia con la cuadratura. Se ejecuta SIEMPRE al guardar,
@@ -5159,6 +5441,8 @@ def editar_dte_boleta_papel(request):
                     return (
                         (dp.metodo_pago or '') != (tp.metodo_pago or '')
                         or int(dp.monto or 0) != int(tp.monto or 0)
+                        or (dp.tipo_tarjeta or '') != (tp.tipo_tarjeta or '')
+                        or (dp.voucher or '') != (tp.voucher or '')
                     )
 
                 mismo_largo = (
@@ -5175,21 +5459,25 @@ def editar_dte_boleta_papel(request):
                 )
 
                 if hay_drift and mismo_largo:
-                    # 1:1 por orden de id. No tocamos tipo_tarjeta / voucher
-                    # del ticket: el usuario sólo edita metodo+monto.
+                    # 1:1 por orden de id. Propagamos también
+                    # tipo_tarjeta + voucher para que la cuadratura clasifique
+                    # correctamente VENTA_INTERNET por plataforma.
                     for dp, tp in zip(
                         dte_pagos_actuales, ticket_pagos_actuales
                     ):
                         tp.metodo_pago = dp.metodo_pago
                         tp.monto = int(dp.monto or 0)
-                        tp.save(update_fields=['metodo_pago', 'monto'])
+                        tp.tipo_tarjeta = dp.tipo_tarjeta
+                        tp.voucher = dp.voucher
+                        tp.save(update_fields=[
+                            'metodo_pago', 'monto', 'tipo_tarjeta', 'voucher',
+                        ])
                         ticket_pagos_sincronizados += 1
                     ticket_pagos_resync_modo = 'update'
                 elif hay_drift:
                     # Cantidad de pagos distinta: reconstruimos los del
-                    # ticket a partir del DTE. Se pierde voucher/tipo_tarjeta
-                    # del ticket original, pero es preferible a tener totales
-                    # que no cuadran en la caja.
+                    # ticket a partir del DTE preservando plataforma y
+                    # voucher (clave para VENTA_INTERNET y tarjetas).
                     TicketDetallePago.objects.filter(
                         ticket_id=ticket_vinculado.pk
                     ).delete()
@@ -5198,6 +5486,8 @@ def editar_dte_boleta_papel(request):
                             ticket_id=ticket_vinculado.pk,
                             metodo_pago=dp.metodo_pago,
                             monto=int(dp.monto or 0),
+                            tipo_tarjeta=dp.tipo_tarjeta,
+                            voucher=dp.voucher,
                         )
                         ticket_pagos_sincronizados += 1
                     ticket_pagos_resync_modo = 'rebuild'
@@ -5541,7 +5831,11 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         sucursal=sucursal,
         fecha_emision=fecha_obj,
         estado_dte__in=['EMITIDO', 'ACEPTADO'],
-        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION']
+        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION'],
+        # Los DTEs marcados como descartados desde la gestión de
+        # documentos no participan de la cuadratura (stock ya devuelto,
+        # documento sacado del listado).
+        descartado=False,
     ).prefetch_related('dte_asociado')
     
     folios_tickets_set = set(folios_tickets)

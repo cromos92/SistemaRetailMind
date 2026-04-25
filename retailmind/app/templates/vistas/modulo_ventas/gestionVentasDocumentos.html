@@ -1046,6 +1046,7 @@ document.addEventListener('DOMContentLoaded', function() {
         listarDocumentos: '{% url "listar_documentos_ventas" %}',
         convertirFactura: '{% url "convertir_ticket_a_factura" %}',
         anularDocumento: '{% url "anular_documento_venta" %}',
+        eliminarDocumento: '{% url "eliminar_documento_venta" %}',
         editarBoletaPapel: '{% url "editar_dte_boleta_papel" %}',
         exportarExcel: '/api/ventas/exportar-documentos/',
         detalleDocumento: (id) => `{% url "detalle_documento_venta" documento_id=0 %}`.replace('/0/', `/${id}/`),
@@ -1323,6 +1324,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             title="Editar campos permitidos del DTE">
                         <i class="ri-edit-2-line"></i> Editar
                     </button>` : ''}
+                    ${esAdmin ? `
+                    <button class="btn btn-sm btn-danger btn-action ms-1"
+                            onclick="eliminarDocumento(${doc.id}, '${(doc.tipo || '').replace(/'/g, "\\'")}', ${doc.numero || 0})"
+                            title="Eliminar documento, devolver stock y sacar de cuadratura">
+                        <i class="ri-delete-bin-line"></i> Eliminar
+                    </button>` : ''}
                 </td>
             </tr>
         `).join('');
@@ -1507,6 +1514,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }).join('');
     }
 
+    // Plataformas válidas para Venta por Internet (consistente con
+    // generacionVentas.html). Si el pago tiene una plataforma libre
+    // (ej. histórica) se agrega como opción "(actual)" para no perderla.
+    const PLATAFORMAS_VENTA_INTERNET = [
+        'Mercado Pago',
+        'Mercado Libre',
+        'Paris',
+        'Ripley',
+        'Falabella',
+        'Walmart',
+        'Shopify',
+        'Klap',
+    ];
+
+    function renderOpcionesPlataforma(plataformaActual) {
+        const actual = (plataformaActual || '').trim();
+        const set = new Set(PLATAFORMAS_VENTA_INTERNET);
+        const incluyeActual = !actual || set.has(actual);
+        const opciones = [`<option value="">Seleccione plataforma…</option>`];
+        if (!incluyeActual) {
+            opciones.push(
+                `<option value="${actual}" selected>${actual} (actual)</option>`
+            );
+        }
+        PLATAFORMAS_VENTA_INTERNET.forEach(p => {
+            const sel = (p === actual) ? 'selected' : '';
+            opciones.push(`<option value="${p}" ${sel}>${p}</option>`);
+        });
+        return opciones.join('');
+    }
+
     function aplicarPermisosFormularioEdicion(tipoDte) {
         // Habilita/deshabilita cada sección del modal según si el usuario
         // tiene permiso para ese campo en ese tipo de DTE.
@@ -1638,14 +1676,25 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Render por pago: una fila principal (método + monto + #id) y una
+        // sub-fila opcional con Plataforma + N° de pedido que se muestra
+        // sólo cuando el método es VENTA_INTERNET. La sub-fila viaja
+        // siempre en el DOM para no perder el dato si el usuario cambia
+        // de método y vuelve atrás.
         tbody.innerHTML = pagos.map((p, idx) => {
-            const opts = renderOpcionesMetodoPago(p.metodo || p.metodo_pago);
+            const metodo = (p.metodo || p.metodo_pago || '').toUpperCase();
+            const opts = renderOpcionesMetodoPago(metodo);
             const monto = parseInt(p.monto || 0, 10);
+            const plataforma = p.tipo_tarjeta || '';
+            const voucher = p.voucher || '';
+            const platOpts = renderOpcionesPlataforma(plataforma);
+            const mostrarInternet = (metodo === 'VENTA_INTERNET');
+            const dis = puedeEditarPagos ? '' : 'disabled';
             return `
                 <tr data-pago-idx="${idx}" data-pago-id="${p.id || ''}">
                     <td>
                         <select class="form-select form-select-sm pago-metodo"
-                                data-editor="pago" ${puedeEditarPagos ? '' : 'disabled'}>
+                                data-editor="pago" ${dis}>
                             ${opts}
                         </select>
                     </td>
@@ -1653,16 +1702,60 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="number" min="0" step="1"
                                class="form-control form-control-sm pago-monto"
                                data-editor="pago"
-                               value="${monto}" ${puedeEditarPagos ? '' : 'disabled'}>
+                               value="${monto}" ${dis}>
                     </td>
                     <td class="text-muted" style="font-size:10px;">#${p.id || '—'}</td>
+                </tr>
+                <tr data-pago-detalle-id="${p.id || ''}"
+                    class="pago-detalle-internet ${mostrarInternet ? '' : 'd-none'}">
+                    <td colspan="3" class="bg-light">
+                        <div class="row g-2 px-1 py-1" style="font-size:11px;">
+                            <div class="col-md-6">
+                                <label class="form-label mb-1 text-muted" style="font-size:11px;">
+                                    <i class="ri-global-line"></i> Plataforma
+                                </label>
+                                <select class="form-select form-select-sm pago-plataforma"
+                                        data-editor="pago" ${dis}>
+                                    ${platOpts}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label mb-1 text-muted" style="font-size:11px;">
+                                    <i class="ri-hashtag"></i> N° de pedido / voucher
+                                </label>
+                                <input type="text" maxlength="100"
+                                       class="form-control form-control-sm pago-voucher"
+                                       data-editor="pago"
+                                       value="${voucher.replace(/"/g, '&quot;')}"
+                                       placeholder="Ej: ORD-123456" ${dis}>
+                            </div>
+                        </div>
+                    </td>
                 </tr>`;
         }).join('');
 
         tbody.querySelectorAll('.pago-monto').forEach(input => {
             input.addEventListener('input', recalcularTotalPagosEditar);
         });
+        // Mostrar/ocultar la sub-fila Plataforma+Pedido al cambiar método
+        // (sólo aplica a VENTA_INTERNET).
+        tbody.querySelectorAll('.pago-metodo').forEach(select => {
+            select.addEventListener('change', onCambioMetodoPagoEditar);
+        });
         recalcularTotalPagosEditar();
+    }
+
+    function onCambioMetodoPagoEditar(ev) {
+        const select = ev.target;
+        const tr = select.closest('tr');
+        if (!tr) return;
+        const pagoId = tr.getAttribute('data-pago-id') || '';
+        const detalle = document.querySelector(
+            `tr.pago-detalle-internet[data-pago-detalle-id="${pagoId}"]`
+        );
+        if (!detalle) return;
+        const esInternet = (select.value || '').toUpperCase() === 'VENTA_INTERNET';
+        detalle.classList.toggle('d-none', !esInternet);
     }
 
     function recalcularTotalPagosEditar() {
@@ -1777,13 +1870,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (puedeEditarCampoEnTipo('pago', tipoDte)) {
             const pagos = [];
+            let errorPago = null;
             document.querySelectorAll('#tbodyPagosEditar tr[data-pago-id]').forEach(tr => {
                 const pagoId = parseInt(tr.getAttribute('data-pago-id'), 10);
                 if (!pagoId) return;
-                const metodo = tr.querySelector('.pago-metodo')?.value || '';
+                const metodo = (tr.querySelector('.pago-metodo')?.value || '').toUpperCase();
                 const monto = parseInt(tr.querySelector('.pago-monto')?.value || 0, 10) || 0;
-                pagos.push({ id: pagoId, metodo_pago: metodo, monto: monto });
+                const detalleTr = document.querySelector(
+                    `tr.pago-detalle-internet[data-pago-detalle-id="${pagoId}"]`
+                );
+                const plataforma = (detalleTr?.querySelector('.pago-plataforma')?.value || '').trim();
+                const voucher = (detalleTr?.querySelector('.pago-voucher')?.value || '').trim();
+
+                if (metodo === 'VENTA_INTERNET') {
+                    if (!plataforma) {
+                        errorPago = `Pago #${pagoId}: seleccione la plataforma de Venta por Internet`;
+                        return;
+                    }
+                    if (!voucher) {
+                        errorPago = `Pago #${pagoId}: ingrese el N° de pedido / voucher`;
+                        return;
+                    }
+                }
+
+                const item = { id: pagoId, metodo_pago: metodo, monto: monto };
+                // Sólo enviamos plataforma/voucher si el método los usa,
+                // así el backend puede limpiarlos en el resto de los casos
+                // sin pisar lo que ya hay si el usuario no abrió la sub-fila.
+                if (metodo === 'VENTA_INTERNET') {
+                    item.tipo_tarjeta = plataforma;
+                    item.voucher = voucher;
+                }
+                pagos.push(item);
             });
+            if (errorPago) {
+                mostrarError(errorPago);
+                return;
+            }
             if (pagos.length > 0) {
                 payload.pagos = pagos;
             }
@@ -1827,6 +1950,101 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(err => {
             console.error('Error editar DTE:', err);
             mostrarError('Error al actualizar el documento');
+        });
+    };
+
+    // === ELIMINACIÓN DE DOCUMENTO (soft delete + devolución de stock) ===
+    //
+    // Solo administradores. Pide motivo, confirma y llama al backend
+    // (`eliminar_documento_venta`) que:
+    //   1. Marca el DTE como `descartado=True` y `estado_dte='ANULADO'`
+    //      → desaparece del listado y de la cuadratura.
+    //   2. Devuelve el stock vendido a bodega creando un movimiento
+    //      `DEVOLUCION_CLIENTE` por línea.
+    //   3. Si hay ticket vinculado, lo marca como ANULADO.
+    window.eliminarDocumento = function(documentoId, tipo, numero) {
+        if (!esAdmin) {
+            mostrarError('Solo administradores pueden eliminar documentos');
+            return;
+        }
+        if (typeof Swal === 'undefined') {
+            mostrarError('No se puede confirmar la eliminación (Swal no disponible)');
+            return;
+        }
+
+        const tipoTxt = tipo || 'DTE';
+        const numTxt = numero || '';
+
+        Swal.fire({
+            icon: 'warning',
+            title: `Eliminar ${tipoTxt} #${numTxt}`,
+            html: `
+                <div class="text-start" style="font-size:13px;">
+                    <p class="mb-2">Esta acción:</p>
+                    <ul class="mb-2 ps-3">
+                        <li>Marca el documento como <strong>descartado</strong>.</li>
+                        <li>Lo saca del <strong>listado</strong> y de la <strong>cuadratura de caja</strong>.</li>
+                        <li><strong>Devuelve el stock</strong> vendido a bodega con su movimiento.</li>
+                        <li>Si tiene ticket vinculado, lo marca como <strong>ANULADO</strong>.</li>
+                    </ul>
+                    <p class="text-danger mb-2"><i class="ri-alert-line"></i> El DTE queda en BD para auditoría pero no aparecerá en consultas.</p>
+                </div>
+                <input id="eliminarDocMotivo" class="swal2-input" placeholder="Motivo (opcional, máx 200)" maxlength="200">
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            confirmButtonColor: '#FF4D4D',
+            cancelButtonText: 'Cancelar',
+            focusCancel: true,
+            preConfirm: () => {
+                const motivo = (document.getElementById('eliminarDocMotivo')?.value || '').trim();
+                return { motivo };
+            },
+        }).then(result => {
+            if (!result.isConfirmed) return;
+            const motivo = result.value?.motivo || '';
+
+            Swal.fire({
+                title: 'Eliminando...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(),
+            });
+
+            fetch(apiUrls.eliminarDocumento, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    documento_id: documentoId,
+                    motivo: motivo,
+                }),
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) {
+                        mostrarError(data.error || 'No se pudo eliminar el documento');
+                        return;
+                    }
+                    const detalle = [];
+                    if (data.movimientos_creados) {
+                        detalle.push(`${data.movimientos_creados} movimiento(s) de devolución`);
+                    }
+                    if (data.ticket_anulado) {
+                        detalle.push('ticket vinculado anulado');
+                    }
+                    mostrarExito(
+                        `${data.message || 'Documento eliminado'}`
+                        + (detalle.length ? ` · ${detalle.join(' · ')}` : '')
+                    );
+                    cargarDocumentos();
+                })
+                .catch(err => {
+                    console.error('Error eliminar documento:', err);
+                    mostrarError('Error al eliminar el documento');
+                });
         });
     };
 
