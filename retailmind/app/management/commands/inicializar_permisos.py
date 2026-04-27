@@ -499,6 +499,8 @@ class Command(BaseCommand):
             'buscar_productos_sucursal',
             # Requerimientos (solo crear)
             'lista_requerimientos', 'crear_requerimiento',
+            # Documentos internos: puede recibir/reportar problemas, no aprobar regularizaciones
+            'recepcion_dte',
             # Mi Cuenta
             'mi_perfil', 'ajuste_stock_rapido',
         ]
@@ -506,10 +508,10 @@ class Command(BaseCommand):
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)
         for opcion in opciones:
             # Determinar permisos seg?n la opci?n
-            puede_crear = opcion.codigo in ['ticket_venta', 'pos_dashboard', 'crear_requerimiento']
+            puede_crear = opcion.codigo in ['ticket_venta', 'pos_dashboard', 'crear_requerimiento', 'recepcion_dte']
             puede_editar = opcion.codigo in ['cuadratura_caja']
             
-            PermisoRol.objects.get_or_create(
+            permiso, created = PermisoRol.objects.get_or_create(
                 rol='cajero',
                 opcion_menu=opcion,
                 defaults={
@@ -518,8 +520,14 @@ class Command(BaseCommand):
                     'puede_editar': puede_editar,
                     'puede_eliminar': False,
                     'puede_exportar': False,
+                    'puede_aprobar': False,
                 }
             )
+            if not created and opcion.codigo == 'recepcion_dte':
+                permiso.puede_ver = True
+                permiso.puede_crear = True
+                permiso.puede_aprobar = False
+                permiso.save(update_fields=['puede_ver', 'puede_crear', 'puede_aprobar'])
         
         self.stdout.write(f'   >> {opciones.count()} permisos creados para Cajero')
 

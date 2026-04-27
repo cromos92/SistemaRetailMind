@@ -3189,6 +3189,95 @@ def generar_txt_acepta_api(request):
         }, status=500)
 
 
+def construir_detalle_txt_desde_dte_productos(dte_productos, tipo_numerico):
+    """
+    Agrupa el detalle para TXT Acepta por variante real de producto.
+
+    El articulo por si solo no identifica una variante en inventario: un mismo
+    articulo puede existir con distinta marca, color o costo.
+    """
+    from collections import defaultdict
+
+    detalle = []
+    productos_agrupados = defaultdict(lambda: {
+        'tallas': [],
+        'cantidad_total': 0,
+        'precio': 0,
+        'monto_total': 0,
+        'descuento_monto_total': 0,
+        'descuento_pct': 0,
+        'articulo': '',
+        'marca': '',
+        'color': '',
+    })
+
+    for dte_producto in dte_productos:
+        if dte_producto.productoTalla is None:
+            # Item de concepto (sin mercadería)
+            detalle.append({
+                'nombre': limpiar_texto(dte_producto.descripcion or 'Concepto'),
+                'descripcion': '',
+                'cantidad': dte_producto.stock,
+                'unidad': 'UN',
+                'precio_unitario': dte_producto.precio_unitario or dte_producto.precio,
+                'descuento_pct': float(dte_producto.descuento_pct) if dte_producto.descuento_pct else 0,
+                'monto_descuento': int(dte_producto.descuento_monto or 0),
+                'monto_item': dte_producto.monto_item or (dte_producto.stock * dte_producto.precio),
+                'codigo': 'SRV',
+                'indicador_exencion': 1 if tipo_numerico == 34 else '',
+            })
+            continue
+
+        producto_talla = dte_producto.productoTalla
+        producto = producto_talla.producto
+        marca = producto.atributo1.valor if producto.atributo1 else ''
+        color = producto.atributo2.valor if producto.atributo2 else ''
+        costo = int(dte_producto.costo if dte_producto.costo is not None else (producto.costo or 0))
+        precio_unitario = dte_producto.precio_unitario or dte_producto.precio
+
+        agrupacion_key = (
+            producto.articulo or '',
+            marca or '',
+            color or '',
+            costo,
+            precio_unitario,
+        )
+        grupo = productos_agrupados[agrupacion_key]
+
+        talla_nombre = str(producto_talla.talla) if getattr(producto_talla, 'talla', None) else 'U'
+        grupo['tallas'].append(f"{dte_producto.stock}:{talla_nombre}")
+        grupo['cantidad_total'] += dte_producto.stock
+        grupo['precio'] = precio_unitario
+        grupo['monto_total'] += dte_producto.monto_item or (dte_producto.stock * dte_producto.precio)
+        grupo['descuento_monto_total'] += int(dte_producto.descuento_monto or 0)
+        if dte_producto.descuento_pct:
+            grupo['descuento_pct'] = float(dte_producto.descuento_pct)
+        grupo['articulo'] = producto.articulo
+        grupo['marca'] = marca
+        grupo['color'] = color
+
+    for grupo in productos_agrupados.values():
+        tallas_str = ' '.join(grupo['tallas'])
+        marca_limpia = limpiar_texto(grupo['marca'] or '')
+        color_limpio = limpiar_texto(grupo['color'] or '')
+        marca_color = f"{marca_limpia} {color_limpio}".strip() if marca_limpia or color_limpio else ''
+        nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
+
+        detalle.append({
+            'nombre': limpiar_texto(nombre_final),
+            'descripcion': '',
+            'cantidad': grupo['cantidad_total'],
+            'unidad': 'UN',
+            'precio_unitario': grupo['precio'],
+            'descuento_pct': grupo['descuento_pct'],
+            'monto_descuento': grupo['descuento_monto_total'],
+            'monto_item': grupo['monto_total'],
+            'codigo': limpiar_texto(grupo['articulo'])
+        })
+
+    return detalle
+
+
 @require_POST
 @login_required
 def generar_dte_desde_ticket_api(request):
@@ -3434,77 +3523,13 @@ def generar_txt_desde_dte_existente(request):
             'referencias': []
         }
         
-        from collections import defaultdict
-        productos_agrupados = defaultdict(lambda: {
-            'tallas': [],
-            'cantidad_total': 0,
-            'precio': 0,
-            'monto_total': 0,
-            'descuento_monto_total': 0,
-            'descuento_pct': 0,
-            'producto': None,
-            'articulo': '',
-            'marca': '',
-            'color': ''
-        })
-
-        for dte_producto in dte.dte_productos.select_related('productoTalla__producto'):
-            if dte_producto.productoTalla is None:
-                # Item de concepto (sin mercadería)
-                datos['detalle'].append({
-                    'nombre': limpiar_texto(dte_producto.descripcion or 'Concepto'),
-                    'descripcion': '',
-                    'cantidad': dte_producto.stock,
-                    'unidad': 'UN',
-                    'precio_unitario': dte_producto.precio_unitario or dte_producto.precio,
-                    'descuento_pct': float(dte_producto.descuento_pct) if dte_producto.descuento_pct else 0,
-                    'monto_descuento': int(dte_producto.descuento_monto or 0),
-                    'monto_item': dte_producto.monto_item or (dte_producto.stock * dte_producto.precio),
-                    'codigo': 'SRV',
-                    'indicador_exencion': 1 if tipo_numerico == 34 else '',
-                })
-                continue
-
-            producto = dte_producto.productoTalla.producto
-            producto_talla = dte_producto.productoTalla
-            articulo_key = producto.articulo
-
-            grupo = productos_agrupados[articulo_key]
-
-            talla_nombre = str(producto_talla.talla) if hasattr(producto_talla, 'talla') and producto_talla.talla else 'U'
-            grupo['tallas'].append(f"{dte_producto.stock}:{talla_nombre}")
-            grupo['cantidad_total'] += dte_producto.stock
-            grupo['precio'] = dte_producto.precio_unitario or dte_producto.precio
-            grupo['monto_total'] += dte_producto.monto_item or (dte_producto.stock * dte_producto.precio)
-            grupo['descuento_monto_total'] += int(dte_producto.descuento_monto or 0)
-            if dte_producto.descuento_pct:
-                grupo['descuento_pct'] = float(dte_producto.descuento_pct)
-            grupo['producto'] = producto
-            grupo['articulo'] = producto.articulo
-
-            if not grupo['marca'] and producto.atributo1:
-                grupo['marca'] = producto.atributo1.valor
-            if not grupo['color'] and producto.atributo2:
-                grupo['color'] = producto.atributo2.valor
-
-        for articulo, grupo in productos_agrupados.items():
-            tallas_str = ' '.join(grupo['tallas'])
-            marca_limpia = limpiar_texto(grupo['marca'] or '')
-            color_limpio = limpiar_texto(grupo['color'] or '')
-            marca_color = f"{marca_limpia} {color_limpio}".strip() if marca_limpia or color_limpio else ''
-            nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
-
-            datos['detalle'].append({
-                'nombre': limpiar_texto(nombre_final),
-                'descripcion': '',
-                'cantidad': grupo['cantidad_total'],
-                'unidad': 'UN',
-                'precio_unitario': grupo['precio'],
-                'descuento_pct': grupo['descuento_pct'],
-                'monto_descuento': grupo['descuento_monto_total'],
-                'monto_item': grupo['monto_total'],
-                'codigo': limpiar_texto(grupo['articulo'])
-            })
+        datos['detalle'] = construir_detalle_txt_desde_dte_productos(
+            dte.dte_productos.select_related(
+                'productoTalla__producto__atributo1',
+                'productoTalla__producto__atributo2',
+            ),
+            tipo_numerico,
+        )
 
         # Poblar descuentos/recargos globales desde BD
         from .models import DescuentoRecargo

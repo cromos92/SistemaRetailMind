@@ -2,12 +2,15 @@
 Tests para generación y parseo de archivos TXT DTE en formato Acepta.
 Cubre: factura con/sin descuento, boleta, descuentos globales, parser, retrocompatibilidad.
 """
+from types import SimpleNamespace
+
 from django.test import TestCase
 from app.views_modulo_documentos import (
     generar_txt_dte_acepta,
     generar_txt_boleta_acepta,
     parsear_txt_acepta,
     construir_nombre_y_descripcion_item,
+    construir_detalle_txt_desde_dte_productos,
     truncar_campo_sii,
     MAX_LENGTHS_SII,
 )
@@ -169,6 +172,43 @@ class TestFacturaSinDescuento(TestCase):
         self.assertEqual(campos[6], '')
         self.assertEqual(campos[7], '')
         self.assertEqual(campos[8], '100000')
+
+
+class TestAgrupacionDetalleDteExistente(TestCase):
+    """El TXT de DTE existente agrupa por variante, no solo por artículo."""
+
+    def _dte_producto(self, articulo, marca, color, costo, talla, stock=1):
+        producto = SimpleNamespace(
+            articulo=articulo,
+            costo=costo,
+            atributo1=SimpleNamespace(valor=marca),
+            atributo2=SimpleNamespace(valor=color),
+        )
+        producto_talla = SimpleNamespace(producto=producto, talla=talla)
+        return SimpleNamespace(
+            productoTalla=producto_talla,
+            descripcion='',
+            costo=costo,
+            precio=10000,
+            precio_unitario=10000,
+            descuento_pct=0,
+            descuento_monto=0,
+            monto_item=stock * 10000,
+            stock=stock,
+        )
+
+    def test_mismo_articulo_distinto_color_o_costo_genera_lineas_distintas(self):
+        detalle = construir_detalle_txt_desde_dte_productos([
+            self._dte_producto('POLERA', 'ACME', 'AZUL', 5000, 'M', stock=2),
+            self._dte_producto('POLERA', 'ACME', 'ROJO', 5000, 'L', stock=1),
+            self._dte_producto('POLERA', 'ACME', 'AZUL', 6500, 'XL', stock=1),
+        ], tipo_numerico=33)
+
+        self.assertEqual(len(detalle), 3)
+        self.assertEqual([item['cantidad'] for item in detalle], [2, 1, 1])
+        self.assertIn('AZUL 2:M', detalle[0]['nombre'])
+        self.assertIn('ROJO 1:L', detalle[1]['nombre'])
+        self.assertIn('AZUL 1:XL', detalle[2]['nombre'])
 
 
 class TestBoletaSinCamposDescuento(TestCase):

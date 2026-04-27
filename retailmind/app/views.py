@@ -103,7 +103,7 @@ def recepcion_dte(request):
     sucursal_id = request.session.get('idSucursalActual')
     puede_ver_todas = (
         request.user.is_superuser or
-        PermisoUsuario.tiene_permiso_ver_todas_sucursales(request.user)
+        PermisoUsuario.usuario_ve_todas_sucursales(request.user)
     )
     return render(request, 'vistas/modulo_compras/recepcion_dte.html', {
         'user_rol': user_rol,
@@ -124,7 +124,7 @@ def recepciones_pendientes_api(request):
         empresa_actual_id = request.session.get('idEmpresaActual')
         puede_ver_todas = (
             request.user.is_superuser or
-            PermisoUsuario.tiene_permiso_ver_todas_sucursales(request.user)
+            PermisoUsuario.usuario_ve_todas_sucursales(request.user)
         )
         ver_todas = puede_ver_todas and request.GET.get('alcance') == 'todas'
 
@@ -2804,7 +2804,7 @@ def obtener_productos_regularizar(request):
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         puede_ver_todas = (
             request.user.is_superuser or
-            PermisoUsuario.tiene_permiso_ver_todas_sucursales(request.user)
+            PermisoUsuario.usuario_ve_todas_sucursales(request.user)
         )
         ver_todas = puede_ver_todas and request.GET.get('alcance') == 'todas'
 
