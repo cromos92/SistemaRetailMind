@@ -50,10 +50,61 @@ def _usuario_puede_ver_creditos_todas_sucursales(user):
     )
 
 
-def _usuario_puede_acceder_credito(request, credito):
+def _alcance_creditos_usuario(request, alcance='actual'):
+    """Retorna empresas/sucursales visibles para créditos según sesión/permisos."""
     empresa_actual_id = request.session.get('idEmpresaActual')
-    if credito.empresa_origen_id != empresa_actual_id:
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    puede_todas = _usuario_puede_ver_creditos_todas_sucursales(request.user)
+
+    if puede_todas and alcance == 'todas':
+        # Administrador ve todo el universo de créditos. Usuarios con override
+        # ven todas las empresas/sucursales que tengan asignadas por EmpresaUser.
+        if request.user.is_superuser or getattr(request.user, 'rol', '') == 'administrador':
+            empresa_ids = list(Empresa.objects.values_list('id', flat=True))
+            sucursal_ids = list(Sucursal.objects.filter(activa=True).values_list('id', flat=True))
+        else:
+            asignaciones = EmpresaUser.objects.filter(
+                user=request.user,
+                status=True,
+            )
+            empresa_ids = list(asignaciones.values_list('empresa_id', flat=True).distinct())
+            sucursal_ids = list(
+                asignaciones
+                .exclude(sucursal_id__isnull=True)
+                .values_list('sucursal_id', flat=True)
+                .distinct()
+            )
+            if not empresa_ids and empresa_actual_id:
+                empresa_ids = [empresa_actual_id]
+            if not sucursal_ids and empresa_ids:
+                sucursal_ids = list(
+                    Sucursal.objects
+                    .filter(empresa_id__in=empresa_ids, activa=True)
+                    .values_list('id', flat=True)
+                )
+        return {
+            'empresa_ids': empresa_ids,
+            'sucursal_ids': sucursal_ids,
+            'alcance': 'todas',
+            'puede_todas': True,
+        }
+
+    return {
+        'empresa_ids': [empresa_actual_id] if empresa_actual_id else [],
+        'sucursal_ids': [sucursal_actual_id] if sucursal_actual_id else [],
+        'alcance': 'actual',
+        'puede_todas': puede_todas,
+    }
+
+
+def _usuario_puede_acceder_credito(request, credito):
+    alcance = _alcance_creditos_usuario(request, 'todas' if _usuario_puede_ver_creditos_todas_sucursales(request.user) else 'actual')
+    if credito.empresa_origen_id not in alcance['empresa_ids']:
         return False
+    if alcance['alcance'] == 'todas':
+        if not alcance['sucursal_ids']:
+            return True
+        return credito.sucursal_id in alcance['sucursal_ids']
     if _usuario_puede_ver_creditos_todas_sucursales(request.user):
         return True
     sucursal_actual_id = request.session.get('idSucursalActual')
@@ -228,32 +279,25 @@ def cargar_creditos_trabajadores(request):
         page = int(data.get('page', 1))
         per_page = int(data.get('per_page', 20))
         
-        # Obtener empresa actual
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        sucursal_actual_id = request.session.get('idSucursalActual')
-        if not empresa_actual_id:
+        alcance_info = _alcance_creditos_usuario(request, alcance)
+        if not alcance_info['empresa_ids']:
             return JsonResponse({
                 'success': False,
-                'error': 'No hay empresa activa en la sesión'
+                'error': 'No hay empresas disponibles para consultar créditos'
             }, status=400)
-        puede_ver_todas = (
-            request.user.is_superuser or
-            getattr(request.user, 'rol', '') == 'administrador' or
-            PermisoUsuario.usuario_ve_todas_sucursales(request.user)
-        )
         
         # Construir queryset base
         queryset = CreditoTrabajador.objects.filter(
-            empresa_origen_id=empresa_actual_id
+            empresa_origen_id__in=alcance_info['empresa_ids']
         ).select_related('beneficiario', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por')
 
-        if not (puede_ver_todas and alcance == 'todas'):
-            if not sucursal_actual_id:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No hay sucursal activa en la sesión'
-                }, status=400)
-            queryset = queryset.filter(sucursal_id=sucursal_actual_id)
+        if alcance_info['sucursal_ids']:
+            queryset = queryset.filter(sucursal_id__in=alcance_info['sucursal_ids'])
+        elif alcance_info['alcance'] != 'todas':
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa en la sesión'
+            }, status=400)
         
         # Aplicar filtros de fecha (DD/MM/YYYY o DD-MM-YYYY)
         fecha_inicio = normalize_fecha(fecha_inicio)
@@ -380,8 +424,8 @@ def cargar_creditos_trabajadores(request):
         return JsonResponse({
             'success': True,
             'creditos': creditos_data,
-            'alcance': 'todas' if (puede_ver_todas and alcance == 'todas') else 'actual',
-            'puede_ver_todas_sucursales': puede_ver_todas,
+            'alcance': alcance_info['alcance'],
+            'puede_ver_todas_sucursales': alcance_info['puede_todas'],
             'pagination': {
                 'current_page': creditos_page.number,
                 'total_pages': paginator.num_pages,
@@ -1216,33 +1260,26 @@ def reporte_creditos_trabajadores(request):
             if len(partes[0]) == 2:
                 return f"{partes[2]}-{partes[1]}-{partes[0]}"
             return fecha_str
-        # Obtener empresa actual
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        sucursal_actual_id = request.session.get('idSucursalActual')
-        if not empresa_actual_id:
+        alcance = request.GET.get('alcance', 'actual')
+        alcance_info = _alcance_creditos_usuario(request, alcance)
+        if not alcance_info['empresa_ids']:
             return JsonResponse({
                 'success': False,
-                'error': 'No hay empresa activa en la sesión'
+                'error': 'No hay empresas disponibles para consultar créditos'
             }, status=400)
-        puede_ver_todas = (
-            request.user.is_superuser or
-            getattr(request.user, 'rol', '') == 'administrador' or
-            PermisoUsuario.usuario_ve_todas_sucursales(request.user)
-        )
-        alcance = request.GET.get('alcance', 'actual')
         
         fecha_inicio = normalize_fecha(request.GET.get('fecha_inicio'))
         fecha_fin = normalize_fecha(request.GET.get('fecha_fin'))
 
         # Estadísticas generales
-        creditos = CreditoTrabajador.objects.filter(empresa_origen_id=empresa_actual_id)
-        if not (puede_ver_todas and alcance == 'todas'):
-            if not sucursal_actual_id:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No hay sucursal activa en la sesión'
-                }, status=400)
-            creditos = creditos.filter(sucursal_id=sucursal_actual_id)
+        creditos = CreditoTrabajador.objects.filter(empresa_origen_id__in=alcance_info['empresa_ids'])
+        if alcance_info['sucursal_ids']:
+            creditos = creditos.filter(sucursal_id__in=alcance_info['sucursal_ids'])
+        elif alcance_info['alcance'] != 'todas':
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa en la sesión'
+            }, status=400)
 
         if fecha_inicio:
             creditos = creditos.filter(fecha_solicitud__date__gte=fecha_inicio)
