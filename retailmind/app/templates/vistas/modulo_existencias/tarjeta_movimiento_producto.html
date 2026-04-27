@@ -27,9 +27,10 @@
                     <div class="card">
                         <div class="card-body">
                             <div class="row g-3 align-items-end">
-                                <div class="col-md-3">
-                                    <label class="form-label fw-semibold">SKU del Producto</label>
-                                    <input type="text" id="inputSku" class="form-control" placeholder="Ingrese SKU..." autofocus>
+                                <div class="col-md-3 position-relative">
+                                    <label class="form-label fw-semibold">SKU o Artículo</label>
+                                    <input type="text" id="inputSku" class="form-control" placeholder="Ingrese SKU o artículo..." autofocus>
+                                    <div id="listaAyudaProductos" class="list-group position-absolute shadow-sm mt-1" style="z-index:1050; display:none; max-height:260px; overflow-y:auto; min-width:360px;"></div>
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label fw-semibold">Fecha Desde</label>
@@ -165,6 +166,7 @@
                                         <tr>
                                             <th>Fecha</th>
                                             <th>Hora</th>
+                                            <th>SKU / Talla</th>
                                             <th>Tipo</th>
                                             <th>Concepto</th>
                                             <th class="text-end">Cantidad</th>
@@ -193,10 +195,12 @@
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
 let movimientosData = [];
+let ayudaTimer = null;
+let ayudaAbortController = null;
 
 function buscarMovimientos() {
     const sku = document.getElementById('inputSku').value.trim();
-    if (!sku) { alert('Ingrese un SKU'); return; }
+    if (!sku) { alert('Ingrese un SKU o artículo'); return; }
     const desde = document.getElementById('inputFechaDesde').value;
     const hasta = document.getElementById('inputFechaHasta').value;
     let url = `/app/api/tarjeta-movimiento/?sku=${encodeURIComponent(sku)}`;
@@ -214,6 +218,67 @@ function buscarMovimientos() {
         document.getElementById('tablaContainer').style.display = '';
         document.getElementById('btnExportar').style.display = '';
     }).catch(e => alert('Error: ' + e.message));
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function ocultarListaAyuda() {
+    document.getElementById('listaAyudaProductos').style.display = 'none';
+}
+
+function renderListaAyuda(productos) {
+    const lista = document.getElementById('listaAyudaProductos');
+    if (!productos.length) {
+        lista.innerHTML = '<div class="list-group-item text-muted small">Sin coincidencias</div>';
+        lista.style.display = '';
+        return;
+    }
+
+    lista.innerHTML = productos.map(p => `
+        <button type="button" class="list-group-item list-group-item-action" data-sku="${escapeHtml(p.sku)}">
+            <div class="d-flex justify-content-between gap-2">
+                <div>
+                    <strong>${escapeHtml(p.articulo)}</strong>
+                    <small class="text-muted d-block">${escapeHtml(p.descripcion)}</small>
+                    <small class="text-muted">SKU: ${escapeHtml(p.sku)} · Talla: ${escapeHtml(p.talla)} · ${escapeHtml(p.marca)}</small>
+                </div>
+                <span class="badge bg-primary-subtle text-primary align-self-start">Stock ${escapeHtml(p.stock)}</span>
+            </div>
+        </button>
+    `).join('');
+    lista.style.display = '';
+}
+
+function buscarAyudaProductos() {
+    const q = document.getElementById('inputSku').value.trim();
+    clearTimeout(ayudaTimer);
+
+    if (q.length < 2) {
+        ocultarListaAyuda();
+        return;
+    }
+
+    ayudaTimer = setTimeout(() => {
+        if (ayudaAbortController) ayudaAbortController.abort();
+        ayudaAbortController = new AbortController();
+
+        fetch(`/app/api/tarjeta-movimiento/buscar/?q=${encodeURIComponent(q)}`, {
+            signal: ayudaAbortController.signal
+        })
+            .then(r => r.json())
+            .then(data => renderListaAyuda(data.productos || []))
+            .catch(e => {
+                if (e.name !== 'AbortError') ocultarListaAyuda();
+            });
+    }, 250);
 }
 
 function renderProducto(p) {
@@ -242,6 +307,7 @@ function renderTabla(movimientos) {
         tbody.innerHTML += `<tr>
             <td>${m.fecha}</td>
             <td>${m.hora}</td>
+            <td><code>${m.sku}</code><br><small class="text-muted">${m.talla}</small></td>
             <td><span class="badge bg-${m.tipo_movimiento === 'INGRESO' ? 'success' : m.tipo_movimiento === 'EGRESO' ? 'danger' : 'info'}-subtle ${tipoClass}">${m.tipo_movimiento}</span></td>
             <td>${m.concepto_display}</td>
             <td class="text-end ${cantClass}">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
@@ -271,4 +337,17 @@ function exportarExcel() {
 }
 
 document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') buscarMovimientos(); });
+document.getElementById('inputSku').addEventListener('input', buscarAyudaProductos);
+document.getElementById('listaAyudaProductos').addEventListener('click', e => {
+    const opcion = e.target.closest('[data-sku]');
+    if (!opcion) return;
+    document.getElementById('inputSku').value = opcion.dataset.sku;
+    ocultarListaAyuda();
+    buscarMovimientos();
+});
+document.addEventListener('click', e => {
+    if (!e.target.closest('#inputSku') && !e.target.closest('#listaAyudaProductos')) {
+        ocultarListaAyuda();
+    }
+});
 </script>

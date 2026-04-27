@@ -35,7 +35,7 @@ URL_PERMISO_MAP = {
     '/app/emisionDTE/': 'emision_dte',
     '/app/documentos/gestion-dte/': 'gestion_dte',
     '/app/recepcion-dte/': 'recepcion_dte',
-    '/app/regularizar-recepciones/': 'regularizar_recepciones',
+    '/app/regularizar-recepciones/': 'recepcion_dte',
     '/app/cotizaciones/': 'gestion_cotizaciones',
     '/app/documentos/gestion-correlativos/': 'gestion_correlativos',
     '/app/documentos/gestion-creditos/': 'gestion_creditos',

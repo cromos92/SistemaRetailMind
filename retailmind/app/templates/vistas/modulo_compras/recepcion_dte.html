@@ -1103,7 +1103,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h4 class="mb-1 text-white"><i class="bi bi-box-arrow-in-down me-2"></i>Recepción de Documentos Internos</h4>
-                    <p class="mb-0 text-white opacity-75">Confirma la recepción de traspasos internos dirigidos a tu bodega</p>
+                    <p class="mb-0 text-white opacity-75">Recibe, revisa y regulariza traspasos internos desde una sola pantalla</p>
                 </div>
                 <div class="text-end">
                     <small class="opacity-75">
@@ -1113,6 +1113,79 @@
                     <small class="opacity-75">
                         <i class="bi bi-person-circle me-1"></i>Usuario: {{ user.username }}
                     </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3" style="border:none;box-shadow:var(--nexo-shadow-md);">
+            <div class="card-body py-3">
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                    <div class="btn-group flex-wrap" role="group" aria-label="Vistas recepción DTE">
+                        {% if puede_recepcionar_dte %}
+                        <button type="button" class="btn btn-outline-primary active vista-unificada-btn" data-vista="recibidos">
+                            <i class="bi bi-inbox me-1"></i>Pendientes de recibir
+                        </button>
+                        {% endif %}
+                        <button type="button" class="btn btn-outline-success vista-unificada-btn" data-vista="recepcionados">
+                            <i class="bi bi-check-circle me-1"></i>Recepcionados
+                        </button>
+                        {% if puede_regularizar_dte %}
+                        <button type="button" class="btn btn-outline-warning vista-unificada-btn" data-vista="regularizar">
+                            <i class="bi bi-tools me-1"></i>Por regularizar
+                        </button>
+                        {% endif %}
+                        {% if puede_ajustar_emitidos %}
+                        <button type="button" class="btn btn-outline-secondary vista-unificada-btn" data-vista="emitidos">
+                            <i class="bi bi-send me-1"></i>Emitidos por mí
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% if puede_ver_todos_dte %}
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="switchVerTodasSucursales">
+                        <label class="form-check-label small fw-semibold" for="switchVerTodasSucursales">
+                            Ver todas las sucursales
+                        </label>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="row g-2 mt-3" id="indicadoresCompactosRecepcion">
+                    <div class="col-6 col-md-2">
+                        <div class="text-center p-2 rounded" style="background:rgba(255,176,32,.12);">
+                            <div class="fw-bold" id="kpiPendientesCompacto">0</div>
+                            <small class="text-muted">Pendientes</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="text-center p-2 rounded" style="background:rgba(0,212,170,.12);">
+                            <div class="fw-bold" id="kpiRecibidosCompacto">0</div>
+                            <small class="text-muted">Recibidos hoy</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="text-center p-2 rounded" style="background:rgba(255,77,77,.10);">
+                            <div class="fw-bold" id="kpiProblemasCompacto">0</div>
+                            <small class="text-muted">Con problema</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="text-center p-2 rounded" style="background:rgba(0,102,255,.10);">
+                            <div class="fw-bold" id="kpiRegularizacionCompacto">0</div>
+                            <small class="text-muted">En regularización</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="text-center p-2 rounded" style="background:rgba(108,117,125,.10);">
+                            <div class="fw-bold" id="kpiRechazadosCompacto">0</div>
+                            <small class="text-muted">Rechazados</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="text-center p-2 rounded" style="background:var(--nexo-gray-100);">
+                            <div class="fw-bold" id="kpiUnidadesCompacto">0</div>
+                            <small class="text-muted">Unidades</small>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1165,9 +1238,11 @@
                                     <label for="filterEstadoDte" class="form-label">Estado</label>
                                     <select id="filterEstadoDte" class="form-select">
                                         <option value="">Todos</option>
+                                        {% if puede_recepcionar_dte %}
                                         <option value="EMITIDO" selected>Pendientes</option>
+                                        {% endif %}
                                         <option value="RECEPCIONADO_COMPLETO">Recepcionado completo</option>
-                                        <option value="RECEPCIONADO_PARCIAL">Recepcionado parcial</option>
+                                        <option value="RECEPCIONADO_PARCIAL">Recepcionado con problemas</option>
                                         <option value="EN_REGULARIZACION">En regularización</option>
                                         <option value="RECHAZADO">Rechazados</option>
                                         <option value="CANCELADO">Cancelados</option>
@@ -1192,7 +1267,55 @@
                             </div>
                         </div>
 
-                        <div class="table-responsive">
+                        <div id="panelRegularizaciones" style="display:none;">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                <div>
+                                    <h6 class="mb-1"><i class="bi bi-tools text-warning me-1"></i>Recepciones por regularizar</h6>
+                                    <small class="text-muted">Faltantes, sobrantes, rechazos y productos en regularización.</small>
+                                </div>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <select id="regularizarTabFiltro" class="form-select form-select-sm" style="width:auto;">
+                                        <option value="pendiente">Pendientes</option>
+                                        <option value="en_regularizacion">En regularización</option>
+                                        <option value="sobrante">Sobrantes</option>
+                                        <option value="regularizado">Regularizados</option>
+                                        <option value="rechazado">Rechazados</option>
+                                        <option value="todos">Todos</option>
+                                    </select>
+                                    <input type="search" id="regularizarBusqueda" class="form-control form-control-sm" placeholder="SKU, producto o DTE" style="width:220px;">
+                                    <button type="button" class="btn btn-warning btn-sm" id="btnBuscarRegularizaciones">
+                                        <i class="bi bi-search me-1"></i>Buscar
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>DTE</th>
+                                            <th>Origen</th>
+                                            <th>Producto</th>
+                                            <th class="text-center">Esperado</th>
+                                            <th class="text-center">Recibido</th>
+                                            <th class="text-center">Faltante</th>
+                                            <th class="text-center">Sobrante</th>
+                                            <th>Estado</th>
+                                            <th class="text-end">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="regularizacionesBody">
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted py-4">
+                                                <div class="spinner-border spinner-border-sm text-warning me-2"></div>
+                                                Cargando regularizaciones...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" id="panelRecepciones">
                             <table class="table table-hover" id="tablaRecepciones">
                                 <thead>
                                     <tr>
@@ -1295,7 +1418,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <a href="/app/regularizar-recepciones/" class="btn btn-warning btn-sm w-100">
+                                <a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="btn btn-warning btn-sm w-100">
                                     <i class="bi bi-tools me-1"></i> Ir a Regularización
                                 </a>
                                 <button type="button" class="btn btn-outline-info btn-sm w-100 mt-1" id="btnVerDTEsProblemas">
@@ -1961,6 +2084,7 @@
 </div>
 
 {% include '../../layout/footer.html' %}
+<script src="{% static 'js/trazabilidad_dte.js' %}"></script>
 
 <script>
 let modalDetalle = null;
@@ -1973,6 +2097,9 @@ let totalPaginas = 1;
 let documentoSeleccionado = null;
 let productosVerificacion = [];  // Array para almacenar estado de verificación
 let productoEditandoIndex = null;  // Índice del producto que se está editando
+const PUEDE_REGULARIZAR_DTE = {{ puede_regularizar_dte|yesno:"true,false" }};
+const PUEDE_RECEPCIONAR_DTE = {{ puede_recepcionar_dte|yesno:"true,false" }};
+const PUEDE_VER_TODOS_DTE = {{ puede_ver_todos_dte|yesno:"true,false" }};
 
 $(document).ready(function() {
     modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleDocumento'));
@@ -1980,7 +2107,9 @@ $(document).ready(function() {
 
     $('#btnRefresh').on('click', () => {
         paginaActual = 1;
-        if (window.modoVista === 'recepcionados') {
+        if (window.modoVista === 'regularizar') {
+            cargarRegularizaciones();
+        } else if (window.modoVista === 'recepcionados') {
             cargarRecepcionados();
         } else if (window.modoVista === 'emitidos') {
             cargarEmitidos();
@@ -1990,7 +2119,9 @@ $(document).ready(function() {
     });
     $('#filterEstadoDte, #filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => {
         paginaActual = 1;
-        if (window.modoVista === 'recepcionados') {
+        if (window.modoVista === 'regularizar') {
+            cargarRegularizaciones();
+        } else if (window.modoVista === 'recepcionados') {
             cargarRecepcionados();
         } else if (window.modoVista === 'emitidos') {
             cargarEmitidos();
@@ -2005,6 +2136,22 @@ $(document).ready(function() {
     $('#btnRechazarRecepcion').on('click', rechazarRecepcion);
     $('#btnRangoMesActual').on('click', aplicarRangoMesActual);
     $('#btnSoloHoy').on('click', aplicarRangoHoy);
+    $('.vista-unificada-btn').on('click', function() {
+        cambiarVistaUnificada($(this).data('vista'));
+    });
+    $('#btnBuscarRegularizaciones, #regularizarTabFiltro').on('click change', function() {
+        cargarRegularizaciones();
+    });
+    $('#regularizarBusqueda').on('keydown', function(e) {
+        if (e.key === 'Enter') cargarRegularizaciones();
+    });
+    $('#switchVerTodasSucursales').on('change', function() {
+        paginaActual = 1;
+        if (window.modoVista === 'regularizar') cargarRegularizaciones();
+        else if (window.modoVista === 'emitidos') cargarEmitidos();
+        else if (window.modoVista === 'recepcionados') cargarRecepcionados();
+        else cargarRecepciones(true);
+    });
     
     // Nuevos eventos para verificación
     $('#btnMarcarTodosOK, #btnMarcarTodosOKMobile').on('click', marcarTodosOK);
@@ -2038,7 +2185,17 @@ $(document).ready(function() {
 
     inicializarReferenciaFechas();
     cargarInfoSucursal();
-    cargarRecepciones();
+    const paramsIniciales = new URLSearchParams(window.location.search);
+    const vistaInicial = paramsIniciales.get('vista');
+    const tabInicial = paramsIniciales.get('tab');
+    if (tabInicial) $('#regularizarTabFiltro').val(tabInicial);
+    if (vistaInicial === 'regularizar' && PUEDE_REGULARIZAR_DTE) {
+        cambiarVistaUnificada('regularizar');
+    } else if (!PUEDE_RECEPCIONAR_DTE) {
+        cambiarVistaUnificada(PUEDE_REGULARIZAR_DTE ? 'regularizar' : 'recepcionados');
+    } else {
+        cargarRecepciones();
+    }
     cargarHistorial();
     cargarDTEsRechazados();
     cargarDTEsParaCorregir();
@@ -2100,13 +2257,153 @@ function cargarInfoSucursal() {
         });
 }
 
+function cambiarVistaUnificada(vista) {
+    if (vista === 'recibidos' && !PUEDE_RECEPCIONAR_DTE) {
+        vista = PUEDE_REGULARIZAR_DTE ? 'regularizar' : 'recepcionados';
+    }
+    if (vista === 'regularizar' && !PUEDE_REGULARIZAR_DTE) return;
+    paginaActual = 1;
+
+    $('.vista-unificada-btn').removeClass('active');
+    $(`.vista-unificada-btn[data-vista="${vista}"]`).addClass('active');
+
+    const esRegularizar = vista === 'regularizar';
+    $('#panelRegularizaciones').toggle(esRegularizar);
+    $('#panelRecepciones').toggle(!esRegularizar);
+    $('#paginationContainer').toggle(!esRegularizar && totalPaginas > 1);
+    $('#filterEstadoDte').closest('.col-md-3').toggle(!esRegularizar);
+    $('#filterTipoDocumento').closest('.col-md-2').toggle(!esRegularizar);
+
+    if (esRegularizar) {
+        window.modoVista = 'regularizar';
+        window.modoEmitidos = false;
+        $('#tituloSeccionDocumentos').text('Recepciones por regularizar');
+        $('#subtituloSeccionDocumentos').text('Productos con faltantes, sobrantes, rechazos o diferencias pendientes de resolución');
+        cargarRegularizaciones();
+    } else if (vista === 'emitidos') {
+        cambiarModoVista(true, 'emitidos');
+    } else if (vista === 'recepcionados') {
+        cambiarModoVista(true, 'recepcionados');
+    } else {
+        cambiarModoVista(false, 'recibidos');
+    }
+}
+
+function obtenerAlcanceDte() {
+    return (PUEDE_VER_TODOS_DTE && $('#switchVerTodasSucursales').is(':checked')) ? 'todas' : 'actual';
+}
+
+function cargarRegularizaciones() {
+    $('#regularizacionesBody').html(`
+        <tr><td colspan="9" class="text-center text-muted py-4">
+            <div class="spinner-border spinner-border-sm text-warning me-2"></div>
+            Cargando recepciones por regularizar...
+        </td></tr>
+    `);
+
+    const params = new URLSearchParams({
+        tab: $('#regularizarTabFiltro').val() || 'pendiente',
+        buscar: $('#regularizarBusqueda').val() || '',
+        alcance: obtenerAlcanceDte(),
+    });
+
+    fetch(`/app/dte/obtener_productos_regularizar/?${params.toString()}`, {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+    })
+        .then(resp => resp.json().then(data => ({ resp, data })))
+        .then(({ resp, data }) => {
+            if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudieron cargar regularizaciones.');
+            renderRegularizaciones(data.productos || []);
+            actualizarIndicadoresRegularizacion(data.estadisticas || {}, data.total || 0);
+        })
+        .catch(err => {
+            $('#regularizacionesBody').html(`
+                <tr><td colspan="9" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle me-1"></i>${err.message || 'Error al cargar regularizaciones.'}
+                </td></tr>
+            `);
+        });
+}
+
+function renderRegularizaciones(productos) {
+    const tbody = $('#regularizacionesBody');
+    tbody.empty();
+    if (!productos.length) {
+        tbody.html(`
+            <tr><td colspan="9" class="text-center text-muted py-4">
+                <i class="bi bi-check-circle display-6 d-block mb-2 text-success"></i>
+                No hay recepciones en este filtro.
+            </td></tr>
+        `);
+        return;
+    }
+
+    productos.forEach(prod => {
+        const estadoBadge = getEstadoBadge(prod.estado);
+        const fecha = prod.dte_fecha ? new Date(prod.dte_fecha).toLocaleDateString('es-CL') : '-';
+        const acciones = `
+            <a class="btn btn-warning btn-sm" href="/app/regularizar-recepciones/?legacy=1&tab=${encodeURIComponent($('#regularizarTabFiltro').val() || 'pendiente')}&recepcion_id=${prod.id}" title="Abrir flujo completo de regularización">
+                <i class="bi bi-tools me-1"></i>Regularizar
+            </a>
+            ${prod.dte_numero ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionadoPorNumero('${prod.dte_numero}')" title="Ver DTE">
+                <i class="bi bi-eye"></i>
+            </button>` : ''}
+        `;
+        tbody.append(`
+            <tr>
+                <td>
+                    <strong>${prod.tipo_documento || 'DTE'} #${prod.dte_numero}</strong>
+                    <br><small class="text-muted">${fecha}</small>
+                </td>
+                <td>
+                    <strong>${prod.sucursal_origen || '-'}</strong>
+                    <br><small class="text-muted">${prod.emisor || '-'}</small>
+                </td>
+                <td>
+                    <div class="fw-semibold">${prod.producto_nombre || '-'}</div>
+                    <small class="text-muted">SKU ${prod.sku || '-'} · Talla ${prod.talla || '-'}</small>
+                </td>
+                <td class="text-center">${prod.cantidad_esperada || 0}</td>
+                <td class="text-center">${prod.cantidad_recibida || 0}</td>
+                <td class="text-center"><span class="${(prod.cantidad_faltante || 0) > 0 ? 'text-danger fw-bold' : ''}">${prod.cantidad_faltante || 0}</span></td>
+                <td class="text-center"><span class="${(prod.cantidad_sobrante || 0) > 0 ? 'text-info fw-bold' : ''}">${prod.cantidad_sobrante || 0}</span></td>
+                <td>${estadoBadge}<br><small class="text-muted">${prod.tipo_regularizacion || ''}</small></td>
+                <td class="text-end">${acciones}</td>
+            </tr>
+        `);
+    });
+}
+
+function actualizarIndicadoresRegularizacion(stats, total) {
+    $('#kpiProblemasCompacto').text(stats.pendientes || total || 0);
+    $('#kpiRegularizacionCompacto').text(stats.en_regularizacion || 0);
+    $('#kpiRechazadosCompacto').text(stats.rechazados || 0);
+    $('#resumenProblemas').text(stats.pendientes || 0);
+    $('#itemProblemasResumen').toggle((stats.pendientes || 0) > 0);
+}
+
+function verDTERecepcionadoPorNumero(numero) {
+    const doc = recepcionesData.find(d => String(d.numero_documento) === String(numero));
+    if (doc) {
+        verDTERecepcionado(doc.id);
+    } else {
+        Swal.fire('DTE no cargado', 'Usa la búsqueda del listado principal para ver el detalle del DTE.', 'info');
+    }
+}
+
 function cargarRecepciones(forzarActualizacion = false) {
+    if (!PUEDE_RECEPCIONAR_DTE) {
+        cambiarVistaUnificada(PUEDE_REGULARIZAR_DTE ? 'regularizar' : 'recepcionados');
+        return;
+    }
     const filtros = {
         tipo_documento: $('#filterTipoDocumento').val(),
         estado: $('#filterEstadoDte').val(),
         fecha_inicio: $('#filterFechaInicio').val(),
         fecha_fin: $('#filterFechaFin').val(),
-        pagina: paginaActual
+        pagina: paginaActual,
+        alcance: obtenerAlcanceDte()
     };
 
     $('#recepcionesBody').html(`
@@ -2235,8 +2532,11 @@ function renderTablaRecepciones() {
         let botonesHtml = '';
         switch (estado) {
             case 'EMITIDO':
-                botonesHtml = `<button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})" title="Recepcionar documento">
-                    <i class="bi bi-box-arrow-in-down me-1"></i>Recepcionar</button>`;
+                botonesHtml = PUEDE_RECEPCIONAR_DTE
+                    ? `<button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})" title="Recepcionar documento">
+                        <i class="bi bi-box-arrow-in-down me-1"></i>Recepcionar</button>`
+                    : `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
+                        <i class="bi bi-eye me-1"></i>Ver</button>`;
                 break;
             case 'RECEPCIONADO_COMPLETO':
                 botonesHtml = `<button class="btn btn-outline-success btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle recepción">
@@ -2246,8 +2546,8 @@ function renderTablaRecepciones() {
             case 'EN_REGULARIZACION':
                 botonesHtml = `<button class="btn btn-outline-warning btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
                     <i class="bi bi-eye me-1"></i>Ver</button>
-                    <a href="/app/regularizar-recepciones/" class="btn btn-warning btn-sm ms-1" title="Ir a regularizar">
-                    <i class="bi bi-tools"></i></a>`;
+                    ${PUEDE_REGULARIZAR_DTE ? `<a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="btn btn-warning btn-sm ms-1" title="Ir a regularizar">
+                    <i class="bi bi-tools"></i></a>` : ''}`;
                 break;
             case 'RECHAZADO':
                 botonesHtml = `<button class="btn btn-outline-danger btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver motivo rechazo">
@@ -2308,6 +2608,8 @@ function actualizarResumen(resumen) {
     $('#resumenRecibidos').text(resumen.recibidos_hoy || 0);
     $('#resumenPendientes').text(resumen.pendientes || recepcionesData.length);
     $('#resumenUnidades').text(resumen.total_unidades_pendientes || 0);
+    $('#kpiRecibidosCompacto').text(resumen.recibidos_hoy || 0);
+    $('#kpiUnidadesCompacto').text(resumen.total_unidades_pendientes || 0);
 
     let pendientesMes = null;
     if (resumen && typeof resumen.pendientes_mes !== 'undefined') {
@@ -2351,6 +2653,12 @@ function actualizarConteoEstados(conteo) {
     $('#conteoRegularizacion').text(regularizacion);
     $('#conteoRechazado').text(rechazado);
     $('#conteoTodos').text(total);
+    $('#kpiPendientesCompacto').text(emitido);
+    $('#kpiRecibidosCompacto').text($('#resumenRecibidos').text() || '0');
+    $('#kpiProblemasCompacto').text((parcial || 0) + (regularizacion || 0));
+    $('#kpiRegularizacionCompacto').text(regularizacion);
+    $('#kpiRechazadosCompacto').text(rechazado);
+    $('#kpiUnidadesCompacto').text($('#resumenUnidades').text() || '0');
 
     // Resaltar el indicador activo
     const estadoActual = $('#filterEstadoDte').val();
@@ -2367,6 +2675,22 @@ function actualizarConteoEstados(conteo) {
 // Click en indicadores del sidebar para filtrar
 $(document).on('click', '.estado-indicator', function() {
     const estado = $(this).data('estado');
+    if (estado === 'EMITIDO' && !PUEDE_RECEPCIONAR_DTE) {
+        Swal.fire('Sin permiso', 'Tu perfil no tiene habilitada la recepción de DTEs pendientes.', 'info');
+        return;
+    }
+    if (window.modoVista === 'regularizar') {
+        $('#panelRegularizaciones').hide();
+        $('#panelRecepciones').show();
+    }
+    window.modoVista = 'recibidos';
+    window.modoEmitidos = false;
+    $('.vista-unificada-btn').removeClass('active');
+    $(`.vista-unificada-btn[data-vista="recibidos"]`).addClass('active');
+    $('#filterEstadoDte').closest('.col-md-3').show();
+    $('#filterTipoDocumento').closest('.col-md-2').show();
+    $('#tituloSeccionDocumentos').text('Documentos de Traspaso');
+    $('#subtituloSeccionDocumentos').text('Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal');
     $('#filterEstadoDte').val(estado === undefined ? '' : estado);
     paginaActual = 1;
     cargarRecepciones();
@@ -2387,7 +2711,9 @@ function cambiarPagina(delta) {
     const nuevaPagina = paginaActual + delta;
     if (nuevaPagina < 1 || nuevaPagina > totalPaginas) return;
     paginaActual = nuevaPagina;
-    if (window.modoVista === 'recepcionados') {
+    if (window.modoVista === 'regularizar') {
+        cargarRegularizaciones();
+    } else if (window.modoVista === 'recepcionados') {
         cargarRecepcionados();
     } else if (window.modoVista === 'emitidos') {
         cargarEmitidos();
@@ -3522,7 +3848,7 @@ function procesarRecepcion(incluirProblemas) {
                             <i class="bi bi-exclamation-triangle me-2"></i>
                             <strong>Próximos pasos:</strong> Los productos con problemas quedan pendientes de regularización.
                             <br>
-                            <a href="/app/regularizar-recepciones/" class="btn btn-warning btn-sm mt-2">
+                            <a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="btn btn-warning btn-sm mt-2">
                                 <i class="bi bi-tools me-1"></i> Ir a Regularización
                             </a>
                         </div>
@@ -3552,7 +3878,9 @@ function procesarRecepcion(incluirProblemas) {
 }
 
 function verDTEsConProblemas() {
-    window.location.href = '/app/regularizar-recepciones/?tab=pendiente';
+    cambiarVistaUnificada('regularizar');
+    $('#regularizarTabFiltro').val('pendiente');
+    cargarRegularizaciones();
 }
 
 // ========== FUNCIONES PARA DTEs RECHAZADOS (que yo envié) ==========
@@ -3574,7 +3902,9 @@ function cargarDTEsRechazados() {
 }
 
 function verDTEsRechazados() {
-    window.location.href = '/app/regularizar-recepciones/?tab=rechazado';
+    cambiarVistaUnificada('regularizar');
+    $('#regularizarTabFiltro').val('rechazado');
+    cargarRegularizaciones();
 }
 
 function rehabilitarDTE(dteId, numeroDocumento) {
@@ -4386,6 +4716,11 @@ function cambiarModoVista(nuevoModoEmitidos, modo) {
     window.modoEmitidos = (window.modoVista !== 'recibidos');
 
     $('#btnModoRecibidos, #btnModoEmitidos, #btnModoRecepcionados').removeClass('active');
+    $('.vista-unificada-btn').removeClass('active');
+    $(`.vista-unificada-btn[data-vista="${window.modoVista}"]`).addClass('active');
+    $('#panelRegularizaciones').hide();
+    $('#panelRecepciones').show();
+    $('#filterTipoDocumento').closest('.col-md-2').show();
 
     if (window.modoVista === 'emitidos') {
         $('#btnModoEmitidos').addClass('active');
@@ -4549,6 +4884,20 @@ function renderTablaRecepcionados() {
                         <i class="bi bi-tools me-1"></i>Reparar (${d.ncs_stock_pendiente})
                     </button>`;
         }
+        const botonDiagnostico = PUEDE_REGULARIZAR_DTE ? `
+                    <button class="btn btn-sm btn-diagnostico-traspaso"
+                            style="background:#6f42c1;color:white;"
+                            data-dte-id="${d.id}"
+                            title="Diagnosticar cantidades, líneas sin producto y stock no actualizado">
+                        <i class="bi bi-shield-exclamation me-1"></i>Diagnóstico
+                    </button>` : '';
+        const botonEmitirNc = PUEDE_REGULARIZAR_DTE ? `
+                    <button class="btn btn-sm btn-danger btn-abrir-ajuste" data-dte-id="${d.id}" data-post-recepcion="1" title="Emitir NC post-recepción">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Emitir NC
+                    </button>` : '';
+        if (!PUEDE_REGULARIZAR_DTE) {
+            botonReparar = '';
+        }
 
         tbody.append(`
             <tr>
@@ -4562,9 +4911,7 @@ function renderTablaRecepcionados() {
                 <td>${_ajusteFormatearPesos(d.monto_con_iva)}</td>
                 <td><span class="badge bg-danger text-white" title="${d.estado_dte}">${d.estado_dte.replace(/_/g, ' ')}</span></td>
                 <td>
-                    <button class="btn btn-sm btn-danger btn-abrir-ajuste" data-dte-id="${d.id}" data-post-recepcion="1" title="Emitir NC post-recepción">
-                        <i class="bi bi-arrow-counterclockwise me-1"></i>Emitir NC
-                    </button>${botonReparar}
+                    ${botonEmitirNc}${botonReparar}${botonDiagnostico}
                     <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${d.id}" title="Ver trazabilidad">
                         <i class="bi bi-diagram-3"></i>
                     </button>
@@ -4573,6 +4920,209 @@ function renderTablaRecepcionados() {
         `);
     });
 }
+
+function _escapeHtmlDte(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[ch]));
+}
+
+async function _fetchJsonConTimeout(url, options = {}, timeoutMs = 35000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const resp = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+        const text = await resp.text();
+        let data = {};
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (parseError) {
+            const resumen = text ? text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240) : '';
+            throw new Error(resumen || `Respuesta no JSON del servidor (HTTP ${resp.status}).`);
+        }
+        if (!resp.ok || data.success === false || data.error === true) {
+            throw new Error(data.error || data.mensaje || `Error HTTP ${resp.status}.`);
+        }
+        return data;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('La reparación tardó demasiado y fue cancelada. Revisa si hay locks o intenta nuevamente.');
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function abrirDiagnosticoTraspaso(dteId) {
+    if (!dteId) return;
+
+    Swal.fire({
+        title: 'Analizando traspaso...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const data = await _fetchJsonConTimeout(`/app/api/dte/${dteId}/diagnostico_reparacion_traspaso/`, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        });
+
+        const resumen = data.resumen || {};
+        const advertencias = data.advertencias || [];
+        const lineas = data.lineas || [];
+        const requiereNc = !!data.requiere_confirmar_nc;
+
+        const resumenHtml = `
+            <div class="row g-2 text-center mb-3">
+                <div class="col"><div class="border rounded p-2"><strong>${resumen.lineas_documento || 0}</strong><br><small>Líneas doc.</small></div></div>
+                <div class="col"><div class="border rounded p-2"><strong>${resumen.lineas_con_problema || 0}</strong><br><small>Con problema</small></div></div>
+                <div class="col"><div class="border rounded p-2"><strong>${resumen.unidades_documento || 0}</strong><br><small>Uds doc.</small></div></div>
+                <div class="col"><div class="border rounded p-2"><strong>${resumen.unidades_recepcionadas || 0}</strong><br><small>Uds recibidas</small></div></div>
+                <div class="col"><div class="border rounded p-2"><strong>${resumen.unidades_sin_recepcion || 0}</strong><br><small>Sin recepción</small></div></div>
+            </div>`;
+
+        const advertenciasHtml = advertencias.map(a => `
+            <div class="alert ${a.tipo === 'DTE_CON_NC_AJUSTES' || a.tipo === 'NC_STOCK_PENDIENTE' ? 'alert-danger' : 'alert-warning'} py-2 small text-start mb-2">
+                <strong>${_escapeHtmlDte(a.tipo)}:</strong> ${_escapeHtmlDte(a.mensaje)}
+            </div>
+        `).join('');
+
+        if (!lineas.length) {
+            await Swal.fire({
+                icon: 'success',
+                title: 'Sin líneas para reparar',
+                html: resumenHtml + (advertenciasHtml || ''),
+                width: '760px',
+            });
+            return;
+        }
+
+        const filas = lineas.map((ln, idx) => {
+            const candidatos = ln.candidatos || [];
+            const disabled = !ln.puede_reparar || !candidatos.length;
+            const opciones = candidatos.map(c => {
+                const roles = (c.roles || []).length ? ` (${c.roles.join('/')})` : '';
+                return `<option value="${c.producto_talla_id}">SKU ${_escapeHtmlDte(c.sku)} · T${_escapeHtmlDte(c.talla)} · ${_escapeHtmlDte(c.sucursal)}${roles}</option>`;
+            }).join('');
+            return `
+                <tr data-dte-producto-id="${ln.dte_producto_id}" data-max="${ln.cantidad_documento}">
+                    <td class="text-center"><input type="checkbox" class="form-check-input diag-usar" ${disabled ? 'disabled' : 'checked'}></td>
+                    <td class="text-start">
+                        <strong>${_escapeHtmlDte(ln.descripcion)}</strong><br>
+                        <small class="text-muted">Doc ${ln.cantidad_documento} · Rec ${ln.cantidad_recepcionada}</small>
+                    </td>
+                    <td><select class="form-select form-select-sm diag-candidato" ${disabled ? 'disabled' : ''}>${opciones || '<option value="">Sin candidato</option>'}</select></td>
+                    <td><input type="number" class="form-control form-control-sm diag-cantidad text-end" min="0" max="${ln.cantidad_documento}" value="${ln.cantidad_sugerida}" ${disabled ? 'disabled' : ''}></td>
+                    <td class="text-center"><input type="checkbox" class="form-check-input diag-entrada" ${disabled ? 'disabled' : 'checked'}></td>
+                    <td class="text-center"><input type="checkbox" class="form-check-input diag-salida" ${disabled ? 'disabled' : (ln.sin_producto_talla ? 'checked' : '')}></td>
+                </tr>`;
+        }).join('');
+
+        const result = await Swal.fire({
+            title: `Diagnóstico DTE #${_escapeHtmlDte((data.dte || {}).numero_documento || dteId)}`,
+            html: `
+                <div class="text-start">
+                    ${resumenHtml}
+                    ${advertenciasHtml}
+                    ${requiereNc ? `
+                        <div class="form-check alert alert-danger py-2">
+                            <input class="form-check-input" type="checkbox" id="diagConfirmNcSwal">
+                            <label class="form-check-label small" for="diagConfirmNcSwal">
+                                Confirmo que revisé las NC/Ajustes asociados antes de modificar stock.
+                            </label>
+                        </div>` : ''}
+                    <div class="table-responsive" style="max-height:360px;overflow:auto;">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Usar</th><th>Línea</th><th>Candidato</th><th>Cantidad</th><th>Entrada</th><th>Salida</th></tr></thead>
+                            <tbody id="diagTraspasoSwalBody">${filas}</tbody>
+                        </table>
+                    </div>
+                    <label class="form-label small fw-bold mt-2">Motivo *</label>
+                    <input id="diagMotivoSwal" class="form-control" maxlength="250" placeholder="Ej: producto eliminado históricamente; mercadería física en destino">
+                </div>`,
+            width: '1100px',
+            showCancelButton: true,
+            confirmButtonText: 'Aplicar reparación manual',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#6f42c1',
+            preConfirm: () => {
+                const motivo = (document.getElementById('diagMotivoSwal')?.value || '').trim();
+                if (!motivo) {
+                    Swal.showValidationMessage('Ingresa un motivo para auditoría.');
+                    return false;
+                }
+                if (requiereNc && !document.getElementById('diagConfirmNcSwal')?.checked) {
+                    Swal.showValidationMessage('Confirma que revisaste las NC/Ajustes asociados.');
+                    return false;
+                }
+
+                const items = [];
+                document.querySelectorAll('#diagTraspasoSwalBody tr[data-dte-producto-id]').forEach(row => {
+                    if (!row.querySelector('.diag-usar')?.checked) return;
+                    const dteProductoId = parseInt(row.dataset.dteProductoId, 10);
+                    const productoTallaId = parseInt(row.querySelector('.diag-candidato')?.value, 10);
+                    const cantidad = parseInt(row.querySelector('.diag-cantidad')?.value, 10);
+                    const max = parseInt(row.dataset.max, 10);
+                    if (!dteProductoId || !productoTallaId || isNaN(cantidad) || cantidad < 0 || cantidad > max) return;
+                    items.push({
+                        dte_producto_id: dteProductoId,
+                        producto_talla_id: productoTallaId,
+                        cantidad_recepcionada: cantidad,
+                        crear_entrada: !!row.querySelector('.diag-entrada')?.checked,
+                        reconstruir_salida: !!row.querySelector('.diag-salida')?.checked,
+                    });
+                });
+                if (!items.length) {
+                    Swal.showValidationMessage('Selecciona al menos una línea válida.');
+                    return false;
+                }
+                return { motivo, items, confirmar_nc: requiereNc ? true : false };
+            }
+        });
+
+        if (!result.isConfirmed || !result.value) return;
+
+        Swal.fire({
+            title: 'Aplicando reparación...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+            || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        const postData = await _fetchJsonConTimeout(`/app/api/dte/${dteId}/reparar_traspaso_manual/`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrf,
+            },
+            body: JSON.stringify(result.value),
+        }, 45000);
+
+        await Swal.fire('Reparación aplicada', postData.message || 'DTE reparado correctamente.', 'success');
+        if (window.modoVista === 'recepcionados') cargarRecepcionados();
+        else if (window.modoVista === 'emitidos') cargarEmitidos();
+        else cargarRecepciones(true);
+    } catch (e) {
+        Swal.fire('Error', e.message || 'No se pudo diagnosticar/reparar el DTE.', 'error');
+    }
+}
+
+$(document).on('click', '.btn-diagnostico-traspaso', function () {
+    abrirDiagnosticoTraspaso(parseInt($(this).data('dte-id'), 10));
+});
 
 // Recarga la lista activa cuando una NC fue reparada desde el helper global.
 document.addEventListener('nc-stock-reparada', function () {
@@ -4927,6 +5477,8 @@ $(document).ready(function () {
         const dteId = parseInt($(this).data('dte-id'), 10);
         if (window.TrazabilidadDTE && dteId) {
             window.TrazabilidadDTE.abrir(dteId);
+        } else {
+            Swal.fire('Trazabilidad no disponible', 'No se pudo cargar el módulo de trazabilidad. Actualiza la página e intenta nuevamente.', 'warning');
         }
     });
 

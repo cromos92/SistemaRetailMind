@@ -123,7 +123,6 @@ class Command(BaseCommand):
             ('emision_dte', 'Emisi?n DTE', None, '/app/emisionDTE/', 'bi-file-earmark-plus', 1),
             ('gestion_dte', 'Gesti?n DTE', None, '/app/documentos/gestion-dte/', 'bi-file-earmark-text', 2),
             ('recepcion_dte', 'Recepci?n Documentos', 'recepcion_dte', None, 'bi-box-arrow-in-down', 3),
-            ('regularizar_recepciones', 'Regularizar Recepciones', 'regularizar_recepciones', None, 'ri-settings-3-line', 4),
             ('gestion_cotizaciones', 'Gesti?n Cotizaciones', 'gestion_cotizaciones', None, 'ri-file-text-line', 5),
             ('gestion_correlativos', 'Gesti?n Correlativos', None, '/app/documentos/gestion-correlativos/', 'ri-file-list-3-line', 6),
             ('gestion_creditos', 'Gesti?n Cr?ditos', None, '/app/documentos/gestion-creditos/', 'ri-bank-card-line', 7),
@@ -150,6 +149,9 @@ class Command(BaseCommand):
                     'orden': orden
                 }
             )
+
+        # Deprecated: regularización ahora vive dentro de Recepción Documentos.
+        OpcionMenu.objects.filter(codigo='regularizar_recepciones').update(activo=False)
         
         self.stdout.write('[Documentos] Modulo Documentos creado')
 
@@ -442,7 +444,7 @@ class Command(BaseCommand):
             'ticket_venta', 'cambios_devoluciones', 'pos_dashboard', 'gestion_documentos_ventas',
             'cuadratura_caja', 'pos_transbank', 'revision_arqueos',
             # Documentos
-            'emision_dte', 'gestion_dte', 'recepcion_dte', 'regularizar_recepciones',
+            'emision_dte', 'gestion_dte', 'recepcion_dte',
             'gestion_cotizaciones', 'gestion_creditos',
             # Existencias
             'gestion_producto', 'edicion_rapida_precios', 'revisar_cambios_precios', 'movimientos_producto',

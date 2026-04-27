@@ -37,7 +37,7 @@ from .models import (
 )
 from django.contrib.auth.decorators import login_required
 from app.decorators import requiere_permiso
-from app.models.permisos import PermisoRol
+from app.models.permisos import PermisoRol, PermisoUsuario
 from app.utils_permisos import puede_cambiar_sucursal
 from django.contrib.sessions.models import Session
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
@@ -86,15 +86,31 @@ def _puede_ajustar_dte_emisor(user, sucursal_id):
         return False
 
 
+def _permiso_recepcion_dte(user, tipo_permiso, sucursal_id=None):
+    return PermisoRol.tiene_permiso(
+        usuario=user,
+        codigo_opcion='recepcion_dte',
+        tipo_permiso=tipo_permiso,
+        sucursal_id=sucursal_id,
+    )
+
+
 @login_required
 @requiere_permiso('recepcion_dte', 'puede_ver')
 def recepcion_dte(request):
     """Vista web para la recepción de traspasos internos."""
     user_rol = _obtener_rol_usuario(request.user)
     sucursal_id = request.session.get('idSucursalActual')
+    puede_ver_todas = (
+        request.user.is_superuser or
+        PermisoUsuario.tiene_permiso_ver_todas_sucursales(request.user)
+    )
     return render(request, 'vistas/modulo_compras/recepcion_dte.html', {
         'user_rol': user_rol,
+        'puede_recepcionar_dte': _permiso_recepcion_dte(request.user, 'puede_crear', sucursal_id),
+        'puede_regularizar_dte': _permiso_recepcion_dte(request.user, 'puede_aprobar', sucursal_id),
         'puede_ajustar_emitidos': _puede_ajustar_dte_emisor(request.user, sucursal_id),
+        'puede_ver_todos_dte': puede_ver_todas,
     })
 
 
@@ -106,8 +122,13 @@ def recepciones_pendientes_api(request):
     try:
         sucursal_destino_id = request.session.get('idSucursalActual')
         empresa_actual_id = request.session.get('idEmpresaActual')
+        puede_ver_todas = (
+            request.user.is_superuser or
+            PermisoUsuario.tiene_permiso_ver_todas_sucursales(request.user)
+        )
+        ver_todas = puede_ver_todas and request.GET.get('alcance') == 'todas'
 
-        if not sucursal_destino_id or not empresa_actual_id:
+        if (not sucursal_destino_id and not ver_todas) or not empresa_actual_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal o empresa activa en la sesión.'
@@ -121,15 +142,21 @@ def recepciones_pendientes_api(request):
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         estado_filtro = request.GET.get('estado', '').strip()
+        puede_recepcionar = _permiso_recepcion_dte(request.user, 'puede_crear', sucursal_destino_id)
+        if not puede_recepcionar and estado_filtro == 'EMITIDO':
+            estado_filtro = 'RECEPCIONADO_COMPLETO'
 
         # Base: DTEs de traspaso dirigidos a esta sucursal
+        filtros_base = {
+            'tipo_transaccion': 'TRASPASO',
+            'dte_movimientos__concepto': 'TRASPASO_SALIDA',
+            'dte_movimientos__tipo_movimiento': 'EGRESO',
+        }
+        if not ver_todas:
+            filtros_base['dte_movimientos__sucursal_destino_id'] = sucursal_destino_id
+
         queryset = (
-            Dte.objects.filter(
-                tipo_transaccion='TRASPASO',
-                dte_movimientos__concepto='TRASPASO_SALIDA',
-                dte_movimientos__tipo_movimiento='EGRESO',
-                dte_movimientos__sucursal_destino_id=sucursal_destino_id
-            )
+            Dte.objects.filter(**filtros_base)
             .select_related('emisor', 'sucursal')
             .prefetch_related(
                 'dte_productos__productoTalla__producto',
@@ -143,6 +170,8 @@ def recepciones_pendientes_api(request):
             queryset = queryset.filter(estado_dte=estado_filtro)
         else:
             queryset = queryset.exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
+            if not puede_recepcionar:
+                queryset = queryset.exclude(estado_dte='EMITIDO')
 
         if tipo_documento:
             queryset = queryset.filter(tipo_documento=tipo_documento)
@@ -206,7 +235,7 @@ def recepciones_pendientes_api(request):
             movimientos_salida = [
                 mov for mov in dte.dte_movimientos.all()
                 if mov.concepto == 'TRASPASO_SALIDA'
-                and mov.sucursal_destino_id == sucursal_destino_id
+                and (ver_todas or mov.sucursal_destino_id == sucursal_destino_id)
             ]
             if not movimientos_salida:
                 continue
@@ -281,9 +310,14 @@ def recepciones_pendientes_api(request):
         hoy = timezone.localdate()
         recibidos_hoy = Dte.objects.filter(
             tipo_transaccion='TRASPASO',
-            sucursal_id=sucursal_destino_id,
             fecha_recepcion=hoy
         ).count()
+        if not ver_todas:
+            recibidos_hoy = Dte.objects.filter(
+                tipo_transaccion='TRASPASO',
+                sucursal_id=sucursal_destino_id,
+                fecha_recepcion=hoy
+            ).count()
 
         # Contar solo los pendientes (sin fecha de recepción)
         pendientes_reales = queryset.filter(fecha_recepcion__isnull=True).values('id').distinct().count()
@@ -300,8 +334,9 @@ def recepciones_pendientes_api(request):
             id__in=movimiento_ids,
             concepto='TRASPASO_SALIDA',
             estado='COMPLETADO',  # ✅ COMPLETADO porque el stock ya salió
-            sucursal_destino_id=sucursal_destino_id
         ).select_related('sucursal_origen__empresa')
+        if not ver_todas:
+            movimientos_pendientes = movimientos_pendientes.filter(sucursal_destino_id=sucursal_destino_id)
 
         origenes_dict = {}
         for mov in movimientos_pendientes:
@@ -315,16 +350,21 @@ def recepciones_pendientes_api(request):
 
         # Contar productos con problemas
         productos_con_problemas = Productos_Recepcionados.objects.filter(
-            dte__sucursal_id=sucursal_destino_id,
             estado__in=['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION']
         ).count()
+        if not ver_todas:
+            productos_con_problemas = Productos_Recepcionados.objects.filter(
+                dte__sucursal_id=sucursal_destino_id,
+                estado__in=['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION']
+            ).count()
 
         # Conteo por estado (para indicadores del sidebar)
         conteo_estados_qs = Dte.objects.filter(
             tipo_transaccion='TRASPASO',
             dte_movimientos__concepto='TRASPASO_SALIDA',
-            dte_movimientos__sucursal_destino_id=sucursal_destino_id,
         ).values('estado_dte').annotate(total=Count('id', distinct=True))
+        if not ver_todas:
+            conteo_estados_qs = conteo_estados_qs.filter(dte_movimientos__sucursal_destino_id=sucursal_destino_id)
         conteo_estados = {r['estado_dte']: r['total'] for r in conteo_estados_qs}
         
         return JsonResponse({
@@ -2622,7 +2662,15 @@ def ajustar_dte_emisor_api(request):
 
 @login_required
 def regularizar_recepciones(request):
-    """Vista para gestionar regularizaciones de productos con problemas en recepción"""
+    """Compatibilidad: la regularización vive dentro de Recepción DTE."""
+    if request.GET.get('legacy') != '1':
+        query = request.GET.urlencode()
+        destino = '/app/recepcion-dte/?vista=regularizar'
+        if query:
+            destino += '&' + query
+        return redirect(destino)
+
+    # Fallback temporal para flujos antiguos mientras se migra toda la UI.
     return render(request, 'vistas/modulo_compras/regularizar_recepciones.html')
 
 
@@ -2746,6 +2794,7 @@ def documento_regularizacion(request, recepcion_id):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
 @require_GET
 def obtener_productos_regularizar(request):
     """Obtiene lista de productos que requieren regularización"""
@@ -2753,7 +2802,13 @@ def obtener_productos_regularizar(request):
         from .models import Productos_Recepcionados
         
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        if not sucursal_id:
+        puede_ver_todas = (
+            request.user.is_superuser or
+            PermisoUsuario.tiene_permiso_ver_todas_sucursales(request.user)
+        )
+        ver_todas = puede_ver_todas and request.GET.get('alcance') == 'todas'
+
+        if not sucursal_id and not ver_todas:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal activa en la sesión.'
@@ -2793,11 +2848,14 @@ def obtener_productos_regularizar(request):
         else:
             estados_a_mostrar = ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
         
-        sucursal_filter = (
-            Q(producto_talla__producto__sucursal_id=sucursal_id) |
-            Q(dte__dte_movimientos__sucursal_destino_id=sucursal_id) |
-            Q(dte__sucursal_id=sucursal_id)
-        )
+        if ver_todas:
+            sucursal_filter = Q()
+        else:
+            sucursal_filter = (
+                Q(producto_talla__producto__sucursal_id=sucursal_id) |
+                Q(dte__dte_movimientos__sucursal_destino_id=sucursal_id) |
+                Q(dte__sucursal_id=sucursal_id)
+            )
         
         if incluir_rechazados_dte and estados_a_mostrar:
             queryset = Productos_Recepcionados.objects.filter(
@@ -2872,7 +2930,7 @@ def obtener_productos_regularizar(request):
             
             # Determinar el ROL del usuario actual en este caso
             # SOY EMISOR si el DTE fue emitido por mi sucursal
-            soy_emisor = (recepcion.dte and recepcion.dte.sucursal_id == sucursal_id)
+            soy_emisor = (recepcion.dte and str(recepcion.dte.sucursal_id) == str(sucursal_id))
             
             # SOY RECEPTOR si:
             # - Tengo movimientos de ENTRADA donde yo soy el destino, O
@@ -2999,6 +3057,7 @@ def obtener_productos_regularizar(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 def procesar_ajuste_interno_individual(request):
     """
@@ -3107,6 +3166,7 @@ def procesar_ajuste_interno_individual(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 def procesar_cambio_producto_individual(request):
     """
@@ -3257,6 +3317,7 @@ def procesar_cambio_producto_individual(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
 @require_GET
 def obtener_solicitudes_recibidas(request):
     """
@@ -3428,6 +3489,7 @@ def obtener_solicitud_producto(request, producto_id):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_POST
 @transaction.atomic
 def decidir_solicitud_api(request):
@@ -3569,6 +3631,7 @@ def decidir_solicitud_api(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
 @require_GET
 def buscar_productos_emisor(request):
     """
@@ -3637,6 +3700,7 @@ def buscar_productos_emisor(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_POST
 @transaction.atomic
 def regularizar_producto_api(request):
@@ -4579,6 +4643,7 @@ def regularizar_producto_api(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 def regularizar_dte_masivo(request):
     """Genera 1 SOLA Nota de Crédito por todo el DTE con múltiples productos"""
@@ -4884,6 +4949,7 @@ def regularizar_dte_masivo(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
 @require_http_methods(["POST"])
 def anular_regularizacion_dte(request):
     """Anula una regularización hecha por error (receptor puede cancelar antes de que emisor resuelva)"""
@@ -5035,6 +5101,7 @@ def anular_regularizacion_dte(request):
 
 
 @login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
 @require_GET
 def obtener_dtes_con_problemas(request):
     """Obtiene lista de DTEs que tienen productos con problemas"""
@@ -13872,6 +13939,11 @@ def api_reparar_traspaso_manual(request, dte_id):
 
     try:
         with transaction.atomic():
+            # Evita que un lock histórico deje el modal girando indefinidamente.
+            with connection.cursor() as cur:
+                cur.execute("SET LOCAL lock_timeout = '5s'")
+                cur.execute("SET LOCAL statement_timeout = '30s'")
+
             dte = (
                 Dte.objects
                 .select_for_update(of=('self',))

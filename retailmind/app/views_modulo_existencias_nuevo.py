@@ -59,16 +59,30 @@ def api_tarjeta_movimiento(request):
     if not sku:
         return JsonResponse({'success': False, 'error': 'Debe ingresar un SKU.'}, status=400)
 
-    try:
-        producto_talla = Producto_Talla.objects.select_related(
-            'producto', 'producto__atributo1', 'producto__sucursal',
-        ).get(sku=sku)
-    except Producto_Talla.DoesNotExist:
-        return JsonResponse({'success': False, 'error': f'SKU {sku} no encontrado.'}, status=404)
+    productos_talla_qs = Producto_Talla.objects.select_related(
+        'producto', 'producto__atributo1', 'producto__sucursal',
+    )
+    if sku.isdigit():
+        productos_talla = list(
+            productos_talla_qs.filter(sku=int(sku)).order_by('producto__articulo', 'talla')
+        )
+        if not productos_talla:
+            productos_talla = list(
+                productos_talla_qs.filter(producto__articulo__iexact=sku).order_by('producto__articulo', 'talla')
+            )
+    else:
+        productos_talla = list(
+            productos_talla_qs.filter(producto__articulo__iexact=sku).order_by('producto__articulo', 'talla')
+        )
+    if not productos_talla:
+        return JsonResponse({'success': False, 'error': f'SKU o artículo {sku} no encontrado.'}, status=404)
 
     movimientos_qs = Movimientos_Producto.objects.filter(
-        ProductoTalla=producto_talla,
-    ).select_related('sucursal_origen', 'sucursal_destino', 'dte', 'ticket')
+        ProductoTalla__in=productos_talla,
+    ).select_related(
+        'ProductoTalla', 'ProductoTalla__producto',
+        'sucursal_origen', 'sucursal_destino', 'dte', 'ticket',
+    )
 
     if fecha_desde:
         movimientos_qs = movimientos_qs.filter(fecha__gte=fecha_desde)
@@ -94,6 +108,8 @@ def api_tarjeta_movimiento(request):
 
         movimientos_data.append({
             'id': m.id,
+            'sku': str(m.ProductoTalla.sku),
+            'talla': m.ProductoTalla.talla,
             'fecha': m.fecha.strftime('%d/%m/%Y') if m.fecha else '',
             'hora': m.hora.strftime('%H:%M') if m.hora else '',
             'tipo_movimiento': m.tipo_movimiento,
@@ -112,17 +128,24 @@ def api_tarjeta_movimiento(request):
             'ticket_correlativo': m.ticket.correlativo if m.ticket else None,
         })
 
+    producto_talla = productos_talla[0]
     producto = producto_talla.producto
+    productos_ids = {pt.producto_id for pt in productos_talla}
+    sucursales = {
+        pt.producto.sucursal.alias
+        for pt in productos_talla
+        if pt.producto.sucursal
+    }
     producto_info = {
         'articulo': producto.articulo,
         'descripcion': producto.descripcion,
-        'sku': str(producto_talla.sku),
-        'talla': producto_talla.talla,
-        'stock_actual': producto_talla.stock,
+        'sku': str(producto_talla.sku) if len(productos_talla) == 1 else f'{len(productos_talla)} SKUs',
+        'talla': producto_talla.talla if len(productos_talla) == 1 else 'Varias',
+        'stock_actual': sum(pt.stock or 0 for pt in productos_talla),
         'costo': producto.costo,
         'precio_venta': producto.precioventa,
         'marca': producto.atributo1.valor if producto.atributo1 else '-',
-        'sucursal': producto.sucursal.alias if producto.sucursal else '-',
+        'sucursal': producto.sucursal.alias if len(productos_ids) == 1 and producto.sucursal else ', '.join(sorted(sucursales)) or '-',
     }
 
     resumen = {
@@ -137,6 +160,45 @@ def api_tarjeta_movimiento(request):
         'producto': producto_info,
         'movimientos': movimientos_data,
         'resumen': resumen,
+    })
+
+
+@login_required
+@require_GET
+def api_buscar_productos_tarjeta_movimiento(request):
+    """Devuelve sugerencias para buscar tarjeta de movimiento por SKU o artículo."""
+    q = request.GET.get('q', '').strip()
+    if len(q) < 2:
+        return JsonResponse({'success': True, 'productos': []})
+
+    filtro = (
+        Q(producto__articulo__icontains=q) |
+        Q(producto__descripcion__icontains=q)
+    )
+    if q.isdigit():
+        filtro |= Q(sku__icontains=q)
+
+    productos = (
+        Producto_Talla.objects
+        .filter(filtro)
+        .select_related('producto', 'producto__atributo1', 'producto__sucursal')
+        .order_by('producto__articulo', 'talla')[:15]
+    )
+
+    return JsonResponse({
+        'success': True,
+        'productos': [
+            {
+                'sku': str(pt.sku),
+                'articulo': pt.producto.articulo,
+                'descripcion': pt.producto.descripcion,
+                'talla': pt.talla,
+                'stock': pt.stock,
+                'marca': pt.producto.atributo1.valor if pt.producto.atributo1 else '-',
+                'sucursal': pt.producto.sucursal.alias if pt.producto.sucursal else '-',
+            }
+            for pt in productos
+        ],
     })
 
 

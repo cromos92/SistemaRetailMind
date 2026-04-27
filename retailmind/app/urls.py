@@ -237,6 +237,7 @@ from .views_modulo_existencias_nuevo import (
     # Tarjeta de Movimiento por Producto
     tarjeta_movimiento_producto,
     api_tarjeta_movimiento,
+    api_buscar_productos_tarjeta_movimiento,
     # Despacho a Todas Sucursales
     despacho_todas_sucursales,
     api_obtener_sucursales_despacho,
@@ -1023,6 +1024,7 @@ urlpatterns = [
     # ========== TARJETA DE MOVIMIENTO POR PRODUCTO ==========
     path('tarjeta-movimiento/', tarjeta_movimiento_producto, name='tarjeta_movimiento_producto'),
     path('api/tarjeta-movimiento/', api_tarjeta_movimiento, name='api_tarjeta_movimiento'),
+    path('api/tarjeta-movimiento/buscar/', api_buscar_productos_tarjeta_movimiento, name='api_buscar_productos_tarjeta_movimiento'),
 
     # ========== DESPACHO A TODAS SUCURSALES ==========
     path('despacho-sucursales/', despacho_todas_sucursales, name='despacho_todas_sucursales'),

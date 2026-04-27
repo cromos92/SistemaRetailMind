@@ -260,19 +260,19 @@
         <div class="ic-count" id="icRechazados">-</div>
         <div class="ic-label">Rechazados sin resolver</div>
         <div class="ic-dias" id="icRechazadosDias"></div>
-        <a href="/app/regularizar-recepciones/?tab=rechazado" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Ver rechazados</a>
+        <a href="/app/recepcion-dte/?vista=regularizar&tab=rechazado" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Ver rechazados</a>
     </div>
     <div class="incompleto-card ic-parcial">
         <div class="ic-count" id="icParcial">-</div>
         <div class="ic-label">Recepcionado parcial</div>
         <div class="ic-dias" id="icParcialDias"></div>
-        <a href="/app/regularizar-recepciones/?tab=pendiente" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Regularizar</a>
+        <a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Regularizar</a>
     </div>
     <div class="incompleto-card ic-regularizacion">
         <div class="ic-count" id="icRegularizacion">-</div>
         <div class="ic-label">En Regularizacion</div>
         <div class="ic-dias" id="icRegularizacionDias"></div>
-        <a href="/app/regularizar-recepciones/?tab=en_regularizacion" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Regularizar</a>
+        <a href="/app/recepcion-dte/?vista=regularizar&tab=en_regularizacion" class="ic-action"><i class="ri-arrow-right-line me-1"></i>Regularizar</a>
     </div>
 </div>
 
@@ -435,7 +435,7 @@ function renderRegPendientes(data) {
             <td>${r.dte__fecha_emision || '-'}</td>
             <td class="text-center"><span class="badge bg-warning text-dark">${r.productos_pendientes}</span></td>
             <td class="text-center" style="color:${diasColor};font-weight:700;">${r.dias_pendiente} dias</td>
-            <td><a href="/app/regularizar-recepciones/?tab=pendiente" class="btn btn-sm btn-outline-primary"><i class="ri-tools-line me-1"></i>Regularizar</a></td>
+            <td><a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="btn btn-sm btn-outline-primary"><i class="ri-tools-line me-1"></i>Regularizar</a></td>
         </tr>`;
     }).join('');
 }
@@ -482,9 +482,9 @@ function renderIncompletosDetalle(data, filtro) {
 
     const ACCION_URL = {
         'EMITIDO': '/app/recepcion-dte/',
-        'RECHAZADO': '/app/regularizar-recepciones/?tab=rechazado',
-        'RECEPCIONADO_PARCIAL': '/app/regularizar-recepciones/?tab=pendiente',
-        'EN_REGULARIZACION': '/app/regularizar-recepciones/?tab=en_regularizacion',
+        'RECHAZADO': '/app/recepcion-dte/?vista=regularizar&tab=rechazado',
+        'RECEPCIONADO_PARCIAL': '/app/recepcion-dte/?vista=regularizar&tab=pendiente',
+        'EN_REGULARIZACION': '/app/recepcion-dte/?vista=regularizar&tab=en_regularizacion',
     };
     const ACCION_TEXTO = {
         'EMITIDO': 'Recepcionar',
@@ -526,7 +526,7 @@ function renderAlertasRegularizacion(kpis, incompletos) {
                     <strong style="color:var(--doc-gray-700);">${kpis.total_pendientes} productos pendientes de regularizacion</strong>
                     <br><small style="color:var(--doc-gray-500);">${kpis.total_faltantes || 0} faltantes, ${kpis.total_danados || 0} danados, ${kpis.total_sobrantes || 0} sobrantes</small>
                 </div>
-                <a href="/app/regularizar-recepciones/?tab=pendiente" class="btn btn-sm btn-outline-warning" style="border-radius:6px;font-size:.75rem;">
+                <a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="btn btn-sm btn-outline-warning" style="border-radius:6px;font-size:.75rem;">
                     <i class="ri-tools-line me-1"></i>Regularizar
                 </a>
             </div>
@@ -542,7 +542,7 @@ function renderAlertasRegularizacion(kpis, incompletos) {
                     <strong style="color:var(--doc-gray-700);">${rechazados.cantidad} DTEs rechazados sin resolver</strong>
                     <br><small style="color:var(--doc-gray-500);">Requieren accion del emisor (rehabilitar o anular)</small>
                 </div>
-                <a href="/app/regularizar-recepciones/?tab=rechazado" class="btn btn-sm btn-outline-danger" style="border-radius:6px;font-size:.75rem;">
+                <a href="/app/recepcion-dte/?vista=regularizar&tab=rechazado" class="btn btn-sm btn-outline-danger" style="border-radius:6px;font-size:.75rem;">
                     <i class="ri-arrow-right-line me-1"></i>Ver rechazados
                 </a>
             </div>
@@ -557,7 +557,7 @@ function renderAlertasRegularizacion(kpis, incompletos) {
                     <strong style="color:var(--doc-gray-700);">${kpis.total_sobrantes} productos sobrantes pendientes de decision</strong>
                     <br><small style="color:var(--doc-gray-500);">Decidir si aceptar en inventario o devolver a origen</small>
                 </div>
-                <a href="/app/regularizar-recepciones/?tab=sobrante" class="btn btn-sm btn-outline-info" style="border-radius:6px;font-size:.75rem;">
+                <a href="/app/recepcion-dte/?vista=regularizar&tab=sobrante" class="btn btn-sm btn-outline-info" style="border-radius:6px;font-size:.75rem;">
                     <i class="ri-arrow-right-line me-1"></i>Decidir
                 </a>
             </div>

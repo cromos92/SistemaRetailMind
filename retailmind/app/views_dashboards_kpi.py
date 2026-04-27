@@ -601,8 +601,8 @@ def api_dashboard_despachos(request):
     ESTADO_ACCIONES = {
         'EMITIDO': {'texto': 'Ir a recepcionar', 'url': '/app/recepcion-dte/'},
         'RECHAZADO': {'texto': 'Ver rechazados', 'url': '/app/recepcion-dte/'},
-        'RECEPCIONADO_PARCIAL': {'texto': 'Regularizar', 'url': '/app/regularizar-recepciones/'},
-        'EN_REGULARIZACION': {'texto': 'Regularizar', 'url': '/app/regularizar-recepciones/'},
+        'RECEPCIONADO_PARCIAL': {'texto': 'Regularizar', 'url': '/app/recepcion-dte/?vista=regularizar&tab=pendiente'},
+        'EN_REGULARIZACION': {'texto': 'Regularizar', 'url': '/app/recepcion-dte/?vista=regularizar&tab=en_regularizacion'},
     }
 
     hoy_incompletos = timezone.localdate()
