@@ -1565,6 +1565,9 @@
                         Diferencial neto: <strong id="ajusteDiferencialNeto">$0</strong> · Unidades a retirar: <strong id="ajusteDiferencialUnidades">0</strong>
                     </div>
                 </div>
+                <div id="ajusteResumenCambios" class="alert alert-light border mt-2 mb-0 small">
+                    Sin cambios seleccionados.
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
@@ -5242,6 +5245,9 @@ function abrirModalAjusteEmisor(dteId, opciones) {
                     <tr data-dp-id="${dpId}"
                         data-cantidad-original="${cantidad}"
                         data-precio="${precio}"
+                        data-sku="${sku}"
+                        data-nombre="${nombre.replace(/"/g, '&quot;')}"
+                        data-talla="${talla}"
                         data-stock-destino="${stockDestino == null ? '' : stockDestino}"
                         data-max-devolver="${maxDevolver}">
                         <td><small class="font-monospace">${sku}</small></td>
@@ -5252,6 +5258,7 @@ function abrirModalAjusteEmisor(dteId, opciones) {
                         <td class="text-center">
                             <input type="number" class="form-control form-control-sm text-center input-ajuste-cantidad"
                                    min="${cantidad - maxDevolver}" max="${cantidad}" value="${cantidad}" style="width: 95px; display:inline-block;">
+                            <div class="small text-muted">NC: <span class="ajuste-cantidad-nc">0</span></div>
                         </td>
                         <td class="text-center">
                             <button class="btn btn-sm btn-outline-danger btn-poner-cero" title="Devolver el máximo permitido">
@@ -5279,6 +5286,7 @@ function abrirModalAjusteEmisor(dteId, opciones) {
 function actualizarDiferencialAjuste() {
     let difNeto = 0;
     let difUnidades = 0;
+    const resumen = [];
     $('#ajusteProductosBody tr[data-dp-id]').each(function () {
         const $tr = $(this);
         const cantOriginal = parseInt($tr.data('cantidad-original'), 10) || 0;
@@ -5293,13 +5301,44 @@ function actualizarDiferencialAjuste() {
         if (nuevaCant > cantOriginal) nuevaCant = cantOriginal;
         if (String(nuevaCant) !== String($input.val())) $input.val(nuevaCant);
         const dif = cantOriginal - nuevaCant;
+        $tr.find('.ajuste-cantidad-nc').text(dif);
         if (dif > 0) {
             difUnidades += dif;
             difNeto += dif * precio;
+            resumen.push({
+                sku: $tr.data('sku') || '-',
+                nombre: $tr.data('nombre') || '-',
+                talla: $tr.data('talla') || '-',
+                original: cantOriginal,
+                nueva: nuevaCant,
+                nc: dif,
+            });
         }
     });
     $('#ajusteDiferencialNeto').text(_ajusteFormatearPesos(difNeto));
     $('#ajusteDiferencialUnidades').text(difUnidades);
+    if (!resumen.length) {
+        $('#ajusteResumenCambios')
+            .removeClass('alert-warning alert-danger')
+            .addClass('alert-light')
+            .html('Sin cambios seleccionados.');
+        return;
+    }
+    $('#ajusteResumenCambios')
+        .removeClass('alert-light')
+        .addClass('alert-warning')
+        .html(`
+            <strong>Resumen de NC/Ajuste:</strong>
+            <div class="mt-1">
+                ${resumen.map(r => `
+                    <div>
+                        <code>${r.sku}</code> ${r.nombre} · T${r.talla}:
+                        original <strong>${r.original}</strong> → nueva <strong>${r.nueva}</strong>
+                        <span class="text-danger fw-bold">(NC ${r.nc})</span>
+                    </div>
+                `).join('')}
+            </div>
+        `);
 }
 
 function confirmarAjusteEmisor() {
@@ -5320,7 +5359,15 @@ function confirmarAjusteEmisor() {
         if (isNaN(nuevaCant) || nuevaCant < 0) nuevaCant = 0;
         if (nuevaCant > cantOriginal) nuevaCant = cantOriginal;
         if (nuevaCant !== cantOriginal) {
-            ajustes.push({ dte_producto_id: dpId, nueva_cantidad: nuevaCant });
+            ajustes.push({
+                dte_producto_id: dpId,
+                nueva_cantidad: nuevaCant,
+                cantidad_original: cantOriginal,
+                cantidad_nc: cantOriginal - nuevaCant,
+                sku: $tr.data('sku') || '-',
+                nombre: $tr.data('nombre') || '-',
+                talla: $tr.data('talla') || '-',
+            });
         }
     });
 
@@ -5331,11 +5378,40 @@ function confirmarAjusteEmisor() {
 
     const esPost = !!(window.ajusteDteActual && window.ajusteDteActual.es_post_recepcion);
     const tituloConfirm = esPost ? '¿Emitir NC post-recepción?' : '¿Confirmar ajuste del DTE?';
+    const resumenAjusteHtml = `
+        <div class="table-responsive mt-2">
+            <table class="table table-sm table-bordered align-middle mb-2">
+                <thead class="table-light">
+                    <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th class="text-center">Talla</th>
+                        <th class="text-end">Original</th>
+                        <th class="text-end">Nueva</th>
+                        <th class="text-end text-danger">NC/Ajuste</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${ajustes.map(a => `
+                        <tr>
+                            <td><code>${a.sku}</code></td>
+                            <td><small>${a.nombre}</small></td>
+                            <td class="text-center">${a.talla}</td>
+                            <td class="text-end">${a.cantidad_original}</td>
+                            <td class="text-end"><strong>${a.nueva_cantidad}</strong></td>
+                            <td class="text-end text-danger fw-bold">${a.cantidad_nc}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>`;
     const htmlConfirm = esPost
         ? `<p>Se generará una NC vinculada al DTE original.</p>
-           <p class="small text-muted">La mercadería saldrá de <strong>${window.ajusteDteActual.sucursal_destino || 'destino'}</strong> y reingresará a tu bodega de origen. Si hay stock insuficiente en destino el ajuste será bloqueado.</p>`
+           <p class="small text-muted">La mercadería saldrá de <strong>${window.ajusteDteActual.sucursal_destino || 'destino'}</strong> y reingresará a tu bodega de origen. Si hay stock insuficiente en destino el ajuste será bloqueado.</p>
+           ${resumenAjusteHtml}`
         : `<p>Se generará un documento de trazabilidad con los productos retirados.</p>
-           <p class="small text-muted">Esta acción reversa el stock al emisor y notifica al receptor.</p>`;
+           <p class="small text-muted">Esta acción reversa el stock al emisor y notifica al receptor.</p>
+           ${resumenAjusteHtml}`;
 
     Swal.fire({
         title: tituloConfirm,

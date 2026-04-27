@@ -21,6 +21,16 @@
         return '$' + n.toLocaleString('es-CL');
     }
 
+    function esc(v) {
+        return String(v ?? '').replace(/[&<>"']/g, ch => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[ch]));
+    }
+
     function asegurarModal() {
         if (document.getElementById(MODAL_ID)) return;
         const html = `
@@ -93,6 +103,12 @@
                        <i class="bi bi-tools me-1"></i>Reparar
                    </button>`
                 : '';
+            const lineas = (h.lineas || []).map(l => `
+                <div class="small text-danger">
+                    <i class="bi bi-dash-circle me-1"></i>
+                    ${esc(l.articulo || l.descripcion || 'Producto')} · SKU ${esc(l.sku || '-')} · T${esc(l.talla || '-')} · <strong>${l.cantidad} uds</strong>
+                </div>
+            `).join('');
             return `
                 <tr>
                     <td>${badge}${pendiente}</td>
@@ -105,6 +121,17 @@
                     <td class="text-end">${botonReparar}</td>
                 </tr>`;
         }).join('');
+        const detalleHijos = hijos.some(h => (h.lineas || []).length)
+            ? `<div class="alert alert-danger py-2 small mt-2 mb-0">
+                  <strong>Productos anulados por NC/Ajuste:</strong>
+                  ${hijos.map(h => (h.lineas || []).map(l => `
+                      <div class="mt-1">
+                          <span class="badge bg-danger me-1">#${esc(h.numero_documento)}</span>
+                          ${esc(l.articulo || l.descripcion || 'Producto')} · SKU ${esc(l.sku || '-')} · T${esc(l.talla || '-')} · <strong>${l.cantidad} uds</strong>
+                      </div>
+                  `).join('')).join('')}
+               </div>`
+            : '';
         return `
             <table class="table table-sm table-striped mb-0">
                 <thead class="table-light"><tr>
@@ -113,7 +140,8 @@
                     <th>Estado</th><th>Motivo</th><th></th>
                 </tr></thead>
                 <tbody>${filas}</tbody>
-            </table>`;
+            </table>
+            ${detalleHijos}`;
     }
 
     function renderMovimientos(mov) {
@@ -122,25 +150,46 @@
             return `<div class="alert alert-light small mb-0">Sin movimientos de stock registrados.</div>`;
         }
         return grupos.map(g => {
-            const filas = (g.items || []).map(it => `
-                <tr>
+            const tot = g.totales || {};
+            const filas = (g.items || []).map(it => {
+                const esNc = !!it.es_nc || String(it.concepto || '').includes('NC') || String(it.concepto || '').includes('DEVOLUCION');
+                const rowClass = esNc ? 'table-danger' : '';
+                const cantClass = esNc ? 'text-danger' : (it.tipo_movimiento === 'INGRESO' ? 'text-success' : 'text-muted');
+                return `
+                <tr class="${rowClass}">
                     <td><small>${it.fecha || '-'} ${it.hora || ''}</small></td>
                     <td><small class="font-monospace">${it.sku || '-'}</small></td>
-                    <td>${it.concepto}</td>
+                    <td>
+                        <small>${esc(it.articulo || it.descripcion || '-')}</small>
+                        ${it.talla ? `<br><small class="text-muted">Talla ${esc(it.talla)}</small>` : ''}
+                    </td>
+                    <td>
+                        ${it.concepto}
+                        ${esNc ? `<span class="badge bg-danger ms-1">NC #${esc(it.dte_numero || '')}</span>` : ''}
+                    </td>
                     <td>${it.tipo_movimiento}</td>
-                    <td class="text-end"><strong>${it.cantidad}</strong></td>
+                    <td class="text-end ${cantClass}"><strong>${it.cantidad}</strong></td>
                     <td><small class="text-muted">${it.sucursal_origen || '-'} → ${it.sucursal_destino || '-'}</small></td>
-                </tr>`).join('');
+                </tr>`;
+            }).join('');
             return `
                 <div class="mb-3">
-                    <h6 class="small text-muted mb-1">
-                        <i class="bi bi-shop me-1"></i>
-                        ${g.sucursal_alias || 'Sin sucursal'}
-                        <span class="text-muted">(${(g.items || []).length} mov.)</span>
-                    </h6>
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
+                        <h6 class="small text-muted mb-0">
+                            <i class="bi bi-shop me-1"></i>
+                            ${g.sucursal_alias || 'Sin sucursal'}
+                            <span class="text-muted">(${(g.items || []).length} mov.)</span>
+                        </h6>
+                        <div class="small">
+                            <span class="badge bg-success">Ingresos ${tot.ingreso || 0}</span>
+                            <span class="badge bg-secondary">Egresos ${tot.egreso || 0}</span>
+                            ${tot.nc ? `<span class="badge bg-danger">Anulado NC ${tot.nc}</span>` : ''}
+                            <span class="badge bg-dark">Neto ${tot.neto || 0}</span>
+                        </div>
+                    </div>
                     <table class="table table-sm table-bordered mb-0">
                         <thead class="table-light"><tr>
-                            <th>Fecha</th><th>SKU</th><th>Concepto</th>
+                            <th>Fecha</th><th>SKU</th><th>Artículo</th><th>Concepto</th>
                             <th>Tipo</th><th class="text-end">Cant.</th><th>Origen → Destino</th>
                         </tr></thead>
                         <tbody>${filas}</tbody>
@@ -325,6 +374,50 @@
             return;
         }
 
+        const totalReparable = diag.lineas
+            .filter(l => l.reparable)
+            .reduce((s, l) => s + (Number(l.faltantes) || 0), 0);
+        const totalBloqueado = diag.lineas
+            .filter(l => !l.reparable)
+            .reduce((s, l) => s + (Number(l.faltantes) || 0), 0);
+        const lineasSinProducto = diag.lineas.filter(l => !l.productoTalla_id && !l.producto_talla_id).length;
+        const totalPendiente = Number(diag.total_faltantes) || (totalReparable + totalBloqueado);
+
+        const resumenReparacion = `
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <div class="border rounded p-2 text-center bg-light">
+                        <div class="fw-bold">${totalPendiente}</div>
+                        <small class="text-muted">Unidades pendientes</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-2 text-center bg-success bg-opacity-10">
+                        <div class="fw-bold text-success">+${totalReparable}</div>
+                        <small class="text-muted">Se agregarán al origen</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-2 text-center ${diag.recepcionado ? 'bg-danger bg-opacity-10' : 'bg-light'}">
+                        <div class="fw-bold ${diag.recepcionado ? 'text-danger' : 'text-muted'}">${diag.recepcionado ? '-' + totalReparable : '0'}</div>
+                        <small class="text-muted">${diag.recepcionado ? 'Se descontarán del destino' : 'No descuenta destino'}</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-2 text-center ${totalBloqueado ? 'bg-warning bg-opacity-10' : 'bg-light'}">
+                        <div class="fw-bold ${totalBloqueado ? 'text-warning' : 'text-muted'}">${totalBloqueado}</div>
+                        <small class="text-muted">Bloqueadas</small>
+                    </div>
+                </div>
+            </div>
+            ${lineasSinProducto ? `
+                <div class="alert alert-danger py-2 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Hay ${lineasSinProducto} línea(s) sin producto creado/vinculado. No se pueden reparar hasta crear o vincular el SKU correspondiente.
+                </div>
+            ` : ''}
+        `;
+
         const headerPost = diag.recepcionado
             ? '<th class="text-end" title="Stock actual en la sucursal destino">Stock destino</th>'
             : '';
@@ -333,7 +426,7 @@
             const maxRepar = l.faltantes;
             const deshabilitado = !l.reparable ? 'disabled' : '';
             const warn = !l.reparable
-                ? `<div class="small text-danger"><i class="bi bi-exclamation-triangle"></i> Stock destino insuficiente (disp. ${l.stock_destino_actual ?? '?'})</div>`
+                ? `<div class="small text-danger"><i class="bi bi-exclamation-triangle"></i> No reparable: ${diag.recepcionado ? 'stock destino insuficiente' : 'producto no disponible'} (disp. ${l.stock_destino_actual ?? '?'})</div>`
                 : '';
             const colDestino = diag.recepcionado
                 ? `<td class="text-end"><span class="badge bg-info text-white">${l.stock_destino_actual ?? '-'}</span></td>`
@@ -366,6 +459,7 @@
                     : 'se reingresarán las unidades al origen (<strong>' + (diag.sucursal_origen || '?') + '</strong>).'}
                 La acción es idempotente: si se aplica dos veces, la segunda es bloqueada.
             </div>
+            ${resumenReparacion}
             <ul class="list-unstyled small mb-3">
                 <li><strong>NC:</strong> ${diag.nc_tipo} #${diag.nc_numero} (${diag.nc_fecha || '-'})</li>
                 <li><strong>DTE padre:</strong> ${diag.dte_padre_tipo} #${diag.dte_padre_numero}
@@ -387,7 +481,7 @@
                             <th class="text-center">Talla</th>
                             <th class="text-end">NC (uds)</th>
                             <th class="text-end" title="Movimientos de reversa que ya existen">Ya rev.</th>
-                            <th class="text-end">Reparar (uds)</th>
+                            <th class="text-end">Agregar al origen</th>
                             ${headerPost}
                             <th class="text-end">Stock origen</th>
                         </tr>
@@ -481,6 +575,15 @@
         }
 
         const motivo = (document.getElementById('inputMotivoReparacion') || {}).value || '';
+        const totalAplicar = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+        if (window.Swal) {
+            const confirmado = confirm(
+                diag.recepcionado
+                    ? `Se agregarán ${totalAplicar} unidad(es) al origen y se descontarán ${totalAplicar} del destino. ¿Continuar?`
+                    : `Se agregarán ${totalAplicar} unidad(es) al origen. ¿Continuar?`
+            );
+            if (!confirmado) return;
+        }
         const btn = document.getElementById('btnAplicarReparacion');
         btn.disabled = true;
         const htmlOriginal = btn.innerHTML;

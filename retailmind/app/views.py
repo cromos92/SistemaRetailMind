@@ -12338,6 +12338,7 @@ def api_dte_trazabilidad(request, dte_id):
         .order_by('-fecha_emision', '-id')
     )
     hijos = []
+    hijos_lineas_por_dte = {}
     for h in hijos_qs:
         # Flag stock_pendiente: True si la NC/AJUSTE no generó los
         # movimientos de reversa esperados (bug histórico). Se computa con
@@ -12368,13 +12369,25 @@ def api_dte_trazabilidad(request, dte_id):
             'stock_pendiente': stock_pendiente,
             'faltantes_totales': faltantes_totales,
         })
+        hijos_lineas_por_dte[h.id] = [
+            {
+                'sku': dp.productoTalla.sku if dp.productoTalla else None,
+                'articulo': dp.productoTalla.producto.articulo if dp.productoTalla and dp.productoTalla.producto else dp.descripcion,
+                'descripcion': dp.descripcion,
+                'talla': dp.productoTalla.talla if dp.productoTalla else None,
+                'cantidad': int(dp.stock or 0),
+                'monto': int(dp.monto_item or ((dp.precio or 0) * (dp.stock or 0))),
+            }
+            for dp in h.dte_productos.select_related('productoTalla__producto').all()
+        ]
+        hijos[-1]['lineas'] = hijos_lineas_por_dte[h.id]
 
     # --- Movimientos asociados (del DTE y de sus hijos), agrupados por sucursal ---
     dte_ids_mov = [dte.id] + [h['id'] for h in hijos]
     movs_qs = (
         Movimientos_Producto.objects
         .filter(dte_id__in=dte_ids_mov)
-        .select_related('ProductoTalla', 'sucursal_origen', 'sucursal_destino')
+        .select_related('ProductoTalla__producto', 'dte', 'sucursal_origen', 'sucursal_destino')
         .order_by('fecha', 'hora', 'id')
     )
 
@@ -12404,16 +12417,42 @@ def api_dte_trazabilidad(request, dte_id):
             'sucursal_id': sucursal_id,
             'sucursal_alias': sucursal.alias if sucursal else 'Sin sucursal',
             'items': [],
+            'totales': {
+                'ingreso': 0,
+                'egreso': 0,
+                'nc': 0,
+                'neto': 0,
+            },
         })
+        cantidad_abs = abs(int(m.cantidad or 0))
+        if m.tipo_movimiento == 'INGRESO':
+            grupo['totales']['ingreso'] += cantidad_abs
+            grupo['totales']['neto'] += cantidad_abs
+        elif m.tipo_movimiento == 'EGRESO':
+            grupo['totales']['egreso'] += cantidad_abs
+            grupo['totales']['neto'] -= cantidad_abs
+
+        es_nc = bool(m.dte and (m.dte.es_nota_credito or m.dte.tipo_documento in ('NOTA DE CREDITO', 'NOTA_CREDITO')))
+        if es_nc:
+            grupo['totales']['nc'] += cantidad_abs
+
+        producto = m.ProductoTalla.producto if m.ProductoTalla else None
         grupo['items'].append({
             'id': m.id,
             'dte_id': m.dte_id,
+            'dte_numero': m.dte.numero_documento if m.dte else None,
+            'dte_tipo': m.dte.tipo_documento if m.dte else None,
+            'es_nc': es_nc,
+            'es_hijo': m.dte_id != dte.id,
             'fecha': m.fecha.strftime('%Y-%m-%d') if m.fecha else None,
             'hora': m.hora.strftime('%H:%M') if m.hora else None,
             'concepto': m.concepto,
             'tipo_movimiento': m.tipo_movimiento,
             'cantidad': m.cantidad,
             'sku': m.ProductoTalla.sku if m.ProductoTalla else None,
+            'articulo': producto.articulo if producto else None,
+            'descripcion': producto.descripcion if producto else None,
+            'talla': m.ProductoTalla.talla if m.ProductoTalla else None,
             'sucursal_origen': m.sucursal_origen.alias if m.sucursal_origen else None,
             'sucursal_destino': m.sucursal_destino.alias if m.sucursal_destino else None,
             'observaciones': (m.observaciones or '')[:200],
