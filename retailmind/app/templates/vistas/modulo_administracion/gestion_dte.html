@@ -818,6 +818,23 @@
                 <div id="diagTraspasoResumen" class="row g-2 mb-3"></div>
                 <div id="diagTraspasoAdvertencias" class="mb-3"></div>
 
+                <div id="diagTraspasoSucursalManualBox" class="alert alert-info py-2 d-none">
+                    <label for="diagTraspasoSucursalManual" class="form-label fw-bold small mb-1">
+                        <i class="bi bi-building me-1"></i>Sucursal destino manual
+                    </label>
+                    <div class="d-flex gap-2">
+                        <select id="diagTraspasoSucursalManual" class="form-select form-select-sm">
+                            <option value="">Seleccionar sucursal destino...</option>
+                        </select>
+                        <button type="button" class="btn btn-sm btn-primary" id="btnReanalizarDiagDestino">
+                            Reanalizar
+                        </button>
+                    </div>
+                    <small class="text-muted">
+                        Úsalo en DTEs antiguos que no tienen movimiento con sucursal destino.
+                    </small>
+                </div>
+
                 <div id="diagTraspasoConfirmNcBox" class="form-check alert alert-danger py-2 d-none">
                     <input class="form-check-input" type="checkbox" id="diagTraspasoConfirmNc">
                     <label class="form-check-label small" for="diagTraspasoConfirmNc">
@@ -1416,6 +1433,7 @@
     // ================================================================
     let modalDiagTraspasoInstance = null;
     let diagnosticoTraspasoActual = null;
+    let diagTraspasoDteActualId = null;
 
     function _ensureModalDiagTraspaso() {
         if (!modalDiagTraspasoInstance) {
@@ -1431,11 +1449,46 @@
         }[ch]));
     }
 
+    function cargarSucursalesDiagTraspaso() {
+        const select = document.getElementById('diagTraspasoSucursalManual');
+        if (!select || select.dataset.loaded === '1') return;
+        fetch('/app/api/sucursales/listar/', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        })
+            .then(r => r.json())
+            .then(data => {
+                const sucursales = data.sucursales || data || [];
+                select.innerHTML = '<option value="">Seleccionar sucursal destino...</option>' + sucursales.map(s => (
+                    `<option value="${s.id}">${_esc(s.alias || s.nombre || ('Sucursal ' + s.id))}${s.direccion ? ' · ' + _esc(s.direccion) : ''}</option>`
+                )).join('');
+                select.dataset.loaded = '1';
+            })
+            .catch(() => {
+                select.innerHTML = '<option value="">No se pudieron cargar sucursales</option>';
+            });
+    }
+
+    async function cargarDiagnosticoTraspaso(dteId) {
+        const sucursalManual = $('#diagTraspasoSucursalManual').val();
+        const query = sucursalManual ? `?sucursal_destino_id=${encodeURIComponent(sucursalManual)}` : '';
+        const resp = await fetch(`/app/api/dte/${dteId}/diagnostico_reparacion_traspaso/${query}`, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudo diagnosticar.');
+        return data;
+    }
+
     function renderDiagnosticoTraspaso(data) {
         diagnosticoTraspasoActual = data;
         const dte = data.dte || {};
         const resumen = data.resumen || {};
         $('#diagTraspasoDteNumero').text(`#${dte.numero_documento || dte.id || '-'}`);
+        const sinDestino = !dte.sucursal_destino || (data.bloqueos || []).some(b => b.tipo === 'SIN_SUCURSAL_DESTINO');
+        $('#diagTraspasoSucursalManualBox').toggleClass('d-none', !sinDestino);
+        if (sinDestino) cargarSucursalesDiagTraspaso();
 
         $('#diagTraspasoResumen').html([
             ['Líneas doc.', resumen.lineas_documento],
@@ -1524,9 +1577,12 @@
     $(document).on('click', '.btn-diagnostico-traspaso', async function () {
         const dteId = parseInt($(this).data('dte-id'), 10);
         if (!dteId) return;
+        diagTraspasoDteActualId = dteId;
 
         $('#btnAplicarReparacionTraspaso').data('dte-id', dteId).prop('disabled', true);
         $('#diagTraspasoMotivo').val('');
+        $('#diagTraspasoSucursalManual').val('');
+        $('#diagTraspasoSucursalManualBox').addClass('d-none');
         $('#diagTraspasoResumen').empty();
         $('#diagTraspasoAdvertencias').empty();
         $('#diagTraspasoLineasBody').html(`<tr><td colspan="7" class="text-center text-muted py-3">
@@ -1537,17 +1593,29 @@
         if (modal) modal.show();
 
         try {
-            const resp = await fetch(`/app/api/dte/${dteId}/diagnostico_reparacion_traspaso/`, {
-                credentials: 'same-origin',
-                headers: { 'Accept': 'application/json' },
-            });
-            const data = await resp.json();
-            if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudo diagnosticar.');
+            const data = await cargarDiagnosticoTraspaso(dteId);
             renderDiagnosticoTraspaso(data);
         } catch (e) {
             $('#diagTraspasoLineasBody').html(`<tr><td colspan="7" class="text-center text-danger py-3">
                 ${_esc(e.message || 'Error al diagnosticar.')}
             </td></tr>`);
+        }
+    });
+
+    $(document).on('click', '#btnReanalizarDiagDestino', async function () {
+        if (!diagTraspasoDteActualId) return;
+        if (!$('#diagTraspasoSucursalManual').val()) {
+            Swal.fire('Atención', 'Selecciona una sucursal destino para reanalizar.', 'warning');
+            return;
+        }
+        $('#diagTraspasoLineasBody').html(`<tr><td colspan="7" class="text-center text-muted py-3">
+            <div class="spinner-border spinner-border-sm me-2"></div>Reanalizando con destino manual...
+        </td></tr>`);
+        try {
+            const data = await cargarDiagnosticoTraspaso(diagTraspasoDteActualId);
+            renderDiagnosticoTraspaso(data);
+        } catch (e) {
+            Swal.fire('Error', e.message || 'No se pudo reanalizar.', 'error');
         }
     });
 
@@ -1617,7 +1685,12 @@
                     'Accept': 'application/json',
                     'X-CSRFToken': csrf,
                 },
-                body: JSON.stringify({ items, motivo, confirmar_nc: confirmarNc }),
+                body: JSON.stringify({
+                    items,
+                    motivo,
+                    confirmar_nc: confirmarNc,
+                    sucursal_destino_id: $('#diagTraspasoSucursalManual').val() || null,
+                }),
             });
             const data = await resp.json();
             if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudo reparar.');

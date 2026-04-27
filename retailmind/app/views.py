@@ -13747,8 +13747,8 @@ def _clonar_producto_talla_a_sucursal(talla_referencia, sucursal):
     return talla_obj, creada
 
 
-def _diagnostico_reparacion_traspaso(dte):
-    sucursal_destino = _sucursal_destino_traspaso(dte)
+def _diagnostico_reparacion_traspaso(dte, sucursal_destino=None):
+    sucursal_destino = sucursal_destino or _sucursal_destino_traspaso(dte)
     hijos = list(
         Dte.objects
         .filter(documento_afectado=dte)
@@ -14001,7 +14001,15 @@ def api_diagnostico_reparacion_traspaso(request, dte_id):
     if sucursal_actual_id and dte.sucursal_id != int(sucursal_actual_id):
         return JsonResponse({'success': False, 'error': 'Sólo la sucursal emisora puede diagnosticar/reparar este DTE.'}, status=403)
 
-    diagnostico = _diagnostico_reparacion_traspaso(dte)
+    sucursal_destino = None
+    sucursal_destino_id = request.GET.get('sucursal_destino_id')
+    if sucursal_destino_id:
+        try:
+            sucursal_destino = Sucursal.objects.get(id=int(sucursal_destino_id))
+        except (Sucursal.DoesNotExist, TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Sucursal destino manual inválida.'}, status=400)
+
+    diagnostico = _diagnostico_reparacion_traspaso(dte, sucursal_destino=sucursal_destino)
     return JsonResponse({'success': True, **diagnostico})
 
 
@@ -14017,6 +14025,7 @@ def api_reparar_traspaso_manual(request, dte_id):
     items = body.get('items') or []
     motivo = (body.get('motivo') or '').strip()
     confirmar_nc = bool(body.get('confirmar_nc'))
+    sucursal_destino_id = body.get('sucursal_destino_id')
 
     if not isinstance(items, list) or not items:
         return JsonResponse({'success': False, 'error': 'Debe enviar al menos una línea para reparar.'}, status=400)
@@ -14054,9 +14063,19 @@ def api_reparar_traspaso_manual(request, dte_id):
                     'requiere_confirmar_nc': True,
                 }, status=409)
 
-            sucursal_destino = _sucursal_destino_traspaso(dte)
+            sucursal_destino = None
+            if sucursal_destino_id:
+                try:
+                    sucursal_destino = Sucursal.objects.get(id=int(sucursal_destino_id))
+                except (Sucursal.DoesNotExist, TypeError, ValueError):
+                    return JsonResponse({'success': False, 'error': 'Sucursal destino manual inválida.'}, status=400)
+            sucursal_destino = sucursal_destino or _sucursal_destino_traspaso(dte)
             if sucursal_destino is None:
-                return JsonResponse({'success': False, 'error': 'No se pudo identificar la sucursal destino.'}, status=400)
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se pudo identificar la sucursal destino. Selecciónala manualmente en el diagnóstico.',
+                    'requiere_sucursal_destino': True,
+                }, status=400)
 
             usuario = request.user.username
             ahora = timezone.now()

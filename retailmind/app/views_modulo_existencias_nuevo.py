@@ -124,7 +124,10 @@ def api_tarjeta_movimiento(request):
             'responsable': m.responsable,
             'observaciones': m.observaciones or '',
             'referencia': m.referencia_externa or '',
-            'dte_folio': m.dte.folio if m.dte else None,
+            'dte_folio': (
+                getattr(m.dte, 'folio', None) or getattr(m.dte, 'numero_documento', None)
+                if m.dte else None
+            ),
             'ticket_correlativo': m.ticket.correlativo if m.ticket else None,
         })
 
@@ -503,7 +506,10 @@ def api_trazabilidad_producto(request):
         'origen': m.sucursal_origen.alias if m.sucursal_origen else '-',
         'destino': m.sucursal_destino.alias if m.sucursal_destino else '-',
         'responsable': m.responsable,
-        'dte_folio': m.dte.folio if m.dte else None,
+        'dte_folio': (
+            getattr(m.dte, 'folio', None) or getattr(m.dte, 'numero_documento', None)
+            if m.dte else None
+        ),
         'ticket_correlativo': m.ticket.correlativo if m.ticket else None,
         'observaciones': m.observaciones or '',
         'referencia': m.referencia_externa or '',
