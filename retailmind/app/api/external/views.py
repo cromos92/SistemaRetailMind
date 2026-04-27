@@ -532,9 +532,16 @@ class GuiasTallaExternalView(APIView):
 
 class PreciosActualesView(APIView):
     """
-    Retorna precios y costos actuales de todos los SKUs de la empresa.
-    Formato ligero optimizado para que AllConnected detecte cambios de precio
-    sin necesidad de traer el catálogo completo.
+    Retorna precios, costos y última fecha de ingreso a nivel EMPRESA, una fila
+    por SKU. Si el mismo SKU vive en múltiples sucursales (un Producto_Talla
+    distinto por sucursal), se consolida con MAX de costo, precio_venta y
+    precio_sugerido (regla de negocio: el SKU expuesto al ecommerce debe
+    publicarse con el mayor precio/costo entre sucursales).
+
+    `ultima_fecha_ingreso` es la fecha del lote ACTIVO más reciente de cualquier
+    sucursal de la empresa para ese SKU (formato YYYY-MM-DD). Es lo que
+    AllConnected usa como referencia de antigüedad de stock para calcular
+    descuentos por antigüedad.
 
     Respuesta:
     {
@@ -546,7 +553,7 @@ class PreciosActualesView(APIView):
                 "precio_venta": 59990,
                 "precio_costo": 25000,
                 "precio_sugerido": 64990,
-                "sucursal": "PAO1"
+                "ultima_fecha_ingreso": "2026-03-15"
             }
         ],
         "total": 123,
@@ -557,6 +564,8 @@ class PreciosActualesView(APIView):
     permission_classes = [ApiKeyPermission]
 
     def get(self, request):
+        from django.db.models import Max, Q
+
         rut = request.query_params.get('rut_empresa', '').strip()
         if not rut:
             return Response(
@@ -566,31 +575,70 @@ class PreciosActualesView(APIView):
             )
 
         logger.info(f"[external/precios-actuales] rut={rut}")
+
+        # 1 fila por (sku × sucursal) con la última fecha_ingreso de los lotes
+        # activos de ese Producto_Talla (la fecha es propia de cada lote).
         rows = list(
             Producto_Talla.objects
             .filter(producto__sucursal__empresa__rut=rut)
+            .annotate(
+                ultima_fecha_lote=Max(
+                    'lotes__fecha_ingreso',
+                    filter=Q(lotes__activo=True),
+                )
+            )
             .values(
                 'sku',
                 'producto__articulo',
                 'producto__costo',
                 'producto__precioventa',
                 'producto__precioSugerido',
-                'producto__sucursal__alias',
+                'ultima_fecha_lote',
             )
         )
 
-        data = []
+        # Consolidar a 1 fila por SKU usando MAX de cada métrica.
+        consolidado: dict = {}
         for row in rows:
-            data.append({
-                'codigo_sku': str(row['sku']),
-                'articulo': row.get('producto__articulo', ''),
-                'precio_venta': int(row.get('producto__precioventa', 0) or 0),
-                'precio_costo': int(row.get('producto__costo', 0) or 0),
-                'precio_sugerido': int(row.get('producto__precioSugerido', 0) or 0),
-                'sucursal': row.get('producto__sucursal__alias', '') or '',
-            })
+            sku = str(row['sku'])
+            if not sku:
+                continue
 
-        logger.info(f"[external/precios-actuales] rut={rut} → {len(data)} SKUs")
+            costo = int(row.get('producto__costo', 0) or 0)
+            precio_venta = int(row.get('producto__precioventa', 0) or 0)
+            precio_sugerido = int(row.get('producto__precioSugerido', 0) or 0)
+            fecha_lote = row.get('ultima_fecha_lote')
+
+            if sku not in consolidado:
+                consolidado[sku] = {
+                    'codigo_sku': sku,
+                    'articulo': row.get('producto__articulo', '') or '',
+                    'precio_venta': precio_venta,
+                    'precio_costo': costo,
+                    'precio_sugerido': precio_sugerido,
+                    '_fecha_lote': fecha_lote,
+                }
+            else:
+                base = consolidado[sku]
+                if precio_venta > base['precio_venta']:
+                    base['precio_venta'] = precio_venta
+                if costo > base['precio_costo']:
+                    base['precio_costo'] = costo
+                if precio_sugerido > base['precio_sugerido']:
+                    base['precio_sugerido'] = precio_sugerido
+                # Fecha más reciente entre sucursales
+                if fecha_lote and (not base['_fecha_lote'] or fecha_lote > base['_fecha_lote']):
+                    base['_fecha_lote'] = fecha_lote
+
+        data = []
+        for sku, info in consolidado.items():
+            fecha_lote = info.pop('_fecha_lote', None)
+            info['ultima_fecha_ingreso'] = (
+                fecha_lote.strftime('%Y-%m-%d') if fecha_lote else None
+            )
+            data.append(info)
+
+        logger.info(f"[external/precios-actuales] rut={rut} → {len(data)} SKUs (consolidados)")
         return Response({
             'success': True,
             'data': data,
