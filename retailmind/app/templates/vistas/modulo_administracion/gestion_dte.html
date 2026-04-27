@@ -610,53 +610,6 @@
 <div class="page-content">
     <div class="container-fluid">
 
-        <!-- ===================================================================
-             Panel "NCs por reparar": NCs/AJUSTES emitidos antes del fix
-             unificado que no generaron los movimientos de reversa de stock.
-             Si no hay casos, la card queda oculta. Colapsable.
-             =================================================================== -->
-        <div class="nexo-card mb-3" id="cardNcsPorReparar" style="display:none;">
-            <div class="nexo-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <h6 class="mb-0">
-                    <i class="bi bi-tools text-warning me-1"></i>
-                    NCs por reparar
-                    <span class="badge bg-warning text-dark ms-2" id="ncsPorRepararCount">0</span>
-                    <small class="text-muted ms-2">(NCs históricas emitidas sin movimientos de reversa de stock)</small>
-                </h6>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-secondary" id="btnRefreshNcsReparar" title="Re-analizar">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" id="btnToggleNcsReparar" title="Mostrar / ocultar">
-                        <i class="bi bi-chevron-up"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="nexo-card-body" id="bodyNcsPorReparar">
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>NC</th>
-                                <th>DTE padre</th>
-                                <th>Fecha</th>
-                                <th>Origen → Destino</th>
-                                <th>Fase</th>
-                                <th class="text-end">Uds pendientes</th>
-                                <th class="text-end"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="tablaNcsPorRepararBody">
-                            <tr><td colspan="7" class="text-center text-muted py-3">
-                                <div class="spinner-border spinner-border-sm text-warning"></div>
-                                <span class="ms-2">Analizando NCs...</span>
-                            </td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
         <div class="nexo-card">
             <div class="nexo-card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
                 <h5>
@@ -837,6 +790,79 @@
                 </button>
                 <button type="button" class="nexo-btn" id="btnConfirmarCrearStock" style="background: var(--nexo-accent); color: white;">
                     <i class="bi bi-check-circle me-1"></i>Aplicar y recepcionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Diagnóstico/Reparación Traspaso -->
+<div class="modal fade nexo-modal" id="modalDiagnosticoTraspaso" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #6f42c1 0%, #4338ca 100%); color: white;">
+                <h5 class="modal-title">
+                    <i class="bi bi-shield-exclamation me-2"></i>
+                    Diagnóstico/Reparación traspaso
+                    <span id="diagTraspasoDteNumero" class="header-badge ms-2">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning py-2 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Revisa NC/Ajustes, productos no creados y stock no actualizado antes de reparar.
+                    Esta acción es manual: debes seleccionar líneas, candidato, cantidad y movimientos.
+                </div>
+
+                <div id="diagTraspasoResumen" class="row g-2 mb-3"></div>
+                <div id="diagTraspasoAdvertencias" class="mb-3"></div>
+
+                <div id="diagTraspasoConfirmNcBox" class="form-check alert alert-danger py-2 d-none">
+                    <input class="form-check-input" type="checkbox" id="diagTraspasoConfirmNc">
+                    <label class="form-check-label small" for="diagTraspasoConfirmNc">
+                        Confirmo que revisé las NC/Ajustes asociados y entiendo que esta reparación modificará stock/trazabilidad.
+                    </label>
+                </div>
+
+                <div class="nexo-table-wrapper mb-3">
+                    <table class="table nexo-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 45px;">Usar</th>
+                                <th>Línea</th>
+                                <th>Problema</th>
+                                <th style="width: 220px;">Producto/Talla candidato</th>
+                                <th class="text-end" style="width: 120px;">Cantidad</th>
+                                <th class="text-center" style="width: 90px;">Entrada</th>
+                                <th class="text-center" style="width: 90px;">Salida</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diagTraspasoLineasBody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-3">
+                                    <div class="spinner-border spinner-border-sm me-2"></div>Analizando DTE...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mb-2">
+                    <label for="diagTraspasoMotivo" class="form-label fw-bold small">
+                        <i class="bi bi-pencil me-1"></i>Motivo <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" id="diagTraspasoMotivo" class="form-control"
+                           placeholder="Ej: Reparación por eliminación histórica de producto ya despachado"
+                           maxlength="250">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <button type="button" class="nexo-btn" id="btnAplicarReparacionTraspaso" style="background:#6f42c1;color:white;">
+                    <i class="bi bi-tools me-1"></i>Aplicar reparación manual
                 </button>
             </div>
         </div>
@@ -1385,6 +1411,229 @@
         }
     });
 
+    // ================================================================
+    // Diagnóstico/Reparación manual de traspasos con trazabilidad rota
+    // ================================================================
+    let modalDiagTraspasoInstance = null;
+    let diagnosticoTraspasoActual = null;
+
+    function _ensureModalDiagTraspaso() {
+        if (!modalDiagTraspasoInstance) {
+            const el = document.getElementById('modalDiagnosticoTraspaso');
+            if (el) modalDiagTraspasoInstance = new bootstrap.Modal(el);
+        }
+        return modalDiagTraspasoInstance;
+    }
+
+    function _esc(v) {
+        return String(v ?? '').replace(/[&<>"']/g, ch => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[ch]));
+    }
+
+    function renderDiagnosticoTraspaso(data) {
+        diagnosticoTraspasoActual = data;
+        const dte = data.dte || {};
+        const resumen = data.resumen || {};
+        $('#diagTraspasoDteNumero').text(`#${dte.numero_documento || dte.id || '-'}`);
+
+        $('#diagTraspasoResumen').html([
+            ['Líneas doc.', resumen.lineas_documento],
+            ['Con problema', resumen.lineas_con_problema],
+            ['Sin producto', resumen.lineas_sin_producto_talla],
+            ['Sin recepción', resumen.lineas_sin_recepcion],
+            ['Uds doc.', resumen.unidades_documento],
+            ['Uds recibidas', resumen.unidades_recepcionadas],
+            ['Salida mov.', resumen.movimientos_salida_unidades],
+            ['Entrada mov.', resumen.movimientos_entrada_unidades],
+        ].map(([label, value]) => `
+            <div class="col-6 col-md-3">
+                <div class="nexo-info-row">
+                    <span class="nexo-info-label">${label}</span>
+                    <span class="nexo-info-value fw-bold">${value ?? 0}</span>
+                </div>
+            </div>
+        `).join(''));
+
+        const advertencias = data.advertencias || [];
+        $('#diagTraspasoAdvertencias').html(advertencias.length ? advertencias.map(a => `
+            <div class="alert ${a.tipo === 'DTE_CON_NC_AJUSTES' || a.tipo === 'NC_STOCK_PENDIENTE' ? 'alert-danger' : 'alert-warning'} py-2 small mb-2">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <strong>${_esc(a.tipo)}:</strong> ${_esc(a.mensaje)}
+                ${a.documentos ? `<div class="mt-1">${a.documentos.map(h => `<span class="badge bg-dark me-1">${_esc(h.tipo_documento)} #${_esc(h.numero_documento)} · ${_esc(h.estado_dte)}</span>`).join('')}</div>` : ''}
+            </div>
+        `).join('') : `
+            <div class="alert alert-success py-2 small mb-2">
+                <i class="bi bi-check-circle me-1"></i>Sin advertencias críticas detectadas.
+            </div>
+        `);
+
+        $('#diagTraspasoConfirmNcBox').toggleClass('d-none', !data.requiere_confirmar_nc);
+        $('#diagTraspasoConfirmNc').prop('checked', false);
+
+        const lineas = data.lineas || [];
+        if (!lineas.length) {
+            $('#diagTraspasoLineasBody').html(`<tr><td colspan="7" class="text-center text-success py-3">
+                <i class="bi bi-check-circle me-1"></i>No hay líneas para reparar.
+            </td></tr>`);
+            $('#btnAplicarReparacionTraspaso').prop('disabled', true);
+            return;
+        }
+
+        $('#diagTraspasoLineasBody').html(lineas.map((ln, idx) => {
+            const problemas = [
+                ln.sin_producto_talla ? '<span class="badge bg-danger me-1">Sin producto</span>' : '',
+                ln.sin_recepcion ? '<span class="badge bg-warning text-dark me-1">Sin recepción</span>' : '',
+                !ln.existe_stock_destino ? '<span class="badge bg-secondary me-1">Destino no creado/stock no detectado</span>' : '',
+            ].join('');
+            const candidatos = ln.candidatos || [];
+            const options = candidatos.map(c => {
+                const roles = (c.roles || []).length ? ` (${c.roles.join('/')})` : '';
+                return `<option value="${c.producto_talla_id}">SKU ${_esc(c.sku)} · T${_esc(c.talla)} · ${_esc(c.sucursal)}${roles} · stock ${c.stock}</option>`;
+            }).join('');
+            const disabled = !ln.puede_reparar || !candidatos.length;
+            return `<tr data-index="${idx}" data-dte-producto-id="${ln.dte_producto_id}" data-max="${ln.cantidad_documento}">
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input chk-reparar-linea" ${disabled ? 'disabled' : 'checked'}>
+                </td>
+                <td>
+                    <div class="fw-semibold">${_esc(ln.descripcion)}</div>
+                    <small class="text-muted">Doc: ${ln.cantidad_documento} · Rec: ${ln.cantidad_recepcionada}</small>
+                </td>
+                <td>${problemas || '<span class="badge bg-info text-dark">Revisar cantidad</span>'}</td>
+                <td>
+                    <select class="form-select form-select-sm select-candidato" ${disabled ? 'disabled' : ''}>
+                        ${options || '<option value="">Sin candidato automático</option>'}
+                    </select>
+                </td>
+                <td class="text-end">
+                    <input type="number" min="0" max="${ln.cantidad_documento}" value="${ln.cantidad_sugerida}"
+                           class="form-control form-control-sm input-cantidad-reparar text-end" ${disabled ? 'disabled' : ''}>
+                </td>
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input chk-crear-entrada" ${disabled ? 'disabled' : 'checked'}>
+                </td>
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input chk-reconstruir-salida" ${disabled ? 'disabled' : (ln.sin_producto_talla ? 'checked' : '')}>
+                </td>
+            </tr>`;
+        }).join(''));
+        $('#btnAplicarReparacionTraspaso').prop('disabled', false);
+    }
+
+    $(document).on('click', '.btn-diagnostico-traspaso', async function () {
+        const dteId = parseInt($(this).data('dte-id'), 10);
+        if (!dteId) return;
+
+        $('#btnAplicarReparacionTraspaso').data('dte-id', dteId).prop('disabled', true);
+        $('#diagTraspasoMotivo').val('');
+        $('#diagTraspasoResumen').empty();
+        $('#diagTraspasoAdvertencias').empty();
+        $('#diagTraspasoLineasBody').html(`<tr><td colspan="7" class="text-center text-muted py-3">
+            <div class="spinner-border spinner-border-sm me-2"></div>Analizando DTE...
+        </td></tr>`);
+
+        const modal = _ensureModalDiagTraspaso();
+        if (modal) modal.show();
+
+        try {
+            const resp = await fetch(`/app/api/dte/${dteId}/diagnostico_reparacion_traspaso/`, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' },
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudo diagnosticar.');
+            renderDiagnosticoTraspaso(data);
+        } catch (e) {
+            $('#diagTraspasoLineasBody').html(`<tr><td colspan="7" class="text-center text-danger py-3">
+                ${_esc(e.message || 'Error al diagnosticar.')}
+            </td></tr>`);
+        }
+    });
+
+    $(document).on('click', '#btnAplicarReparacionTraspaso', async function () {
+        const btn = this;
+        const dteId = parseInt($(btn).data('dte-id'), 10);
+        if (!dteId || !diagnosticoTraspasoActual) return;
+
+        const motivo = $('#diagTraspasoMotivo').val().trim();
+        if (!motivo) {
+            Swal.fire('Atención', 'Debes ingresar un motivo para auditoría.', 'warning');
+            $('#diagTraspasoMotivo').focus();
+            return;
+        }
+
+        const requiereNc = !!diagnosticoTraspasoActual.requiere_confirmar_nc;
+        const confirmarNc = $('#diagTraspasoConfirmNc').is(':checked');
+        if (requiereNc && !confirmarNc) {
+            Swal.fire('Atención', 'Debes confirmar que revisaste las NC/Ajustes asociados antes de reparar.', 'warning');
+            return;
+        }
+
+        const items = [];
+        $('#diagTraspasoLineasBody tr[data-dte-producto-id]').each(function () {
+            if (!$(this).find('.chk-reparar-linea').is(':checked')) return;
+            const dteProductoId = parseInt($(this).data('dte-producto-id'), 10);
+            const productoTallaId = parseInt($(this).find('.select-candidato').val(), 10);
+            const cantidad = parseInt($(this).find('.input-cantidad-reparar').val(), 10);
+            const max = parseInt($(this).data('max'), 10);
+            if (!dteProductoId || !productoTallaId || isNaN(cantidad) || cantidad < 0 || cantidad > max) return;
+            items.push({
+                dte_producto_id: dteProductoId,
+                producto_talla_id: productoTallaId,
+                cantidad_recepcionada: cantidad,
+                crear_entrada: $(this).find('.chk-crear-entrada').is(':checked'),
+                reconstruir_salida: $(this).find('.chk-reconstruir-salida').is(':checked'),
+            });
+        });
+
+        if (!items.length) {
+            Swal.fire('Atención', 'Selecciona al menos una línea válida para reparar.', 'warning');
+            return;
+        }
+
+        const confirmacion = await Swal.fire({
+            title: '¿Aplicar reparación manual?',
+            html: `Se repararán <strong>${items.length}</strong> línea(s). Revisa que las cantidades y movimientos sean correctos.<br><small class="text-danger">Esta acción modifica stock/trazabilidad y queda auditada.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, aplicar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#6f42c1',
+        });
+        if (!confirmacion.isConfirmed) return;
+
+        const htmlOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Aplicando...`;
+        try {
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+            const resp = await fetch(`/app/api/dte/${dteId}/reparar_traspaso_manual/`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrf,
+                },
+                body: JSON.stringify({ items, motivo, confirmar_nc: confirmarNc }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudo reparar.');
+
+            Swal.fire('Reparación aplicada', data.message || 'DTE reparado correctamente.', 'success');
+            const modal = _ensureModalDiagTraspaso();
+            if (modal) modal.hide();
+            if (typeof cargarDTEs === 'function') cargarDTEs();
+        } catch (e) {
+            Swal.fire('Error', e.message || 'No se pudo aplicar la reparación.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = htmlOriginal;
+        }
+    });
+
     // Crear SKUs faltantes en sucursal destino (replicación masiva).
     $(document).on('click', '#btnCrearSkusDestino', async function () {
         const btn = this;
@@ -1451,99 +1700,6 @@
             btn.disabled = false;
             btn.innerHTML = htmlOriginal;
         }
-    });
-
-    // ================================================================
-    // Panel "NCs por reparar": carga, render y acción de reparación.
-    // ================================================================
-    function _fmtPesos(v) { return '$' + (Number(v) || 0).toLocaleString('es-CL'); }
-
-    function cargarNcsPorReparar() {
-        const body = document.getElementById('tablaNcsPorRepararBody');
-        const card = document.getElementById('cardNcsPorReparar');
-        const badge = document.getElementById('ncsPorRepararCount');
-        if (!body) return;
-        body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">
-            <div class="spinner-border spinner-border-sm text-warning"></div>
-            <span class="ms-2">Analizando NCs...</span>
-        </td></tr>`;
-
-        fetch('/app/api/dte/ncs_sin_stock/?page_size=100', {
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' },
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (!data || !data.success) {
-                    body.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-3">
-                        ${(data && data.error) || 'No se pudo cargar el diagnóstico.'}
-                    </td></tr>`;
-                    card.style.display = '';
-                    return;
-                }
-                const items = data.items || [];
-                badge.textContent = data.total || 0;
-
-                if (!items.length) {
-                    // Nada pendiente: ocultar la card (mejor UX que mostrar vacío).
-                    card.style.display = 'none';
-                    return;
-                }
-                card.style.display = '';
-                body.innerHTML = items.map(i => {
-                    const fase = i.recepcionado
-                        ? '<span class="badge bg-danger text-white">POST-recepción</span>'
-                        : '<span class="badge bg-warning text-dark">PRE-recepción</span>';
-                    return `
-                        <tr>
-                            <td><strong>${i.nc_tipo}</strong><br><small class="text-muted">#${i.nc_numero}</small></td>
-                            <td><strong>${i.dte_padre_tipo}</strong><br><small class="text-muted">#${i.dte_padre_numero}</small></td>
-                            <td><small>${i.nc_fecha || '-'}</small></td>
-                            <td><small>${i.sucursal_origen || '-'} → ${i.sucursal_destino || '-'}</small></td>
-                            <td>${fase}</td>
-                            <td class="text-end"><strong>${i.total_faltantes || 0}</strong> uds</td>
-                            <td class="text-end">
-                                <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${i.dte_padre_id}" title="Ver trazabilidad del DTE padre">
-                                    <i class="bi bi-diagram-3"></i>
-                                </button>
-                                <button class="btn btn-sm btn-warning btn-reparar-nc-stock" data-nc-id="${i.nc_id}" title="Reparar stock histórico">
-                                    <i class="bi bi-tools me-1"></i>Reparar
-                                </button>
-                            </td>
-                        </tr>`;
-                }).join('');
-            })
-            .catch(err => {
-                body.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-3">
-                    ${err && err.message}
-                </td></tr>`;
-                card.style.display = '';
-            });
-    }
-
-    // Refrescar a demanda
-    document.addEventListener('DOMContentLoaded', function () {
-        cargarNcsPorReparar();
-
-        const btnRefresh = document.getElementById('btnRefreshNcsReparar');
-        if (btnRefresh) btnRefresh.addEventListener('click', cargarNcsPorReparar);
-
-        const btnToggle = document.getElementById('btnToggleNcsReparar');
-        if (btnToggle) {
-            btnToggle.addEventListener('click', function () {
-                const b = document.getElementById('bodyNcsPorReparar');
-                const icon = btnToggle.querySelector('i');
-                if (!b || !icon) return;
-                const visible = b.style.display !== 'none';
-                b.style.display = visible ? 'none' : '';
-                icon.className = visible ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
-            });
-        }
-    });
-
-    // Al reparar una NC, refrescar el listado (evento que dispara el helper).
-    document.addEventListener('nc-stock-reparada', function () {
-        cargarNcsPorReparar();
     });
 
     function getCookie(name) {
@@ -1818,6 +1974,12 @@
             <button class="nexo-action-btn btn-crear-stock-destino" style="background: var(--nexo-accent); color: white;" title="Crear stock manualmente en sucursal destino (${dte.sucursal_destino.alias})" data-dte-id="${dte.id || 0}">
                 <i class="bi bi-box-arrow-in-down"></i>
             </button>` : ''}
+            {% if es_admin %}
+            ${dte.es_traspaso && dte.estado_dte !== 'ANULADO' && dte.estado_dte !== 'CANCELADO' ? `
+            <button class="nexo-action-btn btn-diagnostico-traspaso" style="background:#6f42c1;color:white;" title="Diagnosticar/reparar trazabilidad de traspaso" data-dte-id="${dte.id || 0}">
+                <i class="bi bi-shield-exclamation"></i>
+            </button>` : ''}
+            {% endif %}
             <button class="nexo-action-btn btn-ver-trazabilidad" data-dte-id="${dte.id || 0}" title="Ver trazabilidad (compras origen, NC hijos, movimientos)">
                 <i class="bi bi-diagram-3"></i>
             </button>

@@ -13534,6 +13534,549 @@ def api_crear_stock_destino_manual(request, dte_id):
     })
 
 
+def _parse_dte_producto_descripcion(descripcion):
+    """Extrae articulo/talla desde descripciones tipo 'ART-COLOR - Talla 37.0'."""
+    texto = (descripcion or '').strip()
+    match = re.match(r'^(?P<articulo>.+?)\s+-\s*Talla\s+(?P<talla>.+?)\s*$', texto, re.IGNORECASE)
+    if not match:
+        return None, None
+    return match.group('articulo').strip(), match.group('talla').strip()
+
+
+def _variantes_talla(talla):
+    valores = {(talla or '').strip()}
+    if talla:
+        texto = str(talla).strip()
+        if texto.endswith('.0'):
+            valores.add(texto[:-2])
+        else:
+            valores.add(f'{texto}.0')
+    valores.discard('')
+    return list(valores)
+
+
+def _producto_payload(producto):
+    if not producto:
+        return {}
+    return {
+        'id': producto.id,
+        'articulo': producto.articulo,
+        'descripcion': producto.descripcion,
+        'sucursal': producto.sucursal.alias if producto.sucursal else None,
+    }
+
+
+def _talla_payload(talla, sucursal_origen_id=None, sucursal_destino_id=None):
+    producto = talla.producto if talla else None
+    sucursal_id = producto.sucursal_id if producto else None
+    roles = []
+    if sucursal_origen_id and sucursal_id == sucursal_origen_id:
+        roles.append('origen')
+    if sucursal_destino_id and sucursal_id == sucursal_destino_id:
+        roles.append('destino')
+    return {
+        'producto_talla_id': talla.id,
+        'sku': talla.sku,
+        'talla': talla.talla,
+        'stock': int(talla.stock or 0),
+        'sucursal_id': sucursal_id,
+        'sucursal': producto.sucursal.alias if producto and producto.sucursal else None,
+        'producto': _producto_payload(producto),
+        'roles': roles,
+    }
+
+
+def _clonar_producto_talla_a_sucursal(talla_referencia, sucursal):
+    """Crea/reusa Producto y Producto_Talla en una sucursal, con stock inicial 0."""
+    producto_ref = talla_referencia.producto
+    if producto_ref is None:
+        raise ValueError('La talla de referencia no tiene producto asociado.')
+
+    producto_destino = (
+        Producto.objects
+        .filter(
+            articulo=producto_ref.articulo,
+            sucursal=sucursal,
+            atributo1=producto_ref.atributo1,
+            atributo2=producto_ref.atributo2,
+            atributo3=producto_ref.atributo3,
+            atributo4=producto_ref.atributo4,
+        )
+        .order_by('id')
+        .first()
+    )
+    if producto_destino is None:
+        producto_destino = Producto.objects.create(
+            articulo=producto_ref.articulo,
+            sucursal=sucursal,
+            atributo1=producto_ref.atributo1,
+            atributo2=producto_ref.atributo2,
+            atributo3=producto_ref.atributo3,
+            atributo4=producto_ref.atributo4,
+            descripcion=producto_ref.descripcion,
+            categoria=producto_ref.categoria,
+            costo=producto_ref.costo,
+            sobreprecio=producto_ref.sobreprecio,
+            precioventa=producto_ref.precioventa,
+            precioSugerido=producto_ref.precioSugerido,
+            tipo_talla=producto_ref.tipo_talla,
+            guia_talla=producto_ref.guia_talla,
+        )
+
+    talla_obj = (
+        Producto_Talla.objects
+        .filter(producto=producto_destino, sku=talla_referencia.sku)
+        .order_by('id')
+        .first()
+    )
+    creada = False
+    if talla_obj is None:
+        talla_obj = Producto_Talla.objects.create(
+            producto=producto_destino,
+            talla=talla_referencia.talla,
+            sku=talla_referencia.sku,
+            stock=0,
+        )
+        creada = True
+    return talla_obj, creada
+
+
+def _diagnostico_reparacion_traspaso(dte):
+    sucursal_destino = _sucursal_destino_traspaso(dte)
+    hijos = list(
+        Dte.objects
+        .filter(documento_afectado=dte)
+        .exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
+        .order_by('-fecha_emision', '-id')
+    )
+
+    productos_activos = list(
+        dte.dte_productos
+        .filter(activo=True)
+        .select_related('productoTalla__producto__sucursal')
+        .order_by('id')
+    )
+    recepciones = {
+        r.dte_producto_id: r for r in (
+            Productos_Recepcionados.objects
+            .filter(dte=dte, dte_producto_id__isnull=False)
+            .select_related('producto_talla')
+        )
+    }
+
+    movimientos_salida_total = (
+        Movimientos_Producto.objects
+        .filter(dte=dte, concepto='TRASPASO_SALIDA')
+        .aggregate(total=Sum('cantidad'))['total'] or 0
+    )
+    movimientos_entrada_total = (
+        Movimientos_Producto.objects
+        .filter(dte=dte, concepto='TRASPASO_ENTRADA')
+        .aggregate(total=Sum('cantidad'))['total'] or 0
+    )
+
+    lineas = []
+    total_documento = 0
+    total_recepcionado = 0
+    total_lineas_rotas = 0
+    total_sin_recepcion = 0
+
+    for dp in productos_activos:
+        esperado = int(dp.stock or 0)
+        total_documento += esperado
+        rec = recepciones.get(dp.id)
+        recibido = int(rec.stockArribado or 0) if rec else 0
+        total_recepcionado += recibido
+        sin_producto_talla = dp.productoTalla_id is None
+        sin_recepcion = rec is None
+        if sin_producto_talla:
+            total_lineas_rotas += 1
+        if sin_recepcion:
+            total_sin_recepcion += 1
+
+        articulo, talla_desc = _parse_dte_producto_descripcion(dp.descripcion)
+        candidatos = []
+        if dp.productoTalla:
+            candidatos = [
+                _talla_payload(dp.productoTalla, dte.sucursal_id, sucursal_destino.id if sucursal_destino else None)
+            ]
+        elif sin_producto_talla and articulo and talla_desc:
+            candidatos_qs = (
+                Producto_Talla.objects
+                .filter(
+                    producto__articulo=articulo,
+                    talla__in=_variantes_talla(talla_desc),
+                )
+                .select_related('producto', 'producto__sucursal')
+                .order_by(
+                    Case(
+                        When(producto__sucursal_id=dte.sucursal_id, then=Value(0)),
+                        When(producto__sucursal_id=sucursal_destino.id if sucursal_destino else None, then=Value(1)),
+                        default=Value(2),
+                        output_field=IntegerField(),
+                    ),
+                    'producto__sucursal__alias',
+                    'id',
+                )
+            )
+            candidatos = [
+                _talla_payload(c, dte.sucursal_id, sucursal_destino.id if sucursal_destino else None)
+                for c in candidatos_qs[:12]
+            ]
+
+        stock_destino = None
+        existe_destino = False
+        sku = dp.productoTalla.sku if dp.productoTalla else None
+        if sku and sucursal_destino:
+            talla_destino = (
+                Producto_Talla.objects
+                .filter(sku=sku, producto__sucursal_id=sucursal_destino.id)
+                .select_related('producto')
+                .first()
+            )
+            if talla_destino:
+                existe_destino = True
+                stock_destino = int(talla_destino.stock or 0)
+
+        necesita_reparacion = sin_producto_talla or sin_recepcion or recibido < esperado
+        if necesita_reparacion:
+            lineas.append({
+                'dte_producto_id': dp.id,
+                'descripcion': dp.descripcion,
+                'articulo_detectado': articulo,
+                'talla_detectada': talla_desc,
+                'cantidad_documento': esperado,
+                'cantidad_recepcionada': recibido,
+                'cantidad_sugerida': max(0, esperado - recibido) if rec else esperado,
+                'sin_producto_talla': sin_producto_talla,
+                'sin_recepcion': sin_recepcion,
+                'producto_talla_actual': _talla_payload(dp.productoTalla, dte.sucursal_id, sucursal_destino.id if sucursal_destino else None) if dp.productoTalla else None,
+                'candidatos': candidatos,
+                'existe_stock_destino': existe_destino,
+                'stock_destino_actual': stock_destino,
+                'puede_reparar': bool(candidatos) if sin_producto_talla else True,
+            })
+
+    advertencias = []
+    bloqueos = []
+    if hijos:
+        advertencias.append({
+            'tipo': 'DTE_CON_NC_AJUSTES',
+            'mensaje': 'El DTE tiene NC/Ajustes asociados. Revísalos antes de ajustar stock.',
+            'cantidad': len(hijos),
+            'documentos': [
+                {
+                    'id': h.id,
+                    'tipo_documento': h.tipo_documento,
+                    'numero_documento': h.numero_documento,
+                    'estado_dte': h.estado_dte,
+                    'unidades': h.unidades_productos,
+                }
+                for h in hijos[:10]
+            ],
+        })
+        for hijo in hijos:
+            diag_nc = _diagnostico_nc(hijo)
+            if diag_nc and diag_nc.get('total_faltantes', 0) > 0:
+                advertencias.append({
+                    'tipo': 'NC_STOCK_PENDIENTE',
+                    'mensaje': f'El documento hijo #{hijo.numero_documento} tiene stock de NC/Ajuste pendiente de aplicar.',
+                    'dte_id': hijo.id,
+                    'unidades_pendientes': diag_nc.get('total_faltantes', 0),
+                })
+
+    if sucursal_destino is None:
+        bloqueos.append({
+            'tipo': 'SIN_SUCURSAL_DESTINO',
+            'mensaje': 'No se pudo identificar la sucursal destino desde los movimientos del DTE.',
+        })
+
+    if total_lineas_rotas or total_sin_recepcion:
+        advertencias.append({
+            'tipo': 'LINEAS_NO_ACTUALIZADAS',
+            'mensaje': (
+                f'{total_lineas_rotas} línea(s) perdieron Producto_Talla y '
+                f'{total_sin_recepcion} línea(s) no tienen recepción registrada.'
+            ),
+        })
+
+    return {
+        'dte': {
+            'id': dte.id,
+            'numero_documento': dte.numero_documento,
+            'tipo_documento': dte.tipo_documento,
+            'estado_dte': dte.estado_dte,
+            'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else None,
+            'fecha_recepcion': dte.fecha_recepcion.strftime('%Y-%m-%d') if dte.fecha_recepcion else None,
+            'sucursal_origen': dte.sucursal.alias if dte.sucursal else None,
+            'sucursal_destino': (
+                {'id': sucursal_destino.id, 'alias': sucursal_destino.alias}
+                if sucursal_destino else None
+            ),
+        },
+        'resumen': {
+            'lineas_documento': len(productos_activos),
+            'lineas_con_problema': len(lineas),
+            'lineas_sin_producto_talla': total_lineas_rotas,
+            'lineas_sin_recepcion': total_sin_recepcion,
+            'unidades_documento': total_documento,
+            'unidades_recepcionadas': total_recepcionado,
+            'unidades_sin_recepcion': max(0, total_documento - total_recepcionado),
+            'movimientos_salida_unidades': abs(int(movimientos_salida_total or 0)),
+            'movimientos_entrada_unidades': int(movimientos_entrada_total or 0),
+        },
+        'advertencias': advertencias,
+        'bloqueos': bloqueos,
+        'requiere_confirmar_nc': bool(hijos),
+        'lineas': lineas,
+    }
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
+@require_GET
+def api_diagnostico_reparacion_traspaso(request, dte_id):
+    try:
+        dte = Dte.objects.select_related('sucursal').get(id=dte_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    if dte.tipo_transaccion != 'TRASPASO':
+        return JsonResponse({'success': False, 'error': 'Sólo aplica a DTE de traspaso.'}, status=400)
+
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    if sucursal_actual_id and dte.sucursal_id != int(sucursal_actual_id):
+        return JsonResponse({'success': False, 'error': 'Sólo la sucursal emisora puede diagnosticar/reparar este DTE.'}, status=403)
+
+    diagnostico = _diagnostico_reparacion_traspaso(dte)
+    return JsonResponse({'success': True, **diagnostico})
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_aprobar')
+@require_POST
+def api_reparar_traspaso_manual(request, dte_id):
+    try:
+        body = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    items = body.get('items') or []
+    motivo = (body.get('motivo') or '').strip()
+    confirmar_nc = bool(body.get('confirmar_nc'))
+
+    if not isinstance(items, list) or not items:
+        return JsonResponse({'success': False, 'error': 'Debe enviar al menos una línea para reparar.'}, status=400)
+    if not motivo:
+        return JsonResponse({'success': False, 'error': 'El motivo es obligatorio.'}, status=400)
+
+    try:
+        with transaction.atomic():
+            dte = (
+                Dte.objects
+                .select_for_update(of=('self',))
+                .select_related('sucursal')
+                .get(id=dte_id)
+            )
+            if dte.tipo_transaccion != 'TRASPASO':
+                return JsonResponse({'success': False, 'error': 'Sólo aplica a DTE de traspaso.'}, status=400)
+
+            sucursal_actual_id = request.session.get('idSucursalActual')
+            if sucursal_actual_id and dte.sucursal_id != int(sucursal_actual_id):
+                return JsonResponse({'success': False, 'error': 'Sólo la sucursal emisora puede reparar este DTE.'}, status=403)
+
+            if dte.estado_dte in ('CANCELADO', 'ANULADO'):
+                return JsonResponse({'success': False, 'error': f'El DTE está {dte.estado_dte}.'}, status=409)
+
+            hijos_activos = Dte.objects.filter(documento_afectado=dte).exclude(estado_dte__in=['CANCELADO', 'ANULADO'])
+            if hijos_activos.exists() and not confirmar_nc:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Este DTE tiene NC/Ajustes asociados. Confirma explícitamente que los revisaste antes de reparar.',
+                    'requiere_confirmar_nc': True,
+                }, status=409)
+
+            sucursal_destino = _sucursal_destino_traspaso(dte)
+            if sucursal_destino is None:
+                return JsonResponse({'success': False, 'error': 'No se pudo identificar la sucursal destino.'}, status=400)
+
+            usuario = request.user.username
+            ahora = timezone.now()
+            reparados = []
+            creados = []
+            total_delta_destino = 0
+
+            for raw in items:
+                try:
+                    dte_producto_id = int(raw.get('dte_producto_id'))
+                    candidato_id = int(raw.get('producto_talla_id'))
+                    cantidad = int(raw.get('cantidad_recepcionada'))
+                except (TypeError, ValueError):
+                    transaction.set_rollback(True)
+                    return JsonResponse({'success': False, 'error': 'Cada item debe incluir dte_producto_id, producto_talla_id y cantidad_recepcionada.'}, status=400)
+
+                crear_entrada = bool(raw.get('crear_entrada', True))
+                reconstruir_salida = bool(raw.get('reconstruir_salida', False))
+
+                dp = (
+                    Dte_Productos.objects
+                    .select_for_update(of=('self',))
+                    .select_related('productoTalla')
+                    .get(id=dte_producto_id, dte=dte, activo=True)
+                )
+                if cantidad < 0 or cantidad > int(dp.stock or 0):
+                    transaction.set_rollback(True)
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Cantidad inválida para línea {dp.id}. Debe estar entre 0 y {dp.stock or 0}.',
+                    }, status=400)
+
+                candidato = (
+                    Producto_Talla.objects
+                    .select_related('producto', 'producto__sucursal')
+                    .get(id=candidato_id)
+                )
+
+                if candidato.producto and candidato.producto.sucursal_id == dte.sucursal_id:
+                    talla_origen = candidato
+                    origen_creado = False
+                else:
+                    talla_origen, origen_creado = _clonar_producto_talla_a_sucursal(candidato, dte.sucursal)
+                    if origen_creado:
+                        creados.append({'tipo': 'origen', 'sku': talla_origen.sku, 'producto_talla_id': talla_origen.id})
+
+                talla_destino, destino_creado = _clonar_producto_talla_a_sucursal(talla_origen, sucursal_destino)
+                if destino_creado:
+                    creados.append({'tipo': 'destino', 'sku': talla_destino.sku, 'producto_talla_id': talla_destino.id})
+
+                if dp.productoTalla_id != talla_origen.id:
+                    dp.productoTalla = talla_origen
+                    dp.save(update_fields=['productoTalla'])
+
+                recepcion, rec_creada = Productos_Recepcionados.objects.get_or_create(
+                    dte=dte,
+                    dte_producto=dp,
+                    defaults={
+                        'producto_talla': talla_origen,
+                        'stockArribado': cantidad,
+                        'cantidad_esperada': int(dp.stock or 0),
+                        'cantidad_danada': 0,
+                        'cantidad_faltante': max(0, int(dp.stock or 0) - cantidad),
+                        'cantidad_sobrante': 0,
+                        'estado': 'RECEPCIONADO_OK' if cantidad >= int(dp.stock or 0) else 'RECEPCIONADO_PARCIAL',
+                        'observaciones': f'Reparación manual trazabilidad DTE: {motivo}',
+                        'fecha_recepcion': ahora,
+                        'recepcionado_por': usuario,
+                    }
+                )
+                if not rec_creada:
+                    delta_rec = cantidad - int(recepcion.stockArribado or 0)
+                    if delta_rec < 0:
+                        transaction.set_rollback(True)
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'La línea {dp.id} ya tiene más unidades recepcionadas que la cantidad indicada.',
+                        }, status=400)
+                    recepcion.producto_talla = talla_origen
+                    recepcion.stockArribado = cantidad
+                    recepcion.cantidad_esperada = int(dp.stock or 0)
+                    recepcion.cantidad_faltante = max(0, int(dp.stock or 0) - cantidad)
+                    recepcion.estado = 'RECEPCIONADO_OK' if cantidad >= int(dp.stock or 0) else 'RECEPCIONADO_PARCIAL'
+                    recepcion.observaciones = f"{recepcion.observaciones or ''}\nReparación manual trazabilidad DTE: {motivo}".strip()
+                    recepcion.fecha_recepcion = recepcion.fecha_recepcion or ahora
+                    recepcion.recepcionado_por = recepcion.recepcionado_por or usuario
+                    recepcion.save(update_fields=[
+                        'producto_talla', 'stockArribado', 'cantidad_esperada',
+                        'cantidad_faltante', 'estado', 'observaciones',
+                        'fecha_recepcion', 'recepcionado_por',
+                    ])
+                    cantidad_para_stock = delta_rec
+                else:
+                    cantidad_para_stock = cantidad
+
+                if crear_entrada and cantidad_para_stock > 0:
+                    Producto_Talla.objects.filter(id=talla_destino.id).update(stock=F('stock') + cantidad_para_stock)
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla_destino,
+                        sucursal_origen=dte.sucursal,
+                        sucursal_destino=sucursal_destino,
+                        cantidad=cantidad_para_stock,
+                        costo=dp.costo,
+                        sobreprecio=dp.sobreprecio,
+                        precio=dp.precio,
+                        concepto='TRASPASO_ENTRADA',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        fecha=timezone.localdate(),
+                        hora=timezone.localtime().time(),
+                        observaciones=f'Reparación manual DTE #{dte.numero_documento} línea {dp.id}. Motivo: {motivo}'[:500],
+                    )
+                    total_delta_destino += cantidad_para_stock
+
+                if reconstruir_salida and cantidad > 0:
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla_origen,
+                        sucursal_origen=dte.sucursal,
+                        sucursal_destino=sucursal_destino,
+                        cantidad=-cantidad,
+                        costo=dp.costo,
+                        sobreprecio=dp.sobreprecio,
+                        precio=dp.precio,
+                        concepto='TRASPASO_SALIDA',
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        fecha=timezone.localdate(),
+                        hora=timezone.localtime().time(),
+                        observaciones=(
+                            f'Reconstrucción manual de trazabilidad DTE #{dte.numero_documento} '
+                            f'línea {dp.id}; no descuenta stock origen. Motivo: {motivo}'
+                        )[:500],
+                    )
+
+                reparados.append({
+                    'dte_producto_id': dp.id,
+                    'sku': talla_origen.sku,
+                    'cantidad': cantidad,
+                    'entrada_stock': cantidad_para_stock if crear_entrada else 0,
+                    'reconstruyo_salida': reconstruir_salida,
+                })
+
+            recepciones_invalidas = Productos_Recepcionados.objects.filter(dte=dte).exclude(estado='RECEPCIONADO_OK').exists()
+            lineas_activas = set(dte.dte_productos.filter(activo=True).values_list('id', flat=True))
+            lineas_rec = set(Productos_Recepcionados.objects.filter(dte=dte, dte_producto_id__in=lineas_activas).values_list('dte_producto_id', flat=True))
+            dte.estado_dte = 'RECEPCIONADO_COMPLETO' if lineas_activas and lineas_activas.issubset(lineas_rec) and not recepciones_invalidas else 'RECEPCIONADO_PARCIAL'
+            if dte.fecha_recepcion is None:
+                dte.fecha_recepcion = timezone.localdate()
+            registro = (
+                f"\n[REPARACION TRAZABILIDAD TRASPASO] {ahora.strftime('%Y-%m-%d %H:%M')} "
+                f"{usuario}: {len(reparados)} línea(s), stock destino {total_delta_destino:+d}. "
+                f"Motivo: {motivo}"
+            )
+            dte.referencias = ((dte.referencias or '') + registro).strip()
+            dte.save(update_fields=['estado_dte', 'fecha_recepcion', 'referencias'])
+
+    except Dte_Productos.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Alguna línea no pertenece al DTE o está inactiva.'}, status=404)
+    except Producto_Talla.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Producto_Talla candidato no encontrado.'}, status=404)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': f'Error al reparar DTE: {e}'}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Reparación aplicada: {len(reparados)} línea(s), stock destino {total_delta_destino:+d}.',
+        'dte_estado': dte.estado_dte,
+        'reparados': reparados,
+        'creados': creados,
+    })
+
+
 @login_required
 @require_GET
 def api_stock_productos(request):

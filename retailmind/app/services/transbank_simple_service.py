@@ -49,6 +49,20 @@ class TransbankPersistenceService:
                         sucursal_id=sucursal_id
                     ).first()
                 
+                # Datos crudos del POS que el modelo TransaccionPOS no tiene
+                # como columnas (accountingDate / realDate / realTime). Se guardan
+                # dentro de `observaciones` para no perder la auditoría sin
+                # exigir migración del modelo en producción.
+                fecha_contable = data.get('accountingDate')
+                fecha_real = data.get('realDate')
+                hora_real = data.get('realTime')
+                observaciones_extra = (
+                    f'Ticket POS: {data.get("ticket", "")} | '
+                    f'accountingDate={fecha_contable} | '
+                    f'realDate={fecha_real} | '
+                    f'realTime={hora_real}'
+                )
+
                 # Crear TransaccionPOS
                 transaccion = TransaccionPOS.objects.create(
                     configuracion_pos=config,
@@ -64,11 +78,8 @@ class TransbankPersistenceService:
                     numero_cuotas=data.get('sharesNumber', 0),
                     codigo_comercio=data.get('commerceCode', ''),
                     terminal_id=data.get('terminalId', ''),
-                    fecha_contable=data.get('accountingDate'),
-                    fecha_real=data.get('realDate'),
-                    hora_real=data.get('realTime'),
                     usuario_operador=user,
-                    observaciones=f'Ticket POS: {data.get("ticket", "")}'
+                    observaciones=observaciones_extra,
                 )
                 
                 logger.info(f"✅ TransaccionPOS guardada: {transaccion.id}")
