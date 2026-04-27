@@ -24,6 +24,7 @@ from .models import (
     ESTADO_CREDITO_CHOICES, TIPO_CREDITO_CHOICES, TIPO_BENEFICIARIO_CHOICES,
     METODO_PAGO_TICKET_CHOICES,
 )
+from .models.permisos import PermisoUsuario
 
 
 def _serializar_beneficiario(credito):
@@ -41,12 +42,35 @@ def _serializar_beneficiario(credito):
     return {'id': None, 'nombre': 'Sin asignar', 'rut': '', 'codigo_vendedor': '', 'empresa': '', 'tipo': ''}
 
 
+def _usuario_puede_ver_creditos_todas_sucursales(user):
+    return (
+        user.is_superuser or
+        getattr(user, 'rol', '') == 'administrador' or
+        PermisoUsuario.usuario_ve_todas_sucursales(user)
+    )
+
+
+def _usuario_puede_acceder_credito(request, credito):
+    empresa_actual_id = request.session.get('idEmpresaActual')
+    if credito.empresa_origen_id != empresa_actual_id:
+        return False
+    if _usuario_puede_ver_creditos_todas_sucursales(request.user):
+        return True
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    return str(credito.sucursal_id) == str(sucursal_actual_id)
+
+
 # ========== GESTIÓN DE CRÉDITOS ==========
 
 @login_required
 def gestion_creditos(request):
     """Vista principal para gestión de créditos a trabajadores"""
     sucursal_id = request.session.get('idSucursalActual')
+    puede_ver_todas = (
+        request.user.is_superuser or
+        getattr(request.user, 'rol', '') == 'administrador' or
+        PermisoUsuario.usuario_ve_todas_sucursales(request.user)
+    )
     sucursal_actual = None
     if sucursal_id:
         try:
@@ -61,6 +85,7 @@ def gestion_creditos(request):
                 getattr(sucursal_actual, 'nombre_impresora_termica', 'EPSON TM-T20II') or 'EPSON TM-T20II'
             ) if sucursal_actual else 'EPSON TM-T20II',
         },
+        'puede_ver_todas_sucursales': puede_ver_todas,
     }
     return render(request, 'vistas/modulo_administracion/gestion_creditos.html', context)
 
@@ -197,6 +222,7 @@ def cargar_creditos_trabajadores(request):
         sucursal_texto = data.get('sucursal_texto')
         saldo_min = data.get('saldo_min')
         saldo_max = data.get('saldo_max')
+        alcance = data.get('alcance', 'actual')
         
         # Parámetros de paginación
         page = int(data.get('page', 1))
@@ -204,16 +230,30 @@ def cargar_creditos_trabajadores(request):
         
         # Obtener empresa actual
         empresa_actual_id = request.session.get('idEmpresaActual')
+        sucursal_actual_id = request.session.get('idSucursalActual')
         if not empresa_actual_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay empresa activa en la sesión'
             }, status=400)
+        puede_ver_todas = (
+            request.user.is_superuser or
+            getattr(request.user, 'rol', '') == 'administrador' or
+            PermisoUsuario.usuario_ve_todas_sucursales(request.user)
+        )
         
         # Construir queryset base
         queryset = CreditoTrabajador.objects.filter(
             empresa_origen_id=empresa_actual_id
         ).select_related('beneficiario', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por')
+
+        if not (puede_ver_todas and alcance == 'todas'):
+            if not sucursal_actual_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No hay sucursal activa en la sesión'
+                }, status=400)
+            queryset = queryset.filter(sucursal_id=sucursal_actual_id)
         
         # Aplicar filtros de fecha (DD/MM/YYYY o DD-MM-YYYY)
         fecha_inicio = normalize_fecha(fecha_inicio)
@@ -340,6 +380,8 @@ def cargar_creditos_trabajadores(request):
         return JsonResponse({
             'success': True,
             'creditos': creditos_data,
+            'alcance': 'todas' if (puede_ver_todas and alcance == 'todas') else 'actual',
+            'puede_ver_todas_sucursales': puede_ver_todas,
             'pagination': {
                 'current_page': creditos_page.number,
                 'total_pages': paginator.num_pages,
@@ -368,12 +410,21 @@ def detalle_credito_trabajador(request, credito_id):
     try:
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
         
-        # Verificar permisos
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        if credito.empresa_origen_id != empresa_actual_id:
+        if not _usuario_puede_acceder_credito(request, credito):
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene permisos para ver este crédito'
+            }, status=403)
+        puede_ver_todas = (
+            request.user.is_superuser or
+            getattr(request.user, 'rol', '') == 'administrador' or
+            PermisoUsuario.usuario_ve_todas_sucursales(request.user)
+        )
+        sucursal_actual_id = request.session.get('idSucursalActual')
+        if not puede_ver_todas and str(credito.sucursal_id) != str(sucursal_actual_id):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para ver créditos de otra sucursal'
             }, status=403)
         
         # Obtener pagos del crédito
@@ -488,8 +539,7 @@ def aprobar_credito_trabajador(request):
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
         
         # Verificar permisos
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        if credito.empresa_origen_id != empresa_actual_id:
+        if not _usuario_puede_acceder_credito(request, credito):
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene permisos para aprobar este crédito'
@@ -557,8 +607,7 @@ def rechazar_credito_trabajador(request):
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
         
         # Verificar permisos
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        if credito.empresa_origen_id != empresa_actual_id:
+        if not _usuario_puede_acceder_credito(request, credito):
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene permisos para rechazar este crédito'
@@ -612,8 +661,7 @@ def activar_credito_trabajador(request):
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
         
         # Verificar permisos
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        if credito.empresa_origen_id != empresa_actual_id:
+        if not _usuario_puede_acceder_credito(request, credito):
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene permisos para activar este crédito'
@@ -666,8 +714,7 @@ def ajustar_monto_credito(request):
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
         
         # Verificar permisos
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        if credito.empresa_origen_id != empresa_actual_id:
+        if not _usuario_puede_acceder_credito(request, credito):
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene permisos para modificar este crédito'
@@ -757,8 +804,7 @@ def registrar_pago_credito(request):
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
         
         # Verificar permisos
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        if credito.empresa_origen_id != empresa_actual_id:
+        if not _usuario_puede_acceder_credito(request, credito):
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene permisos para registrar pagos en este crédito'
@@ -855,8 +901,7 @@ def registrar_firma_credito(request):
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
         
         # Verificar permisos
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        if credito.empresa_origen_id != empresa_actual_id:
+        if not _usuario_puede_acceder_credito(request, credito):
             return JsonResponse({
                 'success': False,
                 'error': 'No tiene permisos para firmar este crédito'
@@ -1173,17 +1218,31 @@ def reporte_creditos_trabajadores(request):
             return fecha_str
         # Obtener empresa actual
         empresa_actual_id = request.session.get('idEmpresaActual')
+        sucursal_actual_id = request.session.get('idSucursalActual')
         if not empresa_actual_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No hay empresa activa en la sesión'
             }, status=400)
+        puede_ver_todas = (
+            request.user.is_superuser or
+            getattr(request.user, 'rol', '') == 'administrador' or
+            PermisoUsuario.usuario_ve_todas_sucursales(request.user)
+        )
+        alcance = request.GET.get('alcance', 'actual')
         
         fecha_inicio = normalize_fecha(request.GET.get('fecha_inicio'))
         fecha_fin = normalize_fecha(request.GET.get('fecha_fin'))
 
         # Estadísticas generales
         creditos = CreditoTrabajador.objects.filter(empresa_origen_id=empresa_actual_id)
+        if not (puede_ver_todas and alcance == 'todas'):
+            if not sucursal_actual_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No hay sucursal activa en la sesión'
+                }, status=400)
+            creditos = creditos.filter(sucursal_id=sucursal_actual_id)
 
         if fecha_inicio:
             creditos = creditos.filter(fecha_solicitud__date__gte=fecha_inicio)
@@ -1274,6 +1333,8 @@ def imprimir_voucher_credito(request, credito_id):
     """Generar voucher térmico de crédito — 80 mm, una sola página, diseño compacto."""
     try:
         credito = get_object_or_404(CreditoTrabajador, id=credito_id)
+        if not _usuario_puede_acceder_credito(request, credito):
+            return JsonResponse({'success': False, 'error': 'No tiene permisos para imprimir este crédito'}, status=403)
 
         rut_benef     = (credito.beneficiario.rut if credito.beneficiario else '') or 'N/A'
         nombre_auth   = credito.autorizado_por.get_full_name() or credito.autorizado_por.username

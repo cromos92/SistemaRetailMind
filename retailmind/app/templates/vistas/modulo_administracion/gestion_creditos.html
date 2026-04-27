@@ -844,6 +844,15 @@
                             <div class="col-md-3">
                                 <input type="text" class="form-control nexo-input" id="filtro-sucursal-texto" placeholder="Sucursal...">
                             </div>
+                            {% if puede_ver_todas_sucursales %}
+                            <div class="col-md-3">
+                                <label class="nexo-form-label">Alcance</label>
+                                <select class="form-select nexo-input" id="filtro-alcance">
+                                    <option value="actual">Sucursal actual</option>
+                                    <option value="todas" selected>Todas las sucursales</option>
+                                </select>
+                            </div>
+                            {% endif %}
                             <div class="col-md-3">
                                 <div class="input-group">
                                     <span class="input-group-text">Saldo</span>
@@ -1458,6 +1467,12 @@ $(document).ready(function() {
     $('#btn-buscar').click(function() {
         currentPage = 1;
         loadCreditos();
+        loadEstadisticas();
+    });
+    $('#filtro-alcance').on('change', function() {
+        currentPage = 1;
+        loadCreditos();
+        loadEstadisticas();
     });
     
     $('#btn-limpiar').click(function() {
@@ -1901,7 +1916,8 @@ $(document).ready(function() {
     function loadEstadisticas() {
         const filtros = {
             fecha_inicio: $('#fecha-inicio').val(),
-            fecha_fin: $('#fecha-fin').val()
+            fecha_fin: $('#fecha-fin').val(),
+            alcance: $('#filtro-alcance').length ? $('#filtro-alcance').val() : 'actual'
         };
         $.get('/app/api/creditos/reporte/', filtros)
             .done(function(response) {
@@ -1944,6 +1960,7 @@ $(document).ready(function() {
             numero_credito: $('#filtro-numero').val(),
             trabajador_texto: $('#filtro-trabajador-texto').val(),
             sucursal_texto: $('#filtro-sucursal-texto').val(),
+            alcance: $('#filtro-alcance').length ? $('#filtro-alcance').val() : 'actual',
             saldo_min: $('#filtro-saldo-min').val(),
             saldo_max: $('#filtro-saldo-max').val()
         };
@@ -2642,6 +2659,7 @@ $(document).ready(function() {
             numero_credito: $('#filtro-numero').val(),
             trabajador_texto: $('#filtro-trabajador-texto').val(),
             sucursal_texto: $('#filtro-sucursal-texto').val(),
+            alcance: $('#filtro-alcance').length ? $('#filtro-alcance').val() : 'actual',
             saldo_min: $('#filtro-saldo-min').val(),
             saldo_max: $('#filtro-saldo-max').val()
         };
