@@ -895,7 +895,14 @@ def debug_user_empresas(request):
 @login_required
 def gestion_creditos_documentos(request):
     """Vista principal para gestión de créditos a trabajadores desde módulo documentos"""
+    from app.models.permisos import PermisoUsuario
+
     sucursal_id = request.session.get('idSucursalActual')
+    puede_ver_todas = (
+        request.user.is_superuser or
+        getattr(request.user, 'rol', '') == 'administrador' or
+        PermisoUsuario.usuario_ve_todas_sucursales(request.user)
+    )
     sucursal_actual = None
     if sucursal_id:
         try:
@@ -910,6 +917,7 @@ def gestion_creditos_documentos(request):
                 getattr(sucursal_actual, 'nombre_impresora_termica', 'EPSON TM-T20II') or 'EPSON TM-T20II'
             ) if sucursal_actual else 'EPSON TM-T20II',
         },
+        'puede_ver_todas_sucursales': puede_ver_todas,
     }
     return render(request, 'vistas/modulo_administracion/gestion_creditos.html', context)
 
