@@ -13780,12 +13780,35 @@ def _diagnostico_reparacion_traspaso(dte):
         .filter(dte=dte, concepto='TRASPASO_ENTRADA')
         .aggregate(total=Sum('cantidad'))['total'] or 0
     )
+    movimientos_entrada_por_sku = {
+        row['ProductoTalla__sku']: int(row['total'] or 0)
+        for row in (
+            Movimientos_Producto.objects
+            .filter(dte=dte, concepto='TRASPASO_ENTRADA')
+            .exclude(ProductoTalla__isnull=True)
+            .values('ProductoTalla__sku')
+            .annotate(total=Sum('cantidad'))
+        )
+    }
+    movimientos_salida_por_sku = {
+        row['ProductoTalla__sku']: abs(int(row['total'] or 0))
+        for row in (
+            Movimientos_Producto.objects
+            .filter(dte=dte, concepto='TRASPASO_SALIDA')
+            .exclude(ProductoTalla__isnull=True)
+            .values('ProductoTalla__sku')
+            .annotate(total=Sum('cantidad'))
+        )
+    }
 
     lineas = []
+    lineas_factura = []
     total_documento = 0
     total_recepcionado = 0
     total_lineas_rotas = 0
     total_sin_recepcion = 0
+    total_sin_producto_destino = 0
+    total_sin_movimiento_entrada = 0
 
     for dp in productos_activos:
         esperado = int(dp.stock or 0)
@@ -13832,7 +13855,7 @@ def _diagnostico_reparacion_traspaso(dte):
 
         stock_destino = None
         existe_destino = False
-        sku = dp.productoTalla.sku if dp.productoTalla else None
+        sku = dp.productoTalla.sku if dp.productoTalla else (candidatos[0]['sku'] if candidatos else None)
         if sku and sucursal_destino:
             talla_destino = (
                 Producto_Talla.objects
@@ -13844,24 +13867,45 @@ def _diagnostico_reparacion_traspaso(dte):
                 existe_destino = True
                 stock_destino = int(talla_destino.stock or 0)
 
-        necesita_reparacion = sin_producto_talla or sin_recepcion or recibido < esperado
+        movimiento_entrada = movimientos_entrada_por_sku.get(sku, 0) if sku else 0
+        movimiento_salida = movimientos_salida_por_sku.get(sku, 0) if sku else 0
+        if not existe_destino:
+            total_sin_producto_destino += 1
+        if movimiento_entrada < esperado:
+            total_sin_movimiento_entrada += 1
+
+        necesita_reparacion = (
+            sin_producto_talla or
+            sin_recepcion or
+            recibido < esperado or
+            not existe_destino or
+            movimiento_entrada < esperado
+        )
+        linea_payload = {
+            'dte_producto_id': dp.id,
+            'sku_detectado': sku,
+            'descripcion': dp.descripcion,
+            'articulo_detectado': articulo or (dp.productoTalla.producto.articulo if dp.productoTalla and dp.productoTalla.producto else ''),
+            'talla_detectada': talla_desc or (dp.productoTalla.talla if dp.productoTalla else ''),
+            'cantidad_documento': esperado,
+            'cantidad_recepcionada': recibido,
+            'cantidad_sugerida': max(0, esperado - recibido) if rec else esperado,
+            'sin_producto_talla': sin_producto_talla,
+            'sin_recepcion': sin_recepcion,
+            'producto_talla_actual': _talla_payload(dp.productoTalla, dte.sucursal_id, sucursal_destino.id if sucursal_destino else None) if dp.productoTalla else None,
+            'candidatos': candidatos,
+            'existe_stock_destino': existe_destino,
+            'stock_destino_actual': stock_destino,
+            'movimiento_entrada': movimiento_entrada,
+            'movimiento_salida': movimiento_salida,
+            'entrada_completa': movimiento_entrada >= esperado,
+            'salida_completa': movimiento_salida >= esperado,
+            'necesita_reparacion': necesita_reparacion,
+            'puede_reparar': bool(candidatos) if sin_producto_talla else True,
+        }
+        lineas_factura.append(linea_payload)
         if necesita_reparacion:
-            lineas.append({
-                'dte_producto_id': dp.id,
-                'descripcion': dp.descripcion,
-                'articulo_detectado': articulo,
-                'talla_detectada': talla_desc,
-                'cantidad_documento': esperado,
-                'cantidad_recepcionada': recibido,
-                'cantidad_sugerida': max(0, esperado - recibido) if rec else esperado,
-                'sin_producto_talla': sin_producto_talla,
-                'sin_recepcion': sin_recepcion,
-                'producto_talla_actual': _talla_payload(dp.productoTalla, dte.sucursal_id, sucursal_destino.id if sucursal_destino else None) if dp.productoTalla else None,
-                'candidatos': candidatos,
-                'existe_stock_destino': existe_destino,
-                'stock_destino_actual': stock_destino,
-                'puede_reparar': bool(candidatos) if sin_producto_talla else True,
-            })
+            lineas.append(linea_payload)
 
     advertencias = []
     bloqueos = []
@@ -13925,6 +13969,8 @@ def _diagnostico_reparacion_traspaso(dte):
             'lineas_con_problema': len(lineas),
             'lineas_sin_producto_talla': total_lineas_rotas,
             'lineas_sin_recepcion': total_sin_recepcion,
+            'lineas_sin_producto_destino': total_sin_producto_destino,
+            'lineas_sin_movimiento_entrada': total_sin_movimiento_entrada,
             'unidades_documento': total_documento,
             'unidades_recepcionadas': total_recepcionado,
             'unidades_sin_recepcion': max(0, total_documento - total_recepcionado),
@@ -13935,6 +13981,7 @@ def _diagnostico_reparacion_traspaso(dte):
         'bloqueos': bloqueos,
         'requiere_confirmar_nc': bool(hijos),
         'lineas': lineas,
+        'lineas_factura': lineas_factura,
     }
 
 
@@ -14027,6 +14074,8 @@ def api_reparar_traspaso_manual(request, dte_id):
                     return JsonResponse({'success': False, 'error': 'Cada item debe incluir dte_producto_id, producto_talla_id y cantidad_recepcionada.'}, status=400)
 
                 crear_entrada = bool(raw.get('crear_entrada', True))
+                actualizar_stock_destino = bool(raw.get('actualizar_stock_destino', crear_entrada))
+                crear_movimiento_entrada = bool(raw.get('crear_movimiento_entrada', crear_entrada))
                 reconstruir_salida = bool(raw.get('reconstruir_salida', False))
 
                 dp = (
@@ -14105,8 +14154,10 @@ def api_reparar_traspaso_manual(request, dte_id):
                 else:
                     cantidad_para_stock = cantidad
 
-                if crear_entrada and cantidad_para_stock > 0:
+                if actualizar_stock_destino and cantidad_para_stock > 0:
                     Producto_Talla.objects.filter(id=talla_destino.id).update(stock=F('stock') + cantidad_para_stock)
+
+                if crear_movimiento_entrada and cantidad_para_stock > 0:
                     Movimientos_Producto.objects.create(
                         dte=dte,
                         ProductoTalla=talla_destino,
@@ -14124,6 +14175,8 @@ def api_reparar_traspaso_manual(request, dte_id):
                         hora=timezone.localtime().time(),
                         observaciones=f'Reparación manual DTE #{dte.numero_documento} línea {dp.id}. Motivo: {motivo}'[:500],
                     )
+
+                if (actualizar_stock_destino or crear_movimiento_entrada) and cantidad_para_stock > 0:
                     total_delta_destino += cantidad_para_stock
 
                 if reconstruir_salida and cantidad > 0:
@@ -14152,7 +14205,8 @@ def api_reparar_traspaso_manual(request, dte_id):
                     'dte_producto_id': dp.id,
                     'sku': talla_origen.sku,
                     'cantidad': cantidad,
-                    'entrada_stock': cantidad_para_stock if crear_entrada else 0,
+                    'entrada_stock': cantidad_para_stock if actualizar_stock_destino else 0,
+                    'movimiento_entrada': cantidad_para_stock if crear_movimiento_entrada else 0,
                     'reconstruyo_salida': reconstruir_salida,
                 })
 

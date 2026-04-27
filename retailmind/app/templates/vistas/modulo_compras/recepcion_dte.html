@@ -2293,6 +2293,9 @@ function cambiarVistaUnificada(vista) {
 }
 
 function obtenerAlcanceDte() {
+    if (window.modoVista === 'regularizar' && PUEDE_VER_TODOS_DTE) {
+        return 'todas';
+    }
     return (PUEDE_VER_TODOS_DTE && $('#switchVerTodasSucursales').is(':checked')) ? 'todas' : 'actual';
 }
 
@@ -4981,7 +4984,8 @@ async function abrirDiagnosticoTraspaso(dteId) {
 
         const resumen = data.resumen || {};
         const advertencias = data.advertencias || [];
-        const lineas = data.lineas || [];
+        const lineasProblema = data.lineas || [];
+        const lineas = data.lineas_factura || lineasProblema;
         const requiereNc = !!data.requiere_confirmar_nc;
 
         const resumenHtml = `
@@ -4991,6 +4995,8 @@ async function abrirDiagnosticoTraspaso(dteId) {
                 <div class="col"><div class="border rounded p-2"><strong>${resumen.unidades_documento || 0}</strong><br><small>Uds doc.</small></div></div>
                 <div class="col"><div class="border rounded p-2"><strong>${resumen.unidades_recepcionadas || 0}</strong><br><small>Uds recibidas</small></div></div>
                 <div class="col"><div class="border rounded p-2"><strong>${resumen.unidades_sin_recepcion || 0}</strong><br><small>Sin recepción</small></div></div>
+                <div class="col"><div class="border rounded p-2"><strong>${resumen.lineas_sin_producto_destino || 0}</strong><br><small>Sin prod. destino</small></div></div>
+                <div class="col"><div class="border rounded p-2"><strong>${resumen.lineas_sin_movimiento_entrada || 0}</strong><br><small>Sin mov. entrada</small></div></div>
             </div>`;
 
         const advertenciasHtml = advertencias.map(a => `
@@ -5011,21 +5017,33 @@ async function abrirDiagnosticoTraspaso(dteId) {
 
         const filas = lineas.map((ln, idx) => {
             const candidatos = ln.candidatos || [];
-            const disabled = !ln.puede_reparar || !candidatos.length;
+            const disabled = !ln.necesita_reparacion || !ln.puede_reparar || !candidatos.length;
+            const rowClass = ln.necesita_reparacion ? 'table-warning' : '';
             const opciones = candidatos.map(c => {
                 const roles = (c.roles || []).length ? ` (${c.roles.join('/')})` : '';
                 return `<option value="${c.producto_talla_id}">SKU ${_escapeHtmlDte(c.sku)} · T${_escapeHtmlDte(c.talla)} · ${_escapeHtmlDte(c.sucursal)}${roles}</option>`;
             }).join('');
             return `
-                <tr data-dte-producto-id="${ln.dte_producto_id}" data-max="${ln.cantidad_documento}">
+                <tr class="${rowClass}" data-dte-producto-id="${ln.dte_producto_id}" data-max="${ln.cantidad_documento}">
                     <td class="text-center"><input type="checkbox" class="form-check-input diag-usar" ${disabled ? 'disabled' : 'checked'}></td>
                     <td class="text-start">
-                        <strong>${_escapeHtmlDte(ln.descripcion)}</strong><br>
-                        <small class="text-muted">Doc ${ln.cantidad_documento} · Rec ${ln.cantidad_recepcionada}</small>
+                        <strong>${_escapeHtmlDte(ln.articulo_detectado || ln.descripcion)}</strong>
+                        <span class="badge bg-secondary ms-1">T${_escapeHtmlDte(ln.talla_detectada || '-')}</span><br>
+                        <small class="text-muted">SKU ${_escapeHtmlDte(ln.sku_detectado || '-')} · Doc ${ln.cantidad_documento} · Rec ${ln.cantidad_recepcionada}</small>
+                    </td>
+                    <td class="small">
+                        ${ln.existe_stock_destino
+                            ? `<span class="badge bg-success">Destino stock ${ln.stock_destino_actual ?? 0}</span>`
+                            : '<span class="badge bg-danger">No existe en destino</span>'}
+                        <br>
+                        ${ln.entrada_completa
+                            ? `<span class="badge bg-success mt-1">Entrada ${ln.movimiento_entrada}</span>`
+                            : `<span class="badge bg-warning text-dark mt-1">Entrada ${ln.movimiento_entrada || 0}/${ln.cantidad_documento}</span>`}
                     </td>
                     <td><select class="form-select form-select-sm diag-candidato" ${disabled ? 'disabled' : ''}>${opciones || '<option value="">Sin candidato</option>'}</select></td>
                     <td><input type="number" class="form-control form-control-sm diag-cantidad text-end" min="0" max="${ln.cantidad_documento}" value="${ln.cantidad_sugerida}" ${disabled ? 'disabled' : ''}></td>
-                    <td class="text-center"><input type="checkbox" class="form-check-input diag-entrada" ${disabled ? 'disabled' : 'checked'}></td>
+                    <td class="text-center"><input type="checkbox" class="form-check-input diag-stock" ${disabled ? 'disabled' : (!ln.existe_stock_destino || ln.sin_recepcion ? 'checked' : '')}></td>
+                    <td class="text-center"><input type="checkbox" class="form-check-input diag-entrada-mov" ${disabled ? 'disabled' : (!ln.entrada_completa ? 'checked' : '')}></td>
                     <td class="text-center"><input type="checkbox" class="form-check-input diag-salida" ${disabled ? 'disabled' : (ln.sin_producto_talla ? 'checked' : '')}></td>
                 </tr>`;
         }).join('');
@@ -5043,9 +5061,12 @@ async function abrirDiagnosticoTraspaso(dteId) {
                                 Confirmo que revisé las NC/Ajustes asociados antes de modificar stock.
                             </label>
                         </div>` : ''}
-                    <div class="table-responsive" style="max-height:360px;overflow:auto;">
+                    <div class="alert alert-light border small text-start" id="diagResumenAplicar">
+                        Selecciona líneas para ver resumen de stock/movimientos a crear.
+                    </div>
+                    <div class="table-responsive" style="max-height:430px;overflow:auto;">
                         <table class="table table-sm align-middle">
-                            <thead><tr><th>Usar</th><th>Línea</th><th>Candidato</th><th>Cantidad</th><th>Entrada</th><th>Salida</th></tr></thead>
+                            <thead><tr><th>Usar</th><th>Factura</th><th>Destino / mov.</th><th>Candidato</th><th>Cantidad</th><th>Stock</th><th>Mov.Ing.</th><th>Mov.Sal.</th></tr></thead>
                             <tbody id="diagTraspasoSwalBody">${filas}</tbody>
                         </table>
                     </div>
@@ -5057,6 +5078,31 @@ async function abrirDiagnosticoTraspaso(dteId) {
             confirmButtonText: 'Aplicar reparación manual',
             cancelButtonText: 'Cancelar',
             confirmButtonColor: '#6f42c1',
+            didOpen: () => {
+                const recalcular = () => {
+                    let stock = 0, movIng = 0, movSal = 0, lineasSel = 0;
+                    document.querySelectorAll('#diagTraspasoSwalBody tr[data-dte-producto-id]').forEach(row => {
+                        if (!row.querySelector('.diag-usar')?.checked) return;
+                        const cant = parseInt(row.querySelector('.diag-cantidad')?.value, 10) || 0;
+                        lineasSel++;
+                        if (row.querySelector('.diag-stock')?.checked) stock += cant;
+                        if (row.querySelector('.diag-entrada-mov')?.checked) movIng += cant;
+                        if (row.querySelector('.diag-salida')?.checked) movSal += cant;
+                    });
+                    const box = document.getElementById('diagResumenAplicar');
+                    if (box) {
+                        box.innerHTML = `<strong>Resumen a aplicar:</strong> ${lineasSel} línea(s) · ` +
+                            `<span class="text-success">sumar stock destino: ${stock}</span> · ` +
+                            `<span class="text-primary">crear mov. entrada: ${movIng}</span> · ` +
+                            `<span class="text-secondary">reconstruir salida: ${movSal}</span>`;
+                    }
+                };
+                document.querySelectorAll('#diagTraspasoSwalBody input, #diagTraspasoSwalBody select').forEach(el => {
+                    el.addEventListener('change', recalcular);
+                    el.addEventListener('input', recalcular);
+                });
+                recalcular();
+            },
             preConfirm: () => {
                 const motivo = (document.getElementById('diagMotivoSwal')?.value || '').trim();
                 if (!motivo) {
@@ -5080,7 +5126,8 @@ async function abrirDiagnosticoTraspaso(dteId) {
                         dte_producto_id: dteProductoId,
                         producto_talla_id: productoTallaId,
                         cantidad_recepcionada: cantidad,
-                        crear_entrada: !!row.querySelector('.diag-entrada')?.checked,
+                        actualizar_stock_destino: !!row.querySelector('.diag-stock')?.checked,
+                        crear_movimiento_entrada: !!row.querySelector('.diag-entrada-mov')?.checked,
                         reconstruir_salida: !!row.querySelector('.diag-salida')?.checked,
                     });
                 });
