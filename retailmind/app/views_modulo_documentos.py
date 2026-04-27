@@ -625,7 +625,10 @@ def empresas_clientes(request):
                 'rut': empresa.rut,
                 'email': empresa.email or '',
                 'telefono': empresa.telefono or '',
-                'direccion': empresa.direccion or ''
+                'direccion': empresa.direccion or '',
+                'comuna': empresa.comuna or '',
+                'ciudad': empresa.ciudad or '',
+                'giro': empresa.giro or '',
             })
         
         return JsonResponse({
@@ -1669,6 +1672,19 @@ def validar_datos_dte_acepta(datos):
         return False, "Falta la razón social del emisor"
     if not emisor.get('giro'):
         return False, "Falta el giro del emisor"
+    tipo_doc_raw = doc.get('tipo_documento')
+    try:
+        tipo_doc = int(tipo_doc_raw) if tipo_doc_raw is not None else None
+    except (TypeError, ValueError):
+        tipo_doc = tipo_doc_raw
+    exige_datos_territoriales = tipo_doc not in (39, 41)
+    if exige_datos_territoriales:
+        if not emisor.get('direccion'):
+            return False, "Falta la dirección del emisor"
+        if not emisor.get('comuna'):
+            return False, "Falta la comuna del emisor"
+        if not emisor.get('ciudad'):
+            return False, "Falta la ciudad del emisor"
     
     # Validar datos del receptor
     if 'receptor' not in datos:
@@ -1679,6 +1695,15 @@ def validar_datos_dte_acepta(datos):
         return False, "Falta el RUT del receptor"
     if not receptor.get('razon_social'):
         return False, "Falta la razón social del receptor"
+    if exige_datos_territoriales:
+        if not receptor.get('giro'):
+            return False, "Falta el giro del receptor"
+        if not receptor.get('direccion'):
+            return False, "Falta la dirección del receptor"
+        if not receptor.get('comuna'):
+            return False, "Falta la comuna del receptor"
+        if not receptor.get('ciudad'):
+            return False, "Falta la ciudad del receptor"
     
     # Validar totales
     if 'totales' not in datos:
@@ -3507,8 +3532,8 @@ def generar_txt_desde_dte_existente(request):
                 'razon_social': limpiar_texto(dte.receptor.razon_social if dte.receptor else 'CONSUMIDOR FINAL'),
                 'giro': limpiar_texto(dte.receptor.giro if dte.receptor else ''),
                 'direccion': limpiar_texto(sucursal_destino.direccion if sucursal_destino and sucursal_destino.direccion else (dte.receptor.direccion if dte.receptor else '')),
-                'comuna': limpiar_texto(dte.receptor.comuna if dte.receptor else ''),
-                'ciudad': limpiar_texto(dte.receptor.ciudad if dte.receptor else ''),
+                'comuna': limpiar_texto((sucursal_destino.comuna if sucursal_destino else None) or (dte.receptor.comuna if dte.receptor else '')),
+                'ciudad': limpiar_texto((sucursal_destino.ciudad if sucursal_destino else None) or (dte.receptor.ciudad if dte.receptor else '')),
                 'sucursal': limpiar_texto(sucursal_destino.alias if sucursal_destino else '')
             },
             'totales': {

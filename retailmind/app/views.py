@@ -22745,6 +22745,44 @@ def emitir_dte(request):
             }, status=400)
         
         print(f"✅ Tipo de documento validado correctamente: {tipo_doc}")
+
+        # Facturas y guías generan TXT Acepta. No permitir que se emita un
+        # documento que luego saldrá sin dirección/comuna/ciudad.
+        if tipo_doc in ('FACTURA ELECTRONICA', 'GUIA'):
+            emisor_direccion = (sucursal.direccion or emisor.direccion or '').strip()
+            emisor_comuna = (getattr(sucursal, 'comuna', '') or emisor.comuna or '').strip()
+            emisor_ciudad = (getattr(sucursal, 'ciudad', '') or emisor.ciudad or '').strip()
+            if not all([emisor_direccion, emisor_comuna, emisor_ciudad]):
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        'Faltan datos territoriales del emisor/sucursal para TXT Acepta: '
+                        'dirección, comuna y ciudad son obligatorios.'
+                    )
+                }, status=400)
+
+            receptor_direccion = (
+                (sucursal_destino.direccion if sucursal_destino else '') or
+                (receptor.direccion if receptor else '') or ''
+            ).strip()
+            receptor_comuna = (
+                (getattr(sucursal_destino, 'comuna', '') if sucursal_destino else '') or
+                (receptor.comuna if receptor else '') or ''
+            ).strip()
+            receptor_ciudad = (
+                (getattr(sucursal_destino, 'ciudad', '') if sucursal_destino else '') or
+                (receptor.ciudad if receptor else '') or ''
+            ).strip()
+            receptor_giro = (receptor.giro if receptor else '').strip()
+            if not all([receptor_direccion, receptor_comuna, receptor_ciudad, receptor_giro]):
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f'Faltan datos del receptor para TXT Acepta ({receptor.nombre if receptor else "sin receptor"}): '
+                        'giro, dirección, comuna y ciudad son obligatorios. '
+                        'Completa la ficha de empresa/sucursal antes de emitir.'
+                    )
+                }, status=400)
         
         with transaction.atomic():
             print(f"🔄 Iniciando transacción atómica...")
@@ -22912,6 +22950,8 @@ def emitir_dte(request):
             
             # Crear detalle de productos y actualizar stock
             
+            lineas_creadas = 0
+            movimientos_creados = 0
             for item in detalle_productos:
                 talla_id = item.get('talla_id')
                 cantidad = int(item.get('cantidad', 0))
@@ -22955,6 +22995,7 @@ def emitir_dte(request):
                     stock=cantidad,
                     activo=True
                 )
+                lineas_creadas += 1
                 
                 # Gestión de stock y movimientos según tipo de despacho
                 if metodo_despacho == 'externo':
@@ -22976,6 +23017,7 @@ def emitir_dte(request):
                         responsable=request.user.username,
                         observaciones=f"Venta DTE #{numero_documento} - Cliente: {receptor.nombre if receptor else 'N/A'}"
                     )
+                    movimientos_creados += 1
                     
                     # ✅ Actualizar stock legacy para mantener sincronización
                     Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
@@ -23002,6 +23044,7 @@ def emitir_dte(request):
                         responsable=request.user.username,
                         observaciones=f"Traspaso DTE #{numero_documento} - Origen: {sucursal.alias} → Destino: {sucursal_destino.alias}"
                     )
+                    movimientos_creados += 1
                     
                     # ✅ Actualizar stock legacy para mantener sincronización con movimientos
                     Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
@@ -23009,13 +23052,31 @@ def emitir_dte(request):
                     print(f"✓ Stock legacy actualizado: campo stock reducido en {cantidad}")
                     print(f"  Destino: {sucursal_destino.alias} (pendiente de recepción)")
                     print(f"  Stock en {sucursal.alias} actualizado en ambos sistemas (movimientos + legacy)")
+
+            lineas_esperadas = len(detalle_productos)
+            lineas_bd = Dte_Productos.objects.filter(dte=dte).count()
+            movimientos_bd = Movimientos_Producto.objects.filter(dte=dte).count()
+            if lineas_bd != lineas_esperadas or lineas_creadas != lineas_esperadas:
+                raise ValueError(
+                    f'Emisión incompleta: se esperaban {lineas_esperadas} línea(s), '
+                    f'pero quedaron {lineas_bd} en el DTE. La transacción fue revertida.'
+                )
+            if movimientos_bd < lineas_esperadas or movimientos_creados < lineas_esperadas:
+                raise ValueError(
+                    f'Emisión incompleta: se esperaban al menos {lineas_esperadas} movimiento(s), '
+                    f'pero quedaron {movimientos_bd}. La transacción fue revertida.'
+                )
         
         return JsonResponse({
             'success': True,
             'message': 'DTE emitido correctamente',
             'numero_documento': numero_documento,
             'dte_id': dte.id,
-            'total': float(total_con_iva)
+            'total': float(total_con_iva),
+            'lineas_recibidas': len(detalle_productos),
+            'lineas_creadas': lineas_bd,
+            'movimientos_creados': movimientos_bd,
+            'unidades': total_unidades,
         })
         
     except json.JSONDecodeError:

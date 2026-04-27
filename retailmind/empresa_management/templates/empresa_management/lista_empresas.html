@@ -516,6 +516,10 @@
                         </div>
                         <div class="nexo-form-row thirds">
                             <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-community-line"></i> Comuna</label>
+                                <input type="text" class="nexo-input" id="comunaEmpresa" name="comuna" placeholder="Providencia">
+                            </div>
+                            <div class="nexo-form-group">
                                 <label class="nexo-label"><i class="ri-building-line"></i> Ciudad</label>
                                 <input type="text" class="nexo-input" id="ciudadEmpresa" name="ciudad" placeholder="Santiago">
                             </div>
@@ -523,6 +527,8 @@
                                 <label class="nexo-label"><i class="ri-map-2-line"></i> Región</label>
                                 <input type="text" class="nexo-input" id="regionEmpresa" name="region" placeholder="Metropolitana">
                             </div>
+                        </div>
+                        <div class="nexo-form-row">
                             <div class="nexo-form-group">
                                 <label class="nexo-label"><i class="ri-mail-open-line"></i> Código Postal</label>
                                 <input type="text" class="nexo-input" id="codigoPostal" name="codigo_postal" placeholder="8320000">
@@ -934,6 +940,7 @@ function editarEmpresa(id) {
                 $('#contacto2Empresa').val(e.contacto2 || '');
                 $('#actecoEmpresa').val(e.acteco || '');
                 $('#direccionEmpresa').val(e.direccion);
+                $('#comunaEmpresa').val(e.comuna || '');
                 $('#ciudadEmpresa').val(e.ciudad);
                 $('#regionEmpresa').val(e.region);
                 $('#codigoPostal').val(e.codigo_postal);

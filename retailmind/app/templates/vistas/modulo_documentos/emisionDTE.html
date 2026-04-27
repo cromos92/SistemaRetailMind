@@ -3033,7 +3033,18 @@ function loadReceptores() {
             data.forEach(cliente => {
                 // Mostrar indicador si es proveedor
                 const badge = cliente.es_proveedor ? ' [Proveedor]' : '';
-                select.append(`<option value="${cliente.id}">${cliente.nombre} - ${cliente.rut}${badge}</option>`);
+                const incompleto = !(cliente.direccion && cliente.comuna && cliente.ciudad && cliente.giro);
+                const warning = incompleto ? ' ⚠️ datos incompletos' : '';
+                select.append(`
+                    <option value="${cliente.id}"
+                            data-direccion="${cliente.direccion || ''}"
+                            data-comuna="${cliente.comuna || ''}"
+                            data-ciudad="${cliente.ciudad || ''}"
+                            data-giro="${cliente.giro || ''}"
+                            data-incompleto="${incompleto ? '1' : '0'}">
+                        ${cliente.nombre} - ${cliente.rut}${badge}${warning}
+                    </option>
+                `);
             });
             
             // Reinicializar Select2 con búsqueda
@@ -5018,6 +5029,23 @@ function validateBeforeEmit() {
             });
             return false;
         }
+        const opt = $('#receptorSelect option:selected');
+        const faltantesReceptor = [];
+        if (!opt.data('giro')) faltantesReceptor.push('giro');
+        if (!opt.data('direccion')) faltantesReceptor.push('dirección');
+        if (!opt.data('comuna')) faltantesReceptor.push('comuna');
+        if (!opt.data('ciudad')) faltantesReceptor.push('ciudad');
+        if ((selectedConcept === 'factura' || selectedConcept === 'guia') && faltantesReceptor.length) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cliente con datos incompletos',
+                html: `Para generar TXT Acepta faltan datos del receptor: <strong>${faltantesReceptor.join(', ')}</strong>.<br>Completa la ficha de empresa antes de emitir.`,
+                confirmButtonText: 'Entendido'
+            }).then(() => {
+                goToStep(1);
+            });
+            return false;
+        }
     }
     
     // Validar paso 2/3: Productos
@@ -5351,6 +5379,8 @@ function procesarEmision() {
             });
         });
     });
+    const lineasEsperadas = detalleProductos.length;
+    const unidadesEsperadas = detalleProductos.reduce((sum, item) => sum + (parseInt(item.cantidad) || 0), 0);
     
     // Usar observaciones finales si están disponibles, sino las del paso 3
     const observaciones = $('#observacionesFinales').val().trim();
@@ -5434,7 +5464,12 @@ function procesarEmision() {
 
             if (response.success) {
                 if (selectedConcept === 'factura' || selectedConcept === 'guia') {
-                    descargarTXTAcepta(response.dte_id, selectedConcept, response.numero_documento);
+                    descargarTXTAcepta(response.dte_id, selectedConcept, response.numero_documento, {
+                        lineasEsperadas,
+                        unidadesEsperadas,
+                        lineasCreadas: response.lineas_creadas,
+                        unidades: response.unidades,
+                    });
                 } else {
                     // Si no es factura/guía, mostrar mensaje normal
                     Swal.fire({
@@ -5447,6 +5482,11 @@ function procesarEmision() {
                                 <p class="mb-2"><strong>N° Documento:</strong> ${response.numero_documento}</p>
                                 <p class="mb-2"><strong>Tipo:</strong> ${selectedConcept === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho'}</p>
                                 <p class="mb-2"><strong>Total:</strong> ${$('#finalMontoTotal').text()}</p>
+                                <div class="alert alert-light border text-start small mt-3 mb-0">
+                                    <strong>Validación de detalle:</strong><br>
+                                    Líneas enviadas: <strong>${lineasEsperadas}</strong> · Líneas creadas: <strong>${response.lineas_creadas ?? '-'}</strong><br>
+                                    Unidades enviadas: <strong>${unidadesEsperadas}</strong> · Unidades DTE: <strong>${response.unidades ?? '-'}</strong>
+                                </div>
                             </div>
                         `,
                         showCancelButton: false,
@@ -5544,7 +5584,7 @@ function buscarPorReferencia(referencia) {
 }
 
 // ✅ Función para descargar TXT de Acepta automáticamente
-async function descargarTXTAcepta(dteId, tipo, numeroDocumento) {
+async function descargarTXTAcepta(dteId, tipo, numeroDocumento, validacionDetalle = null) {
     try {
         const response = await fetch('/app/documentos/generar-txt-desde-dte/', {
             method: 'POST',
@@ -5584,6 +5624,12 @@ async function descargarTXTAcepta(dteId, tipo, numeroDocumento) {
                     <p><strong>N° Documento:</strong> ${numeroDocumento}</p>
                     <p><strong>Tipo:</strong> ${tipo === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho'}</p>
                     <p><strong>Total:</strong> ${$('#finalMontoTotal').text()}</p>
+                    ${validacionDetalle ? `
+                    <div class="alert alert-light border text-start small">
+                        <strong>Validación de detalle:</strong><br>
+                        Líneas enviadas: <strong>${validacionDetalle.lineasEsperadas}</strong> · Líneas creadas: <strong>${validacionDetalle.lineasCreadas ?? '-'}</strong><br>
+                        Unidades enviadas: <strong>${validacionDetalle.unidadesEsperadas}</strong> · Unidades DTE: <strong>${validacionDetalle.unidades ?? '-'}</strong>
+                    </div>` : ''}
                     <hr>
                     <div class="alert alert-warning">
                         <i class="bi bi-file-earmark-arrow-down"></i> <strong>Archivo TXT descargado:</strong><br>

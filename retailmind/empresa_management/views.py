@@ -115,6 +115,7 @@ def lista_empresas(request):
                 'correoIntercambio': empresa.correoIntercambio or '',
                 'correoAdministrador': empresa.correoAdministrador or '',
                 'direccion': empresa.direccion or '',
+                'comuna': empresa.comuna or '',
                 'ciudad': empresa.ciudad or '',
                 'region': empresa.region or '',
                 'codigo_postal': empresa.codigo_postal or '',
@@ -477,8 +478,10 @@ def crear_empresa(request):
             razon_social=data.get('razon_social', ''),
             giro=data.get('giro') or data.get('giro_comercial', ''),  # Aceptar ambos nombres
             direccion=data.get('direccion', ''),
-            comuna=data.get('comuna') or data.get('ciudad', ''),  # Aceptar comuna o ciudad
+            comuna=data.get('comuna', ''),
             ciudad=data.get('ciudad', ''),
+            region=data.get('region') or None,
+            codigo_postal=data.get('codigo_postal') or None,
             esProveedor=es_proveedor,
             correoVendedor=_clean_char_field(correo_vendedor),
             correoIntercambio=_clean_char_field(data.get('correoIntercambio')),
@@ -506,6 +509,8 @@ def crear_empresa(request):
                 'direccion': empresa.direccion,
                 'comuna': empresa.comuna,
                 'ciudad': empresa.ciudad,
+                'region': empresa.region or '',
+                'codigo_postal': empresa.codigo_postal or '',
                 'telefono': empresa.contacto1 or '',
                 'email': empresa.correoVendedor or empresa.correoAdministrador or '',
                 'acteco': empresa.acteco or '',
@@ -562,10 +567,12 @@ def editar_empresa(request):
         empresa.rut = data.get('rut', '')
         empresa.nombre_fantasia = data.get('nombre_fantasia', '')
         empresa.razon_social = data.get('razon_social', '')
-        empresa.giro = data.get('giro_comercial', '')
+        empresa.giro = data.get('giro') or data.get('giro_comercial', '')
         empresa.direccion = data.get('direccion', '')
-        empresa.comuna = data.get('ciudad', '')  # Usar ciudad como comuna
+        empresa.comuna = data.get('comuna', '')
         empresa.ciudad = data.get('ciudad', '')
+        empresa.region = data.get('region') or None
+        empresa.codigo_postal = data.get('codigo_postal') or None
         empresa.esProveedor = es_proveedor
         empresa.correoVendedor = _clean_char_field(correo_vendedor)
         empresa.correoIntercambio = _clean_char_field(data.get('correoIntercambio'))
@@ -587,6 +594,12 @@ def editar_empresa(request):
                 'nombre': empresa.nombre,
                 'rut': empresa.rut,
                 'razon_social': empresa.razon_social,
+                'giro': empresa.giro,
+                'direccion': empresa.direccion,
+                'comuna': empresa.comuna,
+                'ciudad': empresa.ciudad,
+                'region': empresa.region or '',
+                'codigo_postal': empresa.codigo_postal or '',
                 'tipo_display': tipo_display,
                 'esProveedor': empresa.esProveedor,
             }
@@ -1168,6 +1181,7 @@ def obtener_empresa(request, empresa_id):
                 'email': empresa.correoVendedor or '',  # Usar correoVendedor como email
                 'telefono': empresa.contacto1 or '',
                 'direccion': empresa.direccion or '',
+                'comuna': empresa.comuna or '',
                 'ciudad': empresa.ciudad or '',
                 'region': empresa.region or '',
                 'codigo_postal': empresa.codigo_postal or '',
