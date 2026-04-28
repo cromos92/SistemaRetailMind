@@ -417,6 +417,90 @@
     </div>
 </div>
 
+<!-- ========== MODAL: SALIDA DE STOCK POR ARTICULO/SUCURSAL ========== -->
+<div class="modal fade" id="modalSalidaStockArticulo" tabindex="-1" aria-labelledby="modalSalidaStockArticuloLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:16px; overflow:hidden;">
+            <div class="modal-header border-0" style="background: linear-gradient(135deg, #f06548 0%, #c23b22 100%);">
+                <h5 class="modal-title text-white fw-bold" id="modalSalidaStockArticuloLabel">
+                    <i class="bi bi-dash-circle me-2"></i>Sacar stock por articulo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="salida_stock_tallas_ids">
+
+                <div class="alert alert-warning border-0 rounded-3 d-flex align-items-start gap-2 mb-3">
+                    <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                    <div>
+                        <strong>Correccion de stock por sucursal.</strong>
+                        <div class="small">Ingresa cantidad solo en las tallas que necesitas descontar. Cada descuento quedara registrado como movimiento de correccion.</div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="p-3 rounded-3" style="background:#f8f9fa;">
+                            <span class="text-muted small">Articulo</span><br>
+                            <strong id="salida_stock_articulo">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 rounded-3" style="background:#f8f9fa;">
+                            <span class="text-muted small">Sucursal</span><br>
+                            <strong id="salida_stock_sucursal">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 rounded-3" style="background:#f8f9fa;">
+                            <span class="text-muted small">Total a descontar</span><br>
+                            <strong id="salida_stock_total" class="text-danger fs-5">0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-hover align-middle mb-0" id="tablaSalidaStockArticulo">
+                        <thead>
+                            <tr style="background:#405189;">
+                                <th class="text-white">Talla</th>
+                                <th class="text-white">SKU</th>
+                                <th class="text-white text-center">Stock actual</th>
+                                <th class="text-white text-center" style="width:180px;">Cantidad a sacar</th>
+                                <th class="text-white text-center">Stock final</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    <i class="bi bi-hourglass-split"></i> Selecciona un articulo para ajustar
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="salida_stock_referencia" class="form-label fw-semibold">Referencia opcional</label>
+                        <input type="text" class="form-control" id="salida_stock_referencia" placeholder="Ej: Guia 12345">
+                    </div>
+                    <div class="col-md-8">
+                        <label for="salida_stock_motivo" class="form-label fw-semibold">Motivo <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="salida_stock_motivo" rows="2" placeholder="Ej: Correccion por despacho mal registrado (min. 10 caracteres)"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger rounded-pill px-4" onclick="guardarSalidaStockArticulo()">
+                    <i class="bi bi-check-circle me-1"></i>Confirmar salida
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ========== MODAL: HISTORIAL DE MOVIMIENTOS ========== -->
 <div class="modal fade" id="modalHistorialMovimientos" tabindex="-1" aria-labelledby="modalHistorialMovimientosLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">

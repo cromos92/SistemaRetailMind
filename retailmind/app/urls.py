@@ -267,6 +267,8 @@ from .views_edicion_productos import (
     obtener_impacto_recategorizacion,
     actualizar_productos_masivo,
     preview_edicion_masiva,
+    preview_salida_stock_producto,
+    aplicar_salida_stock_producto,
 )
 from .views_modulo_requerimientos import (
     # Vistas principales
@@ -530,6 +532,8 @@ urlpatterns = [
     path('productos/impacto-recategorizacion/<int:producto_id>/', obtener_impacto_recategorizacion, name='obtener_impacto_recategorizacion'),
     path('productos/actualizar-masivo/', actualizar_productos_masivo, name='actualizar_productos_masivo'),
     path('productos/preview-edicion-masiva/', preview_edicion_masiva, name='preview_edicion_masiva'),
+    path('productos/stock-salida/preview/', preview_salida_stock_producto, name='preview_salida_stock_producto'),
+    path('productos/stock-salida/aplicar/', aplicar_salida_stock_producto, name='aplicar_salida_stock_producto'),
     
     # ========== NUEVAS URLs PARA MOVIMIENTOS ==========
      

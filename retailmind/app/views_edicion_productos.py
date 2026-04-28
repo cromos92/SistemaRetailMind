@@ -17,7 +17,7 @@ from decimal import Decimal
 from .models import (
     Producto, Producto_Talla, Movimientos_Producto, LoteProducto,
     Categoria, AtributoOpcion, Productos_Atributos, Sucursal,
-    Ticket_Productos, Dte_Productos
+    Ticket_Productos, Dte_Productos, PermisoRol
 )
 
 
@@ -430,6 +430,247 @@ def actualizar_variacion(request, variacion_id):
 
 
 # ========== AJUSTAR STOCK ==========
+
+def _json_permiso_denegado_gestion_producto():
+    return JsonResponse({
+        'success': False,
+        'error': 'No tienes permiso para ajustar stock de productos.'
+    }, status=403)
+
+
+def _tiene_permiso_editar_gestion_producto(request):
+    sucursal_id = request.session.get('idSucursalActual')
+    return PermisoRol.tiene_permiso(
+        request.user,
+        'gestion_producto',
+        tipo_permiso='puede_editar',
+        sucursal_id=sucursal_id
+    )
+
+
+def _consumir_lotes_fifo_ajuste(producto_talla, cantidad):
+    """
+    Consume lotes FIFO disponibles para una salida de corrección.
+    No crea movimientos ni toca stock; eso queda centralizado en
+    registrar_movimiento_producto.
+    """
+    cantidad_pendiente = cantidad
+    lotes_consumidos = []
+
+    lotes = (
+        LoteProducto.objects.select_for_update()
+        .filter(
+            producto_talla=producto_talla,
+            activo=True,
+            agotado=False,
+            cantidad_disponible__gt=0,
+        )
+        .order_by('fecha_ingreso', 'id')
+    )
+
+    for lote in lotes:
+        if cantidad_pendiente <= 0:
+            break
+
+        cantidad_lote = min(cantidad_pendiente, lote.cantidad_disponible)
+        lote.cantidad_disponible -= cantidad_lote
+        lote.save(update_fields=['cantidad_disponible', 'agotado', 'updated_at'])
+        lotes_consumidos.append({
+            'lote_id': lote.id,
+            'cantidad': cantidad_lote,
+        })
+        cantidad_pendiente -= cantidad_lote
+
+    return lotes_consumidos, cantidad - cantidad_pendiente
+
+
+@require_GET
+@login_required
+def preview_salida_stock_producto(request):
+    """
+    Devuelve el stock actual de las variaciones seleccionadas antes de aplicar
+    una salida/corrección por artículo y sucursal.
+    """
+    if not _tiene_permiso_editar_gestion_producto(request):
+        return _json_permiso_denegado_gestion_producto()
+
+    ids_param = request.GET.get('producto_talla_ids', '')
+    ids = []
+    for raw_id in ids_param.split(','):
+        raw_id = raw_id.strip()
+        if raw_id.isdigit():
+            ids.append(int(raw_id))
+
+    if not ids:
+        return JsonResponse({
+            'success': False,
+            'error': 'Debes seleccionar al menos una variación.'
+        }, status=400)
+
+    variaciones = (
+        Producto_Talla.objects
+        .filter(id__in=ids)
+        .select_related('producto', 'producto__sucursal')
+        .order_by('producto__sucursal__alias', 'talla', 'id')
+    )
+
+    data = []
+    for variacion in variaciones:
+        producto = variacion.producto
+        data.append({
+            'producto_talla_id': variacion.id,
+            'producto_id': producto.id if producto else None,
+            'articulo': producto.articulo if producto else '',
+            'descripcion': producto.descripcion if producto else '',
+            'sucursal_id': producto.sucursal_id if producto else None,
+            'sucursal_alias': producto.sucursal.alias if producto and producto.sucursal else '',
+            'talla': variacion.talla,
+            'sku': variacion.sku,
+            'stock': max(0, int(variacion.stock or 0)),
+        })
+
+    return JsonResponse({
+        'success': True,
+        'variaciones': data,
+    })
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def aplicar_salida_stock_producto(request):
+    """
+    Aplica una salida de stock individual o masiva por artículo/sucursal.
+    Recibe items [{producto_talla_id, cantidad}] y registra movimientos
+    CORRECCION_STOCK negativos con trazabilidad.
+    """
+    if not _tiene_permiso_editar_gestion_producto(request):
+        return _json_permiso_denegado_gestion_producto()
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+
+    items = data.get('items') or []
+    motivo = (data.get('motivo') or '').strip()
+    referencia = (data.get('referencia') or '').strip()
+
+    if not isinstance(items, list) or not items:
+        return JsonResponse({
+            'success': False,
+            'error': 'Debes ingresar al menos una cantidad a descontar.'
+        }, status=400)
+
+    if len(motivo) < 10:
+        return JsonResponse({
+            'success': False,
+            'error': 'El motivo es obligatorio y debe tener al menos 10 caracteres.'
+        }, status=400)
+
+    cantidades = {}
+    for item in items:
+        try:
+            variacion_id = int(item.get('producto_talla_id'))
+            cantidad = int(item.get('cantidad'))
+        except (TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Las variaciones y cantidades deben ser números válidos.'
+            }, status=400)
+
+        if cantidad <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'Todas las cantidades deben ser mayores a 0.'
+            }, status=400)
+
+        cantidades[variacion_id] = cantidades.get(variacion_id, 0) + cantidad
+
+    variaciones = {
+        v.id: v for v in (
+            Producto_Talla.objects.select_for_update()
+            .filter(id__in=cantidades.keys())
+            .select_related('producto', 'producto__sucursal')
+        )
+    }
+
+    faltantes = set(cantidades.keys()) - set(variaciones.keys())
+    if faltantes:
+        return JsonResponse({
+            'success': False,
+            'error': 'Una o más variaciones seleccionadas no existen.'
+        }, status=404)
+
+    for variacion_id, cantidad in cantidades.items():
+        variacion = variaciones[variacion_id]
+        stock_actual = int(variacion.stock or 0)
+        if cantidad > stock_actual:
+            producto = variacion.producto
+            nombre = producto.articulo if producto else variacion.sku
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    f'Stock insuficiente para {nombre} talla {variacion.talla}. '
+                    f'Disponible: {stock_actual}, solicitado: {cantidad}.'
+                )
+            }, status=400)
+
+    from .views import registrar_movimiento_producto
+
+    referencia_final = referencia or f'CORRECCION_STOCK_{timezone.now().strftime("%Y%m%d%H%M%S")}'
+    movimientos = []
+    total_descontado = 0
+    total_lotes_consumidos = 0
+
+    for variacion_id, cantidad in cantidades.items():
+        variacion = variaciones[variacion_id]
+        lotes_consumidos, cantidad_fifo = _consumir_lotes_fifo_ajuste(variacion, cantidad)
+        total_lotes_consumidos += len(lotes_consumidos)
+
+        observaciones = motivo
+        if cantidad_fifo < cantidad:
+            observaciones = (
+                f'{motivo} | FIFO parcial: {cantidad_fifo}/{cantidad} unidades '
+                'con lotes disponibles.'
+            )
+
+        movimiento = registrar_movimiento_producto(
+            producto_talla=variacion,
+            concepto='CORRECCION_STOCK',
+            cantidad=-cantidad,
+            responsable=request.user,
+            sucursal_origen=variacion.producto.sucursal if variacion.producto else None,
+            sucursal_destino=variacion.producto.sucursal if variacion.producto else None,
+            observaciones=observaciones,
+            referencia_externa=referencia_final,
+            crear_lote_fifo=False
+        )
+        movimiento.tipo_movimiento = 'EGRESO'
+        movimiento.save(update_fields=['tipo_movimiento', 'updated_at'])
+
+        variacion.refresh_from_db(fields=['stock'])
+        movimientos.append({
+            'movimiento_id': movimiento.id,
+            'producto_talla_id': variacion.id,
+            'talla': variacion.talla,
+            'sku': variacion.sku,
+            'cantidad': cantidad,
+            'nuevo_stock': variacion.stock,
+            'lotes_consumidos': len(lotes_consumidos),
+        })
+        total_descontado += cantidad
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Se descontaron {total_descontado} unidad(es) correctamente.',
+        'referencia': referencia_final,
+        'movimientos': movimientos,
+        'total_lotes_consumidos': total_lotes_consumidos,
+    })
 
 @require_POST
 @login_required

@@ -661,6 +661,244 @@ function guardarAjusteStock() {
     });
 }
 
+// ========== SALIDA DE STOCK POR ARTICULO/SUCURSAL ==========
+
+function escapeHtmlEdicionProductos(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function recalcularTotalSalidaStockArticulo() {
+    let total = 0;
+    $('#tablaSalidaStockArticulo .input-salida-stock').each(function() {
+        const cantidad = parseInt($(this).val(), 10) || 0;
+        const stock = parseInt($(this).data('stock'), 10) || 0;
+        const final = Math.max(0, stock - cantidad);
+        total += cantidad;
+        $(this).closest('tr').find('.salida-stock-final').text(final);
+    });
+    $('#salida_stock_total').text(total.toLocaleString());
+}
+
+window.abrirModalSalidaStockArticulo = function(nombreArticulo, sucursalNombre, tallasEncoded) {
+    let tallas = [];
+    try {
+        tallas = JSON.parse(decodeURIComponent(tallasEncoded || '[]'));
+    } catch (error) {
+        console.error('Error leyendo tallas para ajuste:', error);
+    }
+
+    const ids = tallas
+        .map(t => parseInt(t.producto_talla_id, 10))
+        .filter(id => Number.isInteger(id) && id > 0);
+
+    if (!ids.length) {
+        mostrarError('No hay tallas creadas para ajustar stock en esta sucursal.');
+        return;
+    }
+
+    $('#salida_stock_articulo').text(nombreArticulo || '-');
+    $('#salida_stock_sucursal').text(sucursalNombre || '-');
+    $('#salida_stock_total').text('0');
+    $('#salida_stock_referencia').val('');
+    $('#salida_stock_motivo').val('');
+    $('#salida_stock_tallas_ids').val(ids.join(','));
+    $('#tablaSalidaStockArticulo tbody').html(`
+        <tr>
+            <td colspan="5" class="text-center text-muted py-4">
+                <span class="spinner-border spinner-border-sm me-2"></span>Cargando stock actual...
+            </td>
+        </tr>
+    `);
+
+    const modalElement = document.getElementById('modalSalidaStockArticulo');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+
+    fetch(`/app/productos/stock-salida/preview/?producto_talla_ids=${ids.join(',')}`, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.error || 'No se pudo cargar el stock actual');
+        }
+
+        const variaciones = data.variaciones || [];
+        if (!variaciones.length) {
+            $('#tablaSalidaStockArticulo tbody').html(`
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">No hay variaciones disponibles.</td>
+                </tr>
+            `);
+            return;
+        }
+
+        const rows = variaciones.map(v => {
+            const stock = parseInt(v.stock, 10) || 0;
+            const stockClass = stock === 0 ? 'text-danger' : stock < 5 ? 'text-warning' : 'text-success';
+            return `
+                <tr data-producto-talla-id="${v.producto_talla_id}">
+                    <td><strong>${escapeHtmlEdicionProductos(v.talla)}</strong></td>
+                    <td><code>${escapeHtmlEdicionProductos(v.sku)}</code></td>
+                    <td class="text-center ${stockClass}"><strong>${stock}</strong></td>
+                    <td>
+                        <input type="number"
+                               class="form-control form-control-sm text-end input-salida-stock"
+                               min="0"
+                               max="${stock}"
+                               data-stock="${stock}"
+                               value=""
+                               placeholder="0"
+                               ${stock <= 0 ? 'disabled' : ''}>
+                    </td>
+                    <td class="text-center"><strong class="salida-stock-final">${stock}</strong></td>
+                </tr>
+            `;
+        }).join('');
+
+        $('#tablaSalidaStockArticulo tbody').html(rows);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        $('#tablaSalidaStockArticulo tbody').html(`
+            <tr>
+                <td colspan="5" class="text-center text-danger py-4">
+                    ${escapeHtmlEdicionProductos(error.message || 'Error al cargar stock')}
+                </td>
+            </tr>
+        `);
+    });
+};
+
+window.guardarSalidaStockArticulo = function() {
+    const items = [];
+    let errorValidacion = '';
+
+    $('#tablaSalidaStockArticulo tbody tr[data-producto-talla-id]').each(function() {
+        const productoTallaId = parseInt($(this).data('producto-talla-id'), 10);
+        const $input = $(this).find('.input-salida-stock');
+        const cantidad = parseInt($input.val(), 10) || 0;
+        const stock = parseInt($input.data('stock'), 10) || 0;
+
+        if (cantidad < 0) {
+            errorValidacion = 'Las cantidades no pueden ser negativas.';
+            return false;
+        }
+        if (cantidad > stock) {
+            errorValidacion = 'Una cantidad supera el stock disponible.';
+            return false;
+        }
+        if (cantidad > 0) {
+            items.push({
+                producto_talla_id: productoTallaId,
+                cantidad: cantidad
+            });
+        }
+        return true;
+    });
+
+    if (errorValidacion) {
+        mostrarError(errorValidacion);
+        return;
+    }
+
+    if (!items.length) {
+        mostrarError('Debes ingresar al menos una cantidad a descontar.');
+        return;
+    }
+
+    const motivo = ($('#salida_stock_motivo').val() || '').trim();
+    if (motivo.length < 10) {
+        mostrarError('El motivo es obligatorio y debe tener al menos 10 caracteres.');
+        return;
+    }
+
+    const total = items.reduce((sum, item) => sum + item.cantidad, 0);
+    const confirmar = typeof Swal !== 'undefined'
+        ? Swal.fire({
+            icon: 'warning',
+            title: 'Confirmar salida de stock',
+            html: `Se descontaran <strong>${total}</strong> unidad(es) del articulo en esta sucursal. Esta accion quedara registrada en movimientos.`,
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Si, descontar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc3545'
+        }).then(result => result.isConfirmed)
+        : Promise.resolve(confirm(`¿Descontar ${total} unidad(es)?`));
+
+    confirmar.then(ok => {
+        if (!ok) return;
+
+        mostrarLoading('Registrando salida de stock...');
+        fetch('/app/productos/stock-salida/aplicar/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                items: items,
+                motivo: motivo,
+                referencia: ($('#salida_stock_referencia').val() || '').trim()
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.error || 'No se pudo registrar la salida de stock');
+            }
+
+            const modalElement = document.getElementById('modalSalidaStockArticulo');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+
+            mostrarExito(data.message || 'Stock descontado correctamente');
+            if (typeof window.cargarProductosParaCrear === 'function') {
+                window.cargarProductosParaCrear(new Date().getFullYear());
+            }
+            if (productoActualEdicion) {
+                abrirModalEdicionProducto(productoActualEdicion.id);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError(error.message || 'Error al registrar salida de stock');
+        })
+        .finally(() => {
+            ocultarLoading();
+        });
+    });
+};
+
+$(document).on('input', '#tablaSalidaStockArticulo .input-salida-stock', function() {
+    const stock = parseInt($(this).data('stock'), 10) || 0;
+    let cantidad = parseInt($(this).val(), 10) || 0;
+    if (cantidad < 0) cantidad = 0;
+    if (cantidad > stock) cantidad = stock;
+    if (String($(this).val()) !== String(cantidad) && $(this).val() !== '') {
+        $(this).val(cantidad);
+    }
+    recalcularTotalSalidaStockArticulo();
+});
+
+$(document).on('click', '.btn-ajuste-stock-articulo', function() {
+    window.abrirModalSalidaStockArticulo(
+        $(this).data('nombre') || '',
+        $(this).data('sucursalNombre') || $(this).data('sucursal-nombre') || '',
+        $(this).attr('data-tallas-encoded') || '[]'
+    );
+});
+
 // ========== FUNCIONES DE HISTORIAL ==========
 
 /**

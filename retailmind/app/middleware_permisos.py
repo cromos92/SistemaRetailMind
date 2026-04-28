@@ -42,6 +42,7 @@ URL_PERMISO_MAP = {
     
     # Existencias
     '/app/verGestionProducto/': 'gestion_producto',
+    '/app/productos/stock-salida/': 'gestion_producto',
     '/app/edicion-rapida-precios/': 'edicion_rapida_precios',
     '/app/gestion-precios/edicion-rapida/': 'edicion_rapida_precios',
     '/app/revisar-cambios-precios/': 'revisar_cambios_precios',

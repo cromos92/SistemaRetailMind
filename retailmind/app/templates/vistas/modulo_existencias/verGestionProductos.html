@@ -4462,6 +4462,16 @@ function showError(msg) {
                         const stock = Number(s.stock) || 0;
                         const esConsolidado = !!s.tiene_consolidado;
                         const resumenTallas = Array.isArray(s.tallas_resumen) ? s.tallas_resumen : [];
+                        const tallasAjusteStock = resumenTallas
+                            .filter(t => t.creado && t.producto_talla_id)
+                            .map(t => ({
+                                producto_talla_id: t.producto_talla_id,
+                                talla: t.talla || '',
+                                sku: t.sku || ''
+                            }));
+                        const tallasAjusteEncoded = encodeURIComponent(JSON.stringify(tallasAjusteStock));
+                        const nombreAttrAjuste = String(p.nombre || '').replace(/"/g, '&quot;');
+                        const sucursalAttrAjuste = String(sucAlias || '').replace(/"/g, '&quot;');
                         const tallasTip = resumenTallas.map(t => `${t.talla}:${t.stock}`).join(' · ');
                         const chipClass = s.tiene_pendientes ? 'suc-chip' : 'suc-chip suc-chip-creado';
                         const flagHtml = s.tiene_pendientes
@@ -4469,7 +4479,15 @@ function showError(msg) {
                                 ? `<span class="suc-chip-flag consolidado" title="Talla consolidada 00 — requiere distribuir">00</span>`
                                 : `<span class="suc-chip-flag real" title="Tallas reales detectadas">Tallas</span>`)
                             : `<span class="suc-chip-flag creado" title="Ya procesado"><i class="bi bi-check-lg"></i></span>`;
-                        const accionesPorSuc = s.tiene_pendientes && !p.creado ? `
+                        const btnAjusteStock = tallasAjusteStock.length > 0 ? `
+                            <button class="btn suc-chip-btn suc-chip-btn-danger btn-ajuste-stock-articulo"
+                                    data-nombre="${nombreAttrAjuste}"
+                                    data-sucursal-nombre="${sucursalAttrAjuste}"
+                                    data-tallas-encoded="${tallasAjusteEncoded}"
+                                    title="Sacar stock de ${sucursalAttrAjuste}">
+                                <i class="bi bi-dash-circle"></i>
+                            </button>` : '';
+                        const accionesCrearPorSuc = s.tiene_pendientes && !p.creado ? `
                             <button class="btn suc-chip-btn btn-crear-sucursal-single abrir-crear-producto"
                                     data-id="${p.producto_id}"
                                     data-sucursal-id="${sucId}"
@@ -4487,6 +4505,7 @@ function showError(msg) {
                                     title="Eliminar pendientes de ${sucAlias}">
                                 <i class="bi bi-trash3"></i>
                             </button>` : '';
+                        const accionesPorSuc = `${accionesCrearPorSuc}${btnAjusteStock}`;
                         return `
                             <span class="${chipClass}" title="${sucAlias}: ${stock} uds — ${tallasTip}">
                                 <i class="bi bi-shop"></i>
@@ -13581,7 +13600,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
 </script>
 
 <!-- ========== SCRIPT DE EDICIÓN DE PRODUCTOS ========== -->
-<script src="{% static 'js/edicion_productos.js' %}?v=202501231500"></script>
+<script src="{% static 'js/edicion_productos.js' %}?v=202604281209"></script>
 
 <script>
     // Verificar que edicion_productos.js se cargó correctamente
