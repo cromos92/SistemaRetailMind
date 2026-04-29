@@ -25460,6 +25460,11 @@ def anular_factura_dte(request):
 
             # Anulación total clásica (sin productos_afectados).
             if es_anulacion_total and not usa_productos_afectados:
+                movs_creados = 0
+
+                # CASO A: el DTE original tiene movimientos EGRESO ligados
+                # directamente (flujo normal: ticket → DTE re-vincula los
+                # movimientos). Reversamos cada uno.
                 movimientos_original = Movimientos_Producto.objects.filter(
                     dte=dte,
                     tipo_movimiento='EGRESO',
@@ -25486,8 +25491,87 @@ def anular_factura_dte(request):
                             responsable=usuario,
                             observaciones=f'Anulación DTE #{dte.numero_documento} → NC #{nc.numero_documento}'
                         )
+                        movs_creados += 1
 
                 movimientos_original.update(estado='CANCELADO')
+
+                # CASO B (fallback): el DTE no tenía movimientos directos.
+                # Pasa con boletas migradas desde Laravel y tickets de POS
+                # cuyos movimientos quedaron sin re-vincular al DTE. Antes
+                # esto generaba NC sin reversa de stock ni movimientos —
+                # el operador veía que la NC "no figuraba en movimientos".
+                # Buscamos por el ticket asociado primero (`folio_dte`).
+                if movs_creados == 0:
+                    tickets_vinculados = Ticket.objects.filter(
+                        folio_dte=dte.numero_documento
+                    )
+                    for tk in tickets_vinculados:
+                        movs_ticket = Movimientos_Producto.objects.filter(
+                            ticket=tk, tipo_movimiento='EGRESO',
+                        ).select_related('ProductoTalla')
+                        for mov in movs_ticket:
+                            cantidad_revertir = abs(mov.cantidad)
+                            if cantidad_revertir > 0 and mov.ProductoTalla_id:
+                                Producto_Talla.objects.filter(id=mov.ProductoTalla_id).update(
+                                    stock=F('stock') + cantidad_revertir
+                                )
+                                Movimientos_Producto.objects.create(
+                                    dte=nc,
+                                    ProductoTalla=mov.ProductoTalla,
+                                    sucursal_origen=mov.sucursal_origen,
+                                    sucursal_destino=mov.sucursal_destino,
+                                    cantidad=cantidad_revertir,
+                                    costo=mov.costo,
+                                    sobreprecio=mov.sobreprecio,
+                                    precio=mov.precio,
+                                    concepto='ANULACION',
+                                    tipo_movimiento='INGRESO',
+                                    estado='COMPLETADO',
+                                    responsable=usuario,
+                                    observaciones=(
+                                        f'Anulación DTE #{dte.numero_documento} → '
+                                        f'NC #{nc.numero_documento} (via ticket #{tk.correlativo})'
+                                    ),
+                                )
+                                movs_creados += 1
+                        movs_ticket.update(estado='CANCELADO')
+
+                # CASO C (último fallback): tampoco había movimientos del
+                # ticket. Generamos movimientos directamente desde las
+                # líneas del DTE (`Dte_Productos`), que son la fuente de
+                # verdad de lo que el documento facturó. Solo lineas con
+                # productoTalla real (no las "Devolución parcial"
+                # conceptuales sin SKU).
+                if movs_creados == 0:
+                    for dp in dte.dte_productos.filter(activo=True).select_related('productoTalla'):
+                        if not dp.productoTalla_id:
+                            continue
+                        cantidad_revertir = int(dp.stock or 0)
+                        if cantidad_revertir <= 0:
+                            continue
+                        Producto_Talla.objects.filter(id=dp.productoTalla_id).update(
+                            stock=F('stock') + cantidad_revertir
+                        )
+                        Movimientos_Producto.objects.create(
+                            dte=nc,
+                            ProductoTalla=dp.productoTalla,
+                            sucursal_origen=dte.sucursal,
+                            sucursal_destino=dte.sucursal,
+                            cantidad=cantidad_revertir,
+                            costo=dp.costo,
+                            sobreprecio=dp.sobreprecio,
+                            precio=dp.precio,
+                            concepto='ANULACION',
+                            tipo_movimiento='INGRESO',
+                            estado='COMPLETADO',
+                            responsable=usuario,
+                            observaciones=(
+                                f'Anulación DTE #{dte.numero_documento} → '
+                                f'NC #{nc.numero_documento} (desde Dte_Productos; '
+                                f'sin movimientos previos vinculados)'
+                            ),
+                        )
+                        movs_creados += 1
 
                 dte.estado_dte = 'ANULADO'
                 dte.save(update_fields=['estado_dte'])
