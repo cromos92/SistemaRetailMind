@@ -46,9 +46,17 @@ def gestion_dte(request):
         sucursal_id=sucursal_actual_id,
     )
 
+    # Permite usar la modalidad "NC OCULTA" (descartado=True). Reusa el
+    # mismo gate de `eliminar_documento_venta` (solo administrador), porque
+    # ocultar la NC produce el mismo efecto que descartar un DTE: queda
+    # invisible en cuadratura y en el listado.
+    rol_usuario = getattr(request.user, 'rol', '') or ''
+    puede_ocultar_nc = (rol_usuario == 'administrador')
+
     context = {
         'es_admin': es_admin,
         'puede_descargar_txt_dte': puede_descargar_txt_dte,
+        'puede_ocultar_nc': puede_ocultar_nc,
     }
     return render(request, 'vistas/modulo_administracion/gestion_dte.html', context)
 
@@ -1732,7 +1740,46 @@ def validar_datos_dte_acepta(datos):
             return False, f"Falta la cantidad en línea {i+1}"
         if item.get('precio_unitario') is None:
             return False, f"Falta el precio unitario en línea {i+1}"
-    
+
+    # Red de seguridad: chequear consistencia entre la suma de líneas y el
+    # cabezal del DTE. No bloquea (para no romper en producción cuando hay
+    # redondeos legítimos), pero deja warning si la diferencia es grande.
+    # Detecta el caso del "envío" con precio sistema fijo cobrado a otro
+    # precio: si las líneas siguen mal pese al fix de Capa 2/3, el log
+    # permite encontrar el folio rápidamente.
+    try:
+        import logging as _logging
+        _logger = _logging.getLogger(__name__)
+        suma_lineas = 0
+        for it in datos['detalle']:
+            cant = int(it.get('cantidad') or 0)
+            pu = int(it.get('precio_unitario') or 0)
+            mi = it.get('monto_item')
+            mi = int(mi) if mi is not None else cant * pu
+            suma_lineas += mi
+        monto_total_doc = int(totales.get('monto_total') or 0)
+        # Tolerancia 2 pesos (redondeos de IVA proporcional).
+        diff = abs(suma_lineas - monto_total_doc)
+        # Para boletas (39) las líneas ya vienen IVA-inclusive y deben
+        # cuadrar 1:1 con monto_total. Para facturas (33) las líneas son
+        # netas y la suma deberia cuadrar con monto_neto, no con total.
+        if tipo_doc == 39:
+            if diff > 2:
+                _logger.warning(
+                    "DTE 39 folio %s: suma de lineas %s != monto_total %s (diff=%s)",
+                    doc.get('folio'), suma_lineas, monto_total_doc, diff
+                )
+        else:
+            monto_neto_doc = int(totales.get('monto_neto') or 0)
+            diff_neto = abs(suma_lineas - monto_neto_doc)
+            if diff_neto > 2:
+                _logger.warning(
+                    "DTE %s folio %s: suma de lineas %s != monto_neto %s (diff=%s)",
+                    tipo_doc, doc.get('folio'), suma_lineas, monto_neto_doc, diff_neto
+                )
+    except Exception:
+        pass
+
     return True, "OK"
 
 
@@ -2866,15 +2913,19 @@ def generar_txt_dte_acepta(datos):
     # ✅ Obtener nombre de impresora para FACTURAS desde configuración de sucursal
     nombre_impresora_factura = datos.get('emisor', {}).get('nombre_impresora_factura', 'factura') or 'factura'
     
+    # Factura (33/34) usa 6 vacíos (7 pipes con la impresora) según el comentario
+    # del formato real arriba. Guía (52) cae en el mismo bloque pero mantiene los
+    # 7 vacíos históricos porque hoy "funciona" en producción y no se debe tocar.
+    campos_vacios_post_obs = 6 if tipo_doc in (33, 34) else 7
     info_adicional = [
         vendedor_codigo,  # 1. Código vendedor
         '',  # 2. Campo vacío
         '',  # 3. Campo vacío
         info_texto,  # 4. Observación/Monto con info adicional
-        '', '', '', '', '', '', '',  # 5-11. 7 campos vacíos
-        nombre_impresora_factura,  # 12. Impresora (configurable por sucursal)
-        '4',  # 13. Copias
-        '}'  # 14. Cierre
+        *[''] * campos_vacios_post_obs,  # 5-N. Campos vacíos (6 factura / 7 guía)
+        nombre_impresora_factura,  # Impresora (configurable por sucursal)
+        '4',  # Copias
+        '}'  # Cierre
     ]
     logger.warning(f"🔍 DEBUG - Línea final: vendedor={vendedor_codigo}, monto={monto_letras}")
     lineas.append(separador.join(info_adicional))

@@ -2329,14 +2329,26 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
         dcto_pct = float(tp.porcentaje_descuento or 0)
         dcto_monto_linea = dcto_unit * tp.stock if dcto_unit else 0
 
+        # `precio_efectivo` = precio antes-de-descuento realmente cobrado.
+        # Cubre el caso del "envío" con precio sistema fijo (ej. 500) que el
+        # operador sube en el POS (a 800): si `tp.precio` se quedó con el
+        # precio sistema pero `tp.subtotal` refleja lo cobrado, derivamos el
+        # precio real desde subtotal/stock + descuento. Si `tp.precio` ya
+        # cuadra con `tp.subtotal/tp.stock + dcto_unit`, no cambia nada.
+        precio_efectivo = tp.precio
+        if tp.stock and tp.subtotal:
+            derivado = int(round(tp.subtotal / tp.stock)) + dcto_unit
+            if derivado and derivado != tp.precio:
+                precio_efectivo = derivado
+
         Dte_Productos.objects.create(
             dte=dte,
             productoTalla=tp.ProductoTalla,
             stock=tp.stock,
             costo=costo_unitario,
             sobreprecio=sobreprecio_unitario,
-            precio=tp.precio,
-            precio_unitario=tp.precio,
+            precio=precio_efectivo,
+            precio_unitario=precio_efectivo,
             descuento_pct=dcto_pct if dcto_pct > 0 else None,
             descuento_monto=dcto_monto_linea if dcto_monto_linea > 0 else None,
             monto_item=tp.subtotal,
@@ -4395,10 +4407,21 @@ def convertir_ticket_a_factura(request):
             for ticket_producto in ticket.ticket_productos.all():
                 costo_unitario = ticket_producto.ProductoTalla.producto.costo
                 sobreprecio_unitario = ticket_producto.ProductoTalla.producto.sobreprecio
-                
+
                 dcto_u = ticket_producto.descuento_unitario or 0
                 dcto_p = float(ticket_producto.porcentaje_descuento or 0)
                 dcto_linea = dcto_u * ticket_producto.stock if dcto_u else 0
+
+                # Igual que en la copia ticket→DTE de boleta: derivar el
+                # precio efectivo desde subtotal/stock + descuento. Cubre
+                # el caso del "envío" con precio sistema fijo cobrado a
+                # otro precio. Sin esto, la línea del TXT NC sale con
+                # precio sistema en vez del cobrado.
+                precio_efectivo_f = ticket_producto.precio
+                if ticket_producto.stock and ticket_producto.subtotal:
+                    derivado = int(round(ticket_producto.subtotal / ticket_producto.stock)) + dcto_u
+                    if derivado and derivado != ticket_producto.precio:
+                        precio_efectivo_f = derivado
 
                 Dte_Productos.objects.create(
                     dte=factura,
@@ -4406,8 +4429,8 @@ def convertir_ticket_a_factura(request):
                     descripcion=f"{ticket_producto.ProductoTalla.producto.articulo} - {ticket_producto.ProductoTalla.talla}",
                     costo=costo_unitario,
                     sobreprecio=sobreprecio_unitario,
-                    precio=ticket_producto.precio,
-                    precio_unitario=ticket_producto.precio,
+                    precio=precio_efectivo_f,
+                    precio_unitario=precio_efectivo_f,
                     descuento_pct=dcto_p if dcto_p > 0 else None,
                     descuento_monto=dcto_linea if dcto_linea > 0 else None,
                     monto_item=ticket_producto.subtotal,
@@ -5851,20 +5874,27 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         # Usar monto real pagado (con descuento aplicado) para cuadratura
         monto_real = suma_pagos_dte if suma_pagos_dte > 0 else monto_dte
         
-        # NC siempre se procesan (para restarlas)
+        # NC: 3 modalidades coordinadas con el modal de gestion-DTE.
+        #   - DEVOLUCION  → resta del efectivo/transferencia teorica y del
+        #                   venta_total (aparece en cuadratura).
+        #   - ANULACION   → modalidad "informativa": cuenta como documento
+        #                   emitido del dia pero NO descuenta del venta_total
+        #                   ni de los teoricos. Asi el operador ve la NC
+        #                   en el resumen sin distorsionar la cuadratura.
+        #   - OCULTA (descartado=True) → ya esta filtrada por el query (linea
+        #                   `descartado=False`), no llega aqui.
         if dte.tipo_documento == 'NOTA DE CREDITO':
-            cuadratura_data['total_notas_credito'] += monto_dte
             cuadratura_data['cantidad_notas_credito'] += 1
-            pagos_nc = dte.dte_asociado.all()
-            tiene_efectivo = pagos_nc.filter(metodo_pago='EFECTIVO').exists()
-            tiene_transferencia = pagos_nc.filter(metodo_pago='TRANSFERENCIA').exists()
-            if tiene_efectivo:
-                cuadratura_data['total_nc_efectivo'] += monto_dte
-            elif tiene_transferencia:
-                cuadratura_data['total_nc_transferencia'] += monto_dte
-            # else: NC sin Dte_Detalle_Pago (ANULACION / NO_AFECTA_CAJA)
-            # figura en el resumen como documento emitido pero no descuenta
-            # del efectivo ni de la transferencia teóricos.
+            if dte.tipo_transaccion == 'DEVOLUCION':
+                cuadratura_data['total_notas_credito'] += monto_dte
+                pagos_nc = dte.dte_asociado.all()
+                if pagos_nc.filter(metodo_pago='EFECTIVO').exists():
+                    cuadratura_data['total_nc_efectivo'] += monto_dte
+                elif pagos_nc.filter(metodo_pago='TRANSFERENCIA').exists():
+                    cuadratura_data['total_nc_transferencia'] += monto_dte
+            # ANULACION (informativa): no se suma a total_notas_credito,
+            # no resta del venta_total ni de los teoricos. Solo cuenta como
+            # documento emitido del dia.
         elif not tiene_ticket_asociado:
             # Solo contar montos DTE si NO tienen ticket asociado (evita doble conteo)
             if dte.tipo_documento == 'BOLETA ELECTRONICA':

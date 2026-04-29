@@ -3035,8 +3035,12 @@ function loadReceptores() {
                 const badge = cliente.es_proveedor ? ' [Proveedor]' : '';
                 const incompleto = !(cliente.direccion && cliente.comuna && cliente.ciudad && cliente.giro);
                 const warning = incompleto ? ' ⚠️ datos incompletos' : '';
+                const rutSafe = (cliente.rut || '').replace(/"/g, '&quot;');
+                const nombreSafe = (cliente.nombre || '').replace(/"/g, '&quot;');
                 select.append(`
                     <option value="${cliente.id}"
+                            data-rut="${rutSafe}"
+                            data-nombre="${nombreSafe}"
                             data-direccion="${cliente.direccion || ''}"
                             data-comuna="${cliente.comuna || ''}"
                             data-ciudad="${cliente.ciudad || ''}"
@@ -5036,12 +5040,27 @@ function validateBeforeEmit() {
         if (!opt.data('comuna')) faltantesReceptor.push('comuna');
         if (!opt.data('ciudad')) faltantesReceptor.push('ciudad');
         if ((selectedConcept === 'factura' || selectedConcept === 'guia') && faltantesReceptor.length) {
+            const rutReceptor = opt.data('rut') || '';
+            const nombreReceptor = opt.data('nombre') || '';
+            const urlEditar = `/empresa_management/lista_empresas/${rutReceptor ? '?search=' + encodeURIComponent(rutReceptor) : ''}`;
+            const empresaInfo = (rutReceptor || nombreReceptor)
+                ? `<div class="mt-2 p-2" style="background:#f8f9fa;border-radius:6px;font-size:0.9rem;">
+                       <i class="bi bi-building me-1"></i>
+                       <strong>${nombreReceptor}</strong>${rutReceptor ? ` &middot; <span class="text-muted">${rutReceptor}</span>` : ''}
+                   </div>`
+                : '';
             Swal.fire({
                 icon: 'warning',
                 title: 'Cliente con datos incompletos',
-                html: `Para generar TXT Acepta faltan datos del receptor: <strong>${faltantesReceptor.join(', ')}</strong>.<br>Completa la ficha de empresa antes de emitir.`,
-                confirmButtonText: 'Entendido'
-            }).then(() => {
+                html: `Para generar TXT Acepta faltan datos del receptor: <strong>${faltantesReceptor.join(', ')}</strong>.<br>Completa la ficha de empresa antes de emitir.${empresaInfo}`,
+                showCancelButton: true,
+                confirmButtonText: '<i class="bi bi-pencil-square me-1"></i>Editar empresa',
+                cancelButtonText: 'Cerrar',
+                confirmButtonColor: '#0066FF',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.open(urlEditar, '_blank');
+                }
                 goToStep(1);
             });
             return false;

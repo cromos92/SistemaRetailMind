@@ -2808,18 +2808,53 @@
                         </div>
                     </div>
 
-                    <p class="mb-2 fw-bold" style="font-size:0.9rem;">Tipo de anulación:</p>
-                    <div class="d-flex flex-column gap-2 mb-3">
-                        <label class="p-2 border rounded" style="cursor:pointer;">
-                            <input type="radio" name="tipoAnulacion" value="ANULACION" checked class="me-2">
-                            <strong>Anulación misma jornada</strong><br>
-                            <small class="text-muted ms-4">La venta nunca se efectuó o el cliente no pagó. La NC aparece en el resumen del día como documento emitido, pero <strong>no descuenta del efectivo ni de las transferencias</strong> teóricas.</small>
+                    <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-shield-exclamation me-1"></i>Modalidad de la Nota de Crédito:</p>
+                    <div class="d-flex flex-column gap-2 mb-2" id="modalidadNCContainer">
+                        <label class="p-2 border rounded modalidad-card" data-modalidad="DEVOLUCION" style="cursor:pointer;">
+                            <input type="radio" name="modalidadNC" value="DEVOLUCION" checked class="me-2">
+                            <strong><i class="bi bi-cash-coin me-1"></i>A. Devolución que afecta cuadratura</strong>
+                            <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
+                                <span class="badge bg-warning text-dark">Resta del método de pago</span>
+                                <span class="badge bg-info text-dark">Aparece en cuadratura</span>
+                                <span class="badge bg-info text-dark">Aparece en Gestión DTE</span>
+                            </div>
+                            <div id="subDevolucion" class="mt-2 ms-4" style="font-size:0.85rem;">
+                                <label class="me-3"><input type="radio" name="metodoDevolucion" value="EFECTIVO_CAJA" checked class="me-1"><i class="bi bi-cash me-1"></i>Efectivo</label>
+                                <label><input type="radio" name="metodoDevolucion" value="TRANSFERENCIA_BANCARIA" class="me-1"><i class="bi bi-bank me-1"></i>Transferencia</label>
+                            </div>
                         </label>
-                        <label class="p-2 border rounded" style="cursor:pointer;">
-                            <input type="radio" name="tipoAnulacion" value="DEVOLUCION" class="me-2">
-                            <strong>Devolución / anulación posterior</strong><br>
-                            <small class="text-muted ms-4">El cliente ya pagó y se le devuelve el dinero. La NC figura en la cuadratura de hoy y <strong>resta</strong> del método de pago elegido (efectivo o transferencia).</small>
+                        <label class="p-2 border rounded modalidad-card" data-modalidad="INFORMATIVA" style="cursor:pointer;">
+                            <input type="radio" name="modalidadNC" value="INFORMATIVA" class="me-2">
+                            <strong><i class="bi bi-info-circle me-1"></i>B. NC informativa (sin afectar montos)</strong>
+                            <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
+                                <span class="badge bg-secondary">No resta nada</span>
+                                <span class="badge bg-info text-dark">Aparece en cuadratura (solo conteo)</span>
+                                <span class="badge bg-info text-dark">Aparece en Gestión DTE</span>
+                            </div>
+                            <small class="text-muted ms-4 d-block mt-1" style="font-size:0.75rem;">Se emite y queda como documento del día, pero no descuenta del efectivo ni del venta total.</small>
                         </label>
+                        {% if puede_ocultar_nc %}
+                        <label class="p-2 border rounded modalidad-card" data-modalidad="OCULTA" style="cursor:pointer;">
+                            <input type="radio" name="modalidadNC" value="OCULTA" class="me-2">
+                            <strong><i class="bi bi-eye-slash me-1"></i>C. NC oculta (no figura en cuadratura ni listado)</strong>
+                            <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
+                                <span class="badge bg-secondary">No resta nada</span>
+                                <span class="badge bg-dark">Oculta de cuadratura</span>
+                                <span class="badge bg-dark">Oculta de Gestión DTE</span>
+                            </div>
+                            <small class="text-muted ms-4 d-block mt-1" style="font-size:0.75rem;">El TXT Acepta se descarga, pero la NC se marca como descartada y no aparece en listados ni cuadratura.</small>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div id="anulEfectoPanel" class="alert alert-info py-2 px-3 mb-3" style="font-size:0.78rem;">
+                        <div class="fw-bold mb-1"><i class="bi bi-broadcast me-1"></i>Efecto de esta NC:</div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <span id="efectoCuadratura" class="badge bg-light text-dark border"></span>
+                            <span id="efectoGestionDte" class="badge bg-light text-dark border"></span>
+                            <span id="efectoEfectivo" class="badge bg-light text-dark border"></span>
+                            <span id="efectoTransferencia" class="badge bg-light text-dark border"></span>
+                        </div>
                     </div>
 
                     <hr class="my-2">
@@ -2919,6 +2954,51 @@
                 };
                 montoEl.addEventListener('input', actualizarInfo);
                 actualizarInfo();
+
+                // Alerta dinamica del efecto segun la modalidad seleccionada.
+                const setBadge = (id, ok, label) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.className = 'badge border ' + (ok === true
+                        ? 'bg-success'
+                        : ok === false
+                            ? 'bg-secondary'
+                            : 'bg-light text-dark');
+                    el.innerHTML = (ok === true ? '<i class="bi bi-check-circle me-1"></i>' :
+                                    ok === false ? '<i class="bi bi-x-circle me-1"></i>' :
+                                    '<i class="bi bi-dash-circle me-1"></i>') + label;
+                };
+                const subDev = document.getElementById('subDevolucion');
+                const actualizarEfecto = () => {
+                    const sel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
+                    const metodo = (document.querySelector('input[name="metodoDevolucion"]:checked') || {}).value || 'EFECTIVO_CAJA';
+                    if (subDev) subDev.style.display = (sel === 'DEVOLUCION') ? '' : 'none';
+                    if (sel === 'DEVOLUCION') {
+                        setBadge('efectoCuadratura', true, 'Aparece en cuadratura');
+                        setBadge('efectoGestionDte', true, 'Aparece en Gestión DTE');
+                        setBadge('efectoEfectivo', metodo === 'EFECTIVO_CAJA', metodo === 'EFECTIVO_CAJA' ? 'Resta del efectivo teórico' : 'No afecta efectivo');
+                        setBadge('efectoTransferencia', metodo === 'TRANSFERENCIA_BANCARIA', metodo === 'TRANSFERENCIA_BANCARIA' ? 'Resta de transferencia teórica' : 'No afecta transferencia');
+                    } else if (sel === 'INFORMATIVA') {
+                        setBadge('efectoCuadratura', true, 'Aparece en cuadratura (solo conteo)');
+                        setBadge('efectoGestionDte', true, 'Aparece en Gestión DTE');
+                        setBadge('efectoEfectivo', false, 'No afecta efectivo');
+                        setBadge('efectoTransferencia', false, 'No afecta transferencia');
+                    } else if (sel === 'OCULTA') {
+                        setBadge('efectoCuadratura', false, 'Oculta de cuadratura');
+                        setBadge('efectoGestionDte', false, 'Oculta de Gestión DTE');
+                        setBadge('efectoEfectivo', false, 'No afecta efectivo');
+                        setBadge('efectoTransferencia', false, 'No afecta transferencia');
+                    }
+                    document.querySelectorAll('.modalidad-card').forEach((card) => {
+                        const isSel = card.getAttribute('data-modalidad') === sel;
+                        card.style.borderColor = isSel ? 'var(--nexo-primary)' : '';
+                        card.style.background = isSel ? 'rgba(0, 102, 255, 0.04)' : '';
+                    });
+                };
+                document.querySelectorAll('input[name="modalidadNC"], input[name="metodoDevolucion"]').forEach((r) => {
+                    r.addEventListener('change', actualizarEfecto);
+                });
+                actualizarEfecto();
             },
             preConfirm: () => {
                 const montoVal = parseInt(document.getElementById('anulMontoNC').value) || 0;
@@ -2941,8 +3021,11 @@
                     return false;
                 }
                 const motivoFinal = selectVal === 'OTRO' ? txtVal : (txtVal ? `${selectVal}. ${txtVal}` : selectVal);
+                const modalidadSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
+                const metodoSel = (document.querySelector('input[name="metodoDevolucion"]:checked') || {}).value || 'EFECTIVO_CAJA';
                 return {
-                    tipoAnulacion: (document.querySelector('input[name="tipoAnulacion"]:checked') || {}).value || 'ANULACION',
+                    modalidadNC: modalidadSel,
+                    metodoDevolucion: modalidadSel === 'DEVOLUCION' ? metodoSel : 'NO_AFECTA_CAJA',
                     montoNC: montoVal,
                     clienteNombre: document.getElementById('anulClienteNombre').value.trim(),
                     clienteRut: document.getElementById('anulClienteRut').value.trim(),
@@ -2954,42 +3037,58 @@
 
         if (!isConfirmed) return;
 
-        const tipoAnulacion = formData.tipoAnulacion;
-        let metodoDevolucion = 'NO_AFECTA_CAJA';
+        const modalidadNC = formData.modalidadNC;
+        const metodoDevolucion = formData.metodoDevolucion;
 
-        // Paso 2: si es DEVOLUCION, preguntar cómo afecta la cuadratura de caja
-        if (tipoAnulacion === 'DEVOLUCION') {
-            const { value: metodo, isConfirmed: confirmado2 } = await Swal.fire({
-                title: `Devolución — Cuadratura de Caja`,
-                html: `
-                    <p class="text-start mb-3">¿Cómo se devuelve el dinero al cliente?<br>
-                    <small class="text-muted">Esto determina cómo se refleja la NC en la cuadratura de caja de la sucursal.</small></p>
-                    <div class="d-flex flex-column gap-2 text-start">
-                        <label class="p-3 border rounded" style="cursor:pointer;">
-                            <input type="radio" name="metodoDevolucion" value="EFECTIVO_CAJA" checked class="me-2">
-                            <strong><i class="bi bi-cash-coin me-1"></i>Devolución en Efectivo</strong><br>
-                            <small class="text-muted ms-4">Se devuelve dinero de la caja. La NC <strong>resta del efectivo teórico</strong> en la cuadratura del día.</small>
-                        </label>
-                        <label class="p-3 border rounded" style="cursor:pointer;">
-                            <input type="radio" name="metodoDevolucion" value="TRANSFERENCIA_BANCARIA" class="me-2">
-                            <strong><i class="bi bi-bank me-1"></i>Devolución por Transferencia</strong><br>
-                            <small class="text-muted ms-4">Se transfiere al cliente. La NC aparece en cuadratura como transferencia, <strong>no afecta el efectivo</strong> de caja.</small>
-                        </label>
-                    </div>
-                `,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Confirmar Anulación',
-                cancelButtonText: 'Cancelar',
-                preConfirm: () => {
-                    const sel = document.querySelector('input[name="metodoDevolucion"]:checked');
-                    return sel ? sel.value : 'EFECTIVO_CAJA';
-                }
-            });
+        // Paso 2: resumen pre-confirmacion con los 4 chips del efecto real.
+        // Permite al operador validar la modalidad antes de generar la NC.
+        const efectoChips = (() => {
+            if (modalidadNC === 'DEVOLUCION') {
+                const esEf = metodoDevolucion === 'EFECTIVO_CAJA';
+                return `
+                    <span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en cuadratura</span>
+                    <span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en Gestión DTE</span>
+                    <span class="badge ${esEf ? 'bg-warning text-dark' : 'bg-secondary'} me-1"><i class="bi bi-${esEf ? 'cash-coin' : 'x-circle'} me-1"></i>${esEf ? 'Resta efectivo teórico' : 'No afecta efectivo'}</span>
+                    <span class="badge ${!esEf ? 'bg-warning text-dark' : 'bg-secondary'}"><i class="bi bi-${!esEf ? 'bank' : 'x-circle'} me-1"></i>${!esEf ? 'Resta transferencia teórica' : 'No afecta transferencia'}</span>`;
+            }
+            if (modalidadNC === 'INFORMATIVA') {
+                return `
+                    <span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en cuadratura (solo conteo)</span>
+                    <span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>Aparece en Gestión DTE</span>
+                    <span class="badge bg-secondary me-1"><i class="bi bi-x-circle me-1"></i>No afecta efectivo</span>
+                    <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>No afecta transferencia</span>`;
+            }
+            return `
+                <span class="badge bg-dark me-1"><i class="bi bi-eye-slash me-1"></i>Oculta de cuadratura</span>
+                <span class="badge bg-dark me-1"><i class="bi bi-eye-slash me-1"></i>Oculta de Gestión DTE</span>
+                <span class="badge bg-secondary me-1"><i class="bi bi-x-circle me-1"></i>No afecta efectivo</span>
+                <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>No afecta transferencia</span>`;
+        })();
+        const tituloModalidad = modalidadNC === 'DEVOLUCION'
+            ? `Devolución (${metodoDevolucion === 'EFECTIVO_CAJA' ? 'Efectivo' : 'Transferencia'})`
+            : modalidadNC === 'INFORMATIVA' ? 'NC Informativa' : 'NC Oculta';
 
-            if (!confirmado2) return;
-            metodoDevolucion = metodo;
-        }
+        const { isConfirmed: okResumen } = await Swal.fire({
+            title: 'Confirmar Generación de NC',
+            html: `
+                <div class="text-start small">
+                    <div class="mb-2"><strong>Documento:</strong> ${nombreDoc} #${numeroDoc}</div>
+                    <div class="mb-2"><strong>Monto NC:</strong> ${fmtCLP(formData.montoNC)} ${formData.montoNC >= montoRestante ? '<span class="badge bg-danger ms-1">Total — anulará el documento</span>' : '<span class="badge bg-info text-dark ms-1">Parcial</span>'}</div>
+                    <div class="mb-2"><strong>Modalidad:</strong> ${tituloModalidad}</div>
+                    <div class="mb-2"><strong>Motivo:</strong> ${formData.motivo}</div>
+                    ${formData.clienteNombre ? `<div class="mb-2"><strong>Cliente:</strong> ${formData.clienteNombre}${formData.clienteRut ? ` (${formData.clienteRut})` : ''}</div>` : ''}
+                    <hr class="my-2">
+                    <div class="fw-bold mb-1">Efecto en cuadratura del día:</div>
+                    <div class="d-flex flex-wrap gap-1">${efectoChips}</div>
+                </div>
+            `,
+            icon: modalidadNC === 'OCULTA' ? 'warning' : 'question',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Confirmar y generar NC',
+            cancelButtonText: 'Volver',
+            width: '560px'
+        });
+        if (!okResumen) return;
 
         Swal.fire({
             title: 'Procesando...',
@@ -3007,7 +3106,7 @@
                 },
                 body: JSON.stringify({
                     dte_id: dteId,
-                    tipo_anulacion: tipoAnulacion,
+                    modalidad_nc: modalidadNC,
                     metodo_devolucion: metodoDevolucion,
                     monto_nc: formData.montoNC,
                     cliente_nombre: formData.clienteNombre,
@@ -3033,11 +3132,17 @@
             URL.revokeObjectURL(url);
 
             const esTotal = formData.montoNC >= montoRestante;
-            const resumenMetodo = metodoDevolucion === 'EFECTIVO_CAJA'
-                ? '<br><span class="text-warning"><i class="bi bi-cash-coin me-1"></i>NC resta del efectivo en cuadratura</span>'
-                : metodoDevolucion === 'TRANSFERENCIA_BANCARIA'
-                    ? '<br><span class="text-info"><i class="bi bi-bank me-1"></i>NC registrada como transferencia en cuadratura</span>'
-                    : '';
+            // Resumen del efecto real en cuadratura segun la modalidad seleccionada.
+            let resumenModalidad = '';
+            if (modalidadNC === 'DEVOLUCION') {
+                resumenModalidad = metodoDevolucion === 'EFECTIVO_CAJA'
+                    ? '<br><span class="text-warning"><i class="bi bi-cash-coin me-1"></i>NC resta del efectivo teórico en cuadratura</span>'
+                    : '<br><span class="text-info"><i class="bi bi-bank me-1"></i>NC resta de la transferencia teórica en cuadratura</span>';
+            } else if (modalidadNC === 'INFORMATIVA') {
+                resumenModalidad = '<br><span class="text-secondary"><i class="bi bi-info-circle me-1"></i>NC informativa: aparece en el resumen como documento del día pero NO afecta los montos teóricos</span>';
+            } else if (modalidadNC === 'OCULTA') {
+                resumenModalidad = '<br><span class="text-dark"><i class="bi bi-eye-slash me-1"></i>NC oculta: no figura en cuadratura ni en Gestión DTE (descartada). El TXT Acepta queda disponible para envío al SII.</span>';
+            }
             const resumenMonto = !esTotal
                 ? `<br><span class="text-primary"><i class="bi bi-pie-chart me-1"></i>NC parcial por ${fmtCLP(formData.montoNC)} de ${fmtCLP(montoOriginal)}</span>`
                 : '';
@@ -3045,7 +3150,7 @@
             await Swal.fire({
                 icon: 'success',
                 title: esTotal ? 'Documento Anulado' : 'NC Parcial Generada',
-                html: `Nota de Crédito por <strong>${fmtCLP(formData.montoNC)}</strong> creada.<br>TXT Acepta descargado.${esTotal ? `<br><small class="text-muted">${nombreDoc} #${numeroDoc} marcada como ANULADO.</small>` : `<br><small class="text-muted">${nombreDoc} #${numeroDoc} sigue vigente. Puede generar otra NC por el restante.</small>`}${resumenMetodo}${resumenMonto}`,
+                html: `Nota de Crédito por <strong>${fmtCLP(formData.montoNC)}</strong> creada.<br>TXT Acepta descargado.${esTotal ? `<br><small class="text-muted">${nombreDoc} #${numeroDoc} marcada como ANULADO.</small>` : `<br><small class="text-muted">${nombreDoc} #${numeroDoc} sigue vigente. Puede generar otra NC por el restante.</small>`}${resumenModalidad}${resumenMonto}`,
                 confirmButtonText: 'Aceptar'
             });
             cargarDTEs(currentPageDTE, currentSearchDTE);

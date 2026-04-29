@@ -22049,10 +22049,13 @@ def empresas_clientes(request):
                 'rut': cliente.rut,
                 'nombre_fantasia': cliente.nombre_fantasia,
                 'razon_social': cliente.razon_social,
-                'direccion': cliente.direccion,
-                'ciudad': cliente.ciudad,
+                'giro': cliente.giro or '',
+                'direccion': cliente.direccion or '',
+                'comuna': cliente.comuna or '',
+                'ciudad': cliente.ciudad or '',
+                'acteco': cliente.acteco or '',
                 'es_proveedor': cliente.esProveedor,
-                'tipo': tipo
+                'tipo': tipo,
             })
         
         return JsonResponse(data, safe=False)
@@ -24817,7 +24820,8 @@ def anular_factura_dte(request):
     Recibe JSON:
         {
             "dte_id": int,
-            "tipo_anulacion": "ANULACION" | "DEVOLUCION",
+            "modalidad_nc": "DEVOLUCION" | "INFORMATIVA" | "OCULTA",  # nuevo (modal unificado)
+            "tipo_anulacion": "ANULACION" | "DEVOLUCION",            # legacy (sigue aceptado)
             "metodo_devolucion": "EFECTIVO_CAJA" | "TRANSFERENCIA_BANCARIA" | "NO_AFECTA_CAJA",
             "monto_nc": int | null,
             "productos_afectados": [  # opcional — NC parcial por línea
@@ -24825,6 +24829,22 @@ def anular_factura_dte(request):
                 ...
             ]
         }
+
+    Modalidades (efecto en cuadratura y gestion-DTE):
+
+    - `modalidad_nc='DEVOLUCION'`  → NC con `Dte_Detalle_Pago` en EFECTIVO o
+      TRANSFERENCIA. Aparece en cuadratura, resta del teórico del método y
+      del `venta_total`.
+    - `modalidad_nc='INFORMATIVA'` → NC sin `Dte_Detalle_Pago`. Aparece como
+      documento emitido del día (cantidad de NC) pero NO resta del
+      `venta_total` ni de los teóricos de caja.
+    - `modalidad_nc='OCULTA'`     → NC se crea con `descartado=True`. No
+      figura en cuadratura ni en el listado de gestion-DTE; el TXT Acepta
+      sí se descarga.
+
+    Si no llega `modalidad_nc`, se conserva el contrato legacy basado en
+    `tipo_anulacion` + `metodo_devolucion` (compatibilidad con
+    `recepcion_dte.html` y otros consumidores existentes).
 
     Modos:
 
@@ -24857,12 +24877,32 @@ def anular_factura_dte(request):
         return JsonResponse({'error': 'JSON inválido'}, status=400)
 
     dte_id = body.get('dte_id')
+
+    # Modalidades nuevas (modal unificado en gestion-DTE):
+    #   - DEVOLUCION   → afecta cuadratura (resta efectivo o transferencia)
+    #   - INFORMATIVA  → NC visible pero no resta venta_total ni teoricos
+    #   - OCULTA       → NC marcada con descartado=True (no figura en
+    #                    cuadratura ni en el listado de gestion-DTE)
+    # Mantiene retro-compat con el contrato legacy (tipo_anulacion +
+    # metodo_devolucion) cuando no llega `modalidad_nc`.
+    modalidad_nc = (body.get('modalidad_nc') or '').strip().upper()
+    if modalidad_nc not in ('DEVOLUCION', 'INFORMATIVA', 'OCULTA'):
+        modalidad_nc = ''
+
     tipo_anulacion = body.get('tipo_anulacion', 'ANULACION')
     if tipo_anulacion not in ('ANULACION', 'DEVOLUCION'):
         tipo_anulacion = 'ANULACION'
 
     metodo_devolucion = body.get('metodo_devolucion', 'NO_AFECTA_CAJA')
     if metodo_devolucion not in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'NO_AFECTA_CAJA'):
+        metodo_devolucion = 'NO_AFECTA_CAJA'
+
+    if modalidad_nc == 'DEVOLUCION':
+        tipo_anulacion = 'DEVOLUCION'
+        if metodo_devolucion not in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA'):
+            metodo_devolucion = 'EFECTIVO_CAJA'
+    elif modalidad_nc in ('INFORMATIVA', 'OCULTA'):
+        tipo_anulacion = 'ANULACION'
         metodo_devolucion = 'NO_AFECTA_CAJA'
 
     if tipo_anulacion == 'ANULACION':
@@ -25096,31 +25136,73 @@ def anular_factura_dte(request):
                 dte=nc, metodo_pago='TRANSFERENCIA', monto=nc.monto_con_iva
             )
 
+        # Modalidad OCULTA: marcar la NC como descartada para excluirla
+        # tanto de la cuadratura de caja (filtro `descartado=False` en
+        # `_calcular_cuadratura_data`) como del listado de gestion-DTE
+        # (`listar_documentos_ventas` aplica el mismo filtro). La NC
+        # sigue existiendo en BD y el TXT Acepta se descarga normalmente,
+        # pero queda fuera del flujo de control de caja.
+        if modalidad_nc == 'OCULTA':
+            nc.descartado = True
+            nc.descartado_por = (request.user.username or 'sistema')[:100]
+            nc.fecha_descarte = timezone.now()
+            nc.motivo_descarte = (
+                f"NC oculta de cuadratura — {motivo_anulacion}"
+            )[:500] if motivo_anulacion else "NC oculta de cuadratura"
+            nc.save(update_fields=[
+                'descartado', 'descartado_por', 'fecha_descarte', 'motivo_descarte'
+            ])
+
         # Detalle de la NC:
         # - NC parcial por línea: una línea por producto afectado.
         # - NC total sin productos_afectados: copiar los productos 1:1 del DTE.
         # - NC parcial por monto (legacy): una línea genérica “Devolución parcial”.
+        #
+        # Propagamos `monto_item` y derivamos `precio` desde el monto cobrado
+        # cuando difiere de `dp.precio` (caso del "envío" con precio sistema
+        # fijo cobrado a otro precio en el POS). Esto asegura que la línea
+        # de la NC respete lo realmente cobrado y que el TXT cuadre con el
+        # cabezal de la NC.
+        def _precio_efectivo_dp(dp_src, qty):
+            qty = qty or 0
+            mi = int(dp_src.monto_item) if dp_src.monto_item else int((dp_src.stock or 0) * (dp_src.precio or 0))
+            if qty and mi:
+                # Precio por unidad realmente cobrado (proporcional a qty
+                # respecto al stock total del dp_src).
+                stock_src = int(dp_src.stock or 0) or qty
+                monto_proporcional = int(round(mi * (qty / stock_src)))
+                derivado = int(round(monto_proporcional / qty))
+                if derivado:
+                    return derivado, monto_proporcional
+            return int(dp_src.precio or 0), int((dp_src.precio or 0) * qty)
+
         if usa_productos_afectados:
             for dp, cantidad in lineas_afectadas:
+                p_eff, mi_eff = _precio_efectivo_dp(dp, cantidad)
                 Dte_Productos.objects.create(
                     dte=nc,
                     productoTalla=dp.productoTalla,
                     descripcion=f"[DEV -{cantidad}] {dp.descripcion}",
                     costo=dp.costo,
                     sobreprecio=dp.sobreprecio,
-                    precio=dp.precio,
+                    precio=p_eff,
+                    precio_unitario=p_eff,
+                    monto_item=mi_eff,
                     stock=cantidad,
                     activo=True,
                 )
         elif es_anulacion_total:
             for dp in dte.dte_productos.select_related('productoTalla__producto'):
+                p_eff, mi_eff = _precio_efectivo_dp(dp, dp.stock)
                 Dte_Productos.objects.create(
                     dte=nc,
                     productoTalla=dp.productoTalla,
                     descripcion=dp.descripcion,
                     costo=dp.costo,
                     sobreprecio=dp.sobreprecio,
-                    precio=dp.precio,
+                    precio=p_eff,
+                    precio_unitario=p_eff,
+                    monto_item=mi_eff,
                     stock=dp.stock,
                     activo=True
                 )
@@ -25442,8 +25524,14 @@ def anular_factura_dte(request):
         talla_nombre = str(dp.productoTalla.talla) if hasattr(dp.productoTalla, 'talla') and dp.productoTalla.talla else 'U'
         g['tallas'].append(f"{dp.stock}:{talla_nombre}")
         g['cantidad_total'] += dp.stock
-        g['precio'] = dp.precio
-        g['monto_total'] += dp.stock * dp.precio
+        # Preferimos el `monto_item` realmente cobrado (capturado al crear
+        # el DTE original desde el ticket) sobre `dp.precio * dp.stock`.
+        # Esto cubre el caso del "envío" con precio sistema fijo (500) que
+        # se cobra en realidad a otro precio (800): `dp.precio` puede
+        # quedar con el sistema, pero `monto_item` refleja lo cobrado.
+        monto_linea = int(dp.monto_item) if dp.monto_item else int((dp.stock or 0) * (dp.precio or 0))
+        g['monto_total'] += monto_linea
+        g['precio'] = dp.precio  # se usa solo como fallback si no hay cantidad
         g['articulo'] = producto.articulo
         if not g['marca'] and producto.atributo1:
             g['marca'] = producto.atributo1.valor
@@ -25457,12 +25545,22 @@ def anular_factura_dte(request):
         color_limpio = limpiar_texto(g['color'] or '')
         marca_color = f"{marca_limpia} {color_limpio}".strip()
         nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
+        # Red de seguridad: derivamos precio_unitario desde el monto total
+        # cobrado por la cantidad. Garantiza que `cantidad * precio_unitario
+        # == monto_item` y que la suma de líneas cuadre con el cabezal del
+        # DTE/NC, aunque `dp.precio` haya quedado mal en el origen.
+        cant = g['cantidad_total'] or 1
+        precio_efectivo = (
+            int(round(g['monto_total'] / cant))
+            if cant and g['monto_total']
+            else int(g['precio'] or 0)
+        )
         detalle.append({
             'nombre': limpiar_texto(nombre_final),
             'descripcion': '',
             'cantidad': g['cantidad_total'],
             'unidad': 'UN',
-            'precio_unitario': g['precio'],
+            'precio_unitario': precio_efectivo,
             'descuento_pct': 0,
             'monto_descuento': 0,
             'monto_item': g['monto_total'],
