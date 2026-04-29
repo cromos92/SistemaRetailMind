@@ -387,6 +387,23 @@
         color: var(--nexo-gray-600);
     }
 
+    .td-costo,
+    .td-precio {
+        text-align: right !important;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.72rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .td-costo {
+        color: var(--nexo-gray-700);
+    }
+
+    .td-precio {
+        color: var(--nexo-success);
+    }
+
     /* ========== HEADERS SUCURSALES ========== */
     .th-sucursal {
         background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #d4e4ff 100%) !important;
@@ -1043,6 +1060,8 @@ function renderizarTabla() {
                             <th style="text-align: left;" rowspan="2">Artículo</th>
                             <th style="text-align: left;" rowspan="2">Marca</th>
                             <th style="text-align: left;" rowspan="2">Color</th>
+                            <th style="text-align: right;" rowspan="2">Costo</th>
+                            <th style="text-align: right;" rowspan="2">P. Venta</th>
     `;
     
     // Headers sucursales
@@ -1066,6 +1085,8 @@ function renderizarTabla() {
                 <td class="td-articulo" title="${producto.articulo}">${producto.articulo}</td>
                 <td class="td-marca">${producto.marca}</td>
                 <td class="td-color">${producto.color}</td>
+                <td class="td-costo">${formatearMoneda(producto.costo)}</td>
+                <td class="td-precio">${formatearMoneda(producto.precio_venta)}</td>
         `;
         
         sucursalesList.forEach(suc => {
@@ -1180,6 +1201,16 @@ function exportarExcel() {
 function formatearNumero(num) {
     if (!num) return '0';
     return parseFloat(num).toLocaleString('es-CL', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    });
+}
+
+function formatearMoneda(num) {
+    if (num === null || num === undefined || num === '' || isNaN(num) || parseFloat(num) === 0) {
+        return '<span class="stock-empty stock-badge">-</span>';
+    }
+    return '$' + parseFloat(num).toLocaleString('es-CL', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
     });

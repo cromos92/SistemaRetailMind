@@ -5350,12 +5350,12 @@ def exportar_movimientos_sucursal_excel(request):
         
         # Headers fila 4
         row = 4
-        headers = ['Artículo', 'Marca', 'Color', 'Departamento']
-        
+        headers = ['Artículo', 'Marca', 'Color', 'Departamento', 'Costo', 'Precio Venta']
+
         sucursales_nombres = [s.alias for s in sucursales_list]
         for suc in sucursales_nombres:
             headers.extend([f'{suc} Recib.', f'{suc} Rest.'])
-        
+
         headers.extend(['TOTAL Recib.', 'TOTAL Rest.', 'VENDIDO'])
         
         for col, header in enumerate(headers, 1):
@@ -5388,6 +5388,21 @@ def exportar_movimientos_sucursal_excel(request):
                 ws.cell(row=row, column=col, value=producto.atributo2.valor if producto.atributo2 else '-').border = border
                 col += 1
                 ws.cell(row=row, column=col, value=producto.categoria.nombre if producto.categoria else '-').border = border
+                col += 1
+
+                costo_val = float(producto.costo) if producto.costo else 0
+                cell_costo = ws.cell(row=row, column=col, value=costo_val)
+                cell_costo.border = border
+                cell_costo.number_format = '"$"#,##0'
+                cell_costo.alignment = Alignment(horizontal='right')
+                col += 1
+
+                precio_val = float(producto.precioventa) if producto.precioventa else 0
+                cell_precio = ws.cell(row=row, column=col, value=precio_val)
+                cell_precio.border = border
+                cell_precio.number_format = '"$"#,##0'
+                cell_precio.alignment = Alignment(horizontal='right')
+                cell_precio.font = Font(bold=True, color="00875A")
                 col += 1
 
                 # Datos por sucursal (desde los mapas, sin queries)
@@ -5435,8 +5450,10 @@ def exportar_movimientos_sucursal_excel(request):
         ws.column_dimensions['B'].width = 18
         ws.column_dimensions['C'].width = 15
         ws.column_dimensions['D'].width = 18
-        
-        for col in range(5, len(headers) + 1):
+        ws.column_dimensions['E'].width = 13
+        ws.column_dimensions['F'].width = 13
+
+        for col in range(7, len(headers) + 1):
             ws.column_dimensions[get_column_letter(col)].width = 10
         
         # Preparar respuesta
