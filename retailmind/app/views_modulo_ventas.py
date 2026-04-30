@@ -1762,11 +1762,25 @@ def anular_ticket_pendiente(request):
 def buscar_cliente_rut(request):
     """API para buscar cliente por RUT.
 
-    Busca en este orden:
-      1. Tabla `Cliente` (CRM clásico).
-      2. Tabla `Empresa` (clientes creados desde POS / gestion-DTE → NCN,
-         que graban vía `guardar_cliente_pos`).
-      3. Tickets anteriores (histórico de ventas).
+    Busca en este orden y prioriza el match en `Empresa` para devolver
+    `cliente_id` (porque el receptor de un DTE/NC es FK a `Empresa`,
+    no a `Cliente` ni a `Ticket`):
+      1. Tabla `Empresa` (clientes creados desde POS / gestion-DTE → NCN,
+         o sincronizados desde Acepta — son receptor válido de DTE).
+      2. Tabla `Cliente` (CRM clásico — solo enriquece datos, NO sirve
+         como id de receptor de DTE).
+      3. Tickets anteriores (histórico de ventas, igual: solo enriquece).
+
+    Convención de respuesta:
+      - `cliente_id`: SOLO se devuelve cuando el match es en `Empresa`.
+        Es el id que se debe pasar a `asignar_receptor_dte` y a
+        `anular_factura_dte` como `cliente_id`.
+      - `cliente_origen`: 'EMPRESA' | 'CRM' | 'TICKET' — útil para que
+        el frontend decida si mandar `cliente_id` o sólo RUT + datos.
+      - Cuando es CRM/TICKET, `cliente_id` queda fuera de la respuesta
+        para evitar la confusión de IDs cruzados que provocaba el error
+        "El cliente seleccionado no existe" al intentar usar un Cliente.id
+        (CRM) como Empresa.id.
     """
     from app.models import Cliente, Empresa
 
@@ -1782,7 +1796,37 @@ def buscar_cliente_rut(request):
         rut_limpio = rut.replace('.', '').replace('-', '').strip()
         rut_formateado = formatear_rut(rut_limpio)
 
-        # 1) Tabla de Clientes (CRM)
+        # 1) Tabla Empresa — match aquí da cliente_id usable como receptor.
+        empresa_cliente = Empresa.objects.filter(
+            Q(rut__iexact=rut_formateado) |
+            Q(rut__iexact=rut) |
+            Q(rut__icontains=rut_limpio)
+        ).filter(esProveedor=False).order_by('-id').first()
+
+        if empresa_cliente:
+            cliente_data = {
+                'nombre': empresa_cliente.nombre or empresa_cliente.razon_social or '',
+                'rut': empresa_cliente.rut,
+                'email': empresa_cliente.correoVendedor or empresa_cliente.email or '',
+                'telefono': empresa_cliente.contacto1 or empresa_cliente.telefono or '',
+                'giro': empresa_cliente.giro or '',
+                'comuna': empresa_cliente.comuna or '',
+                'ciudad': empresa_cliente.ciudad or '',
+                'direccion': empresa_cliente.direccion or '',
+                'telefono_secundario': empresa_cliente.contacto2 or '',
+                'email_facturacion': empresa_cliente.correoAdministrador or '',
+            }
+            return JsonResponse({
+                'success': True,
+                'cliente': cliente_data,
+                'mensaje': 'Cliente encontrado en empresas',
+                'cliente_id': empresa_cliente.id,
+                'cliente_origen': 'EMPRESA',
+            })
+
+        # 2) Tabla Cliente (CRM): solo enriquece datos para auto-llenar el form.
+        # NO se devuelve `cliente_id` porque ese id es de Cliente, no de Empresa,
+        # y al usarlo como receptor explotaba con "El cliente seleccionado no existe".
         cliente = Cliente.objects.filter(
             Q(rut__iexact=rut_formateado) |
             Q(rut__icontains=rut_limpio)
@@ -1801,42 +1845,16 @@ def buscar_cliente_rut(request):
                 'telefono_secundario': cliente.celular if cliente.telefono else '',
                 'email_facturacion': cliente.email or '',
             }
-
             return JsonResponse({
                 'success': True,
                 'cliente': cliente_data,
-                'mensaje': 'Cliente encontrado en base de datos',
-                'cliente_id': cliente.id
+                'mensaje': 'Cliente encontrado en CRM (se creará Empresa al asignar)',
+                'cliente_origen': 'CRM',
+                # No incluimos cliente_id: el backend resolverá por RUT y, si
+                # es necesario, creará la Empresa con los datos del cliente.
             })
 
-        # 2) Tabla Empresa (clientes creados desde POS / NCN en gestion-DTE)
-        empresa_cliente = Empresa.objects.filter(
-            Q(rut__iexact=rut_formateado) |
-            Q(rut__icontains=rut_limpio)
-        ).filter(esProveedor=False).order_by('-id').first()
-
-        if empresa_cliente:
-            cliente_data = {
-                'nombre': empresa_cliente.nombre or empresa_cliente.razon_social or '',
-                'rut': empresa_cliente.rut,
-                'email': empresa_cliente.correoVendedor or empresa_cliente.email or '',
-                'telefono': empresa_cliente.contacto1 or empresa_cliente.telefono or '',
-                'giro': empresa_cliente.giro or '',
-                'comuna': empresa_cliente.comuna or '',
-                'ciudad': empresa_cliente.ciudad or '',
-                'direccion': empresa_cliente.direccion or '',
-                'telefono_secundario': empresa_cliente.contacto2 or '',
-                'email_facturacion': empresa_cliente.correoAdministrador or '',
-            }
-
-            return JsonResponse({
-                'success': True,
-                'cliente': cliente_data,
-                'mensaje': 'Cliente encontrado en empresas',
-                'cliente_id': empresa_cliente.id
-            })
-
-        # 3) Histórico de tickets
+        # 3) Histórico de tickets: igual que CRM, solo enriquece datos.
         ticket_con_cliente = Ticket.objects.filter(
             Q(cliente_rut__iexact=rut_formateado) |
             Q(cliente_rut__icontains=rut_limpio)
@@ -1859,11 +1877,11 @@ def buscar_cliente_rut(request):
                 'telefono_secundario': ticket_con_cliente.cliente_telefono_secundario or '',
                 'email_facturacion': ticket_con_cliente.cliente_email_facturacion or '',
             }
-
             return JsonResponse({
                 'success': True,
                 'cliente': cliente_data,
-                'mensaje': 'Cliente encontrado en tickets anteriores'
+                'mensaje': 'Cliente encontrado en tickets anteriores',
+                'cliente_origen': 'TICKET',
             })
 
         return JsonResponse({
@@ -3691,17 +3709,28 @@ def gestion_ventas_documentos(request):
         'puede_editar_fecha_dte': permisos_dte['campo']['fecha'],
         'puede_editar_numero_dte': permisos_dte['campo']['numero_documento'],
         'puede_editar_pago_dte': permisos_dte['campo']['pago'],
-        # Permiso para cambiar el vendedor asignado al DTE. Si False
-        # el campo se muestra deshabilitado en el modal de edición y
-        # el endpoint rechaza el cambio en runtime.
-        'puede_editar_vendedor_dte': permisos_dte['campo'].get('vendedor', False),
+        # Permiso para cambiar el vendedor asignado al DTE.
+        # Bypass: el rol `administrador` siempre puede editar vendedor,
+        # consistente con el resto de operaciones admin-only del módulo
+        # (`crear_dte_manual`, `eliminar_documento_venta`). Esto evita
+        # que el usuario quede bloqueado cuando la migración
+        # `0151_permiso_dte_editar_vendedor` aún no se ha aplicado en
+        # el servidor; otros roles siguen necesitando el permiso
+        # granular `dte_editar_vendedor.puede_editar`.
+        'puede_editar_vendedor_dte': (
+            es_admin or permisos_dte['campo'].get('vendedor', False)
+        ),
         # Flags por tipo de DTE (nombre amigable: sin espacios para usar en template)
         'puede_editar_tipo_boleta_electronica': permisos_dte['tipo']['BOLETA ELECTRONICA'],
         'puede_editar_tipo_boleta_papel': permisos_dte['tipo']['BOLETA PAPEL'],
         'puede_editar_tipo_factura_electronica': permisos_dte['tipo']['FACTURA ELECTRONICA'],
         'puede_editar_tipo_factura_exenta': permisos_dte['tipo']['FACTURA EXENTA'],
-        # ¿Puede editar algo en algún tipo? → controla visibilidad del modal
-        'puede_editar_algun_dte': permisos_dte['cualquiera'],
+        # ¿Puede editar algo en algún tipo? → controla visibilidad del modal.
+        # Admin siempre lo ve (consistente con el bypass aplicado al
+        # resto de los flags por campo y por tipo). Los demás roles
+        # se rigen por `permisos_dte['cualquiera']` (al menos un par
+        # campo+tipo habilitado).
+        'puede_editar_algun_dte': es_admin or permisos_dte['cualquiera'],
         # Mapa serializado {tipo_origen: [tipos_destino]} para el JS del modal
         # (usado para mostrar el selector "Tipo de Documento" en cambios
         # compatibles, p. ej. BOLETA ELECTRONICA ↔ BOLETA PAPEL).
@@ -5284,9 +5313,20 @@ def editar_dte_boleta_papel(request):
                 }, status=403)
 
             # Validar permisos campo + tipo para cada cambio solicitado.
+            #
+            # El rol `administrador` salta la matriz de permisos
+            # granulares (mismo bypass que se usa en `crear_dte_manual`
+            # y `eliminar_documento_venta`). Esto deja el sistema
+            # operativo aunque alguna migración de permisos granulares
+            # (0140 / 0151) no se haya aplicado todavía.
             errores_permiso = []
+            es_admin_request = (
+                getattr(request.user, 'rol', '') == 'administrador'
+            )
 
             def _check(campo):
+                if es_admin_request:
+                    return
                 if not puede_editar_campo_dte(
                     request.user, campo, dte.tipo_documento,
                     sucursal_id=sucursal_id_sesion,

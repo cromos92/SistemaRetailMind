@@ -2402,8 +2402,13 @@
             if (data.success && data.cliente) {
                 const c = data.cliente;
                 nombreInput.value = c.nombre || '';
+                // cliente_id solo se usa como receptor cuando viene de la
+                // tabla Empresa (cliente_origen === 'EMPRESA'). Si viene de
+                // CRM o TICKET, el id es de OTRA tabla y el backend
+                // resolverá por RUT (creando Empresa si no existe).
+                const idValido = (data.cliente_origen === 'EMPRESA') ? (data.cliente_id || null) : null;
                 window._editNcClienteState = {
-                    clienteId: data.cliente_id || null,
+                    clienteId: idValido,
                     clienteRut: c.rut || rut,
                     clienteNombre: c.nombre || '',
                     clienteGiro: c.giro || '',
@@ -2413,9 +2418,14 @@
                     clienteEmail: c.email || '',
                     clienteTelefono: c.telefono || '',
                     clienteCambio: true,
+                    clienteOrigen: data.cliente_origen || null,
                 };
                 estado.className = 'badge bg-success d-inline-block w-100 py-1';
-                estado.innerHTML = '<i class="bi bi-check-circle me-1"></i>Encontrado';
+                let etiquetaOrigen = '';
+                if (data.cliente_origen === 'EMPRESA') etiquetaOrigen = '';
+                else if (data.cliente_origen === 'CRM') etiquetaOrigen = ' (CRM)';
+                else if (data.cliente_origen === 'TICKET') etiquetaOrigen = ' (Ticket)';
+                estado.innerHTML = '<i class="bi bi-check-circle me-1"></i>Encontrado' + etiquetaOrigen;
                 document.getElementById('editNcCrearClienteAlert').classList.add('d-none');
             } else {
                 nombreInput.value = '';
@@ -2927,10 +2937,20 @@
                     nombreInput.value = data.cliente.nombre || '';
                     nombreInput.readOnly = true;
                     nombreInput.style.background = '#d1e7dd';
-                    clienteIdInput.value = data.cliente_id || '';
+                    // El input oculto `anulClienteId` viaja como `cliente_id`
+                    // a /app/documentos/anular-factura/, donde se usa como
+                    // FK a Empresa. Solo lo seteamos si el match vino de la
+                    // tabla Empresa; en CRM/TICKET el backend resolverá por
+                    // RUT (creando Empresa si hace falta).
+                    clienteIdInput.value = (data.cliente_origen === 'EMPRESA')
+                        ? (data.cliente_id || '')
+                        : '';
                     estadoBadge.className = 'badge bg-success d-inline-block w-100 py-2';
                     estadoBadge.style.fontSize = '0.72rem';
-                    estadoBadge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Cliente encontrado';
+                    let etiquetaOrigenAnul = '';
+                    if (data.cliente_origen === 'CRM') etiquetaOrigenAnul = ' (CRM)';
+                    else if (data.cliente_origen === 'TICKET') etiquetaOrigenAnul = ' (Ticket)';
+                    estadoBadge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Cliente encontrado' + etiquetaOrigenAnul;
                     noEncontradoDiv.classList.add('d-none');
                     extraDiv.classList.add('d-none');
                     if (data.cliente.email) {
@@ -3139,7 +3159,12 @@
         if (clienteEncontrado) {
             // 2a) Confirmar uso del cliente encontrado
             const c = clienteEncontrado.cliente;
-            const cId = clienteEncontrado.cliente_id || null;
+            // cliente_id solo es válido como receptor si vino de la tabla
+            // Empresa. CRM/Ticket comparten endpoint pero distintos espacios
+            // de id, así que en esos casos forzamos resolución por RUT.
+            const cId = (clienteEncontrado.cliente_origen === 'EMPRESA')
+                ? (clienteEncontrado.cliente_id || null)
+                : null;
             const { isConfirmed } = await Swal.fire({
                 title: 'Cliente encontrado',
                 html: `

@@ -1174,12 +1174,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function puedeEditarCampoEnTipo(campo, tipoDte) {
         if (!campo) return false;
+        // El administrador siempre puede editar (mismo bypass que el
+        // backend en `editar_dte_boleta_papel` y `crear_dte_manual`).
+        // Mantiene la consistencia con el resto del módulo: la matriz
+        // granular sólo se aplica a roles no-admin.
+        if (esAdmin) return true;
         if (!permisoCampoDte[campo]) return false;
         if (!tipoDte) return false;
         return !!permisoTipoDte[tipoDte];
     }
 
     function dteTieneAlgunCampoEditable(tipoDte) {
+        if (esAdmin) return true;
         if (!permisoTipoDte[tipoDte]) return false;
         const algunCampo = !!(permisoCampoDte.numero_documento
                            || permisoCampoDte.fecha
@@ -2471,20 +2477,38 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
 
-    // Mostrar/ocultar campos extra (tipo_tarjeta, voucher) según el
-    // método de pago seleccionado. Para Transbank y Venta Internet
-    // estos datos son útiles para que la cuadratura clasifique por
-    // plataforma o canal. Además inicializa Select2 (con búsqueda por
-    // texto) sobre los selects de Vendedor y Método de pago al abrir
-    // el modal, anclando el dropdown al modal mismo (`dropdownParent`)
-    // para que no se corte por el `overflow:hidden` del modal-body.
+    // matcher Select2 reutilizable: además de buscar por el texto
+    // visible de la opción, matchea también por el atributo
+    // `data-sucursales` (alias de sucursales del vendedor) — útil
+    // para encontrar a un vendedor por su tienda. Funciona aunque
+    // jQuery todavía no esté cargado en runtime: se referencia por
+    // nombre dentro de los callbacks de inicialización.
+    function buildSelect2MatcherSucursales($) {
+        return function(params, data) {
+            if ($.trim(params.term) === '') return data;
+            if (!data || !data.id) return null;
+            const term = params.term.toLowerCase();
+            const text = (data.text || '').toLowerCase();
+            const $opt = data.element ? $(data.element) : null;
+            const sucursales = ($opt && $opt.attr('data-sucursales') || '').toLowerCase();
+            if (text.indexOf(term) > -1 || sucursales.indexOf(term) > -1) {
+                return data;
+            }
+            return null;
+        };
+    }
+
+    // === DTE manual: campos extra dependientes del método de pago ===
+    // Mostrar/ocultar tipo_tarjeta y voucher según el método. Sólo se
+    // engancha si el modal de creación está renderizado (admin); de
+    // lo contrario silenciosamente no hace nada.
     document.addEventListener('DOMContentLoaded', () => {
-        const select = document.getElementById('dteManualMetodo');
-        if (!select) return;
+        const selectMetodo = document.getElementById('dteManualMetodo');
+        if (!selectMetodo) return;
         const wrapTarjeta = document.getElementById('dteManualWrapTipoTarjeta');
         const wrapVoucher = document.getElementById('dteManualWrapVoucher');
         const sync = () => {
-            const m = (select.value || '').toUpperCase();
+            const m = (selectMetodo.value || '').toUpperCase();
             const usaTarjeta = m === 'VENTA_INTERNET'
                 || m === 'TARJETA_DEBITO' || m === 'TARJETA_CREDITO'
                 || m === 'TARJETA_COMERCIAL'
@@ -2493,44 +2517,35 @@ document.addEventListener('DOMContentLoaded', function() {
             if (wrapTarjeta) wrapTarjeta.style.display = usaTarjeta ? '' : 'none';
             if (wrapVoucher) wrapVoucher.style.display = usaVoucher ? '' : 'none';
         };
-        select.addEventListener('change', sync);
+        selectMetodo.addEventListener('change', sync);
         sync();
+    });
 
-        // Select2 sólo si jQuery + plugin están disponibles (el footer
-        // global los carga, pero defendemos por si en algún ambiente no
-        // están).
+    // === Select2 en el modal de Crear DTE manual ===
+    // Anclamos el dropdown al modal (`dropdownParent`) para evitar que
+    // se corte por el `overflow:hidden` del modal-body.
+    document.addEventListener('DOMContentLoaded', () => {
         const modalEl = document.getElementById('modalCrearDteManual');
-        if (modalEl && window.jQuery && jQuery.fn && jQuery.fn.select2) {
-            const $ = window.jQuery;
-            // matcher custom: además de buscar por el texto visible de
-            // la opción, también matchea por el atributo
-            // `data-sucursales` (alias de sucursales del vendedor),
-            // útil para encontrar a un vendedor por su tienda.
-            const matcherSucursales = function(params, data) {
-                if ($.trim(params.term) === '') return data;
-                if (!data || !data.id) return null;
-                const term = params.term.toLowerCase();
-                const text = (data.text || '').toLowerCase();
-                const $opt = data.element ? $(data.element) : null;
-                const sucursales = ($opt && $opt.attr('data-sucursales') || '').toLowerCase();
-                if (text.indexOf(term) > -1 || sucursales.indexOf(term) > -1) {
-                    return data;
-                }
-                return null;
-            };
+        if (!modalEl) return;
+        if (!(window.jQuery && jQuery.fn && jQuery.fn.select2)) return;
+        const $ = window.jQuery;
+        const matcher = buildSelect2MatcherSucursales($);
 
-            modalEl.addEventListener('shown.bs.modal', () => {
+        modalEl.addEventListener('shown.bs.modal', () => {
+            if (!$('#dteManualVendedor').data('select2')) {
                 $('#dteManualVendedor').select2({
                     dropdownParent: $(modalEl),
                     placeholder: 'Buscar vendedor por código, nombre o sucursal…',
                     allowClear: false,
                     width: '100%',
-                    matcher: matcherSucursales,
+                    matcher: matcher,
                     language: {
                         noResults: () => 'Sin resultados',
                         searching: () => 'Buscando…',
                     },
                 });
+            }
+            if (!$('#dteManualMetodo').data('select2')) {
                 $('#dteManualMetodo').select2({
                     dropdownParent: $(modalEl),
                     placeholder: 'Buscar método de pago…',
@@ -2541,64 +2556,58 @@ document.addEventListener('DOMContentLoaded', function() {
                         searching: () => 'Buscando…',
                     },
                 });
-                // Re-evaluar campos extra en caso que se haya
-                // pre-seleccionado un método de pago.
-                sync();
-            });
+            }
+            // Re-evaluar campos extra (tipo_tarjeta, voucher) por si
+            // venía pre-seleccionado un método. El listener de `change`
+            // del primer `DOMContentLoaded` se encarga de sincronizar
+            // los wrappers.
+            const m = document.getElementById('dteManualMetodo');
+            if (m) m.dispatchEvent(new Event('change'));
+        });
 
-            // Al cerrar el modal limpiamos el estado del Select2 para
-            // que no queden valores entre aperturas.
-            modalEl.addEventListener('hidden.bs.modal', () => {
-                if ($('#dteManualVendedor').data('select2')) {
-                    $('#dteManualVendedor').val('').trigger('change');
-                }
-                if ($('#dteManualMetodo').data('select2')) {
-                    $('#dteManualMetodo').val('').trigger('change');
-                }
-            });
-        }
+        // Al cerrar el modal limpiamos el estado del Select2.
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            if ($('#dteManualVendedor').data('select2')) {
+                $('#dteManualVendedor').val('').trigger('change');
+            }
+            if ($('#dteManualMetodo').data('select2')) {
+                $('#dteManualMetodo').val('').trigger('change');
+            }
+        });
+    });
 
-        // Select2 sobre el campo Vendedor del modal de edición de DTE.
-        // Se inicializa cuando el modal se muestra para asegurar que el
-        // contenedor exista (DOM ya rendido) y se aplica el matcher
-        // custom para buscar también por alias de sucursal.
+    // === Select2 en el modal de Editar DTE (campo Vendedor) ===
+    // INDEPENDIENTE del modal de Crear: se inicializa siempre que el
+    // modal de edición esté renderizado en la página (gateado por
+    // `puede_editar_algun_dte`), aunque el usuario no tenga permiso
+    // para crear DTEs manuales.
+    document.addEventListener('DOMContentLoaded', () => {
         const modalEditEl = document.getElementById('modalEditarBoletaPapel');
-        if (modalEditEl && window.jQuery && jQuery.fn && jQuery.fn.select2) {
-            const $ = window.jQuery;
-            const matcherSucursalesEdit = function(params, data) {
-                if ($.trim(params.term) === '') return data;
-                if (!data || !data.id) return null;
-                const term = params.term.toLowerCase();
-                const text = (data.text || '').toLowerCase();
-                const $opt = data.element ? $(data.element) : null;
-                const sucursales = ($opt && $opt.attr('data-sucursales') || '').toLowerCase();
-                if (text.indexOf(term) > -1 || sucursales.indexOf(term) > -1) {
-                    return data;
-                }
-                return null;
-            };
+        if (!modalEditEl) return;
+        if (!(window.jQuery && jQuery.fn && jQuery.fn.select2)) return;
+        const $ = window.jQuery;
+        const matcher = buildSelect2MatcherSucursales($);
 
-            modalEditEl.addEventListener('shown.bs.modal', () => {
-                const $sel = $('#editarBoletaPapelVendedor');
-                if (!$sel.length) return;
-                if (!$sel.data('select2')) {
-                    $sel.select2({
-                        dropdownParent: $(modalEditEl),
-                        placeholder: 'Buscar vendedor por código, nombre o sucursal…',
-                        allowClear: false,
-                        width: '100%',
-                        matcher: matcherSucursalesEdit,
-                        language: {
-                            noResults: () => 'Sin resultados',
-                            searching: () => 'Buscando…',
-                        },
-                    });
-                }
-                // Forzar actualización visual al pre-seleccionar el
-                // valor original del DTE (asignado en abrirEditarBoletaPapel).
-                $sel.trigger('change.select2');
-            });
-        }
+        modalEditEl.addEventListener('shown.bs.modal', () => {
+            const $sel = $('#editarBoletaPapelVendedor');
+            if (!$sel.length) return;
+            if (!$sel.data('select2')) {
+                $sel.select2({
+                    dropdownParent: $(modalEditEl),
+                    placeholder: 'Buscar vendedor por código, nombre o sucursal…',
+                    allowClear: false,
+                    width: '100%',
+                    matcher: matcher,
+                    language: {
+                        noResults: () => 'Sin resultados',
+                        searching: () => 'Buscando…',
+                    },
+                });
+            }
+            // Forzar actualización visual: el valor original lo asigna
+            // `abrirEditarBoletaPapel` antes de mostrar el modal.
+            $sel.trigger('change.select2');
+        });
     });
 
     window.cambiarPagina = function(pagina) {

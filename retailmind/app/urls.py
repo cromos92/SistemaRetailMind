@@ -1058,6 +1058,7 @@ urlpatterns = [
     path('reportes/ventas-sucursal/', views_modulo_reportes.ver_reporte_ventas_sucursal, name='ver_reporte_ventas_sucursal'),
     path('api/reportes/ventas-por-vendedor/', views_modulo_reportes.obtener_ventas_por_vendedor_reporte, name='obtener_ventas_por_vendedor_reporte'),
     path('api/reportes/ventas-por-sucursal/', views_modulo_reportes.obtener_ventas_por_sucursal_reporte, name='obtener_ventas_por_sucursal_reporte'),
+    path('api/reportes/diagnostico-cuadratura/', views_modulo_reportes.api_diagnostico_cuadratura_vs_reporte, name='api_diagnostico_cuadratura'),
     path('api/reportes/comisiones-vendedor/', views_modulo_reportes.obtener_comisiones_por_vendedor, name='obtener_comisiones_por_vendedor'),
     path('api/reportes/comisiones-vendedor/exportar/', views_modulo_reportes.exportar_comisiones_vendedor_excel, name='exportar_comisiones_vendedor_excel'),
     path('reportes/ventas-global/', views_modulo_reportes.ver_reporte_ventas_global, name='ver_reporte_ventas_global'),

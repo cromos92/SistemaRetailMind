@@ -25987,16 +25987,22 @@ def asignar_receptor_dte(request):
         }, status=400)
 
     # ---- Resolver Empresa receptora ----
+    # Estrategia tolerante: si llega cliente_id que no existe en Empresa
+    # (por ejemplo porque vino de un Cliente CRM o de un endpoint que
+    # mezclaba IDs), no fallar inmediatamente: intentar resolver por
+    # cliente_rut. Solo se rinde si AMBAS rutas fallan.
     receptor = None
+    cliente_id_invalido = False
 
     if cliente_id_in:
         try:
             receptor = Empresa.objects.get(id=int(cliente_id_in))
         except (Empresa.DoesNotExist, TypeError, ValueError):
-            return JsonResponse({
-                'success': False,
-                'error': 'El cliente seleccionado no existe.'
-            }, status=400)
+            cliente_id_invalido = True
+            logger.warning(
+                "asignar_receptor_dte: cliente_id=%s no existe en Empresa "
+                "(fallback a cliente_rut=%s)", cliente_id_in, cliente_rut
+            )
 
     if receptor is None and cliente_rut:
         rut_norm = _fmt_rut(cliente_rut)
