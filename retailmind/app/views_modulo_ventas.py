@@ -3648,20 +3648,32 @@ def gestion_ventas_documentos(request):
     # extremos del grupo, para que el frontend pueda ofrecer el cambio.
     compatibles_por_tipo = permisos_dte.get('compatibles_por_tipo', {})
 
-    # Vendedores de la sucursal activa, para poblar el selector del modal
-    # "DTE manual". Se exponen solo los activos y asignados a esta
-    # sucursal (M2M `Vendedor.sucursales`). Si no hay sucursal activa la
-    # lista queda vacía y el modal lo refleja.
-    if sucursal_actual_id:
-        vendedores_sucursal = list(
-            Vendedor.objects
-            .filter(sucursales__id=sucursal_actual_id, activo=True)
-            .order_by('nombre')
-            .values('id', 'nombre', 'codigo_vendedor')
-            .distinct()
+    # Vendedores para el selector del modal "DTE manual".
+    # Se devuelven TODOS los vendedores activos sin filtrar por sucursal,
+    # porque puede existir el caso en el que un vendedor opera en una
+    # sucursal a la que no está asignado vía M2M (datos migrados,
+    # cobertura ad-hoc, etc.) y el operador igual necesita poder
+    # seleccionarlo. Se incluye la lista de alias de sucursales
+    # asignadas para que el buscador del Select2 pueda matchear por
+    # sucursal además del nombre/código del vendedor.
+    vendedores_qs = (
+        Vendedor.objects
+        .filter(activo=True)
+        .prefetch_related('sucursales')
+        .order_by('nombre')
+    )
+    vendedores_sucursal = []
+    for v in vendedores_qs:
+        sucursales_alias = sorted(
+            (s.alias or s.direccion or '') for s in v.sucursales.all()
+            if (s.alias or s.direccion)
         )
-    else:
-        vendedores_sucursal = []
+        vendedores_sucursal.append({
+            'id': v.id,
+            'nombre': v.nombre or '',
+            'codigo_vendedor': v.codigo_vendedor or '',
+            'sucursales_str': ', '.join(sucursales_alias),
+        })
 
     # Hoy en zona horaria Chile: se usa como `value` por defecto del
     # input de fecha en el modal de DTE manual (regla timezone-chile).
@@ -3679,6 +3691,10 @@ def gestion_ventas_documentos(request):
         'puede_editar_fecha_dte': permisos_dte['campo']['fecha'],
         'puede_editar_numero_dte': permisos_dte['campo']['numero_documento'],
         'puede_editar_pago_dte': permisos_dte['campo']['pago'],
+        # Permiso para cambiar el vendedor asignado al DTE. Si False
+        # el campo se muestra deshabilitado en el modal de edición y
+        # el endpoint rechaza el cambio en runtime.
+        'puede_editar_vendedor_dte': permisos_dte['campo'].get('vendedor', False),
         # Flags por tipo de DTE (nombre amigable: sin espacios para usar en template)
         'puede_editar_tipo_boleta_electronica': permisos_dte['tipo']['BOLETA ELECTRONICA'],
         'puede_editar_tipo_boleta_papel': permisos_dte['tipo']['BOLETA PAPEL'],
@@ -4016,6 +4032,7 @@ def listar_documentos_ventas(request):
                 'cliente_email': dte.receptor.correoVendedor if dte.receptor else '',
                 'cliente_direccion': dte.receptor.direccion if dte.receptor else '',
                 'cliente_comuna': dte.receptor.comuna if dte.receptor else '',
+                'vendedor_id': dte.vendedor_id,
                 'vendedor_nombre': (
                     f"{dte.vendedor.codigo_vendedor} - {dte.vendedor.nombre}"
                     if dte.vendedor else 'Sin vendedor'
@@ -5055,6 +5072,7 @@ def editar_dte_boleta_papel(request):
            - fecha            -> `dte_editar_fecha`
            - numero_documento -> `dte_editar_numero`
            - pago             -> `dte_editar_pago`
+           - vendedor         -> `dte_editar_vendedor`
 
       2. Permiso del tipo de DTE:
            - BOLETA ELECTRONICA   -> `dte_editar_tipo_boleta_electronica`
@@ -5094,8 +5112,15 @@ def editar_dte_boleta_papel(request):
         tiene_fecha = 'fecha_emision' in data and data.get('fecha_emision') is not None
         tiene_pagos = 'pagos' in data and data.get('pagos') is not None
         tiene_tipo = 'tipo_documento' in data and data.get('tipo_documento') is not None
+        # vendedor_id puede llegar como null/"" para "no tocar"; sólo se
+        # considera "cambio solicitado" si trae un valor entero válido.
+        tiene_vendedor = (
+            'vendedor_id' in data
+            and data.get('vendedor_id') is not None
+            and str(data.get('vendedor_id')).strip() != ''
+        )
 
-        if not (tiene_numero or tiene_fecha or tiene_pagos or tiene_tipo):
+        if not (tiene_numero or tiene_fecha or tiene_pagos or tiene_tipo or tiene_vendedor):
             return JsonResponse({
                 'success': False,
                 'error': 'No se enviaron campos para editar'
@@ -5137,6 +5162,21 @@ def editar_dte_boleta_papel(request):
                 return JsonResponse({
                     'success': False,
                     'error': f'Tipo de documento destino no soportado: {nuevo_tipo}'
+                })
+
+        nuevo_vendedor_id = None
+        if tiene_vendedor:
+            try:
+                nuevo_vendedor_id = int(data.get('vendedor_id'))
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'vendedor_id inválido'
+                })
+            if nuevo_vendedor_id <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'vendedor_id debe ser un entero positivo'
                 })
 
         pagos_payload = []
@@ -5259,12 +5299,15 @@ def editar_dte_boleta_papel(request):
                 _check('fecha')
             if tiene_pagos:
                 _check('pago')
+            if tiene_vendedor:
+                _check('vendedor')
 
             if errores_permiso:
                 labels = {
                     'numero_documento': 'N° documento',
                     'fecha': 'fecha',
                     'pago': 'pagos',
+                    'vendedor': 'vendedor',
                 }
                 campos_txt = ', '.join(labels.get(c, c) for c in errores_permiso)
                 return JsonResponse({
@@ -5274,6 +5317,31 @@ def editar_dte_boleta_papel(request):
                         f'{dte.tipo_documento}'
                     )
                 }, status=403)
+
+            # Validar que el vendedor solicitado exista y esté activo.
+            # El cambio sólo tiene sentido si difiere del actual; si es
+            # el mismo lo silenciamos (sin error) para que un guardado
+            # repetido no pinche.
+            cambiar_vendedor = False
+            vendedor_obj = None
+            if tiene_vendedor and nuevo_vendedor_id != (dte.vendedor_id or None):
+                vendedor_obj = (
+                    Vendedor.objects.filter(id=nuevo_vendedor_id).first()
+                )
+                if not vendedor_obj:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Vendedor no encontrado',
+                    }, status=400)
+                if not getattr(vendedor_obj, 'activo', True):
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            'No se puede asignar un vendedor inactivo '
+                            f'({vendedor_obj.nombre or vendedor_obj.codigo_vendedor})'
+                        ),
+                    }, status=400)
+                cambiar_vendedor = True
 
             # --- Validación de cambio de TIPO (solo pares compatibles) ---
             # Nota: se permite en cualquier estado excepto ANULADO (ya
@@ -5468,6 +5536,10 @@ def editar_dte_boleta_papel(request):
                     dte.fecha_vencimiento = fecha_parsed
                     update_fields.append('fecha_vencimiento')
 
+            if cambiar_vendedor and vendedor_obj is not None:
+                dte.vendedor = vendedor_obj
+                update_fields.append('vendedor')
+
             if update_fields:
                 dte.save(update_fields=update_fields)
 
@@ -5629,6 +5701,12 @@ def editar_dte_boleta_papel(request):
                 ),
                 'pagos_actualizados': len(pagos_actualizar),
                 'tipo_cambiado': cambiar_tipo,
+                'vendedor_cambiado': cambiar_vendedor,
+                'vendedor_id': dte.vendedor_id,
+                'vendedor_nombre': (
+                    f"{dte.vendedor.codigo_vendedor} - {dte.vendedor.nombre}"
+                    if dte.vendedor else None
+                ),
                 'ticket_sincronizado': ticket_sincronizado,
                 'ticket_id': ticket_vinculado.pk if ticket_vinculado else None,
                 'ticket_pagos_sincronizados': ticket_pagos_sincronizados,

@@ -260,6 +260,30 @@
                     </div>
                 </div>
 
+                <!-- Edición de vendedor: requiere permiso `dte_editar_vendedor`     -->
+                <!-- + el permiso del tipo de DTE. Si el rol no tiene `puede_editar` -->
+                <!-- el select queda deshabilitado y se muestra el ícono de candado. -->
+                <div class="mt-2" data-campo="vendedor">
+                    <label class="form-label mb-1">
+                        Vendedor
+                        <i class="ri-lock-line text-muted d-none" data-lock-icon="vendedor" title="Sin permiso"></i>
+                    </label>
+                    <!-- data-sucursales se usa como texto extra en el matcher de    -->
+                    <!-- Select2 (igual que en Crear DTE manual): permite filtrar    -->
+                    <!-- por alias de sucursal al buscar.                             -->
+                    <select class="form-select form-select-sm dte-edit-search" id="editarBoletaPapelVendedor"
+                            data-placeholder="Buscar vendedor por código, nombre o sucursal…">
+                        <option value=""></option>
+                        {% for v in vendedores_sucursal %}
+                        <option value="{{ v.id }}" data-sucursales="{{ v.sucursales_str|default:'' }}">{{ v.codigo_vendedor }} - {{ v.nombre }}{% if v.sucursales_str %} ({{ v.sucursales_str }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted" style="font-size:11px;">
+                        Cambiar el vendedor reasigna la venta para los reportes
+                        de comisiones y ventas-por-vendedor.
+                    </small>
+                </div>
+
                 <!-- Sección Pagos -->
                 <div class="mt-3" data-campo="pago">
                     <label class="form-label mb-1">
@@ -408,21 +432,27 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label mb-1" for="dteManualVendedor">Vendedor <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" id="dteManualVendedor" required>
-                                <option value="">— Seleccionar —</option>
+                            <!-- data-sucursales se usa como texto extra de búsqueda en  -->
+                            <!-- Select2 (matchCustom) para que el usuario pueda filtrar -->
+                            <!-- por alias de sucursal aparte del código y nombre.       -->
+                            <select class="form-select form-select-sm dte-manual-search" id="dteManualVendedor" required
+                                    data-placeholder="Buscar vendedor por código, nombre o sucursal…">
+                                <option value=""></option>
                                 {% for v in vendedores_sucursal %}
-                                <option value="{{ v.id }}">{{ v.codigo_vendedor }} - {{ v.nombre }}</option>
+                                <option value="{{ v.id }}" data-sucursales="{{ v.sucursales_str|default:'' }}">{{ v.codigo_vendedor }} - {{ v.nombre }}{% if v.sucursales_str %} ({{ v.sucursales_str }}){% endif %}</option>
                                 {% endfor %}
                             </select>
                             {% if not vendedores_sucursal %}
                             <small class="text-danger" style="font-size:10px;">
-                                No hay vendedores activos en esta sucursal.
+                                No hay vendedores activos.
                             </small>
                             {% endif %}
                         </div>
                         <div class="col-md-4">
                             <label class="form-label mb-1" for="dteManualMetodo">Método de pago <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" id="dteManualMetodo" required>
+                            <select class="form-select form-select-sm dte-manual-search" id="dteManualMetodo" required
+                                    data-placeholder="Buscar método de pago…">
+                                <option value=""></option>
                                 {% for codigo, nombre in metodo_pago_choices %}
                                 {% if codigo != 'MULTIPLE' %}
                                 <option value="{{ codigo }}">{{ nombre }}</option>
@@ -1105,6 +1135,7 @@ document.addEventListener('DOMContentLoaded', function() {
         numero_documento: {% if puede_editar_numero_dte %}true{% else %}false{% endif %},
         fecha:            {% if puede_editar_fecha_dte %}true{% else %}false{% endif %},
         pago:             {% if puede_editar_pago_dte %}true{% else %}false{% endif %},
+        vendedor:         {% if puede_editar_vendedor_dte %}true{% else %}false{% endif %},
     };
     const permisoTipoDte = {
         'BOLETA ELECTRONICA':  {% if puede_editar_tipo_boleta_electronica %}true{% else %}false{% endif %},
@@ -1152,7 +1183,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!permisoTipoDte[tipoDte]) return false;
         const algunCampo = !!(permisoCampoDte.numero_documento
                            || permisoCampoDte.fecha
-                           || permisoCampoDte.pago);
+                           || permisoCampoDte.pago
+                           || permisoCampoDte.vendedor);
         const puedeCambiarTipo = puedeCambiarTipoDesde(tipoDte);
         return algunCampo || puedeCambiarTipo;
     }
@@ -1670,7 +1702,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function aplicarPermisosFormularioEdicion(tipoDte) {
         // Habilita/deshabilita cada sección del modal según si el usuario
         // tiene permiso para ese campo en ese tipo de DTE.
-        const campos = ['numero_documento', 'fecha', 'pago'];
+        const campos = ['numero_documento', 'fecha', 'pago', 'vendedor'];
         campos.forEach(campo => {
             const permitido = puedeEditarCampoEnTipo(campo, tipoDte);
             const grupo = document.querySelector(`[data-campo="${campo}"]`);
@@ -1685,6 +1717,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 lock.classList.toggle('d-none', permitido);
             }
         });
+
+        // Sincronizar el estado deshabilitado con el wrapper de Select2
+        // sobre el select de vendedor, para que al cerrar/abrir el modal
+        // refleje el permiso correcto.
+        if (window.jQuery && jQuery.fn && jQuery.fn.select2) {
+            const $sel = window.jQuery('#editarBoletaPapelVendedor');
+            if ($sel.length && $sel.data('select2')) {
+                const permitidoVend = puedeEditarCampoEnTipo('vendedor', tipoDte);
+                $sel.prop('disabled', !permitidoVend).trigger('change.select2');
+            }
+        }
     }
 
     function configurarSelectorTipoDte(tipoDte, estadoDte) {
@@ -1930,6 +1973,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         document.getElementById('editarBoletaPapelFecha').value = formatearFechaParaInput(doc.fecha);
 
+        // Pre-seleccionar el vendedor actual del DTE. Se guarda también
+        // en `dataset.valorOriginal` para detectar el cambio al guardar.
+        const selectVendedor = document.getElementById('editarBoletaPapelVendedor');
+        if (selectVendedor) {
+            const vendIdActual = doc.vendedor_id != null ? String(doc.vendedor_id) : '';
+            selectVendedor.value = vendIdActual;
+            selectVendedor.dataset.valorOriginal = vendIdActual;
+            // Si el modelo de Select2 ya está vivo (segunda apertura),
+            // sincronizar visualmente.
+            if (window.jQuery && jQuery.fn && jQuery.fn.select2
+                    && window.jQuery(selectVendedor).data('select2')) {
+                window.jQuery(selectVendedor).val(vendIdActual).trigger('change.select2');
+            }
+        }
+
         // Referencia para validar suma de pagos en la UI.
         const referenciaEl = document.getElementById('editarDteMontoReferencia');
         const totalDte = parseInt(doc.total || 0, 10);
@@ -1990,6 +2048,24 @@ document.addEventListener('DOMContentLoaded', function() {
             payload.fecha_emision = fecha;
         }
 
+        // Cambio de VENDEDOR: sólo si el rol tiene permiso y el valor
+        // efectivamente cambió respecto al original. Si el usuario no
+        // tiene permiso el select queda disabled y este bloque no se
+        // ejecuta (el backend igual valida en runtime).
+        if (puedeEditarCampoEnTipo('vendedor', tipoDte)) {
+            const selectVendedor = document.getElementById('editarBoletaPapelVendedor');
+            const vendedorActual = (selectVendedor?.value || '').trim();
+            const vendedorOriginal = (selectVendedor?.dataset.valorOriginal || '').trim();
+            if (vendedorActual && vendedorActual !== vendedorOriginal) {
+                const vid = parseInt(vendedorActual, 10);
+                if (!Number.isFinite(vid) || vid <= 0) {
+                    mostrarError('Selecciona un vendedor válido');
+                    return;
+                }
+                payload.vendedor_id = vid;
+            }
+        }
+
         if (puedeEditarCampoEnTipo('pago', tipoDte)) {
             const pagos = [];
             let errorPago = null;
@@ -2038,7 +2114,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const tieneCampo = ('numero_documento' in payload)
                        || ('fecha_emision' in payload)
                        || ('pagos' in payload)
-                       || ('tipo_documento' in payload);
+                       || ('tipo_documento' in payload)
+                       || ('vendedor_id' in payload);
         if (!tieneCampo) {
             mostrarError('No tienes permisos para editar ningún campo de este DTE');
             return;
@@ -2397,7 +2474,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mostrar/ocultar campos extra (tipo_tarjeta, voucher) según el
     // método de pago seleccionado. Para Transbank y Venta Internet
     // estos datos son útiles para que la cuadratura clasifique por
-    // plataforma o canal.
+    // plataforma o canal. Además inicializa Select2 (con búsqueda por
+    // texto) sobre los selects de Vendedor y Método de pago al abrir
+    // el modal, anclando el dropdown al modal mismo (`dropdownParent`)
+    // para que no se corte por el `overflow:hidden` del modal-body.
     document.addEventListener('DOMContentLoaded', () => {
         const select = document.getElementById('dteManualMetodo');
         if (!select) return;
@@ -2415,6 +2495,110 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         select.addEventListener('change', sync);
         sync();
+
+        // Select2 sólo si jQuery + plugin están disponibles (el footer
+        // global los carga, pero defendemos por si en algún ambiente no
+        // están).
+        const modalEl = document.getElementById('modalCrearDteManual');
+        if (modalEl && window.jQuery && jQuery.fn && jQuery.fn.select2) {
+            const $ = window.jQuery;
+            // matcher custom: además de buscar por el texto visible de
+            // la opción, también matchea por el atributo
+            // `data-sucursales` (alias de sucursales del vendedor),
+            // útil para encontrar a un vendedor por su tienda.
+            const matcherSucursales = function(params, data) {
+                if ($.trim(params.term) === '') return data;
+                if (!data || !data.id) return null;
+                const term = params.term.toLowerCase();
+                const text = (data.text || '').toLowerCase();
+                const $opt = data.element ? $(data.element) : null;
+                const sucursales = ($opt && $opt.attr('data-sucursales') || '').toLowerCase();
+                if (text.indexOf(term) > -1 || sucursales.indexOf(term) > -1) {
+                    return data;
+                }
+                return null;
+            };
+
+            modalEl.addEventListener('shown.bs.modal', () => {
+                $('#dteManualVendedor').select2({
+                    dropdownParent: $(modalEl),
+                    placeholder: 'Buscar vendedor por código, nombre o sucursal…',
+                    allowClear: false,
+                    width: '100%',
+                    matcher: matcherSucursales,
+                    language: {
+                        noResults: () => 'Sin resultados',
+                        searching: () => 'Buscando…',
+                    },
+                });
+                $('#dteManualMetodo').select2({
+                    dropdownParent: $(modalEl),
+                    placeholder: 'Buscar método de pago…',
+                    allowClear: false,
+                    width: '100%',
+                    language: {
+                        noResults: () => 'Sin resultados',
+                        searching: () => 'Buscando…',
+                    },
+                });
+                // Re-evaluar campos extra en caso que se haya
+                // pre-seleccionado un método de pago.
+                sync();
+            });
+
+            // Al cerrar el modal limpiamos el estado del Select2 para
+            // que no queden valores entre aperturas.
+            modalEl.addEventListener('hidden.bs.modal', () => {
+                if ($('#dteManualVendedor').data('select2')) {
+                    $('#dteManualVendedor').val('').trigger('change');
+                }
+                if ($('#dteManualMetodo').data('select2')) {
+                    $('#dteManualMetodo').val('').trigger('change');
+                }
+            });
+        }
+
+        // Select2 sobre el campo Vendedor del modal de edición de DTE.
+        // Se inicializa cuando el modal se muestra para asegurar que el
+        // contenedor exista (DOM ya rendido) y se aplica el matcher
+        // custom para buscar también por alias de sucursal.
+        const modalEditEl = document.getElementById('modalEditarBoletaPapel');
+        if (modalEditEl && window.jQuery && jQuery.fn && jQuery.fn.select2) {
+            const $ = window.jQuery;
+            const matcherSucursalesEdit = function(params, data) {
+                if ($.trim(params.term) === '') return data;
+                if (!data || !data.id) return null;
+                const term = params.term.toLowerCase();
+                const text = (data.text || '').toLowerCase();
+                const $opt = data.element ? $(data.element) : null;
+                const sucursales = ($opt && $opt.attr('data-sucursales') || '').toLowerCase();
+                if (text.indexOf(term) > -1 || sucursales.indexOf(term) > -1) {
+                    return data;
+                }
+                return null;
+            };
+
+            modalEditEl.addEventListener('shown.bs.modal', () => {
+                const $sel = $('#editarBoletaPapelVendedor');
+                if (!$sel.length) return;
+                if (!$sel.data('select2')) {
+                    $sel.select2({
+                        dropdownParent: $(modalEditEl),
+                        placeholder: 'Buscar vendedor por código, nombre o sucursal…',
+                        allowClear: false,
+                        width: '100%',
+                        matcher: matcherSucursalesEdit,
+                        language: {
+                            noResults: () => 'Sin resultados',
+                            searching: () => 'Buscando…',
+                        },
+                    });
+                }
+                // Forzar actualización visual al pre-seleccionar el
+                // valor original del DTE (asignado en abrirEditarBoletaPapel).
+                $sel.trigger('change.select2');
+            });
+        }
     });
 
     window.cambiarPagina = function(pagina) {

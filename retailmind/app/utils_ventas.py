@@ -167,6 +167,11 @@ CODIGO_PERMISO_CAMPO_DTE = {
     'fecha': 'dte_editar_fecha',
     'numero_documento': 'dte_editar_numero',
     'pago': 'dte_editar_pago',
+    # Edición del vendedor asociado al DTE. Útil cuando el vendedor
+    # original quedó mal asignado (p. ej., un cajero registró la venta a
+    # su nombre y debe corregirse al vendedor real para no distorsionar
+    # los reportes de comisiones).
+    'vendedor': 'dte_editar_vendedor',
 }
 
 # Mapping `tipo_documento` almacenado en DB -> código de OpcionMenu.

@@ -2045,7 +2045,7 @@
                 <i class="bi bi-x-circle"></i>
             </button>` : ''}
             ${['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento) ? `
-            <button class="nexo-action-btn warning" title="Editar folio NC" onclick="editarFolioNC(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}')">
+            <button class="nexo-action-btn warning" title="Editar folio / cliente NC" onclick='editarFolioNC(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(dte.tipo_documento || "")}, ${dte.receptor_id ? "true" : "false"}, ${JSON.stringify(dte.receptor_nombre || "")}, ${JSON.stringify(dte.receptor_rut || "")})'>
                 <i class="bi bi-pencil-square"></i>
             </button>` : ''}
             ${(!dte.receptor_id && (dte.es_nota_credito || ['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento))) ? `
@@ -2361,96 +2361,451 @@
         }, 500);
     }
 
-    // Función para editar folio de NC
-    async function editarFolioNC(dteId, folioActual, tipoDocumento) {
+    // Estado interno del modal "Editar NC" para el bloque de cliente.
+    // Usamos variables globales (window.*) para que los handlers inline
+    // del HTML del modal puedan leer/escribir sin pelearse con scopes.
+    window._editNcClienteState = {
+        clienteId: null,
+        clienteRut: '',
+        clienteNombre: '',
+        clienteGiro: '',
+        clienteDireccion: '',
+        clienteComuna: '',
+        clienteCiudad: '',
+        clienteEmail: '',
+        clienteTelefono: '',
+        clienteCambio: false,  // True si el operador tocó el bloque de cliente
+    };
+
+    // Buscar cliente desde el modal "Editar NC"
+    async function buscarClienteEnEditarNC() {
+        const rut = (document.getElementById('editNcRut').value || '').trim();
+        const estado = document.getElementById('editNcEstadoCliente');
+        const nombreInput = document.getElementById('editNcNombreCliente');
+
+        if (!rut || rut.length < 7) {
+            estado.className = 'badge bg-danger d-inline-block w-100 py-1';
+            estado.style.fontSize = '0.7rem';
+            estado.textContent = 'RUT inválido';
+            estado.classList.remove('d-none');
+            return;
+        }
+
+        estado.className = 'badge bg-secondary d-inline-block w-100 py-1';
+        estado.style.fontSize = '0.7rem';
+        estado.textContent = 'Buscando...';
+        estado.classList.remove('d-none');
+
+        try {
+            const r = await fetch(`/app/api/buscar-cliente/?rut=${encodeURIComponent(rut)}`);
+            const data = await r.json();
+            if (data.success && data.cliente) {
+                const c = data.cliente;
+                nombreInput.value = c.nombre || '';
+                window._editNcClienteState = {
+                    clienteId: data.cliente_id || null,
+                    clienteRut: c.rut || rut,
+                    clienteNombre: c.nombre || '',
+                    clienteGiro: c.giro || '',
+                    clienteDireccion: c.direccion || '',
+                    clienteComuna: c.comuna || '',
+                    clienteCiudad: c.ciudad || '',
+                    clienteEmail: c.email || '',
+                    clienteTelefono: c.telefono || '',
+                    clienteCambio: true,
+                };
+                estado.className = 'badge bg-success d-inline-block w-100 py-1';
+                estado.innerHTML = '<i class="bi bi-check-circle me-1"></i>Encontrado';
+                document.getElementById('editNcCrearClienteAlert').classList.add('d-none');
+            } else {
+                nombreInput.value = '';
+                window._editNcClienteState.clienteId = null;
+                window._editNcClienteState.clienteRut = data.rut_formateado || rut;
+                window._editNcClienteState.clienteNombre = '';
+                estado.className = 'badge bg-warning text-dark d-inline-block w-100 py-1';
+                estado.textContent = 'No encontrado';
+                if (data.rut_formateado) {
+                    document.getElementById('editNcRut').value = data.rut_formateado;
+                }
+                document.getElementById('editNcCrearClienteAlert').classList.remove('d-none');
+            }
+        } catch (e) {
+            estado.className = 'badge bg-danger d-inline-block w-100 py-1';
+            estado.textContent = 'Error de conexión';
+        }
+    }
+
+    // Crear cliente desde el modal "Editar NC" (sub-popup SweetAlert)
+    async function crearClienteDesdeEditarNC() {
+        const rut = (document.getElementById('editNcRut').value || '').trim();
+        if (!rut) {
+            Swal.showValidationMessage && Swal.showValidationMessage('Ingrese el RUT primero');
+            return;
+        }
+        const { value, isConfirmed } = await Swal.fire({
+            title: '<i class="bi bi-person-plus me-2"></i>Crear nuevo cliente',
+            html: `
+                <div class="text-start">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">RUT</label>
+                        <input type="text" id="ncEditRut" class="form-control form-control-sm" value="${rut}" readonly style="background:#e9ecef;">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">Nombre / Razón Social <span class="text-danger">*</span></label>
+                        <input type="text" id="ncEditNombre" class="form-control form-control-sm" placeholder="Nombre o razón social">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">Giro <span class="text-danger">*</span></label>
+                        <input type="text" id="ncEditGiro" class="form-control form-control-sm" placeholder="Giro comercial">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">Dirección <span class="text-danger">*</span></label>
+                        <input type="text" id="ncEditDireccion" class="form-control form-control-sm" placeholder="Dirección">
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Comuna <span class="text-danger">*</span></label>
+                            <input type="text" id="ncEditComuna" class="form-control form-control-sm" placeholder="Comuna">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Ciudad <span class="text-danger">*</span></label>
+                            <input type="text" id="ncEditCiudad" class="form-control form-control-sm" placeholder="Ciudad">
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input type="email" id="ncEditEmail" class="form-control form-control-sm" placeholder="Email (opcional)">
+                        </div>
+                        <div class="col-6">
+                            <input type="text" id="ncEditTelefono" class="form-control form-control-sm" placeholder="Teléfono (opcional)">
+                        </div>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-person-plus me-1"></i>Usar este cliente',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#198754',
+            width: '520px',
+            preConfirm: () => {
+                const nombre = (document.getElementById('ncEditNombre').value || '').trim();
+                const giro = (document.getElementById('ncEditGiro').value || '').trim();
+                const direccion = (document.getElementById('ncEditDireccion').value || '').trim();
+                const comuna = (document.getElementById('ncEditComuna').value || '').trim();
+                const ciudad = (document.getElementById('ncEditCiudad').value || '').trim();
+                if (!nombre || !giro || !direccion || !comuna || !ciudad) {
+                    Swal.showValidationMessage('Nombre, giro, dirección, comuna y ciudad son obligatorios para que el TXT Acepta sea válido');
+                    return false;
+                }
+                return {
+                    nombre, giro, direccion, comuna, ciudad,
+                    email: (document.getElementById('ncEditEmail').value || '').trim(),
+                    telefono: (document.getElementById('ncEditTelefono').value || '').trim()
+                };
+            }
+        });
+        if (!isConfirmed || !value) return;
+
+        // Guardamos los datos en el state — la creación efectiva en BD ocurre
+        // en el submit (POST a /app/documentos/asignar-receptor-dte/), donde
+        // el endpoint crea la Empresa on-the-fly cuando llega cliente_rut sin
+        // cliente_id pero con datos territoriales.
+        window._editNcClienteState = {
+            clienteId: null,
+            clienteRut: rut,
+            clienteNombre: value.nombre,
+            clienteGiro: value.giro,
+            clienteDireccion: value.direccion,
+            clienteComuna: value.comuna,
+            clienteCiudad: value.ciudad,
+            clienteEmail: value.email,
+            clienteTelefono: value.telefono,
+            clienteCambio: true,
+        };
+
+        document.getElementById('editNcNombreCliente').value = value.nombre;
+        const estado = document.getElementById('editNcEstadoCliente');
+        estado.className = 'badge bg-info d-inline-block w-100 py-1';
+        estado.style.fontSize = '0.7rem';
+        estado.innerHTML = '<i class="bi bi-plus-circle me-1"></i>A crear';
+        estado.classList.remove('d-none');
+        document.getElementById('editNcCrearClienteAlert').classList.add('d-none');
+    }
+
+    // Función para editar folio + cliente de NC
+    async function editarFolioNC(dteId, folioActual, tipoDocumento, tieneReceptor, receptorNombre, receptorRut) {
+        // Inicializar state con el receptor actual; el bloque de cliente
+        // sólo se considerará "cambiado" si el operador toca el RUT.
+        window._editNcClienteState = {
+            clienteId: null,
+            clienteRut: receptorRut || '',
+            clienteNombre: receptorNombre || '',
+            clienteGiro: '',
+            clienteDireccion: '',
+            clienteComuna: '',
+            clienteCiudad: '',
+            clienteEmail: '',
+            clienteTelefono: '',
+            clienteCambio: false,
+        };
+
+        const receptorActualHTML = tieneReceptor
+            ? `<strong>${receptorNombre || '-'}</strong>${receptorRut ? ` <code>${receptorRut}</code>` : ''}`
+            : '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Sin receptor</span>';
+
         const { value: formValues } = await Swal.fire({
-            title: '<i class="bi bi-pencil-square text-warning"></i> Editar Folio NC',
+            title: '<i class="bi bi-pencil-square text-warning"></i> Editar NC',
             html: `
                 <div class="text-start">
                     <p class="small text-muted mb-3">
                         Editando <strong>${tipoDocumento}</strong> #<strong>${folioActual}</strong>
                     </p>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Nuevo Folio</label>
-                        <input type="number" id="swal-nuevo-folio" class="form-control" 
-                               value="${folioActual}" min="1" placeholder="Ingrese el nuevo número de folio">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small fw-bold">Motivo del cambio <span class="text-danger">*</span></label>
-                        <input type="text" id="swal-motivo-folio" class="form-control" 
+
+                    <fieldset class="border rounded p-2 mb-3">
+                        <legend class="float-none w-auto px-2 small fw-bold text-primary">
+                            <i class="bi bi-hash me-1"></i>Folio
+                        </legend>
+                        <label class="form-label small fw-bold mb-1">Nuevo folio</label>
+                        <input type="number" id="swal-nuevo-folio" class="form-control form-control-sm"
+                               value="${folioActual}" min="1" placeholder="Número de folio">
+                        <label class="form-label small fw-bold mb-1 mt-2">
+                            Motivo del cambio de folio
+                            <small class="text-muted fw-normal">(obligatorio si cambia el folio)</small>
+                        </label>
+                        <input type="text" id="swal-motivo-folio" class="form-control form-control-sm"
                                placeholder="Ej: Corrección de folio por error de digitación" maxlength="200">
-                    </div>
-                    <div class="alert alert-warning py-2 small mt-3 mb-0">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
-                        Se actualizarán automáticamente las referencias, movimientos de stock y la trazabilidad asociada.
+                    </fieldset>
+
+                    <fieldset class="border rounded p-2">
+                        <legend class="float-none w-auto px-2 small fw-bold text-primary">
+                            <i class="bi bi-person me-1"></i>Cliente / Receptor
+                        </legend>
+                        <div class="small text-muted mb-2">
+                            Actual: ${receptorActualHTML}
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-8">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" id="editNcRut" class="form-control"
+                                           placeholder="RUT (ej: 12345678-9)"
+                                           value="${receptorRut || ''}">
+                                    <button type="button" class="btn btn-outline-primary"
+                                            onclick="buscarClienteEnEditarNC()" title="Buscar cliente">
+                                        <i class="bi bi-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <span id="editNcEstadoCliente" class="badge d-none w-100 py-1" style="font-size:0.7rem;"></span>
+                            </div>
+                        </div>
+                        <input type="text" id="editNcNombreCliente" class="form-control form-control-sm"
+                               placeholder="Nombre del cliente" readonly style="background:#f8f9fa;"
+                               value="${(receptorNombre || '').replace(/"/g, '&quot;')}">
+                        <div id="editNcCrearClienteAlert" class="alert alert-warning py-1 px-2 mb-0 mt-2 small d-none">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-exclamation-triangle me-1"></i>Cliente no encontrado</span>
+                                <button type="button" class="btn btn-sm btn-warning py-0 px-2" onclick="crearClienteDesdeEditarNC()" style="font-size:0.72rem;">
+                                    <i class="bi bi-person-plus me-1"></i>Crear cliente
+                                </button>
+                            </div>
+                        </div>
+                        <small class="text-muted d-block mt-2" style="font-size:0.72rem;">
+                            Si modifica el cliente, se actualizará el receptor del DTE para que el TXT Acepta sea válido.
+                        </small>
+                    </fieldset>
+
+                    <div class="alert alert-info py-2 px-3 small mt-3 mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Si cambia el folio se actualizan automáticamente las referencias, movimientos
+                        de stock y trazabilidad. Si cambia el cliente se actualiza solo el receptor.
                     </div>
                 </div>`,
-            width: '500px',
+            width: '560px',
             showCancelButton: true,
-            confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Guardar cambio',
+            confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Guardar cambios',
             cancelButtonText: 'Cancelar',
             confirmButtonColor: '#0066FF',
             cancelButtonColor: '#6c757d',
             focusConfirm: false,
+            didOpen: () => {
+                const rutEl = document.getElementById('editNcRut');
+                if (rutEl) {
+                    rutEl.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            buscarClienteEnEditarNC();
+                        }
+                    });
+                    rutEl.addEventListener('input', () => {
+                        const nuevoRut = rutEl.value.trim();
+                        if (nuevoRut !== (receptorRut || '').trim()) {
+                            window._editNcClienteState.clienteCambio = true;
+                            window._editNcClienteState.clienteRut = nuevoRut;
+                            // Si tipea, invalida el cliente_id encontrado previamente
+                            window._editNcClienteState.clienteId = null;
+                        }
+                    });
+                }
+            },
             preConfirm: () => {
-                const nuevoFolio = document.getElementById('swal-nuevo-folio').value;
-                const motivo = document.getElementById('swal-motivo-folio').value.trim();
-                if (!nuevoFolio || parseInt(nuevoFolio) <= 0) {
-                    Swal.showValidationMessage('Ingrese un folio válido');
+                const nuevoFolio = parseInt(document.getElementById('swal-nuevo-folio').value);
+                const motivo = (document.getElementById('swal-motivo-folio').value || '').trim();
+                const folioCambio = (nuevoFolio && nuevoFolio > 0 && nuevoFolio !== parseInt(folioActual));
+
+                const cliState = window._editNcClienteState;
+                const rutInput = (document.getElementById('editNcRut').value || '').trim();
+                // Si el RUT del input difiere del original Y todavía no se buscó/creó,
+                // forzamos al operador a buscarlo o crearlo antes de aceptar.
+                const clienteCambio = cliState.clienteCambio || (rutInput !== (receptorRut || '').trim() && rutInput !== '');
+
+                if (!folioCambio && !clienteCambio) {
+                    Swal.showValidationMessage('No hay cambios para guardar (modifique folio o cliente)');
                     return false;
                 }
-                if (!motivo) {
-                    Swal.showValidationMessage('El motivo es obligatorio');
-                    return false;
+
+                if (folioCambio) {
+                    if (!nuevoFolio || nuevoFolio <= 0) {
+                        Swal.showValidationMessage('Ingrese un folio válido');
+                        return false;
+                    }
+                    if (!motivo) {
+                        Swal.showValidationMessage('El motivo del cambio de folio es obligatorio');
+                        return false;
+                    }
                 }
-                if (parseInt(nuevoFolio) === parseInt(folioActual)) {
-                    Swal.showValidationMessage('El nuevo folio debe ser diferente al actual');
-                    return false;
+
+                if (clienteCambio) {
+                    if (!rutInput) {
+                        Swal.showValidationMessage('Ingrese el RUT del cliente o cancele');
+                        return false;
+                    }
+                    // Si tipeó RUT pero no buscó/creó (no hay nombre cargado), bloquear
+                    const nombreCargado = (document.getElementById('editNcNombreCliente').value || '').trim();
+                    if (!nombreCargado) {
+                        Swal.showValidationMessage(
+                            'Presione el botón de buscar antes de aceptar. ' +
+                            'Si el cliente no existe, créelo desde "Crear cliente".'
+                        );
+                        return false;
+                    }
                 }
-                return { nuevo_folio: parseInt(nuevoFolio), motivo };
+
+                return {
+                    folioCambio,
+                    nuevo_folio: folioCambio ? nuevoFolio : null,
+                    motivo: folioCambio ? motivo : null,
+                    clienteCambio,
+                    cliente: clienteCambio ? {
+                        cliente_id: cliState.clienteId,
+                        cliente_rut: rutInput,
+                        cliente_nombre: cliState.clienteNombre,
+                        giro: cliState.clienteGiro,
+                        direccion: cliState.clienteDireccion,
+                        comuna: cliState.clienteComuna,
+                        ciudad: cliState.clienteCiudad,
+                        email: cliState.clienteEmail,
+                        telefono: cliState.clienteTelefono,
+                    } : null
+                };
             }
         });
 
         if (!formValues) return;
 
+        Swal.fire({
+            title: 'Guardando cambios...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        const errores = [];
+        const exitos = [];
+
         try {
-            Swal.fire({
-                title: 'Actualizando folio...',
-                html: 'Actualizando referencias y trazabilidad',
-                allowOutsideClick: false,
-                didOpen: () => Swal.showLoading()
-            });
+            // 1) Editar folio (si cambió). Es el que tiene auditoría con motivo.
+            if (formValues.folioCambio) {
+                const resp = await fetch('/app/documentos/editar-folio-dte/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        dte_id: dteId,
+                        nuevo_folio: formValues.nuevo_folio,
+                        motivo: formValues.motivo
+                    })
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    errores.push(`Folio: ${data.error || `Error ${resp.status}`}`);
+                } else {
+                    exitos.push(
+                        `Folio: #${data.folio_anterior} → #${data.folio_nuevo}` +
+                        (data.referencias_actualizadas
+                            ? ` (${data.referencias_actualizadas} referencias actualizadas)`
+                            : '')
+                    );
+                }
+            }
 
-            const response = await fetch('/app/documentos/editar-folio-dte/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({
+            // 2) Asignar/cambiar receptor (si se modificó). forzar=true porque
+            // el endpoint por defecto no reemplaza un receptor existente.
+            if (formValues.clienteCambio) {
+                const payload = Object.assign({}, formValues.cliente, {
                     dte_id: dteId,
-                    nuevo_folio: formValues.nuevo_folio,
-                    motivo: formValues.motivo
-                })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Error al actualizar el folio');
+                    forzar: true,
+                });
+                const resp = await fetch('/app/documentos/asignar-receptor-dte/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    errores.push(`Cliente: ${data.error || `Error ${resp.status}`}`);
+                } else {
+                    exitos.push(`Cliente: ${data.receptor.nombre} (${data.receptor.rut})`);
+                }
             }
 
-            let htmlExtra = '';
-            if (data.referencias_actualizadas > 0) {
-                htmlExtra = `<br><small class="text-muted">${data.referencias_actualizadas} referencia(s) actualizada(s) en otros documentos</small>`;
+            if (errores.length === 0) {
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Cambios guardados',
+                    html: '<ul class="text-start mb-0 ps-3">' +
+                          exitos.map(e => `<li>${e}</li>`).join('') +
+                          '</ul>',
+                    confirmButtonColor: '#0066FF'
+                });
+            } else if (exitos.length === 0) {
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Error al guardar',
+                    html: '<ul class="text-start mb-0 ps-3">' +
+                          errores.map(e => `<li>${e}</li>`).join('') +
+                          '</ul>',
+                    confirmButtonColor: '#dc3545'
+                });
+            } else {
+                await Swal.fire({
+                    icon: 'warning',
+                    title: 'Cambios parciales',
+                    html: `
+                        <div class="text-start">
+                            <p class="mb-1 fw-bold text-success">Guardado:</p>
+                            <ul class="ps-3">${exitos.map(e => `<li>${e}</li>`).join('')}</ul>
+                            <p class="mb-1 fw-bold text-danger">Falló:</p>
+                            <ul class="ps-3">${errores.map(e => `<li>${e}</li>`).join('')}</ul>
+                        </div>
+                    `,
+                    confirmButtonColor: '#0066FF'
+                });
             }
-
-            Swal.fire({
-                icon: 'success',
-                title: 'Folio actualizado',
-                html: `<p>El folio se cambió de <strong>#${data.folio_anterior}</strong> a <strong>#${data.folio_nuevo}</strong></p>${htmlExtra}`,
-                confirmButtonColor: '#0066FF'
-            });
 
             cargarDTEs(currentPageDTE, currentSearchDTE);
 
@@ -2458,7 +2813,7 @@
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: error.message || 'No se pudo actualizar el folio',
+                text: error.message || 'No se pudieron aplicar los cambios',
                 confirmButtonColor: '#dc3545'
             });
         }
