@@ -11,9 +11,77 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
 import csv
+import logging
 from datetime import datetime, timedelta
 
 from app.models import Cliente, LogCliente, Empresa
+
+logger = logging.getLogger(__name__)
+
+
+# ---- Helpers compartidos ----
+def _opt(value):
+    """Devuelve None para valores vacíos, en otro caso un string sin espacios.
+
+    Útil para CharField/EmailField nullable: evita guardar '' donde el modelo
+    espera NULL o un valor real.
+    """
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value if value else None
+
+
+def _parse_fecha(value):
+    """Parsea 'YYYY-MM-DD'. Devuelve None si vacío o inválido."""
+    if not value:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
+_TIPO_CLIENTE_ALIAS = {
+    'NATURAL': 'INDIVIDUAL',
+    'PERSONA': 'INDIVIDUAL',
+    'INDIVIDUAL': 'INDIVIDUAL',
+    'JURIDICA': 'EMPRESARIAL',
+    'JURÍDICA': 'EMPRESARIAL',
+    'EMPRESA': 'EMPRESARIAL',
+    'EMPRESARIAL': 'EMPRESARIAL',
+    'MAYORISTA': 'MAYORISTA',
+    'DISTRIBUIDOR': 'DISTRIBUIDOR',
+    'EMPLEADO': 'EMPLEADO',
+    'CREDITO_EXTERNO': 'CREDITO_EXTERNO',
+}
+
+
+def _normalizar_tipo_cliente(valor):
+    """Normaliza el tipo de cliente del frontend a un valor válido del modelo."""
+    if not valor:
+        return 'INDIVIDUAL'
+    candidato = _TIPO_CLIENTE_ALIAS.get(str(valor).strip().upper())
+    if candidato:
+        return candidato
+    validos = {c[0] for c in Cliente.TIPO_CLIENTE_CHOICES}
+    upper = str(valor).strip().upper()
+    return upper if upper in validos else 'INDIVIDUAL'
+
+
+def _errores_validation(exc):
+    """Extrae errores de un ValidationError de forma segura.
+
+    Devuelve siempre un dict {campo: [mensajes]}.
+    """
+    try:
+        return exc.message_dict
+    except AttributeError:
+        msgs = getattr(exc, 'messages', None) or [str(exc)]
+        return {'__all__': list(msgs)}
 
 # ========== VISTAS PARA CLIENTES ==========
 
@@ -147,48 +215,65 @@ def lista_clientes(request):
 @require_http_methods(["POST"])
 def crear_cliente(request):
     """Crear nuevo cliente via AJAX"""
-    
+
     try:
-        data = json.loads(request.body)
-        
+        try:
+            data = json.loads(request.body or b'{}')
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'message': 'Datos JSON inválidos'
+            }, status=400)
+
+        nombre = (data.get('nombre') or '').strip()
+        apellido = (data.get('apellido') or '').strip()
+        if not nombre or not apellido:
+            return JsonResponse({
+                'success': False,
+                'message': 'Nombre y apellido son obligatorios',
+                'errors': {
+                    'nombre': ['Requerido'] if not nombre else [],
+                    'apellido': ['Requerido'] if not apellido else [],
+                }
+            }, status=400)
+
         with transaction.atomic():
             # Obtener empresa si se especifica
             empresa = None
-            if data.get('empresa_id'):
-                empresa = get_object_or_404(Empresa, id=data['empresa_id'])
-            
-            # Crear cliente
-            cliente = Cliente(
-                nombre=data['nombre'],
-                apellido=data['apellido'],
-                rut=data.get('rut', ''),
-                email=data.get('email', ''),
-                telefono=data.get('telefono', ''),
-                celular=data.get('celular', ''),
-                direccion=data.get('direccion', ''),
-                comuna=data.get('comuna', ''),
-                ciudad=data.get('ciudad', ''),
-                fecha_nacimiento=data.get('fecha_nacimiento', ''),
-                genero=data.get('genero', ''),
-                tipo_cliente=data.get('tipo_cliente', 'INDIVIDUAL'),
-                empresa=empresa,
-                observaciones=data.get('observaciones', ''),
-                created_by=request.user
-            )
-            
-            # Procesar fecha de nacimiento si se proporciona
-            if data.get('fecha_nacimiento'):
+            empresa_id = data.get('empresa_id')
+            if empresa_id:
                 try:
-                    cliente.fecha_nacimiento = datetime.strptime(
-                        data['fecha_nacimiento'], '%Y-%m-%d'
-                    ).date()
-                except ValueError:
-                    pass
-            
+                    empresa = Empresa.objects.get(id=empresa_id)
+                except Empresa.DoesNotExist:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'La empresa seleccionada no existe',
+                        'errors': {'empresa_id': ['No encontrada']}
+                    }, status=400)
+
+            cliente = Cliente(
+                nombre=nombre,
+                apellido=apellido,
+                rut=_opt(data.get('rut')),
+                email=_opt(data.get('email')),
+                telefono=_opt(data.get('telefono')),
+                celular=_opt(data.get('celular')),
+                direccion=_opt(data.get('direccion')),
+                comuna=_opt(data.get('comuna')),
+                ciudad=_opt(data.get('ciudad')),
+                fecha_nacimiento=_parse_fecha(data.get('fecha_nacimiento')),
+                genero=_opt(data.get('genero')),
+                tipo_cliente=_normalizar_tipo_cliente(
+                    data.get('tipo_cliente') or data.get('tipo')
+                ),
+                empresa=empresa,
+                observaciones=_opt(data.get('observaciones')),
+                created_by=request.user,
+            )
+
             cliente.full_clean()
             cliente.save()
-            
-            # Crear log
+
             LogCliente.objects.create(
                 cliente=cliente,
                 usuario=request.user,
@@ -204,7 +289,7 @@ def crear_cliente(request):
                 ip_address=request.META.get('REMOTE_ADDR'),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
-            
+
             return JsonResponse({
                 'success': True,
                 'message': f'Cliente "{cliente.nombre_completo}" creado exitosamente',
@@ -220,15 +305,16 @@ def crear_cliente(request):
                     'activo': cliente.activo,
                 }
             })
-            
+
     except ValidationError as e:
         return JsonResponse({
             'success': False,
             'message': 'Error de validación',
-            'errors': e.message_dict
+            'errors': _errores_validation(e),
         }, status=400)
-        
+
     except Exception as e:
+        logger.exception('Error inesperado al crear cliente')
         return JsonResponse({
             'success': False,
             'message': f'Error al crear cliente: {str(e)}'
@@ -239,21 +325,31 @@ def crear_cliente(request):
 @require_http_methods(["POST", "PUT"])
 def editar_cliente(request):
     """Editar cliente existente via AJAX"""
-    
+
     try:
-        data = json.loads(request.body)
-        
-        # Obtener el ID del cliente del body
+        try:
+            data = json.loads(request.body or b'{}')
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'message': 'Datos JSON inválidos'
+            }, status=400)
+
         cliente_id = data.get('cliente_id') or data.get('id')
         if not cliente_id:
             return JsonResponse({
                 'success': False,
                 'message': 'ID de cliente no proporcionado'
             }, status=400)
-        
-        cliente = get_object_or_404(Cliente, id=cliente_id)
-        
-        # Guardar datos anteriores para el log
+
+        try:
+            cliente = Cliente.objects.get(id=cliente_id)
+        except Cliente.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'Cliente no encontrado'
+            }, status=404)
+
         datos_anteriores = {
             'nombre': cliente.nombre,
             'apellido': cliente.apellido,
@@ -262,64 +358,65 @@ def editar_cliente(request):
             'empresa': cliente.empresa.nombre if cliente.empresa else None,
             'activo': cliente.activo,
         }
-        
+
         with transaction.atomic():
-            # Obtener empresa si se especifica
-            empresa = cliente.empresa  # Mantener empresa actual por defecto
-            if data.get('empresa_id'):
-                empresa = get_object_or_404(Empresa, id=data['empresa_id'])
-            
-            # Manejar el nombre - puede venir como nombre completo o separado
-            nombre_completo = data.get('nombre', '')
-            if data.get('apellido'):
-                # Si viene apellido separado, usar ambos campos
-                cliente.nombre = data.get('nombre', '')
-                cliente.apellido = data.get('apellido', '')
-            else:
-                # Si viene nombre completo, intentar separar
-                partes = nombre_completo.split(' ', 1)
-                cliente.nombre = partes[0] if partes else ''
-                cliente.apellido = partes[1] if len(partes) > 1 else ''
-            
-            # Actualizar campos básicos
-            cliente.rut = data.get('rut', cliente.rut or '')
-            cliente.email = data.get('email', cliente.email or '')
-            cliente.telefono = data.get('telefono', cliente.telefono or '')
-            cliente.celular = data.get('celular', cliente.celular or '')
-            cliente.direccion = data.get('direccion', cliente.direccion or '')
-            cliente.comuna = data.get('comuna', cliente.comuna or '')
-            cliente.ciudad = data.get('ciudad', cliente.ciudad or '')
-            cliente.observaciones = data.get('observaciones', cliente.observaciones or '')
-            
-            # Mapear tipo de cliente del frontend al modelo
-            tipo = data.get('tipo') or data.get('tipo_cliente', '')
-            if tipo in ['natural', 'INDIVIDUAL']:
-                cliente.tipo_cliente = 'INDIVIDUAL'
-            elif tipo in ['juridica', 'EMPRESA']:
-                cliente.tipo_cliente = 'EMPRESA'
-            elif tipo:
-                cliente.tipo_cliente = tipo
-            
-            # Campos opcionales
-            if data.get('genero'):
-                cliente.genero = data.get('genero', '')
-            
+            # Mantener la empresa actual por defecto; solo cambia si llega empresa_id
+            empresa = cliente.empresa
+            empresa_id = data.get('empresa_id')
+            if empresa_id:
+                try:
+                    empresa = Empresa.objects.get(id=empresa_id)
+                except Empresa.DoesNotExist:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'La empresa seleccionada no existe',
+                        'errors': {'empresa_id': ['No encontrada']}
+                    }, status=400)
+
+            # Nombre/apellido: aceptar separados o "nombre completo" en `nombre`
+            apellido_in = (data.get('apellido') or '').strip()
+            nombre_in = (data.get('nombre') or '').strip()
+            if apellido_in:
+                cliente.nombre = nombre_in
+                cliente.apellido = apellido_in
+            elif nombre_in:
+                partes = nombre_in.split(' ', 1)
+                cliente.nombre = partes[0]
+                cliente.apellido = partes[1] if len(partes) > 1 else cliente.apellido
+
+            # Solo actualizar campos presentes en el payload (PATCH-like)
+            if 'rut' in data:
+                cliente.rut = _opt(data.get('rut'))
+            if 'email' in data:
+                cliente.email = _opt(data.get('email'))
+            if 'telefono' in data:
+                cliente.telefono = _opt(data.get('telefono'))
+            if 'celular' in data:
+                cliente.celular = _opt(data.get('celular'))
+            if 'direccion' in data:
+                cliente.direccion = _opt(data.get('direccion'))
+            if 'comuna' in data:
+                cliente.comuna = _opt(data.get('comuna'))
+            if 'ciudad' in data:
+                cliente.ciudad = _opt(data.get('ciudad'))
+            if 'observaciones' in data:
+                cliente.observaciones = _opt(data.get('observaciones'))
+            if 'genero' in data:
+                cliente.genero = _opt(data.get('genero'))
+
+            tipo_in = data.get('tipo_cliente') or data.get('tipo')
+            if tipo_in:
+                cliente.tipo_cliente = _normalizar_tipo_cliente(tipo_in)
+
+            if 'fecha_nacimiento' in data:
+                cliente.fecha_nacimiento = _parse_fecha(data.get('fecha_nacimiento'))
+
             cliente.empresa = empresa
             cliente.updated_by = request.user
-            
-            # Procesar fecha de nacimiento si se proporciona
-            if data.get('fecha_nacimiento'):
-                try:
-                    cliente.fecha_nacimiento = datetime.strptime(
-                        data['fecha_nacimiento'], '%Y-%m-%d'
-                    ).date()
-                except ValueError:
-                    pass
-            
+
             cliente.full_clean()
             cliente.save()
-            
-            # Crear log
+
             LogCliente.objects.create(
                 cliente=cliente,
                 usuario=request.user,
@@ -337,7 +434,7 @@ def editar_cliente(request):
                 ip_address=request.META.get('REMOTE_ADDR'),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
-            
+
             return JsonResponse({
                 'success': True,
                 'message': f'Cliente "{cliente.nombre_completo}" actualizado exitosamente',
@@ -353,15 +450,16 @@ def editar_cliente(request):
                     'activo': cliente.activo,
                 }
             })
-            
+
     except ValidationError as e:
         return JsonResponse({
             'success': False,
             'message': 'Error de validación',
-            'errors': e.message_dict
+            'errors': _errores_validation(e),
         }, status=400)
-        
+
     except Exception as e:
+        logger.exception('Error inesperado al editar cliente')
         return JsonResponse({
             'success': False,
             'message': f'Error al actualizar cliente: {str(e)}'

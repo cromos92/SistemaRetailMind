@@ -772,6 +772,7 @@ urlpatterns = [
     path('documentos/gestion-dte/', views.gestion_dte, name='gestion_dte'),
     path('documentos/anular-factura/', views.anular_factura_dte, name='anular_factura_dte'),
     path('documentos/editar-folio-dte/', views.editar_folio_dte, name='editar_folio_dte'),
+    path('documentos/asignar-receptor-dte/', views.asignar_receptor_dte, name='asignar_receptor_dte'),
     path('documentos/api/cargar-dte-ventas/', views.cargar_dte_ventas, name='cargar_dte_ventas'),
     path('documentos/api/dte/<int:dte_id>/', views.detalle_dte, name='detalle_dte'),
     path('detalle_dte/<int:dte_id>/', views.vista_detalle_dte, name='vista_detalle_dte'),  # Vista HTML

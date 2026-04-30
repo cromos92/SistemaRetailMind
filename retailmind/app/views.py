@@ -24910,6 +24910,7 @@ def anular_factura_dte(request):
 
     cliente_nombre = body.get('cliente_nombre', '').strip()
     cliente_rut = body.get('cliente_rut', '').strip()
+    cliente_id_in = body.get('cliente_id')
     motivo_anulacion = body.get('motivo', '').strip()
     productos_afectados_input = body.get('productos_afectados') or []
 
@@ -24925,6 +24926,49 @@ def anular_factura_dte(request):
         )
     except Dte.DoesNotExist:
         return JsonResponse({'error': 'Documento no encontrado o tipo no anulable'}, status=404)
+
+    # ------------------------------------------------------------------
+    # Resolver receptor de la NC
+    #
+    # Para que el TXT Acepta de la NC sea descargable, el receptor con sus
+    # datos territoriales (giro, dirección, comuna, ciudad) tiene que
+    # existir cuando la modalidad NO es OCULTA. La modalidad OCULTA está
+    # pensada para casos donde el TXT no se enviará al SII, así que ahí
+    # toleramos que falte.
+    #
+    # Estrategia de resolución, en orden de precedencia:
+    #   1. `cliente_id` (id de Empresa enviado por el modal).
+    #   2. `cliente_rut` -> buscar Empresa por RUT (con o sin formateo).
+    #   3. Heredar de `dte.receptor` (boletas pueden no tener receptor).
+    # ------------------------------------------------------------------
+    receptor_nc = dte.receptor
+
+    if cliente_id_in:
+        try:
+            receptor_nc = Empresa.objects.get(id=int(cliente_id_in))
+        except (Empresa.DoesNotExist, TypeError, ValueError):
+            return JsonResponse({
+                'error': 'El cliente seleccionado no existe en la base de datos.'
+            }, status=400)
+    elif cliente_rut:
+        from .views_modulo_ventas import formatear_rut as _fmt_rut
+        rut_norm = _fmt_rut(cliente_rut)
+        receptor_nc = (
+            Empresa.objects
+            .filter(Q(rut__iexact=rut_norm) | Q(rut__iexact=cliente_rut))
+            .order_by('-id')
+            .first()
+        ) or receptor_nc
+
+    if modalidad_nc != 'OCULTA' and receptor_nc is None:
+        return JsonResponse({
+            'error': (
+                'Debe seleccionar (o crear) un cliente con RUT antes de '
+                'generar la NC. El TXT Acepta no se puede emitir sin '
+                'receptor identificado. Si querés guardar igual la NC sin '
+                'enviar TXT al SII, usá la modalidad "NC oculta".'
+            )
+        }, status=400)
 
     if dte.estado_dte == 'ANULADO':
         return JsonResponse({'error': 'El documento ya está anulado'}, status=400)
@@ -25099,7 +25143,7 @@ def anular_factura_dte(request):
 
         nc = Dte.objects.create(
             emisor=dte.emisor,
-            receptor=dte.receptor,
+            receptor=receptor_nc,
             tipo_documento='NOTA DE CREDITO',
             numero_documento=numero_nc,
             monto_neto=monto_neto_nc,
@@ -25868,6 +25912,178 @@ def editar_folio_dte(request):
 
 
 @login_required
+@require_POST
+def asignar_receptor_dte(request):
+    """Asigna o actualiza el receptor de un DTE (típicamente NC) sin receptor.
+
+    Caso de uso: NCs históricas creadas a partir de boletas sin receptor
+    (consumidor final). Sin receptor, `validar_datos_dte_acepta` falla y
+    el TXT Acepta no se puede descargar. Este endpoint permite enlazar
+    una `Empresa` (cliente) como receptor de la NC y, opcionalmente,
+    crearla on-the-fly si no existe.
+
+    Body (JSON):
+        {
+            "dte_id": int,
+            "cliente_id": int | null,        # id de Empresa, preferido
+            "cliente_rut": str | null,        # alternativa: buscar por RUT
+            "cliente_nombre": str | null,     # solo si se va a crear
+            "giro": str | null,               # idem
+            "direccion": str | null,
+            "comuna": str | null,
+            "ciudad": str | null,
+            "email": str | null,
+            "telefono": str | null
+        }
+
+    Restricciones:
+      - El DTE debe pertenecer a la empresa actual.
+      - El DTE no puede tener ya un receptor (si se quiere reemplazar uno
+        existente, hay que decirlo explícitamente con `forzar=True`).
+      - Solo administradores pueden ejecutarlo.
+    """
+    from .views_modulo_ventas import formatear_rut as _fmt_rut
+
+    try:
+        body = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    dte_id = body.get('dte_id')
+    if not dte_id:
+        return JsonResponse({'success': False, 'error': 'dte_id es requerido'}, status=400)
+
+    cliente_id_in = body.get('cliente_id')
+    cliente_rut = (body.get('cliente_rut') or '').strip()
+    cliente_nombre = (body.get('cliente_nombre') or '').strip()
+    forzar = bool(body.get('forzar', False))
+
+    es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+    if not es_admin:
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo administradores pueden asignar receptor a un DTE'
+        }, status=403)
+
+    try:
+        dte = Dte.objects.select_related('emisor', 'receptor', 'sucursal').get(id=dte_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado'}, status=404)
+
+    empresa_actual_id = request.session.get('idEmpresaActual')
+    if dte.emisor_id != empresa_actual_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Sin permiso sobre este DTE'
+        }, status=403)
+
+    if dte.receptor_id and not forzar:
+        return JsonResponse({
+            'success': False,
+            'error': (
+                f'El DTE ya tiene receptor asignado ({dte.receptor.nombre}). '
+                'Use forzar=true para reemplazarlo.'
+            )
+        }, status=400)
+
+    # ---- Resolver Empresa receptora ----
+    receptor = None
+
+    if cliente_id_in:
+        try:
+            receptor = Empresa.objects.get(id=int(cliente_id_in))
+        except (Empresa.DoesNotExist, TypeError, ValueError):
+            return JsonResponse({
+                'success': False,
+                'error': 'El cliente seleccionado no existe.'
+            }, status=400)
+
+    if receptor is None and cliente_rut:
+        rut_norm = _fmt_rut(cliente_rut)
+        receptor = (
+            Empresa.objects
+            .filter(Q(rut__iexact=rut_norm) | Q(rut__iexact=cliente_rut))
+            .order_by('-id')
+            .first()
+        )
+
+        if receptor is None:
+            # No existe en BD: crear on-the-fly si llegan los datos mínimos
+            if not cliente_nombre:
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        'No existe ningún cliente con ese RUT. Para crearlo '
+                        'envíe también cliente_nombre, giro, direccion, '
+                        'comuna y ciudad.'
+                    )
+                }, status=400)
+
+            try:
+                receptor = Empresa.objects.create(
+                    nombre=cliente_nombre,
+                    rut=rut_norm,
+                    nombre_fantasia=cliente_nombre,
+                    razon_social=cliente_nombre,
+                    giro=(body.get('giro') or '').strip(),
+                    direccion=(body.get('direccion') or '').strip(),
+                    comuna=(body.get('comuna') or '').strip(),
+                    ciudad=(body.get('ciudad') or '').strip(),
+                    esProveedor=False,
+                    correoVendedor=(body.get('email') or '').strip(),
+                    correoAdministrador='',
+                    correoIntercambio='',
+                    contacto1=(body.get('telefono') or '').strip(),
+                    contacto2='',
+                )
+            except Exception as e:
+                logger.exception('Error creando Empresa receptora desde asignar_receptor_dte')
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Error al crear cliente: {e}'
+                }, status=500)
+
+    if receptor is None:
+        return JsonResponse({
+            'success': False,
+            'error': 'Debe enviar cliente_id o cliente_rut para identificar el receptor.'
+        }, status=400)
+
+    receptor_anterior_id = dte.receptor_id
+    receptor_anterior_nombre = dte.receptor.nombre if dte.receptor else None
+
+    dte.receptor = receptor
+    dte.save(update_fields=['receptor'])
+
+    logger.info(
+        "[RECEPTOR] %s asignó receptor a DTE #%s (%s): %s -> %s (id %s)",
+        request.user.username, dte.id, dte.tipo_documento,
+        receptor_anterior_nombre or 'sin receptor',
+        receptor.nombre, receptor.id,
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Receptor asignado: {receptor.nombre} ({receptor.rut})',
+        'dte_id': dte.id,
+        'receptor': {
+            'id': receptor.id,
+            'rut': receptor.rut,
+            'nombre': receptor.nombre,
+            'razon_social': receptor.razon_social,
+            'giro': receptor.giro,
+            'direccion': receptor.direccion,
+            'comuna': receptor.comuna,
+            'ciudad': receptor.ciudad,
+        },
+        'receptor_anterior': {
+            'id': receptor_anterior_id,
+            'nombre': receptor_anterior_nombre,
+        } if receptor_anterior_id else None,
+    })
+
+
+@login_required
 @require_GET
 def detalle_dte(request, dte_id):
     """Retorna el detalle de un DTE de ventas, con productos y pagos.
@@ -26329,6 +26545,7 @@ def cargar_dte_ventas(request):
 
             items.append({
                 'id': dte.id,
+                'receptor_id': dte.receptor_id,
                 'receptor_nombre': dte.receptor.nombre if dte.receptor else 'Sin receptor',
                 'receptor_rut': dte.receptor.rut if dte.receptor else '',
                 'numero_documento': dte.numero_documento,

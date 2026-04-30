@@ -1986,8 +1986,14 @@
 <tr class="${dte.es_nota_credito ? 'fila-nc' : ''}">
     <td style="display: none;">${dte.id || ''}</td>
     <td class="text-start">
-        <span class="fw-medium">${resaltarBusqueda(dte.receptor_nombre || '', search)}</span>
-        <br><code class="small text-muted">${resaltarBusqueda(dte.receptor_rut || '', search)}</code>
+        ${(!dte.receptor_id && (dte.es_nota_credito || (dte.tipo_documento || '').toUpperCase().includes('NOTA DE CREDITO'))) ? `
+            <span class="badge bg-warning text-dark" style="font-size:0.65rem;" title="Esta NC no tiene receptor: el TXT Acepta no se puede descargar hasta asignarlo">
+                <i class="bi bi-exclamation-triangle me-1"></i>Sin receptor
+            </span><br>
+        ` : `
+            <span class="fw-medium">${resaltarBusqueda(dte.receptor_nombre || '', search)}</span>
+            <br><code class="small text-muted">${resaltarBusqueda(dte.receptor_rut || '', search)}</code>
+        `}
         ${dte.vendedor ? `<br><small class="text-muted"><i class="bi bi-person me-1"></i>${dte.vendedor}</small>` : ''}
     </td>
     <td>
@@ -2041,6 +2047,10 @@
             ${['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento) ? `
             <button class="nexo-action-btn warning" title="Editar folio NC" onclick="editarFolioNC(${dte.id || 0}, '${dte.numero_documento}', '${dte.tipo_documento}')">
                 <i class="bi bi-pencil-square"></i>
+            </button>` : ''}
+            ${(!dte.receptor_id && (dte.es_nota_credito || ['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento))) ? `
+            <button class="nexo-action-btn" style="background:#0dcaf0;color:white;" title="Asignar receptor a esta NC (necesario para descargar el TXT Acepta)" onclick="asignarReceptorNC(${dte.id || 0}, '${dte.numero_documento}')">
+                <i class="bi bi-person-plus"></i>
             </button>` : ''}
             {% endif %}
             ${dte.es_traspaso && dte.sucursal_destino && (!dte.nc_asociadas || dte.nc_asociadas.length === 0) && (!dte.ajustes_asociados || dte.ajustes_asociados.length === 0) && dte.estado_dte !== 'ANULADO' && dte.estado_dte !== 'CANCELADO' ? `
@@ -2715,6 +2725,232 @@
         });
     }
 
+    // Asignar receptor a NCs (típicamente sobre boletas) que se emitieron
+    // sin receptor. Sin receptor, validar_datos_dte_acepta falla y el TXT
+    // Acepta no se puede descargar. Este flujo:
+    //   1. Pide RUT.
+    //   2. Busca en /app/api/buscar-cliente/ (Cliente, Empresa, Tickets).
+    //   3. Si existe -> confirma y envía solo cliente_id/cliente_rut.
+    //   4. Si no existe -> abre modal de creación con los campos
+    //      tributarios mínimos (giro, dirección, comuna, ciudad).
+    //   5. POST a /app/documentos/asignar-receptor-dte/.
+    async function asignarReceptorNC(dteId, numeroDoc) {
+        const { value: rutInput, isConfirmed: rutOk } = await Swal.fire({
+            title: `Asignar receptor a NC #${numeroDoc}`,
+            html: `
+                <div class="text-start small">
+                    <p class="mb-2">
+                        Esta NC fue emitida sin receptor identificado, por lo que
+                        el <strong>TXT Acepta no se puede descargar</strong>.
+                    </p>
+                    <label class="form-label small fw-bold mb-1">RUT del cliente <span class="text-danger">*</span></label>
+                    <input type="text" id="asigReceptorRut" class="form-control form-control-sm"
+                           placeholder="Ej: 12345678-9" autofocus>
+                    <small class="text-muted d-block mt-1">
+                        Lo buscaremos en clientes, empresas y tickets anteriores.
+                    </small>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-search me-1"></i>Buscar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0dcaf0',
+            preConfirm: () => {
+                const v = (document.getElementById('asigReceptorRut').value || '').trim();
+                if (!v || v.length < 7) {
+                    Swal.showValidationMessage('Ingrese un RUT válido');
+                    return false;
+                }
+                return v;
+            }
+        });
+        if (!rutOk || !rutInput) return;
+
+        // 1) Buscar cliente
+        let clienteEncontrado = null;
+        let rutFormateado = rutInput;
+        try {
+            const r = await fetch(`/app/api/buscar-cliente/?rut=${encodeURIComponent(rutInput)}`);
+            const data = await r.json();
+            if (data.success && data.cliente) {
+                clienteEncontrado = data;
+            } else if (data.rut_formateado) {
+                rutFormateado = data.rut_formateado;
+            }
+        } catch (e) { /* cae al modo "crear" */ }
+
+        let payloadAsignar = null;
+
+        if (clienteEncontrado) {
+            // 2a) Confirmar uso del cliente encontrado
+            const c = clienteEncontrado.cliente;
+            const cId = clienteEncontrado.cliente_id || null;
+            const { isConfirmed } = await Swal.fire({
+                title: 'Cliente encontrado',
+                html: `
+                    <div class="text-start small">
+                        <div><strong>Nombre:</strong> ${c.nombre || '-'}</div>
+                        <div><strong>RUT:</strong> <code>${c.rut || rutFormateado}</code></div>
+                        ${c.giro ? `<div><strong>Giro:</strong> ${c.giro}</div>` : ''}
+                        ${c.direccion ? `<div><strong>Dirección:</strong> ${c.direccion}</div>` : ''}
+                        ${c.comuna ? `<div><strong>Comuna:</strong> ${c.comuna}</div>` : ''}
+                        ${c.ciudad ? `<div><strong>Ciudad:</strong> ${c.ciudad}</div>` : ''}
+                        <hr class="my-2">
+                        <div class="text-muted">¿Asignarlo como receptor de la NC?</div>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Asignar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#198754'
+            });
+            if (!isConfirmed) return;
+
+            payloadAsignar = {
+                dte_id: dteId,
+                cliente_id: cId,
+                cliente_rut: c.rut || rutFormateado,
+                cliente_nombre: c.nombre,
+                giro: c.giro || '',
+                direccion: c.direccion || '',
+                comuna: c.comuna || '',
+                ciudad: c.ciudad || '',
+                email: c.email || '',
+                telefono: c.telefono || ''
+            };
+        } else {
+            // 2b) No existe -> pedir datos para crearlo
+            const { value: nuevoCli, isConfirmed } = await Swal.fire({
+                title: 'Crear nuevo cliente',
+                html: `
+                    <div class="text-start">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold mb-1">RUT</label>
+                            <input type="text" id="ncReceptorRut" class="form-control form-control-sm" value="${rutFormateado}" readonly style="background:#e9ecef;">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold mb-1">Nombre / Razón Social <span class="text-danger">*</span></label>
+                            <input type="text" id="ncReceptorNombre" class="form-control form-control-sm" placeholder="Nombre o razón social">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold mb-1">Giro <span class="text-danger">*</span></label>
+                            <input type="text" id="ncReceptorGiro" class="form-control form-control-sm" placeholder="Giro comercial">
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">Dirección <span class="text-danger">*</span></label>
+                                <input type="text" id="ncReceptorDireccion" class="form-control form-control-sm" placeholder="Dirección">
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold mb-1">Comuna <span class="text-danger">*</span></label>
+                                <input type="text" id="ncReceptorComuna" class="form-control form-control-sm" placeholder="Comuna">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold mb-1">Ciudad <span class="text-danger">*</span></label>
+                                <input type="text" id="ncReceptorCiudad" class="form-control form-control-sm" placeholder="Ciudad">
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="email" id="ncReceptorEmail" class="form-control form-control-sm" placeholder="Email (opcional)">
+                            </div>
+                            <div class="col-6">
+                                <input type="text" id="ncReceptorTelefono" class="form-control form-control-sm" placeholder="Teléfono (opcional)">
+                            </div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="bi bi-person-plus me-1"></i>Crear y asignar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#198754',
+                width: '520px',
+                preConfirm: () => {
+                    const nombre = (document.getElementById('ncReceptorNombre').value || '').trim();
+                    const giro = (document.getElementById('ncReceptorGiro').value || '').trim();
+                    const direccion = (document.getElementById('ncReceptorDireccion').value || '').trim();
+                    const comuna = (document.getElementById('ncReceptorComuna').value || '').trim();
+                    const ciudad = (document.getElementById('ncReceptorCiudad').value || '').trim();
+                    if (!nombre || !giro || !direccion || !comuna || !ciudad) {
+                        Swal.showValidationMessage('Nombre, giro, dirección, comuna y ciudad son obligatorios para que el TXT Acepta sea válido');
+                        return false;
+                    }
+                    return {
+                        rut: rutFormateado,
+                        nombre, giro, direccion, comuna, ciudad,
+                        email: (document.getElementById('ncReceptorEmail').value || '').trim(),
+                        telefono: (document.getElementById('ncReceptorTelefono').value || '').trim()
+                    };
+                }
+            });
+            if (!isConfirmed || !nuevoCli) return;
+
+            payloadAsignar = {
+                dte_id: dteId,
+                cliente_rut: nuevoCli.rut,
+                cliente_nombre: nuevoCli.nombre,
+                giro: nuevoCli.giro,
+                direccion: nuevoCli.direccion,
+                comuna: nuevoCli.comuna,
+                ciudad: nuevoCli.ciudad,
+                email: nuevoCli.email,
+                telefono: nuevoCli.telefono
+            };
+        }
+
+        // 3) POST de asignación
+        Swal.fire({
+            title: 'Asignando receptor...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            const resp = await fetch('/app/documentos/asignar-receptor-dte/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(payloadAsignar)
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                throw new Error(data.error || `Error ${resp.status}`);
+            }
+
+            await Swal.fire({
+                icon: 'success',
+                title: 'Receptor asignado',
+                html: `
+                    <div class="text-start small">
+                        <div><strong>${data.receptor.nombre}</strong></div>
+                        <div><code>${data.receptor.rut}</code></div>
+                        <hr class="my-2">
+                        <div class="text-muted">Ahora puede descargar el TXT Acepta de la NC.</div>
+                    </div>
+                `,
+                confirmButtonText: 'OK'
+            });
+
+            // Recargar el listado para reflejar el nuevo receptor en la fila
+            if (typeof cargarDTEs === 'function') {
+                cargarDTEs(currentPageDTE || 1, currentSearchDTE || '');
+            } else {
+                location.reload();
+            }
+        } catch (e) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: e.message || 'No se pudo asignar el receptor'
+            });
+        }
+    }
+
     function actualizarMotivoAnulacion() {
         const sel = document.getElementById('anulMotivoSelect');
         const txt = document.getElementById('anulMotivo');
@@ -2858,11 +3094,17 @@
                     </div>
 
                     <hr class="my-2">
-                    <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-person me-1"></i>Datos del cliente (opcional):</p>
+                    <p class="mb-2 fw-bold" style="font-size:0.9rem;">
+                        <i class="bi bi-person me-1"></i>Datos del cliente
+                        <span class="text-danger" id="anulClienteRequiredMark">*</span>
+                        <small id="anulClienteHint" class="text-danger ms-1" style="font-weight:500;">
+                            (obligatorio para emitir NC con TXT al SII)
+                        </small>
+                    </p>
                     <div class="row g-2 mb-1">
                         <div class="col-8">
                             <div class="input-group input-group-sm">
-                                <input type="text" id="anulClienteRut" class="form-control" placeholder="RUT (ej: 12345678-9)">
+                                <input type="text" id="anulClienteRut" class="form-control" placeholder="RUT (ej: 12345678-9)" required>
                                 <button type="button" class="btn btn-outline-primary" onclick="buscarClienteAnulacion()" title="Buscar cliente">
                                     <i class="bi bi-search"></i>
                                 </button>
@@ -2995,10 +3237,31 @@
                         card.style.background = isSel ? 'rgba(0, 102, 255, 0.04)' : '';
                     });
                 };
+                // Mostrar/ocultar la marca "(obligatorio)" segun modalidad.
+                // En OCULTA el receptor es opcional porque no se envia TXT al SII.
+                const actualizarHintCliente = () => {
+                    const sel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
+                    const mark = document.getElementById('anulClienteRequiredMark');
+                    const hint = document.getElementById('anulClienteHint');
+                    const rutInput = document.getElementById('anulClienteRut');
+                    const obligatorio = (sel !== 'OCULTA');
+                    if (mark) mark.style.display = obligatorio ? '' : 'none';
+                    if (hint) {
+                        hint.textContent = obligatorio
+                            ? '(obligatorio para emitir NC con TXT al SII)'
+                            : '(opcional en NC oculta — no se envía al SII)';
+                        hint.className = obligatorio
+                            ? 'text-danger ms-1'
+                            : 'text-muted ms-1';
+                    }
+                    if (rutInput) rutInput.required = obligatorio;
+                };
                 document.querySelectorAll('input[name="modalidadNC"], input[name="metodoDevolucion"]').forEach((r) => {
                     r.addEventListener('change', actualizarEfecto);
+                    r.addEventListener('change', actualizarHintCliente);
                 });
                 actualizarEfecto();
+                actualizarHintCliente();
             },
             preConfirm: () => {
                 const montoVal = parseInt(document.getElementById('anulMontoNC').value) || 0;
@@ -3023,13 +3286,40 @@
                 const motivoFinal = selectVal === 'OTRO' ? txtVal : (txtVal ? `${selectVal}. ${txtVal}` : selectVal);
                 const modalidadSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
                 const metodoSel = (document.querySelector('input[name="metodoDevolucion"]:checked') || {}).value || 'EFECTIVO_CAJA';
+
+                const clienteRut = document.getElementById('anulClienteRut').value.trim();
+                const clienteNombre = document.getElementById('anulClienteNombre').value.trim();
+                const clienteId = document.getElementById('anulClienteId').value || null;
+
+                // Validar receptor obligatorio cuando NO es modalidad OCULTA.
+                // Sin receptor con datos territoriales (giro/dir/comuna/ciudad)
+                // el TXT Acepta no es descargable y la NC queda huerfana.
+                if (modalidadSel !== 'OCULTA') {
+                    if (!clienteRut) {
+                        Swal.showValidationMessage(
+                            'Debe ingresar el RUT del cliente y buscarlo (o crearlo si no existe). ' +
+                            'Para NC sin cliente identificado seleccione la modalidad "NC oculta".'
+                        );
+                        return false;
+                    }
+                    // Si tiene RUT pero no se encontró/creó (no hay cliente_id ni
+                    // nombre completado por la búsqueda), bloqueamos también.
+                    if (!clienteId && !clienteNombre) {
+                        Swal.showValidationMessage(
+                            'El RUT ingresado no se ha buscado en la base. ' +
+                            'Presione el botón de buscar; si no existe, créelo con "Crear Cliente".'
+                        );
+                        return false;
+                    }
+                }
+
                 return {
                     modalidadNC: modalidadSel,
                     metodoDevolucion: modalidadSel === 'DEVOLUCION' ? metodoSel : 'NO_AFECTA_CAJA',
                     montoNC: montoVal,
-                    clienteNombre: document.getElementById('anulClienteNombre').value.trim(),
-                    clienteRut: document.getElementById('anulClienteRut').value.trim(),
-                    clienteId: document.getElementById('anulClienteId').value || null,
+                    clienteNombre: clienteNombre,
+                    clienteRut: clienteRut,
+                    clienteId: clienteId,
                     motivo: motivoFinal
                 };
             }
@@ -3109,6 +3399,7 @@
                     modalidad_nc: modalidadNC,
                     metodo_devolucion: metodoDevolucion,
                     monto_nc: formData.montoNC,
+                    cliente_id: formData.clienteId,
                     cliente_nombre: formData.clienteNombre,
                     cliente_rut: formData.clienteRut,
                     motivo: formData.motivo

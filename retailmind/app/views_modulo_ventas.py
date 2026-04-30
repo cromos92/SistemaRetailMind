@@ -1760,30 +1760,35 @@ def anular_ticket_pendiente(request):
 
 @login_required
 def buscar_cliente_rut(request):
-    """API para buscar cliente por RUT en tabla Cliente"""
-    from app.models import Cliente
+    """API para buscar cliente por RUT.
+
+    Busca en este orden:
+      1. Tabla `Cliente` (CRM clásico).
+      2. Tabla `Empresa` (clientes creados desde POS / gestion-DTE → NCN,
+         que graban vía `guardar_cliente_pos`).
+      3. Tickets anteriores (histórico de ventas).
+    """
+    from app.models import Cliente, Empresa
 
     rut = request.GET.get('rut', '').strip()
-    
+
     if not rut:
         return JsonResponse({
             'success': False,
             'error': 'RUT requerido'
         })
-    
+
     try:
-        # Limpiar y formatear el RUT
         rut_limpio = rut.replace('.', '').replace('-', '').strip()
         rut_formateado = formatear_rut(rut_limpio)
-        
-        # Buscar primero en la tabla de Clientes
+
+        # 1) Tabla de Clientes (CRM)
         cliente = Cliente.objects.filter(
-            Q(rut__iexact=rut_formateado) | 
+            Q(rut__iexact=rut_formateado) |
             Q(rut__icontains=rut_limpio)
         ).filter(activo=True).first()
-        
+
         if cliente:
-            # Cliente encontrado en la base de datos
             cliente_data = {
                 'nombre': cliente.nombre_completo,
                 'rut': cliente.rut,
@@ -1796,24 +1801,51 @@ def buscar_cliente_rut(request):
                 'telefono_secundario': cliente.celular if cliente.telefono else '',
                 'email_facturacion': cliente.email or '',
             }
-            
+
             return JsonResponse({
                 'success': True,
                 'cliente': cliente_data,
                 'mensaje': 'Cliente encontrado en base de datos',
                 'cliente_id': cliente.id
             })
-        
-        # Si no está en Clientes, buscar en tickets anteriores
+
+        # 2) Tabla Empresa (clientes creados desde POS / NCN en gestion-DTE)
+        empresa_cliente = Empresa.objects.filter(
+            Q(rut__iexact=rut_formateado) |
+            Q(rut__icontains=rut_limpio)
+        ).filter(esProveedor=False).order_by('-id').first()
+
+        if empresa_cliente:
+            cliente_data = {
+                'nombre': empresa_cliente.nombre or empresa_cliente.razon_social or '',
+                'rut': empresa_cliente.rut,
+                'email': empresa_cliente.correoVendedor or empresa_cliente.email or '',
+                'telefono': empresa_cliente.contacto1 or empresa_cliente.telefono or '',
+                'giro': empresa_cliente.giro or '',
+                'comuna': empresa_cliente.comuna or '',
+                'ciudad': empresa_cliente.ciudad or '',
+                'direccion': empresa_cliente.direccion or '',
+                'telefono_secundario': empresa_cliente.contacto2 or '',
+                'email_facturacion': empresa_cliente.correoAdministrador or '',
+            }
+
+            return JsonResponse({
+                'success': True,
+                'cliente': cliente_data,
+                'mensaje': 'Cliente encontrado en empresas',
+                'cliente_id': empresa_cliente.id
+            })
+
+        # 3) Histórico de tickets
         ticket_con_cliente = Ticket.objects.filter(
-            Q(cliente_rut__iexact=rut_formateado) | 
+            Q(cliente_rut__iexact=rut_formateado) |
             Q(cliente_rut__icontains=rut_limpio)
         ).exclude(
             cliente_nombre__isnull=True
         ).exclude(
             cliente_nombre__exact=''
         ).order_by('-created_at').first()
-        
+
         if ticket_con_cliente and ticket_con_cliente.cliente_nombre:
             cliente_data = {
                 'nombre': ticket_con_cliente.cliente_nombre,
@@ -1827,19 +1859,19 @@ def buscar_cliente_rut(request):
                 'telefono_secundario': ticket_con_cliente.cliente_telefono_secundario or '',
                 'email_facturacion': ticket_con_cliente.cliente_email_facturacion or '',
             }
-            
+
             return JsonResponse({
                 'success': True,
                 'cliente': cliente_data,
                 'mensaje': 'Cliente encontrado en tickets anteriores'
             })
-        else:
-            return JsonResponse({
-                'success': False,
-                'error': 'Cliente no encontrado',
-                'rut_formateado': rut_formateado  # Devolver el RUT formateado para pre-llenarlo
-            })
-            
+
+        return JsonResponse({
+            'success': False,
+            'error': 'Cliente no encontrado',
+            'rut_formateado': rut_formateado,
+        })
+
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -14947,39 +14979,53 @@ def buscar_productos_para_cambio(request):
 @require_POST
 @login_required
 def guardar_cliente_pos(request):
-    """Guardar datos del cliente desde el POS"""
+    """Guardar datos del cliente desde el POS / flujo NCN de gestion-DTE.
+
+    Usa la tabla `Empresa` (no `Cliente` CRM). Si encuentra un registro con el
+    mismo RUT lo actualiza; si no, crea uno nuevo siempre que llegue RUT.
+    """
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+
     try:
-        data = json.loads(request.body)
-        
-        nombre = data.get('nombre', '').strip()
-        rut = data.get('rut', '').strip()
-        email = data.get('email', '').strip()
-        telefono = data.get('telefono', '').strip()
+        try:
+            data = json.loads(request.body or b'{}')
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Datos JSON inválidos'
+            }, status=400)
+
+        nombre = (data.get('nombre') or '').strip()
+        rut_raw = (data.get('rut') or '').strip()
+        email = (data.get('email') or '').strip()
+        telefono = (data.get('telefono') or '').strip()
         tipo_documento = data.get('tipo_documento', 'BOLETA_ELECTRONICA')
-        
-        # Datos adicionales
-        giro = data.get('giro', '').strip()
-        direccion = data.get('direccion', '').strip()
-        comuna = data.get('comuna', '').strip()
-        ciudad = data.get('ciudad', '').strip()
-        telefono_secundario = data.get('telefono_secundario', '').strip()
-        email_facturacion = data.get('email_facturacion', '').strip()
-        
-        # Si no hay datos suficientes, no guardar
-        if not nombre and not rut:
+
+        giro = (data.get('giro') or '').strip()
+        direccion = (data.get('direccion') or '').strip()
+        comuna = (data.get('comuna') or '').strip()
+        ciudad = (data.get('ciudad') or '').strip()
+        telefono_secundario = (data.get('telefono_secundario') or '').strip()
+        email_facturacion = (data.get('email_facturacion') or '').strip()
+
+        if not nombre and not rut_raw:
             return JsonResponse({
                 'success': False,
                 'error': 'Debe proporcionar al menos nombre o RUT'
-            })
-        
-        # Buscar o crear empresa/cliente
+            }, status=400)
+
+        # Normalizar RUT: si viene sin guión lo formateamos para que matchee
+        # con registros existentes y respete el regex validator de Empresa.rut
+        rut = formatear_rut(rut_raw) if rut_raw else ''
+
         cliente = None
         if rut:
-            # Buscar por RUT
-            cliente = Empresa.objects.filter(rut=rut).order_by('-id').first()
-        
+            cliente = Empresa.objects.filter(
+                Q(rut__iexact=rut) | Q(rut__iexact=rut_raw)
+            ).order_by('-id').first()
+
         if cliente:
-            # Actualizar datos existentes para empresas/personas
             if nombre:
                 cliente.nombre = nombre
                 cliente.razon_social = nombre
@@ -14992,7 +15038,6 @@ def guardar_cliente_pos(request):
                 cliente.contacto1 = telefono or cliente.contacto1 or ''
                 cliente.contacto2 = telefono_secundario or cliente.contacto2 or ''
 
-            # Actualizar campos tributarios (para facturas o si vienen valores)
             if tipo_documento == 'FACTURA_ELECTRONICA' or giro or direccion or comuna or ciudad:
                 if giro:
                     cliente.giro = giro
@@ -15004,14 +15049,13 @@ def guardar_cliente_pos(request):
                     cliente.ciudad = ciudad
 
             cliente.save()
-            print(f"✅ Cliente actualizado (ID {cliente.id}) - giro: {cliente.giro}")
+            _log.info("Cliente actualizado (Empresa ID %s) - giro: %s", cliente.id, cliente.giro)
         else:
-            # Crear nuevo registro (empresa) solo si hay RUT
             if not rut:
                 return JsonResponse({
                     'success': False,
                     'error': 'Debe proporcionar un RUT para crear un nuevo cliente'
-                })
+                }, status=400)
 
             cliente = Empresa.objects.create(
                 nombre=nombre or f'Cliente {rut}',
@@ -15029,24 +15073,20 @@ def guardar_cliente_pos(request):
                 contacto1=telefono or '',
                 contacto2=telefono_secundario or '',
             )
-            print(f"✅ Cliente creado (ID {cliente.id}) - giro: {cliente.giro}")
-        
+            _log.info("Cliente creado (Empresa ID %s) - giro: %s", cliente.id, cliente.giro)
+
         return JsonResponse({
             'success': True,
             'cliente_id': cliente.id,
             'mensaje': 'Cliente guardado exitosamente'
         })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
+
     except Exception as e:
+        _log.exception("Error inesperado en guardar_cliente_pos")
         return JsonResponse({
             'success': False,
             'error': f'Error al guardar cliente: {str(e)}'
-        })
+        }, status=500)
 
 
 @require_POST
