@@ -25492,7 +25492,23 @@ def anular_factura_dte(request):
                 dte.monto_neto = Decimal(nuevo_neto)
                 dte.monto_con_iva = nuevo_con_iva
                 dte.unidades_productos = int(nuevas_unidades)
-                if int(nuevas_unidades) == 0 or es_anulacion_total:
+                # IMPORTANTE: solo marcar el DTE como ANULADO cuando la NC
+                # es OCULTA. Para DEVOLUCION e INFORMATIVA mantenemos el
+                # estado original (EMITIDO/ACEPTADO) para que cuadratura
+                # del día de emisión siga contando la venta. La NC se
+                # encarga del balance:
+                #   - DEVOLUCION resta del día de la NC.
+                #   - INFORMATIVA es solo legal/contable (no afecta caja).
+                # Si marcáramos como ANULADO, cuadratura del día original
+                # excluiría el DTE y quedaría doble descuento (DEVOLUCION)
+                # o pérdida del ingreso real (INFORMATIVA). La protección
+                # contra una segunda NC sigue funcionando porque
+                # `total_nc_previas` ya cubre el `monto_restante`.
+                anular_estado = (
+                    (int(nuevas_unidades) == 0 or es_anulacion_total)
+                    and modalidad_nc == 'OCULTA'
+                )
+                if anular_estado:
                     dte.estado_dte = 'ANULADO'
                     dte.save(update_fields=[
                         'monto_neto', 'monto_con_iva', 'unidades_productos', 'estado_dte'
@@ -25617,8 +25633,12 @@ def anular_factura_dte(request):
                         )
                         movs_creados += 1
 
-                dte.estado_dte = 'ANULADO'
-                dte.save(update_fields=['estado_dte'])
+                # Solo marcar el DTE original como ANULADO cuando la NC
+                # es OCULTA — ver comentario en el bloque "anulación por
+                # productos_afectados" más arriba para el racional.
+                if modalidad_nc == 'OCULTA':
+                    dte.estado_dte = 'ANULADO'
+                    dte.save(update_fields=['estado_dte'])
 
     # 6. Construir datos para TXT NC
     from collections import defaultdict

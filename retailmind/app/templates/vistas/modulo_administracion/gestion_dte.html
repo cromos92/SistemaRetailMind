@@ -3568,13 +3568,24 @@
                 const infoEl = document.getElementById('anulInfoTotal');
                 const actualizarInfo = () => {
                     const v = parseInt(montoEl.value) || 0;
+                    const modSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
                     if (v >= montoRestante) {
-                        infoEl.innerHTML = '<br>El documento quedará <strong>ANULADO</strong> y se revertirá el stock.';
+                        // En modalidad OCULTA marcamos el DTE como ANULADO
+                        // (es el flujo de "borrar" todo el rastro). En las
+                        // otras modalidades el DTE preserva su estado para
+                        // que cuadratura del día original siga contando la
+                        // venta y el balance lo haga la NC en su día.
+                        if (modSel === 'OCULTA') {
+                            infoEl.innerHTML = '<br>El documento quedará <strong>ANULADO</strong> y se revertirá el stock (modalidad OCULTA).';
+                        } else {
+                            infoEl.innerHTML = '<br>Se revertirá el stock y se emitirá la NC. El DTE original conservará su estado para que la cuadratura del día de emisión siga reflejando la venta.';
+                        }
                     } else {
                         infoEl.innerHTML = '<br>NC parcial: el documento <strong>no</strong> se marcará como anulado. Podrá generar otra NC por el restante.';
                     }
                 };
                 montoEl.addEventListener('input', actualizarInfo);
+                document.querySelectorAll('input[name="modalidadNC"]').forEach(r => r.addEventListener('change', actualizarInfo));
                 actualizarInfo();
 
                 // Alerta dinamica del efecto segun la modalidad seleccionada.
