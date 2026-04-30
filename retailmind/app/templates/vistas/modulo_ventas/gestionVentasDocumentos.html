@@ -86,7 +86,12 @@
                         </div>
                     </div>
                     <div class="col-md-4 text-end">
-                        <button class="btn btn-outline-secondary btn-sm" onclick="copiarTablaParaExcel()" title="Copiar todos los datos al portapapeles (pegar en Excel)">
+                        {% if puede_crear_dte_manual %}
+                        <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearDteManual" title="Crear un DTE manual (sin productos) para que figure en cuadratura y reportes">
+                            <i class="ri-add-line"></i> DTE Manual
+                        </button>
+                        {% endif %}
+                        <button class="btn btn-outline-secondary btn-sm ms-1" onclick="copiarTablaParaExcel()" title="Copiar todos los datos al portapapeles (pegar en Excel)">
                             <i class="ri-file-copy-line"></i> Copiar Tabla
                         </button>
                         <button class="btn btn-success btn-sm ms-1" onclick="exportarDocumentos()">
@@ -342,6 +347,121 @@
         </div>
     </div>
 </div>
+
+{% if puede_crear_dte_manual %}
+<!-- Modal: Crear DTE manual (sólo administradores) -->
+<!-- Permite registrar boletas/facturas emitidas fuera del sistema       -->
+<!-- (ej.: boleta papel a mano, factura externa) para que figuren en la   -->
+<!-- cuadratura de caja y en el reporte de ventas-sucursal. No genera     -->
+<!-- movimientos de stock ni TXT a Acepta.                                -->
+<div class="modal fade" id="modalCrearDteManual" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="ri-add-line me-1"></i> Crear DTE manual
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning py-2 mb-3" style="font-size:12px;">
+                    <i class="ri-information-line me-1"></i>
+                    Este DTE es <strong>informativo</strong> para que aparezca en cuadratura y reportes.
+                    No descuenta stock, no genera correlativo SII y no envía TXT a Acepta.
+                </div>
+
+                {% if not sucursal_actual %}
+                <div class="alert alert-danger py-2" style="font-size:12px;">
+                    <i class="ri-error-warning-line me-1"></i>
+                    Debes seleccionar una sucursal antes de crear un DTE manual.
+                </div>
+                {% endif %}
+
+                <form id="formCrearDteManual" onsubmit="return false;">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label mb-1" for="dteManualTipo">Tipo de documento <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="dteManualTipo" required>
+                                <option value="BOLETA ELECTRONICA">Boleta Electrónica</option>
+                                <option value="BOLETA PAPEL">Boleta Papel</option>
+                                <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label mb-1" for="dteManualNumero">N° documento <span class="text-danger">*</span></label>
+                            <input type="number" min="1" step="1" class="form-control form-control-sm" id="dteManualNumero" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label mb-1" for="dteManualFecha">Fecha emisión <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control form-control-sm" id="dteManualFecha" value="{{ fecha_hoy_str }}" required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label mb-1" for="dteManualMonto">Monto total <span class="text-danger">*</span></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" min="1" step="1" class="form-control" id="dteManualMonto" required>
+                            </div>
+                            <small class="text-muted" style="font-size:10px;">
+                                Boletas: monto con IVA. Facturas: neto (se agrega IVA automáticamente).
+                            </small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label mb-1" for="dteManualVendedor">Vendedor <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="dteManualVendedor" required>
+                                <option value="">— Seleccionar —</option>
+                                {% for v in vendedores_sucursal %}
+                                <option value="{{ v.id }}">{{ v.codigo_vendedor }} - {{ v.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if not vendedores_sucursal %}
+                            <small class="text-danger" style="font-size:10px;">
+                                No hay vendedores activos en esta sucursal.
+                            </small>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label mb-1" for="dteManualMetodo">Método de pago <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="dteManualMetodo" required>
+                                {% for codigo, nombre in metodo_pago_choices %}
+                                {% if codigo != 'MULTIPLE' %}
+                                <option value="{{ codigo }}">{{ nombre }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 dte-manual-extra" id="dteManualWrapTipoTarjeta" style="display:none;">
+                            <label class="form-label mb-1" for="dteManualTipoTarjeta">Tipo tarjeta / plataforma</label>
+                            <input type="text" class="form-control form-control-sm" id="dteManualTipoTarjeta"
+                                   placeholder="Ej.: VISA, MASTERCARD, FALABELLA, MERCADOPAGO...">
+                        </div>
+                        <div class="col-md-6 dte-manual-extra" id="dteManualWrapVoucher" style="display:none;">
+                            <label class="form-label mb-1" for="dteManualVoucher">Voucher / N° pedido</label>
+                            <input type="text" class="form-control form-control-sm" id="dteManualVoucher"
+                                   placeholder="Voucher Transbank o N° de pedido (Venta Internet)">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label mb-1" for="dteManualReferencias">Observaciones (opcional)</label>
+                            <input type="text" class="form-control form-control-sm" id="dteManualReferencias" maxlength="200"
+                                   placeholder="Ej.: regularización boleta papel emitida a mano el 12/04">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-warning btn-sm" id="btnCrearDteManual" onclick="crearDteManual()" {% if not sucursal_actual %}disabled{% endif %}>
+                    <i class="ri-save-line me-1"></i> Crear DTE manual
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- NEXO Design System Styles -->
 <style>
@@ -1048,6 +1168,7 @@ document.addEventListener('DOMContentLoaded', function() {
         anularDocumento: '{% url "anular_documento_venta" %}',
         eliminarDocumento: '{% url "eliminar_documento_venta" %}',
         editarBoletaPapel: '{% url "editar_dte_boleta_papel" %}',
+        crearDteManual: '{% url "crear_dte_manual" %}',
         exportarExcel: '/api/ventas/exportar-documentos/',
         detalleDocumento: (id) => `{% url "detalle_documento_venta" documento_id=0 %}`.replace('/0/', `/${id}/`),
     };
@@ -1282,11 +1403,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         tbody.innerHTML = documentosData.map(doc => `
-            <tr>
+            <tr${doc.es_manual ? ' class="dte-manual-row"' : ''}>
                 <td>
                     <span class="badge badge-tipo ${obtenerClaseTipo(doc.tipo)}" title="${doc.tipo}">
                         <i class="${obtenerIconoTipo(doc.tipo)} me-1"></i>${abreviarTipo(doc.tipo)}
                     </span>
+                    ${doc.es_manual ? '<span class="badge bg-warning text-dark ms-1" style="font-size:9px;" title="DTE creado manualmente desde Gestión de Documentos">MANUAL</span>' : ''}
                 </td>
                 <td>
                     <span class="fw-medium">#${doc.numero}</span>
@@ -2180,6 +2302,120 @@ document.addEventListener('DOMContentLoaded', function() {
     window.actualizarListado = function() {
         cargarDocumentos();
     };
+
+    // === DTE MANUAL (sólo administradores) ===
+    //
+    // Envía el form `#formCrearDteManual` al endpoint `crear_dte_manual`
+    // y, en éxito, refresca el listado para que el nuevo DTE aparezca.
+    // El endpoint también valida el rol del lado servidor; el frontend
+    // sólo evita pedidos malformados.
+    window.crearDteManual = function() {
+        const tipo = (document.getElementById('dteManualTipo')?.value || '').trim();
+        const numero = (document.getElementById('dteManualNumero')?.value || '').trim();
+        const fecha = (document.getElementById('dteManualFecha')?.value || '').trim();
+        const monto = (document.getElementById('dteManualMonto')?.value || '').trim();
+        const vendedor = (document.getElementById('dteManualVendedor')?.value || '').trim();
+        const metodo = (document.getElementById('dteManualMetodo')?.value || '').trim();
+        const tipoTarjeta = (document.getElementById('dteManualTipoTarjeta')?.value || '').trim();
+        const voucher = (document.getElementById('dteManualVoucher')?.value || '').trim();
+        const referencias = (document.getElementById('dteManualReferencias')?.value || '').trim();
+
+        if (!tipo) { mostrarError('Selecciona el tipo de documento'); return; }
+        if (!numero || parseInt(numero, 10) <= 0) { mostrarError('Ingresa un N° de documento válido'); return; }
+        if (!fecha) { mostrarError('Selecciona la fecha de emisión'); return; }
+        if (!monto || parseInt(monto, 10) <= 0) { mostrarError('Ingresa un monto total válido'); return; }
+        if (!vendedor) { mostrarError('Selecciona un vendedor'); return; }
+        if (!metodo) { mostrarError('Selecciona un método de pago'); return; }
+        if (metodo === 'VENTA_INTERNET') {
+            if (!tipoTarjeta) { mostrarError('Venta por Internet requiere plataforma (Falabella, Mercado Pago, Paris…)'); return; }
+            if (!voucher) { mostrarError('Venta por Internet requiere N° de pedido / voucher'); return; }
+        }
+
+        const payload = {
+            tipo_documento: tipo,
+            numero_documento: parseInt(numero, 10),
+            fecha_emision: fecha,
+            monto_total: parseInt(monto, 10),
+            vendedor_id: parseInt(vendedor, 10),
+            metodo_pago: metodo,
+            tipo_tarjeta: tipoTarjeta || null,
+            voucher: voucher || null,
+            referencias: referencias || '',
+        };
+
+        const btn = document.getElementById('btnCrearDteManual');
+        if (btn) btn.disabled = true;
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ title: 'Creando DTE manual…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        }
+
+        fetch(apiUrls.crearDteManual, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(async (r) => {
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || !data.success) {
+                throw new Error(data.error || `HTTP ${r.status}`);
+            }
+            return data;
+        })
+        .then((data) => {
+            if (typeof Swal !== 'undefined') Swal.close();
+            const modalEl = document.getElementById('modalCrearDteManual');
+            const inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+            if (inst) inst.hide();
+
+            const form = document.getElementById('formCrearDteManual');
+            if (form) form.reset();
+            const fechaInput = document.getElementById('dteManualFecha');
+            if (fechaInput) fechaInput.value = '{{ fecha_hoy_str }}';
+            const wrapTarjeta = document.getElementById('dteManualWrapTipoTarjeta');
+            const wrapVoucher = document.getElementById('dteManualWrapVoucher');
+            if (wrapTarjeta) wrapTarjeta.style.display = 'none';
+            if (wrapVoucher) wrapVoucher.style.display = 'none';
+
+            mostrarExito(`DTE manual creado: ${data.documento.tipo_documento} #${data.documento.numero_documento}`);
+            cargarDocumentos();
+        })
+        .catch((err) => {
+            console.error('Error crear DTE manual:', err);
+            if (typeof Swal !== 'undefined') Swal.close();
+            mostrarError(err.message || 'No se pudo crear el DTE manual');
+        })
+        .finally(() => {
+            if (btn) btn.disabled = false;
+        });
+    };
+
+    // Mostrar/ocultar campos extra (tipo_tarjeta, voucher) según el
+    // método de pago seleccionado. Para Transbank y Venta Internet
+    // estos datos son útiles para que la cuadratura clasifique por
+    // plataforma o canal.
+    document.addEventListener('DOMContentLoaded', () => {
+        const select = document.getElementById('dteManualMetodo');
+        if (!select) return;
+        const wrapTarjeta = document.getElementById('dteManualWrapTipoTarjeta');
+        const wrapVoucher = document.getElementById('dteManualWrapVoucher');
+        const sync = () => {
+            const m = (select.value || '').toUpperCase();
+            const usaTarjeta = m === 'VENTA_INTERNET'
+                || m === 'TARJETA_DEBITO' || m === 'TARJETA_CREDITO'
+                || m === 'TARJETA_COMERCIAL'
+                || m.startsWith('TBK_');
+            const usaVoucher = usaTarjeta || m === 'TRANSFERENCIA' || m === 'CHEQUE';
+            if (wrapTarjeta) wrapTarjeta.style.display = usaTarjeta ? '' : 'none';
+            if (wrapVoucher) wrapVoucher.style.display = usaVoucher ? '' : 'none';
+        };
+        select.addEventListener('change', sync);
+        sync();
+    });
 
     window.cambiarPagina = function(pagina) {
         if (pagina >= 1 && pagina <= Math.ceil(totalDocumentos / documentosPorPagina)) {

@@ -164,6 +164,17 @@ class Dte(models.Model):
         help_text="Motivo por el cual se descartó"
     )
 
+    # === DTE MANUAL (CUADRATURA) ===
+    # True cuando se creó manualmente desde Gestión de Documentos para
+    # registrar una venta que ocurrió fuera del sistema (boleta papel
+    # emitida a mano, factura externa, etc.). Estos DTEs no tienen
+    # productos asociados ni movimientos de stock; solo cabecera + un
+    # `Dte_Detalle_Pago` para que figuren en cuadratura y reportes.
+    es_manual = models.BooleanField(
+        default=False,
+        help_text="DTE creado manualmente desde Gestión de Documentos (sin productos, solo cabecera + pago)"
+    )
+
     # === CAMPOS PARA MODO DE PRECIO EN DESPACHO EXTERNO ===
     TIPO_PRECIO_EXTERNO_CHOICES = [
         ('COSTO', 'Solo Costo'),

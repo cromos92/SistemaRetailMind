@@ -32,6 +32,7 @@ from .views_modulo_ventas import (
     anular_documento_venta,
     eliminar_documento_venta,
     editar_dte_boleta_papel,
+    crear_dte_manual,
     # Funciones Cuadratura y Arqueo
     cuadratura_caja,
     generar_cuadratura_caja,
@@ -715,6 +716,7 @@ urlpatterns = [
     path('api/ventas/anular-documento/', anular_documento_venta, name='anular_documento_venta'),
     path('api/ventas/eliminar-documento/', eliminar_documento_venta, name='eliminar_documento_venta'),
     path('api/ventas/editar-boleta-papel/', editar_dte_boleta_papel, name='editar_dte_boleta_papel'),
+    path('api/ventas/documentos/crear-manual/', crear_dte_manual, name='crear_dte_manual'),
     
     # === CUADRATURA Y ARQUEO DE CAJA ===
     path('ventas/cuadratura-caja/', cuadratura_caja, name='cuadratura_caja'),

@@ -3648,6 +3648,25 @@ def gestion_ventas_documentos(request):
     # extremos del grupo, para que el frontend pueda ofrecer el cambio.
     compatibles_por_tipo = permisos_dte.get('compatibles_por_tipo', {})
 
+    # Vendedores de la sucursal activa, para poblar el selector del modal
+    # "DTE manual". Se exponen solo los activos y asignados a esta
+    # sucursal (M2M `Vendedor.sucursales`). Si no hay sucursal activa la
+    # lista queda vacía y el modal lo refleja.
+    if sucursal_actual_id:
+        vendedores_sucursal = list(
+            Vendedor.objects
+            .filter(sucursales__id=sucursal_actual_id, activo=True)
+            .order_by('nombre')
+            .values('id', 'nombre', 'codigo_vendedor')
+            .distinct()
+        )
+    else:
+        vendedores_sucursal = []
+
+    # Hoy en zona horaria Chile: se usa como `value` por defecto del
+    # input de fecha en el modal de DTE manual (regla timezone-chile).
+    fecha_hoy_str = timezone.localdate().strftime('%Y-%m-%d')
+
     context = {
         'sucursal_actual': sucursal_actual,
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
@@ -3672,6 +3691,12 @@ def gestion_ventas_documentos(request):
         # compatibles, p. ej. BOLETA ELECTRONICA ↔ BOLETA PAPEL).
         'tipos_dte_compatibles_json': json.dumps(compatibles_por_tipo),
         'puede_cambiar_tipo_dte_flag': bool(compatibles_por_tipo),
+        # Creación de DTE manual: solo administradores. La pantalla
+        # esconde el botón cuando el flag es False; el endpoint también
+        # valida el rol del lado servidor.
+        'puede_crear_dte_manual': es_admin,
+        'vendedores_sucursal': vendedores_sucursal,
+        'fecha_hoy_str': fecha_hoy_str,
     }
     return render(request, 'vistas/modulo_ventas/gestionVentasDocumentos.html', context)
 
@@ -4013,6 +4038,7 @@ def listar_documentos_ventas(request):
                     if dte.numero_documento in ticket_map_by_folio else None
                 ),
                 'observaciones': getattr(dte, 'referencias', '') or '',
+                'es_manual': bool(getattr(dte, 'es_manual', False)),
             })
 
         return JsonResponse({
@@ -5621,6 +5647,274 @@ def editar_dte_boleta_papel(request):
             'success': False,
             'error': f'Error al editar documento: {str(e)}'
         })
+
+
+# ========== DTE MANUAL (CUADRATURA INFORMATIVA) ==========
+
+# Tipos de DTE permitidos para creación manual desde Gestión de
+# Documentos. No incluye FACTURA EXENTA ni NOTA DE CREDITO porque
+# estos requieren reglas de negocio adicionales (servicios sin IVA,
+# documento afectado, motivo, etc.) que escapan al alcance del
+# "DTE informativo para cuadratura".
+TIPOS_DTE_MANUAL_PERMITIDOS = (
+    'BOLETA ELECTRONICA',
+    'BOLETA PAPEL',
+    'FACTURA ELECTRONICA',
+)
+
+
+@login_required
+@require_POST
+def crear_dte_manual(request):
+    """Crea un DTE manual (sin productos) para que figure en cuadratura
+    y reportes de ventas.
+
+    Pensado para registrar boletas/facturas que se emitieron fuera del
+    sistema (boleta papel a mano, factura externa, etc.) y necesitan
+    aparecer en `/app/ventas/documentos/`, en el resumen de caja y en
+    `/app/reportes/ventas-sucursal/`. NO genera movimientos de stock,
+    NO emite TXT a Acepta y NO consume correlativos del talonario
+    electrónico: el operador digita el folio que corresponda.
+
+    Body esperado::
+
+        {
+          "tipo_documento": "BOLETA ELECTRONICA" | "BOLETA PAPEL" | "FACTURA ELECTRONICA",
+          "numero_documento": 12345,
+          "fecha_emision": "2026-04-30",        // opcional, default = hoy Chile
+          "monto_total": 10000,
+          "vendedor_id": 7,
+          "metodo_pago": "EFECTIVO",
+          "tipo_tarjeta": "...",                 // opcional
+          "voucher": "...",                      // opcional (obligatorio en VENTA_INTERNET)
+          "referencias": "..."                   // opcional, texto libre
+        }
+
+    Sólo administradores (`request.user.rol == 'administrador'`).
+    """
+    from decimal import Decimal
+
+    # Restricción de rol: solo administradores. La pantalla ya esconde el
+    # botón cuando no corresponde, pero validamos también del lado servidor.
+    if getattr(request.user, 'rol', '') != 'administrador':
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo los administradores pueden crear DTEs manuales'
+        }, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+
+    sucursal_id = get_sucursal_id(request)
+    if not sucursal_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'No hay sucursal seleccionada en la sesión'
+        }, status=400)
+
+    tipo_documento = (data.get('tipo_documento') or '').strip().upper()
+    if tipo_documento not in TIPOS_DTE_MANUAL_PERMITIDOS:
+        return JsonResponse({
+            'success': False,
+            'error': (
+                f'Tipo de documento no permitido para DTE manual: {tipo_documento}. '
+                f'Permitidos: {", ".join(TIPOS_DTE_MANUAL_PERMITIDOS)}'
+            )
+        }, status=400)
+
+    try:
+        numero_documento = int(data.get('numero_documento'))
+    except (TypeError, ValueError):
+        return JsonResponse({
+            'success': False,
+            'error': 'Número de documento inválido'
+        }, status=400)
+    if numero_documento <= 0:
+        return JsonResponse({
+            'success': False,
+            'error': 'El número de documento debe ser un entero positivo'
+        }, status=400)
+
+    fecha_raw = (data.get('fecha_emision') or '').strip()
+    if fecha_raw:
+        try:
+            fecha_emision = datetime.strptime(fecha_raw, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Fecha inválida. Formato esperado YYYY-MM-DD'
+            }, status=400)
+    else:
+        # Default: hoy en zona horaria Chile (regla timezone-chile).
+        fecha_emision = timezone.localdate()
+
+    try:
+        monto_total = int(data.get('monto_total'))
+    except (TypeError, ValueError):
+        return JsonResponse({
+            'success': False,
+            'error': 'Monto total inválido'
+        }, status=400)
+    if monto_total <= 0:
+        return JsonResponse({
+            'success': False,
+            'error': 'El monto total debe ser mayor a 0'
+        }, status=400)
+
+    vendedor_id_raw = data.get('vendedor_id')
+    try:
+        vendedor_id = int(vendedor_id_raw) if vendedor_id_raw is not None else None
+    except (TypeError, ValueError):
+        vendedor_id = None
+    if not vendedor_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Debe seleccionar un vendedor'
+        }, status=400)
+
+    metodo_pago = (data.get('metodo_pago') or '').strip().upper()
+    metodos_validos = {c for c, _ in METODO_PAGO_TICKET_CHOICES}
+    if metodo_pago not in metodos_validos:
+        return JsonResponse({
+            'success': False,
+            'error': f'Método de pago inválido: {metodo_pago}'
+        }, status=400)
+
+    tipo_tarjeta = (data.get('tipo_tarjeta') or '').strip() or None
+    voucher = (data.get('voucher') or '').strip() or None
+    referencias = (data.get('referencias') or '').strip()
+
+    # VENTA_INTERNET: misma regla de validación que `editar_dte_boleta_papel`
+    # (se usa el campo `tipo_tarjeta` para la plataforma y `voucher` para el
+    # N° de pedido). Sin estos datos la cuadratura no puede clasificar el
+    # ingreso por plataforma (Falabella, Mercado Pago, etc.).
+    if metodo_pago == 'VENTA_INTERNET':
+        if not tipo_tarjeta:
+            return JsonResponse({
+                'success': False,
+                'error': 'Venta por Internet requiere plataforma (Mercado Pago, Falabella, Paris…)'
+            }, status=400)
+        if not voucher:
+            return JsonResponse({
+                'success': False,
+                'error': 'Venta por Internet requiere N° de pedido / voucher'
+            }, status=400)
+
+    try:
+        sucursal = Sucursal.objects.select_related('empresa').get(id=sucursal_id)
+    except Sucursal.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Sucursal de la sesión no encontrada'
+        }, status=400)
+
+    if not sucursal.empresa_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'La sucursal no tiene empresa asociada (emisor del DTE)'
+        }, status=400)
+
+    try:
+        vendedor = Vendedor.objects.get(id=vendedor_id)
+    except Vendedor.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Vendedor no encontrado'
+        }, status=400)
+
+    # Folio único por (sucursal, tipo_documento). Mismo invariante que
+    # `editar_dte_boleta_papel` para evitar pisar un DTE real ya emitido.
+    if Dte.objects.filter(
+        sucursal_id=sucursal_id,
+        tipo_documento=tipo_documento,
+        numero_documento=numero_documento,
+    ).exists():
+        return JsonResponse({
+            'success': False,
+            'error': (
+                f'Ya existe un {tipo_documento} con el número '
+                f'{numero_documento} en esta sucursal'
+            )
+        }, status=400)
+
+    # Cálculo neto/IVA: las boletas guardan total IVA-inclusive y derivan
+    # el neto dividiendo por 1.19. Las facturas guardan neto y agregan
+    # 19% de IVA al total. Replica la misma lógica que
+    # `_generar_dte_desde_ticket` para mantener consistencia con DTEs
+    # generados desde tickets (cuadratura usa `monto_con_iva`).
+    es_boleta = tipo_documento in ('BOLETA ELECTRONICA', 'BOLETA PAPEL')
+    total_dec = Decimal(monto_total)
+    if es_boleta:
+        monto_con_iva = total_dec
+        monto_neto = (total_dec / Decimal('1.19')).quantize(Decimal('1'))
+    else:
+        monto_neto = total_dec
+        iva = (total_dec * Decimal('0.19')).quantize(Decimal('1'))
+        monto_con_iva = total_dec + iva
+
+    referencias_final = referencias or 'DTE MANUAL'
+
+    try:
+        with transaction.atomic():
+            dte = Dte.objects.create(
+                emisor=sucursal.empresa,
+                receptor=None,
+                numero_documento=numero_documento,
+                tipo_documento=tipo_documento,
+                monto_con_iva=monto_con_iva,
+                monto_neto=monto_neto,
+                estado_pago='PAGADO',
+                estado_dte='EMITIDO',
+                responsable=request.user.username or '',
+                fecha_emision=fecha_emision,
+                fecha_vencimiento=fecha_emision,
+                diasCredito=0,
+                bultos=0,
+                unidades_productos=0,
+                vendedor=vendedor,
+                descuento=0,
+                sucursal=sucursal,
+                hora=timezone.localtime().time(),
+                tipo_transaccion='VENTA_PUBLICO',
+                referencias=referencias_final,
+                descartado=False,
+                es_manual=True,
+            )
+
+            Dte_Detalle_Pago.objects.create(
+                dte=dte,
+                metodo_pago=metodo_pago,
+                tipo_tarjeta=tipo_tarjeta,
+                voucher=voucher,
+                monto=int(monto_total),
+                notas='DTE manual (cuadratura informativa)',
+            )
+
+        return JsonResponse({
+            'success': True,
+            'message': 'DTE manual creado correctamente',
+            'documento': {
+                'id': dte.id,
+                'tipo_documento': dte.tipo_documento,
+                'numero_documento': dte.numero_documento,
+                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
+                'monto_con_iva': int(dte.monto_con_iva or 0),
+                'monto_neto': int(dte.monto_neto or 0),
+                'metodo_pago': metodo_pago,
+                'es_manual': True,
+            },
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al crear DTE manual: {str(e)}'
+        }, status=500)
 
 
 # ========== CUADRATURA Y ARQUEO DE CAJA ==========
