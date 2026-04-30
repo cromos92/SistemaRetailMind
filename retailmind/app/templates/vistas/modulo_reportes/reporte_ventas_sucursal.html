@@ -424,7 +424,7 @@
                     </div>
                 </div>
 
-                <!-- KPIs comisiones -->
+                <!-- KPIs comisiones (6 cards x col-md-2 = 12 columnas) -->
                 <div class="row g-2 mb-3" id="comisionesKpis">
                     <div class="col-md-2">
                         <div class="card border-0 shadow-sm h-100">
@@ -442,7 +442,19 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <!-- "Total original" — coincide con el KPI Total Ventas
+                         del reporte principal (ventas brutas con IVA). -->
+                    <div class="col-md-2">
+                        <div class="card border-0 shadow-sm h-100" style="background:#f8f9fa;">
+                            <div class="card-body py-2 px-3">
+                                <div class="text-uppercase text-muted small" title="Total bruto facturado con IVA — coincide con el Total Ventas del reporte principal">
+                                    Total Ventas c/IVA
+                                </div>
+                                <div class="fs-4 fw-bold text-info" id="kpiComVentasBrutasIva">$0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-body py-2 px-3">
                                 <div class="text-uppercase text-muted small">Ventas netas s/IVA</div>
@@ -458,7 +470,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-body py-2 px-3">
                                 <div class="text-uppercase text-muted small">Total Comisiones</div>
@@ -919,25 +931,38 @@ document.addEventListener('DOMContentLoaded', function() {
         datos.forEach((vendedor, index) => {
             const ticketPromedio = vendedor.documentos > 0 ? vendedor.ventas / vendedor.documentos : 0;
             const dcto = vendedor.descuentos || 0;
+            const sinVendedor = !!vendedor.sin_vendedor;
+            // Fila virtual "Sin vendedor": fondo distinto, sin código, sin
+            // botón de detalle (no hay vendedor_id real). Muestra el dinero
+            // que sí entra al KPI principal pero no estaba asignado a un
+            // vendedor — útil para que el operador asigne el vendedor que
+            // falta y que la cifra desaparezca de esta fila.
+            const filaCss = sinVendedor ? ' class="table-warning"' : '';
+            const nombreCol = sinVendedor
+                ? `<strong>${vendedor.nombre}</strong>
+                   <i class="ri-error-warning-line text-warning ms-1"
+                      title="Estos DTE no tienen vendedor asignado. Asignáselos para que sumen al ranking."></i>`
+                : `<strong>${vendedor.nombre}</strong>`;
+            const accionCol = sinVendedor
+                ? '<span class="text-muted small">—</span>'
+                : `<button class="btn btn-sm btn-outline-info"
+                          onclick="verDocumentosVendedor(${vendedor.id}, '${(vendedor.nombre || '').replace(/'/g, "\\'")}')"
+                          title="Ver documentos">
+                       <i class="ri-file-list-2-line"></i>
+                   </button>`;
             const row = `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td><strong>${vendedor.nombre}</strong></td>
+                <tr${filaCss}>
+                    <td>${sinVendedor ? '–' : (index + 1)}</td>
+                    <td>${nombreCol}</td>
                     <td>${vendedor.codigo || '-'}</td>
                     <td class="text-end fw-semibold">$${formatearNumero(vendedor.ventas)}</td>
                     <td class="text-end ${dcto > 0 ? 'text-danger' : ''}">${dcto > 0 ? '-$' + formatearNumero(dcto) : '-'}</td>
                     <td class="text-center">${vendedor.documentos}</td>
                     <td class="text-end">$${formatearNumero(ticketPromedio)}</td>
                     <td class="text-center">
-                        <span class="badge bg-primary">${vendedor.participacion.toFixed(1)}%</span>
+                        <span class="badge ${sinVendedor ? 'bg-warning text-dark' : 'bg-primary'}">${vendedor.participacion.toFixed(1)}%</span>
                     </td>
-                    <td class="text-center">
-                        <button class="btn btn-sm btn-outline-info"
-                                onclick="verDocumentosVendedor(${vendedor.id}, '${vendedor.nombre.replace(/'/g, "\\'")}')"
-                                title="Ver documentos">
-                            <i class="ri-file-list-2-line"></i>
-                        </button>
-                    </td>
+                    <td class="text-center">${accionCol}</td>
                 </tr>
             `;
             tbody.innerHTML += row;
@@ -1510,6 +1535,10 @@ document.addEventListener('DOMContentLoaded', function() {
             (t.cantidad_empresas || empresas.length || 0).toString();
         document.getElementById('kpiComCantVendedores').textContent =
             (t.cantidad_vendedores || 0).toString();
+        // "Total original" — bruto facturado c/IVA, coincide con el KPI
+        // "Total Ventas" del reporte principal.
+        document.getElementById('kpiComVentasBrutasIva').textContent =
+            '$' + formatearNumero(t.total_ventas_brutas_con_iva || 0);
         document.getElementById('kpiComVentasNetas').textContent =
             '$' + formatearNumero(t.total_ventas_netas_sin_iva || 0);
         document.getElementById('kpiComDevoluciones').textContent =

@@ -1130,17 +1130,9 @@ def ver_reporte_ventas_sucursal(request):
 def obtener_ventas_por_vendedor_reporte(request):
     """API para obtener datos de ventas por vendedor.
 
-    Alineado con ``_calcular_cuadratura_data`` (fuente de verdad de
-    cuadratura-caja). Mismos filtros que ``obtener_ventas_por_sucursal_reporte``
-    para que el total agregado por vendedor coincida con el total de
-    cuadratura para una misma fecha/sucursal.
-
-    Reglas:
-      * ``estado_dte in {EMITIDO, ACEPTADO}``
-      * ``tipo_transaccion in {VENTA, VENTA_PUBLICO, DEVOLUCION, ANULACION}``
-      * ``descartado=False``
-      * NC ``DEVOLUCION`` resta del total; NC ``ANULACION`` es informativa
-        (no resta — coincide con cuadratura)
+    Mismos filtros que ``obtener_ventas_por_sucursal_reporte``: cuenta
+    toda venta emitida (incluso ANULADO; el reporte es facturación
+    histórica, no caja). Las NC restan independiente de modalidad.
     """
     try:
         # Parámetros de filtro
@@ -1170,12 +1162,15 @@ def obtener_ventas_por_vendedor_reporte(request):
         fi = fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio
         ff = fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin
 
-        # ========== DTEs alineados con cuadratura ==========
+        # ========== DTEs (facturación histórica) ==========
+        # Acepta ANULADO; las NC se restan independiente de modalidad
+        # (DEVOLUCION o ANULACION) — ver docstring del endpoint y de
+        # `obtener_ventas_por_sucursal_reporte` para el racional.
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fi,
             fecha_emision__lte=ff,
             tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION'],
-            estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            estado_dte__in=['EMITIDO', 'ACEPTADO', 'ANULADO'],
             descartado=False,
         ).select_related('vendedor', 'sucursal')
 
@@ -1185,15 +1180,9 @@ def obtener_ventas_por_vendedor_reporte(request):
             queryset_dtes = queryset_dtes.filter(vendedor_id=vendedor_id)
 
         queryset_ventas = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO')
-        # Solo las NC DEVOLUCION restan; las ANULACION son informativas.
-        queryset_ncs = queryset_dtes.filter(
-            tipo_documento='NOTA DE CREDITO',
-            tipo_transaccion='DEVOLUCION',
-        )
-        queryset_ncs_anulacion = queryset_dtes.filter(
-            tipo_documento='NOTA DE CREDITO',
-            tipo_transaccion='ANULACION',
-        )
+        # TODAS las NC restan (ambas modalidades anulan facturación).
+        queryset_ncs = queryset_dtes.filter(tipo_documento='NOTA DE CREDITO')
+        queryset_ncs_anulacion = queryset_ncs.filter(tipo_transaccion='ANULACION')
 
         # Ventas por vendedor
         ventas_por_vend = queryset_ventas.values(
@@ -1207,6 +1196,8 @@ def obtener_ventas_por_vendedor_reporte(request):
         )
 
         # Devoluciones (NC DEVOLUCION) por vendedor — restan del total.
+        # Incluimos también las NC sin vendedor asignado (vendedor__id=None)
+        # para que el row "Sin vendedor" refleje el neto correcto.
         ncs_por_vend = {
             r['vendedor__id']: {
                 'total': int(r['total'] or 0),
@@ -1216,7 +1207,6 @@ def obtener_ventas_por_vendedor_reporte(request):
                 total=Sum('monto_con_iva'),
                 cant=Count('id'),
             )
-            if r['vendedor__id']
         }
 
         # NC ANULACION (informativas) por vendedor — solo conteo, no restan.
@@ -1229,20 +1219,23 @@ def obtener_ventas_por_vendedor_reporte(request):
                 total=Sum('monto_con_iva'),
                 cant=Count('id'),
             )
-            if r['vendedor__id']
         }
 
-        # Consolidar
+        # Consolidar.
+        # Usamos `None` como key para los DTEs sin vendedor asignado para
+        # que el total de la tabla calce con el KPI "Total Ventas" del
+        # reporte. Antes eso se descartaba con `if not vid: continue`,
+        # creando un gap que confundía al usuario (veía $X arriba y la
+        # tabla sumaba $X − sin_vendedor).
         ventas_acumuladas = {}
         for item in ventas_por_vend:
-            vid = item['vendedor__id']
-            if not vid:
-                continue
+            vid = item['vendedor__id']  # puede ser None
             nc = ncs_por_vend.get(vid, {'total': 0, 'cantidad': 0})
             nc_anul = ncs_anul_por_vend.get(vid, {'total': 0, 'cantidad': 0})
+            es_sin_vendedor = (not vid)
             ventas_acumuladas[vid] = {
-                'nombre': item['vendedor__nombre'],
-                'codigo': item['vendedor__codigo_vendedor'],
+                'nombre': item['vendedor__nombre'] if not es_sin_vendedor else 'Sin vendedor asignado',
+                'codigo': item['vendedor__codigo_vendedor'] if not es_sin_vendedor else '',
                 'ventas_brutas': int(item['total_ventas'] or 0),
                 'descuentos': int(item['total_descuentos'] or 0),
                 'documentos': int(item['total_documentos'] or 0),
@@ -1250,6 +1243,25 @@ def obtener_ventas_por_vendedor_reporte(request):
                 'cantidad_devoluciones': nc['cantidad'],
                 'nc_anulacion_total': nc_anul['total'],
                 'cantidad_nc_anulacion': nc_anul['cantidad'],
+                'sin_vendedor': es_sin_vendedor,
+            }
+
+        # Si hay NCs sin vendedor pero ningún DTE de venta sin vendedor,
+        # igual mostramos la fila para que el total cierre correctamente.
+        if None in ncs_por_vend and None not in ventas_acumuladas:
+            nc = ncs_por_vend[None]
+            nc_anul = ncs_anul_por_vend.get(None, {'total': 0, 'cantidad': 0})
+            ventas_acumuladas[None] = {
+                'nombre': 'Sin vendedor asignado',
+                'codigo': '',
+                'ventas_brutas': 0,
+                'descuentos': 0,
+                'documentos': 0,
+                'devoluciones': nc['total'],
+                'cantidad_devoluciones': nc['cantidad'],
+                'nc_anulacion_total': nc_anul['total'],
+                'cantidad_nc_anulacion': nc_anul['cantidad'],
+                'sin_vendedor': True,
             }
 
         # Total general (ventas netas = brutas − devoluciones)
@@ -1281,12 +1293,20 @@ def obtener_ventas_por_vendedor_reporte(request):
                 'cantidad_nc_anulacion': int(data.get('cantidad_nc_anulacion', 0)),
                 'documentos': data['documentos'],
                 'participacion': round(participacion, 1),
+                # Marca para que el frontend pinte la fila distinto y NO
+                # ofrezca el botón "ver documentos" (no hay vendedor_id).
+                'sin_vendedor': bool(data.get('sin_vendedor', False)),
             })
 
-        # KPIs
+        # KPIs.
+        # `top_vendedor` ignora la fila virtual "Sin vendedor" para que
+        # nunca aparezca como ranking #1.
         total_documentos = sum(v['documentos'] for v in ventas_acumuladas.values())
         ticket_promedio = total_general / total_documentos if total_documentos > 0 else 0
-        top_vendedor = vendedores_data[0]['nombre'] if vendedores_data else '-'
+        top_vendedor = next(
+            (v['nombre'] for v in vendedores_data if not v.get('sin_vendedor')),
+            '-',
+        )
         total_devoluciones_general = sum(
             v['devoluciones'] for v in ventas_acumuladas.values()
         )
@@ -1407,11 +1427,12 @@ def _parse_rango_fechas_reporte(request):
 def _calcular_comisiones_vendedor(request):
     """Calcula la matriz de comisiones por vendedor para los filtros pedidos.
 
-    Reusa los mismos filtros excluyentes que `obtener_ventas_por_vendedor_reporte`
-    (anulados, autoventas, centros de distribución, facturas exentas, facturas
-    sin receptor). La "venta neta" se define como la suma de `monto_neto`
-    (sin IVA) de los DTEs de venta menos la suma de `monto_neto` de las
-    Notas de Crédito asociadas al mismo vendedor en el período.
+    Reusa los mismos filtros que `obtener_ventas_por_vendedor_reporte`
+    (facturación histórica: incluye ``ANULADO``, todas las NC restan
+    independiente de modalidad). La "venta neta" se define como la suma
+    de `monto_neto` (sin IVA) de los DTEs de venta menos la suma de
+    `monto_neto` de las Notas de Crédito asociadas al mismo vendedor
+    en el período.
 
     La comisión se calcula como `venta_neta_sin_iva * (Vendedor.comision / 100)`.
 
@@ -1445,22 +1466,14 @@ def _calcular_comisiones_vendedor(request):
     sucursal_id = request.GET.get('sucursal_id')
     vendedor_id = request.GET.get('vendedor_id')
 
+    # Mismos filtros que los reportes de ventas-sucursal/-vendedor:
+    # facturación histórica (ANULADO entra, todas las NC restan).
     queryset_dtes = Dte.objects.filter(
         fecha_emision__gte=fi,
         fecha_emision__lte=ff,
-        tipo_transaccion__in=['VENTA_PUBLICO', 'VENTA'],
-    ).exclude(
-        estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
-    ).exclude(
-        receptor__isnull=False,
-        receptor_id=F('emisor_id')
-    ).exclude(
-        sucursal__tipo_sucursal='CENTRO_DISTRIBUCION'
-    ).exclude(
-        tipo_documento='FACTURA EXENTA'
-    ).exclude(
-        tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA'],
-        receptor__isnull=True,
+        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION'],
+        estado_dte__in=['EMITIDO', 'ACEPTADO', 'ANULADO'],
+        descartado=False,
     ).select_related('vendedor', 'sucursal', 'emisor')
 
     # Respetar permisos de sucursal del usuario y filtro explícito si vino.
@@ -1530,10 +1543,13 @@ def _calcular_comisiones_vendedor(request):
     empresas_map: dict[int, dict] = {}
     vendedores_data: list[dict] = []
     total_comisiones = 0
+    total_ventas_brutas_con_iva = 0
+    total_ventas_brutas_sin_iva = 0
     total_ventas_netas_sin_iva = 0
     total_ventas_netas_con_iva = 0
     total_documentos = 0
     total_devoluciones = 0
+    total_devoluciones_neto = 0
 
     for item in ventas_agg:
         vid = item['vendedor__id']
@@ -1582,7 +1598,9 @@ def _calcular_comisiones_vendedor(request):
             'rut': fila['empresa_rut'],
             'vendedores': [],
             'subtotales': {
+                'total_ventas_brutas_con_iva': 0,
                 'total_ventas_brutas_neto': 0,
+                'total_devoluciones_con_iva': 0,
                 'total_devoluciones_neto': 0,
                 'total_ventas_netas_sin_iva': 0,
                 'total_ventas_netas_con_iva': 0,
@@ -1593,7 +1611,9 @@ def _calcular_comisiones_vendedor(request):
         })
         emp['vendedores'].append(fila)
         sub = emp['subtotales']
+        sub['total_ventas_brutas_con_iva'] += ventas_brutas_iva
         sub['total_ventas_brutas_neto'] += ventas_brutas_neto
+        sub['total_devoluciones_con_iva'] += nc['total']
         sub['total_devoluciones_neto'] += nc['neto']
         sub['total_ventas_netas_sin_iva'] += ventas_netas_neto
         sub['total_ventas_netas_con_iva'] += ventas_netas_iva
@@ -1602,10 +1622,13 @@ def _calcular_comisiones_vendedor(request):
         sub['cantidad_vendedores'] += 1
 
         total_comisiones += comision_monto
+        total_ventas_brutas_con_iva += ventas_brutas_iva
+        total_ventas_brutas_sin_iva += ventas_brutas_neto
         total_ventas_netas_sin_iva += ventas_netas_neto
         total_ventas_netas_con_iva += ventas_netas_iva
         total_documentos += int(item['total_documentos'] or 0)
         total_devoluciones += nc['total']
+        total_devoluciones_neto += nc['neto']
 
     # Ordenamientos: empresas alfabéticamente; dentro de cada empresa los
     # vendedores por ventas netas descendentes.
@@ -1628,11 +1651,16 @@ def _calcular_comisiones_vendedor(request):
         'sucursal_id': sucursal_id or None,
         'vendedor_id': vendedor_id or None,
         'totales': {
+            # "Total original" — la cifra que coincide con el KPI principal
+            # del reporte (ventas brutas con IVA, antes de devoluciones).
+            'total_ventas_brutas_con_iva': total_ventas_brutas_con_iva,
+            'total_ventas_brutas_sin_iva': total_ventas_brutas_sin_iva,
             'total_ventas_netas_sin_iva': total_ventas_netas_sin_iva,
             'total_ventas_netas_con_iva': total_ventas_netas_con_iva,
             'total_comisiones': total_comisiones,
             'total_documentos': total_documentos,
             'total_devoluciones': total_devoluciones,
+            'total_devoluciones_neto': total_devoluciones_neto,
             'cantidad_vendedores': len(vendedores_data),
             'cantidad_empresas': len(empresas_data),
         },
@@ -2010,19 +2038,31 @@ def exportar_comisiones_vendedor_excel(request):
 def obtener_ventas_por_sucursal_reporte(request):
     """API para obtener datos de ventas por sucursal.
 
-    Alineado con la lógica de ``_calcular_cuadratura_data`` en
-    ``views_modulo_ventas.py`` (fuente de verdad de cuadratura-caja).
-    Comparte filtros para que el total del reporte coincida con el de
-    cuadratura para la misma fecha/sucursal:
+    Reporte de **facturación histórica** (no de caja):
+      * Cuenta toda venta emitida, INCLUSO si después se anuló
+        (``estado_dte=ANULADO`` también entra). Si vendiste $X el día Y,
+        ese día Y vendiste $X — independiente de que más tarde se anule
+        con NC.
+      * Las NC restan del día en que se emitieron (sea ``DEVOLUCION`` o
+        ``ANULACION``). Así, si emitiste la NC en otro mes, el reporte
+        del mes original sigue mostrando la venta y el mes de la NC
+        muestra la devolución.
+      * No es lo mismo que cuadratura-caja: cuadratura excluye los
+        ANULADOS (no hay dinero) y trata las NC ANULACION como
+        informativas. Para conciliar las dos vistas usar el botón
+        "Diagnóstico vs cuadratura" del tab sucursales.
 
-      * ``estado_dte in {EMITIDO, ACEPTADO}``
+    Filtros que SÍ aplica:
       * ``tipo_transaccion in {VENTA, VENTA_PUBLICO, DEVOLUCION, ANULACION}``
-      * ``descartado=False`` (las NC ocultas no restan)
-      * NC ``DEVOLUCION`` resta del total; NC ``ANULACION`` es informativa
-        (no resta — coincide con cuadratura)
-      * Incluye FACTURA EXENTA, autoventas (receptor=emisor),
-        centros de distribución y facturas sin receptor: cuadratura los
-        cuenta, así que el reporte también, para alinear el total.
+        (las dos primeras para ventas; las dos últimas para que las NC
+        del día entren al queryset)
+      * ``estado_dte in {EMITIDO, ACEPTADO, ANULADO}`` — excluye
+        ``CANCELADO``/``RECHAZADO``/``PENDIENTE`` (rechazos del SII y
+        documentos sin emitir).
+      * ``descartado=False`` — NC ocultas y eliminaciones lógicas no
+        cuentan (operación interna).
+      * Incluye FACTURA EXENTA, autoventas, CDs y facturas sin receptor
+        (todo lo que se haya emitido oficialmente).
     """
     try:
         # Parámetros de filtro
@@ -2052,14 +2092,14 @@ def obtener_ventas_por_sucursal_reporte(request):
         fi = fecha_inicio.date() if hasattr(fecha_inicio, 'date') else fecha_inicio
         ff = fecha_fin.date() if hasattr(fecha_fin, 'date') else fecha_fin
 
-        # ========== DTEs alineados con cuadratura ==========
-        # Mismo set de filtros que `_calcular_cuadratura_data` aplica al
-        # iterar DTEs del día (ver `views_modulo_ventas.py` ~6275-6284).
+        # ========== DTEs (facturación histórica) ==========
+        # Acepta ANULADO porque ese DTE fue una venta real el día que se
+        # emitió; la NC asociada se contabiliza el día en que se emitió.
         queryset_dtes = Dte.objects.filter(
             fecha_emision__gte=fi,
             fecha_emision__lte=ff,
             tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION'],
-            estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            estado_dte__in=['EMITIDO', 'ACEPTADO', 'ANULADO'],
             descartado=False,
         ).select_related('sucursal', 'vendedor')
 
@@ -2067,19 +2107,14 @@ def obtener_ventas_por_sucursal_reporte(request):
 
         # Separar ventas (no-NC) de notas de crédito.
         queryset_ventas = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO')
-        # Solo las NC DEVOLUCION restan del total. Las ANULACION son
-        # informativas y se cuentan aparte (cantidad_nc_anulacion). Esto
-        # coincide con la política de cuadratura: ANULACION no descuenta
-        # del venta_total ni de los teóricos.
-        queryset_ncs_devolucion = queryset_dtes.filter(
-            tipo_documento='NOTA DE CREDITO',
-            tipo_transaccion='DEVOLUCION',
-        )
-        queryset_ncs_anulacion = queryset_dtes.filter(
-            tipo_documento='NOTA DE CREDITO',
-            tipo_transaccion='ANULACION',
-        )
-        queryset_ncs = queryset_ncs_devolucion  # alias para no romper código abajo
+        # Restar TODAS las NC (DEVOLUCION + ANULACION). En este reporte
+        # ambas representan ventas que se deshicieron oficialmente, así
+        # que ambas afectan el total del mes. La distinción DEVOLUCION/
+        # ANULACION es relevante para cuadratura-caja, no para un reporte
+        # de facturación histórica.
+        queryset_ncs = queryset_dtes.filter(tipo_documento='NOTA DE CREDITO')
+        queryset_ncs_devolucion = queryset_ncs.filter(tipo_transaccion='DEVOLUCION')
+        queryset_ncs_anulacion = queryset_ncs.filter(tipo_transaccion='ANULACION')
 
         # Agregar ventas por sucursal
         ventas_por_suc = queryset_ventas.values(
@@ -2093,21 +2128,25 @@ def obtener_ventas_por_sucursal_reporte(request):
             total_documentos=Count('id'),
         )
 
-        # NCs DEVOLUCION (que sí restan del total, igual que cuadratura).
+        # NCs por sucursal: AMBAS modalidades (DEVOLUCION y ANULACION)
+        # restan del total. Es un reporte de facturación, así que cualquier
+        # NC válida cancela una venta previa.
         ncs_por_suc = {
             r['sucursal__id']: {
                 'total': int(r['total'] or 0),
                 'neto': int(r['neto'] or 0),
                 'cantidad': int(r['cant'] or 0),
             }
-            for r in queryset_ncs_devolucion.values('sucursal__id').annotate(
+            for r in queryset_ncs.values('sucursal__id').annotate(
                 total=Sum('monto_con_iva'),
                 neto=Sum('monto_neto'),
                 cant=Count('id'),
             )
         }
 
-        # NCs ANULACION (informativas: no restan, solo se muestran como conteo).
+        # Desglose informativo (no afecta totales — solo se muestra como
+        # conteo en cada fila para que el operador sepa cuántas
+        # ANULACIONes hay vs DEVOLUCIONes).
         ncs_anul_por_suc = {
             r['sucursal__id']: {
                 'total': int(r['total'] or 0),
@@ -2262,7 +2301,10 @@ def obtener_ventas_por_sucursal_reporte(request):
 _REPORTE_TIPO_TRANSACCION_PERMITIDA = {
     'VENTA', 'VENTA_PUBLICO', 'DEVOLUCION', 'ANULACION',
 }
-_REPORTE_ESTADO_DTE_PERMITIDO = {'EMITIDO', 'ACEPTADO'}
+# El reporte acepta ANULADO (es facturación histórica). Cuadratura no lo
+# acepta (es caja del día). Por eso el diagnóstico mostrará el DTE ANULADO
+# como "solo en reporte" — diferencia esperada y deseable.
+_REPORTE_ESTADO_DTE_PERMITIDO = {'EMITIDO', 'ACEPTADO', 'ANULADO'}
 
 
 def _diagnosticar_dte_vs_reporte(dte):
@@ -2270,8 +2312,11 @@ def _diagnosticar_dte_vs_reporte(dte):
     de ventas-sucursal según los filtros que apliquen.
 
     Lista vacía => el DTE entraría al reporte. La función refleja los
-    filtros vigentes del reporte (post-fix). Útil para comparar contra
-    el set de DTEs que cuadratura sí cuenta.
+    filtros REALES vigentes en `obtener_ventas_por_sucursal_reporte`
+    tras alinear con cuadratura (sin exclusiones por CENTRO_DISTRIBUCION,
+    autoventa, FACTURA_EXENTA o factura-sin-receptor). Si en el futuro
+    se reintroduce alguna de esas exclusiones, sumar el motivo aquí
+    para que el diagnóstico siga siendo fiel.
     """
     motivos = []
     if dte.tipo_transaccion not in _REPORTE_TIPO_TRANSACCION_PERMITIDA:
@@ -2280,19 +2325,6 @@ def _diagnosticar_dte_vs_reporte(dte):
         motivos.append(f'ESTADO={dte.estado_dte}')
     if getattr(dte, 'descartado', False):
         motivos.append('DESCARTADO')
-    # Sucursal CD
-    suc = getattr(dte, 'sucursal', None)
-    if suc and getattr(suc, 'tipo_sucursal', None) == 'CENTRO_DISTRIBUCION':
-        motivos.append('CENTRO_DISTRIBUCION')
-    # Autoventa (mismo emisor que receptor)
-    if dte.receptor_id and dte.emisor_id and dte.receptor_id == dte.emisor_id:
-        motivos.append('AUTOVENTA')
-    # Facturas sin receptor (servicios internos)
-    if (
-        dte.tipo_documento in ('FACTURA ELECTRONICA', 'FACTURA EXENTA')
-        and dte.receptor_id is None
-    ):
-        motivos.append('FACTURA_SIN_RECEPTOR')
     return motivos
 
 
@@ -2414,18 +2446,17 @@ def api_diagnostico_cuadratura_vs_reporte(request):
         entra_cuadratura = _diagnosticar_dte_vs_cuadratura(dte)
 
         # Calcular el aporte al "total ventas" del reporte:
-        # el reporte hace `ventas_brutas - devoluciones`, donde
-        # devoluciones son las NC tipo DEVOLUCION (post-fix). Las NC
-        # ANULACION son informativas (no restan).
+        # el reporte hace `ventas_brutas - devoluciones`. Como es un
+        # reporte de facturación histórica, restamos TODAS las NC
+        # (DEVOLUCION y ANULACION). Cuadratura solo resta DEVOLUCION;
+        # esa diferencia se puede observar en el listado de DTE en
+        # disputa que devuelve este endpoint.
         es_nc = dte.tipo_documento == 'NOTA DE CREDITO'
         aporte_reporte = 0
         if entra_reporte:
             monto = int(dte.monto_con_iva or 0)
-            if es_nc and dte.tipo_transaccion == 'DEVOLUCION':
+            if es_nc:
                 aporte_reporte = -monto
-            elif es_nc:
-                # ANULACION informativa: no resta ni suma.
-                aporte_reporte = 0
             else:
                 aporte_reporte = monto
         reporte_total += aporte_reporte
