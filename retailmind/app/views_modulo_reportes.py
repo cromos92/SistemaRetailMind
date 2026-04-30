@@ -27,6 +27,7 @@ from .models import (
     Empresa, Vendedor, LoteProducto, Traspaso, AjusteInventario,
     TicketDetallePago, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
     Categoria, AtributoOpcion, Productos_Atributos,
+    PermisoRol,
 )
 from .utils_permisos import (
     obtener_sucursales_usuario,
@@ -1106,8 +1107,21 @@ def obtener_resumen_reportes(request):
 
 @login_required
 def ver_reporte_ventas_sucursal(request):
-    """Vista principal del reporte de ventas mensual por vendedor y sucursal"""
+    """Vista principal del reporte de ventas mensual por vendedor y sucursal.
+
+    Adicionalmente expone los flags `puede_ver_reporte_comisiones` y
+    `puede_exportar_reporte_comisiones` para que el template muestre /
+    oculte el botón "Comisiones" y los controles del modal según el
+    permiso `reporte_comisiones_vendedor`.
+    """
     context = obtener_contexto_sucursales(request.user, request)
+    sucursal_id_sesion = _sucursal_id_sesion(request)
+    context['puede_ver_reporte_comisiones'] = _puede_ver_reporte_comisiones(
+        request.user, sucursal_id=sucursal_id_sesion,
+    )
+    context['puede_exportar_reporte_comisiones'] = _puede_exportar_reporte_comisiones(
+        request.user, sucursal_id=sucursal_id_sesion,
+    )
     return render(request, 'vistas/modulo_reportes/reporte_ventas_sucursal.html', context)
 
 
@@ -1272,6 +1286,540 @@ def obtener_ventas_por_vendedor_reporte(request):
             'success': False,
             'error': f'Error al obtener ventas por vendedor: {str(e)}'
         })
+
+
+# ========== HELPERS COMUNES PARA REPORTES DE COMISIONES ==========
+
+# Código del `OpcionMenu` que protege el reporte de comisiones por
+# vendedor. Configurable por rol/sucursal desde la pantalla de gestión
+# de permisos. Lo crea la migración 0150_permiso_reporte_comisiones_vendedor.
+CODIGO_PERMISO_COMISIONES = 'reporte_comisiones_vendedor'
+
+
+def _puede_ver_reporte_comisiones(user, sucursal_id=None) -> bool:
+    """Atajo para chequear el permiso del reporte de comisiones.
+
+    El permiso se verifica con `puede_ver`, que es la convención del
+    resto de reportes del módulo (`reporte_ventas_sucursal`,
+    `reporte_existencias`, etc.). Si el usuario no está autenticado
+    devuelve False sin tocar la BD.
+    """
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return False
+    return PermisoRol.tiene_permiso(
+        user, CODIGO_PERMISO_COMISIONES, 'puede_ver',
+        sucursal_id=sucursal_id,
+    )
+
+
+def _puede_exportar_reporte_comisiones(user, sucursal_id=None) -> bool:
+    """Chequea `puede_exportar` para el endpoint de Excel.
+
+    Si el rol no tiene `puede_exportar=True` pero sí `puede_ver`, podrá
+    consultar el reporte en pantalla pero no descargarlo. La migración
+    inicial otorga `puede_ver=puede_exportar=True` al rol administrador.
+    """
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return False
+    return PermisoRol.tiene_permiso(
+        user, CODIGO_PERMISO_COMISIONES, 'puede_exportar',
+        sucursal_id=sucursal_id,
+    )
+
+
+def _sucursal_id_sesion(request):
+    """Sucursal activa en la sesión (None si no hay).
+
+    Se usa para que `PermisoRol.tiene_permiso` evalúe también el override
+    por sucursal (`PermisoSucursal`). Replica la convención del resto
+    del proyecto (idSucursalActual / sucursalActual).
+    """
+    return (
+        request.session.get('idSucursalActual')
+        or request.session.get('sucursalActual')
+    )
+
+
+def _parse_rango_fechas_reporte(request):
+    """Calcula `(fecha_inicio, fecha_fin)` (date) según los parámetros GET.
+
+    Soporta los mismos modos que el resto del reporte de ventas-sucursal:
+      * `fecha=YYYY-MM-DD` → un día puntual.
+      * `fecha_inicio=...&fecha_fin=...` → rango.
+      * `mes=YYYY-MM` → mes completo (default: mes actual en TZ Chile).
+
+    Devuelve un tuple `(fecha_inicio, fecha_fin)` con `datetime.date`.
+    """
+    mes = request.GET.get('mes')
+    fecha = request.GET.get('fecha')
+    fecha_inicio_param = request.GET.get('fecha_inicio')
+    fecha_fin_param = request.GET.get('fecha_fin')
+
+    if fecha:
+        fi = datetime.strptime(fecha, '%Y-%m-%d').date()
+        ff = fi
+    elif fecha_inicio_param and fecha_fin_param:
+        fi = datetime.strptime(fecha_inicio_param, '%Y-%m-%d').date()
+        ff = datetime.strptime(fecha_fin_param, '%Y-%m-%d').date()
+    else:
+        if not mes:
+            # Mes actual en zona horaria Chile (regla `timezone-chile`).
+            mes = timezone.localdate().strftime('%Y-%m')
+        primer_dia = datetime.strptime(mes, '%Y-%m').replace(day=1).date()
+        if primer_dia.month == 12:
+            ultimo_dia = primer_dia.replace(
+                year=primer_dia.year + 1, month=1, day=1
+            ) - timedelta(days=1)
+        else:
+            ultimo_dia = primer_dia.replace(
+                month=primer_dia.month + 1, day=1
+            ) - timedelta(days=1)
+        fi = primer_dia
+        ff = ultimo_dia
+    return fi, ff
+
+
+def _calcular_comisiones_vendedor(request):
+    """Calcula la matriz de comisiones por vendedor para los filtros pedidos.
+
+    Reusa los mismos filtros excluyentes que `obtener_ventas_por_vendedor_reporte`
+    (anulados, autoventas, centros de distribución, facturas exentas, facturas
+    sin receptor). La "venta neta" se define como la suma de `monto_neto`
+    (sin IVA) de los DTEs de venta menos la suma de `monto_neto` de las
+    Notas de Crédito asociadas al mismo vendedor en el período.
+
+    La comisión se calcula como `venta_neta_sin_iva * (Vendedor.comision / 100)`.
+
+    Devuelve un dict con::
+
+        {
+          'vendedores': [
+            {'id', 'nombre', 'codigo', 'sucursales',
+             'ventas_brutas', 'ventas_brutas_neto',
+             'devoluciones', 'devoluciones_neto',
+             'ventas_netas_con_iva', 'ventas_netas_sin_iva',
+             'documentos', 'comision_pct', 'comision_monto'},
+            ...
+          ],
+          'fecha_inicio': 'YYYY-MM-DD',
+          'fecha_fin': 'YYYY-MM-DD',
+          'sucursal_id': str | None,
+          'vendedor_id': str | None,
+          'totales': {
+            'total_ventas_netas_sin_iva', 'total_ventas_netas_con_iva',
+            'total_comisiones', 'total_documentos', 'total_devoluciones',
+            'cantidad_vendedores',
+          },
+        }
+    """
+    fi, ff = _parse_rango_fechas_reporte(request)
+    sucursal_id = request.GET.get('sucursal_id')
+    vendedor_id = request.GET.get('vendedor_id')
+
+    queryset_dtes = Dte.objects.filter(
+        fecha_emision__gte=fi,
+        fecha_emision__lte=ff,
+        tipo_transaccion__in=['VENTA_PUBLICO', 'VENTA'],
+    ).exclude(
+        estado_dte__in=['ANULADO', 'CANCELADO', 'RECHAZADO']
+    ).exclude(
+        receptor__isnull=False,
+        receptor_id=F('emisor_id')
+    ).exclude(
+        sucursal__tipo_sucursal='CENTRO_DISTRIBUCION'
+    ).exclude(
+        tipo_documento='FACTURA EXENTA'
+    ).exclude(
+        tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA'],
+        receptor__isnull=True,
+    ).select_related('vendedor', 'sucursal')
+
+    # Respetar permisos de sucursal del usuario y filtro explícito si vino.
+    queryset_dtes = filtrar_queryset_por_sucursal(queryset_dtes, request.user, request)
+    if sucursal_id:
+        queryset_dtes = queryset_dtes.filter(sucursal_id=sucursal_id)
+    if vendedor_id:
+        queryset_dtes = queryset_dtes.filter(vendedor_id=vendedor_id)
+
+    queryset_ventas = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO')
+    queryset_ncs = queryset_dtes.filter(tipo_documento='NOTA DE CREDITO')
+
+    ventas_por_vend = queryset_ventas.values(
+        'vendedor__id',
+        'vendedor__nombre',
+        'vendedor__codigo_vendedor',
+        'vendedor__comision',
+    ).annotate(
+        total_ventas=Sum('monto_con_iva'),
+        total_neto=Sum('monto_neto'),
+        total_documentos=Count('id'),
+    )
+
+    ncs_por_vend = {
+        r['vendedor__id']: {
+            'total': int(r['total'] or 0),
+            'neto': int(r['neto'] or 0),
+        }
+        for r in queryset_ncs.values('vendedor__id').annotate(
+            total=Sum('monto_con_iva'),
+            neto=Sum('monto_neto'),
+        )
+        if r['vendedor__id']
+    }
+
+    # Sucursales en las que el vendedor tuvo ventas en el período (para
+    # mostrar contexto al usuario en la tabla, ya que un vendedor puede
+    # estar asignado a múltiples sucursales por M2M).
+    sucursales_por_vend: dict[int, set[str]] = {}
+    for r in queryset_dtes.values(
+        'vendedor_id', 'sucursal__alias',
+    ).distinct():
+        vid = r['vendedor_id']
+        alias = r['sucursal__alias']
+        if not vid or not alias:
+            continue
+        sucursales_por_vend.setdefault(vid, set()).add(alias)
+
+    vendedores_data = []
+    total_comisiones = 0
+    total_ventas_netas_sin_iva = 0
+    total_ventas_netas_con_iva = 0
+    total_documentos = 0
+    total_devoluciones = 0
+
+    for item in ventas_por_vend:
+        vid = item['vendedor__id']
+        if not vid:
+            continue
+        ventas_brutas_iva = int(item['total_ventas'] or 0)
+        ventas_brutas_neto = int(item['total_neto'] or 0)
+        nc = ncs_por_vend.get(vid, {'total': 0, 'neto': 0})
+        ventas_netas_iva = ventas_brutas_iva - nc['total']
+        ventas_netas_neto = ventas_brutas_neto - nc['neto']
+        # `Vendedor.comision` es DecimalField (porcentaje 0-100); se convierte
+        # a float para serializar y calcular el monto en pesos enteros.
+        try:
+            comision_pct = float(item['vendedor__comision'] or 0)
+        except (TypeError, ValueError):
+            comision_pct = 0.0
+        comision_monto = int(round(ventas_netas_neto * comision_pct / 100.0))
+
+        vendedores_data.append({
+            'id': vid,
+            'nombre': item['vendedor__nombre'] or '(sin nombre)',
+            'codigo': item['vendedor__codigo_vendedor'] or '',
+            'sucursales': sorted(sucursales_por_vend.get(vid, [])),
+            'ventas_brutas': ventas_brutas_iva,
+            'ventas_brutas_neto': ventas_brutas_neto,
+            'devoluciones': nc['total'],
+            'devoluciones_neto': nc['neto'],
+            'ventas_netas_con_iva': ventas_netas_iva,
+            'ventas_netas_sin_iva': ventas_netas_neto,
+            'documentos': int(item['total_documentos'] or 0),
+            'comision_pct': comision_pct,
+            'comision_monto': comision_monto,
+        })
+
+        total_comisiones += comision_monto
+        total_ventas_netas_sin_iva += ventas_netas_neto
+        total_ventas_netas_con_iva += ventas_netas_iva
+        total_documentos += int(item['total_documentos'] or 0)
+        total_devoluciones += nc['total']
+
+    vendedores_data.sort(
+        key=lambda v: v['ventas_netas_sin_iva'], reverse=True,
+    )
+
+    return {
+        'vendedores': vendedores_data,
+        'fecha_inicio': fi.strftime('%Y-%m-%d'),
+        'fecha_fin': ff.strftime('%Y-%m-%d'),
+        'sucursal_id': sucursal_id or None,
+        'vendedor_id': vendedor_id or None,
+        'totales': {
+            'total_ventas_netas_sin_iva': total_ventas_netas_sin_iva,
+            'total_ventas_netas_con_iva': total_ventas_netas_con_iva,
+            'total_comisiones': total_comisiones,
+            'total_documentos': total_documentos,
+            'total_devoluciones': total_devoluciones,
+            'cantidad_vendedores': len(vendedores_data),
+        },
+    }
+
+
+@require_GET
+@login_required
+def obtener_comisiones_por_vendedor(request):
+    """API JSON: comisiones por vendedor en el período/sucursal indicados.
+
+    Reusa los filtros del reporte de ventas-sucursal (mes/fecha/rango y
+    sucursal/vendedor). La comisión se calcula como
+    `venta_neta_sin_iva × Vendedor.comision / 100`.
+
+    Requiere el permiso `reporte_comisiones_vendedor` (acción `puede_ver`)
+    configurable por rol/sucursal desde la pantalla de gestión de permisos.
+    """
+    if not _puede_ver_reporte_comisiones(
+        request.user, sucursal_id=_sucursal_id_sesion(request)
+    ):
+        return JsonResponse(
+            {
+                'success': False,
+                'error': 'No tienes permiso para ver el reporte de comisiones por vendedor',
+            },
+            status=403,
+        )
+    try:
+        data = _calcular_comisiones_vendedor(request)
+        return JsonResponse({'success': True, **data})
+    except ValueError as e:
+        return JsonResponse(
+            {'success': False, 'error': f'Parámetros inválidos: {e}'},
+            status=400,
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse(
+            {'success': False, 'error': f'Error al calcular comisiones: {e}'},
+            status=500,
+        )
+
+
+@require_GET
+@login_required
+def exportar_comisiones_vendedor_excel(request):
+    """Exporta el reporte de comisiones por vendedor a Excel con formato.
+
+    Encabezado con color institucional, totales en negrita, formato moneda
+    y porcentaje, columnas auto-dimensionadas y bordes en toda la tabla.
+    Reusa `_calcular_comisiones_vendedor` para garantizar que el Excel
+    refleje exactamente los mismos números que el modal en pantalla.
+
+    Requiere el permiso `reporte_comisiones_vendedor` con la acción
+    `puede_exportar` (puede ser distinta de `puede_ver`: un rol puede
+    consultar el reporte en pantalla pero no descargarlo).
+    """
+    sucursal_id_sesion = _sucursal_id_sesion(request)
+    if not _puede_ver_reporte_comisiones(request.user, sucursal_id_sesion):
+        return JsonResponse(
+            {
+                'success': False,
+                'error': 'No tienes permiso para ver el reporte de comisiones',
+            },
+            status=403,
+        )
+    if not _puede_exportar_reporte_comisiones(request.user, sucursal_id_sesion):
+        return JsonResponse(
+            {
+                'success': False,
+                'error': 'No tienes permiso para exportar el reporte de comisiones',
+            },
+            status=403,
+        )
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        data = _calcular_comisiones_vendedor(request)
+
+        # Resolver alias de sucursal y vendedor para mostrar en el header.
+        sucursal_label = 'Todas'
+        if data['sucursal_id']:
+            try:
+                suc = Sucursal.objects.get(id=data['sucursal_id'])
+                sucursal_label = suc.alias or suc.direccion or f"#{suc.id}"
+            except Sucursal.DoesNotExist:
+                sucursal_label = f"#{data['sucursal_id']}"
+
+        vendedor_label = 'Todos'
+        if data['vendedor_id']:
+            try:
+                v = Vendedor.objects.get(id=data['vendedor_id'])
+                vendedor_label = f"{v.codigo_vendedor} - {v.nombre}"
+            except Vendedor.DoesNotExist:
+                vendedor_label = f"#{data['vendedor_id']}"
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Comisiones por Vendedor'
+
+        # Estilos institucionales NEXO (azul corporativo).
+        header_fill = PatternFill(start_color='0066FF', end_color='0066FF', fill_type='solid')
+        header_font = Font(bold=True, color='FFFFFF', size=11)
+        sub_fill = PatternFill(start_color='E6F0FF', end_color='E6F0FF', fill_type='solid')
+        total_fill = PatternFill(start_color='1A1A2E', end_color='1A1A2E', fill_type='solid')
+        total_font = Font(bold=True, color='FFFFFF', size=11)
+        thin = Side(style='thin', color='B0B0B0')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        right = Alignment(horizontal='right', vertical='center')
+        left = Alignment(horizontal='left', vertical='center')
+
+        # ===== Banner / título =====
+        ws.merge_cells('A1:I1')
+        ws['A1'] = 'REPORTE DE COMISIONES POR VENDEDOR'
+        ws['A1'].font = Font(bold=True, color='FFFFFF', size=14)
+        ws['A1'].fill = total_fill
+        ws['A1'].alignment = center
+        ws.row_dimensions[1].height = 26
+
+        # ===== Sub-banner: contexto de filtros =====
+        ws.merge_cells('A2:I2')
+        rango_str = (
+            f"Período: {data['fecha_inicio']} → {data['fecha_fin']}  ·  "
+            f"Sucursal: {sucursal_label}  ·  Vendedor: {vendedor_label}"
+        )
+        ws['A2'] = rango_str
+        ws['A2'].font = Font(italic=True, size=10, color='4A4A5A')
+        ws['A2'].alignment = center
+        ws['A2'].fill = sub_fill
+        ws.row_dimensions[2].height = 20
+
+        ws.merge_cells('A3:I3')
+        ws['A3'] = (
+            f"Generado: {timezone.localtime().strftime('%d/%m/%Y %H:%M')}  ·  "
+            f"Vendedores: {data['totales']['cantidad_vendedores']}"
+        )
+        ws['A3'].font = Font(italic=True, size=9, color='8A8A9A')
+        ws['A3'].alignment = center
+
+        # ===== Headers de tabla =====
+        headers = [
+            '#', 'Vendedor', 'Código', 'Sucursal(es)',
+            'Ventas Brutas (s/IVA)', 'Devoluciones (s/IVA)',
+            'Ventas Netas (s/IVA)', '% Comisión', 'Comisión $',
+        ]
+        row = 5
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=row, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+            cell.alignment = center
+        ws.row_dimensions[row].height = 32
+
+        # ===== Filas de datos =====
+        money_fmt = '"$"#,##0'
+        pct_fmt = '0.00"%"'
+        row = 6
+        for idx, v in enumerate(data['vendedores'], start=1):
+            ws.cell(row=row, column=1, value=idx).alignment = center
+            ws.cell(row=row, column=2, value=v['nombre']).alignment = left
+            ws.cell(row=row, column=3, value=v['codigo']).alignment = center
+            ws.cell(row=row, column=4, value=', '.join(v['sucursales'])).alignment = left
+
+            c5 = ws.cell(row=row, column=5, value=v['ventas_brutas_neto'])
+            c5.number_format = money_fmt
+            c5.alignment = right
+
+            c6 = ws.cell(row=row, column=6, value=v['devoluciones_neto'])
+            c6.number_format = money_fmt
+            c6.alignment = right
+
+            c7 = ws.cell(row=row, column=7, value=v['ventas_netas_sin_iva'])
+            c7.number_format = money_fmt
+            c7.alignment = right
+            c7.font = Font(bold=True, color='1A1A2E')
+
+            c8 = ws.cell(row=row, column=8, value=v['comision_pct'])
+            c8.number_format = pct_fmt
+            c8.alignment = center
+
+            c9 = ws.cell(row=row, column=9, value=v['comision_monto'])
+            c9.number_format = money_fmt
+            c9.alignment = right
+            c9.font = Font(bold=True, color='00B38A')
+
+            for col in range(1, 10):
+                ws.cell(row=row, column=col).border = border
+            row += 1
+
+        # ===== Fila de TOTALES =====
+        if data['vendedores']:
+            ws.cell(row=row, column=1, value='').fill = total_fill
+            cell_label = ws.cell(row=row, column=2, value='TOTAL GENERAL')
+            cell_label.fill = total_fill
+            cell_label.font = total_font
+            cell_label.alignment = right
+            ws.cell(row=row, column=3, value='').fill = total_fill
+            ws.cell(row=row, column=4, value='').fill = total_fill
+
+            t_brutas = sum(v['ventas_brutas_neto'] for v in data['vendedores'])
+            t_dev = sum(v['devoluciones_neto'] for v in data['vendedores'])
+
+            c5 = ws.cell(row=row, column=5, value=t_brutas)
+            c5.number_format = money_fmt
+            c5.fill = total_fill
+            c5.font = total_font
+            c5.alignment = right
+
+            c6 = ws.cell(row=row, column=6, value=t_dev)
+            c6.number_format = money_fmt
+            c6.fill = total_fill
+            c6.font = total_font
+            c6.alignment = right
+
+            c7 = ws.cell(
+                row=row, column=7,
+                value=data['totales']['total_ventas_netas_sin_iva'],
+            )
+            c7.number_format = money_fmt
+            c7.fill = total_fill
+            c7.font = total_font
+            c7.alignment = right
+
+            ws.cell(row=row, column=8, value='').fill = total_fill
+
+            c9 = ws.cell(
+                row=row, column=9,
+                value=data['totales']['total_comisiones'],
+            )
+            c9.number_format = money_fmt
+            c9.fill = total_fill
+            c9.font = total_font
+            c9.alignment = right
+
+            for col in range(1, 10):
+                ws.cell(row=row, column=col).border = border
+            ws.row_dimensions[row].height = 22
+
+        # ===== Anchos =====
+        anchos = [5, 30, 12, 28, 18, 18, 20, 12, 18]
+        for col, w in enumerate(anchos, 1):
+            ws.column_dimensions[get_column_letter(col)].width = w
+
+        # Congelar encabezado de tabla.
+        ws.freeze_panes = 'A6'
+
+        # Render binario.
+        from io import BytesIO
+        bio = BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+
+        nombre = (
+            f"comisiones_{data['fecha_inicio']}_{data['fecha_fin']}.xlsx"
+        )
+        response = HttpResponse(
+            bio.read(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument'
+                '.spreadsheetml.sheet'
+            ),
+        )
+        response['Content-Disposition'] = (
+            f'attachment; filename="{nombre}"'
+        )
+        return response
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse(
+            {'success': False, 'error': f'Error al exportar comisiones: {e}'},
+            status=500,
+        )
 
 
 @require_GET

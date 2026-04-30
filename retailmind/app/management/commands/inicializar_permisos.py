@@ -280,6 +280,10 @@ class Command(BaseCommand):
             ('reporte_ventas_comparativo', 'Comparativo de Ventas', None, '/app/reportes/ventas-comparativo/', 'ri-bar-chart-2-line', 2),
             ('reporte_productos_vendidos', 'Productos Vendidos', None, '/app/reportes/productos-vendidos/', 'ri-shopping-bag-line', 3),
             ('reporte_documentos_emitidos', 'Documentos Emitidos', None, '/app/reportes/documentos-emitidos/', 'ri-file-list-3-line', 4),
+            # Permiso granular embebido dentro del reporte ventas-sucursal:
+            # controla la visibilidad del botón "Comisiones" y los endpoints
+            # `obtener_comisiones_por_vendedor` / `exportar_comisiones_vendedor_excel`.
+            ('reporte_comisiones_vendedor', 'Reporte Comisiones por Vendedor', None, None, 'ri-percent-line', 5),
             # Reportes Existencias
             ('reporte_existencias', 'Reporte de Existencias', 'ver_reporte_existencias', None, 'ri-file-list-3-line', 3),
             ('reporte_existencias_marca', 'Existencias por Marca', 'ver_reporte_existencias_marca', None, 'ri-price-tag-3-line', 4),

@@ -68,6 +68,21 @@
                                     <i class="ri-search-line"></i> Buscar
                                 </button>
                             </div>
+                            {% if puede_ver_reporte_comisiones %}
+                            <div class="col-md-2 d-flex align-items-end">
+                                <!-- Abre el modal #modalComisionesVendedor con el                  -->
+                                <!-- reporte calculado para los filtros actuales (período/         -->
+                                <!-- sucursal/vendedor). El cálculo y el Excel reusan los          -->
+                                <!-- mismos endpoints (`obtener_comisiones_por_vendedor` y        -->
+                                <!-- `exportar_comisiones_vendedor_excel`). El bloque              -->
+                                <!-- completo está protegido por el permiso                        -->
+                                <!-- `reporte_comisiones_vendedor` (acción `puede_ver`).           -->
+                                <button type="button" class="btn btn-warning w-100" id="btnAbrirComisiones"
+                                        title="Reporte de comisiones por vendedor (calculado sobre venta neta sin IVA × % comisión del vendedor)">
+                                    <i class="ri-percent-line"></i> Comisiones
+                                </button>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -366,6 +381,129 @@
     </div>
 </div>
 
+{% if puede_ver_reporte_comisiones %}
+<!-- ====== MODAL: Reporte de Comisiones por Vendedor ====== -->
+<!-- Se abre al hacer click en #btnAbrirComisiones. Toma los filtros        -->
+<!-- actuales (mes/fecha/rango + sucursal + vendedor) y consulta            -->
+<!-- /app/api/reportes/comisiones-vendedor/ para renderizar la tabla.       -->
+<!-- El botón "Exportar Excel" descarga el mismo cálculo en xlsx con        -->
+<!-- formato (encabezado coloreado, totales en negrita, etc.).              -->
+<!-- Protegido por el permiso `reporte_comisiones_vendedor`. La acción     -->
+<!-- `puede_exportar` se evalúa por separado para mostrar / ocultar el     -->
+<!-- botón "Exportar Excel" dentro del modal.                              -->
+<div class="modal fade" id="modalComisionesVendedor" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="ri-percent-line me-1"></i> Reporte de Comisiones por Vendedor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                    <div>
+                        <div class="text-muted small" id="comisionesContextoFiltros">—</div>
+                        <small class="text-muted fst-italic" style="font-size:11px;">
+                            Comisión = Venta neta (sin IVA) × % comisión del vendedor
+                        </small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        {% if puede_exportar_reporte_comisiones %}
+                        <button class="btn btn-success btn-sm" id="btnExportarComisionesExcel">
+                            <i class="ri-file-excel-line"></i> Exportar Excel
+                        </button>
+                        {% endif %}
+                        <button class="btn btn-outline-secondary btn-sm" id="btnRecargarComisiones" title="Recalcular con los filtros actuales">
+                            <i class="ri-refresh-line"></i> Recargar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPIs comisiones -->
+                <div class="row g-2 mb-3" id="comisionesKpis">
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 px-3">
+                                <div class="text-uppercase text-muted small">Vendedores</div>
+                                <div class="fs-4 fw-bold text-primary" id="kpiComCantVendedores">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 px-3">
+                                <div class="text-uppercase text-muted small">Ventas netas s/IVA</div>
+                                <div class="fs-4 fw-bold text-dark" id="kpiComVentasNetas">$0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 px-3">
+                                <div class="text-uppercase text-muted small">Devoluciones (NC)</div>
+                                <div class="fs-4 fw-bold text-danger" id="kpiComDevoluciones">$0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 px-3">
+                                <div class="text-uppercase text-muted small">Total Comisiones</div>
+                                <div class="fs-4 fw-bold text-success" id="kpiComTotalComisiones">$0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped align-middle mb-0" id="tablaComisiones">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>#</th>
+                                <th>Vendedor</th>
+                                <th>Código</th>
+                                <th>Sucursal(es)</th>
+                                <th class="text-end">Ventas Brutas (s/IVA)</th>
+                                <th class="text-end">Devoluciones (s/IVA)</th>
+                                <th class="text-end">Ventas Netas (s/IVA)</th>
+                                <th class="text-center">% Comisión</th>
+                                <th class="text-end">Comisión $</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyComisiones">
+                            <tr>
+                                <td colspan="9" class="text-center py-4 text-muted">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Cargando…</span>
+                                    </div>
+                                    <div class="mt-2">Calculando comisiones…</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td colspan="4" class="text-end">TOTAL GENERAL:</td>
+                                <td class="text-end" id="tfComBrutas">$0</td>
+                                <td class="text-end" id="tfComDevoluciones">$0</td>
+                                <td class="text-end" id="tfComNetas">$0</td>
+                                <td class="text-center">—</td>
+                                <td class="text-end text-success" id="tfComComisiones">$0</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% include '../../layout/footer.html' %}
 
 <script>
@@ -404,6 +542,24 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnImprimirSucursales').addEventListener('click', imprimirSucursales);
     document.getElementById('btnExportarSucursales').addEventListener('click', exportarSucursalesExcel);
     document.getElementById('btnPDFSucursales').addEventListener('click', exportarSucursalesPDF);
+
+    // === Reporte de Comisiones por Vendedor ===
+    // El botón abre el modal y dispara la carga inicial usando los
+    // filtros actuales. Los botones internos del modal permiten
+    // recargar (recalcular con filtros vigentes) y exportar a Excel.
+    const btnAbrirComisiones = document.getElementById('btnAbrirComisiones');
+    if (btnAbrirComisiones) {
+        btnAbrirComisiones.addEventListener('click', () => {
+            const modalEl = document.getElementById('modalComisionesVendedor');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+            cargarComisionesVendedor();
+        });
+    }
+    const btnRecargarCom = document.getElementById('btnRecargarComisiones');
+    if (btnRecargarCom) btnRecargarCom.addEventListener('click', cargarComisionesVendedor);
+    const btnExportarCom = document.getElementById('btnExportarComisionesExcel');
+    if (btnExportarCom) btnExportarCom.addEventListener('click', descargarComisionesExcel);
 
     // Event listener para cambio de tipo de filtro de fecha
     document.getElementById('tipoFiltroFecha').addEventListener('change', function() {
@@ -1207,6 +1363,147 @@ document.addEventListener('DOMContentLoaded', function() {
             text: 'Funcionalidad en desarrollo...',
             timer: 2000
         });
+    }
+
+    // === Reporte de comisiones: helpers ===
+    //
+    // Reusan los mismos selects (#tipoFiltroFecha, #filtroMes/Fecha/...,
+    // #filtroSucursal, #filtroVendedor) que el reporte principal, así
+    // el modal siempre refleja la última búsqueda del usuario sin
+    // duplicar UI de filtros.
+    function obtenerParametrosComisiones() {
+        const tipoFiltro = document.getElementById('tipoFiltroFecha').value;
+        const sucursal = document.getElementById('filtroSucursal').value;
+        const vendedor = document.getElementById('filtroVendedor').value;
+        const params = new URLSearchParams();
+        if (tipoFiltro === 'mes') {
+            const mes = document.getElementById('filtroMes').value;
+            if (mes) params.set('mes', mes);
+        } else if (tipoFiltro === 'fecha') {
+            const fecha = document.getElementById('filtroFecha').value;
+            if (fecha) params.set('fecha', fecha);
+        } else if (tipoFiltro === 'rango') {
+            const fi = document.getElementById('filtroFechaInicio').value;
+            const ff = document.getElementById('filtroFechaFin').value;
+            if (fi) params.set('fecha_inicio', fi);
+            if (ff) params.set('fecha_fin', ff);
+        }
+        if (sucursal) params.set('sucursal_id', sucursal);
+        if (vendedor) params.set('vendedor_id', vendedor);
+        return params;
+    }
+
+    function _txtFiltrosComisiones(data) {
+        const sel = document.getElementById('filtroSucursal');
+        const sucursalLabel = sel && sel.value
+            ? (sel.options[sel.selectedIndex]?.text || sel.value)
+            : 'Todas';
+        const selV = document.getElementById('filtroVendedor');
+        const vendedorLabel = selV && selV.value
+            ? (selV.options[selV.selectedIndex]?.text || selV.value)
+            : 'Todos';
+        const fi = data?.fecha_inicio || '';
+        const ff = data?.fecha_fin || '';
+        const periodo = (fi && ff)
+            ? (fi === ff ? fi : `${fi} → ${ff}`)
+            : '—';
+        return `Período: <strong>${periodo}</strong> · Sucursal: <strong>${sucursalLabel}</strong> · Vendedor: <strong>${vendedorLabel}</strong>`;
+    }
+
+    function cargarComisionesVendedor() {
+        const params = obtenerParametrosComisiones();
+        const tbody = document.getElementById('tbodyComisiones');
+        const ctxEl = document.getElementById('comisionesContextoFiltros');
+        if (ctxEl) ctxEl.innerHTML = _txtFiltrosComisiones({});
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center py-4 text-muted">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando…</span>
+                        </div>
+                        <div class="mt-2">Calculando comisiones…</div>
+                    </td>
+                </tr>`;
+        }
+
+        fetch(`/app/api/reportes/comisiones-vendedor/?${params.toString()}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) {
+                    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4">${data.error || 'Error al cargar comisiones'}</td></tr>`;
+                    return;
+                }
+                renderComisionesTabla(data);
+            })
+            .catch(err => {
+                console.error('Error cargando comisiones:', err);
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4">Error de red al cargar comisiones</td></tr>`;
+            });
+    }
+
+    function renderComisionesTabla(data) {
+        const ctxEl = document.getElementById('comisionesContextoFiltros');
+        if (ctxEl) ctxEl.innerHTML = _txtFiltrosComisiones(data);
+
+        const tbody = document.getElementById('tbodyComisiones');
+        const vendedores = data.vendedores || [];
+        const t = data.totales || {};
+
+        document.getElementById('kpiComCantVendedores').textContent =
+            (t.cantidad_vendedores || 0).toString();
+        document.getElementById('kpiComVentasNetas').textContent =
+            '$' + formatearNumero(t.total_ventas_netas_sin_iva || 0);
+        document.getElementById('kpiComDevoluciones').textContent =
+            '$' + formatearNumero(t.total_devoluciones || 0);
+        document.getElementById('kpiComTotalComisiones').textContent =
+            '$' + formatearNumero(t.total_comisiones || 0);
+
+        if (vendedores.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No hay vendedores con ventas en este período.</td></tr>`;
+            document.getElementById('tfComBrutas').textContent = '$0';
+            document.getElementById('tfComDevoluciones').textContent = '$0';
+            document.getElementById('tfComNetas').textContent = '$0';
+            document.getElementById('tfComComisiones').textContent = '$0';
+            return;
+        }
+
+        let totalBrutas = 0;
+        let totalDev = 0;
+        const filas = vendedores.map((v, i) => {
+            totalBrutas += (v.ventas_brutas_neto || 0);
+            totalDev += (v.devoluciones_neto || 0);
+            const sucursalesStr = (v.sucursales && v.sucursales.length)
+                ? v.sucursales.join(', ')
+                : '—';
+            const pct = (typeof v.comision_pct === 'number') ? v.comision_pct : 0;
+            return `
+                <tr>
+                    <td class="text-center">${i + 1}</td>
+                    <td>${v.nombre || ''}</td>
+                    <td class="text-center"><span class="badge bg-light text-dark">${v.codigo || ''}</span></td>
+                    <td><small class="text-muted">${sucursalesStr}</small></td>
+                    <td class="text-end">$${formatearNumero(v.ventas_brutas_neto || 0)}</td>
+                    <td class="text-end text-danger">${(v.devoluciones_neto || 0) > 0 ? '−$' + formatearNumero(v.devoluciones_neto) : '—'}</td>
+                    <td class="text-end fw-bold">$${formatearNumero(v.ventas_netas_sin_iva || 0)}</td>
+                    <td class="text-center">${pct.toFixed(2)}%</td>
+                    <td class="text-end fw-bold text-success">$${formatearNumero(v.comision_monto || 0)}</td>
+                </tr>`;
+        }).join('');
+        tbody.innerHTML = filas;
+
+        document.getElementById('tfComBrutas').textContent = '$' + formatearNumero(totalBrutas);
+        document.getElementById('tfComDevoluciones').textContent = totalDev > 0 ? ('−$' + formatearNumero(totalDev)) : '$0';
+        document.getElementById('tfComNetas').textContent = '$' + formatearNumero(t.total_ventas_netas_sin_iva || 0);
+        document.getElementById('tfComComisiones').textContent = '$' + formatearNumero(t.total_comisiones || 0);
+    }
+
+    function descargarComisionesExcel() {
+        const params = obtenerParametrosComisiones();
+        const url = `/app/api/reportes/comisiones-vendedor/exportar/?${params.toString()}`;
+        // Abre en nueva pestaña; el navegador descarga el .xlsx por el
+        // header `Content-Disposition: attachment` del backend.
+        window.open(url, '_blank');
     }
 
     // Función auxiliar para formatear números
