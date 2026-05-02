@@ -489,7 +489,7 @@
                                 <th>Código</th>
                                 <th>Sucursal(es)</th>
                                 <th>Dirección(es)</th>
-                                <th class="text-end">Ventas Brutas (s/IVA)</th>
+                                <th class="text-end">Ventas Brutas (c/IVA)</th>
                                 <th class="text-end">Devoluciones (s/IVA)</th>
                                 <th class="text-end">Ventas Netas (s/IVA)</th>
                                 <th class="text-center">% Comisión</th>
@@ -1499,7 +1499,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="text-center"><span class="badge bg-light text-dark">${v.codigo || ''}</span></td>
                 <td><small class="text-muted">${sucursalesStr}</small></td>
                 <td><small class="text-muted">${direccionesStr}</small></td>
-                <td class="text-end">$${formatearNumero(v.ventas_brutas_neto || 0)}</td>
+                <td class="text-end">$${formatearNumero(v.ventas_brutas || 0)}</td>
                 <td class="text-end text-danger">${(v.devoluciones_neto || 0) > 0 ? '−$' + formatearNumero(v.devoluciones_neto) : '—'}</td>
                 <td class="text-end fw-bold">$${formatearNumero(v.ventas_netas_sin_iva || 0)}</td>
                 <td class="text-center">${pct.toFixed(2)}%</td>
@@ -1523,7 +1523,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 rut: '',
                 vendedores: data.vendedores || [],
                 subtotales: {
-                    total_ventas_brutas_neto: (data.vendedores || []).reduce((a, v) => a + (v.ventas_brutas_neto || 0), 0),
+                    total_ventas_brutas_con_iva: (data.vendedores || []).reduce((a, v) => a + (v.ventas_brutas || 0), 0),
                     total_devoluciones_neto: (data.vendedores || []).reduce((a, v) => a + (v.devoluciones_neto || 0), 0),
                     total_ventas_netas_sin_iva: (data.totales || {}).total_ventas_netas_sin_iva || 0,
                     total_comisiones: (data.totales || {}).total_comisiones || 0,
@@ -1579,7 +1579,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             vendedores.forEach(v => {
                 idxGlobal += 1;
-                totalBrutas += (v.ventas_brutas_neto || 0);
+                totalBrutas += (v.ventas_brutas || 0);
                 totalDev += (v.devoluciones_neto || 0);
                 html += _filaComisionVendedor(v, idxGlobal);
             });
@@ -1588,7 +1588,7 @@ document.addEventListener('DOMContentLoaded', function() {
             html += `
                 <tr class="table-secondary fw-semibold">
                     <td colspan="5" class="text-end">Subtotal ${emp.nombre || ''}:</td>
-                    <td class="text-end">$${formatearNumero(sub.total_ventas_brutas_neto || 0)}</td>
+                    <td class="text-end">$${formatearNumero(sub.total_ventas_brutas_con_iva || 0)}</td>
                     <td class="text-end text-danger">${(sub.total_devoluciones_neto || 0) > 0 ? '−$' + formatearNumero(sub.total_devoluciones_neto) : '—'}</td>
                     <td class="text-end">$${formatearNumero(sub.total_ventas_netas_sin_iva || 0)}</td>
                     <td class="text-center">—</td>

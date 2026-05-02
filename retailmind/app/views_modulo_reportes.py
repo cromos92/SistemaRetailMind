@@ -1817,9 +1817,11 @@ def exportar_comisiones_vendedor_excel(request):
         ws['A3'].alignment = center
 
         # ===== Headers de tabla =====
+        # "Ventas Brutas (c/IVA)" para que sea distinto a "Ventas Netas (s/IVA)"
+        # cuando no hay devoluciones; concilia con el KPI "Total Ventas c/IVA".
         headers = [
             '#', 'Vendedor', 'Código', 'Sucursal(es)', 'Dirección(es)',
-            'Ventas Brutas (s/IVA)', 'Devoluciones (s/IVA)',
+            'Ventas Brutas (c/IVA)', 'Devoluciones (s/IVA)',
             'Ventas Netas (s/IVA)', '% Comisión', 'Comisión $',
         ]
         row = 5
@@ -1876,7 +1878,9 @@ def exportar_comisiones_vendedor_excel(request):
                     value=' · '.join(v.get('direcciones') or []),
                 ).alignment = left
 
-                c6 = ws.cell(row=row, column=6, value=v.get('ventas_brutas_neto', 0))
+                # Brutas con IVA (concuerda con la columna en pantalla y
+                # con el KPI "Total Ventas c/IVA" del modal).
+                c6 = ws.cell(row=row, column=6, value=v.get('ventas_brutas', 0))
                 c6.number_format = money_fmt
                 c6.alignment = right
 
@@ -1913,7 +1917,7 @@ def exportar_comisiones_vendedor_excel(request):
             cell_lbl.font = subtotal_font
             cell_lbl.alignment = right
 
-            cs6 = ws.cell(row=row, column=6, value=sub.get('total_ventas_brutas_neto', 0))
+            cs6 = ws.cell(row=row, column=6, value=sub.get('total_ventas_brutas_con_iva', 0))
             cs6.number_format = money_fmt
             cs6.fill = subtotal_fill
             cs6.font = subtotal_font
@@ -1955,7 +1959,7 @@ def exportar_comisiones_vendedor_excel(request):
             cell_label.font = total_font
             cell_label.alignment = right
 
-            t_brutas = sum(v['ventas_brutas_neto'] for v in data['vendedores'])
+            t_brutas = sum(v['ventas_brutas'] for v in data['vendedores'])
             t_dev = sum(v['devoluciones_neto'] for v in data['vendedores'])
 
             c6 = ws.cell(row=row, column=6, value=t_brutas)
