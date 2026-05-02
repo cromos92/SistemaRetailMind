@@ -1432,14 +1432,18 @@ def _calcular_comisiones_vendedor(request):
     independiente de modalidad). La "venta neta" se define como la suma
     de `monto_neto` (sin IVA) de los DTEs de venta menos la suma de
     `monto_neto` de las Notas de Crédito asociadas al mismo vendedor
-    en el período.
+    en la misma sucursal y período.
 
     La comisión se calcula como `venta_neta_sin_iva * (Vendedor.comision / 100)`.
 
-    El resultado se agrupa por **(vendedor, empresa emisora)**: si un vendedor
-    operó para más de una empresa en el período aparece una vez por empresa,
-    para que cada razón social vea sus propias comisiones por separado y la
-    contabilidad las pueda liquidar de forma independiente.
+    El resultado se agrupa por **(vendedor, empresa emisora, sucursal)**: si
+    un vendedor operó para más de una empresa o en más de una sucursal en el
+    período aparece una fila por cada combinación, para que la liquidación
+    contable pueda hacerse por razón social y por local.
+
+    Las NC que salen en una sucursal distinta a la de la venta original se
+    imputan a la sucursal donde efectivamente se emitió la NC (la cardinalidad
+    natural del agregado SQL).
 
     Devuelve un dict con::
 
@@ -1449,17 +1453,26 @@ def _calcular_comisiones_vendedor(request):
               'id': 1,
               'nombre': 'Empresa A',
               'rut': '76.123.456-7',
-              'vendedores': [<dict por vendedor en esta empresa>],
-              'subtotales': {<mismas keys que totales>},
+              'sucursales': [
+                {
+                  'id': 10,
+                  'alias': 'Centro',
+                  'direccion': 'Av. ...',
+                  'vendedores': [<dict por vendedor en esta sucursal>],
+                  'subtotales': {<mismas keys que totales>},
+                },
+                ...
+              ],
+              'subtotales': {<suma de las sucursales + cantidad_sucursales>},
             },
             ...
           ],
-          'vendedores': [...],   # flat (compatibilidad)
+          'vendedores': [...],   # flat (1 por trío vendedor-empresa-sucursal)
           'fecha_inicio': 'YYYY-MM-DD',
           'fecha_fin': 'YYYY-MM-DD',
           'sucursal_id': str | None,
           'vendedor_id': str | None,
-          'totales': {<global>},
+          'totales': {<global, incluye cantidad_sucursales>},
         }
     """
     fi, ff = _parse_rango_fechas_reporte(request)
@@ -1486,9 +1499,9 @@ def _calcular_comisiones_vendedor(request):
     queryset_ventas = queryset_dtes.exclude(tipo_documento='NOTA DE CREDITO')
     queryset_ncs = queryset_dtes.filter(tipo_documento='NOTA DE CREDITO')
 
-    # Agrupación por (vendedor, emisor=empresa). Cada DTE pertenece a una
-    # empresa (`Dte.emisor`); si el mismo vendedor tiene ventas para
-    # empresas distintas se separan en filas distintas.
+    # Agrupación triple (vendedor, emisor=empresa, sucursal). Un mismo
+    # vendedor que vendió para varias empresas o en varias sucursales
+    # produce una fila por cada combinación.
     ventas_agg = queryset_ventas.values(
         'vendedor__id',
         'vendedor__nombre',
@@ -1497,49 +1510,45 @@ def _calcular_comisiones_vendedor(request):
         'emisor__id',
         'emisor__nombre',
         'emisor__rut',
+        'sucursal__id',
+        'sucursal__alias',
+        'sucursal__direccion',
     ).annotate(
         total_ventas=Sum('monto_con_iva'),
         total_neto=Sum('monto_neto'),
         total_documentos=Count('id'),
     )
 
+    # NC con la misma clave triple. Si una NC se emite en otra sucursal
+    # respecto de la venta original, se imputa donde se emitió.
     ncs_agg = {
-        (r['vendedor__id'], r['emisor__id']): {
+        (r['vendedor__id'], r['emisor__id'], r['sucursal__id']): {
             'total': int(r['total'] or 0),
             'neto': int(r['neto'] or 0),
         }
-        for r in queryset_ncs.values('vendedor__id', 'emisor__id').annotate(
+        for r in queryset_ncs.values(
+            'vendedor__id', 'emisor__id', 'sucursal__id',
+        ).annotate(
             total=Sum('monto_con_iva'),
             neto=Sum('monto_neto'),
         )
         if r['vendedor__id'] and r['emisor__id']
     }
 
-    # Sucursales (alias + dirección) por (vendedor, empresa) en las que el
-    # vendedor tuvo ventas en el período. Permite mostrar contexto al
-    # usuario y separar empresas que podrían reutilizar el mismo
-    # vendedor en sucursales distintas.
-    sucursales_por_par: dict[tuple, dict[str, set[str]]] = {}
-    for r in queryset_dtes.values(
-        'vendedor_id',
-        'emisor_id',
-        'sucursal__alias',
-        'sucursal__direccion',
-    ).distinct():
-        vid = r['vendedor_id']
-        eid = r['emisor_id']
-        if not vid or not eid:
-            continue
-        info = sucursales_por_par.setdefault(
-            (vid, eid), {'aliases': set(), 'direcciones': set()},
-        )
-        if r['sucursal__alias']:
-            info['aliases'].add(r['sucursal__alias'])
-        if r['sucursal__direccion']:
-            info['direcciones'].add(r['sucursal__direccion'])
+    def _nuevo_subtotal() -> dict:
+        return {
+            'total_ventas_brutas_con_iva': 0,
+            'total_ventas_brutas_neto': 0,
+            'total_devoluciones_con_iva': 0,
+            'total_devoluciones_neto': 0,
+            'total_ventas_netas_sin_iva': 0,
+            'total_ventas_netas_con_iva': 0,
+            'total_comisiones': 0,
+            'total_documentos': 0,
+            'cantidad_vendedores': 0,
+        }
 
-    # Construcción de la lista flat de vendedores (uno por par
-    # vendedor-empresa) y agrupación por empresa simultáneamente.
+    # Construcción anidada Empresa -> Sucursal -> Vendedor + lista flat.
     empresas_map: dict[int, dict] = {}
     vendedores_data: list[dict] = []
     total_comisiones = 0
@@ -1550,15 +1559,17 @@ def _calcular_comisiones_vendedor(request):
     total_documentos = 0
     total_devoluciones = 0
     total_devoluciones_neto = 0
+    sucursales_distintas: set[int] = set()
 
     for item in ventas_agg:
         vid = item['vendedor__id']
         eid = item['emisor__id']
+        sid = item['sucursal__id']
         if not vid or not eid:
             continue
         ventas_brutas_iva = int(item['total_ventas'] or 0)
         ventas_brutas_neto = int(item['total_neto'] or 0)
-        nc = ncs_agg.get((vid, eid), {'total': 0, 'neto': 0})
+        nc = ncs_agg.get((vid, eid, sid), {'total': 0, 'neto': 0})
         ventas_netas_iva = ventas_brutas_iva - nc['total']
         ventas_netas_neto = ventas_brutas_neto - nc['neto']
         try:
@@ -1567,9 +1578,8 @@ def _calcular_comisiones_vendedor(request):
             comision_pct = 0.0
         comision_monto = int(round(ventas_netas_neto * comision_pct / 100.0))
 
-        sucursales_info = sucursales_por_par.get(
-            (vid, eid), {'aliases': set(), 'direcciones': set()},
-        )
+        sucursal_alias = item['sucursal__alias'] or ''
+        sucursal_direccion = item['sucursal__direccion'] or ''
 
         fila = {
             'id': vid,
@@ -1578,8 +1588,9 @@ def _calcular_comisiones_vendedor(request):
             'empresa_id': eid,
             'empresa_nombre': item['emisor__nombre'] or '(sin empresa)',
             'empresa_rut': item['emisor__rut'] or '',
-            'sucursales': sorted(sucursales_info['aliases']),
-            'direcciones': sorted(sucursales_info['direcciones']),
+            'sucursal_id': sid,
+            'sucursal_alias': sucursal_alias,
+            'sucursal_direccion': sucursal_direccion,
             'ventas_brutas': ventas_brutas_iva,
             'ventas_brutas_neto': ventas_brutas_neto,
             'devoluciones': nc['total'],
@@ -1596,30 +1607,45 @@ def _calcular_comisiones_vendedor(request):
             'id': eid,
             'nombre': fila['empresa_nombre'],
             'rut': fila['empresa_rut'],
-            'vendedores': [],
-            'subtotales': {
-                'total_ventas_brutas_con_iva': 0,
-                'total_ventas_brutas_neto': 0,
-                'total_devoluciones_con_iva': 0,
-                'total_devoluciones_neto': 0,
-                'total_ventas_netas_sin_iva': 0,
-                'total_ventas_netas_con_iva': 0,
-                'total_comisiones': 0,
-                'total_documentos': 0,
-                'cantidad_vendedores': 0,
-            },
+            'sucursales_map': {},  # interno, se elimina antes de devolver
+            'subtotales': {**_nuevo_subtotal(), 'cantidad_sucursales': 0},
         })
-        emp['vendedores'].append(fila)
-        sub = emp['subtotales']
-        sub['total_ventas_brutas_con_iva'] += ventas_brutas_iva
-        sub['total_ventas_brutas_neto'] += ventas_brutas_neto
-        sub['total_devoluciones_con_iva'] += nc['total']
-        sub['total_devoluciones_neto'] += nc['neto']
-        sub['total_ventas_netas_sin_iva'] += ventas_netas_neto
-        sub['total_ventas_netas_con_iva'] += ventas_netas_iva
-        sub['total_comisiones'] += comision_monto
-        sub['total_documentos'] += int(item['total_documentos'] or 0)
-        sub['cantidad_vendedores'] += 1
+
+        # Clave robusta para sucursales sin id (DTEs huérfanos): usa el
+        # alias o un placeholder negativo derivado del id de empresa.
+        suc_key = sid if sid is not None else f"_no_suc_{eid}"
+        suc = emp['sucursales_map'].setdefault(suc_key, {
+            'id': sid,
+            'alias': sucursal_alias,
+            'direccion': sucursal_direccion,
+            'vendedores': [],
+            'subtotales': _nuevo_subtotal(),
+        })
+        suc['vendedores'].append(fila)
+
+        # Subtotales por sucursal.
+        ssub = suc['subtotales']
+        ssub['total_ventas_brutas_con_iva'] += ventas_brutas_iva
+        ssub['total_ventas_brutas_neto'] += ventas_brutas_neto
+        ssub['total_devoluciones_con_iva'] += nc['total']
+        ssub['total_devoluciones_neto'] += nc['neto']
+        ssub['total_ventas_netas_sin_iva'] += ventas_netas_neto
+        ssub['total_ventas_netas_con_iva'] += ventas_netas_iva
+        ssub['total_comisiones'] += comision_monto
+        ssub['total_documentos'] += int(item['total_documentos'] or 0)
+        ssub['cantidad_vendedores'] += 1
+
+        # Subtotales por empresa = suma natural sobre todas sus sucursales.
+        esub = emp['subtotales']
+        esub['total_ventas_brutas_con_iva'] += ventas_brutas_iva
+        esub['total_ventas_brutas_neto'] += ventas_brutas_neto
+        esub['total_devoluciones_con_iva'] += nc['total']
+        esub['total_devoluciones_neto'] += nc['neto']
+        esub['total_ventas_netas_sin_iva'] += ventas_netas_neto
+        esub['total_ventas_netas_con_iva'] += ventas_netas_iva
+        esub['total_comisiones'] += comision_monto
+        esub['total_documentos'] += int(item['total_documentos'] or 0)
+        esub['cantidad_vendedores'] += 1
 
         total_comisiones += comision_monto
         total_ventas_brutas_con_iva += ventas_brutas_iva
@@ -1629,18 +1655,34 @@ def _calcular_comisiones_vendedor(request):
         total_documentos += int(item['total_documentos'] or 0)
         total_devoluciones += nc['total']
         total_devoluciones_neto += nc['neto']
+        if sid is not None:
+            sucursales_distintas.add(sid)
 
-    # Ordenamientos: empresas alfabéticamente; dentro de cada empresa los
+    # Ordenamientos: empresas alfabéticamente; dentro de cada empresa las
+    # sucursales por alias alfabético; dentro de cada sucursal los
     # vendedores por ventas netas descendentes.
     for emp in empresas_map.values():
-        emp['vendedores'].sort(
-            key=lambda v: v['ventas_netas_sin_iva'], reverse=True,
+        sucursales_lista = list(emp['sucursales_map'].values())
+        for suc in sucursales_lista:
+            suc['vendedores'].sort(
+                key=lambda v: v['ventas_netas_sin_iva'], reverse=True,
+            )
+        sucursales_lista.sort(
+            key=lambda s: ((s['alias'] or '').lower(), (s['direccion'] or '').lower()),
         )
+        emp['sucursales'] = sucursales_lista
+        emp['subtotales']['cantidad_sucursales'] = len(sucursales_lista)
+        del emp['sucursales_map']
+
     empresas_data = sorted(
         empresas_map.values(), key=lambda e: (e['nombre'] or '').lower(),
     )
     vendedores_data.sort(
-        key=lambda v: (v['empresa_nombre'].lower(), -v['ventas_netas_sin_iva']),
+        key=lambda v: (
+            v['empresa_nombre'].lower(),
+            (v['sucursal_alias'] or '').lower(),
+            -v['ventas_netas_sin_iva'],
+        ),
     )
 
     return {
@@ -1663,6 +1705,7 @@ def _calcular_comisiones_vendedor(request):
             'total_devoluciones_neto': total_devoluciones_neto,
             'cantidad_vendedores': len(vendedores_data),
             'cantidad_empresas': len(empresas_data),
+            'cantidad_sucursales': len(sucursales_distintas),
         },
     }
 
@@ -1773,18 +1816,29 @@ def exportar_comisiones_vendedor_excel(request):
         total_font = Font(bold=True, color='FFFFFF', size=11)
         empresa_fill = PatternFill(start_color='0052CC', end_color='0052CC', fill_type='solid')
         empresa_font = Font(bold=True, color='FFFFFF', size=12)
-        subtotal_fill = PatternFill(start_color='F0F4FF', end_color='F0F4FF', fill_type='solid')
+        # Banner de sucursal: tono azul intermedio (más suave que empresa,
+        # más fuerte que subtotal). Permite separar visualmente los 3
+        # niveles de jerarquía: TOTAL > EMPRESA > SUCURSAL > vendedor.
+        sucursal_fill = PatternFill(start_color='4D7BC9', end_color='4D7BC9', fill_type='solid')
+        sucursal_font = Font(bold=True, color='FFFFFF', size=11)
+        # Subtotal sucursal: tono más claro que el subtotal de empresa para
+        # que la jerarquía siga reflejándose en las filas de totales.
+        subtotal_suc_fill = PatternFill(start_color='EAF1FB', end_color='EAF1FB', fill_type='solid')
+        subtotal_suc_font = Font(bold=True, color='1A1A2E', size=10)
+        # Subtotal empresa (más oscuro que el de sucursal).
+        subtotal_fill = PatternFill(start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
         subtotal_font = Font(bold=True, color='1A1A2E', size=10)
         thin = Side(style='thin', color='B0B0B0')
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
         center = Alignment(horizontal='center', vertical='center', wrap_text=True)
         right = Alignment(horizontal='right', vertical='center')
         left = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        left_indent = Alignment(horizontal='left', vertical='center', wrap_text=True, indent=1)
 
-        # 10 columnas (col J): #, Vendedor, Código, Sucursal(es),
-        # Dirección(es), Ventas Brutas, Devoluciones, Ventas Netas,
-        # % Comisión, Comisión $.
-        N_COLS = 10
+        # 8 columnas: #, Vendedor, Código, Ventas Brutas, Devoluciones,
+        # Ventas Netas, % Comisión, Comisión $. La sucursal y dirección
+        # se muestran como banner agrupador, no como columnas.
+        N_COLS = 8
         last_col_letter = get_column_letter(N_COLS)
 
         # ===== Banner / título =====
@@ -1811,6 +1865,7 @@ def exportar_comisiones_vendedor_excel(request):
         ws['A3'] = (
             f"Generado: {timezone.localtime().strftime('%d/%m/%Y %H:%M')}  ·  "
             f"Empresas: {data['totales'].get('cantidad_empresas', 0)}  ·  "
+            f"Sucursales: {data['totales'].get('cantidad_sucursales', 0)}  ·  "
             f"Vendedores: {data['totales']['cantidad_vendedores']}"
         )
         ws['A3'].font = Font(italic=True, size=9, color='8A8A9A')
@@ -1820,7 +1875,7 @@ def exportar_comisiones_vendedor_excel(request):
         # "Ventas Brutas (c/IVA)" para que sea distinto a "Ventas Netas (s/IVA)"
         # cuando no hay devoluciones; concilia con el KPI "Total Ventas c/IVA".
         headers = [
-            '#', 'Vendedor', 'Código', 'Sucursal(es)', 'Dirección(es)',
+            '#', 'Vendedor', 'Código',
             'Ventas Brutas (c/IVA)', 'Devoluciones (s/IVA)',
             'Ventas Netas (s/IVA)', '% Comisión', 'Comisión $',
         ]
@@ -1833,27 +1888,54 @@ def exportar_comisiones_vendedor_excel(request):
             cell.alignment = center
         ws.row_dimensions[row].height = 32
 
-        # ===== Filas de datos agrupadas por empresa =====
+        # ===== Filas de datos: Empresa -> Sucursal -> Vendedor =====
         money_fmt = '"$"#,##0'
         pct_fmt = '0.00"%"'
         row = 6
         idx_global = 0
         empresas = data.get('empresas') or []
 
+        def _label_sucursal_compacto(suc: dict) -> str:
+            """Texto del banner de sucursal: alias — dirección (compacto)."""
+            alias = (suc.get('alias') or '').strip()
+            direc = (suc.get('direccion') or '').strip()
+            if alias and direc and alias.lower() != direc.lower():
+                return f"{alias} — {direc}"
+            return alias or direc or '(sin sucursal)'
+
         for emp in empresas:
-            vendedores_emp = emp.get('vendedores') or []
-            if not vendedores_emp:
+            sucursales_emp = emp.get('sucursales') or []
+            # Backcompat: si por algún motivo el backend mandara solo
+            # `vendedores` (formato anterior), agruparlos en una
+            # "sucursal sintética" sin alias para no romper el Excel.
+            if not sucursales_emp and emp.get('vendedores'):
+                sucursales_emp = [{
+                    'id': None,
+                    'alias': '',
+                    'direccion': '',
+                    'vendedores': emp.get('vendedores') or [],
+                    'subtotales': emp.get('subtotales') or {},
+                }]
+            total_vend_emp = sum(
+                len(s.get('vendedores') or []) for s in sucursales_emp
+            )
+            if not total_vend_emp:
                 continue
 
-            # Banner de empresa (merge sobre todas las columnas).
+            sub_emp = emp.get('subtotales') or {}
+            cant_suc = sub_emp.get('cantidad_sucursales') or len(sucursales_emp)
+
+            # Banner empresa.
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=N_COLS)
             cabecera_emp = ws.cell(
                 row=row, column=1,
                 value=(
                     f"EMPRESA: {emp.get('nombre') or '(sin nombre)'}"
                     + (f"  ·  RUT {emp.get('rut')}" if emp.get('rut') else '')
-                    + f"  ·  {len(vendedores_emp)} vendedor"
-                    + ('' if len(vendedores_emp) == 1 else 'es')
+                    + f"  ·  {cant_suc} sucursal"
+                    + ('' if cant_suc == 1 else 'es')
+                    + f"  ·  {total_vend_emp} vendedor"
+                    + ('' if total_vend_emp == 1 else 'es')
                 ),
             )
             cabecera_emp.fill = empresa_fill
@@ -1864,51 +1946,107 @@ def exportar_comisiones_vendedor_excel(request):
                 ws.cell(row=row, column=col).border = border
             row += 1
 
-            for v in vendedores_emp:
-                idx_global += 1
-                ws.cell(row=row, column=1, value=idx_global).alignment = center
-                ws.cell(row=row, column=2, value=v.get('nombre', '')).alignment = left
-                ws.cell(row=row, column=3, value=v.get('codigo', '')).alignment = center
-                ws.cell(
-                    row=row, column=4,
-                    value=', '.join(v.get('sucursales') or []),
-                ).alignment = left
-                ws.cell(
-                    row=row, column=5,
-                    value=' · '.join(v.get('direcciones') or []),
-                ).alignment = left
+            for suc in sucursales_emp:
+                vendedores_suc = suc.get('vendedores') or []
+                if not vendedores_suc:
+                    continue
+                ssub = suc.get('subtotales') or {}
+                label_suc = _label_sucursal_compacto(suc)
 
-                # Brutas con IVA (concuerda con la columna en pantalla y
-                # con el KPI "Total Ventas c/IVA" del modal).
-                c6 = ws.cell(row=row, column=6, value=v.get('ventas_brutas', 0))
-                c6.number_format = money_fmt
-                c6.alignment = right
-
-                c7 = ws.cell(row=row, column=7, value=v.get('devoluciones_neto', 0))
-                c7.number_format = money_fmt
-                c7.alignment = right
-
-                c8 = ws.cell(row=row, column=8, value=v.get('ventas_netas_sin_iva', 0))
-                c8.number_format = money_fmt
-                c8.alignment = right
-                c8.font = Font(bold=True, color='1A1A2E')
-
-                c9 = ws.cell(row=row, column=9, value=v.get('comision_pct', 0))
-                c9.number_format = pct_fmt
-                c9.alignment = center
-
-                c10 = ws.cell(row=row, column=10, value=v.get('comision_monto', 0))
-                c10.number_format = money_fmt
-                c10.alignment = right
-                c10.font = Font(bold=True, color='00B38A')
-
+                # Banner sucursal (nivel intermedio entre empresa y
+                # subtotal). Compacto: alias y dirección en una sola línea.
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=N_COLS)
+                cabecera_suc = ws.cell(
+                    row=row, column=1,
+                    value=(
+                        f"↳ SUCURSAL: {label_suc}"
+                        f"  ·  {len(vendedores_suc)} vendedor"
+                        + ('' if len(vendedores_suc) == 1 else 'es')
+                    ),
+                )
+                cabecera_suc.fill = sucursal_fill
+                cabecera_suc.font = sucursal_font
+                cabecera_suc.alignment = left_indent
+                ws.row_dimensions[row].height = 20
                 for col in range(1, N_COLS + 1):
                     ws.cell(row=row, column=col).border = border
                 row += 1
 
-            # Subtotal por empresa.
-            sub = emp.get('subtotales') or {}
-            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+                for v in vendedores_suc:
+                    idx_global += 1
+                    ws.cell(row=row, column=1, value=idx_global).alignment = center
+                    ws.cell(row=row, column=2, value=v.get('nombre', '')).alignment = left
+                    ws.cell(row=row, column=3, value=v.get('codigo', '')).alignment = center
+
+                    c4 = ws.cell(row=row, column=4, value=v.get('ventas_brutas', 0))
+                    c4.number_format = money_fmt
+                    c4.alignment = right
+
+                    c5 = ws.cell(row=row, column=5, value=v.get('devoluciones_neto', 0))
+                    c5.number_format = money_fmt
+                    c5.alignment = right
+
+                    c6 = ws.cell(row=row, column=6, value=v.get('ventas_netas_sin_iva', 0))
+                    c6.number_format = money_fmt
+                    c6.alignment = right
+                    c6.font = Font(bold=True, color='1A1A2E')
+
+                    c7 = ws.cell(row=row, column=7, value=v.get('comision_pct', 0))
+                    c7.number_format = pct_fmt
+                    c7.alignment = center
+
+                    c8 = ws.cell(row=row, column=8, value=v.get('comision_monto', 0))
+                    c8.number_format = money_fmt
+                    c8.alignment = right
+                    c8.font = Font(bold=True, color='00B38A')
+
+                    for col in range(1, N_COLS + 1):
+                        ws.cell(row=row, column=col).border = border
+                    row += 1
+
+                # Subtotal por sucursal.
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+                cell_lbl = ws.cell(
+                    row=row, column=1,
+                    value=f"↳ Subtotal {label_suc}",
+                )
+                cell_lbl.fill = subtotal_suc_fill
+                cell_lbl.font = subtotal_suc_font
+                cell_lbl.alignment = right
+
+                ss4 = ws.cell(row=row, column=4, value=ssub.get('total_ventas_brutas_con_iva', 0))
+                ss4.number_format = money_fmt
+                ss4.fill = subtotal_suc_fill
+                ss4.font = subtotal_suc_font
+                ss4.alignment = right
+
+                ss5 = ws.cell(row=row, column=5, value=ssub.get('total_devoluciones_neto', 0))
+                ss5.number_format = money_fmt
+                ss5.fill = subtotal_suc_fill
+                ss5.font = subtotal_suc_font
+                ss5.alignment = right
+
+                ss6 = ws.cell(row=row, column=6, value=ssub.get('total_ventas_netas_sin_iva', 0))
+                ss6.number_format = money_fmt
+                ss6.fill = subtotal_suc_fill
+                ss6.font = subtotal_suc_font
+                ss6.alignment = right
+
+                ws.cell(row=row, column=7, value='').fill = subtotal_suc_fill
+
+                ss8 = ws.cell(row=row, column=8, value=ssub.get('total_comisiones', 0))
+                ss8.number_format = money_fmt
+                ss8.fill = subtotal_suc_fill
+                ss8.font = Font(bold=True, color='00B38A', size=10)
+                ss8.alignment = right
+
+                for col in range(1, N_COLS + 1):
+                    ws.cell(row=row, column=col).border = border
+                ws.row_dimensions[row].height = 18
+                row += 1
+
+            # Subtotal por empresa (suma de sus sucursales).
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
             cell_lbl = ws.cell(
                 row=row, column=1,
                 value=f"Subtotal {emp.get('nombre') or ''}",
@@ -1917,31 +2055,31 @@ def exportar_comisiones_vendedor_excel(request):
             cell_lbl.font = subtotal_font
             cell_lbl.alignment = right
 
-            cs6 = ws.cell(row=row, column=6, value=sub.get('total_ventas_brutas_con_iva', 0))
+            cs4 = ws.cell(row=row, column=4, value=sub_emp.get('total_ventas_brutas_con_iva', 0))
+            cs4.number_format = money_fmt
+            cs4.fill = subtotal_fill
+            cs4.font = subtotal_font
+            cs4.alignment = right
+
+            cs5 = ws.cell(row=row, column=5, value=sub_emp.get('total_devoluciones_neto', 0))
+            cs5.number_format = money_fmt
+            cs5.fill = subtotal_fill
+            cs5.font = subtotal_font
+            cs5.alignment = right
+
+            cs6 = ws.cell(row=row, column=6, value=sub_emp.get('total_ventas_netas_sin_iva', 0))
             cs6.number_format = money_fmt
             cs6.fill = subtotal_fill
             cs6.font = subtotal_font
             cs6.alignment = right
 
-            cs7 = ws.cell(row=row, column=7, value=sub.get('total_devoluciones_neto', 0))
-            cs7.number_format = money_fmt
-            cs7.fill = subtotal_fill
-            cs7.font = subtotal_font
-            cs7.alignment = right
+            ws.cell(row=row, column=7, value='').fill = subtotal_fill
 
-            cs8 = ws.cell(row=row, column=8, value=sub.get('total_ventas_netas_sin_iva', 0))
+            cs8 = ws.cell(row=row, column=8, value=sub_emp.get('total_comisiones', 0))
             cs8.number_format = money_fmt
             cs8.fill = subtotal_fill
-            cs8.font = subtotal_font
+            cs8.font = Font(bold=True, color='00B38A', size=10)
             cs8.alignment = right
-
-            ws.cell(row=row, column=9, value='').fill = subtotal_fill
-
-            cs10 = ws.cell(row=row, column=10, value=sub.get('total_comisiones', 0))
-            cs10.number_format = money_fmt
-            cs10.fill = subtotal_fill
-            cs10.font = Font(bold=True, color='00B38A', size=10)
-            cs10.alignment = right
 
             for col in range(1, N_COLS + 1):
                 ws.cell(row=row, column=col).border = border
@@ -1953,7 +2091,7 @@ def exportar_comisiones_vendedor_excel(request):
 
         # ===== Fila de TOTAL GENERAL =====
         if data['vendedores']:
-            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
             cell_label = ws.cell(row=row, column=1, value='TOTAL GENERAL')
             cell_label.fill = total_fill
             cell_label.font = total_font
@@ -1962,46 +2100,45 @@ def exportar_comisiones_vendedor_excel(request):
             t_brutas = sum(v['ventas_brutas'] for v in data['vendedores'])
             t_dev = sum(v['devoluciones_neto'] for v in data['vendedores'])
 
-            c6 = ws.cell(row=row, column=6, value=t_brutas)
+            c4 = ws.cell(row=row, column=4, value=t_brutas)
+            c4.number_format = money_fmt
+            c4.fill = total_fill
+            c4.font = total_font
+            c4.alignment = right
+
+            c5 = ws.cell(row=row, column=5, value=t_dev)
+            c5.number_format = money_fmt
+            c5.fill = total_fill
+            c5.font = total_font
+            c5.alignment = right
+
+            c6 = ws.cell(
+                row=row, column=6,
+                value=data['totales']['total_ventas_netas_sin_iva'],
+            )
             c6.number_format = money_fmt
             c6.fill = total_fill
             c6.font = total_font
             c6.alignment = right
 
-            c7 = ws.cell(row=row, column=7, value=t_dev)
-            c7.number_format = money_fmt
-            c7.fill = total_fill
-            c7.font = total_font
-            c7.alignment = right
+            ws.cell(row=row, column=7, value='').fill = total_fill
 
             c8 = ws.cell(
                 row=row, column=8,
-                value=data['totales']['total_ventas_netas_sin_iva'],
+                value=data['totales']['total_comisiones'],
             )
             c8.number_format = money_fmt
             c8.fill = total_fill
             c8.font = total_font
             c8.alignment = right
 
-            ws.cell(row=row, column=9, value='').fill = total_fill
-
-            c10 = ws.cell(
-                row=row, column=10,
-                value=data['totales']['total_comisiones'],
-            )
-            c10.number_format = money_fmt
-            c10.fill = total_fill
-            c10.font = total_font
-            c10.alignment = right
-
             for col in range(1, N_COLS + 1):
                 ws.cell(row=row, column=col).border = border
             ws.row_dimensions[row].height = 22
 
         # ===== Anchos =====
-        # #, Vendedor, Código, Sucursal(es), Dirección(es), Brutas, Dev,
-        # Netas, %, Comisión.
-        anchos = [5, 30, 12, 24, 38, 18, 18, 20, 12, 18]
+        # #, Vendedor, Código, Brutas, Dev, Netas, %, Comisión.
+        anchos = [5, 32, 14, 20, 20, 22, 12, 20]
         for col, w in enumerate(anchos, 1):
             ws.column_dimensions[get_column_letter(col)].width = w
 

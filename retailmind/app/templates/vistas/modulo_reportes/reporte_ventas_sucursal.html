@@ -481,14 +481,15 @@
                 </div>
 
                 <div class="table-responsive">
+                    <!-- 8 columnas: la sucursal y dirección ya no son
+                         columnas; se muestran como banner compacto entre
+                         las filas de cada sucursal. -->
                     <table class="table table-hover align-middle mb-0" id="tablaComisiones">
                         <thead class="table-primary">
                             <tr>
                                 <th>#</th>
                                 <th>Vendedor</th>
                                 <th>Código</th>
-                                <th>Sucursal(es)</th>
-                                <th>Dirección(es)</th>
                                 <th class="text-end">Ventas Brutas (c/IVA)</th>
                                 <th class="text-end">Devoluciones (s/IVA)</th>
                                 <th class="text-end">Ventas Netas (s/IVA)</th>
@@ -498,7 +499,7 @@
                         </thead>
                         <tbody id="tbodyComisiones">
                             <tr>
-                                <td colspan="10" class="text-center py-4 text-muted">
+                                <td colspan="8" class="text-center py-4 text-muted">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Cargando…</span>
                                     </div>
@@ -508,7 +509,7 @@
                         </tbody>
                         <tfoot class="table-dark fw-bold">
                             <tr>
-                                <td colspan="5" class="text-end">TOTAL GENERAL:</td>
+                                <td colspan="3" class="text-end">TOTAL GENERAL:</td>
                                 <td class="text-end" id="tfComBrutas">$0</td>
                                 <td class="text-end" id="tfComDevoluciones">$0</td>
                                 <td class="text-end" id="tfComNetas">$0</td>
@@ -1447,7 +1448,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const periodo = (fi && ff)
             ? (fi === ff ? fi : `${fi} → ${ff}`)
             : '—';
-        return `Período: <strong>${periodo}</strong> · Sucursal: <strong>${sucursalLabel}</strong> · Vendedor: <strong>${vendedorLabel}</strong>`;
+        const cs = data?.totales?.cantidad_sucursales;
+        const sucActivasHtml = (typeof cs === 'number' && cs > 0)
+            ? ` · Sucursales con ventas: <strong>${cs}</strong>` : '';
+        return `Período: <strong>${periodo}</strong> · Sucursal: <strong>${sucursalLabel}</strong> · Vendedor: <strong>${vendedorLabel}</strong>${sucActivasHtml}`;
     }
 
     function cargarComisionesVendedor() {
@@ -1458,7 +1462,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="10" class="text-center py-4 text-muted">
+                    <td colspan="8" class="text-center py-4 text-muted">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Cargando…</span>
                         </div>
@@ -1471,40 +1475,71 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r => r.json())
             .then(data => {
                 if (!data.success) {
-                    tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger py-4">${data.error || 'Error al cargar comisiones'}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${data.error || 'Error al cargar comisiones'}</td></tr>`;
                     return;
                 }
                 renderComisionesTabla(data);
             })
             .catch(err => {
                 console.error('Error cargando comisiones:', err);
-                tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger py-4">Error de red al cargar comisiones</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error de red al cargar comisiones</td></tr>`;
             });
     }
 
     // Helper interno: HTML de una sola fila de vendedor en la tabla de
-    // comisiones. Se extrae para reusar entre la sección por empresa y
-    // posibles fallback cuando el backend no envíe `empresas` (modo
-    // legacy).
+    // comisiones. Tabla de 8 columnas; la sucursal y dirección ya no son
+    // columnas porque se muestran como banner agrupador.
     function _filaComisionVendedor(v, idx) {
-        const sucursalesStr = (v.sucursales && v.sucursales.length)
-            ? v.sucursales.join(', ') : '—';
-        const direccionesStr = (v.direcciones && v.direcciones.length)
-            ? v.direcciones.join(' · ') : '—';
         const pct = (typeof v.comision_pct === 'number') ? v.comision_pct : 0;
         return `
             <tr>
                 <td class="text-center">${idx}</td>
                 <td>${v.nombre || ''}</td>
                 <td class="text-center"><span class="badge bg-light text-dark">${v.codigo || ''}</span></td>
-                <td><small class="text-muted">${sucursalesStr}</small></td>
-                <td><small class="text-muted">${direccionesStr}</small></td>
                 <td class="text-end">$${formatearNumero(v.ventas_brutas || 0)}</td>
                 <td class="text-end text-danger">${(v.devoluciones_neto || 0) > 0 ? '−$' + formatearNumero(v.devoluciones_neto) : '—'}</td>
                 <td class="text-end fw-bold">$${formatearNumero(v.ventas_netas_sin_iva || 0)}</td>
                 <td class="text-center">${pct.toFixed(2)}%</td>
                 <td class="text-end fw-bold text-success">$${formatearNumero(v.comision_monto || 0)}</td>
             </tr>`;
+    }
+
+    // Helper: arma el texto compacto del banner de sucursal. Si solo
+    // hay alias o solo dirección muestra eso; si hay ambos, "alias —
+    // dirección".
+    function _labelSucursal(suc) {
+        const alias = (suc?.alias || '').trim();
+        const dir = (suc?.direccion || '').trim();
+        if (alias && dir && alias.toLowerCase() !== dir.toLowerCase()) {
+            return `${alias} — ${dir}`;
+        }
+        return alias || dir || '(sin sucursal)';
+    }
+
+    // Compat: si el backend devolvió formato antiguo (`emp.vendedores`
+    // sin `emp.sucursales`), construye una "sucursal sintética" por
+    // empresa con todos los vendedores adentro para no romper la UI
+    // mientras se cachea HTML viejo en el browser.
+    function _normalizarSucursalesEmp(emp) {
+        if (Array.isArray(emp.sucursales) && emp.sucursales.length) {
+            return emp.sucursales;
+        }
+        const vs = emp.vendedores || [];
+        if (!vs.length) return [];
+        const sub = emp.subtotales || {};
+        return [{
+            id: null,
+            alias: '',
+            direccion: '',
+            vendedores: vs,
+            subtotales: {
+                total_ventas_brutas_con_iva: sub.total_ventas_brutas_con_iva || 0,
+                total_devoluciones_neto: sub.total_devoluciones_neto || 0,
+                total_ventas_netas_sin_iva: sub.total_ventas_netas_sin_iva || 0,
+                total_comisiones: sub.total_comisiones || 0,
+                cantidad_vendedores: vs.length,
+            },
+        }];
     }
 
     function renderComisionesTabla(data) {
@@ -1514,29 +1549,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const tbody = document.getElementById('tbodyComisiones');
         const empresas = (data.empresas && data.empresas.length)
             ? data.empresas
-            // Compat: si el backend no envió `empresas`, agrupamos
-            // todo bajo una empresa "ficticia" sin nombre para no
-            // romper la UI.
-            : [{
-                id: null,
-                nombre: '(Sin agrupar)',
-                rut: '',
-                vendedores: data.vendedores || [],
-                subtotales: {
-                    total_ventas_brutas_con_iva: (data.vendedores || []).reduce((a, v) => a + (v.ventas_brutas || 0), 0),
-                    total_devoluciones_neto: (data.vendedores || []).reduce((a, v) => a + (v.devoluciones_neto || 0), 0),
-                    total_ventas_netas_sin_iva: (data.totales || {}).total_ventas_netas_sin_iva || 0,
-                    total_comisiones: (data.totales || {}).total_comisiones || 0,
-                },
-            }];
+            // Fallback duro: backend que no envió ni `empresas` ni
+            // `vendedores` (no debería ocurrir).
+            : [];
         const t = data.totales || {};
 
         document.getElementById('kpiComCantEmpresas').textContent =
             (t.cantidad_empresas || empresas.length || 0).toString();
         document.getElementById('kpiComCantVendedores').textContent =
             (t.cantidad_vendedores || 0).toString();
-        // "Total original" — bruto facturado c/IVA, coincide con el KPI
-        // "Total Ventas" del reporte principal.
         document.getElementById('kpiComVentasBrutasIva').textContent =
             '$' + formatearNumero(t.total_ventas_brutas_con_iva || 0);
         document.getElementById('kpiComVentasNetas').textContent =
@@ -1546,8 +1567,11 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('kpiComTotalComisiones').textContent =
             '$' + formatearNumero(t.total_comisiones || 0);
 
-        if (!empresas.length || !empresas.some(e => (e.vendedores || []).length)) {
-            tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No hay vendedores con ventas en este período.</td></tr>`;
+        const hayVendedores = empresas.some(e =>
+            _normalizarSucursalesEmp(e).some(s => (s.vendedores || []).length)
+        );
+        if (!empresas.length || !hayVendedores) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No hay vendedores con ventas en este período.</td></tr>`;
             document.getElementById('tfComBrutas').textContent = '$0';
             document.getElementById('tfComDevoluciones').textContent = '$0';
             document.getElementById('tfComNetas').textContent = '$0';
@@ -1561,33 +1585,68 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = '';
 
         empresas.forEach(emp => {
-            const vendedores = emp.vendedores || [];
-            if (!vendedores.length) return;
+            const sucursales = _normalizarSucursalesEmp(emp);
+            if (!sucursales.length) return;
+            const totalVendEmp = sucursales.reduce(
+                (a, s) => a + ((s.vendedores || []).length), 0
+            );
+            if (!totalVendEmp) return;
             const sub = emp.subtotales || {};
             const rutHtml = emp.rut ? `<small class="text-light opacity-75 ms-2">${emp.rut}</small>` : '';
+            const cantSuc = sub.cantidad_sucursales || sucursales.length;
 
-            // Header de empresa
+            // Header empresa (3 niveles visuales: empresa > sucursal > vendedor)
             html += `
                 <tr class="table-primary">
-                    <td colspan="10" class="fw-bold">
+                    <td colspan="8" class="fw-bold">
                         <i class="ri-building-2-line me-1"></i>
                         Empresa: ${emp.nombre || '(sin nombre)'}
                         ${rutHtml}
-                        <span class="badge bg-light text-primary ms-2">${vendedores.length} vendedor${vendedores.length === 1 ? '' : 'es'}</span>
+                        <span class="badge bg-light text-primary ms-2">${cantSuc} sucursal${cantSuc === 1 ? '' : 'es'}</span>
+                        <span class="badge bg-light text-secondary ms-1">${totalVendEmp} vendedor${totalVendEmp === 1 ? '' : 'es'}</span>
                     </td>
                 </tr>`;
 
-            vendedores.forEach(v => {
-                idxGlobal += 1;
-                totalBrutas += (v.ventas_brutas || 0);
-                totalDev += (v.devoluciones_neto || 0);
-                html += _filaComisionVendedor(v, idxGlobal);
+            sucursales.forEach(suc => {
+                const vendedores = suc.vendedores || [];
+                if (!vendedores.length) return;
+                const ssub = suc.subtotales || {};
+                const labelSuc = _labelSucursal(suc);
+
+                // Header sucursal (compacto: una sola línea con alias +
+                // dirección si existen ambos).
+                html += `
+                    <tr class="table-info">
+                        <td colspan="8" class="ps-4">
+                            <i class="ri-store-2-line me-1"></i>
+                            <span class="fw-semibold">↳ ${labelSuc}</span>
+                            <span class="badge bg-light text-info ms-2">${vendedores.length} vendedor${vendedores.length === 1 ? '' : 'es'}</span>
+                        </td>
+                    </tr>`;
+
+                vendedores.forEach(v => {
+                    idxGlobal += 1;
+                    totalBrutas += (v.ventas_brutas || 0);
+                    totalDev += (v.devoluciones_neto || 0);
+                    html += _filaComisionVendedor(v, idxGlobal);
+                });
+
+                // Subtotal sucursal
+                html += `
+                    <tr class="table-light fw-semibold">
+                        <td colspan="3" class="text-end ps-4">↳ Subtotal ${labelSuc}:</td>
+                        <td class="text-end">$${formatearNumero(ssub.total_ventas_brutas_con_iva || 0)}</td>
+                        <td class="text-end text-danger">${(ssub.total_devoluciones_neto || 0) > 0 ? '−$' + formatearNumero(ssub.total_devoluciones_neto) : '—'}</td>
+                        <td class="text-end">$${formatearNumero(ssub.total_ventas_netas_sin_iva || 0)}</td>
+                        <td class="text-center">—</td>
+                        <td class="text-end text-success">$${formatearNumero(ssub.total_comisiones || 0)}</td>
+                    </tr>`;
             });
 
-            // Subtotal por empresa
+            // Subtotal empresa (suma de sus sucursales)
             html += `
                 <tr class="table-secondary fw-semibold">
-                    <td colspan="5" class="text-end">Subtotal ${emp.nombre || ''}:</td>
+                    <td colspan="3" class="text-end">Subtotal ${emp.nombre || ''}:</td>
                     <td class="text-end">$${formatearNumero(sub.total_ventas_brutas_con_iva || 0)}</td>
                     <td class="text-end text-danger">${(sub.total_devoluciones_neto || 0) > 0 ? '−$' + formatearNumero(sub.total_devoluciones_neto) : '—'}</td>
                     <td class="text-end">$${formatearNumero(sub.total_ventas_netas_sin_iva || 0)}</td>
