@@ -892,6 +892,10 @@
         <button class="nexo-btn nexo-btn-success" onclick="exportarExcel()">
             📥 Exportar Excel
         </button>
+
+        <button class="nexo-btn nexo-btn-outline" onclick="exportarPDF()" title="Descargar reporte en PDF">
+            📄 Exportar PDF
+        </button>
     </div>
 
     <div id="alerta-historico" class="nexo-alert nexo-alert-warning" style="display: none;">
@@ -1305,22 +1309,32 @@ function formatearNumero(num) {
 }
 
 // ==================== EXPORTAR EXCEL ====================
-function exportarExcel() {
+function _construirParamsExportacion() {
     const marcaId = document.getElementById('filtro-marca').value;
     const categoriaId = document.getElementById('filtro-categoria').value;
     const fechaCorte = document.getElementById('filtro-fecha').value;
 
-    let url = '/app/api/exportar-resumen-existencias-excel/';
     const params = new URLSearchParams();
-
     params.append('agrupar_por', agruparPor);
     if (marcaId) params.append('marca_id', marcaId);
     if (categoriaId && agruparPor !== 'categoria') params.append('categoria_id', categoriaId);
     if (fechaCorte) params.append('fecha_corte', fechaCorte);
     if (excluidosSet.size > 0) params.append('excluir_articulos', [...excluidosSet].join(','));
+    return params;
+}
 
+function exportarExcel() {
+    let url = '/app/api/exportar-resumen-existencias-excel/';
+    const params = _construirParamsExportacion();
     if (params.toString()) url += '?' + params.toString();
+    window.location.href = url;
+}
 
+// ==================== EXPORTAR PDF ====================
+function exportarPDF() {
+    let url = '/app/api/exportar-resumen-existencias-pdf/';
+    const params = _construirParamsExportacion();
+    if (params.toString()) url += '?' + params.toString();
     window.location.href = url;
 }
 
