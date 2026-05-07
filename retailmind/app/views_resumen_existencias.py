@@ -79,6 +79,17 @@ def calcular_stock_historico(talla, sucursal_id, fecha_corte):
     return max(0, stock_historico)
 
 
+def _parse_excluir_articulos(request):
+    """Parsea el parámetro `excluir_articulos` (CSV de IDs de Producto) en una lista de ints."""
+    raw = request.GET.get('excluir_articulos', '') or ''
+    ids = []
+    for token in raw.split(','):
+        token = token.strip()
+        if token.isdigit():
+            ids.append(int(token))
+    return ids
+
+
 @require_GET
 @login_required
 def obtener_resumen_existencias(request):
@@ -89,7 +100,8 @@ def obtener_resumen_existencias(request):
         categoria_id = request.GET.get('categoria_id')
         fecha_corte_str = request.GET.get('fecha_corte')  # Formato: YYYY-MM-DD
         agrupar_por = request.GET.get('agrupar_por', 'sucursal')  # sucursal | categoria
-        
+        excluir_ids = _parse_excluir_articulos(request)
+
         # Parsear fecha de corte
         fecha_corte = None
         es_historico = False
@@ -99,41 +111,52 @@ def obtener_resumen_existencias(request):
                 es_historico = fecha_corte < timezone.localdate()
             except ValueError:
                 pass
-        
-        # Si es agrupación por categoría
-        if agrupar_por == 'categoria':
-            return _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresas_usuario)
-        
-        # Filtrar por sucursales del usuario (seguridad multi-tenant)
-        empresas_usuario = EmpresaUser.objects.filter(
+
+        # Filtrar por empresas del usuario (seguridad multi-tenant)
+        empresas_usuario = list(EmpresaUser.objects.filter(
             user=request.user,
             status=True
-        ).values_list('empresa_id', flat=True)
+        ).values_list('empresa_id', flat=True))
+
+        # Si es agrupación por categoría
+        if agrupar_por == 'categoria':
+            return _resumen_por_categoria(
+                request, marca_id, fecha_corte, es_historico,
+                empresas_usuario, excluir_ids,
+            )
 
         # Agrupación por sucursal (default)
-        sucursales = Sucursal.objects.filter(empresa_id__in=empresas_usuario).order_by('alias')
+        sucursales = Sucursal.objects.filter(
+            empresa_id__in=empresas_usuario
+        ).select_related('empresa').order_by('alias')
         resumen_sucursales = []
-        
+        # Acumulador por empresa para el resumen final
+        empresas_acum = {}
+
         for sucursal in sucursales:
             # Filtrar productos de esta sucursal (excluye productos marcados como "excluir de analítica")
             queryset_productos = Producto.objects.filter(
                 sucursal_id=sucursal.id,
                 excluir_de_analitica=False,
             ).select_related('atributo1', 'categoria').prefetch_related('producto_talla')
-            
+
             # Aplicar filtros opcionales
             if marca_id:
                 queryset_productos = queryset_productos.filter(atributo1_id=marca_id)
-            
+
             if categoria_id:
                 queryset_productos = queryset_productos.filter(categoria_id=categoria_id)
-            
+
+            # Filtro temporal de exclusión (sesión, no toca BD)
+            if excluir_ids:
+                queryset_productos = queryset_productos.exclude(id__in=excluir_ids)
+
             # Inicializar totales
             total_pares = 0
             total_costo = Decimal('0.00')
             total_precio_interno = Decimal('0.00')
             total_precio_venta = Decimal('0.00')
-            
+
             # Calcular totales
             for producto in queryset_productos:
                 for talla in producto.producto_talla.all():
@@ -142,32 +165,53 @@ def obtener_resumen_existencias(request):
                         stock = calcular_stock_historico(talla, sucursal.id, fecha_corte)
                     else:
                         stock = talla.stock
-                    
+
                     if stock > 0:
                         total_pares += stock
-                        
+
                         if producto.costo:
                             total_costo += (Decimal(str(producto.costo)) * stock)
-                        
+
                         # Precio interno = costo + sobreprecio (CORREGIDO)
                         precio_interno_unitario = Decimal(str(producto.costo or 0)) + Decimal(str(producto.sobreprecio or 0))
                         total_precio_interno += (precio_interno_unitario * stock)
-                        
+
                         if producto.precioventa:
                             total_precio_venta += (Decimal(str(producto.precioventa)) * stock)
-            
+
             # Solo agregar sucursales con stock
             if total_pares > 0:
                 resumen_sucursales.append({
                     'sucursal_id': sucursal.id,
                     'sucursal': sucursal.alias,
                     'direccion': sucursal.direccion or '-',
+                    'empresa_id': sucursal.empresa_id,
+                    'empresa': sucursal.empresa.nombre if sucursal.empresa else 'Sin Empresa',
                     'total_pares': total_pares,
                     'total_costo': float(total_costo),
                     'total_precio_interno': float(total_precio_interno),
                     'total_precio_venta': float(total_precio_venta),
                 })
-        
+
+                # Acumular en resumen por empresa
+                emp_id = sucursal.empresa_id
+                if emp_id not in empresas_acum:
+                    empresas_acum[emp_id] = {
+                        'empresa_id': emp_id,
+                        'empresa': sucursal.empresa.nombre if sucursal.empresa else 'Sin Empresa',
+                        'num_sucursales': 0,
+                        'total_pares': 0,
+                        'total_costo': Decimal('0.00'),
+                        'total_precio_interno': Decimal('0.00'),
+                        'total_precio_venta': Decimal('0.00'),
+                    }
+                acum = empresas_acum[emp_id]
+                acum['num_sucursales'] += 1
+                acum['total_pares'] += total_pares
+                acum['total_costo'] += total_costo
+                acum['total_precio_interno'] += total_precio_interno
+                acum['total_precio_venta'] += total_precio_venta
+
         # Calcular totales generales
         total_general = {
             'pares': sum(s['total_pares'] for s in resumen_sucursales),
@@ -175,18 +219,35 @@ def obtener_resumen_existencias(request):
             'precio_interno': sum(s['total_precio_interno'] for s in resumen_sucursales),
             'precio_venta': sum(s['total_precio_venta'] for s in resumen_sucursales),
         }
-        
+
+        # Serializar resumen por empresa (Decimal -> float) ordenado por nombre
+        resumen_empresas = []
+        for emp in sorted(empresas_acum.values(), key=lambda e: (e['empresa'] or '').lower()):
+            resumen_empresas.append({
+                'empresa_id': emp['empresa_id'],
+                'empresa': emp['empresa'],
+                'num_sucursales': emp['num_sucursales'],
+                'total_pares': emp['total_pares'],
+                'total_costo': float(emp['total_costo']),
+                'total_precio_interno': float(emp['total_precio_interno']),
+                'total_precio_venta': float(emp['total_precio_venta']),
+            })
+
         fecha_info = f"al {fecha_corte.strftime('%d/%m/%Y')}" if es_historico else "actual"
         print(f"📊 Resumen generado para {len(resumen_sucursales)} sucursales ({fecha_info})")
         print(f"📈 Total general de pares: {total_general['pares']}")
-        
+        if excluir_ids:
+            print(f"🚫 Artículos excluidos por filtro de sesión: {len(excluir_ids)}")
+
         return JsonResponse({
             'success': True,
             'datos': resumen_sucursales,
             'total_general': total_general,
+            'resumen_empresas': resumen_empresas,
             'es_historico': es_historico,
             'fecha_corte': fecha_corte_str if es_historico else None,
-            'agrupar_por': 'sucursal'
+            'agrupar_por': 'sucursal',
+            'excluir_articulos_count': len(excluir_ids),
         })
         
     except Exception as e:
@@ -199,18 +260,25 @@ def obtener_resumen_existencias(request):
         })
 
 
-def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresas_usuario):
+def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresas_usuario, excluir_ids=None):
     """Genera resumen agrupado por categoría/departamento"""
     try:
-        # Sucursales del usuario
-        sucursales_ids = list(Sucursal.objects.filter(
+        excluir_ids = excluir_ids or []
+
+        # Sucursales del usuario (precargamos empresa para el resumen final)
+        sucursales_qs = Sucursal.objects.filter(
             empresa_id__in=empresas_usuario
-        ).values_list('id', flat=True))
+        ).select_related('empresa')
+        sucursales_map = {s.id: s for s in sucursales_qs}
+        sucursales_ids = list(sucursales_map.keys())
 
         # Obtener todas las categorías raíz (departamentos)
         categorias = Categoria.objects.filter(padre__isnull=True).order_by('nombre')
 
         resumen_categorias = []
+        # Acumulador por empresa (cross-categoría) para el resumen final
+        empresas_acum = {}
+        sucursales_por_empresa = {}  # empresa_id -> set(sucursal_id) para contar
 
         for categoria in categorias:
             # IDs de esta categoría y sus subcategorías
@@ -227,18 +295,24 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
                 excluir_de_analitica=False,
                 sucursal_id__in=sucursales_ids,
             ).select_related('atributo1', 'categoria', 'sucursal').prefetch_related('producto_talla')
-            
+
             # Aplicar filtro de marca si existe
             if marca_id:
                 queryset_productos = queryset_productos.filter(atributo1_id=marca_id)
-            
+
+            # Filtro temporal de exclusión (sesión, no toca BD)
+            if excluir_ids:
+                queryset_productos = queryset_productos.exclude(id__in=excluir_ids)
+
             # Inicializar totales
             total_pares = 0
             total_costo = Decimal('0.00')
             total_precio_interno = Decimal('0.00')
             total_precio_venta = Decimal('0.00')
             sucursales_set = set()
-            
+            # Acumulador local por empresa para esta categoría
+            empresas_local = {}
+
             # Calcular totales
             for producto in queryset_productos:
                 for talla in producto.producto_talla.all():
@@ -247,21 +321,47 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
                         stock = calcular_stock_historico(talla, producto.sucursal_id, fecha_corte)
                     else:
                         stock = talla.stock
-                    
+
                     if stock > 0:
                         total_pares += stock
-                        sucursales_set.add(producto.sucursal.alias if producto.sucursal else 'Sin Sucursal')
-                        
+                        suc_alias = producto.sucursal.alias if producto.sucursal else 'Sin Sucursal'
+                        sucursales_set.add(suc_alias)
+
                         if producto.costo:
                             total_costo += (Decimal(str(producto.costo)) * stock)
-                        
+
                         # Precio interno = costo + sobreprecio (CORREGIDO)
                         precio_interno_unitario = Decimal(str(producto.costo or 0)) + Decimal(str(producto.sobreprecio or 0))
-                        total_precio_interno += (precio_interno_unitario * stock)
-                        
+                        precio_interno_acum = precio_interno_unitario * stock
+                        total_precio_interno += precio_interno_acum
+
+                        precio_venta_acum = Decimal('0.00')
                         if producto.precioventa:
-                            total_precio_venta += (Decimal(str(producto.precioventa)) * stock)
-            
+                            precio_venta_acum = Decimal(str(producto.precioventa)) * stock
+                            total_precio_venta += precio_venta_acum
+
+                        costo_acum = (Decimal(str(producto.costo)) * stock) if producto.costo else Decimal('0.00')
+
+                        # Acumular por empresa (cross-categoría)
+                        emp_id = producto.sucursal.empresa_id if producto.sucursal else None
+                        if emp_id is not None:
+                            if emp_id not in empresas_acum:
+                                empresas_acum[emp_id] = {
+                                    'empresa_id': emp_id,
+                                    'empresa': producto.sucursal.empresa.nombre if producto.sucursal and producto.sucursal.empresa else 'Sin Empresa',
+                                    'total_pares': 0,
+                                    'total_costo': Decimal('0.00'),
+                                    'total_precio_interno': Decimal('0.00'),
+                                    'total_precio_venta': Decimal('0.00'),
+                                }
+                                sucursales_por_empresa[emp_id] = set()
+                            acum = empresas_acum[emp_id]
+                            acum['total_pares'] += stock
+                            acum['total_costo'] += costo_acum
+                            acum['total_precio_interno'] += precio_interno_acum
+                            acum['total_precio_venta'] += precio_venta_acum
+                            sucursales_por_empresa[emp_id].add(producto.sucursal_id)
+
             # Solo agregar categorías con stock
             if total_pares > 0:
                 resumen_categorias.append({
@@ -273,7 +373,7 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
                     'total_precio_interno': float(total_precio_interno),
                     'total_precio_venta': float(total_precio_venta),
                 })
-        
+
         # Calcular totales generales
         total_general = {
             'pares': sum(c['total_pares'] for c in resumen_categorias),
@@ -281,16 +381,31 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
             'precio_interno': sum(c['total_precio_interno'] for c in resumen_categorias),
             'precio_venta': sum(c['total_precio_venta'] for c in resumen_categorias),
         }
-        
+
+        # Serializar resumen por empresa
+        resumen_empresas = []
+        for emp in sorted(empresas_acum.values(), key=lambda e: (e['empresa'] or '').lower()):
+            resumen_empresas.append({
+                'empresa_id': emp['empresa_id'],
+                'empresa': emp['empresa'],
+                'num_sucursales': len(sucursales_por_empresa.get(emp['empresa_id'], set())),
+                'total_pares': emp['total_pares'],
+                'total_costo': float(emp['total_costo']),
+                'total_precio_interno': float(emp['total_precio_interno']),
+                'total_precio_venta': float(emp['total_precio_venta']),
+            })
+
         return JsonResponse({
             'success': True,
             'datos': resumen_categorias,
             'total_general': total_general,
+            'resumen_empresas': resumen_empresas,
             'es_historico': es_historico,
             'fecha_corte': fecha_corte.strftime('%Y-%m-%d') if es_historico and fecha_corte else None,
-            'agrupar_por': 'categoria'
+            'agrupar_por': 'categoria',
+            'excluir_articulos_count': len(excluir_ids),
         })
-        
+
     except Exception as e:
         import traceback
         print(f"❌ Error en resumen por categoría: {str(e)}")
@@ -329,7 +444,9 @@ def exportar_resumen_existencias_excel(request):
         datos_resumen = datos.get('datos', [])
         total_general = datos.get('total_general', {})
         es_historico = datos.get('es_historico', False)
-        
+        resumen_empresas = datos.get('resumen_empresas', []) or []
+        excluir_count = datos.get('excluir_articulos_count', 0)
+
         if not datos_resumen:
             return JsonResponse({
                 'success': False,
@@ -454,9 +571,73 @@ def exportar_resumen_existencias_excel(request):
         cell.border = border
         
         ws.row_dimensions[fila].height = 25
-        
+
+        # ===== Resumen por Empresa =====
+        if resumen_empresas:
+            fila += 2  # espacio en blanco
+
+            # Título de la sección
+            ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=6)
+            cell = ws.cell(row=fila, column=1, value="RESUMEN POR EMPRESA")
+            cell.fill = PatternFill(start_color="1A1A2E", end_color="1A1A2E", fill_type="solid")
+            cell.font = Font(bold=True, color="FFFFFF", size=12)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[fila].height = 24
+            fila += 1
+
+            # Encabezados
+            empresa_headers = ['Empresa', 'Sucursales', 'Total Pares', 'Total Costo', 'Total Precio Interno', 'Total Precio Venta']
+            for idx, header in enumerate(empresa_headers, start=1):
+                c = ws.cell(row=fila, column=idx, value=header)
+                c.fill = header_fill
+                c.font = header_font
+                c.alignment = Alignment(horizontal='center', vertical='center')
+                c.border = border
+            ws.row_dimensions[fila].height = 22
+            fila += 1
+
+            # Filas
+            for emp in resumen_empresas:
+                ws.cell(row=fila, column=1, value=emp.get('empresa', '')).border = border
+
+                c = ws.cell(row=fila, column=2, value=emp.get('num_sucursales', 0))
+                c.alignment = Alignment(horizontal='right')
+                c.border = border
+
+                c = ws.cell(row=fila, column=3, value=emp.get('total_pares', 0))
+                c.alignment = Alignment(horizontal='right')
+                c.border = border
+
+                c = ws.cell(row=fila, column=4, value=emp.get('total_costo', 0))
+                c.number_format = '#,##0'
+                c.alignment = Alignment(horizontal='right')
+                c.border = border
+
+                c = ws.cell(row=fila, column=5, value=emp.get('total_precio_interno', 0))
+                c.number_format = '#,##0'
+                c.alignment = Alignment(horizontal='right')
+                c.border = border
+
+                c = ws.cell(row=fila, column=6, value=emp.get('total_precio_venta', 0))
+                c.number_format = '#,##0'
+                c.alignment = Alignment(horizontal='right')
+                c.border = border
+
+                fila += 1
+
+        # Nota de exclusiones (si aplica)
+        if excluir_count:
+            fila += 1
+            ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=6)
+            nota = ws.cell(
+                row=fila, column=1,
+                value=f"Nota: {excluir_count} artículo(s) excluidos del análisis (filtro temporal de la sesión)."
+            )
+            nota.font = Font(italic=True, color="8a6914")
+            nota.alignment = Alignment(horizontal='left', vertical='center')
+
         # Ajustar anchos de columna
-        ws.column_dimensions['A'].width = 25
+        ws.column_dimensions['A'].width = 28
         ws.column_dimensions['B'].width = 35
         ws.column_dimensions['C'].width = 15
         ws.column_dimensions['D'].width = 18
@@ -487,6 +668,149 @@ def exportar_resumen_existencias_excel(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar: {str(e)}'
+        })
+
+
+@require_GET
+@login_required
+def listar_sucursales_resumen(request):
+    """
+    Devuelve las sucursales pertenecientes a las empresas del usuario actual.
+    Usado por el modal de exclusiones del reporte de resumen de existencias.
+    """
+    try:
+        empresas_usuario = list(EmpresaUser.objects.filter(
+            user=request.user,
+            status=True,
+        ).values_list('empresa_id', flat=True))
+
+        sucursales = (
+            Sucursal.objects
+            .filter(empresa_id__in=empresas_usuario)
+            .select_related('empresa')
+            .order_by('empresa__nombre', 'alias')
+        )
+
+        items = []
+        for s in sucursales:
+            items.append({
+                'id': s.id,
+                'alias': s.alias,
+                'empresa': s.empresa.nombre if s.empresa else '-',
+            })
+
+        return JsonResponse({'success': True, 'items': items})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e), 'items': []})
+
+
+@require_GET
+@login_required
+def listar_articulos_para_excluir(request):
+    """
+    Devuelve hasta 50 productos del usuario para alimentar el modal de
+    exclusiones del reporte de resumen de existencias.
+
+    Filtra por las empresas del usuario (multi-tenant).
+    Acepta los parámetros:
+      - sucursal_id (opcional): filtra por una sucursal específica
+      - q (opcional): texto a buscar en articulo, descripcion o sku
+      - ids (opcional): CSV de IDs a recuperar siempre (para mostrar
+        los ya excluidos aunque no calcen con la búsqueda)
+    """
+    try:
+        sucursal_id = request.GET.get('sucursal_id') or None
+        q = (request.GET.get('q') or '').strip()
+        ids_raw = request.GET.get('ids') or ''
+        ids_solicitados = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
+
+        empresas_usuario = list(EmpresaUser.objects.filter(
+            user=request.user,
+            status=True,
+        ).values_list('empresa_id', flat=True))
+
+        base_qs = Producto.objects.filter(
+            sucursal__empresa_id__in=empresas_usuario,
+        ).select_related('sucursal', 'sucursal__empresa')
+
+        if sucursal_id:
+            try:
+                base_qs = base_qs.filter(sucursal_id=int(sucursal_id))
+            except (TypeError, ValueError):
+                pass
+
+        # Búsqueda combinada
+        productos = []
+        seen_ids = set()
+
+        if q:
+            buscar_qs = base_qs.filter(
+                Q(articulo__icontains=q)
+                | Q(descripcion__icontains=q)
+                | Q(producto_talla__sku__icontains=q)
+            ).distinct().order_by('articulo')[:50]
+            for p in buscar_qs:
+                if p.id in seen_ids:
+                    continue
+                seen_ids.add(p.id)
+                productos.append(p)
+        elif not ids_solicitados:
+            # Sin búsqueda y sin ids puntuales: devolvemos los primeros 50
+            for p in base_qs.order_by('articulo')[:50]:
+                if p.id in seen_ids:
+                    continue
+                seen_ids.add(p.id)
+                productos.append(p)
+
+        # Anexar IDs explícitamente solicitados (los excluidos actuales)
+        if ids_solicitados:
+            faltantes = [i for i in ids_solicitados if i not in seen_ids]
+            if faltantes:
+                for p in base_qs.filter(id__in=faltantes):
+                    if p.id in seen_ids:
+                        continue
+                    seen_ids.add(p.id)
+                    productos.append(p)
+
+        # Calcular stock total de cada producto en su sucursal
+        productos_ids = [p.id for p in productos]
+        stock_por_producto = {}
+        if productos_ids:
+            agg = (
+                Producto_Talla.objects
+                .filter(producto_id__in=productos_ids)
+                .values('producto_id')
+                .annotate(total=Sum('stock'))
+            )
+            for row in agg:
+                stock_por_producto[row['producto_id']] = max(0, row['total'] or 0)
+
+        items = []
+        for p in productos:
+            items.append({
+                'id': p.id,
+                'articulo': p.articulo,
+                'descripcion': p.descripcion,
+                'sucursal_id': p.sucursal_id,
+                'sucursal': p.sucursal.alias if p.sucursal else '-',
+                'empresa': p.sucursal.empresa.nombre if p.sucursal and p.sucursal.empresa else '-',
+                'stock_total': stock_por_producto.get(p.id, 0),
+            })
+
+        return JsonResponse({
+            'success': True,
+            'items': items,
+            'total': len(items),
+            'limite': 50,
+        })
+    except Exception as e:
+        import traceback
+        print(f"❌ Error en listar_articulos_para_excluir: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'items': [],
         })
 
 

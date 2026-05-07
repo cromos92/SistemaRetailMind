@@ -478,9 +478,358 @@
     .nexo-alert { margin: 12px 16px 0; font-size: 0.85rem; }
 }
 
+/* ========== RESUMEN POR EMPRESA ========== */
+.nexo-empresas-section {
+    padding: 28px 32px;
+    background: var(--nexo-white);
+    border-top: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-empresas-section h2 {
+    font-size: 1.05em;
+    color: var(--nexo-gray-700);
+    margin: 0 0 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nexo-empresas-section h2 .icon { font-size: 1.2em; }
+
+.nexo-empresa-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.nexo-empresa-card {
+    background: linear-gradient(135deg, #ffffff 0%, var(--nexo-gray-100) 100%);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg);
+    padding: 20px;
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.nexo-empresa-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--nexo-primary);
+}
+
+.nexo-empresa-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-empresa-card .empresa-nombre {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin: 0 0 4px;
+}
+
+.nexo-empresa-card .empresa-meta {
+    font-size: 0.8em;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 14px;
+}
+
+.nexo-empresa-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.nexo-empresa-stat {
+    background: var(--nexo-white);
+    padding: 10px 12px;
+    border-radius: var(--nexo-radius-md);
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-empresa-stat .label {
+    font-size: 0.7em;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.nexo-empresa-stat .value {
+    font-size: 1em;
+    font-weight: 700;
+    color: var(--nexo-gray-900);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    margin-top: 2px;
+}
+
+.nexo-empresa-stat.pares .value { color: var(--nexo-primary); }
+.nexo-empresa-stat.costo .value { color: var(--nexo-success); }
+.nexo-empresa-stat.interno .value { color: #c99200; }
+.nexo-empresa-stat.venta .value { color: var(--nexo-error); }
+
+/* ========== BADGE CONTADOR EXCLUSIONES ========== */
+.nexo-badge-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 11px;
+    background: var(--nexo-error);
+    color: var(--nexo-white);
+    font-size: 0.75em;
+    font-weight: 700;
+    margin-left: 6px;
+}
+
+/* ========== MODAL EXCLUSIONES ========== */
+.nexo-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 26, 46, 0.55);
+    z-index: 1050;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.nexo-modal-overlay.is-open { display: flex; }
+
+.nexo-modal {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-lg);
+    width: 100%;
+    max-width: 960px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.nexo-modal-header {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nexo-modal-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nexo-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--nexo-white);
+    font-size: 1.4em;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: var(--nexo-radius-sm);
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-modal-close:hover { background: rgba(255,255,255,0.15); }
+
+.nexo-modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 20px;
+    flex: 1;
+}
+
+.nexo-modal-footer {
+    padding: 14px 24px;
+    border-top: 1px solid var(--nexo-gray-300);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: var(--nexo-gray-100);
+    flex-wrap: wrap;
+}
+
+.nexo-modal-footer .footer-info {
+    font-size: 0.85em;
+    color: var(--nexo-gray-700);
+}
+
+.nexo-busqueda-panel,
+.nexo-excluidos-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 380px;
+    max-height: 60vh;
+}
+
+.nexo-busqueda-panel h4,
+.nexo-excluidos-panel h4 {
+    margin: 0 0 10px;
+    font-size: 0.85em;
+    color: var(--nexo-gray-700);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+}
+
+.nexo-busqueda-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.nexo-busqueda-controls select,
+.nexo-busqueda-controls input {
+    padding: 8px 12px;
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: 0.9em;
+    background: var(--nexo-white);
+}
+
+.nexo-busqueda-controls select { flex: 0 0 38%; }
+.nexo-busqueda-controls input  { flex: 1; }
+
+.nexo-busqueda-controls select:focus,
+.nexo-busqueda-controls input:focus {
+    outline: none;
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0,102,255,0.15);
+}
+
+.nexo-articulos-lista,
+.nexo-excluidos-lista {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    background: var(--nexo-white);
+}
+
+.nexo-articulo-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+}
+
+.nexo-articulo-item:last-child { border-bottom: none; }
+.nexo-articulo-item:hover { background: var(--nexo-primary-light); }
+
+.nexo-articulo-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--nexo-primary);
+}
+
+.nexo-articulo-item .info {
+    flex: 1;
+    min-width: 0;
+}
+
+.nexo-articulo-item .info .titulo {
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+    font-size: 0.92em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nexo-articulo-item .info .meta {
+    font-size: 0.78em;
+    color: var(--nexo-gray-500);
+    margin-top: 2px;
+}
+
+.nexo-articulo-item .stock {
+    font-size: 0.78em;
+    color: var(--nexo-gray-700);
+    background: var(--nexo-gray-100);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.nexo-excluido-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-excluido-item:last-child { border-bottom: none; }
+
+.nexo-excluido-item .quitar {
+    background: transparent;
+    border: none;
+    color: var(--nexo-error);
+    cursor: pointer;
+    font-size: 1.1em;
+    padding: 2px 6px;
+    border-radius: var(--nexo-radius-sm);
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-excluido-item .quitar:hover { background: rgba(255, 77, 77, 0.12); }
+
+.nexo-modal-empty {
+    padding: 30px 20px;
+    text-align: center;
+    color: var(--nexo-gray-500);
+    font-size: 0.9em;
+}
+
+.nexo-modal-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--nexo-primary);
+    font-size: 0.9em;
+}
+
+@media (max-width: 768px) {
+    .nexo-modal-body { grid-template-columns: 1fr; }
+    .nexo-busqueda-controls { flex-direction: column; }
+    .nexo-busqueda-controls select,
+    .nexo-busqueda-controls input { flex: 1; width: 100%; }
+}
+
 /* ========== IMPRESIÓN ========== */
 @media print {
     .nexo-controls, .nexo-btn { display: none !important; }
+    .nexo-modal-overlay { display: none !important; }
     .nexo-resumen-container { box-shadow: none; }
     .nexo-header { background: #333 !important; -webkit-print-color-adjust: exact; }
     .nexo-tabla thead { background: #333 !important; -webkit-print-color-adjust: exact; }
@@ -535,6 +884,11 @@
             <i class="ri-refresh-line"></i> Generar Resumen
         </button>
 
+        <button class="nexo-btn nexo-btn-outline" id="btn-excluir-articulos" onclick="abrirModalExclusiones()">
+            🚫 Excluir Artículos
+            <span id="badge-excluidos" class="nexo-badge-count" style="display: none;">0</span>
+        </button>
+
         <button class="nexo-btn nexo-btn-success" onclick="exportarExcel()">
             📥 Exportar Excel
         </button>
@@ -544,7 +898,18 @@
         <span class="nexo-alert-icon">⏰</span>
         <span id="alerta-historico-texto">Mostrando inventario histórico al <strong id="fecha-historico"></strong></span>
     </div>
-    
+
+    <div id="alerta-exclusiones" class="nexo-alert nexo-alert-warning" style="display: none;">
+        <span class="nexo-alert-icon">🚫</span>
+        <span>
+            <strong id="alerta-exclusiones-num">0</strong> artículo(s) excluidos del análisis
+            (filtro temporal de esta sesión).
+            <a href="javascript:void(0)" onclick="abrirModalExclusiones()" style="color: inherit; text-decoration: underline;">Gestionar</a>
+            ·
+            <a href="javascript:void(0)" onclick="limpiarExclusiones()" style="color: inherit; text-decoration: underline;">Limpiar todo</a>
+        </span>
+    </div>
+
     <div id="info-disponibilidad" class="nexo-alert nexo-alert-info" style="display: none;">
         <span class="nexo-alert-icon">ℹ️</span>
         <span id="info-disponibilidad-texto"></span>
@@ -559,6 +924,55 @@
             <p class="hint">Opcionalmente filtra por marca, categoría o fecha histórica</p>
         </div>
     </div>
+
+    <div id="resumen-empresas-container"></div>
+</div>
+
+<!-- ========== MODAL EXCLUSIONES ========== -->
+<div id="modal-exclusiones" class="nexo-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-exclusiones-title">
+    <div class="nexo-modal">
+        <div class="nexo-modal-header">
+            <h3 id="modal-exclusiones-title">🚫 Excluir Artículos del Análisis</h3>
+            <button type="button" class="nexo-modal-close" onclick="cerrarModalExclusiones()" aria-label="Cerrar">×</button>
+        </div>
+        <div class="nexo-modal-body">
+            <div class="nexo-busqueda-panel">
+                <h4>Buscar artículos</h4>
+                <div class="nexo-busqueda-controls">
+                    <select id="modal-filtro-sucursal">
+                        <option value="">Todas las sucursales</option>
+                    </select>
+                    <input type="search" id="modal-busqueda-input" placeholder="Buscar por artículo, descripción o SKU…" autocomplete="off">
+                </div>
+                <div id="modal-articulos-lista" class="nexo-articulos-lista">
+                    <div class="nexo-modal-empty">
+                        Escribe en el buscador o selecciona una sucursal para ver artículos.
+                    </div>
+                </div>
+            </div>
+            <div class="nexo-excluidos-panel">
+                <h4>Excluidos actualmente (<span id="modal-excluidos-count">0</span>)</h4>
+                <div id="modal-excluidos-lista" class="nexo-excluidos-lista">
+                    <div class="nexo-modal-empty">
+                        Aún no hay artículos excluidos.
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="nexo-modal-footer">
+            <span class="footer-info">
+                Las exclusiones se guardan en este navegador y solo aplican a este reporte.
+            </span>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="nexo-btn nexo-btn-outline" onclick="limpiarExclusiones(true)">
+                    Limpiar todo
+                </button>
+                <button type="button" class="nexo-btn nexo-btn-primary" onclick="aplicarExclusiones()">
+                    Aplicar y recargar
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -566,16 +980,54 @@
 let agruparPor = 'sucursal';
 let esHistorico = false;
 
+// ===== Estado de exclusiones (filtro temporal por sesión) =====
+const STORAGE_KEY_EXCLUSIONES = 'resumen_existencias_exclusiones_v1';
+const STORAGE_KEY_META = 'resumen_existencias_exclusiones_meta_v1'; // { id: {articulo, descripcion, sucursal, empresa} }
+let excluidosSet = new Set();
+let excluidosMeta = {};
+let sucursalesCache = [];
+let busquedaTimer = null;
+
 // ==================== INICIALIZACIÓN ====================
 document.addEventListener('DOMContentLoaded', function() {
     // Configurar fecha máxima como hoy
     const hoy = new Date().toISOString().split('T')[0];
     document.getElementById('filtro-fecha').max = hoy;
-    
+
+    cargarExclusionesDesdeStorage();
+    actualizarUIExclusiones();
+
     cargarMarcas();
     cargarCategorias();
+    cargarSucursalesParaModal();
     verificarDisponibilidadHistorico();
     cargarResumen();
+
+    // Listener de búsqueda con debounce dentro del modal
+    const inputBusqueda = document.getElementById('modal-busqueda-input');
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', () => {
+            clearTimeout(busquedaTimer);
+            busquedaTimer = setTimeout(() => buscarArticulosModal(), 300);
+        });
+    }
+    const selectSuc = document.getElementById('modal-filtro-sucursal');
+    if (selectSuc) {
+        selectSuc.addEventListener('change', () => buscarArticulosModal());
+    }
+
+    // Cerrar modal al hacer clic fuera o con Escape
+    const overlay = document.getElementById('modal-exclusiones');
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) cerrarModalExclusiones();
+        });
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay && overlay.classList.contains('is-open')) {
+            cerrarModalExclusiones();
+        }
+    });
 });
 
 // ==================== VERIFICAR DISPONIBILIDAD ====================
@@ -678,6 +1130,7 @@ async function cargarResumen() {
         if (marcaId) params.append('marca_id', marcaId);
         if (categoriaId && agruparPor !== 'categoria') params.append('categoria_id', categoriaId);
         if (fechaCorte) params.append('fecha_corte', fechaCorte);
+        if (excluidosSet.size > 0) params.append('excluir_articulos', [...excluidosSet].join(','));
 
         if (params.toString()) url += '?' + params.toString();
 
@@ -689,6 +1142,7 @@ async function cargarResumen() {
             actualizarUIHistorico(data);
             renderizarTotales(data.total_general);
             renderizarResumen(data.datos, data.agrupar_por);
+            renderizarResumenEmpresas(data.resumen_empresas || []);
         } else {
             contenido.innerHTML = `
                 <div class="nexo-empty-state">
@@ -855,18 +1309,318 @@ function exportarExcel() {
     const marcaId = document.getElementById('filtro-marca').value;
     const categoriaId = document.getElementById('filtro-categoria').value;
     const fechaCorte = document.getElementById('filtro-fecha').value;
-    
+
     let url = '/app/api/exportar-resumen-existencias-excel/';
     const params = new URLSearchParams();
-    
+
     params.append('agrupar_por', agruparPor);
     if (marcaId) params.append('marca_id', marcaId);
     if (categoriaId && agruparPor !== 'categoria') params.append('categoria_id', categoriaId);
     if (fechaCorte) params.append('fecha_corte', fechaCorte);
-    
+    if (excluidosSet.size > 0) params.append('excluir_articulos', [...excluidosSet].join(','));
+
     if (params.toString()) url += '?' + params.toString();
-    
+
     window.location.href = url;
+}
+
+// ==================== RESUMEN POR EMPRESA ====================
+function renderizarResumenEmpresas(empresas) {
+    const container = document.getElementById('resumen-empresas-container');
+    if (!container) return;
+
+    // Si no hay empresas o solo hay 1, no duplicamos info
+    if (!empresas || empresas.length <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const cards = empresas.map(emp => `
+        <div class="nexo-empresa-card">
+            <div class="empresa-nombre">${escapeHtml(emp.empresa || 'Sin Empresa')}</div>
+            <div class="empresa-meta">${emp.num_sucursales} sucursal${emp.num_sucursales === 1 ? '' : 'es'}</div>
+            <div class="nexo-empresa-stats">
+                <div class="nexo-empresa-stat pares">
+                    <div class="label">Total Unidades</div>
+                    <div class="value">${formatearNumero(emp.total_pares)}</div>
+                </div>
+                <div class="nexo-empresa-stat costo">
+                    <div class="label">Valor Costo</div>
+                    <div class="value">$${formatearNumero(emp.total_costo)}</div>
+                </div>
+                <div class="nexo-empresa-stat interno">
+                    <div class="label">Valor P. Interno</div>
+                    <div class="value">$${formatearNumero(emp.total_precio_interno)}</div>
+                </div>
+                <div class="nexo-empresa-stat venta">
+                    <div class="label">Valor P. Venta</div>
+                    <div class="value">$${formatearNumero(emp.total_precio_venta)}</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = `
+        <div class="nexo-empresas-section">
+            <h2><span class="icon">🏢</span> Resumen por Empresa</h2>
+            <div class="nexo-empresa-cards">${cards}</div>
+        </div>
+    `;
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ==================== EXCLUSIONES (LOCALSTORAGE) ====================
+function cargarExclusionesDesdeStorage() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY_EXCLUSIONES);
+        if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) {
+                excluidosSet = new Set(arr.map(x => parseInt(x, 10)).filter(x => !isNaN(x)));
+            }
+        }
+        const rawMeta = localStorage.getItem(STORAGE_KEY_META);
+        if (rawMeta) {
+            const obj = JSON.parse(rawMeta);
+            if (obj && typeof obj === 'object') {
+                excluidosMeta = obj;
+            }
+        }
+    } catch (e) {
+        console.warn('No se pudieron leer exclusiones del localStorage', e);
+        excluidosSet = new Set();
+        excluidosMeta = {};
+    }
+}
+
+function guardarExclusionesEnStorage() {
+    try {
+        localStorage.setItem(STORAGE_KEY_EXCLUSIONES, JSON.stringify([...excluidosSet]));
+        // Limpiar meta de IDs que ya no están excluidos
+        const limpio = {};
+        excluidosSet.forEach(id => {
+            if (excluidosMeta[id]) limpio[id] = excluidosMeta[id];
+        });
+        excluidosMeta = limpio;
+        localStorage.setItem(STORAGE_KEY_META, JSON.stringify(excluidosMeta));
+    } catch (e) {
+        console.warn('No se pudieron guardar exclusiones en localStorage', e);
+    }
+}
+
+function actualizarUIExclusiones() {
+    const n = excluidosSet.size;
+    const badge = document.getElementById('badge-excluidos');
+    if (badge) {
+        if (n > 0) {
+            badge.style.display = 'inline-flex';
+            badge.textContent = n;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+    const alerta = document.getElementById('alerta-exclusiones');
+    const numEl = document.getElementById('alerta-exclusiones-num');
+    if (alerta && numEl) {
+        if (n > 0) {
+            numEl.textContent = n;
+            alerta.style.display = 'flex';
+        } else {
+            alerta.style.display = 'none';
+        }
+    }
+    const countEl = document.getElementById('modal-excluidos-count');
+    if (countEl) countEl.textContent = n;
+}
+
+function limpiarExclusiones(silencioso) {
+    if (excluidosSet.size === 0) return;
+    if (!silencioso) {
+        if (!confirm(`¿Quitar las ${excluidosSet.size} exclusiones aplicadas?`)) return;
+    }
+    excluidosSet.clear();
+    excluidosMeta = {};
+    guardarExclusionesEnStorage();
+    actualizarUIExclusiones();
+    renderizarExcluidosEnModal();
+    // Desmarcar todos los checkboxes visibles del modal
+    document.querySelectorAll('#modal-articulos-lista input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+    });
+    cargarResumen();
+}
+
+// ==================== MODAL EXCLUSIONES ====================
+function abrirModalExclusiones() {
+    const overlay = document.getElementById('modal-exclusiones');
+    if (!overlay) return;
+    overlay.classList.add('is-open');
+    renderizarExcluidosEnModal();
+    // Cargar listado inicial
+    buscarArticulosModal();
+}
+
+function cerrarModalExclusiones() {
+    const overlay = document.getElementById('modal-exclusiones');
+    if (overlay) overlay.classList.remove('is-open');
+}
+
+function aplicarExclusiones() {
+    cerrarModalExclusiones();
+    actualizarUIExclusiones();
+    cargarResumen();
+}
+
+async function cargarSucursalesParaModal() {
+    try {
+        const response = await fetch('/app/api/listar-sucursales-resumen/');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success || !Array.isArray(data.items)) return;
+
+        sucursalesCache = data.items;
+
+        const select = document.getElementById('modal-filtro-sucursal');
+        if (!select) return;
+        while (select.options.length > 1) select.remove(1);
+        data.items.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = `${s.alias} — ${s.empresa}`;
+            select.appendChild(opt);
+        });
+    } catch (e) {
+        console.warn('No se pudieron cargar sucursales para el modal:', e);
+    }
+}
+
+async function buscarArticulosModal() {
+    const sucursalId = document.getElementById('modal-filtro-sucursal').value;
+    const q = document.getElementById('modal-busqueda-input').value.trim();
+    const lista = document.getElementById('modal-articulos-lista');
+
+    lista.innerHTML = '<div class="nexo-modal-loading">Buscando…</div>';
+
+    try {
+        const params = new URLSearchParams();
+        if (sucursalId) params.append('sucursal_id', sucursalId);
+        if (q) params.append('q', q);
+        if (excluidosSet.size > 0) params.append('ids', [...excluidosSet].join(','));
+
+        const response = await fetch('/app/api/listar-articulos-para-excluir/?' + params.toString());
+        const data = await response.json();
+
+        if (!data.success) {
+            lista.innerHTML = `<div class="nexo-modal-empty">${escapeHtml(data.error || 'Error al buscar artículos')}</div>`;
+            return;
+        }
+
+        pintarArticulosModal(data.items || []);
+    } catch (e) {
+        console.error(e);
+        lista.innerHTML = '<div class="nexo-modal-empty">Error de conexión al buscar artículos.</div>';
+    }
+}
+
+// Cache de items mostrados en el modal: id -> objeto producto
+let articulosCacheModal = {};
+
+function pintarArticulosModal(items) {
+    const lista = document.getElementById('modal-articulos-lista');
+    if (!lista) return;
+
+    // Indexar items en cache para que toggleExclusion pueda recuperar la meta sin riesgo de XSS por HTML attribute
+    (items || []).forEach(p => { if (p && p.id != null) articulosCacheModal[p.id] = p; });
+
+    if (!items || items.length === 0) {
+        lista.innerHTML = '<div class="nexo-modal-empty">No se encontraron artículos con los filtros indicados.</div>';
+        return;
+    }
+    lista.innerHTML = items.map(p => {
+        const checked = excluidosSet.has(p.id) ? 'checked' : '';
+        return `
+            <label class="nexo-articulo-item" for="excl-${p.id}">
+                <input type="checkbox" id="excl-${p.id}" ${checked}
+                    onchange="toggleExclusion(${p.id}, this.checked)">
+                <div class="info">
+                    <div class="titulo">${escapeHtml(p.articulo)} <span style="color: var(--nexo-gray-500); font-weight: 400;">— ${escapeHtml(p.descripcion || '')}</span></div>
+                    <div class="meta">${escapeHtml(p.sucursal || '-')} · ${escapeHtml(p.empresa || '-')}</div>
+                </div>
+                <div class="stock">Stock: ${formatearNumero(p.stock_total || 0)}</div>
+            </label>
+        `;
+    }).join('');
+}
+
+function toggleExclusion(id, checked) {
+    const pid = parseInt(id, 10);
+    if (isNaN(pid)) return;
+    if (checked) {
+        excluidosSet.add(pid);
+        const meta = articulosCacheModal[pid];
+        if (meta && typeof meta === 'object') {
+            excluidosMeta[pid] = {
+                articulo: meta.articulo,
+                descripcion: meta.descripcion,
+                sucursal: meta.sucursal,
+                empresa: meta.empresa,
+            };
+        }
+    } else {
+        excluidosSet.delete(pid);
+        delete excluidosMeta[pid];
+    }
+    guardarExclusionesEnStorage();
+    actualizarUIExclusiones();
+    renderizarExcluidosEnModal();
+}
+
+function quitarExclusion(id) {
+    const pid = parseInt(id, 10);
+    excluidosSet.delete(pid);
+    delete excluidosMeta[pid];
+    guardarExclusionesEnStorage();
+    actualizarUIExclusiones();
+    renderizarExcluidosEnModal();
+    // Sincronizar checkbox en la lista de búsqueda si está visible
+    const cb = document.getElementById('excl-' + pid);
+    if (cb) cb.checked = false;
+}
+
+function renderizarExcluidosEnModal() {
+    const cont = document.getElementById('modal-excluidos-lista');
+    if (!cont) return;
+    if (excluidosSet.size === 0) {
+        cont.innerHTML = '<div class="nexo-modal-empty">Aún no hay artículos excluidos.</div>';
+        return;
+    }
+    const filas = [];
+    excluidosSet.forEach(id => {
+        const meta = excluidosMeta[id] || {};
+        filas.push(`
+            <div class="nexo-excluido-item">
+                <div class="info" style="min-width:0;">
+                    <div class="titulo" style="font-weight:600;font-size:0.9em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        ${escapeHtml(meta.articulo || ('ID ' + id))}
+                    </div>
+                    <div class="meta" style="font-size:0.75em;color:var(--nexo-gray-500);">
+                        ${escapeHtml(meta.sucursal || '-')} · ${escapeHtml(meta.descripcion || '')}
+                    </div>
+                </div>
+                <button type="button" class="quitar" title="Quitar exclusión" onclick="quitarExclusion(${id})">×</button>
+            </div>
+        `);
+    });
+    cont.innerHTML = filas.join('');
 }
 </script>
 

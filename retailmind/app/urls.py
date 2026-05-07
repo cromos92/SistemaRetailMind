@@ -1112,6 +1112,8 @@ urlpatterns = [
     path('api/resumen-existencias/', views_resumen_existencias.obtener_resumen_existencias, name='obtener_resumen_existencias'),
     path('api/exportar-resumen-existencias-excel/', views_resumen_existencias.exportar_resumen_existencias_excel, name='exportar_resumen_existencias_excel'),
     path('api/verificar-disponibilidad-historico/', views_resumen_existencias.verificar_disponibilidad_historico, name='verificar_disponibilidad_historico'),
+    path('api/listar-articulos-para-excluir/', views_resumen_existencias.listar_articulos_para_excluir, name='listar_articulos_para_excluir'),
+    path('api/listar-sucursales-resumen/', views_resumen_existencias.listar_sucursales_resumen, name='listar_sucursales_resumen'),
 
     # ========== MÓDULO DE REQUERIMIENTOS DE GARANTÍAS ==========
     # Vistas principales
