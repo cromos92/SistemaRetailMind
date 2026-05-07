@@ -27,6 +27,8 @@ from rest_framework.permissions import AllowAny
 from django.utils import timezone
 
 from app.models import Producto_Talla, Producto, GuiaTalla, GuiaTallaItem, Sucursal
+from app.models.dte import Dte, Dte_Productos
+from app.models.ventas import Ticket
 
 from .authentication import ApiKeyAuthentication, ApiKeyPermission
 from .serializers import ProductoExternalSerializer, agrupar_por_producto
@@ -750,4 +752,268 @@ class NovedadesView(APIView):
             'desde': str(desde),
             'timestamp': timezone.now().isoformat(),
             'error': None,
+        })
+
+
+# ──────────────────────────────────────────────
+# Endpoint 10 — Movimientos de venta (Dte + líneas)
+# GET /api/movimientos-ventas/?rut_empresa=...&fecha_desde=YYYY-MM-DD&fecha_hasta=YYYY-MM-DD
+# ──────────────────────────────────────────────
+
+class MovimientosVentasView(APIView):
+    """
+    Lista de movimientos de venta (líneas de DTEs emitidos) en un rango de
+    fechas para una empresa. Diseñado como reemplazo de la API legacy de
+    HoldingTebes ``/consultaProductosVentasInternet`` consumida por la
+    pantalla de devoluciones de AllConnected.
+
+    Query params:
+      rut_empresa   (obligatorio)
+      fecha_desde   YYYY-MM-DD (obligatorio)
+      fecha_hasta   YYYY-MM-DD (opcional; si falta usa fecha_desde)
+      sku           (opcional, búsqueda parcial en sku del Producto_Talla)
+      boleta        (opcional, búsqueda parcial en numero_documento del Dte)
+      marca         (opcional, exact-icontains sobre Producto.atributo1)
+      alias         (opcional, exact sobre Sucursal.alias)
+      tipo_documento (opcional, exact: BOLETA / FACTURA / NOTA_CREDITO / etc.)
+      tipo_movimiento (opcional, 'Egreso' por defecto = ventas; 'Ingreso' = NC)
+      limit         (opcional, default 5000)
+
+    El response replica el shape de la API HT — el frontend de devoluciones
+    (devoluciones.html) lo lee sin cambios:
+
+      {
+        "success": True,
+        "fecha_desde": "...",
+        "fecha_hasta": "...",
+        "total_movimientos": int,
+        "total_unidades": int,
+        "resumen_por_marca": {marca: cantidad, ...},
+        "resumen_por_bodega": {alias: cantidad, ...},
+        "movimientos": [
+          {
+            "codigo_asociado": "<sku>",
+            "articulo": "<descripcion del producto>",
+            "marca": "<atributo1>",
+            "alias": "<alias sucursal>",
+            "sucursal": "<dirección sucursal>",
+            "N_documento": <numero_documento>,
+            "voucher": <ticket.correlativo o None>,
+            "n_pedido": <ticket.correlativo o None>,  # alias frontend
+            "tt": <stock>,        # cantidad
+            "cantidad": <stock>,  # alias
+            "precio": <precio>,
+            "costo": <costo>,
+            "fecha": "YYYY-MM-DD",
+            "hora": "HH:MM:SS",
+            "tipo_movimiento": "Egreso" | "Ingreso",
+            "tipo_documento": "<tipo>",
+            "concepto": "Venta" | "NC" | ...,
+          },
+          ...
+        ]
+      }
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    # Mapeo: tipo_documento del Dte → concepto/movimiento. NC = nota de crédito
+    # (devolución/anulación) = Ingreso desde la perspectiva del stock.
+    _TIPOS_INGRESO = {"NOTA_CREDITO", "NOTA_CREDITO_ELECTRONICA", "NC"}
+
+    def get(self, request):
+        from datetime import datetime, timedelta
+
+        rut          = request.query_params.get('rut_empresa', '').strip()
+        fecha_desde  = request.query_params.get('fecha_desde', '').strip()
+        fecha_hasta  = request.query_params.get('fecha_hasta', '').strip() or fecha_desde
+        sku_filt     = request.query_params.get('sku', '').strip()
+        boleta_filt  = request.query_params.get('boleta', '').strip()
+        marca_filt   = request.query_params.get('marca', '').strip()
+        alias_filt   = request.query_params.get('alias', '').strip()
+        tipo_doc     = request.query_params.get('tipo_documento', '').strip().upper()
+        tipo_mov     = request.query_params.get('tipo_movimiento', '').strip()
+        limit        = int(request.query_params.get('limit', 5000) or 5000)
+
+        if not rut:
+            return Response(
+                {'success': False, 'error': 'rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not fecha_desde:
+            return Response(
+                {'success': False, 'error': 'fecha_desde es obligatorio (YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            d_from = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+            d_to   = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'success': False, 'error': 'Formato de fecha inválido. Usa YYYY-MM-DD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if d_to < d_from:
+            return Response(
+                {'success': False, 'error': 'fecha_hasta debe ser >= fecha_desde.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Cap defensivo: el frontend ya valida ≤ 7 días, pero protegemos el
+        # backend en caso de uso directo de la API.
+        if (d_to - d_from) > timedelta(days=31):
+            return Response(
+                {'success': False, 'error': 'Rango máximo 31 días.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # === 1. Query base de DTEs en rango y empresa ===
+        # Nos quedamos con DTEs que efectivamente generan movimiento de stock
+        # (ventas y notas de crédito de venta). Ignoramos descartados.
+        dtes_qs = Dte.objects.filter(
+            emisor__rut=rut,
+            fecha_emision__gte=d_from,
+            fecha_emision__lte=d_to,
+            descartado=False,
+        ).exclude(estado_dte__in=['ANULADO', 'RECHAZADO'])
+
+        if tipo_doc:
+            dtes_qs = dtes_qs.filter(tipo_documento=tipo_doc)
+        if boleta_filt:
+            # numero_documento es IntegerField; usamos contains via cast a str
+            try:
+                num = int(boleta_filt)
+                dtes_qs = dtes_qs.filter(numero_documento=num)
+            except ValueError:
+                # parcial: convertimos a string en Python
+                dtes_qs = dtes_qs.extra(
+                    where=["CAST(numero_documento AS TEXT) LIKE %s"],
+                    params=[f"%{boleta_filt}%"],
+                )
+        if alias_filt:
+            dtes_qs = dtes_qs.filter(sucursal__alias__iexact=alias_filt)
+
+        # === 2. Líneas de los DTEs filtrados ===
+        lineas_qs = (
+            Dte_Productos.objects
+            .filter(dte__in=dtes_qs, activo=True)
+            .select_related(
+                'dte', 'dte__sucursal',
+                'productoTalla', 'productoTalla__producto',
+                'productoTalla__producto__atributo1',
+            )
+        )
+
+        if sku_filt:
+            lineas_qs = lineas_qs.filter(productoTalla__sku__icontains=sku_filt)
+        if marca_filt:
+            lineas_qs = lineas_qs.filter(
+                productoTalla__producto__atributo1__valor__iexact=marca_filt,
+            )
+
+        # === 3. Mapa Dte → ticket.correlativo (voucher) ===
+        # Ticket no tiene FK directa a Dte: ambos comparten (sucursal,
+        # correlativo) cuando dte_generado=True (folio_dte = numero_documento).
+        # Construimos un mapa por (sucursal_id, numero_documento) → ticket.correlativo.
+        dte_ids = list(dtes_qs.values_list('id', flat=True))
+        voucher_map: dict = {}
+        if dte_ids:
+            dtes_lite = list(
+                Dte.objects.filter(id__in=dte_ids).values(
+                    'id', 'sucursal_id', 'numero_documento',
+                )
+            )
+            # Buscar tickets cuyo folio_dte coincida con numero_documento
+            folios = [d['numero_documento'] for d in dtes_lite if d['numero_documento']]
+            tickets = Ticket.objects.filter(
+                folio_dte__in=folios, dte_generado=True,
+            ).values('sucursal_id', 'folio_dte', 'correlativo')
+            t_map = {(t['sucursal_id'], t['folio_dte']): t['correlativo'] for t in tickets}
+            for d in dtes_lite:
+                key = (d['sucursal_id'], d['numero_documento'])
+                if key in t_map:
+                    voucher_map[d['id']] = t_map[key]
+
+        # === 4. Construir respuesta ===
+        movimientos: list = []
+        resumen_marca: dict = {}
+        resumen_bodega: dict = {}
+        total_unidades = 0
+
+        for ln in lineas_qs.iterator(chunk_size=500):
+            if len(movimientos) >= limit:
+                break
+
+            dte = ln.dte
+            pt = ln.productoTalla
+            prod = pt.producto if pt else None
+            suc = dte.sucursal
+
+            sku = pt.sku if pt else ''
+            descripcion = ln.descripcion or (prod.descripcion if prod else '')
+            marca = ''
+            if prod and prod.atributo1 and getattr(prod.atributo1, 'valor', None):
+                marca = prod.atributo1.valor
+            alias = suc.alias if suc else ''
+            sucursal_nombre = suc.direccion if suc else ''
+
+            es_ingreso = dte.tipo_documento in self._TIPOS_INGRESO
+            tipo_movimiento_calc = 'Ingreso' if es_ingreso else 'Egreso'
+            if tipo_mov and tipo_movimiento_calc != tipo_mov:
+                continue
+
+            cantidad = int(ln.stock or 0)
+            voucher = voucher_map.get(dte.id)
+
+            mov = {
+                'codigo_asociado': sku,
+                'articulo': descripcion,
+                'marca': marca,
+                'alias': alias,
+                'sucursal': sucursal_nombre,
+                'N_documento': dte.numero_documento,
+                'voucher': voucher,
+                'n_pedido': voucher,  # alias usado por el frontend
+                'tt': cantidad,
+                'cantidad': cantidad,
+                'precio': int(ln.precio_unitario or ln.precio or 0),
+                'costo': int(ln.costo or 0),
+                'fecha': dte.fecha_emision.isoformat() if dte.fecha_emision else '',
+                'hora': dte.hora.isoformat() if dte.hora else '',
+                'tipo_movimiento': tipo_movimiento_calc,
+                'tipo_documento': dte.tipo_documento,
+                'concepto': 'Nota Crédito' if es_ingreso else 'Venta',
+            }
+            movimientos.append(mov)
+
+            total_unidades += cantidad
+            if marca:
+                resumen_marca[marca] = resumen_marca.get(marca, 0) + cantidad
+            if alias:
+                resumen_bodega[alias] = resumen_bodega.get(alias, 0) + cantidad
+
+        logger.info(
+            f"[external/movimientos-ventas] rut={rut} {fecha_desde}→{fecha_hasta} "
+            f"→ {len(movimientos)} movimientos, {total_unidades} unidades"
+        )
+
+        return Response({
+            'success': True,
+            'fecha_desde': fecha_desde,
+            'fecha_hasta': fecha_hasta,
+            'filtros': {
+                'sku': sku_filt or None,
+                'boleta': boleta_filt or None,
+                'marca': marca_filt or None,
+                'alias': alias_filt or None,
+                'tipo_documento': tipo_doc or None,
+                'tipo_movimiento': tipo_mov or None,
+            },
+            'total_movimientos': len(movimientos),
+            'total_unidades': total_unidades,
+            'resumen_por_marca': resumen_marca,
+            'resumen_por_bodega': resumen_bodega,
+            'movimientos': movimientos,
         })
