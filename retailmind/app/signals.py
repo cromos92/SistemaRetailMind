@@ -77,6 +77,13 @@ def notificar_stock_a_allconnected(sender, instance, created, **kwargs):
     Cada vez que se registra un movimiento de stock (venta, devolución,
     ajuste, recepción), notifica a AllConnected con el nuevo stock del SKU.
     La notificación va en un thread daemon — no bloquea la caja.
+
+    Deriva ``rut_empresa`` desde la cadena
+    ``Producto_Talla → Producto → Sucursal → Empresa.rut`` para que
+    AllConnected resuelva el canal RetailMind correcto vía
+    ``(tipo_marketplace=RETAILMIND, rut_empresa, ACTIVO)``. Esto soporta
+    nativamente RetailMind multi-empresa (un mismo POS atendiendo varias
+    organizaciones) sin hardcodear ``ALLCONNECTED_CANAL_ORIGEN_ID``.
     """
     if not created:
         return
@@ -84,10 +91,22 @@ def notificar_stock_a_allconnected(sender, instance, created, **kwargs):
     if not pt:
         return
     try:
+        # Resolver RUT con varios fallbacks defensivos para no romper
+        # la venta si la cadena de FKs tuviera algún None.
+        rut = None
+        try:
+            producto = pt.producto
+            sucursal = getattr(producto, 'sucursal', None) if producto else None
+            empresa = getattr(sucursal, 'empresa', None) if sucursal else None
+            rut = getattr(empresa, 'rut', None) if empresa else None
+        except Exception:
+            rut = None
+
         from .stock_notifier import notificar_cambio_stock
         notificar_cambio_stock(
             sku=str(pt.sku),
             nuevo_stock=int(pt.stock or 0),
+            rut_empresa=rut,
         )
     except Exception:
         # Nunca romper la venta por un fallo de notificación
