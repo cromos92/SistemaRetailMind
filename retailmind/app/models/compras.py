@@ -416,7 +416,12 @@ class Solicitud_Regularizacion(models.Model):
         blank=True,
         help_text="Cantidad finalmente aprobada"
     )
-    
+    devolver_stock = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Decisión del emisor al emitir NC: True=devolver mercadería al origen; False=queda en destino (origen asume baja); None=no aplica"
+    )
+
     # Ejecución de la solución
     fecha_ejecucion = models.DateTimeField(
         null=True,

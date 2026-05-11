@@ -140,7 +140,22 @@ class Dte(models.Model):
         null=True,
         help_text="Motivo del rechazo del DTE (máximo 100 caracteres)"
     )
-    
+
+    # === LIMBO / NC CON DEVOLUCIÓN FÍSICA PENDIENTE ===
+    # Aplican al DTE hijo (NC / AJUSTE TRASPASO POST) cuando el emisor optó
+    # por "devolver mercadería al origen": la NC documental queda emitida,
+    # pero los Movimientos_Producto se crean en estado PENDIENTE hasta que
+    # el receptor confirme el despacho físico.
+    requiere_devolucion_fisica = models.BooleanField(
+        default=False,
+        help_text="DTE hijo cuya NC requiere despacho físico desde destino para mover el stock al origen"
+    )
+    fecha_confirmacion_devolucion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que el receptor confirmó el despacho físico de la devolución"
+    )
+
     # === CAMPOS PARA SOFT DELETE / DESCARTE ===
     descartado = models.BooleanField(
         default=False,

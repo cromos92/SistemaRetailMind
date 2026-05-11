@@ -14032,7 +14032,7 @@ def aprobar_cambio_generar_ticket(request):
                                 ProductoTalla=item.producto_nuevo,
                                 tipo_movimiento='EGRESO',
                                 concepto='VENTA',
-                                cantidad=item.cantidad_nueva,
+                                cantidad=-item.cantidad_nueva,
                                 responsable=request.user.username,
                                 sucursal_origen=sucursal,
                                 ticket=ticket,

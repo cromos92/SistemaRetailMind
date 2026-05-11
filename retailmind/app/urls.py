@@ -632,6 +632,13 @@ urlpatterns = [
     path('dte/ajustar_emitido/', views.ajustar_dte_emisor_api, name='ajustar_dte_emisor_api'),
     # Alias semántico: mismo endpoint, detecta pre/post recepción automáticamente.
     path('dte/ajustar_traspaso/', views.ajustar_dte_emisor_api, name='ajustar_traspaso_api'),
+    # === LIMBO INBOX ===
+    path('dtes-en-limbo/', views.dtes_en_limbo, name='dtes_en_limbo'),
+    path('dte/obtener_limbo_emisor/', views.obtener_dtes_limbo_emisor_api, name='obtener_dtes_limbo_emisor_api'),
+    path('dte/limbo_resumen/<int:dte_id>/', views.obtener_resumen_limbo_dte_api, name='obtener_resumen_limbo_dte_api'),
+    path('dte/confirmar_devolucion_fisica/', views.confirmar_devolucion_fisica_api, name='confirmar_devolucion_fisica_api'),
+    path('dte/obtener_regularizacion_receptor/', views.obtener_dtes_regularizacion_receptor_api, name='obtener_dtes_regularizacion_receptor_api'),
+    path('dte/devolucion_pendiente_detalle/<int:dte_hijo_id>/', views.obtener_devolucion_pendiente_detalle_api, name='obtener_devolucion_pendiente_detalle_api'),
     path('regularizar-recepciones/', views.regularizar_recepciones, name='regularizar_recepciones'),
     path('dte/obtener_productos_regularizar/', views.obtener_productos_regularizar, name='obtener_productos_regularizar'),
     path('dte/obtener_solicitudes_recibidas/', views.obtener_solicitudes_recibidas, name='obtener_solicitudes_recibidas'),

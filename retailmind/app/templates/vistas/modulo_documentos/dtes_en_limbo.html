@@ -1,0 +1,696 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-900: #1A1A2E;
+    }
+
+    .page-content { background: #fff; min-height: calc(100vh - 70px); }
+
+    .limbo-header {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        color: #fff;
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 15px rgba(26, 26, 46, 0.1);
+    }
+    .limbo-header h4 { color: #fff; font-weight: 600; margin: 0; }
+    .limbo-header small { color: rgba(255,255,255,0.85); }
+
+    .limbo-card {
+        box-shadow: 0 10px 15px rgba(26, 26, 46, 0.08);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    .limbo-card .card-header {
+        background: var(--nexo-gray-100);
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--nexo-gray-300);
+    }
+    .limbo-card .card-header h5 { margin: 0; font-weight: 600; color: var(--nexo-gray-900); }
+
+    .badge-estado { font-weight: 600; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
+    .badge-rechazado { background: #FFE5E5; color: #B30000; }
+    .badge-parcial { background: #FFF4E0; color: #B36A00; }
+    .badge-sobrante { background: #E0F7FA; color: #006B70; }
+    .badge-regularizacion { background: var(--nexo-primary-light); color: var(--nexo-primary-dark); }
+    .badge-emitido-viejo { background: #F0E6FF; color: #5B2E91; }
+
+    .badge-dias { font-weight: 600; padding: 3px 9px; border-radius: 10px; font-size: 11px; }
+    .badge-dias-ok { background: #E0F8EF; color: #007A4D; }
+    .badge-dias-warn { background: #FFF4E0; color: #B36A00; }
+    .badge-dias-alert { background: #FFE5E5; color: #B30000; }
+
+    .chip-problema {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        margin-right: 4px;
+        margin-bottom: 2px;
+        font-weight: 500;
+    }
+    .chip-faltante { background: #FFE5E5; color: #B30000; }
+    .chip-danado { background: #FFF4E0; color: #B36A00; }
+    .chip-sobrante { background: #E0F7FA; color: #006B70; }
+
+    .btn-resolver {
+        background: var(--nexo-primary);
+        color: #fff;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: background 150ms ease;
+    }
+    .btn-resolver:hover { background: var(--nexo-primary-dark); color: #fff; }
+
+    .accion-card {
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: 12px;
+        padding: 18px;
+        cursor: pointer;
+        transition: all 200ms ease;
+        height: 100%;
+    }
+    .accion-card:hover:not(.disabled) {
+        border-color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+        transform: translateY(-2px);
+    }
+    .accion-card.disabled { opacity: 0.45; cursor: not-allowed; }
+    .accion-card h6 { font-weight: 600; margin-bottom: 8px; }
+    .accion-card small { color: var(--nexo-gray-500); }
+
+    .toggle-devolucion {
+        display: flex;
+        gap: 10px;
+        margin: 12px 0;
+    }
+    .toggle-opcion {
+        flex: 1;
+        padding: 14px;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: 10px;
+        cursor: pointer;
+        text-align: left;
+        background: #fff;
+        transition: all 150ms ease;
+    }
+    .toggle-opcion.active {
+        border-color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+    }
+    .toggle-opcion.disabled { opacity: 0.5; cursor: not-allowed; }
+    .toggle-opcion strong { display: block; margin-bottom: 4px; }
+    .toggle-opcion small { color: var(--nexo-gray-700); font-size: 12px; }
+
+    .tabla-productos-nc { font-size: 13px; }
+    .tabla-productos-nc th { background: var(--nexo-gray-100); font-weight: 600; }
+    .tabla-productos-nc input.cantidad-nc { width: 80px; text-align: center; }
+
+    .alerta-pendiente-confirmacion {
+        background: var(--nexo-primary-light);
+        border-left: 4px solid var(--nexo-primary);
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-top: 10px;
+    }
+</style>
+
+<div class="page-content p-4">
+    <div class="limbo-header">
+        <div class="d-flex align-items-center justify-content-between flex-wrap">
+            <div>
+                <h4>⏳ DTEs en Limbo</h4>
+                <small>DTEs emitidos que requieren tu decisión: rehabilitar, corregir o emitir Nota de Crédito.</small>
+            </div>
+            <div class="text-end">
+                <span id="contadorTotal" class="badge bg-light text-dark" style="font-size: 14px; padding: 8px 14px;">— DTEs</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="limbo-card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h5>📋 Lista de DTEs</h5>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <select id="filtroEstado" class="form-select form-select-sm" style="width: auto;">
+                    <option value="">Todos los estados</option>
+                    <option value="RECHAZADO">Rechazados</option>
+                    <option value="RECEPCIONADO_PARCIAL">Parciales</option>
+                    <option value="RECEPCIONADO_SOBRANTE">Con sobrantes</option>
+                    <option value="EN_REGULARIZACION">En regularización</option>
+                    <option value="EMITIDO">Emitidos sin recepcionar</option>
+                </select>
+                <input type="number" id="filtroDiasMinimos" class="form-control form-control-sm"
+                       placeholder="Min. días" style="width: 110px;" min="0" />
+                <button class="btn btn-sm btn-outline-primary" id="btnRefrescar">🔄 Refrescar</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Tipo</th>
+                            <th>Destino</th>
+                            <th>Estado</th>
+                            <th>Días</th>
+                            <th>Problemas</th>
+                            <th>Unidades / Monto</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaLimbo">
+                        <tr><td colspan="8" class="text-center text-muted py-4">Cargando…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Resolver -->
+<div class="modal fade" id="modalResolver" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="modalResolverTitulo">Resolver DTE</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalResolverBody">
+                <div class="text-center py-4 text-muted">Cargando detalle…</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary d-none" id="btnVolverAccion">← Cambiar acción</button>
+                <button type="button" class="btn btn-primary d-none" id="btnEnviarAccion">Confirmar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+const PUEDE_APROBAR = {{ puede_aprobar|yesno:"true,false" }};
+let dteSeleccionado = null;
+let detalleActual = null;
+let accionElegida = null;
+let modoNcDevolucion = null; // 'con' | 'sin'
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+const CSRF = getCookie('csrftoken');
+
+function cargarLimboInbox() {
+    const estado = document.getElementById('filtroEstado').value;
+    const diasMin = document.getElementById('filtroDiasMinimos').value;
+    const params = new URLSearchParams();
+    if (estado) params.set('estado', estado);
+    if (diasMin) params.set('dias_emision', diasMin);
+
+    fetch(`/app/dte/obtener_limbo_emisor/?${params.toString()}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                document.getElementById('tablaLimbo').innerHTML =
+                    `<tr><td colspan="8" class="text-center text-danger py-4">Error: ${data.error || 'desconocido'}</td></tr>`;
+                return;
+            }
+            renderTabla(data.items);
+            document.getElementById('contadorTotal').textContent = `${data.total} DTEs`;
+        })
+        .catch(err => {
+            document.getElementById('tablaLimbo').innerHTML =
+                `<tr><td colspan="8" class="text-center text-danger py-4">Error: ${err}</td></tr>`;
+        });
+}
+
+function badgeEstado(estado) {
+    const map = {
+        'RECHAZADO': 'badge-rechazado',
+        'RECEPCIONADO_PARCIAL': 'badge-parcial',
+        'RECEPCIONADO_SOBRANTE': 'badge-sobrante',
+        'EN_REGULARIZACION': 'badge-regularizacion',
+        'EMITIDO': 'badge-emitido-viejo',
+    };
+    return `<span class="badge-estado ${map[estado] || 'badge-regularizacion'}">${estado.replace(/_/g, ' ')}</span>`;
+}
+
+function badgeDias(dias) {
+    if (dias === null || dias === undefined) return '<span class="text-muted">—</span>';
+    let cls = 'badge-dias-ok';
+    if (dias >= 7) cls = 'badge-dias-warn';
+    if (dias >= 15) cls = 'badge-dias-alert';
+    return `<span class="badge-dias ${cls}">${dias} día${dias !== 1 ? 's' : ''}</span>`;
+}
+
+function chipsProblemas(p) {
+    const chips = [];
+    if (p.faltantes > 0) chips.push(`<span class="chip-problema chip-faltante">${p.faltantes} faltante${p.faltantes !== 1 ? 's' : ''}</span>`);
+    if (p.danados > 0) chips.push(`<span class="chip-problema chip-danado">${p.danados} dañado${p.danados !== 1 ? 's' : ''}</span>`);
+    if (p.sobrantes > 0) chips.push(`<span class="chip-problema chip-sobrante">${p.sobrantes} sobrante${p.sobrantes !== 1 ? 's' : ''}</span>`);
+    return chips.join('') || '<span class="text-muted small">—</span>';
+}
+
+function renderTabla(items) {
+    const tbody = document.getElementById('tablaLimbo');
+    if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">🎉 No tienes DTEs en limbo</td></tr>';
+        return;
+    }
+    tbody.innerHTML = items.map(it => {
+        const pendNc = it.ncs_hijas_pendientes_devolucion > 0
+            ? `<br><small class="text-warning">⏳ ${it.ncs_hijas_pendientes_devolucion} NC esperando devolución</small>`
+            : '';
+        return `
+            <tr>
+                <td><strong>#${it.numero_documento}</strong>${pendNc}</td>
+                <td><small>${it.tipo_documento || '-'}</small></td>
+                <td>${it.destino_alias || '-'}</td>
+                <td>${badgeEstado(it.estado_dte)}${it.motivo_rechazo ? `<br><small class="text-muted">${it.motivo_rechazo}</small>` : ''}</td>
+                <td>${badgeDias(it.dias_en_limbo)}</td>
+                <td>${chipsProblemas(it.resumen_problemas)}</td>
+                <td><small>${it.unidades_productos} und<br>$${Math.round(it.monto_con_iva).toLocaleString('es-CL')}</small></td>
+                <td>
+                    ${PUEDE_APROBAR
+                        ? `<button class="btn-resolver btn-sm" onclick="abrirResolver(${it.id})">Resolver</button>`
+                        : '<small class="text-muted">Sin permiso</small>'}
+                </td>
+            </tr>`;
+    }).join('');
+}
+
+function abrirResolver(dteId) {
+    dteSeleccionado = dteId;
+    accionElegida = null;
+    modoNcDevolucion = null;
+    document.getElementById('modalResolverBody').innerHTML =
+        '<div class="text-center py-4 text-muted">Cargando detalle…</div>';
+    document.getElementById('btnVolverAccion').classList.add('d-none');
+    document.getElementById('btnEnviarAccion').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('modalResolver')).show();
+
+    fetch(`/app/dte/limbo_resumen/${dteId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                document.getElementById('modalResolverBody').innerHTML =
+                    `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+            detalleActual = data;
+            document.getElementById('modalResolverTitulo').textContent =
+                `Resolver DTE #${data.dte.numero_documento} (${data.dte.tipo_documento})`;
+            renderPasoAccion();
+        });
+}
+
+function renderPasoAccion() {
+    const d = detalleActual.dte;
+    const acciones = detalleActual.acciones_permitidas;
+    const html = `
+        <div class="row mb-3">
+            <div class="col-md-3"><small class="text-muted">Estado</small><br>${badgeEstado(d.estado_dte)}</div>
+            <div class="col-md-3"><small class="text-muted">Destino</small><br><strong>${d.destino_alias || '-'}</strong></div>
+            <div class="col-md-3"><small class="text-muted">Unidades</small><br><strong>${d.unidades_productos}</strong></div>
+            <div class="col-md-3"><small class="text-muted">Monto</small><br><strong>$${Math.round(d.monto_con_iva).toLocaleString('es-CL')}</strong></div>
+        </div>
+        ${d.motivo_rechazo ? `<div class="alert alert-warning py-2 small">📝 <strong>Motivo de rechazo:</strong> ${d.motivo_rechazo}</div>` : ''}
+
+        <h6 class="mb-3">¿Qué quieres hacer?</h6>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="accion-card ${acciones.includes('rehabilitar') ? '' : 'disabled'}"
+                     onclick="${acciones.includes('rehabilitar') ? "elegirAccion('rehabilitar')" : ''}">
+                    <h6>🔄 Rehabilitar</h6>
+                    <small>Que el receptor vuelva a intentar recepcionar. Útil cuando se rechazó por error.</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="accion-card ${acciones.includes('corregir') ? '' : 'disabled'}"
+                     onclick="${acciones.includes('corregir') ? "elegirAccion('corregir')" : ''}">
+                    <h6>✏️ Corregir cantidades</h6>
+                    <small>Confirmar que la mercadería sí llegó (error de conteo). Sube stock en destino, sin NC.</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="accion-card ${(acciones.includes('nc_con_devolucion') || acciones.includes('nc_sin_devolucion')) ? '' : 'disabled'}"
+                     onclick="${(acciones.includes('nc_con_devolucion') || acciones.includes('nc_sin_devolucion')) ? "elegirAccion('nc')" : ''}">
+                    <h6>📄 Emitir Nota de Crédito</h6>
+                    <small>Anular líneas con problemas. Puedes elegir devolver mercadería al origen o dejarla en destino.</small>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalResolverBody').innerHTML = html;
+    document.getElementById('btnVolverAccion').classList.add('d-none');
+    document.getElementById('btnEnviarAccion').classList.add('d-none');
+}
+
+function elegirAccion(acc) {
+    accionElegida = acc;
+    if (acc === 'rehabilitar') renderRehabilitar();
+    else if (acc === 'corregir') renderCorregir();
+    else if (acc === 'nc') renderNc();
+}
+
+function renderRehabilitar() {
+    document.getElementById('modalResolverBody').innerHTML = `
+        <div class="alert alert-info">
+            Vas a rehabilitar el DTE rechazado. Volverá al estado <strong>EMITIDO</strong>
+            y el receptor podrá intentar recepcionar de nuevo.
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Observación (opcional)</label>
+            <textarea class="form-control" id="obsRehabilitar" rows="3"
+                      placeholder="Ej: confirmé con bodega que la mercadería sí salió"></textarea>
+        </div>
+    `;
+    document.getElementById('btnVolverAccion').classList.remove('d-none');
+    const btn = document.getElementById('btnEnviarAccion');
+    btn.classList.remove('d-none');
+    btn.textContent = 'Rehabilitar DTE';
+    btn.onclick = enviarRehabilitar;
+}
+
+function enviarRehabilitar() {
+    const obs = document.getElementById('obsRehabilitar').value.trim();
+    document.getElementById('btnEnviarAccion').disabled = true;
+    fetch('/app/dte/rehabilitar_rechazado/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({dte_id: dteSeleccionado, observaciones: obs}),
+    })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('btnEnviarAccion').disabled = false;
+            if (data.success) {
+                alert(data.message || 'DTE rehabilitado correctamente');
+                bootstrap.Modal.getInstance(document.getElementById('modalResolver')).hide();
+                cargarLimboInbox();
+            } else {
+                alert(data.error || 'Error al rehabilitar');
+            }
+        });
+}
+
+function renderCorregir() {
+    const productos = detalleActual.productos.filter(p => (p.cantidad_faltante || 0) > 0);
+    if (productos.length === 0) {
+        document.getElementById('modalResolverBody').innerHTML =
+            '<div class="alert alert-warning">No hay productos faltantes para corregir.</div>';
+        return;
+    }
+    document.getElementById('modalResolverBody').innerHTML = `
+        <div class="alert alert-info">
+            Estás afirmando que la mercadería <strong>sí llegó al destino</strong>.
+            Se va a sumar al stock en destino sin emitir NC.
+        </div>
+        <table class="table tabla-productos-nc">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Talla</th>
+                    <th>Descripción</th>
+                    <th class="text-end">Esperada</th>
+                    <th class="text-end">Recibida</th>
+                    <th class="text-end">Faltante</th>
+                    <th class="text-end">Cantidad real</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${productos.map(p => `
+                    <tr data-recepcion-id="${p.recepcion_id}">
+                        <td><small>${p.sku}</small></td>
+                        <td>${p.talla}</td>
+                        <td><small>${p.descripcion}</small></td>
+                        <td class="text-end">${p.cantidad_esperada}</td>
+                        <td class="text-end">${p.cantidad_recepcionada}</td>
+                        <td class="text-end text-danger">${p.cantidad_faltante}</td>
+                        <td class="text-end">
+                            <input type="number" class="form-control form-control-sm cantidad-corregir"
+                                   min="${p.cantidad_recepcionada}" max="${p.cantidad_esperada}"
+                                   value="${p.cantidad_esperada}" />
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <div class="mb-3">
+            <label class="form-label">Observación general (opcional)</label>
+            <textarea class="form-control" id="obsCorregir" rows="2"></textarea>
+        </div>
+    `;
+    document.getElementById('btnVolverAccion').classList.remove('d-none');
+    const btn = document.getElementById('btnEnviarAccion');
+    btn.classList.remove('d-none');
+    btn.textContent = 'Aplicar corrección';
+    btn.onclick = enviarCorregir;
+}
+
+function enviarCorregir() {
+    const productos = [];
+    document.querySelectorAll('#modalResolverBody tbody tr').forEach(tr => {
+        const id = parseInt(tr.dataset.recepcionId, 10);
+        const cant = parseInt(tr.querySelector('.cantidad-corregir').value, 10);
+        if (!isNaN(id) && !isNaN(cant)) {
+            productos.push({recepcion_id: id, cantidad_corregida: cant});
+        }
+    });
+    const obs = document.getElementById('obsCorregir').value.trim();
+    document.getElementById('btnEnviarAccion').disabled = true;
+    fetch('/app/dte/corregir_recepcion_emisor/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({dte_id: dteSeleccionado, productos, observaciones: obs}),
+    })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('btnEnviarAccion').disabled = false;
+            if (data.success) {
+                alert(data.message);
+                bootstrap.Modal.getInstance(document.getElementById('modalResolver')).hide();
+                cargarLimboInbox();
+            } else {
+                alert(data.error || 'Error al corregir');
+            }
+        });
+}
+
+function renderNc() {
+    // Decidir cuáles productos son candidatos:
+    //   parcial/regularización → faltantes/dañados
+    //   sobrante → sobrantes
+    //   rechazado/emitido → todos
+    const d = detalleActual.dte;
+    const acciones = detalleActual.acciones_permitidas;
+    const productos = detalleActual.productos.map(p => {
+        let cantSugerida = 0;
+        if (d.estado_dte === 'RECEPCIONADO_SOBRANTE') {
+            cantSugerida = p.cantidad_sobrante || 0;
+        } else if (d.estado_dte === 'RECEPCIONADO_PARCIAL' ||
+                   d.estado_dte === 'EN_REGULARIZACION') {
+            cantSugerida = (p.cantidad_faltante || 0) + (p.cantidad_danada || 0);
+        } else {
+            cantSugerida = p.cantidad_esperada;
+        }
+        return { ...p, cant_sugerida: cantSugerida };
+    });
+
+    // Determinar disponibilidad del toggle de devolución
+    const forzarDevolucion =
+        d.estado_dte === 'RECHAZADO' || d.estado_dte === 'EMITIDO';
+    const permiteSinDevolucion = acciones.includes('nc_sin_devolucion');
+    const permiteConDevolucion = acciones.includes('nc_con_devolucion');
+
+    // Default según contexto
+    if (d.estado_dte === 'RECEPCIONADO_SOBRANTE') {
+        modoNcDevolucion = 'sin';
+    } else if (forzarDevolucion) {
+        modoNcDevolucion = 'con';
+    } else {
+        modoNcDevolucion = 'con';
+    }
+
+    document.getElementById('modalResolverBody').innerHTML = `
+        <h6 class="mb-3">📄 Emitir Nota de Crédito</h6>
+
+        <div class="mb-3">
+            <label class="form-label small text-muted">Selecciona los productos y cantidades a creditar:</label>
+            <div class="table-responsive">
+                <table class="table tabla-productos-nc">
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;"><input type="checkbox" id="ncCheckAll" /></th>
+                            <th>SKU</th>
+                            <th>Descripción</th>
+                            <th class="text-end">Esperada</th>
+                            <th class="text-end">Problema</th>
+                            <th class="text-end">A creditar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${productos.map(p => `
+                            <tr data-dte-producto-id="${p.dte_producto_id || ''}">
+                                <td><input type="checkbox" class="nc-check" ${p.cant_sugerida > 0 ? 'checked' : ''} /></td>
+                                <td><small>${p.sku}</small></td>
+                                <td><small>${p.descripcion}</small></td>
+                                <td class="text-end">${p.cantidad_esperada}</td>
+                                <td class="text-end">
+                                    ${p.cantidad_faltante ? `<span class="chip-problema chip-faltante">${p.cantidad_faltante}F</span>` : ''}
+                                    ${p.cantidad_danada ? `<span class="chip-problema chip-danado">${p.cantidad_danada}D</span>` : ''}
+                                    ${p.cantidad_sobrante ? `<span class="chip-problema chip-sobrante">${p.cantidad_sobrante}S</span>` : ''}
+                                </td>
+                                <td class="text-end">
+                                    <input type="number" class="form-control form-control-sm cantidad-nc"
+                                           min="0" max="${p.cantidad_esperada}" value="${p.cant_sugerida}" />
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-bold">¿Devolver mercadería al origen?</label>
+            <div class="toggle-devolucion">
+                <div class="toggle-opcion ${modoNcDevolucion === 'con' ? 'active' : ''} ${permiteConDevolucion ? '' : 'disabled'}"
+                     onclick="${permiteConDevolucion ? "setModoNc('con')" : ''}">
+                    <strong>✅ Sí, devolver al origen</strong>
+                    <small>Se emite NC y se le pide al destino despachar físicamente la mercadería. El stock se mueve cuando confirmen el envío.</small>
+                </div>
+                <div class="toggle-opcion ${modoNcDevolucion === 'sin' ? 'active' : ''} ${(permiteSinDevolucion && !forzarDevolucion) ? '' : 'disabled'}"
+                     onclick="${(permiteSinDevolucion && !forzarDevolucion) ? "setModoNc('sin')" : ''}">
+                    <strong>❌ No, queda en destino</strong>
+                    <small>Se emite NC sin movimiento físico. Origen asume la baja. Útil para sobrantes aceptados o mercadería que no vale la pena devolver.</small>
+                </div>
+            </div>
+            ${forzarDevolucion ? '<small class="text-muted">⚠️ Para este estado, la devolución al origen es obligatoria (mercadería no fue recibida en destino).</small>' : ''}
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Motivo de la NC <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="ncMotivo" rows="2" required
+                      placeholder="Describe por qué emites la NC"></textarea>
+        </div>
+    `;
+
+    document.getElementById('ncCheckAll').addEventListener('change', (e) => {
+        document.querySelectorAll('.nc-check').forEach(c => c.checked = e.target.checked);
+    });
+
+    document.getElementById('btnVolverAccion').classList.remove('d-none');
+    const btn = document.getElementById('btnEnviarAccion');
+    btn.classList.remove('d-none');
+    btn.textContent = 'Emitir Nota de Crédito';
+    btn.onclick = enviarNc;
+}
+
+function setModoNc(modo) {
+    modoNcDevolucion = modo;
+    document.querySelectorAll('.toggle-opcion').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.toggle-opcion').forEach(el => {
+        if (el.textContent.includes(modo === 'con' ? 'Sí, devolver' : 'No, queda')) {
+            el.classList.add('active');
+        }
+    });
+}
+
+function enviarNc() {
+    const motivo = document.getElementById('ncMotivo').value.trim();
+    if (!motivo) {
+        alert('Debes ingresar un motivo');
+        return;
+    }
+
+    const ajustes = [];
+    document.querySelectorAll('#modalResolverBody tbody tr').forEach(tr => {
+        const check = tr.querySelector('.nc-check');
+        if (!check || !check.checked) return;
+        const dteProductoId = parseInt(tr.dataset.dteProductoId, 10);
+        const cantNc = parseInt(tr.querySelector('.cantidad-nc').value, 10);
+        if (isNaN(dteProductoId) || isNaN(cantNc) || cantNc < 0) return;
+        // En el endpoint, `nueva_cantidad` es la cantidad que queda viva
+        // tras la NC. El backend calcula la diferencia.
+        // Para mantener compat con ajustar_dte_emisor_api existente:
+        // nueva_cantidad = cantidad_esperada - cantidad_a_creditar.
+        const cantidadOriginal = parseInt(tr.querySelector('td:nth-child(4)').textContent, 10);
+        ajustes.push({
+            dte_producto_id: dteProductoId,
+            nueva_cantidad: Math.max(0, cantidadOriginal - cantNc),
+        });
+    });
+
+    if (ajustes.length === 0) {
+        alert('Selecciona al menos un producto a creditar');
+        return;
+    }
+
+    const devolverStock = (modoNcDevolucion === 'con');
+
+    document.getElementById('btnEnviarAccion').disabled = true;
+    fetch('/app/dte/ajustar_emitido/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({
+            dte_id: dteSeleccionado,
+            ajustes,
+            motivo,
+            devolver_stock: devolverStock,
+        }),
+    })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('btnEnviarAccion').disabled = false;
+            if (data.success) {
+                alert(data.message);
+                bootstrap.Modal.getInstance(document.getElementById('modalResolver')).hide();
+                cargarLimboInbox();
+            } else {
+                alert(data.error || 'Error al emitir NC');
+            }
+        });
+}
+
+// Eventos
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btnRefrescar').addEventListener('click', cargarLimboInbox);
+    document.getElementById('filtroEstado').addEventListener('change', cargarLimboInbox);
+    document.getElementById('filtroDiasMinimos').addEventListener('change', cargarLimboInbox);
+    document.getElementById('btnVolverAccion').addEventListener('click', renderPasoAccion);
+    cargarLimboInbox();
+});
+</script>

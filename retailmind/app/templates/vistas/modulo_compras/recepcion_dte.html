@@ -1134,6 +1134,10 @@
                             <i class="bi bi-tools me-1"></i>Por regularizar
                         </button>
                         {% endif %}
+                        <button type="button" class="btn btn-outline-info vista-unificada-btn" data-vista="mis_regularizaciones">
+                            <i class="bi bi-clock-history me-1"></i>Mis regularizaciones
+                            <span class="badge bg-warning text-dark ms-1 d-none" id="badgeDevolucionesPendientes">0</span>
+                        </button>
                         {% if puede_ajustar_emitidos %}
                         <button type="button" class="btn btn-outline-secondary vista-unificada-btn" data-vista="emitidos">
                             <i class="bi bi-send me-1"></i>Emitidos por mí
@@ -1312,6 +1316,58 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+
+                        <div id="panelMisRegularizaciones" style="display:none;">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                <div>
+                                    <h6 class="mb-1"><i class="bi bi-clock-history text-info me-1"></i>Mis Regularizaciones (decisiones del emisor)</h6>
+                                    <small class="text-muted">DTEs que recibiste y que el emisor está procesando. Si emitió NC con devolución, debes despachar la mercadería.</small>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-info" id="btnRefrescarMisRegs">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>Refrescar
+                                </button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>DTE</th>
+                                            <th>Origen</th>
+                                            <th>Fecha</th>
+                                            <th>Estado actual</th>
+                                            <th class="text-end">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="misRegularizacionesBody">
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-4">
+                                                <div class="spinner-border spinner-border-sm text-info me-2"></div>
+                                                Cargando regularizaciones del emisor...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Modal: confirmar devolución física al origen -->
+                        <div class="modal fade" id="modalConfirmarDevolucion" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-info text-white">
+                                        <h5 class="modal-title">Confirmar despacho físico al origen</h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body" id="modalConfirmarDevolucionBody">
+                                        <div class="text-center py-4 text-muted">Cargando…</div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="button" class="btn btn-info" id="btnConfirmarDevolucionFisica">Confirmar despacho</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -2185,6 +2241,8 @@ $(document).ready(function() {
     $('#btnVerDTEsRechazados').on('click', verDTEsRechazados);
     $('#btnVerDTEsCorregir').on('click', verDTEsParaCorregir);
     $('#btnConfirmarCorreccion').on('click', confirmarCorreccionEmisor);
+    $('#btnRefrescarMisRegs').on('click', cargarMisRegularizaciones);
+    $('#btnConfirmarDevolucionFisica').on('click', confirmarDespachoFisico);
 
     inicializarReferenciaFechas();
     cargarInfoSucursal();
@@ -2271,11 +2329,13 @@ function cambiarVistaUnificada(vista) {
     $(`.vista-unificada-btn[data-vista="${vista}"]`).addClass('active');
 
     const esRegularizar = vista === 'regularizar';
+    const esMisRegs = vista === 'mis_regularizaciones';
     $('#panelRegularizaciones').toggle(esRegularizar);
-    $('#panelRecepciones').toggle(!esRegularizar);
-    $('#paginationContainer').toggle(!esRegularizar && totalPaginas > 1);
-    $('#filterEstadoDte').closest('.col-md-3').toggle(!esRegularizar);
-    $('#filterTipoDocumento').closest('.col-md-2').toggle(!esRegularizar);
+    $('#panelMisRegularizaciones').toggle(esMisRegs);
+    $('#panelRecepciones').toggle(!esRegularizar && !esMisRegs);
+    $('#paginationContainer').toggle(!esRegularizar && !esMisRegs && totalPaginas > 1);
+    $('#filterEstadoDte').closest('.col-md-3').toggle(!esRegularizar && !esMisRegs);
+    $('#filterTipoDocumento').closest('.col-md-2').toggle(!esRegularizar && !esMisRegs);
 
     if (esRegularizar) {
         window.modoVista = 'regularizar';
@@ -2283,6 +2343,12 @@ function cambiarVistaUnificada(vista) {
         $('#tituloSeccionDocumentos').text('Recepciones por regularizar');
         $('#subtituloSeccionDocumentos').text('Productos con faltantes, sobrantes, rechazos o diferencias pendientes de resolución');
         cargarRegularizaciones();
+    } else if (esMisRegs) {
+        window.modoVista = 'mis_regularizaciones';
+        window.modoEmitidos = false;
+        $('#tituloSeccionDocumentos').text('Mis Regularizaciones');
+        $('#subtituloSeccionDocumentos').text('Decisiones del emisor sobre los DTEs que recibiste');
+        cargarMisRegularizaciones();
     } else if (vista === 'emitidos') {
         cambiarModoVista(true, 'emitidos');
     } else if (vista === 'recepcionados') {
@@ -2290,6 +2356,140 @@ function cambiarVistaUnificada(vista) {
     } else {
         cambiarModoVista(false, 'recibidos');
     }
+}
+
+// === MIS REGULARIZACIONES (vista del receptor sobre decisiones del emisor) ===
+
+function cargarMisRegularizaciones() {
+    $('#misRegularizacionesBody').html(`
+        <tr><td colspan="5" class="text-center text-muted py-4">
+            <div class="spinner-border spinner-border-sm text-info me-2"></div>
+            Cargando…
+        </td></tr>
+    `);
+    fetch('/app/dte/obtener_regularizacion_receptor/', { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                $('#misRegularizacionesBody').html(`<tr><td colspan="5" class="text-center text-danger py-4">${data.error || 'Error'}</td></tr>`);
+                return;
+            }
+            renderMisRegularizaciones(data.items || []);
+        });
+}
+
+function renderMisRegularizaciones(items) {
+    let pendientesDevolucion = 0;
+    if (!items.length) {
+        $('#misRegularizacionesBody').html('<tr><td colspan="5" class="text-center text-muted py-4">No tienes DTEs en regularización</td></tr>');
+        $('#badgeDevolucionesPendientes').addClass('d-none');
+        return;
+    }
+    const rows = items.map(it => {
+        let accionBtn = '<small class="text-muted">Esperando emisor</small>';
+        if (it.hijo_devolucion_pendiente) {
+            pendientesDevolucion++;
+            accionBtn = `<button class="btn btn-sm btn-info" onclick="abrirConfirmarDevolucion(${it.hijo_devolucion_pendiente.id})">
+                <i class="bi bi-truck me-1"></i>Confirmar despacho
+            </button>`;
+        }
+        return `
+            <tr>
+                <td><strong>#${it.numero_documento}</strong><br><small class="text-muted">${it.tipo_documento || ''}</small></td>
+                <td>${it.origen_alias || '-'}</td>
+                <td><small>${it.fecha_emision || '-'}</small></td>
+                <td>${it.label}</td>
+                <td class="text-end">${accionBtn}</td>
+            </tr>
+        `;
+    }).join('');
+    $('#misRegularizacionesBody').html(rows);
+
+    const $badge = $('#badgeDevolucionesPendientes');
+    if (pendientesDevolucion > 0) {
+        $badge.removeClass('d-none').text(pendientesDevolucion);
+    } else {
+        $badge.addClass('d-none');
+    }
+}
+
+let _confirmarDte_HijoId = null;
+
+function abrirConfirmarDevolucion(dteHijoId) {
+    _confirmarDte_HijoId = dteHijoId;
+    $('#modalConfirmarDevolucionBody').html('<div class="text-center py-4 text-muted">Cargando…</div>');
+    const modal = new bootstrap.Modal(document.getElementById('modalConfirmarDevolucion'));
+    modal.show();
+    fetch(`/app/dte/devolucion_pendiente_detalle/${dteHijoId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                $('#modalConfirmarDevolucionBody').html(`<div class="alert alert-danger">${data.error}</div>`);
+                return;
+            }
+            renderConfirmarDevolucion(data);
+        });
+}
+
+function renderConfirmarDevolucion(data) {
+    const rows = data.lineas.map(ln => `
+        <tr data-sku="${ln.sku}">
+            <td><small>${ln.sku}</small></td>
+            <td>${ln.talla}</td>
+            <td><small>${ln.descripcion}</small></td>
+            <td class="text-end">${ln.cantidad_pedida}</td>
+            <td class="text-end">${ln.stock_actual_destino}</td>
+            <td class="text-end">
+                <input type="number" class="form-control form-control-sm cant-efectiva"
+                       min="0" max="${Math.min(ln.cantidad_pedida, ln.stock_actual_destino)}"
+                       value="${Math.min(ln.cantidad_pedida, ln.stock_actual_destino)}" />
+            </td>
+        </tr>
+    `).join('');
+    $('#modalConfirmarDevolucionBody').html(`
+        <div class="alert alert-info">
+            Estás confirmando el despacho físico de la mercadería hacia
+            <strong>${data.dte_original.origen_alias}</strong> (DTE #${data.dte_original.numero_documento}).
+            Indica las unidades efectivamente despachadas por cada SKU.
+        </div>
+        <table class="table">
+            <thead>
+                <tr><th>SKU</th><th>Talla</th><th>Descripción</th><th class="text-end">Pedida</th><th class="text-end">Stock destino</th><th class="text-end">Despachada</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `);
+}
+
+function confirmarDespachoFisico() {
+    if (!_confirmarDte_HijoId) return;
+    const lineas = [];
+    $('#modalConfirmarDevolucionBody tbody tr').each(function() {
+        const sku = $(this).data('sku');
+        const cant = parseInt($(this).find('.cant-efectiva').val(), 10) || 0;
+        if (sku && cant > 0) lineas.push({ sku, cantidad_efectiva: cant });
+    });
+    $('#btnConfirmarDevolucionFisica').prop('disabled', true);
+    fetch('/app/dte/confirmar_devolucion_fisica/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val() || document.cookie.split('csrftoken=')[1]?.split(';')[0],
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ dte_hijo_id: _confirmarDte_HijoId, lineas }),
+    })
+        .then(r => r.json())
+        .then(data => {
+            $('#btnConfirmarDevolucionFisica').prop('disabled', false);
+            if (data.success) {
+                alert(data.message);
+                bootstrap.Modal.getInstance(document.getElementById('modalConfirmarDevolucion')).hide();
+                cargarMisRegularizaciones();
+            } else {
+                alert(data.error || 'Error');
+            }
+        });
 }
 
 function obtenerAlcanceDte() {

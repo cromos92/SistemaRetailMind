@@ -2099,6 +2099,19 @@ def ajustar_dte_emisor_api(request):
     dte_id = data.get('dte_id')
     ajustes = data.get('ajustes') or []
     motivo = (data.get('motivo') or '').strip()
+    # devolver_stock controla qué pasa con la mercadería en post-recepción:
+    #   True  → la NC pide al destino devolverla físicamente; los
+    #           Movimientos_Producto se crean en estado PENDIENTE y solo
+    #           se completan cuando el receptor confirma el despacho.
+    #   False → la mercadería queda en destino; se emite EGRESO en destino
+    #           con concepto SOBRANTE_ABSORBIDO_ORIGEN y origen asume la
+    #           baja. Sin movimiento en origen.
+    # Default True (preserva semántica histórica del endpoint).
+    # Pre-recepción y RECHAZADO ignoran el flag (siempre vuelve al origen).
+    devolver_stock = data.get('devolver_stock')
+    if devolver_stock is None:
+        devolver_stock = True
+    devolver_stock = bool(devolver_stock)
 
     if not dte_id:
         return JsonResponse({'success': False, 'error': 'Falta dte_id.'}, status=400)
@@ -2207,6 +2220,11 @@ def ajustar_dte_emisor_api(request):
             diferencial_neto = Decimal('0')
             diferencial_unidades = 0
             lineas_para_documento = []
+            # En post-recepción guardamos aquí los datos para crear los
+            # Movimientos_Producto después de instanciar `doc_nuevo` (que es
+            # la NC/AJUSTE POST). Cada item: talla_origen, talla_destino,
+            # diferencia (cantidad), costo, sobreprecio, precio.
+            lineas_movimientos_post = []
             hoy = timezone.now()
             usuario = request.user.username
 
@@ -2249,7 +2267,9 @@ def ajustar_dte_emisor_api(request):
 
                 if es_post_recepcion:
                     # Buscar Producto_Talla en la sucursal destino para
-                    # descontar stock efectivamente.
+                    # validar existencia y stock; los movimientos reales se
+                    # crean DESPUÉS, cuando `doc_nuevo` ya exista, para que
+                    # se asocien a la NC y no al DTE original.
                     talla_destino = _talla_en_sucursal(talla, sucursal_destino_traspaso)
                     if talla_destino is None:
                         return JsonResponse({
@@ -2262,14 +2282,19 @@ def ajustar_dte_emisor_api(request):
                     # Re-leer stock con lock para validación exacta.
                     talla_destino_actual = Producto_Talla.objects.only('stock').get(id=talla_destino.id)
                     stock_destino_actual = int(talla_destino_actual.stock or 0)
-                    if stock_destino_actual < diferencia:
+                    # Solo validar stock cuando vamos a descontarlo del
+                    # destino — caso `devolver_stock=False` (absorber) y
+                    # caso `devolver_stock=True` (despacho diferido NO
+                    # descuenta todavía, así que no validamos aquí; el
+                    # chequeo se hace al confirmar el despacho).
+                    if not devolver_stock and stock_destino_actual < diferencia:
                         return JsonResponse({
                             'success': False,
                             'error': (
                                 f'Stock insuficiente en destino para {dp.descripcion} '
                                 f'(SKU {talla.sku}). Disponible: {stock_destino_actual}, '
-                                f'se intentó devolver: {diferencia}. '
-                                f'Si parte se vendió, el receptor debe regularizar.'
+                                f'se intentó descontar: {diferencia}. '
+                                f'Considera emitir NC con devolución pendiente.'
                             ),
                             'stock_insuficiente': True,
                             'sku': talla.sku,
@@ -2277,51 +2302,16 @@ def ajustar_dte_emisor_api(request):
                             'solicitado': diferencia,
                         }, status=409)
 
-                    # 1) Egreso en destino
-                    Producto_Talla.objects.filter(id=talla_destino.id).update(
-                        stock=F('stock') - diferencia
-                    )
-                    Movimientos_Producto.objects.create(
-                        dte=dte,
-                        ProductoTalla=talla_destino,
-                        sucursal_origen=sucursal_destino_traspaso,
-                        sucursal_destino=None,
-                        cantidad=-diferencia,
-                        costo=dp.costo,
-                        sobreprecio=dp.sobreprecio,
-                        precio=dp.precio,
-                        concepto='DEVOLUCION_NC_POST_RECEPCION',
-                        tipo_movimiento='EGRESO',
-                        estado='COMPLETADO',
-                        responsable=usuario,
-                        observaciones=(
-                            f'NC post-recepción DTE #{dte.numero_documento}: '
-                            f'salida desde {sucursal_destino_traspaso.alias}'
-                        )[:500],
-                    )
-
-                    # 2) Ingreso en origen
-                    Producto_Talla.objects.filter(id=talla.id).update(
-                        stock=F('stock') + diferencia
-                    )
-                    Movimientos_Producto.objects.create(
-                        dte=dte,
-                        ProductoTalla=talla,
-                        sucursal_origen=None,
-                        sucursal_destino=dte.sucursal,
-                        cantidad=diferencia,
-                        costo=dp.costo,
-                        sobreprecio=dp.sobreprecio,
-                        precio=dp.precio,
-                        concepto='DEVOLUCION_NC_POST_RECEPCION',
-                        tipo_movimiento='INGRESO',
-                        estado='COMPLETADO',
-                        responsable=usuario,
-                        observaciones=(
-                            f'NC post-recepción DTE #{dte.numero_documento}: '
-                            f'reingreso a {dte.sucursal.alias}'
-                        )[:500],
-                    )
+                    # Guardar referencias para crear los movimientos después
+                    # de instanciar `doc_nuevo`.
+                    lineas_movimientos_post.append({
+                        'talla_origen': talla,
+                        'talla_destino': talla_destino,
+                        'diferencia': diferencia,
+                        'costo': dp.costo,
+                        'sobreprecio': dp.sobreprecio,
+                        'precio': dp.precio,
+                    })
 
                     # En post-recepcion NO modificamos dp.stock ni dp.activo:
                     # el DTE original queda como evidencia histórica de lo despachado.
@@ -2466,22 +2456,94 @@ def ajustar_dte_emisor_api(request):
                     activo=True,
                 )
 
+            # ========================================================
+            # Movimientos de stock para el caso post-recepción.
+            # ========================================================
+            # Pre-recepción ya se manejó en el loop (reversa al origen).
+            # Aquí ramificamos según `devolver_stock`:
+            #   - True  → crear movimientos PENDIENTE (no mueven stock todavía)
+            #   - False → un solo egreso en destino, sin reingreso al origen
+            if es_post_recepcion and lineas_movimientos_post:
+                from .services.limbo_dte import (
+                    crear_movimientos_devolucion_pendiente,
+                    absorber_sin_retorno,
+                )
+                motivo_corto = motivo[:120]
+                if devolver_stock:
+                    for lm in lineas_movimientos_post:
+                        crear_movimientos_devolucion_pendiente(
+                            dte=dte,
+                            dte_hijo=doc_nuevo,
+                            talla_origen=lm['talla_origen'],
+                            talla_destino=lm['talla_destino'],
+                            cantidad=lm['diferencia'],
+                            sucursal_destino=sucursal_destino_traspaso,
+                            costo=lm['costo'],
+                            sobreprecio=lm['sobreprecio'],
+                            precio=lm['precio'],
+                            usuario=request.user,
+                            motivo_corto=motivo_corto,
+                        )
+                    doc_nuevo.requiere_devolucion_fisica = True
+                    doc_nuevo.save(update_fields=['requiere_devolucion_fisica'])
+                else:
+                    for lm in lineas_movimientos_post:
+                        absorber_sin_retorno(
+                            dte=dte,
+                            dte_hijo=doc_nuevo,
+                            talla_destino=lm['talla_destino'],
+                            cantidad=lm['diferencia'],
+                            sucursal_destino=sucursal_destino_traspaso,
+                            costo=lm['costo'],
+                            sobreprecio=lm['sobreprecio'],
+                            precio=lm['precio'],
+                            usuario=request.user,
+                            motivo_corto=motivo_corto,
+                        )
+
             try:
                 if dte.receptor:
+                    if es_post_recepcion and devolver_stock:
+                        titulo_notif = (
+                            f"DTE #{dte.numero_documento} ajustado — devuelve mercadería"
+                        )
+                        mensaje_notif = (
+                            f"La sucursal emisora ({dte.sucursal.alias}) emitió "
+                            f"{tipo_doc_nuevo} #{numero_nuevo} sobre el DTE "
+                            f"#{dte.numero_documento}. Debes despachar físicamente "
+                            f"{diferencial_unidades} unidad(es) hacia {dte.sucursal.alias} "
+                            f"y confirmar el envío desde 'Mis Regularizaciones'. "
+                            f"El stock se moverá una vez confirmes. Motivo: {motivo}"
+                        )
+                    elif es_post_recepcion and not devolver_stock:
+                        titulo_notif = (
+                            f"DTE #{dte.numero_documento} ajustado — mercadería queda en destino"
+                        )
+                        mensaje_notif = (
+                            f"La sucursal emisora ({dte.sucursal.alias}) emitió "
+                            f"{tipo_doc_nuevo} #{numero_nuevo} sin devolución. "
+                            f"Se descontaron {diferencial_unidades} unidad(es) del stock "
+                            f"de {sucursal_destino_traspaso.alias}; origen asume la baja. "
+                            f"Motivo: {motivo}"
+                        )
+                    else:
+                        titulo_notif = (
+                            f"DTE #{dte.numero_documento} ajustado por emisor ({etiqueta_fase})"
+                        )
+                        mensaje_notif = (
+                            f"La sucursal emisora ({dte.sucursal.alias}) ajustó el DTE "
+                            f"#{dte.numero_documento} ({etiqueta_fase}). Se retiraron "
+                            f"{diferencial_unidades} unidad(es). Documento de trazabilidad: "
+                            f"{tipo_doc_nuevo} #{numero_nuevo}. Motivo: {motivo}"
+                        )
                     NotificacionDTE.objects.create(
                         dte=dte,
                         empresa_receptora=dte.receptor,
                         sucursal=sucursal_destino_traspaso,
                         sucursal_reportante=dte.sucursal,
                         tipo='CORRECCION_RECEPCION',
-                        titulo=f"DTE #{dte.numero_documento} ajustado por emisor ({etiqueta_fase})",
-                        mensaje=(
-                            f"La sucursal emisora ({dte.sucursal.alias}) ajustó el DTE #{dte.numero_documento} "
-                            f"({etiqueta_fase}). "
-                            f"Se retiraron {diferencial_unidades} unidad(es). "
-                            f"Documento de trazabilidad: {tipo_doc_nuevo} #{numero_nuevo}. "
-                            f"Motivo: {motivo}"
-                        ),
+                        titulo=titulo_notif,
+                        mensaje=mensaje_notif,
                         usuario_que_proceso=request.user,
                     )
             except Exception:
@@ -18486,8 +18548,9 @@ def crear_lote_producto(producto_talla, cantidad, costo_unitario, sobreprecio_un
 def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=None,
                        observaciones=None, referencia_externa=None):
     """
-    Consume lotes FIFO (First In, First Out) sin modificar stock ni crear movimientos.
-    Stock y movimientos los gestiona registrar_movimiento_producto (unico escritor).
+    Consume lotes FIFO (First In, First Out), crea el Movimientos_Producto de EGRESO
+    y actualiza Producto_Talla.stock. Mantiene los tres trackings sincronizados:
+    LoteProducto.cantidad_disponible, Producto_Talla.stock y Movimientos_Producto.
     Retorna (costo_total_consumido, lotes_utilizados).
     """
     from .models import LoteProducto
@@ -18538,6 +18601,22 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
 
     if cantidad_restante > 0:
         raise Exception(f'Stock insuficiente. Faltan {cantidad_restante} unidades')
+
+    if ticket and not referencia_externa:
+        referencia_final = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
+    else:
+        referencia_final = referencia_externa
+
+    registrar_movimiento_producto(
+        producto_talla=producto_talla,
+        concepto='VENTA' if ticket else 'SALIDA',
+        cantidad=-cantidad_requerida,
+        responsable=responsable,
+        ticket=ticket,
+        observaciones=observaciones,
+        referencia_externa=referencia_final,
+        crear_lote_fifo=False
+    )
 
     _fifo_logger.info("FIFO consumido: SKU %s, Costo total: %s, Lotes: %s", producto_talla.sku, costo_total_consumido, len(lotes_utilizados))
 
@@ -28943,4 +29022,555 @@ def editar_producto_talla_creado(request):
         'success': True,
         'cambios': cambios,
         'message': f'Producto actualizado: {", ".join(cambios)}',
+    })
+
+
+# ============================================================
+# LIMBO INBOX — Gestión unificada de DTEs en estado intermedio
+# ============================================================
+# Centraliza las decisiones del emisor cuando un DTE de TRASPASO queda
+# atascado entre EMITIDO y RECEPCIONADO_COMPLETO. Reusa endpoints
+# existentes (rehabilitar_dte_rechazado_api, corregir_recepcion_emisor_api,
+# ajustar_dte_emisor_api) y agrega dos piezas faltantes:
+#   1) Vista de inbox con resumen por DTE
+#   2) Confirmación del receptor cuando hay devolución física pendiente
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
+def dtes_en_limbo(request):
+    """Renderiza el Limbo Inbox del emisor."""
+    sucursal_id = request.session.get('idSucursalActual')
+    puede_aprobar = _permiso_recepcion_dte(request.user, 'puede_aprobar', sucursal_id)
+    return render(request, 'vistas/modulo_documentos/dtes_en_limbo.html', {
+        'puede_aprobar': puede_aprobar,
+    })
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
+@require_GET
+def obtener_dtes_limbo_emisor_api(request):
+    """Lista todos los DTEs de TRASPASO emitidos por la sucursal actual
+    que requieren decisión del emisor:
+      - RECHAZADO
+      - RECEPCIONADO_PARCIAL
+      - RECEPCIONADO_SOBRANTE
+      - EN_REGULARIZACION
+      - EMITIDO con > N días sin recepcionar (configurable; default 7)
+    Excluye DTEs hijos (NCs / AJUSTE TRASPASO POST) y estados terminales.
+    """
+    from datetime import timedelta
+    from django.db.models import Q, Sum, Count
+
+    sucursal_id = request.session.get('idSucursalActual')
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa.'}, status=400)
+
+    try:
+        dias_emision = int(request.GET.get('dias_emision', 7))
+    except (TypeError, ValueError):
+        dias_emision = 7
+
+    ESTADOS_LIMBO = ['RECHAZADO', 'RECEPCIONADO_PARCIAL',
+                     'RECEPCIONADO_SOBRANTE', 'EN_REGULARIZACION']
+    hace_n_dias = timezone.now() - timedelta(days=dias_emision)
+
+    qs = (
+        Dte.objects
+        .filter(sucursal_id=sucursal_id,
+                tipo_transaccion='TRASPASO',
+                es_nota_credito=False,
+                documento_afectado__isnull=True)
+        .filter(
+            Q(estado_dte__in=ESTADOS_LIMBO) |
+            Q(estado_dte='EMITIDO', fecha_emision__lt=hace_n_dias.date())
+        )
+        .exclude(estado_dte__in=['CANCELADO', 'ANULADO',
+                                  'RECEPCIONADO_COMPLETO'])
+        .exclude(tipo_documento__in=['NOTA DE CREDITO',
+                                       'AJUSTE TRASPASO',
+                                       'AJUSTE TRASPASO POST'])
+        .exclude(descartado=True)
+        .select_related('emisor', 'receptor', 'sucursal')
+        .order_by('-fecha_emision', '-id')
+    )
+
+    estado_filtro = (request.GET.get('estado') or '').strip().upper()
+    if estado_filtro:
+        qs = qs.filter(estado_dte=estado_filtro)
+
+    items = []
+    for dte in qs[:300]:
+        mov_salida = dte.dte_movimientos.filter(
+            concepto='TRASPASO_SALIDA',
+            sucursal_destino__isnull=False,
+        ).select_related('sucursal_destino').first()
+        destino = mov_salida.sucursal_destino if mov_salida else None
+
+        recepciones = Productos_Recepcionados.objects.filter(dte=dte)
+        resumen_faltantes = recepciones.aggregate(s=Sum('cantidad_faltante'))['s'] or 0
+        resumen_danados = recepciones.aggregate(s=Sum('cantidad_danada'))['s'] or 0
+        resumen_sobrantes = recepciones.aggregate(s=Sum('cantidad_sobrante'))['s'] or 0
+
+        fecha_ref = dte.fecha_recepcion or dte.fecha_emision
+        dias_en_limbo = (timezone.now().date() - fecha_ref).days if fecha_ref else None
+
+        acciones = []
+        if dte.estado_dte == 'RECHAZADO':
+            acciones.append('rehabilitar')
+            acciones.append('nc_con_devolucion')
+        elif dte.estado_dte in ('RECEPCIONADO_PARCIAL', 'EN_REGULARIZACION'):
+            if resumen_faltantes > 0:
+                acciones.append('corregir')
+            acciones.append('nc_con_devolucion')
+            acciones.append('nc_sin_devolucion')
+        elif dte.estado_dte == 'RECEPCIONADO_SOBRANTE':
+            acciones.append('nc_con_devolucion')
+            acciones.append('nc_sin_devolucion')
+        elif dte.estado_dte == 'EMITIDO':
+            acciones.append('nc_con_devolucion')
+
+        ncs_hijas_pendientes = Dte.objects.filter(
+            documento_afectado=dte,
+            requiere_devolucion_fisica=True,
+            fecha_confirmacion_devolucion__isnull=True,
+        ).count()
+
+        items.append({
+            'id': dte.id,
+            'numero_documento': dte.numero_documento,
+            'tipo_documento': dte.tipo_documento,
+            'estado_dte': dte.estado_dte,
+            'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else None,
+            'fecha_recepcion': dte.fecha_recepcion.strftime('%Y-%m-%d') if dte.fecha_recepcion else None,
+            'motivo_rechazo': dte.motivo_rechazo,
+            'destino_alias': destino.alias if destino else None,
+            'destino_id': destino.id if destino else None,
+            'dias_en_limbo': dias_en_limbo,
+            'resumen_problemas': {
+                'faltantes': int(resumen_faltantes),
+                'danados': int(resumen_danados),
+                'sobrantes': int(resumen_sobrantes),
+            },
+            'acciones_permitidas': acciones,
+            'ncs_hijas_pendientes_devolucion': ncs_hijas_pendientes,
+            'monto_con_iva': float(dte.monto_con_iva or 0),
+            'unidades_productos': int(dte.unidades_productos or 0),
+        })
+
+    return JsonResponse({
+        'success': True,
+        'total': len(items),
+        'items': items,
+    })
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
+@require_GET
+def obtener_resumen_limbo_dte_api(request, dte_id):
+    """Detalle completo de un DTE en limbo para alimentar el wizard."""
+    sucursal_id = request.session.get('idSucursalActual')
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa.'}, status=400)
+
+    try:
+        dte = Dte.objects.select_related(
+            'emisor', 'receptor', 'sucursal'
+        ).get(id=dte_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    if dte.sucursal_id != int(sucursal_id):
+        return JsonResponse({'success': False,
+                              'error': 'Solo la sucursal emisora puede ver este detalle.'},
+                             status=403)
+
+    mov_salida = dte.dte_movimientos.filter(
+        concepto='TRASPASO_SALIDA',
+        sucursal_destino__isnull=False,
+    ).select_related('sucursal_destino').first()
+    destino = mov_salida.sucursal_destino if mov_salida else None
+
+    productos_problema = []
+    recepciones = Productos_Recepcionados.objects.filter(dte=dte).select_related(
+        'producto_talla', 'producto_talla__producto', 'dte_producto'
+    )
+    for rec in recepciones:
+        prod = rec.producto_talla.producto if rec.producto_talla else None
+        productos_problema.append({
+            'recepcion_id': rec.id,
+            'dte_producto_id': rec.dte_producto_id,
+            'sku': rec.producto_talla.sku if rec.producto_talla else '-',
+            'talla': rec.producto_talla.talla if rec.producto_talla else '-',
+            'descripcion': (prod.descripcion if prod else
+                            (rec.dte_producto.descripcion if rec.dte_producto else '-')),
+            'articulo': prod.articulo if prod else '-',
+            'cantidad_esperada': rec.cantidad_esperada,
+            'cantidad_recepcionada': rec.stockArribado,
+            'cantidad_faltante': rec.cantidad_faltante or 0,
+            'cantidad_danada': rec.cantidad_danada or 0,
+            'cantidad_sobrante': rec.cantidad_sobrante or 0,
+            'estado': rec.estado,
+            'observaciones': rec.observaciones or '',
+        })
+
+    # Si no hay Productos_Recepcionados (caso RECHAZADO/EMITIDO),
+    # fallback a Dte_Productos del DTE original para alimentar el wizard NC.
+    if not productos_problema:
+        dte_productos = Dte_Productos.objects.filter(
+            dte=dte, activo=True
+        ).select_related('productoTalla', 'productoTalla__producto')
+        for dp in dte_productos:
+            prod = dp.productoTalla.producto if dp.productoTalla else None
+            productos_problema.append({
+                'recepcion_id': None,
+                'dte_producto_id': dp.id,
+                'sku': dp.productoTalla.sku if dp.productoTalla else '-',
+                'talla': dp.productoTalla.talla if dp.productoTalla else '-',
+                'descripcion': dp.descripcion or (prod.descripcion if prod else '-'),
+                'articulo': prod.articulo if prod else '-',
+                'cantidad_esperada': dp.stock or 0,
+                'cantidad_recepcionada': 0,
+                'cantidad_faltante': dp.stock or 0,
+                'cantidad_danada': 0,
+                'cantidad_sobrante': 0,
+                'estado': 'PENDIENTE',
+                'observaciones': '',
+            })
+
+    acciones = []
+    if dte.estado_dte == 'RECHAZADO':
+        acciones = ['rehabilitar', 'nc_con_devolucion']
+    elif dte.estado_dte in ('RECEPCIONADO_PARCIAL', 'EN_REGULARIZACION'):
+        if any(p['cantidad_faltante'] > 0 for p in productos_problema):
+            acciones.append('corregir')
+        acciones.append('nc_con_devolucion')
+        acciones.append('nc_sin_devolucion')
+    elif dte.estado_dte == 'RECEPCIONADO_SOBRANTE':
+        acciones = ['nc_con_devolucion', 'nc_sin_devolucion']
+    elif dte.estado_dte == 'EMITIDO':
+        acciones = ['nc_con_devolucion']
+
+    return JsonResponse({
+        'success': True,
+        'dte': {
+            'id': dte.id,
+            'numero_documento': dte.numero_documento,
+            'tipo_documento': dte.tipo_documento,
+            'estado_dte': dte.estado_dte,
+            'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else None,
+            'fecha_recepcion': dte.fecha_recepcion.strftime('%Y-%m-%d') if dte.fecha_recepcion else None,
+            'destino_alias': destino.alias if destino else None,
+            'destino_id': destino.id if destino else None,
+            'motivo_rechazo': dte.motivo_rechazo,
+            'monto_con_iva': float(dte.monto_con_iva or 0),
+            'unidades_productos': int(dte.unidades_productos or 0),
+            'referencias': dte.referencias or '',
+        },
+        'productos': productos_problema,
+        'acciones_permitidas': acciones,
+    })
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_crear')
+@require_POST
+@transaction.atomic
+def confirmar_devolucion_fisica_api(request):
+    """El RECEPTOR confirma que despachó físicamente la mercadería de
+    vuelta al origen. Toma los Movimientos_Producto en estado PENDIENTE
+    del DTE hijo (NC/AJUSTE POST con requiere_devolucion_fisica=True) y
+    los completa, moviendo stock destino → origen.
+
+    Soporta confirmaciones parciales (si el receptor pudo despachar
+    menos que lo pedido). Lo no despachado queda PENDIENTE para que el
+    emisor decida si emite NC complementaria sin devolución.
+
+    Payload:
+        {
+            "dte_hijo_id": int,
+            "lineas": [{"sku": str, "cantidad_efectiva": int}, ...]
+        }
+    Si `lineas` no se envía, se asume que se despachó todo lo pedido.
+    """
+    from .services.limbo_dte import completar_movimientos_pendientes
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    dte_hijo_id = data.get('dte_hijo_id')
+    lineas = data.get('lineas') or []
+
+    if not dte_hijo_id:
+        return JsonResponse({'success': False, 'error': 'Falta dte_hijo_id.'}, status=400)
+
+    sucursal_actual_id = request.session.get('idSucursalActual')
+    if not sucursal_actual_id:
+        return JsonResponse({'success': False,
+                              'error': 'No hay sucursal activa.'}, status=400)
+    sucursal_actual_id = int(sucursal_actual_id)
+
+    try:
+        dte_hijo = (
+            Dte.objects
+            .select_for_update(of=('self',))
+            .select_related('documento_afectado', 'sucursal')
+            .get(id=dte_hijo_id)
+        )
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    if not dte_hijo.documento_afectado_id:
+        return JsonResponse({'success': False,
+                              'error': 'Este DTE no es una NC/AJUSTE hijo.'}, status=400)
+
+    if not dte_hijo.requiere_devolucion_fisica:
+        return JsonResponse({'success': False,
+                              'error': 'Este DTE no tiene devolución física pendiente.'},
+                             status=400)
+
+    if dte_hijo.fecha_confirmacion_devolucion is not None:
+        return JsonResponse({'success': False,
+                              'error': 'La devolución ya fue confirmada anteriormente.'},
+                             status=400)
+
+    # Validar que el usuario sea de la sucursal destino del traspaso original.
+    dte_original = dte_hijo.documento_afectado
+    mov_salida_original = dte_original.dte_movimientos.filter(
+        concepto='TRASPASO_SALIDA',
+        sucursal_destino__isnull=False,
+    ).select_related('sucursal_destino').first()
+
+    if not mov_salida_original or not mov_salida_original.sucursal_destino:
+        return JsonResponse({'success': False,
+                              'error': 'No se pudo identificar la sucursal destino.'},
+                             status=400)
+
+    sucursal_destino_id = mov_salida_original.sucursal_destino_id
+    if sucursal_destino_id != sucursal_actual_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo la sucursal destino del traspaso original puede confirmar la devolución.',
+        }, status=403)
+
+    mapping_cantidades = {}
+    for ln in lineas:
+        sku = (ln.get('sku') or '').strip()
+        try:
+            cant = int(ln.get('cantidad_efectiva') or 0)
+        except (TypeError, ValueError):
+            cant = 0
+        if sku and cant > 0:
+            mapping_cantidades[sku] = cant
+
+    # Si el usuario no pasó `lineas`, leer las cantidades pedidas y usar todo
+    if not mapping_cantidades:
+        for mov in Movimientos_Producto.objects.filter(
+            dte=dte_hijo,
+            concepto='DEVOLUCION_NC_PENDIENTE_DESPACHO',
+            estado='PENDIENTE',
+            tipo_movimiento='EGRESO',
+        ).select_related('ProductoTalla'):
+            if mov.ProductoTalla and mov.ProductoTalla.sku:
+                mapping_cantidades[mov.ProductoTalla.sku] = abs(int(mov.cantidad or 0))
+
+    resultado = completar_movimientos_pendientes(
+        dte_hijo=dte_hijo,
+        mapping_cantidades=mapping_cantidades,
+        usuario=request.user.username,
+    )
+
+    quedan_pendientes = Movimientos_Producto.objects.filter(
+        dte=dte_hijo,
+        concepto='DEVOLUCION_NC_PENDIENTE_DESPACHO',
+        estado='PENDIENTE',
+    ).exists()
+
+    if not quedan_pendientes:
+        dte_hijo.requiere_devolucion_fisica = False
+        dte_hijo.fecha_confirmacion_devolucion = timezone.now()
+        dte_hijo.save(update_fields=['requiere_devolucion_fisica',
+                                       'fecha_confirmacion_devolucion'])
+
+    # Notificar al emisor
+    try:
+        from .models.dte import NotificacionDTE
+        total_aplicado = sum(a['cantidad'] for a in resultado['aplicados'])
+        NotificacionDTE.objects.create(
+            dte=dte_original,
+            empresa_receptora=dte_original.emisor,
+            sucursal=dte_original.sucursal,
+            sucursal_reportante=mov_salida_original.sucursal_destino,
+            tipo='CORRECCION_RECEPCION',
+            titulo=(f"Devolución confirmada — DTE #{dte_original.numero_documento} "
+                    f"(NC #{dte_hijo.numero_documento})"),
+            mensaje=(
+                f"La sucursal destino confirmó el despacho físico de "
+                f"{total_aplicado} unidad(es) hacia {dte_original.sucursal.alias}. "
+                f"{'Quedan unidades pendientes — revisa el Limbo Inbox.' if quedan_pendientes else 'Devolución completada.'}"
+            ),
+            usuario_que_proceso=request.user,
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({
+        'success': True,
+        'message': (
+            f"Despacho confirmado. {len(resultado['aplicados'])} producto(s) "
+            f"procesados; {len(resultado['no_aplicados'])} con observaciones."
+        ),
+        'aplicados': resultado['aplicados'],
+        'no_aplicados': resultado['no_aplicados'],
+        'cerrado': not quedan_pendientes,
+    })
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
+@require_GET
+def obtener_dtes_regularizacion_receptor_api(request):
+    """Lista los DTEs que la sucursal actual (receptora) tiene en proceso
+    de regularización por parte del emisor. Para cada uno se incluye un
+    label legible con la decisión del emisor y, si hay un DTE hijo con
+    devolución física pendiente, la información para confirmar el despacho.
+    """
+    sucursal_id = request.session.get('idSucursalActual')
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa.'}, status=400)
+    sucursal_id = int(sucursal_id)
+
+    # DTEs cuyo destino es la sucursal actual (vía Movimientos_Producto).
+    movs = Movimientos_Producto.objects.filter(
+        concepto='TRASPASO_SALIDA',
+        sucursal_destino_id=sucursal_id,
+        dte__isnull=False,
+    ).values_list('dte_id', flat=True).distinct()
+
+    dtes = (
+        Dte.objects
+        .filter(id__in=list(movs),
+                tipo_transaccion='TRASPASO',
+                es_nota_credito=False,
+                documento_afectado__isnull=True)
+        .exclude(estado_dte__in=['RECEPCIONADO_COMPLETO', 'CANCELADO', 'ANULADO'])
+        .exclude(descartado=True)
+        .select_related('emisor', 'sucursal')
+        .order_by('-fecha_emision', '-id')[:300]
+    )
+
+    items = []
+    for dte in dtes:
+        # Buscar DTE hijo (NC / AJUSTE POST) más reciente con devolución pendiente.
+        hijo_pendiente = (
+            Dte.objects.filter(documento_afectado=dte,
+                                requiere_devolucion_fisica=True,
+                                fecha_confirmacion_devolucion__isnull=True)
+            .order_by('-id').first()
+        )
+
+        # Label legible del estado.
+        if hijo_pendiente:
+            label = (f"NC #{hijo_pendiente.numero_documento} emitida — "
+                     f"debes despachar mercadería a {dte.sucursal.alias}")
+        elif dte.estado_dte == 'RECHAZADO':
+            label = "Rechazado — espera decisión del emisor"
+        elif dte.estado_dte == 'EN_REGULARIZACION':
+            label = "En regularización — emisor está revisando"
+        elif dte.estado_dte in ('RECEPCIONADO_PARCIAL',
+                                 'RECEPCIONADO_SOBRANTE'):
+            label = f"{dte.estado_dte.replace('_', ' ').title()} — pendiente decisión del emisor"
+        else:
+            label = dte.estado_dte
+
+        items.append({
+            'id': dte.id,
+            'numero_documento': dte.numero_documento,
+            'tipo_documento': dte.tipo_documento,
+            'estado_dte': dte.estado_dte,
+            'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else None,
+            'origen_alias': dte.sucursal.alias if dte.sucursal else None,
+            'label': label,
+            'hijo_devolucion_pendiente': (
+                {
+                    'id': hijo_pendiente.id,
+                    'numero_documento': hijo_pendiente.numero_documento,
+                    'tipo_documento': hijo_pendiente.tipo_documento,
+                } if hijo_pendiente else None
+            ),
+        })
+
+    return JsonResponse({'success': True, 'items': items})
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
+@require_GET
+def obtener_devolucion_pendiente_detalle_api(request, dte_hijo_id):
+    """Devuelve el detalle de los Movimientos_Producto PENDIENTE de un DTE
+    hijo (NC con devolución física pendiente), para que el receptor pueda
+    confirmar el despacho línea por línea.
+    """
+    sucursal_id = request.session.get('idSucursalActual')
+    if not sucursal_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa.'}, status=400)
+    sucursal_id = int(sucursal_id)
+
+    try:
+        dte_hijo = Dte.objects.select_related('documento_afectado',
+                                                'documento_afectado__sucursal').get(id=dte_hijo_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    if not dte_hijo.documento_afectado_id or not dte_hijo.requiere_devolucion_fisica:
+        return JsonResponse({'success': False,
+                              'error': 'Este DTE no requiere devolución pendiente.'},
+                             status=400)
+
+    dte_original = dte_hijo.documento_afectado
+    mov_salida = dte_original.dte_movimientos.filter(
+        concepto='TRASPASO_SALIDA',
+        sucursal_destino__isnull=False,
+    ).first()
+    if not mov_salida or mov_salida.sucursal_destino_id != sucursal_id:
+        return JsonResponse({'success': False,
+                              'error': 'Solo la sucursal destino puede ver este detalle.'},
+                             status=403)
+
+    lineas = []
+    for mov in Movimientos_Producto.objects.filter(
+        dte=dte_hijo,
+        concepto='DEVOLUCION_NC_PENDIENTE_DESPACHO',
+        estado='PENDIENTE',
+        tipo_movimiento='EGRESO',
+    ).select_related('ProductoTalla', 'ProductoTalla__producto'):
+        talla = mov.ProductoTalla
+        if not talla:
+            continue
+        stock_actual = int(Producto_Talla.objects.only('stock').get(id=talla.id).stock or 0)
+        lineas.append({
+            'sku': talla.sku,
+            'talla': talla.talla,
+            'descripcion': talla.producto.descripcion if talla.producto else '-',
+            'articulo': talla.producto.articulo if talla.producto else '-',
+            'cantidad_pedida': abs(int(mov.cantidad or 0)),
+            'stock_actual_destino': stock_actual,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'dte_hijo': {
+            'id': dte_hijo.id,
+            'numero_documento': dte_hijo.numero_documento,
+            'tipo_documento': dte_hijo.tipo_documento,
+        },
+        'dte_original': {
+            'id': dte_original.id,
+            'numero_documento': dte_original.numero_documento,
+            'origen_alias': dte_original.sucursal.alias if dte_original.sucursal else None,
+        },
+        'lineas': lineas,
     })

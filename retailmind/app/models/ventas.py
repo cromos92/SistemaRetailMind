@@ -110,6 +110,19 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
     # pre-recepción y preservar trazabilidad en reportes.
     ('DEVOLUCION_NC_POST_RECEPCION', 'Devolución NC tras recepción'),
 
+    # === NC POST-RECEPCIÓN CON DEVOLUCIÓN FÍSICA PENDIENTE ===
+    # El emisor emitió NC pidiendo devolver mercadería al origen, pero el
+    # receptor aún NO ha despachado físicamente. Movimientos creados con
+    # estado='PENDIENTE'. Al confirmar el despacho, se convierten en
+    # DEVOLUCION_NC_POST_RECEPCION + COMPLETADO y recién ahí se mueve stock.
+    ('DEVOLUCION_NC_PENDIENTE_DESPACHO', 'Devolución NC - Pendiente despacho físico desde destino'),
+
+    # === NC SIN DEVOLUCIÓN: ORIGEN ASUME LA BAJA ===
+    # El emisor emite NC pero la mercadería queda en destino (mermada,
+    # absorbida, regalada o sobrante aceptado). Único movimiento EGRESO
+    # en destino; el origen NO recupera stock, asume contablemente la baja.
+    ('SOBRANTE_ABSORBIDO_ORIGEN', 'NC sin devolución - mercadería queda en destino'),
+
     # === REPARACIÓN RETROACTIVA DE NC HISTÓRICAS SIN MOVIMIENTOS ===
     # Movimientos generados por el barrido de `reparar_stock` sobre NCs
     # emitidas antes del fix unificado, que quedaron sin los
