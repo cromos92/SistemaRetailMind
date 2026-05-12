@@ -18806,16 +18806,37 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
     else:
         referencia_final = referencia_externa
 
-    registrar_movimiento_producto(
-        producto_talla=producto_talla,
-        concepto='VENTA' if ticket else 'SALIDA',
-        cantidad=-cantidad_requerida,
-        responsable=responsable,
+    # Crear movimiento de EGRESO sincronizado con el descuento de lotes.
+    # Usamos VENTA_PUBLICO (concepto valido en CONCEPTO_MOVIMIENTO_CHOICES).
+    from .models import Movimientos_Producto
+    from django.utils import timezone
+    sucursal_origen = None
+    if ticket and getattr(ticket, 'sucursal', None):
+        sucursal_origen = ticket.sucursal
+    elif producto_talla.producto and getattr(producto_talla.producto, 'sucursal', None):
+        sucursal_origen = producto_talla.producto.sucursal
+
+    Movimientos_Producto.objects.create(
+        ProductoTalla=producto_talla,
         ticket=ticket,
-        observaciones=observaciones,
-        referencia_externa=referencia_final,
-        crear_lote_fifo=False
+        sucursal_origen=sucursal_origen,
+        cantidad=-cantidad_requerida,
+        costo=int(producto_talla.producto.costo or 0) if producto_talla.producto else 0,
+        sobreprecio=int(getattr(producto_talla.producto, 'sobreprecio', 0) or 0) if producto_talla.producto else 0,
+        precio=int(producto_talla.producto.precioventa or 0) if producto_talla.producto else 0,
+        concepto='VENTA_PUBLICO',
+        tipo_movimiento='EGRESO',
+        estado='COMPLETADO',
+        responsable=str(responsable) if responsable else 'Sistema',
+        observaciones=observaciones or '',
+        referencia_externa=referencia_final or '',
+        fecha=timezone.localdate(),
+        hora=timezone.localtime().time(),
     )
+
+    # Actualizar stock legacy de forma atomica (evita race conditions)
+    Producto_Talla.objects.filter(id=producto_talla.id).update(stock=F('stock') - cantidad_requerida)
+    producto_talla.refresh_from_db(fields=['stock'])
 
     _fifo_logger.info("FIFO consumido: SKU %s, Costo total: %s, Lotes: %s", producto_talla.sku, costo_total_consumido, len(lotes_utilizados))
 
