@@ -336,7 +336,11 @@ class Dte_Detalle_Pago(models.Model):
     voucher =  models.CharField(max_length=50,null=True)
     monto = models.IntegerField()
     notas = models.TextField(blank=True, null=True)
-    
+    fecha_cheque = models.DateField(
+        null=True, blank=True,
+        help_text="Fecha del cheque (para depósito). Aplica solo cuando metodo_pago='Cheque'."
+    )
+
     def __str__(self):
         return f"Dte_Detalle_Pago {self.metodo_pago} - {self.monto}"
 

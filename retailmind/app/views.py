@@ -9081,6 +9081,187 @@ def cargarDteCompra(request):
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
+def facturasPendientesPorMes(request):
+    """
+    Devuelve facturas (DTE) pendientes de pago agrupadas por mes para el año/filtro
+    seleccionado, con totales y detalle por documento.
+    Soporta exportación CSV con ?formato=csv.
+    """
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+
+    try:
+        empresa_id = request.session.get('idEmpresaActual')
+        if not empresa_id:
+            return JsonResponse({'success': False, 'error': 'Empresa no identificada en sesión'}, status=403)
+
+        try:
+            anio = int(request.GET.get('anio') or datetime.now().year)
+        except (TypeError, ValueError):
+            anio = datetime.now().year
+        tipo_fecha = request.GET.get('tipo_fecha', 'emision')
+        tipo_documento = request.GET.get('tipo_documento', '').strip()
+        formato = request.GET.get('formato', 'json').lower()
+
+        qs = Dte.objects.filter(
+            tipo_transaccion='COMPRA',
+            receptor_id=empresa_id,
+        ).exclude(
+            estado_pago__in=['Pagado', 'PAGADO']
+        ).exclude(
+            estado_dte__in=['RECHAZADO', 'Rechazado']
+        )
+
+        # Excluir descartados/soft-deleted si el modelo lo soporta
+        try:
+            qs = qs.filter(descartado=False)
+        except Exception:
+            pass
+
+        # Filtro por tipo documento (default: solo facturas si no se pasa)
+        if tipo_documento:
+            qs = qs.filter(tipo_documento=tipo_documento)
+
+        # Campo de fecha a usar para agrupar
+        if tipo_fecha == 'recepcion':
+            fecha_field = 'fecha_recepcion'
+        else:
+            fecha_field = 'fecha_emision'
+
+        # Filtrar por año
+        qs = qs.filter(**{f'{fecha_field}__year': anio})
+
+        qs = qs.select_related('emisor').only(
+            'id', 'numero_documento', 'tipo_documento',
+            'fecha_emision', 'fecha_recepcion',
+            'monto_con_iva', 'estado_dte', 'estado_pago',
+            'dias_credito',
+            'emisor__id', 'emisor__nombre',
+        )
+
+        # Pre-calcular abonos por DTE en una sola consulta
+        abonos_map = dict(
+            Dte_Detalle_Pago.objects
+                .filter(dte__in=qs)
+                .exclude(metodo_pago='Nota de Crédito')
+                .values_list('dte_id')
+                .annotate(total=Sum('monto'))
+                .values_list('dte_id', 'total')
+        )
+
+        # NCs aplicadas (Nota de Crédito como medio de pago) reducen el saldo
+        ncs_map = dict(
+            Dte_Detalle_Pago.objects
+                .filter(dte__in=qs, metodo_pago='Nota de Crédito')
+                .values_list('dte_id')
+                .annotate(total=Sum('monto'))
+                .values_list('dte_id', 'total')
+        )
+
+        hoy = datetime.now().date()
+
+        # Agrupar por mes
+        meses = {}
+        total_monto = 0
+        total_cantidad = 0
+        total_vencidas = 0
+        total_proximas = 0
+        detalle_para_csv = []
+
+        for dte in qs:
+            fecha_ref = getattr(dte, fecha_field, None)
+            if not fecha_ref:
+                continue
+            mes = fecha_ref.month
+
+            monto = float(dte.monto_con_iva or 0)
+            abonado = float(abonos_map.get(dte.id, 0) or 0)
+            ncs = float(ncs_map.get(dte.id, 0) or 0)
+            saldo = max(monto - abonado - ncs, 0)
+            if saldo <= 0:
+                continue
+
+            # Días restantes según fecha de emisión + días de crédito
+            dias_restantes = None
+            if dte.fecha_emision and dte.dias_credito is not None:
+                vencimiento = dte.fecha_emision + timedelta(days=int(dte.dias_credito))
+                dias_restantes = (vencimiento - hoy).days
+
+            es_vencida = dias_restantes is not None and dias_restantes <= 0
+            es_proxima = dias_restantes is not None and 0 < dias_restantes <= 7
+
+            bucket = meses.setdefault(mes, {
+                'mes': mes,
+                'cantidad': 0,
+                'monto_pendiente': 0,
+                'vencidas': 0,
+                'monto_vencido': 0,
+                'facturas': [],
+            })
+            bucket['cantidad'] += 1
+            bucket['monto_pendiente'] += saldo
+            if es_vencida:
+                bucket['vencidas'] += 1
+                bucket['monto_vencido'] += saldo
+                total_vencidas += 1
+            if es_proxima:
+                total_proximas += 1
+
+            factura_dict = {
+                'id': dte.id,
+                'proveedor': dte.emisor.nombre if dte.emisor else '',
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.tipo_documento,
+                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
+                'monto_con_iva': monto,
+                'abonado': abonado + ncs,
+                'saldo': saldo,
+                'dias_restantes': dias_restantes,
+            }
+            bucket['facturas'].append(factura_dict)
+            detalle_para_csv.append((mes, factura_dict))
+
+            total_monto += saldo
+            total_cantidad += 1
+
+        meses_list = sorted(meses.values(), key=lambda x: x['mes'])
+
+        if formato == 'csv':
+            response = HttpResponse(content_type='text/csv; charset=utf-8')
+            response['Content-Disposition'] = (
+                f'attachment; filename="facturas_pendientes_{anio}_{tipo_fecha}.csv"'
+            )
+            response.write('﻿')  # BOM para Excel
+            writer = csv.writer(response, delimiter=';')
+            writer.writerow([
+                'Mes', 'Año', 'Proveedor', 'N° Documento', 'Tipo',
+                'Fecha Emisión', 'Monto c/IVA', 'Abonado', 'Saldo', 'Días Restantes'
+            ])
+            mes_nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+            for mes_num, f in detalle_para_csv:
+                writer.writerow([
+                    mes_nombres[mes_num - 1], anio, f['proveedor'], f['numero_documento'],
+                    f['tipo_documento'], f['fecha_emision'],
+                    int(f['monto_con_iva']), int(f['abonado']), int(f['saldo']),
+                    f['dias_restantes'] if f['dias_restantes'] is not None else '',
+                ])
+            return response
+
+        return JsonResponse({
+            'success': True,
+            'anio': anio,
+            'tipo_fecha': tipo_fecha,
+            'tipo_documento': tipo_documento,
+            'meses': meses_list,
+            'total_monto': total_monto,
+            'total_cantidad': total_cantidad,
+            'total_vencidas': total_vencidas,
+            'total_proximas': total_proximas,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 def registrarPagoDTE(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
@@ -9091,9 +9272,20 @@ def registrarPagoDTE(request):
         metodo_pago = data.get('metodo_pago')
         voucher = data.get('voucher', '').strip()
         monto = int(data.get('monto'))
+        fecha_cheque_raw = data.get('fecha_cheque')
 
         if not dte_id or not metodo_pago or monto <= 0:
             return JsonResponse({'error': 'Datos incompletos o inválidos'}, status=400)
+
+        # Para cheque, exigir fecha
+        fecha_cheque = None
+        if metodo_pago == 'Cheque':
+            if not fecha_cheque_raw:
+                return JsonResponse({'error': 'Para pagos con Cheque debes indicar la fecha del cheque.'}, status=400)
+            try:
+                fecha_cheque = datetime.strptime(fecha_cheque_raw, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                return JsonResponse({'error': 'Fecha del cheque inválida.'}, status=400)
 
         dte = Dte.objects.get(pk=dte_id)
 
@@ -9136,7 +9328,8 @@ def registrarPagoDTE(request):
             dte=dte,
             metodo_pago=metodo_pago,
             voucher=voucher if voucher else None,
-            monto=monto
+            monto=monto,
+            fecha_cheque=fecha_cheque,
         )
 
         # Actualizar estado de pago
@@ -9180,7 +9373,7 @@ def pagosDTE(request, dte_id):
         ).exclude(
             metodo_pago='Nota de Crédito'
         ).values(
-            'id', 'metodo_pago', 'voucher', 'monto'
+            'id', 'metodo_pago', 'voucher', 'monto', 'fecha_cheque'
         )
         return JsonResponse(list(pagos), safe=False)
 
@@ -9232,7 +9425,8 @@ def detallePago(request, pago_id):
                 'dte_id': pago.dte.id,
                 'metodo_pago': pago.metodo_pago,
                 'voucher': pago.voucher,
-                'monto': pago.monto
+                'monto': pago.monto,
+                'fecha_cheque': pago.fecha_cheque.isoformat() if pago.fecha_cheque else None,
             })
 
         except Dte_Detalle_Pago.DoesNotExist:
@@ -9269,6 +9463,19 @@ def editarPago(request, pago_id):
             pago.metodo_pago = data.get('metodo_pago', pago.metodo_pago)
             pago.voucher = nuevo_voucher if nuevo_voucher else None
             nuevo_monto = int(data.get('monto', pago.monto))
+
+            # Fecha de cheque: requerida si el método (nuevo o vigente) es Cheque
+            if pago.metodo_pago == 'Cheque':
+                fecha_cheque_raw = data.get('fecha_cheque')
+                if fecha_cheque_raw:
+                    try:
+                        pago.fecha_cheque = datetime.strptime(fecha_cheque_raw, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        return JsonResponse({'error': 'Fecha del cheque inválida.'}, status=400)
+                elif not pago.fecha_cheque:
+                    return JsonResponse({'error': 'Para pagos con Cheque debes indicar la fecha del cheque.'}, status=400)
+            else:
+                pago.fecha_cheque = None
             
             # Validar que el total de pagos no exceda el monto del DTE
             pagos_otros = Dte_Detalle_Pago.objects.filter(dte=dte).exclude(id=pago_id).aggregate(
@@ -9606,72 +9813,64 @@ def obtener_documentos_base(request):
 
 def obtener_ncs_disponibles(request):
     """
-    Obtiene notas de crédito que no están asociadas a ninguna factura
+    Obtiene notas de crédito que no están asociadas a ninguna factura.
+    Optimizado: 1 sola consulta para NCs + 1 consulta para vouchers usados.
     """
-    if request.method == 'GET':
-        try:
-            empresa_id = request.session.get('idEmpresaActual')
-            if not empresa_id:
-                return JsonResponse({'error': 'Empresa no identificada en sesión'}, status=403)
-            
-            proveedor_id = request.GET.get('proveedor', '')
-            busqueda = request.GET.get('busqueda', '')
-            
-            print(f"🔍 DEBUG - Buscando NCs con:")
-            print(f"   - Empresa ID: {empresa_id}")
-            print(f"   - Proveedor ID: {proveedor_id}")
-            print(f"   - Búsqueda: {busqueda}")
-            
-            # Obtener todas las NCs primero
-            ncs_query = Dte.objects.filter(
-                tipo_transaccion='COMPRA',
-                receptor_id=empresa_id,
-                tipo_documento='NOTA DE CREDITO'
-            ).select_related('emisor')
-            
-            print(f"📊 Total NCs encontradas: {ncs_query.count()}")
-            
-            # Aplicar filtros ANTES de verificar asociación
-            if proveedor_id:
-                ncs_query = ncs_query.filter(emisor_id=proveedor_id)
-                print(f"📊 Después de filtro proveedor: {ncs_query.count()}")
-            
-            if busqueda:
-                ncs_query = ncs_query.filter(numero_documento__icontains=busqueda)
-                print(f"📊 Después de filtro búsqueda: {ncs_query.count()}")
-            
-            # Ahora filtrar las que no están asociadas
-            ncs_disponibles = []
-            for nc in ncs_query:
-                # Verificar si esta NC ya está siendo usada como pago
-                ya_usada = Dte_Detalle_Pago.objects.filter(
-                    voucher=nc.numero_documento,
-                    metodo_pago='Nota de Crédito'
-                ).exists()
-                
-                print(f"   NC #{nc.numero_documento}: {'YA USADA' if ya_usada else 'DISPONIBLE'}")
-                
-                if not ya_usada:
-                    ncs_disponibles.append(nc)
-            
-            print(f"✅ NCs disponibles finales: {len(ncs_disponibles)}")
-            
-            resultado = []
-            for nc in ncs_disponibles:
-                resultado.append({
-                    'id': nc.id,
-                    'numero_documento': nc.numero_documento,
-                    'proveedor': nc.emisor.nombre if nc.emisor else 'N/A',
-                    'fecha_emision': nc.fecha_emision.strftime('%Y-%m-%d'),
-                    'monto_con_iva': float(nc.monto_con_iva),
-                    'estado': nc.estado_dte
-                })
-            
-            return JsonResponse({'success': True, 'ncs': resultado})
-        except Exception as e:
-            print(f"❌ Error en obtener_ncs_disponibles: {str(e)}")
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
-    return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+
+    try:
+        empresa_id = request.session.get('idEmpresaActual')
+        if not empresa_id:
+            return JsonResponse({'error': 'Empresa no identificada en sesión'}, status=403)
+
+        proveedor_id = request.GET.get('proveedor', '')
+        busqueda = (request.GET.get('busqueda', '') or '').strip()
+        limit = int(request.GET.get('limit', 200))  # cap por defecto
+
+        ncs_query = Dte.objects.filter(
+            tipo_transaccion='COMPRA',
+            receptor_id=empresa_id,
+            tipo_documento='NOTA DE CREDITO',
+        )
+
+        if proveedor_id:
+            ncs_query = ncs_query.filter(emisor_id=proveedor_id)
+
+        if busqueda:
+            ncs_query = ncs_query.filter(numero_documento__icontains=busqueda)
+
+        # Excluir NCs que ya están usadas como medio de pago (Nota de Crédito) en una sola consulta.
+        # Filtramos por el subconjunto correspondiente a esta empresa para reducir el universo de vouchers.
+        nc_numeros_ya_usados = set(
+            Dte_Detalle_Pago.objects.filter(
+                metodo_pago='Nota de Crédito',
+                dte__receptor_id=empresa_id,
+            ).exclude(voucher__isnull=True)
+             .values_list('voucher', flat=True)
+        )
+
+        ncs_query = ncs_query.exclude(numero_documento__in=nc_numeros_ya_usados) \
+                             .select_related('emisor') \
+                             .only(
+                                 'id', 'numero_documento', 'fecha_emision',
+                                 'monto_con_iva', 'estado_dte',
+                                 'emisor__id', 'emisor__nombre',
+                             ) \
+                             .order_by('-fecha_emision')[:limit]
+
+        resultado = [{
+            'id': nc.id,
+            'numero_documento': nc.numero_documento,
+            'proveedor': nc.emisor.nombre if nc.emisor else 'N/A',
+            'fecha_emision': nc.fecha_emision.strftime('%Y-%m-%d') if nc.fecha_emision else '',
+            'monto_con_iva': float(nc.monto_con_iva or 0),
+            'estado': nc.estado_dte,
+        } for nc in ncs_query]
+
+        return JsonResponse({'success': True, 'ncs': resultado})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 def obtener_facturas_para_nc(request):
     """

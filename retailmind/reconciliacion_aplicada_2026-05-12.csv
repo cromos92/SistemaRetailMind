@@ -1,0 +1,33 @@
+ticket_id,correlativo,sku,producto_talla_id,sucursal_id,sucursal_alias,cantidad,accion,observacion
+4517,10380,4739692,212863,2,PAO1,1,CREADO,Movimiento de EGRESO creado
+4517,10380,4739648,209689,2,PAO1,1,CREADO,Movimiento de EGRESO creado
+4515,113256,4802130,27135,6,NICK1,1,CREADO,Movimiento de EGRESO creado
+4515,113256,4812815,362969,6,NICK1,1,CREADO,Movimiento de EGRESO creado
+4510,114069,4748351,496130,4,PAO3,1,CREADO,Movimiento de EGRESO creado
+4512,114071,4801509,176997,4,PAO3,1,CREADO,Movimiento de EGRESO creado
+4512,114071,4790546,415513,4,PAO3,1,CREADO,Movimiento de EGRESO creado
+4508,134417,4818359,391579,3,PAO2,1,CREADO,Movimiento de EGRESO creado
+4509,134418,4823565,233558,3,PAO2,1,CREADO,Movimiento de EGRESO creado
+4509,134418,4801153,253168,3,PAO2,1,CREADO,Movimiento de EGRESO creado
+4509,134418,4818419,89585,3,PAO2,1,CREADO,Movimiento de EGRESO creado
+4509,134418,4790652,362949,3,PAO2,1,CREADO,Movimiento de EGRESO creado
+4520,134419,4810747,492079,3,PAO2,1,CREADO,Movimiento de EGRESO creado
+4525,134422,4696343,225256,3,PAO2,2,CREADO,Movimiento de EGRESO creado
+4518,180726,4818984,143287,7,NICK2,1,CREADO,Movimiento de EGRESO creado
+4518,180726,4812815,362970,7,NICK2,1,CREADO,Movimiento de EGRESO creado
+,,4739692,212863,2,PAO1,1,AJUSTE_STOCK,stock 1 -> 0 (resta 1 unid vendidas por bug POS)
+,,4739648,209689,2,PAO1,1,AJUSTE_STOCK,stock 1 -> 0 (resta 1 unid vendidas por bug POS)
+,,4802130,27135,6,NICK1,1,AJUSTE_STOCK,stock 2 -> 1 (resta 1 unid vendidas por bug POS)
+,,4812815,362969,6,NICK1,1,AJUSTE_STOCK,stock 833 -> 832 (resta 1 unid vendidas por bug POS)
+,,4748351,496130,4,PAO3,1,AJUSTE_STOCK,stock 2 -> 1 (resta 1 unid vendidas por bug POS)
+,,4801509,176997,4,PAO3,1,AJUSTE_STOCK,stock 2 -> 1 (resta 1 unid vendidas por bug POS)
+,,4790546,415513,4,PAO3,1,AJUSTE_STOCK,stock 872 -> 871 (resta 1 unid vendidas por bug POS)
+,,4818359,391579,3,PAO2,1,AJUSTE_STOCK,stock 1 -> 0 (resta 1 unid vendidas por bug POS)
+,,4823565,233558,3,PAO2,1,AJUSTE_STOCK,stock 1 -> 0 (resta 1 unid vendidas por bug POS)
+,,4801153,253168,3,PAO2,1,AJUSTE_STOCK_CLAMP,"stock 0 -> 0 (resta 1 unid; calculado -1, CLAMP a 0)"
+,,4818419,89585,3,PAO2,1,AJUSTE_STOCK,stock 1 -> 0 (resta 1 unid vendidas por bug POS)
+,,4790652,362949,3,PAO2,1,AJUSTE_STOCK,stock 423 -> 422 (resta 1 unid vendidas por bug POS)
+,,4810747,492079,3,PAO2,1,AJUSTE_STOCK_CLAMP,"stock 0 -> 0 (resta 1 unid; calculado -1, CLAMP a 0)"
+,,4696343,225256,3,PAO2,2,AJUSTE_STOCK,stock 3 -> 1 (resta 2 unid vendidas por bug POS)
+,,4818984,143287,7,NICK2,1,AJUSTE_STOCK,stock 3 -> 2 (resta 1 unid vendidas por bug POS)
+,,4812815,362970,7,NICK2,1,AJUSTE_STOCK,stock 672 -> 671 (resta 1 unid vendidas por bug POS)

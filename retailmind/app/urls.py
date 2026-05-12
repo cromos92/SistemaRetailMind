@@ -430,6 +430,7 @@ urlpatterns = [
     path('empresas_proveedoras/', views_modulo_compras.empresas_proveedoras, name='empresas_proveedoras'),
     path('empresas_receptoras/', views.empresas_receptoras, name='empresas_receptoras'),
      path('cargarDteCompra/', views.cargarDteCompra, name='cargarDteCompra'),
+     path('facturasPendientesPorMes/', views.facturasPendientesPorMes, name='facturasPendientesPorMes'),
      path('registrarPagoDTE/', views.registrarPagoDTE, name='registrarPagoDTE'),
      path('obtenerDetallePago/<int:dte_id>/', views.obtenerDetallePago, name='obtenerDetallePago'),
      path('pagosDTE/<int:dte_id>/', views.pagosDTE, name='pagosDTE'),

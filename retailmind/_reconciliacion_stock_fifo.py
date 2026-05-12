@@ -320,48 +320,53 @@ def aplicar_correccion(tickets_data, skus_afectados):
         print(f"Tickets procesados OK:  {tickets_procesados}")
         print(f"Tickets fallidos:       {tickets_fallidos}")
 
-        print(f"\n--- Ajustando Producto_Talla.stock = SUM(lotes) en bulk ---")
-        lotes_actuales = dict(
-            LoteProducto.objects
-            .filter(producto_talla_id__in=skus_afectados.keys(), activo=True)
-            .values('producto_talla_id')
-            .annotate(total=Sum('cantidad_disponible'))
-            .values_list('producto_talla_id', 'total')
-        )
+        print(f"\n--- Ajustando Producto_Talla.stock = stock_antes - unidades_vendidas_bug ---")
+        # Para cada SKU, sumar las unidades exactas vendidas en los tickets del bug POS.
+        # Esto baja el stock SOLO por las ventas reales del periodo afectado,
+        # no toca descuadres historicos preexistentes.
+        unidades_por_sku = {}
+        for td in tickets_data:
+            for p in td['productos']:
+                pt_id = p['producto_talla_id']
+                unidades_por_sku[pt_id] = unidades_por_sku.get(pt_id, 0) + p['cantidad']
 
         ajustes_stock = 0
-        omitidos_aumentar = 0
+        clampeados = 0
         ajustes_batch = []
         for pt_id, pt in skus_afectados.items():
-            stock_real = lotes_actuales.get(pt_id, 0) or 0
+            unid_vendidas = unidades_por_sku.get(pt_id, 0)
+            if unid_vendidas <= 0:
+                continue
+
             stock_antes = pt.stock or 0
+            stock_calculado = stock_antes - unid_vendidas
+            stock_nuevo = max(0, stock_calculado)
             sucursal = pt.producto.sucursal if pt.producto else None
             suc_id = sucursal.id if sucursal else ''
             suc_alias = (sucursal.alias if sucursal else '') or ''
 
-            if stock_antes == stock_real:
-                continue
-
-            if stock_real < stock_antes:
-                pt.stock = stock_real
-                ajustes_batch.append(pt)
-                w.writerow(['', '', pt.sku, pt_id, suc_id, suc_alias, '',
-                            'AJUSTE_STOCK',
-                            f'stock {stock_antes} -> {stock_real} (DISMINUIR - bug POS)'])
-                ajustes_stock += 1
+            pt.stock = stock_nuevo
+            ajustes_batch.append(pt)
+            if stock_calculado < 0:
+                clampeados += 1
+                obs = (f'stock {stock_antes} -> 0 (resta {unid_vendidas} unid; '
+                       f'calculado {stock_calculado}, CLAMP a 0)')
+                accion = 'AJUSTE_STOCK_CLAMP'
             else:
-                omitidos_aumentar += 1
-                w.writerow(['', '', pt.sku, pt_id, suc_id, suc_alias, '',
-                            'OMITIDO_AUMENTAR',
-                            f'stock {stock_antes} < lotes {stock_real}. '
-                            f'NO se ajusta automaticamente (revisar manualmente).'])
+                obs = (f'stock {stock_antes} -> {stock_nuevo} '
+                       f'(resta {unid_vendidas} unid vendidas por bug POS)')
+                accion = 'AJUSTE_STOCK'
+            w.writerow(['', '', pt.sku, pt_id, suc_id, suc_alias, unid_vendidas,
+                        accion, obs])
+            ajustes_stock += 1
 
         if ajustes_batch:
             with transaction.atomic():
                 Producto_Talla.objects.bulk_update(ajustes_batch, ['stock'], batch_size=500)
 
-        print(f"SKUs con stock ajustado (DISMINUIR): {ajustes_stock}")
-        print(f"SKUs OMITIDOS (caso AUMENTAR, revisar manual): {omitidos_aumentar}")
+        print(f"SKUs con stock ajustado: {ajustes_stock}")
+        if clampeados:
+            print(f"  De los cuales {clampeados} fueron CLAMP a 0 (stock calculado < 0).")
 
     print(f"\nCSV exportado: {csv_path}")
 

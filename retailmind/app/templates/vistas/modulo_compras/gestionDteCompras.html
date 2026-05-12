@@ -817,6 +817,109 @@
         border-color: #6c757d;
     }
 
+    /* ==================== ESTILOS PARA COLUMNA PAGO ==================== */
+    .pago-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        line-height: 1.1;
+    }
+    .pago-badge i { font-size: 0.85rem; }
+    .pago-badge--pagado    { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+    .pago-badge--parcial   { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+    .pago-badge--pendiente { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+    .pago-badge--vencido   { background: #fee2e2; color: #991b1b; border-color: #fca5a5; animation: pulseVencido 2s infinite; }
+    .pago-badge--default   { background: #e5e7eb; color: #374151; border-color: #d1d5db; }
+    @keyframes pulseVencido {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.35); }
+        50%      { box-shadow: 0 0 0 5px rgba(220, 38, 38, 0); }
+    }
+
+    /* ==================== DROPDOWN DE ACCIONES ==================== */
+    .acciones-dropdown .btn-acciones {
+        background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+        border: 1px solid #d1d5db;
+        color: #374151;
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 999px;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .acciones-dropdown .btn-acciones:hover,
+    .acciones-dropdown .btn-acciones:focus,
+    .acciones-dropdown.show .btn-acciones {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        border-color: transparent;
+        box-shadow: 0 3px 8px rgba(64, 81, 137, 0.25);
+    }
+    .acciones-dropdown .dropdown-menu {
+        min-width: 220px;
+        padding: 6px 0;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.10), 0 4px 10px rgba(0,0,0,0.05);
+        font-size: 0.82rem;
+    }
+    .acciones-dropdown .dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 14px;
+        color: #374151;
+        transition: background 0.15s;
+    }
+    .acciones-dropdown .dropdown-item:hover,
+    .acciones-dropdown .dropdown-item:focus {
+        background: #f3f4f6;
+    }
+    .acciones-dropdown .dropdown-item.disabled,
+    .acciones-dropdown .dropdown-item:disabled {
+        color: #9ca3af !important;
+        background: transparent;
+        cursor: not-allowed;
+    }
+    .acciones-dropdown .dropdown-item.disabled i {
+        opacity: 0.5;
+    }
+    .acciones-dropdown .dropdown-item i {
+        width: 18px;
+        text-align: center;
+        font-size: 0.95rem;
+    }
+    .acciones-dropdown .dropdown-item.action-pagar i        { color: #0ab39c; }
+    .acciones-dropdown .dropdown-item.action-ver-pagos i    { color: #299cdb; }
+    .acciones-dropdown .dropdown-item.action-editar i       { color: #f59e0b; }
+    .acciones-dropdown .dropdown-item.action-anexar i       { color: #6366f1; }
+    .acciones-dropdown .dropdown-item.action-incidencias i  { color: #ef4444; }
+    .acciones-dropdown .dropdown-item.action-compras i      { color: #405189; }
+    .acciones-dropdown .dropdown-item.action-trazabilidad i { color: #64748b; }
+    .acciones-dropdown .dropdown-item.action-eliminar       { color: #b91c1c; }
+    .acciones-dropdown .dropdown-item.action-eliminar i     { color: #b91c1c; }
+    .acciones-dropdown .dropdown-item.action-eliminar:hover { background: #fee2e2; }
+    .acciones-dropdown .dropdown-item .badge-incidencias {
+        margin-left: auto;
+        background: #ef4444;
+        color: #fff;
+        font-size: 0.68rem;
+        padding: 2px 7px;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+    /* Evita clipping del dropdown dentro del scrollBody de DataTables */
+    .dataTables_scrollBody { overflow-y: visible !important; }
+
     @media (max-width: 576px) {
         .dte-compras-header { flex-direction: column; gap: 0.5rem; }
         .dte-compras-header .btn { width: 100%; }
@@ -908,6 +1011,9 @@
                     <button class="btn btn-light" data-bs-toggle="modal"
                         data-bs-target="#modalGestionProveedores">
                         <i class="bi bi-building me-1"></i>Proveedores
+                    </button>
+                    <button class="btn btn-light" type="button" onclick="abrirModalPendientesMes()" data-bs-toggle="tooltip" title="Facturas pendientes de pago agrupadas por mes">
+                        <i class="bi bi-calendar2-week me-1"></i>Pendientes/mes
                     </button>
                     <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#modalNuevoDTE">
                         <i class="bi bi-plus-circle me-1"></i>Nuevo DTE
@@ -1475,6 +1581,23 @@
                         </div>
                     </div>
 
+                    <!-- Datos específicos del cheque (visibles solo cuando metodo=Cheque) -->
+                    <div id="bloqueCheque" class="row g-3 mb-3" style="display:none;">
+                        <div class="col-md-6">
+                            <label for="fechaCheque" class="form-label">
+                                Fecha del cheque <span class="text-danger">*</span>
+                            </label>
+                            <input type="date" class="form-control" id="fechaCheque">
+                            <div class="form-text">Fecha en que debe depositarse el cheque.</div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div id="recordatorioCheque" class="alert alert-warning py-2 px-3 mb-0 w-100" style="font-size:0.82rem; display:none;">
+                                <i class="bi bi-bell-fill me-1"></i>
+                                <span id="textoRecordatorioCheque"></span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="rm-summary-row">
                         <span class="rm-summary-label">Monto original del DTE</span>
                         <span class="rm-summary-value" id="inputMontoOriginal"></span>
@@ -1508,6 +1631,108 @@
                     <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Registrar Pago</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Facturas Pendientes por Mes -->
+<div class="modal fade rm-modal" id="modalPendientesMes" tabindex="-1" aria-labelledby="modalPendientesMesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content rm-accent--blue">
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--blue">
+                        <i class="bi bi-calendar2-week"></i>
+                    </div>
+                    <div>
+                        <h5 class="rm-modal-title" id="modalPendientesMesLabel">Facturas pendientes por mes</h5>
+                        <p class="rm-modal-subtitle">Resumen de pagos pendientes agrupados por mes de emisión</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="rm-modal-body rm-modal-body--white" style="padding: 16px 24px;">
+                <!-- Filtros -->
+                <div class="row g-2 mb-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Año</label>
+                        <select id="filtroPendientesAnio" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Tipo de fecha</label>
+                        <select id="filtroPendientesTipoFecha" class="form-select form-select-sm">
+                            <option value="emision" selected>Emisión</option>
+                            <option value="recepcion">Recepción</option>
+                            <option value="vencimiento">Vencimiento (estimado)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Tipo documento</label>
+                        <select id="filtroPendientesTipoDoc" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            <option value="FACTURA ELECTRONICA" selected>Factura Electrónica</option>
+                            <option value="GUIA">Guía</option>
+                            <option value="COTIZACION">Cotización</option>
+                            <option value="NOTA DE DEBITO">Nota de Débito</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <button class="btn btn-sm btn-primary me-1" onclick="cargarPendientesMes()">
+                            <i class="bi bi-arrow-clockwise"></i> Actualizar
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" onclick="exportarPendientesMes()" title="Exportar CSV">
+                            <i class="bi bi-download"></i> CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tarjetas resumen -->
+                <div class="row g-2 mb-3" id="pendientesMesResumen">
+                    <div class="col-md-3">
+                        <div class="p-2 rounded" style="background:#fef3c7; border:1px solid #fcd34d;">
+                            <small class="text-muted d-block">Total pendiente</small>
+                            <strong id="resPendientesMonto" style="color:#92400e;">$0</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-2 rounded" style="background:#dbeafe; border:1px solid #93c5fd;">
+                            <small class="text-muted d-block">N° de facturas</small>
+                            <strong id="resPendientesCantidad" style="color:#1e40af;">0</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-2 rounded" style="background:#fee2e2; border:1px solid #fca5a5;">
+                            <small class="text-muted d-block">Vencidas</small>
+                            <strong id="resPendientesVencidas" style="color:#991b1b;">0</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-2 rounded" style="background:#d1fae5; border:1px solid #6ee7b7;">
+                            <small class="text-muted d-block">Por vencer (≤7d)</small>
+                            <strong id="resPendientesProximas" style="color:#065f46;">0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla -->
+                <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead style="background:#f8fafc;">
+                            <tr>
+                                <th class="py-2">Mes</th>
+                                <th class="text-end py-2">N° Facturas</th>
+                                <th class="text-end py-2">Monto pendiente</th>
+                                <th class="text-end py-2">Vencidas</th>
+                                <th class="text-end py-2">Monto vencido</th>
+                                <th class="py-2" style="width:30px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaPendientesMesBody">
+                            <tr><td colspan="6" class="text-center text-muted py-3">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -2688,82 +2913,10 @@
                                 }
         </div>
     </td>
-   <td>
-        <span class="badge bg-${dte.estado_pago === 'Pagado' ? 'success' : 'warning'}">
-            ${dte.estado_pago || 'Pendiente'}
-        </span>
-    </td>
+   <td>${pagoBadge(dte.estado_pago, dte.dias_credito_restantes)}</td>
 
 
-  <td>
-    <div class="d-flex flex-wrap justify-content-center gap-1">
-        ${dte.tipo === 'NOTA DE CREDITO'
-                                    ? `
-                <!-- Acciones específicas para Notas de Crédito -->
-                ${!dte.nc_esta_asociada
-                                        ? `<button class="btn btn-sm btn-outline-danger" title="Eliminar NC" onclick="eliminarDTE(${dte.id || 0})">
-                        <i class="bi bi-trash" style="font-size: 1.1rem;"></i>
-                    </button>`
-                                        : '<button class="btn btn-sm btn-outline-success" title="NC asociada a Factura #' + facturaAsociadaNumero + '" disabled>' +
-                                        '<i class="bi bi-check-circle-fill" style="font-size: 1.1rem;"></i>' +
-                                        '</button>' +
-                                        '<button class="btn btn-sm btn-outline-secondary" title="No se puede eliminar - NC está asociada" disabled>' +
-                                        '<i class="bi bi-trash" style="font-size: 1.1rem;"></i>' +
-                                        '</button>'
-                                    }
-            `
-                                    : `
-                <!-- Acciones normales para otros tipos de documento -->
-                ${dte.estado === 'RECHAZADO' || (dte.incidencias_pendientes && dte.incidencias_pendientes > 0) || (dte.requiere_factura && !dte.tiene_factura_anexada)
-                                        ? `<button class="btn btn-sm btn-outline-success" title="${dte.estado === 'RECHAZADO' ? 'No disponible para DTEs rechazados' :
-                                            (dte.requiere_factura && !dte.tiene_factura_anexada) ? 'Este documento requiere tener una factura anexada antes de poder pagar' :
-                                                'Resuelve las incidencias pendientes antes de registrar pagos'
-                                        }" disabled>
-                        <i class="bi bi-cash-coin" style="font-size: 1.1rem;"></i>
-                    </button>`
-                                        : `<button class="btn btn-sm btn-outline-success" title="Pagar" onclick="abrirModalPago(${dte.id || 0}, ${dte.monto_con_iva || 0}, ${dte.incidencias_pendientes || 0}, ${dte.requiere_factura ? 'true' : 'false'}, ${dte.tiene_factura_anexada ? 'true' : 'false'})">
-                        <i class="bi bi-cash-coin" style="font-size: 1.1rem;"></i>
-                    </button>`
-                                    }
-                ${dte.estado === 'RECHAZADO'
-                                        ? `<button class="btn btn-sm btn-outline-info" title="No disponible para DTEs rechazados" disabled>
-                        <i class="bi bi-chat-left-text" style="font-size: 1.1rem;"></i>
-                    </button>`
-                                        : `<button class="btn btn-sm btn-outline-info" title="Ver pagos" onclick="verPagosDTE(${dte.id || 0})">
-                        <i class="bi bi-chat-left-text" style="font-size: 1.1rem;"></i>
-                    </button>`
-                                    }
-                ${dte.estado === 'RECHAZADO'
-                                        ? `<button class="btn btn-sm btn-outline-warning" title="No disponible para DTEs rechazados" disabled>
-                        <i class="bi bi-pencil-square" style="font-size: 1.1rem;"></i>
-                    </button>`
-                                        : `<button class="btn btn-sm btn-outline-warning" title="Editar DTE" onclick="editarDTE(${dte.id || 0})">
-                        <i class="bi bi-pencil-square" style="font-size: 1.1rem;"></i>
-                    </button>`
-                                    }
-                <button class="btn btn-sm btn-outline-secondary" title="Eliminar DTE" onclick="eliminarDTE(${dte.id || 0})">
-                    <i class="bi bi-trash" style="font-size: 1.1rem;"></i>
-                </button>
-            `
-                                }
-        ${dte.tipo === 'FACTURA ELECTRONICA'
-                                    ? `<button class="btn btn-sm btn-outline-info" title="Anexar NC a Factura" onclick="abrirModalAnexarNCaFactura(${dte.id || 0})">
-                <i class="bi bi-link-45deg" style="font-size: 1.1rem;"></i>
-            </button>`
-                                    : ''
-                                }
-        <button class="btn btn-sm btn-outline-${dte.incidencias_pendientes > 0 ? 'danger' : 'primary'}" style="position: relative;" title="Gestionar Incidencias" onclick="abrirModalIncidencias(${dte.id || 0})">
-            <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.1rem;"></i>
-            ${dte.incidencias_count > 0 ? `<span class="badge bg-danger" style="font-size: 0.65rem; position: absolute; top: -5px; right: -5px;">${dte.incidencias_count}</span>` : ''}
-        </button>
-        <a class="btn btn-sm btn-outline-primary" href="/app/verGestionCompras/?buscar=${encodeURIComponent(dte.nombre || '')}" title="Ver compras de ${dte.nombre || 'este proveedor'}">
-            <i class="bi bi-cart" style="font-size: 1.1rem;"></i>
-        </a>
-        <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${dte.id || 0}" title="Ver trazabilidad (compras origen, NC hijos, movimientos)">
-            <i class="bi bi-diagram-3" style="font-size: 1.1rem;"></i>
-        </button>
-    </div>
-</td>
+  <td>${accionesDropdownHtml(dte, facturaAsociadaNumero)}</td>
 
 </tr>`;
                             tbody.append(fila);
@@ -2813,6 +2966,24 @@
                             console.warn('DataTables no está disponible, usando tabla básica');
                             $('#tablaDTE').addClass('table-striped table-hover');
                         }
+                    }
+
+                    // Inicializar dropdowns de acciones con Popper en modo fixed
+                    // para que el menú no quede recortado por el scrollBody de DataTables
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+                        $('#tablaDTE .acciones-dropdown [data-bs-toggle="dropdown"]').each(function () {
+                            bootstrap.Dropdown.getOrCreateInstance(this, {
+                                popperConfig: function (defaultConfig) {
+                                    return Object.assign({}, defaultConfig, {
+                                        strategy: 'fixed',
+                                        modifiers: (defaultConfig.modifiers || []).concat([
+                                            { name: 'preventOverflow', options: { boundary: 'viewport' } },
+                                            { name: 'flip', options: { boundary: 'viewport' } }
+                                        ])
+                                    });
+                                }
+                            });
+                        });
                     }
 
                     hideGlobalLoader();
@@ -3029,9 +3200,27 @@
                     tbody.append('<tr><td colspan="4" class="text-center">Sin pagos registrados.</td></tr>');
                 } else {
                     data.forEach(pago => {
+                        // Info adicional para cheque: fecha de depósito
+                        let infoCheque = '';
+                        if (pago.metodo_pago === 'Cheque' && pago.fecha_cheque) {
+                            const fc = new Date(pago.fecha_cheque + 'T00:00:00');
+                            const hoy = new Date(); hoy.setHours(0,0,0,0);
+                            const dias = Math.round((fc - hoy) / 86400000);
+                            let cls = 'bg-info';
+                            let icon = 'bi-calendar-event';
+                            if (dias < 0) { cls = 'bg-danger'; icon = 'bi-exclamation-octagon-fill'; }
+                            else if (dias <= 3) { cls = 'bg-warning text-dark'; icon = 'bi-bell-fill'; }
+                            const txt = dias < 0
+                                ? `Depositar (vencido ${Math.abs(dias)}d)`
+                                : dias === 0 ? 'Depositar HOY'
+                                : `Depositar en ${dias}d`;
+                            infoCheque = `<br><span class="badge ${cls}" style="font-size:0.68rem;" title="Fecha cheque: ${fc.toLocaleDateString('es-CL')}">
+                                <i class="bi ${icon}"></i> ${txt}
+                            </span>`;
+                        }
                         const fila = `
                         <tr data-id="${pago.id}">
-                            <td>${pago.metodo_pago}</td>
+                            <td>${pago.metodo_pago}${infoCheque}</td>
                             <td>${pago.voucher ?? '-'}</td>
                             <td>$${parseFloat(pago.monto).toLocaleString()}</td>
                             <td>
@@ -3081,6 +3270,145 @@
 
     function pagoColor(pago) {
         return pago === 'Pagado' ? 'success' : pago === 'Pendiente' ? 'warning text-dark' : 'secondary';
+    }
+
+    // Render del badge de pago según estado (case-insensitive) + vencimiento
+    function pagoBadge(estadoPago, diasRestantes) {
+        const estado = (estadoPago || 'Pendiente').toString().trim();
+        const key = estado.toUpperCase();
+        const dias = parseInt(diasRestantes, 10);
+
+        // Si está pendiente y los días de crédito ya pasaron, marcar como vencido
+        if (key === 'PENDIENTE' && !isNaN(dias) && dias <= 0) {
+            return `<span class="pago-badge pago-badge--vencido" title="Pago vencido">
+                        <i class="bi bi-exclamation-octagon-fill"></i> Vencido
+                    </span>`;
+        }
+        if (key === 'PAGADO') {
+            return `<span class="pago-badge pago-badge--pagado" title="Pago completado">
+                        <i class="bi bi-check-circle-fill"></i> Pagado
+                    </span>`;
+        }
+        if (key === 'PARCIAL') {
+            return `<span class="pago-badge pago-badge--parcial" title="Pago parcial">
+                        <i class="bi bi-pie-chart-fill"></i> Parcial
+                    </span>`;
+        }
+        if (key === 'VENCIDO') {
+            return `<span class="pago-badge pago-badge--vencido" title="Pago vencido">
+                        <i class="bi bi-exclamation-octagon-fill"></i> Vencido
+                    </span>`;
+        }
+        if (key === 'PENDIENTE') {
+            return `<span class="pago-badge pago-badge--pendiente" title="Pago pendiente">
+                        <i class="bi bi-clock-history"></i> Pendiente
+                    </span>`;
+        }
+        return `<span class="pago-badge pago-badge--default">${estado}</span>`;
+    }
+
+    // Construye el dropdown de acciones de una fila DTE
+    function accionesDropdownHtml(dte, facturaAsociadaNumero) {
+        const id = dte.id || 0;
+        const items = [];
+        const esNC = dte.tipo === 'NOTA DE CREDITO';
+        const esFactura = dte.tipo === 'FACTURA ELECTRONICA';
+        const rechazado = dte.estado === 'RECHAZADO';
+        const tieneIncPend = !!(dte.incidencias_pendientes && dte.incidencias_pendientes > 0);
+        const necesitaFactura = dte.requiere_factura && !dte.tiene_factura_anexada;
+
+        if (esNC) {
+            if (!dte.nc_esta_asociada) {
+                items.push(`<li><a class="dropdown-item action-eliminar" href="#" onclick="eliminarDTE(${id}); return false;">
+                                <i class="bi bi-trash"></i> Eliminar NC
+                            </a></li>`);
+            } else {
+                items.push(`<li><span class="dropdown-item disabled">
+                                <i class="bi bi-check-circle-fill text-success"></i> NC asociada a Factura #${facturaAsociadaNumero}
+                            </span></li>`);
+                items.push(`<li><span class="dropdown-item disabled">
+                                <i class="bi bi-info-circle"></i> No se puede eliminar (asociada)
+                            </span></li>`);
+            }
+        } else {
+            // Pagar
+            if (rechazado || tieneIncPend || necesitaFactura) {
+                const tip = rechazado
+                    ? 'No disponible para DTEs rechazados'
+                    : necesitaFactura
+                        ? 'Requiere factura anexada antes de pagar'
+                        : 'Resuelve incidencias pendientes antes de pagar';
+                items.push(`<li><span class="dropdown-item action-pagar disabled" title="${tip}">
+                                <i class="bi bi-cash-coin"></i> Pagar
+                            </span></li>`);
+            } else {
+                items.push(`<li><a class="dropdown-item action-pagar" href="#" onclick="abrirModalPago(${id}, ${dte.monto_con_iva || 0}, ${dte.incidencias_pendientes || 0}, ${dte.requiere_factura ? 'true' : 'false'}, ${dte.tiene_factura_anexada ? 'true' : 'false'}); return false;">
+                                <i class="bi bi-cash-coin"></i> Pagar
+                            </a></li>`);
+            }
+            // Ver pagos
+            if (rechazado) {
+                items.push(`<li><span class="dropdown-item action-ver-pagos disabled" title="No disponible para DTEs rechazados">
+                                <i class="bi bi-receipt"></i> Ver pagos
+                            </span></li>`);
+            } else {
+                items.push(`<li><a class="dropdown-item action-ver-pagos" href="#" onclick="verPagosDTE(${id}); return false;">
+                                <i class="bi bi-receipt"></i> Ver pagos
+                            </a></li>`);
+            }
+            // Editar
+            if (rechazado) {
+                items.push(`<li><span class="dropdown-item action-editar disabled" title="No disponible para DTEs rechazados">
+                                <i class="bi bi-pencil-square"></i> Editar DTE
+                            </span></li>`);
+            } else {
+                items.push(`<li><a class="dropdown-item action-editar" href="#" onclick="editarDTE(${id}); return false;">
+                                <i class="bi bi-pencil-square"></i> Editar DTE
+                            </a></li>`);
+            }
+        }
+
+        // Anexar NC (sólo facturas)
+        if (esFactura) {
+            items.push(`<li><a class="dropdown-item action-anexar" href="#" onclick="abrirModalAnexarNCaFactura(${id}); return false;">
+                            <i class="bi bi-link-45deg"></i> Anexar NC a Factura
+                        </a></li>`);
+        }
+
+        // Incidencias (para todos)
+        const badgeInc = dte.incidencias_count > 0
+            ? `<span class="badge-incidencias">${dte.incidencias_count}</span>`
+            : '';
+        items.push(`<li><a class="dropdown-item action-incidencias" href="#" onclick="abrirModalIncidencias(${id}); return false;">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Gestionar incidencias ${badgeInc}
+                    </a></li>`);
+
+        // Ver compras del proveedor
+        items.push(`<li><a class="dropdown-item action-compras" href="/app/verGestionCompras/?buscar=${encodeURIComponent(dte.nombre || '')}">
+                        <i class="bi bi-cart"></i> Ver compras del proveedor
+                    </a></li>`);
+
+        // Trazabilidad
+        items.push(`<li><a class="dropdown-item action-trazabilidad btn-ver-trazabilidad" href="#" data-dte-id="${id}" onclick="return false;">
+                        <i class="bi bi-diagram-3"></i> Ver trazabilidad
+                    </a></li>`);
+
+        // Eliminar DTE (excepto NC que ya tiene el suyo)
+        if (!esNC) {
+            items.push(`<li><hr class="dropdown-divider my-1"></li>`);
+            items.push(`<li><a class="dropdown-item action-eliminar" href="#" onclick="eliminarDTE(${id}); return false;">
+                            <i class="bi bi-trash"></i> Eliminar DTE
+                        </a></li>`);
+        }
+
+        return `
+            <div class="dropdown acciones-dropdown">
+                <button class="btn btn-sm btn-acciones dropdown-toggle" type="button"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-three-dots-vertical"></i> Acciones
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">${items.join('')}</ul>
+            </div>`;
     }
     $(document).on('submit', '#formNuevoDTE', function (e) {
         e.preventDefault();
@@ -3655,6 +3983,9 @@
         $('#voucher').val('');
         $('#montoPago').val('');
         $('#pagarTodo').prop('checked', false);
+        $('#fechaCheque').val('');
+        $('#bloqueCheque').hide();
+        $('#recordatorioCheque').hide();
 
         // Reset textos y etiquetas
         $('#modalPagoLabel').text('Registrar Pago');
@@ -3692,6 +4023,20 @@
                     });
                 }
 
+                // Mostrar/ocultar bloque cheque según método
+                $('#metodoPago').off('change.cheque').on('change.cheque', function () {
+                    if ($(this).val() === 'Cheque') {
+                        $('#bloqueCheque').slideDown(150);
+                    } else {
+                        $('#bloqueCheque').slideUp(150);
+                        $('#fechaCheque').val('');
+                        $('#recordatorioCheque').hide();
+                    }
+                });
+
+                // Recordatorio dinámico según fecha del cheque
+                $('#fechaCheque').off('change.recordatorio').on('change.recordatorio', actualizarRecordatorioCheque);
+
                 const modal = new bootstrap.Modal(document.getElementById('modalPago'));
                 modal.show();
             },
@@ -3705,6 +4050,175 @@
         });
     }
 
+    // ==================== MODAL: FACTURAS PENDIENTES POR MES ====================
+    function abrirModalPendientesMes() {
+        // Poblar selector de años (5 atrás → 1 adelante)
+        const $anio = $('#filtroPendientesAnio');
+        if ($anio.find('option').length === 0) {
+            const anioActual = new Date().getFullYear();
+            for (let y = anioActual + 1; y >= anioActual - 5; y--) {
+                $anio.append(`<option value="${y}" ${y === anioActual ? 'selected' : ''}>${y}</option>`);
+            }
+        }
+        cargarPendientesMes();
+        const modal = new bootstrap.Modal(document.getElementById('modalPendientesMes'));
+        modal.show();
+    }
+
+    function cargarPendientesMes() {
+        const params = {
+            anio: $('#filtroPendientesAnio').val() || new Date().getFullYear(),
+            tipo_fecha: $('#filtroPendientesTipoFecha').val() || 'emision',
+            tipo_documento: $('#filtroPendientesTipoDoc').val() || ''
+        };
+        const $tbody = $('#tablaPendientesMesBody');
+        $tbody.html('<tr><td colspan="6" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando…</td></tr>');
+
+        $.ajax({
+            url: '/app/facturasPendientesPorMes/',
+            method: 'GET',
+            data: params,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function (resp) {
+                if (!resp.success) {
+                    $tbody.html(`<tr><td colspan="6" class="text-center text-danger py-3">${resp.error || 'Error al cargar datos'}</td></tr>`);
+                    return;
+                }
+                renderPendientesMes(resp);
+            },
+            error: function () {
+                $tbody.html('<tr><td colspan="6" class="text-center text-danger py-3">Error al cargar datos.</td></tr>');
+            }
+        });
+    }
+
+    function renderPendientesMes(resp) {
+        const meses = resp.meses || [];
+        const $tbody = $('#tablaPendientesMesBody');
+        $tbody.empty();
+
+        if (meses.length === 0) {
+            $tbody.html('<tr><td colspan="6" class="text-center text-muted py-3">Sin facturas pendientes en este período.</td></tr>');
+        } else {
+            const mesNombre = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+            meses.forEach((m, idx) => {
+                const rowId = `pendmes-${m.mes}`;
+                $tbody.append(`
+                    <tr class="pendientes-mes-row" data-row-id="${rowId}" style="cursor:pointer;">
+                        <td><strong>${mesNombre[m.mes - 1]} ${resp.anio}</strong></td>
+                        <td class="text-end">${m.cantidad.toLocaleString()}</td>
+                        <td class="text-end fw-bold" style="color:#92400e;">$${m.monto_pendiente.toLocaleString()}</td>
+                        <td class="text-end">${m.vencidas.toLocaleString()}</td>
+                        <td class="text-end" style="color:${m.monto_vencido > 0 ? '#991b1b' : '#6b7280'};">$${m.monto_vencido.toLocaleString()}</td>
+                        <td class="text-center"><i class="bi bi-chevron-down toggle-icon"></i></td>
+                    </tr>
+                    <tr class="pendientes-mes-detalle" data-row-id="${rowId}" style="display:none;">
+                        <td colspan="6" style="background:#fafafa; padding:0;">
+                            <div class="p-2">
+                                ${renderDetalleMes(m.facturas || [])}
+                            </div>
+                        </td>
+                    </tr>
+                `);
+            });
+        }
+
+        // Resumen
+        $('#resPendientesMonto').text('$' + (resp.total_monto || 0).toLocaleString());
+        $('#resPendientesCantidad').text((resp.total_cantidad || 0).toLocaleString());
+        $('#resPendientesVencidas').text((resp.total_vencidas || 0).toLocaleString());
+        $('#resPendientesProximas').text((resp.total_proximas || 0).toLocaleString());
+    }
+
+    function renderDetalleMes(facturas) {
+        if (!facturas || facturas.length === 0) {
+            return '<div class="text-center text-muted small py-2">Sin detalle.</div>';
+        }
+        let html = `<table class="table table-sm mb-0" style="font-size:0.78rem;">
+            <thead><tr>
+                <th>Proveedor</th><th>N° Doc</th><th>Tipo</th><th>F. Emisión</th>
+                <th class="text-end">Monto c/IVA</th><th class="text-end">Abonado</th>
+                <th class="text-end">Saldo</th><th>Estado</th>
+            </tr></thead><tbody>`;
+        facturas.forEach(f => {
+            const vencida = f.dias_restantes !== null && f.dias_restantes <= 0;
+            html += `<tr${vencida ? ' style="background:#fef2f2;"' : ''}>
+                <td>${f.proveedor || '-'}</td>
+                <td>${f.numero_documento || '-'}</td>
+                <td>${f.tipo_documento || '-'}</td>
+                <td>${f.fecha_emision || '-'}</td>
+                <td class="text-end">$${(f.monto_con_iva || 0).toLocaleString()}</td>
+                <td class="text-end">$${(f.abonado || 0).toLocaleString()}</td>
+                <td class="text-end fw-bold">$${(f.saldo || 0).toLocaleString()}</td>
+                <td>${
+                    vencida
+                        ? `<span class="badge bg-danger">Vencida ${Math.abs(f.dias_restantes)}d</span>`
+                        : f.dias_restantes !== null && f.dias_restantes <= 7
+                            ? `<span class="badge bg-warning text-dark">${f.dias_restantes}d</span>`
+                            : `<span class="badge bg-light text-dark">${f.dias_restantes ?? '-'}d</span>`
+                }</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        return html;
+    }
+
+    // Toggle detalle por mes
+    $(document).on('click', '.pendientes-mes-row', function () {
+        const rowId = $(this).data('row-id');
+        const $det = $(`.pendientes-mes-detalle[data-row-id="${rowId}"]`);
+        const $icon = $(this).find('.toggle-icon');
+        $det.toggle();
+        $icon.toggleClass('bi-chevron-down bi-chevron-up');
+    });
+
+    // Recargar al cambiar filtros
+    $(document).on('change', '#filtroPendientesAnio, #filtroPendientesTipoFecha, #filtroPendientesTipoDoc', function () {
+        cargarPendientesMes();
+    });
+
+    function exportarPendientesMes() {
+        const params = $.param({
+            anio: $('#filtroPendientesAnio').val() || new Date().getFullYear(),
+            tipo_fecha: $('#filtroPendientesTipoFecha').val() || 'emision',
+            tipo_documento: $('#filtroPendientesTipoDoc').val() || '',
+            formato: 'csv'
+        });
+        window.location.href = `/app/facturasPendientesPorMes/?${params}`;
+    }
+
+    // Actualiza el banner de recordatorio según la fecha del cheque
+    function actualizarRecordatorioCheque() {
+        const fechaStr = $('#fechaCheque').val();
+        const $alert = $('#recordatorioCheque');
+        const $txt = $('#textoRecordatorioCheque');
+        if (!fechaStr) { $alert.hide(); return; }
+
+        const fechaCheque = new Date(fechaStr + 'T00:00:00');
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        const diffMs = fechaCheque - hoy;
+        const dias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+        let texto = '';
+        let clase = 'alert-warning';
+        if (dias < 0) {
+            texto = `Vencido hace ${Math.abs(dias)} día${Math.abs(dias) !== 1 ? 's' : ''} — depositar cuanto antes.`;
+            clase = 'alert-danger';
+        } else if (dias === 0) {
+            texto = 'Depositar HOY.';
+            clase = 'alert-danger';
+        } else if (dias <= 3) {
+            texto = `Depositar en ${dias} día${dias !== 1 ? 's' : ''} (${fechaCheque.toLocaleDateString('es-CL')}).`;
+            clase = 'alert-warning';
+        } else {
+            texto = `Depositar el ${fechaCheque.toLocaleDateString('es-CL')} (en ${dias} días).`;
+            clase = 'alert-info';
+        }
+        $alert.removeClass('alert-warning alert-danger alert-info').addClass(clase);
+        $txt.text(texto);
+        $alert.show();
+    }
+
     $('#formPago').on('submit', function (e) {
         e.preventDefault();
 
@@ -3713,10 +4227,15 @@
         const metodo_pago = $('#metodoPago').val();
         const voucher = $('#voucher').val().trim();
         const monto = unformatMoney($('#montoPago').val());
+        const fecha_cheque = $('#fechaCheque').val() || null;
         const saldoPermitido = parseInt($('#inputSaldoPendiente').text()?.replace(/[^\d]/g, '') || 0);
 
         if (!metodo_pago || isNaN(monto) || monto <= 0) {
             return Swal.fire('Faltan datos', 'Completa todos los campos obligatorios.', 'warning');
+        }
+
+        if (metodo_pago === 'Cheque' && !fecha_cheque) {
+            return Swal.fire('Falta fecha del cheque', 'Debes indicar la fecha del cheque para saber cuándo depositarlo.', 'warning');
         }
 
         // Solo validar el saldo si NO estamos editando (ya que el backend lo valida correctamente)
@@ -3728,7 +4247,8 @@
             dte_id: dteId,
             metodo_pago,
             voucher: voucher || '',
-            monto
+            monto,
+            fecha_cheque: metodo_pago === 'Cheque' ? fecha_cheque : null
         };
 
         const url = pagoId ? `/app/editarPago/${pagoId}/` : '/app/registrarPagoDTE/';
@@ -3861,9 +4381,20 @@
 
                         $('#pagoEditId').val(pago.id);
                         $('#pagoDteId').val(pago.dte_id);
-                        $('#metodoPago').val(pago.metodo_pago);
+                        $('#metodoPago').val(pago.metodo_pago).trigger('change');
                         $('#voucher').val(pago.voucher || '');
                         setMoneyVal('#montoPago', pago.monto);
+
+                        // Pre-cargar fecha del cheque si aplica
+                        if (pago.metodo_pago === 'Cheque') {
+                            $('#bloqueCheque').show();
+                            $('#fechaCheque').val(pago.fecha_cheque || '');
+                            actualizarRecordatorioCheque();
+                        } else {
+                            $('#bloqueCheque').hide();
+                            $('#fechaCheque').val('');
+                            $('#recordatorioCheque').hide();
+                        }
 
                         $('#inputMontoOriginal').text(`$${totalDTE.toLocaleString()}`);
                         $('#inputMontoAbonado').text(`$${abonadoSinEste.toLocaleString()}`);
