@@ -362,6 +362,8 @@ kbd.sc {
 .pos-table tbody tr:last-child td { border-bottom: none; }
 
 /* Column sizing */
+.tc-foto  { width: 86px; min-width: 86px; max-width: 86px; padding: 6px !important; text-align: center; }
+.tc-foto img.producto-portada-img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--np-gray-100, #F5F5F7); border: 1px solid var(--np-gray-300, #D1D1D9); }
 .tc-art   { min-width: 130px; max-width: 170px; }
 .tc-desc  { min-width: 150px; max-width: 210px; }
 .tc-attr  { min-width: 80px;  text-align: center; }
@@ -940,6 +942,7 @@ kbd.sc {
                     <table class="pos-table">
                         <thead>
                             <tr>
+                                <th class="tc-foto"><i class="bi bi-image"></i></th>
                                 <th class="tc-art"><i class="bi bi-box-seam me-1"></i>Artículo</th>
                                 <th class="tc-desc"><i class="bi bi-card-text me-1"></i>Descripción</th>
                                 <th class="tc-attr"><i class="bi bi-award me-1"></i>Marca</th>
@@ -988,9 +991,14 @@ kbd.sc {
             <div class="modal-body">
                 <!-- Info del producto -->
                 <div class="modal-prod-card">
-                    <div class="modal-prod-hdr">
-                        <div class="modal-prod-ico"><i class="bi bi-box-seam"></i></div>
-                        <div>
+                    <div class="modal-prod-hdr" style="display:flex;align-items:center;gap:1.25rem;">
+                        <img id="modalFotoPortada" src="{% static 'images/producto_placeholder.svg' %}"
+                             alt="" data-foto-zoom=""
+                             style="width:160px;height:160px;border-radius:12px;object-fit:cover;
+                                    border:1px solid var(--np-gray-300,#D1D1D9);
+                                    background:var(--np-gray-100,#F5F5F7);flex-shrink:0;
+                                    box-shadow:0 2px 8px rgba(0,0,0,.06);">
+                        <div style="flex:1;min-width:0;">
                             <h4 class="modal-prod-name" id="modalArticulo">-</h4>
                             <p class="modal-prod-desc" id="modalDescripcion">-</p>
                         </div>
@@ -1292,8 +1300,12 @@ $(document).ready(function () {
 
             const dataAttr = escAttr(JSON.stringify(p));
 
+            const fotoUrl = p.foto_portada_url || '{% static "images/producto_placeholder.svg" %}';
+            const fotoHtml = `<img class="producto-portada-img" src="${escAttr(fotoUrl)}" alt="" loading="lazy" onerror="this.src='{% static "images/producto_placeholder.svg" %}';">`;
+
             tbody.append(`
                 <tr>
+                    <td class="tc-foto">${fotoHtml}</td>
                     <td class="tc-art">
                         <div class="art-cell">
                             <span class="art-name" title="${escHtml(p.articulo)}">${escHtml(p.articulo)}</span>
@@ -1379,6 +1391,14 @@ $(document).ready(function () {
         $('#modalSucursal').text(p.sucursal);
         $('#modalTipoTalla').text(p.tipo_talla || 'Estándar');
 
+        // Foto grande: usar la URL del producto o el placeholder estático.
+        const placeholderFoto = '{% static "images/producto_placeholder.svg" %}';
+        const fotoUrl = p.foto_portada_url || placeholderFoto;
+        const $foto = $('#modalFotoPortada');
+        $foto.attr('src', fotoUrl);
+        // data-foto-zoom activa el lightbox sólo si NO es placeholder.
+        $foto.attr('data-foto-zoom', p.foto_portada_url ? fotoUrl : '');
+
         const stClass = p.stock_total === 0 ? 'rojo' : (p.stock_total < 10 ? '' : 'verde');
         $('#modalStockTotal').text(p.stock_total).attr('class', 'modal-stat-val ' + stClass);
 
@@ -1442,3 +1462,6 @@ $(document).ready(function () {
     setTimeout(() => $('#search_input').focus(), 300);
 });
 </script>
+
+<!-- Lightbox para ampliar miniaturas de portada -->
+<script src="{% static 'js/foto_lightbox.js' %}"></script>

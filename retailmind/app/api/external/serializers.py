@@ -67,26 +67,29 @@ def agrupar_por_producto(rows: list) -> list:
         color     = row.get('producto__atributo2__valor', '') or ''
         genero    = row.get('producto__atributo3__valor', '') or ''
         categoria = row.get('producto__categoria__nombre', '') or ''
+        empresa_id = row.get('producto__sucursal__empresa_id')
 
         # Clave de producto: identidad completa sin sucursal
         prod_key = (articulo, marca, color, genero, categoria)
 
         if prod_key not in productos:
+            from app.services.realsport_imagenes_service import resolver_foto_portada_url
             productos[prod_key] = {
-                'articulo':       articulo,
-                'descripcion':    row.get('producto__descripcion', '') or '',
-                'marca':          marca,
-                'color':          color,
-                'genero':         genero,
-                'categoria':      categoria,
-                'subcategoria':   '',
-                'precio_venta':   int(row.get('producto__precioventa', 0) or 0),
-                'precio_costo':   int(row.get('producto__costo', 0) or 0),
-                'precio_interno': int(row.get('producto__precioSugerido', 0) or 0),
-                'imagenes':       [],   # llegan por webhook Shopify
-                'guia_talla_id':  row.get('producto__guia_talla_id'),
-                'tipo_talla':     row.get('producto__tipo_talla', '') or '',
-                'tallas':         [],
+                'articulo':         articulo,
+                'descripcion':      row.get('producto__descripcion', '') or '',
+                'marca':            marca,
+                'color':            color,
+                'genero':           genero,
+                'categoria':        categoria,
+                'subcategoria':     '',
+                'precio_venta':     int(row.get('producto__precioventa', 0) or 0),
+                'precio_costo':     int(row.get('producto__costo', 0) or 0),
+                'precio_interno':   int(row.get('producto__precioSugerido', 0) or 0),
+                'imagenes':         [],   # llegan por webhook Shopify
+                'foto_portada_url': resolver_foto_portada_url(articulo, empresa_id),
+                'guia_talla_id':    row.get('producto__guia_talla_id'),
+                'tipo_talla':       row.get('producto__tipo_talla', '') or '',
+                'tallas':           [],
             }
             tallas_idx[prod_key] = {}
 
@@ -127,20 +130,21 @@ class TallaExternalSerializer(serializers.Serializer):
 
 class ProductoExternalSerializer(serializers.Serializer):
     """Serializa un producto agrupado (salida de agrupar_por_producto)."""
-    articulo       = serializers.CharField()
-    descripcion    = serializers.CharField()
-    marca          = serializers.CharField()
-    color          = serializers.CharField()
-    genero         = serializers.CharField()
-    categoria      = serializers.CharField()
-    subcategoria   = serializers.CharField()
-    precio_venta   = serializers.IntegerField()
-    precio_costo   = serializers.IntegerField()
-    precio_interno = serializers.IntegerField()
-    imagenes       = serializers.ListField(child=serializers.CharField(), default=list)
-    guia_talla_id  = serializers.IntegerField(allow_null=True, required=False)
-    tipo_talla     = serializers.CharField(allow_blank=True, required=False, default='')
-    tallas         = TallaExternalSerializer(many=True)
+    articulo         = serializers.CharField()
+    descripcion      = serializers.CharField()
+    marca            = serializers.CharField()
+    color            = serializers.CharField()
+    genero           = serializers.CharField()
+    categoria        = serializers.CharField()
+    subcategoria     = serializers.CharField()
+    precio_venta     = serializers.IntegerField()
+    precio_costo     = serializers.IntegerField()
+    precio_interno   = serializers.IntegerField()
+    imagenes         = serializers.ListField(child=serializers.CharField(), default=list)
+    foto_portada_url = serializers.CharField(allow_blank=True, required=False, default='')
+    guia_talla_id    = serializers.IntegerField(allow_null=True, required=False)
+    tipo_talla       = serializers.CharField(allow_blank=True, required=False, default='')
+    tallas           = TallaExternalSerializer(many=True)
 
 
 # Mantener alias para compatibilidad con imports existentes

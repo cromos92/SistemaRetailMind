@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <rect width="80" height="80" rx="8" fill="#F5F5F7"/>
+  <g fill="none" stroke="#8A8A9A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="18" y="22" width="44" height="36" rx="4"/>
+    <circle cx="30" cy="34" r="3"/>
+    <path d="M22 50l10-10 8 8 6-6 12 12"/>
+  </g>
+  <text x="40" y="74" text-anchor="middle" font-family="system-ui, sans-serif" font-size="6" fill="#8A8A9A">sin foto</text>
+</svg>

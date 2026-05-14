@@ -1107,7 +1107,7 @@
                 </div>
                 <div class="text-end">
                     <small class="opacity-75">
-                        <i class="bi bi-building me-1"></i>Sucursal Destino: <strong id="infoSucursalDestino">-</strong>
+                        <i class="bi bi-building me-1"></i>Sucursal actual: <strong id="infoSucursalDestino">-</strong>
                     </small>
                     <br>
                     <small class="opacity-75">
@@ -1119,41 +1119,8 @@
 
         <div class="card mb-3" style="border:none;box-shadow:var(--nexo-shadow-md);">
             <div class="card-body py-3">
-                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
-                    <div class="btn-group flex-wrap" role="group" aria-label="Vistas recepción DTE">
-                        {% if puede_recepcionar_dte %}
-                        <button type="button" class="btn btn-outline-primary active vista-unificada-btn" data-vista="recibidos">
-                            <i class="bi bi-inbox me-1"></i>Pendientes de recibir
-                        </button>
-                        {% endif %}
-                        <button type="button" class="btn btn-outline-success vista-unificada-btn" data-vista="recepcionados">
-                            <i class="bi bi-check-circle me-1"></i>Recepcionados
-                        </button>
-                        {% if puede_regularizar_dte %}
-                        <button type="button" class="btn btn-outline-warning vista-unificada-btn" data-vista="regularizar">
-                            <i class="bi bi-tools me-1"></i>Por regularizar
-                        </button>
-                        {% endif %}
-                        <button type="button" class="btn btn-outline-info vista-unificada-btn" data-vista="mis_regularizaciones">
-                            <i class="bi bi-clock-history me-1"></i>Mis regularizaciones
-                            <span class="badge bg-warning text-dark ms-1 d-none" id="badgeDevolucionesPendientes">0</span>
-                        </button>
-                        {% if puede_ajustar_emitidos %}
-                        <button type="button" class="btn btn-outline-secondary vista-unificada-btn" data-vista="emitidos">
-                            <i class="bi bi-send me-1"></i>Emitidos por mí
-                        </button>
-                        {% endif %}
-                    </div>
-                    {% if puede_ver_todos_dte %}
-                    <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" type="checkbox" role="switch" id="switchVerTodasSucursales">
-                        <label class="form-check-label small fw-semibold" for="switchVerTodasSucursales">
-                            Ver todas las sucursales
-                        </label>
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="row g-2 mt-3" id="indicadoresCompactosRecepcion">
+                <span id="badgeDevolucionesPendientes" class="d-none"></span>
+                <div class="row g-2" id="indicadoresCompactosRecepcion">
                     <div class="col-6 col-md-2">
                         <div class="text-center p-2 rounded" style="background:rgba(255,176,32,.12);">
                             <div class="fw-bold" id="kpiPendientesCompacto">0</div>
@@ -1194,26 +1161,34 @@
             </div>
         </div>
 
+        <!-- Banner prominente de DTEs rechazados que YO envie -->
+        <div class="alert alert-danger d-none mb-3 d-flex justify-content-between align-items-center" id="bannerDTEsRechazados" role="alert">
+            <div>
+                <i class="bi bi-x-octagon-fill me-2"></i>
+                <strong>Tienes <span id="bannerCountRechazados">0</span> DTE(s) que enviaste y fueron RECHAZADOS por el destino.</strong>
+                <br>
+                <small>Decide si los rehabilitas (para reintentar) o anulas. El stock de origen sigue descontado hasta que decidas.</small>
+            </div>
+            <button type="button" class="btn btn-danger" id="btnBannerVerRechazados">
+                <i class="bi bi-eye me-1"></i>Ver y Decidir
+            </button>
+        </div>
+
         <div class="row">
             <div class="col-lg-9">
                 <div class="card recepcion-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
                             <h5 class="mb-0" id="tituloSeccionDocumentos">Documentos de Traspaso</h5>
-                            <small class="text-muted" id="subtituloSeccionDocumentos">Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal</small>
+                            <small class="text-muted" id="subtituloSeccionDocumentos">Documentos donde mi sucursal es origen o destino, filtrables por estado</small>
                         </div>
-                        <div class="d-flex gap-2 align-items-center">
-                            {% if puede_ajustar_emitidos %}
-                            <div class="btn-group btn-group-sm" role="group" aria-label="Modo de vista">
-                                <button type="button" class="btn btn-outline-primary active" id="btnModoRecibidos" title="DTEs dirigidos a esta sucursal (para recepcionar)">
-                                    <i class="bi bi-box-arrow-in-down me-1"></i>Recibidos
-                                </button>
-                                <button type="button" class="btn btn-outline-warning" id="btnModoEmitidos" title="DTEs emitidos y aún no recepcionados">
-                                    <i class="bi bi-box-arrow-up me-1"></i>Emitidos por mí
-                                </button>
-                                <button type="button" class="btn btn-outline-danger" id="btnModoRecepcionados" title="Despachos ya recepcionados por el destino. Permite emitir NC post-recepción">
-                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Despachados recepcionados
-                                </button>
+                        <div class="d-flex gap-3 align-items-center">
+                            {% if puede_ver_todos_dte %}
+                            <div class="form-check form-switch mb-0" title="Solo disponible para administradores y usuarios con permiso multi-sucursal">
+                                <input class="form-check-input" type="checkbox" role="switch" id="switchVerTodasSucursales">
+                                <label class="form-check-label small fw-semibold" for="switchVerTodasSucursales">
+                                    <i class="bi bi-building-fill-gear me-1 text-primary"></i>Ver todas las sucursales
+                                </label>
                             </div>
                             {% endif %}
                             <button id="btnRefresh" class="btn btn-outline-primary btn-sm">
@@ -1239,18 +1214,18 @@
                                     </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <label for="filterEstadoDte" class="form-label">Estado</label>
+                                    <label for="filterEstadoDte" class="form-label">Estado del DTE</label>
                                     <select id="filterEstadoDte" class="form-select">
-                                        <option value="">Todos</option>
+                                        <option value=""{% if puede_ajustar_emitidos or not puede_recepcionar_dte %} selected{% endif %}>Todos</option>
                                         {% if puede_recepcionar_dte %}
-                                        <option value="EMITIDO" selected>Pendientes</option>
+                                        <option value="EMITIDO"{% if not puede_ajustar_emitidos %} selected{% endif %}>Pendientes de recepcionar</option>
                                         {% endif %}
                                         <option value="RECEPCIONADO_COMPLETO">Recepcionado completo</option>
-                                        <option value="RECEPCIONADO_PARCIAL">Recepcionado con problemas</option>
-                                        <option value="EN_REGULARIZACION">En regularización</option>
+                                        <option value="RECEPCIONADO_PARCIAL">Recepción parcial / con diferencias</option>
                                         <option value="RECHAZADO">Rechazados</option>
                                         <option value="CANCELADO">Cancelados</option>
                                     </select>
+                                    <small class="text-muted">Para "En regularización" usa la vista <strong>Por regularizar</strong>.</small>
                                 </div>
                                 <div class="col-md-2">
                                     <label for="filterTipoDocumento" class="form-label">Tipo doc.</label>
@@ -1276,20 +1251,50 @@
                                 <div>
                                     <h6 class="mb-1"><i class="bi bi-tools text-warning me-1"></i>Recepciones por regularizar</h6>
                                     <small class="text-muted">Faltantes, sobrantes, rechazos y productos en regularización.</small>
+                                    {% if puede_ver_todos_dte %}
+                                    <div class="small text-muted mt-1">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Usa el switch <strong>"Ver todas las sucursales"</strong> arriba para incluir regularizaciones de otras sucursales.
+                                    </div>
+                                    {% endif %}
                                 </div>
-                                <div class="d-flex gap-2 flex-wrap">
-                                    <select id="regularizarTabFiltro" class="form-select form-select-sm" style="width:auto;">
-                                        <option value="pendiente">Pendientes</option>
-                                        <option value="en_regularizacion">En regularización</option>
-                                        <option value="sobrante">Sobrantes</option>
-                                        <option value="regularizado">Regularizados</option>
-                                        <option value="rechazado">Rechazados</option>
-                                        <option value="todos">Todos</option>
-                                    </select>
+                                <div class="d-flex gap-2 flex-wrap align-items-center">
+                                    <div class="btn-group btn-group-sm regularizar-tabs flex-wrap" role="group" aria-label="Filtrar regularizaciones por estado">
+                                        <button type="button" class="btn btn-outline-warning active" data-tab="pendiente">
+                                            <i class="bi bi-hourglass-split me-1"></i>Pendientes
+                                            <span class="badge bg-warning text-dark ms-1" data-count="pendiente">0</span>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary" data-tab="en_regularizacion">
+                                            <i class="bi bi-arrow-repeat me-1"></i>En regularización
+                                            <span class="badge bg-primary ms-1" data-count="en_regularizacion">0</span>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" data-tab="sobrante">
+                                            <i class="bi bi-plus-square me-1"></i>Sobrantes
+                                            <span class="badge bg-info ms-1" data-count="sobrante">0</span>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success" data-tab="regularizado">
+                                            <i class="bi bi-check2-all me-1"></i>Regularizados
+                                            <span class="badge bg-success ms-1" data-count="regularizado">0</span>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger" data-tab="rechazado">
+                                            <i class="bi bi-x-octagon me-1"></i>Rechazados
+                                            <span class="badge bg-danger ms-1" data-count="rechazado">0</span>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" data-tab="todos">
+                                            <i class="bi bi-list-ul me-1"></i>Todos
+                                            <span class="badge bg-secondary ms-1" data-count="todos">0</span>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" id="regularizarTabFiltro" value="pendiente">
                                     <input type="search" id="regularizarBusqueda" class="form-control form-control-sm" placeholder="SKU, producto o DTE" style="width:220px;">
                                     <button type="button" class="btn btn-warning btn-sm" id="btnBuscarRegularizaciones">
                                         <i class="bi bi-search me-1"></i>Buscar
                                     </button>
+                                    {% if puede_exportar_regularizar %}
+                                    <button type="button" class="btn btn-outline-danger btn-sm" id="btnExportarRegularizarPdf" title="Exportar la tabla completa (todos los registros que matchean los filtros) a PDF">
+                                        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                                    </button>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="table-responsive">
@@ -1316,6 +1321,12 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mt-3" id="paginationRegularizar" style="display: none;">
+                                <button class="btn btn-outline-secondary btn-sm" id="btnPrevRegularizar"><i class="bi bi-chevron-left"></i> Anterior</button>
+                                <span class="mx-3 small text-muted" id="pageInfoRegularizar">Página 1 de 1</span>
+                                <button class="btn btn-outline-secondary btn-sm" id="btnNextRegularizar">Siguiente <i class="bi bi-chevron-right"></i></button>
                             </div>
                         </div>
 
@@ -1376,7 +1387,8 @@
                                 <thead>
                                     <tr>
                                         <th>Documento</th>
-                                        <th>Origen</th>
+                                        <th>Mi rol</th>
+                                        <th>Origen &rarr; Destino</th>
                                         <th>Fecha Emisión</th>
                                         <th>Items</th>
                                         <th>Cantidad Total</th>
@@ -1386,11 +1398,11 @@
                                 </thead>
                                 <tbody id="recepcionesBody">
                                     <tr>
-                                        <td colspan="7">
+                                        <td colspan="8">
                                             <div class="empty-state">
                                                 <i class="bi bi-clipboard-data"></i>
                                                 <h5 class="mt-2">Sin documentos pendientes</h5>
-                                                <p class="text-muted">Cuando haya traspasos internos dirigidos a tu bodega aparecerán aquí para confirmación.</p>
+                                                <p class="text-muted">Cuando haya traspasos internos donde tu sucursal sea origen o destino aparecerán aquí.</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -1408,53 +1420,6 @@
             </div>
 
             <div class="col-lg-3">
-                <!-- Indicadores por estado -->
-                <div class="card mb-3" style="border:none;box-shadow:var(--nexo-shadow-md);">
-                    <div class="card-body p-3">
-                        <div class="section-title mb-2">
-                            <i class="bi bi-bar-chart-fill me-2 text-primary"></i>DTEs por Estado
-                        </div>
-                        <div id="indicadoresEstado" class="d-flex flex-column gap-2">
-                            <div class="estado-indicator" data-estado="EMITIDO" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(255,176,32,0.1);border-left:3px solid var(--nexo-warning);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span style="font-size:13px;"><i class="bi bi-hourglass-split text-warning me-1"></i>Pendientes</span>
-                                    <span class="badge bg-warning text-dark fw-bold" id="conteoEmitido">0</span>
-                                </div>
-                            </div>
-                            <div class="estado-indicator" data-estado="RECEPCIONADO_COMPLETO" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(0,212,170,0.08);border-left:3px solid var(--nexo-success);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span style="font-size:13px;"><i class="bi bi-check-circle-fill text-success me-1"></i>Recepcionados</span>
-                                    <span class="badge bg-success fw-bold" id="conteoRecepcionado">0</span>
-                                </div>
-                            </div>
-                            <div class="estado-indicator" data-estado="RECEPCIONADO_PARCIAL" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(255,176,32,0.06);border-left:3px solid #e69a00;transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span style="font-size:13px;"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>Parcial</span>
-                                    <span class="badge bg-warning text-dark fw-bold" id="conteoParcial">0</span>
-                                </div>
-                            </div>
-                            <div class="estado-indicator" data-estado="EN_REGULARIZACION" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(0,102,255,0.06);border-left:3px solid var(--nexo-info);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span style="font-size:13px;"><i class="bi bi-arrow-repeat text-info me-1"></i>En regularización</span>
-                                    <span class="badge bg-info fw-bold" id="conteoRegularizacion">0</span>
-                                </div>
-                            </div>
-                            <div class="estado-indicator" data-estado="RECHAZADO" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:rgba(255,77,77,0.06);border-left:3px solid var(--nexo-error);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span style="font-size:13px;"><i class="bi bi-x-circle-fill text-danger me-1"></i>Rechazados</span>
-                                    <span class="badge bg-danger fw-bold" id="conteoRechazado">0</span>
-                                </div>
-                            </div>
-                            <div class="estado-indicator" data-estado="" style="cursor:pointer;padding:8px 12px;border-radius:8px;background:var(--nexo-gray-100);border-left:3px solid var(--nexo-gray-500);transition:all .15s;" onmouseover="this.style.transform='translateX(3px)'" onmouseout="this.style.transform='none'">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span style="font-size:13px;"><i class="bi bi-grid-fill text-secondary me-1"></i>Ver todos</span>
-                                    <span class="badge bg-secondary fw-bold" id="conteoTodos">0</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="card resumen-card mb-3">
                     <div class="card-body">
                         <div class="section-title">
@@ -1503,22 +1468,10 @@
                     </div>
                 </div>
 
-                <!-- Card de DTEs rechazados (que YO envié) -->
-                <div class="card mb-3 border-danger d-none" id="cardDTEsRechazados">
-                    <div class="card-header bg-danger bg-opacity-10">
-                        <h6 class="mb-0 text-danger">
-                            <i class="bi bi-x-octagon me-2"></i>DTEs Rechazados
-                            <span class="badge bg-danger ms-1" id="badgeRechazados">0</span>
-                        </h6>
-                    </div>
-                    <div class="card-body py-2">
-                        <p class="small text-muted mb-2">
-                            Tienes DTEs que enviaste pero fueron rechazados. Puedes rehabilitarlos o anularlos.
-                        </p>
-                        <button type="button" class="btn btn-outline-danger btn-sm w-100" id="btnVerDTEsRechazados">
-                            <i class="bi bi-eye me-1"></i>Ver y Rehabilitar
-                        </button>
-                    </div>
+                {# Card lateral de DTEs Rechazados eliminado: reemplazado por banner rojo arriba #}
+                <div class="d-none" id="cardDTEsRechazados">
+                    <span id="badgeRechazados">0</span>
+                    <button type="button" id="btnVerDTEsRechazados"></button>
                 </div>
 
                 <div class="card mb-3">
@@ -1931,6 +1884,9 @@
 
 <!-- Modal DTEs Rechazados - Reemplazado por redirección a regularizar-recepciones -->
 
+<!-- Modal de Regularización (HTML + JS compartido con la página legacy) -->
+{% include 'vistas/modulo_compras/_modal_regularizar.html' %}
+
 <!-- Modal historial completo -->
 <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -2153,12 +2109,15 @@ let historialData = [];
 let sucursalDestinoInfo = null;
 let paginaActual = 1;
 let totalPaginas = 1;
+let paginaActualRegularizar = 1;
+let totalPaginasRegularizar = 1;
 let documentoSeleccionado = null;
 let productosVerificacion = [];  // Array para almacenar estado de verificación
 let productoEditandoIndex = null;  // Índice del producto que se está editando
 const PUEDE_REGULARIZAR_DTE = {{ puede_regularizar_dte|yesno:"true,false" }};
 const PUEDE_RECEPCIONAR_DTE = {{ puede_recepcionar_dte|yesno:"true,false" }};
 const PUEDE_VER_TODOS_DTE = {{ puede_ver_todos_dte|yesno:"true,false" }};
+const PUEDE_AJUSTAR_EMITIDOS = {{ puede_ajustar_emitidos|yesno:"true,false" }};
 
 $(document).ready(function() {
     modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleDocumento'));
@@ -2166,6 +2125,7 @@ $(document).ready(function() {
 
     $('#btnRefresh').on('click', () => {
         paginaActual = 1;
+        paginaActualRegularizar = 1;
         if (window.modoVista === 'regularizar') {
             cargarRegularizaciones();
         } else if (window.modoVista === 'recepcionados') {
@@ -2178,6 +2138,7 @@ $(document).ready(function() {
     });
     $('#filterEstadoDte, #filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => {
         paginaActual = 1;
+        paginaActualRegularizar = 1;
         if (window.modoVista === 'regularizar') {
             cargarRegularizaciones();
         } else if (window.modoVista === 'recepcionados') {
@@ -2190,6 +2151,8 @@ $(document).ready(function() {
     });
     $('#btnPrev').on('click', () => cambiarPagina(-1));
     $('#btnNext').on('click', () => cambiarPagina(1));
+    $('#btnPrevRegularizar').on('click', () => cambiarPaginaRegularizar(-1));
+    $('#btnNextRegularizar').on('click', () => cambiarPaginaRegularizar(1));
     $('#btnConfirmarRecepcion').on('click', confirmarRecepcion);
     $('#btnRecepcionarParcial').on('click', confirmarRecepcionParcial);
     $('#btnRechazarRecepcion').on('click', rechazarRecepcion);
@@ -2198,18 +2161,54 @@ $(document).ready(function() {
     $('.vista-unificada-btn').on('click', function() {
         cambiarVistaUnificada($(this).data('vista'));
     });
-    $('#btnBuscarRegularizaciones, #regularizarTabFiltro').on('click change', function() {
+    $('#btnBuscarRegularizaciones').on('click', function() {
+        paginaActualRegularizar = 1;
+        cargarRegularizaciones();
+    });
+    $('#btnExportarRegularizarPdf').on('click', function() {
+        // El PDF reusa los mismos filtros que la tabla. La paginación NO se
+        // envía: el backend devuelve todos los registros que matchean.
+        const params = new URLSearchParams({
+            tab: $('#regularizarTabFiltro').val() || 'pendiente',
+            buscar: $('#regularizarBusqueda').val() || '',
+            alcance: obtenerAlcanceDte(),
+        });
+        const fechaIni = $('#filterFechaInicio').val();
+        const fechaFin = $('#filterFechaFin').val();
+        const tipoDoc = $('#filterTipoDocumento').val();
+        if (fechaIni) params.set('fecha_inicio', fechaIni);
+        if (fechaFin) params.set('fecha_fin', fechaFin);
+        if (tipoDoc) params.set('tipo_documento', tipoDoc);
+        window.open(`/app/dte/exportar_productos_regularizar_pdf/?${params.toString()}`, '_blank');
+    });
+    $('.regularizar-tabs').on('click', '[data-tab]', function() {
+        const tab = $(this).data('tab');
+        $('.regularizar-tabs [data-tab]').removeClass('active');
+        $(this).addClass('active');
+        $('#regularizarTabFiltro').val(tab);
+        paginaActualRegularizar = 1;
         cargarRegularizaciones();
     });
     $('#regularizarBusqueda').on('keydown', function(e) {
-        if (e.key === 'Enter') cargarRegularizaciones();
+        if (e.key === 'Enter') {
+            paginaActualRegularizar = 1;
+            cargarRegularizaciones();
+        }
     });
     $('#switchVerTodasSucursales').on('change', function() {
         paginaActual = 1;
+        paginaActualRegularizar = 1;
         if (window.modoVista === 'regularizar') cargarRegularizaciones();
         else if (window.modoVista === 'emitidos') cargarEmitidos();
         else if (window.modoVista === 'recepcionados') cargarRecepcionados();
+        else if (window.modoVista === 'mis_regularizaciones') cargarMisRegularizaciones();
         else cargarRecepciones(true);
+        // El banner de DTEs Rechazados y la card de DTEs Por Corregir tienen
+        // su propio conteo independiente del listado principal: si no los
+        // recargamos aquí, sus badges quedan desactualizados al togglear el
+        // switch (mostrando solo la sucursal actual).
+        cargarDTEsRechazados();
+        cargarDTEsParaCorregir();
     });
     
     // Nuevos eventos para verificación
@@ -2239,6 +2238,7 @@ $(document).ready(function() {
     });
     
     $('#btnVerDTEsRechazados').on('click', verDTEsRechazados);
+    $('#btnBannerVerRechazados').on('click', verDTEsRechazados);
     $('#btnVerDTEsCorregir').on('click', verDTEsParaCorregir);
     $('#btnConfirmarCorreccion').on('click', confirmarCorreccionEmisor);
     $('#btnRefrescarMisRegs').on('click', cargarMisRegularizaciones);
@@ -2249,10 +2249,16 @@ $(document).ready(function() {
     const paramsIniciales = new URLSearchParams(window.location.search);
     const vistaInicial = paramsIniciales.get('vista');
     const tabInicial = paramsIniciales.get('tab');
-    if (tabInicial) $('#regularizarTabFiltro').val(tabInicial);
+    const buscarInicial = paramsIniciales.get('buscar');
+    if (tabInicial) {
+        $('#regularizarTabFiltro').val(tabInicial);
+        $('.regularizar-tabs [data-tab]').removeClass('active');
+        $(`.regularizar-tabs [data-tab="${tabInicial}"]`).addClass('active');
+    }
+    if (buscarInicial) $('#regularizarBusqueda').val(buscarInicial);
     if (vistaInicial === 'regularizar' && PUEDE_REGULARIZAR_DTE) {
         cambiarVistaUnificada('regularizar');
-    } else if (!PUEDE_RECEPCIONAR_DTE) {
+    } else if (!PUEDE_RECEPCIONAR_DTE && !PUEDE_AJUSTAR_EMITIDOS) {
         cambiarVistaUnificada(PUEDE_REGULARIZAR_DTE ? 'regularizar' : 'recepcionados');
     } else {
         cargarRecepciones();
@@ -2261,6 +2267,38 @@ $(document).ready(function() {
     cargarDTEsRechazados();
     cargarDTEsParaCorregir();
 });
+
+// Variables globales que el modal de regularización (partial compartido)
+// espera: productosProblemas se sincroniza desde cargarRegularizaciones,
+// productoSeleccionado lo maneja abrirModalRegularizar, tabActual refleja
+// la pestaña del filtro.
+window.productosProblemas = [];
+window.productoSeleccionado = null;
+window.tabActual = 'pendiente';
+
+// Aliases para que las funciones del partial (originalmente del template
+// legacy regularizar_recepciones.html) encuentren sus equivalentes en
+// esta página: la "lista de productos problema" aquí es la tabla de
+// regularizaciones; recargar = cargarRegularizaciones().
+window.cargarProductosProblemas = function() { cargarRegularizaciones(); };
+window.notificarRegularizacionCompleta = function() {
+    cargarRegularizaciones();
+    cargarDTEsRechazados();
+    cargarDTEsParaCorregir();
+};
+// Loader global usado por algunos botones del partial.
+if (typeof window.showGlobalLoader !== 'function') {
+    window.showGlobalLoader = function() {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        }
+    };
+}
+if (typeof window.hideGlobalLoader !== 'function') {
+    window.hideGlobalLoader = function() {
+        if (typeof Swal !== 'undefined') Swal.close();
+    };
+}
 
 function inicializarReferenciaFechas() {
     const hoy = new Date();
@@ -2330,18 +2368,31 @@ function cambiarVistaUnificada(vista) {
 
     const esRegularizar = vista === 'regularizar';
     const esMisRegs = vista === 'mis_regularizaciones';
+    // Regularizar y "mis regularizaciones" tienen sus propios filtros (tab +
+    // búsqueda dentro del panel). En regularizar dejamos visibles los inputs
+    // de fecha y los accesos rápidos (Mes actual / Solo hoy) porque sí aplican
+    // a la query, pero ocultamos el select "Estado del DTE" (no aplica) para
+    // evitar confusión. En "mis regularizaciones" ocultamos toda la sección.
+    const ocultarFiltrosTable = esRegularizar || esMisRegs;
     $('#panelRegularizaciones').toggle(esRegularizar);
     $('#panelMisRegularizaciones').toggle(esMisRegs);
-    $('#panelRecepciones').toggle(!esRegularizar && !esMisRegs);
-    $('#paginationContainer').toggle(!esRegularizar && !esMisRegs && totalPaginas > 1);
-    $('#filterEstadoDte').closest('.col-md-3').toggle(!esRegularizar && !esMisRegs);
-    $('#filterTipoDocumento').closest('.col-md-2').toggle(!esRegularizar && !esMisRegs);
+    $('#panelRecepciones').toggle(!ocultarFiltrosTable);
+    $('#paginationContainer').toggle(!ocultarFiltrosTable && totalPaginas > 1);
+    if (esMisRegs) {
+        $('.filter-section').hide();
+    } else {
+        $('.filter-section').show();
+        // En regularizar el select "Estado del DTE" no tiene efecto (los estados
+        // los maneja el tab dentro del panel), así que lo escondemos.
+        $('#filterEstadoDte').closest('.col-md-3').toggle(!esRegularizar);
+    }
 
     if (esRegularizar) {
         window.modoVista = 'regularizar';
         window.modoEmitidos = false;
         $('#tituloSeccionDocumentos').text('Recepciones por regularizar');
         $('#subtituloSeccionDocumentos').text('Productos con faltantes, sobrantes, rechazos o diferencias pendientes de resolución');
+        paginaActualRegularizar = 1;
         cargarRegularizaciones();
     } else if (esMisRegs) {
         window.modoVista = 'mis_regularizaciones';
@@ -2367,7 +2418,7 @@ function cargarMisRegularizaciones() {
             Cargando…
         </td></tr>
     `);
-    fetch('/app/dte/obtener_regularizacion_receptor/', { credentials: 'same-origin' })
+    fetch(`/app/dte/obtener_regularizacion_receptor/?alcance=${obtenerAlcanceDte()}`, { credentials: 'same-origin' })
         .then(r => r.json())
         .then(data => {
             if (!data.success) {
@@ -2493,10 +2544,13 @@ function confirmarDespachoFisico() {
 }
 
 function obtenerAlcanceDte() {
-    if (window.modoVista === 'regularizar' && PUEDE_VER_TODOS_DTE) {
-        return 'todas';
-    }
-    return (PUEDE_VER_TODOS_DTE && $('#switchVerTodasSucursales').is(':checked')) ? 'todas' : 'actual';
+    // Respeta el switch principal "Ver todas las sucursales" en TODOS los
+    // modos (recibidos, emitidos, recepcionados, regularizar). Antes
+    // regularizar forzaba 'todas' ignorando el switch; ahora el usuario
+    // controla el alcance de forma uniforme.
+    return (PUEDE_VER_TODOS_DTE && $('#switchVerTodasSucursales').is(':checked'))
+        ? 'todas'
+        : 'actual';
 }
 
 function cargarRegularizaciones() {
@@ -2511,7 +2565,16 @@ function cargarRegularizaciones() {
         tab: $('#regularizarTabFiltro').val() || 'pendiente',
         buscar: $('#regularizarBusqueda').val() || '',
         alcance: obtenerAlcanceDte(),
+        pagina: paginaActualRegularizar || 1,
     });
+    // Reutilizamos los inputs de fecha del listado principal: ahora también
+    // aplican al panel regularizar (productos con problema y rechazados en frío).
+    const fechaInicio = $('#filterFechaInicio').val();
+    const fechaFin = $('#filterFechaFin').val();
+    if (fechaInicio) params.set('fecha_inicio', fechaInicio);
+    if (fechaFin) params.set('fecha_fin', fechaFin);
+    const tipoDoc = $('#filterTipoDocumento').val();
+    if (tipoDoc) params.set('tipo_documento', tipoDoc);
 
     fetch(`/app/dte/obtener_productos_regularizar/?${params.toString()}`, {
         credentials: 'same-origin',
@@ -2520,8 +2583,9 @@ function cargarRegularizaciones() {
         .then(resp => resp.json().then(data => ({ resp, data })))
         .then(({ resp, data }) => {
             if (!resp.ok || !data.success) throw new Error(data.error || 'No se pudieron cargar regularizaciones.');
-            renderRegularizaciones(data.productos || []);
+            renderRegularizaciones(data.productos || [], data.dtes_rechazados_sin_recepcion || []);
             actualizarIndicadoresRegularizacion(data.estadisticas || {}, data.total || 0);
+            actualizarPaginacionRegularizar(data.pagination || null);
         })
         .catch(err => {
             $('#regularizacionesBody').html(`
@@ -2529,13 +2593,96 @@ function cargarRegularizaciones() {
                     <i class="bi bi-exclamation-triangle me-1"></i>${err.message || 'Error al cargar regularizaciones.'}
                 </td></tr>
             `);
+            $('#paginationRegularizar').hide();
         });
 }
 
-function renderRegularizaciones(productos) {
+function actualizarPaginacionRegularizar(pagination) {
+    if (!pagination || pagination.total_pages <= 1) {
+        $('#paginationRegularizar').hide();
+        paginaActualRegularizar = pagination ? pagination.page : 1;
+        totalPaginasRegularizar = pagination ? pagination.total_pages : 1;
+        return;
+    }
+    paginaActualRegularizar = pagination.page;
+    totalPaginasRegularizar = pagination.total_pages;
+    $('#paginationRegularizar').show();
+    $('#btnPrevRegularizar').prop('disabled', paginaActualRegularizar <= 1);
+    $('#btnNextRegularizar').prop('disabled', paginaActualRegularizar >= totalPaginasRegularizar);
+    $('#pageInfoRegularizar').text(`Página ${paginaActualRegularizar} de ${totalPaginasRegularizar} · ${pagination.total_items} resultados`);
+}
+
+function cambiarPaginaRegularizar(delta) {
+    const nuevaPagina = (paginaActualRegularizar || 1) + delta;
+    if (nuevaPagina < 1 || nuevaPagina > totalPaginasRegularizar) return;
+    paginaActualRegularizar = nuevaPagina;
+    cargarRegularizaciones();
+}
+
+function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
+    // El modal de regularización (partial _modal_regularizar.html) lee de
+    // la variable global productosProblemas. La sincronizamos aquí para que
+    // abrirModalRegularizar(id) encuentre el producto correctamente.
+    window.productosProblemas = productos || [];
+    window.tabActual = $('#regularizarTabFiltro').val() || 'pendiente';
+    const coldRechazados = dtesRechazadosSinRecepcion || [];
+
     const tbody = $('#regularizacionesBody');
     tbody.empty();
-    if (!productos.length) {
+
+    // Rechazados "en frío": DTEs rechazados sin recepción iniciada. Vienen
+    // del backend solo en los tabs 'rechazado' y 'todos'. Los pintamos al
+    // tope con sus propios botones (Rehabilitar / Anular).
+    if (coldRechazados.length) {
+        tbody.append(`
+            <tr class="table-light">
+                <td colspan="9" class="py-2 small text-muted">
+                    <i class="bi bi-x-octagon-fill text-danger me-1"></i>
+                    <strong>${coldRechazados.length} DTE(s) rechazado(s) sin recepción iniciada</strong>
+                    <span class="ms-2">— se rechazaron antes de empezar la recepción, decide si rehabilitar o anular.</span>
+                </td>
+            </tr>
+        `);
+        coldRechazados.forEach(dte => {
+            const fecha = dte.fecha_emision ? new Date(dte.fecha_emision).toLocaleDateString('es-CL') : '-';
+            const tipoEsc = String(dte.tipo_documento || '').replace(/'/g, "\\'");
+            const montoFmt = Number(dte.monto_con_iva || 0).toLocaleString('es-CL');
+            tbody.append(`
+                <tr class="table-danger-subtle" style="background-color: rgba(255, 77, 77, 0.06);">
+                    <td>
+                        <strong>${dte.tipo_documento_display || dte.tipo_documento || 'DTE'} #${dte.numero_documento}</strong>
+                        <br><small class="text-muted">${fecha}</small>
+                    </td>
+                    <td>
+                        <strong>${dte.sucursal_origen || '-'}</strong>
+                        <br><small class="text-muted">${dte.emisor || '-'}</small>
+                    </td>
+                    <td colspan="5">
+                        <div class="fw-semibold text-danger">
+                            <i class="bi bi-exclamation-triangle me-1"></i>${dte.motivo_rechazo || 'Sin motivo'}
+                        </div>
+                        <small class="text-muted">
+                            Destino: <strong>${dte.sucursal_destino || '-'}</strong> · ${dte.unidades || 0} uds · $${montoFmt} con IVA · Sin recepción iniciada
+                        </small>
+                    </td>
+                    <td><span class="badge bg-danger">RECHAZADO</span></td>
+                    <td class="text-end text-nowrap">
+                        <button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${dte.dte_id}, '${dte.numero_documento}')" title="Rehabilitar">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        <button class="btn btn-danger btn-sm ms-1" onclick="anularDteRechazadoSegunTipo(${dte.dte_id}, '${dte.numero_documento}', '${tipoEsc}')" title="Anular (genera NC si es factura)">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${dte.dte_id})" title="Ver DTE">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+        });
+    }
+
+    if (!productos.length && !coldRechazados.length) {
         tbody.html(`
             <tr><td colspan="9" class="text-center text-muted py-4">
                 <i class="bi bi-check-circle display-6 d-block mb-2 text-success"></i>
@@ -2544,18 +2691,77 @@ function renderRegularizaciones(productos) {
         `);
         return;
     }
+    if (!productos.length) {
+        // Solo cold rechazados, nada más que renderizar abajo.
+        return;
+    }
 
-    productos.forEach(prod => {
+    // Agrupar por DTE para mostrar una cabecera por documento con botón de
+    // regularización masiva (1 NC con N líneas) cuando hay ≥2 líneas
+    // pendientes del mismo DTE y el documento es factura/boleta.
+    const grupos = {};
+    productos.forEach(p => {
+        const key = String(p.dte_numero || 'sin_dte');
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(p);
+    });
+
+    Object.entries(grupos).forEach(([dteNumero, lineas]) => {
+        const primera = lineas[0];
+        const pendientes = lineas.filter(l => {
+            const e = String(l.estado || '').toUpperCase();
+            return e !== 'REGULARIZADO' && e !== 'RECEPCIONADO_OK';
+        });
+        const tipoDoc = String(primera.tipo_documento_display || primera.tipo_documento || '');
+        const tipoNorm = tipoDoc.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        const esFacturaOBoleta = /FACTURA|BOLETA/.test(tipoNorm) && !tipoNorm.includes('GUIA');
+        const mostrarBotonMasivo = pendientes.length >= 2 && esFacturaOBoleta;
+
+        if (mostrarBotonMasivo) {
+            const totalUds = pendientes.reduce((s, l) => s + ((l.cantidad_faltante || 0) + (l.cantidad_danada || 0)), 0);
+            const montoAprox = pendientes.reduce((s, l) => s + (((l.cantidad_faltante || 0) + (l.cantidad_danada || 0)) * Number(l.precio_unitario || 0)), 0);
+            const montoFmt = Math.round(montoAprox * 1.19).toLocaleString('es-CL');
+            tbody.append(`
+                <tr class="table-light fw-semibold">
+                    <td colspan="9" class="py-2">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <i class="bi bi-file-earmark-text text-primary me-1"></i>
+                                ${tipoDoc || 'DTE'} <strong>#${dteNumero}</strong>
+                                <span class="badge bg-warning text-dark ms-2">${pendientes.length} productos con problema</span>
+                                <span class="text-muted small ms-2">${totalUds} uds · ~$${montoFmt} con IVA</span>
+                            </div>
+                            <button type="button" class="btn btn-success btn-sm" onclick="abrirModalRegularizarDTE('${dteNumero}')" title="Generar 1 sola NC con todas las líneas">
+                                <i class="bi bi-tools me-1"></i>Regularizar DTE completo (1 NC)
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `);
+        }
+
+        lineas.forEach(prod => {
         const estadoBadge = getEstadoBadge(prod.estado);
         const fecha = prod.dte_fecha ? new Date(prod.dte_fecha).toLocaleDateString('es-CL') : '-';
-        const acciones = `
-            <a class="btn btn-warning btn-sm" href="/app/regularizar-recepciones/?legacy=1&tab=${encodeURIComponent($('#regularizarTabFiltro').val() || 'pendiente')}&recepcion_id=${prod.id}" title="Abrir flujo completo de regularización">
-                <i class="bi bi-tools me-1"></i>Regularizar
-            </a>
-            ${prod.dte_numero ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionadoPorNumero('${prod.dte_numero}')" title="Ver DTE">
-                <i class="bi bi-eye"></i>
-            </button>` : ''}
-        `;
+        const yaRegularizado = ['REGULARIZADO', 'RECEPCIONADO_OK'].includes(String(prod.estado || '').toUpperCase());
+
+        // Mini-resumen de NC asociada (si el backend lo envía)
+        const ncInfo = prod.nc_numero
+            ? `<br><small class="text-success"><i class="bi bi-receipt-cutoff me-1"></i>NC #${prod.nc_numero}${prod.nc_id ? ` <a href="/app/dte/${prod.nc_id}/txt-acepta/" class="ms-1" title="Descargar TXT Acepta"><i class="bi bi-download"></i></a>` : ''}</small>`
+            : (prod.tipo_regularizacion ? `<br><small class="text-muted">${prod.tipo_regularizacion}</small>` : '');
+
+        // Acciones según estado: regularizado → solo ver detalle; pendiente → regularizar + ver
+        const acciones = yaRegularizado
+            ? `<button type="button" class="btn btn-outline-success btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Ver detalle de la regularización">
+                    <i class="bi bi-eye me-1"></i>Ver detalle
+               </button>`
+            : `<button type="button" class="btn btn-warning btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Abrir flujo de regularización">
+                    <i class="bi bi-tools me-1"></i>Regularizar
+               </button>
+               ${prod.dte_id ? `<button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${prod.dte_id})" title="Ver DTE">
+                    <i class="bi bi-eye"></i>
+               </button>` : ''}`;
+
         tbody.append(`
             <tr>
                 <td>
@@ -2574,19 +2780,38 @@ function renderRegularizaciones(productos) {
                 <td class="text-center">${prod.cantidad_recibida || 0}</td>
                 <td class="text-center"><span class="${(prod.cantidad_faltante || 0) > 0 ? 'text-danger fw-bold' : ''}">${prod.cantidad_faltante || 0}</span></td>
                 <td class="text-center"><span class="${(prod.cantidad_sobrante || 0) > 0 ? 'text-info fw-bold' : ''}">${prod.cantidad_sobrante || 0}</span></td>
-                <td>${estadoBadge}<br><small class="text-muted">${prod.tipo_regularizacion || ''}</small></td>
+                <td>${estadoBadge}${ncInfo}</td>
                 <td class="text-end">${acciones}</td>
             </tr>
         `);
+        });
     });
 }
 
 function actualizarIndicadoresRegularizacion(stats, total) {
+    // El conteo de "rechazados" del tab y del KPI debe sumar tanto los
+    // Productos_Recepcionados con DTE rechazado (rechazo tras recepción
+    // parcial) como los DTEs rechazados en frío (sin recepción iniciada),
+    // para que el badge coincida con lo que efectivamente se ve en la tabla.
+    const rechazadosTotales = (stats.rechazados || 0) + (stats.rechazados_sin_recepcion || 0);
     $('#kpiProblemasCompacto').text(stats.pendientes || total || 0);
     $('#kpiRegularizacionCompacto').text(stats.en_regularizacion || 0);
-    $('#kpiRechazadosCompacto').text(stats.rechazados || 0);
+    $('#kpiRechazadosCompacto').text(rechazadosTotales);
     $('#resumenProblemas').text(stats.pendientes || 0);
     $('#itemProblemasResumen').toggle((stats.pendientes || 0) > 0);
+
+    const totalTodos = (stats.pendientes || 0) + (stats.regularizados || 0) + rechazadosTotales;
+    const conteoTab = {
+        pendiente: stats.pendientes || 0,
+        en_regularizacion: stats.en_regularizacion || 0,
+        sobrante: stats.sobrantes || 0,
+        regularizado: stats.regularizados || 0,
+        rechazado: rechazadosTotales,
+        todos: totalTodos,
+    };
+    Object.keys(conteoTab).forEach(key => {
+        $(`.regularizar-tabs [data-count="${key}"]`).text(conteoTab[key]);
+    });
 }
 
 function verDTERecepcionadoPorNumero(numero) {
@@ -2599,7 +2824,9 @@ function verDTERecepcionadoPorNumero(numero) {
 }
 
 function cargarRecepciones(forzarActualizacion = false) {
-    if (!PUEDE_RECEPCIONAR_DTE) {
+    // La vista unificada aplica si puedo recepcionar (soy destino) o si
+    // puedo ajustar emitidos (soy origen). Si no tengo ninguno, redirigir.
+    if (!PUEDE_RECEPCIONAR_DTE && !PUEDE_AJUSTAR_EMITIDOS) {
         cambiarVistaUnificada(PUEDE_REGULARIZAR_DTE ? 'regularizar' : 'recepcionados');
         return;
     }
@@ -2614,7 +2841,7 @@ function cargarRecepciones(forzarActualizacion = false) {
 
     $('#recepcionesBody').html(`
         <tr>
-            <td colspan="7" class="text-center py-4">
+            <td colspan="8" class="text-center py-4">
                 <div class="spinner-border text-success" role="status">
                     <span class="visually-hidden">Cargando...</span>
                 </div>
@@ -2649,7 +2876,7 @@ function cargarRecepciones(forzarActualizacion = false) {
     }).fail(xhr => {
         $('#recepcionesBody').html(`
             <tr>
-                <td colspan="7" class="text-center py-4 text-muted">
+                <td colspan="8" class="text-center py-4 text-muted">
                     <i class="bi bi-exclamation-triangle text-warning me-2"></i>
                     Error al cargar recepciones: ${xhr.responseJSON ? xhr.responseJSON.error : 'Error inesperado'}
                 </td>
@@ -2665,11 +2892,11 @@ function renderTablaRecepciones() {
     if (!recepcionesData.length) {
         tbody.append(`
             <tr>
-                <td colspan="7">
+                <td colspan="8">
                     <div class="empty-state">
                         <i class="bi bi-clipboard-data"></i>
                         <h5 class="mt-2">Sin documentos</h5>
-                        <p class="text-muted">Cuando haya traspasos internos dirigidos a tu bodega aparecerán aquí.</p>
+                        <p class="text-muted">Cuando haya traspasos internos donde tu sucursal sea origen o destino aparecerán aquí.</p>
                     </div>
                 </td>
             </tr>
@@ -2692,7 +2919,6 @@ function renderTablaRecepciones() {
         const diasDesdeEmision = Math.floor((new Date() - new Date(doc.fecha_emision)) / (1000 * 60 * 60 * 24));
         const diasClass = diasDesdeEmision > 7 ? 'text-danger fw-bold' : diasDesdeEmision > 3 ? 'text-warning fw-bold' : 'text-muted';
 
-        // Configuración visual por estado
         const ESTADO_CONFIG = {
             'EMITIDO': {
                 badge: '<span class="badge badge-pendiente"><i class="bi bi-hourglass-split me-1"></i>Pendiente</span>',
@@ -2734,39 +2960,70 @@ function renderTablaRecepciones() {
         const estado = doc.estado_dte || 'EMITIDO';
         const config = ESTADO_CONFIG[estado] || ESTADO_CONFIG['EMITIDO'];
 
-        // Botones según estado
+        // Rol de la sucursal actual respecto a este DTE (origen|destino|ambos|otro).
+        // 'otro' aplica solo en vista global cuando el DTE no toca mi sucursal.
+        const rol = doc.rol_sucursal_actual || 'destino';
+        const ROL_BADGE = {
+            destino: '<span class="badge bg-info text-dark" title="Mi sucursal recibe este DTE"><i class="bi bi-box-arrow-in-down"></i> Recibí</span>',
+            origen:  '<span class="badge bg-secondary" title="Mi sucursal emitió este DTE"><i class="bi bi-box-arrow-up"></i> Emití</span>',
+            ambos:   '<span class="badge bg-dark" title="Misma sucursal origen y destino">Origen y Destino</span>',
+            otro:    '<span class="badge bg-light text-dark border" title="DTE de otra sucursal">Otra sucursal</span>',
+        };
+        const rolBadge = ROL_BADGE[rol] || ROL_BADGE.otro;
+
+        // Acciones según (rol, estado)
+        const motivoSafe = (doc.motivo_rechazo || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const numSafe = String(doc.numero_documento || '').replace(/'/g, "\\'");
         let botonesHtml = '';
-        switch (estado) {
-            case 'EMITIDO':
+        if (rol === 'destino' || rol === 'ambos') {
+            if (estado === 'EMITIDO' || estado === 'ACEPTADO') {
                 botonesHtml = PUEDE_RECEPCIONAR_DTE
                     ? `<button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})" title="Recepcionar documento">
                         <i class="bi bi-box-arrow-in-down me-1"></i>Recepcionar</button>`
                     : `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
                         <i class="bi bi-eye me-1"></i>Ver</button>`;
-                break;
-            case 'RECEPCIONADO_COMPLETO':
-                botonesHtml = `<button class="btn btn-outline-success btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle recepción">
-                    <i class="bi bi-eye me-1"></i>Ver</button>`;
-                break;
-            case 'RECEPCIONADO_PARCIAL':
-            case 'EN_REGULARIZACION':
+            } else if (estado === 'RECEPCIONADO_PARCIAL' || estado === 'EN_REGULARIZACION') {
                 botonesHtml = `<button class="btn btn-outline-warning btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
                     <i class="bi bi-eye me-1"></i>Ver</button>
-                    ${PUEDE_REGULARIZAR_DTE ? `<a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="btn btn-warning btn-sm ms-1" title="Ir a regularizar">
+                    ${PUEDE_REGULARIZAR_DTE ? `<a href="/app/recepcion-dte/?vista=regularizar&tab=todos&buscar=${encodeURIComponent(numSafe)}" class="btn btn-warning btn-sm ms-1" title="Ir a regularizar este DTE">
                     <i class="bi bi-tools"></i></a>` : ''}`;
-                break;
-            case 'RECHAZADO':
-                botonesHtml = `<button class="btn btn-outline-danger btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver motivo rechazo">
-                    <i class="bi bi-eye me-1"></i>Ver</button>`;
-                break;
-            default:
+            } else {
                 botonesHtml = `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
+                    <i class="bi bi-eye me-1"></i>Ver</button>`;
+            }
+        } else if (rol === 'origen') {
+            if (estado === 'RECHAZADO' && PUEDE_AJUSTAR_EMITIDOS) {
+                const tipoSafe = String(doc.tipo_documento || '').replace(/'/g, "\\'");
+                botonesHtml = `<button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${doc.id}, '${numSafe}')" title="Reactivar DTE rechazado">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar</button>
+                    <button class="btn btn-danger btn-sm ms-1" onclick="anularDteRechazadoSegunTipo(${doc.id}, '${numSafe}', '${tipoSafe}')" title="Anular (genera NC si es factura)">
+                        <i class="bi bi-x-circle"></i></button>
+                    <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
+                        <i class="bi bi-eye"></i></button>`;
+            } else if ((estado === 'EMITIDO' || estado === 'ACEPTADO') && PUEDE_AJUSTAR_EMITIDOS) {
+                botonesHtml = `<button class="btn btn-outline-warning btn-sm" onclick="abrirModalAjusteEmisor(${doc.id})" title="Ajustar antes de recepción">
+                        <i class="bi bi-pencil-square me-1"></i>Ajustar</button>
+                    <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
+                        <i class="bi bi-eye"></i></button>`;
+            } else if (estado === 'RECEPCIONADO_PARCIAL' || estado === 'EN_REGULARIZACION') {
+                botonesHtml = `<a href="/app/recepcion-dte/?vista=regularizar&tab=todos&buscar=${encodeURIComponent(numSafe)}" class="btn btn-outline-info btn-sm" title="Ver regularizaciones de este DTE">
+                        <i class="bi bi-tools me-1"></i>Ver regularizaciones</a>
+                    <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
+                        <i class="bi bi-eye"></i></button>`;
+            } else {
+                botonesHtml = `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
+                        <i class="bi bi-eye me-1"></i>Ver</button>`;
+            }
+        } else {
+            // 'otro': DTE de otra sucursal (visible solo en vista global) → solo lectura
+            botonesHtml = `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
                     <i class="bi bi-eye me-1"></i>Ver</button>`;
         }
 
         // Motivo de rechazo si aplica
-        const motivoRechazo = (estado === 'RECHAZADO' && doc.referencias)
-            ? `<br><small class="text-danger"><i class="bi bi-chat-left-text me-1"></i>${doc.referencias.substring(0, 80)}${doc.referencias.length > 80 ? '...' : ''}</small>`
+        const fuenteMotivo = doc.motivo_rechazo || doc.referencias || '';
+        const motivoRechazo = (estado === 'RECHAZADO' && fuenteMotivo)
+            ? `<br><small class="text-danger"><i class="bi bi-chat-left-text me-1"></i>${fuenteMotivo.substring(0, 80)}${fuenteMotivo.length > 80 ? '...' : ''}</small>`
             : '';
 
         // Indicador NC/Ajuste previo por el emisor
@@ -2782,6 +3039,22 @@ function renderTablaRecepciones() {
             indicadorAjuste = `<div class="mt-1">${partes.join('')} <small class="text-muted">(-${totalUds} uds)</small></div>`;
         }
 
+        // Origen → Destino: horizontal, resalto la sucursal que soy yo
+        const yoSoyOrigen = (rol === 'origen' || rol === 'ambos');
+        const yoSoyDestino = (rol === 'destino' || rol === 'ambos');
+        const claseOrigen = yoSoyOrigen ? 'fw-bold text-primary' : 'fw-semibold';
+        const claseDestino = yoSoyDestino ? 'fw-bold text-primary' : 'fw-semibold';
+        const empresaOrigen = doc.empresa_origen
+            ? `<div><small class="text-muted">${doc.empresa_origen}</small></div>`
+            : '';
+        const flujoHtml = `
+            <div class="d-flex align-items-center gap-2 flex-nowrap">
+                <span class="${claseOrigen}">${doc.sucursal_origen}</span>
+                <i class="bi bi-arrow-right text-muted"></i>
+                <span class="${claseDestino}">${doc.sucursal_destino}</span>
+                ${doc.vista_global ? '<span class="badge bg-light text-dark border ms-1" title="Vista global de todas las sucursales"><i class="bi bi-globe2"></i></span>' : ''}
+            </div>${empresaOrigen}`;
+
         tbody.append(`
             <tr data-id="${doc.id}" class="${config.rowClass}">
                 <td>
@@ -2789,10 +3062,8 @@ function renderTablaRecepciones() {
                     <small class="text-muted">${doc.observaciones || doc.referencias || ''}</small>
                     ${indicadorAjuste}
                 </td>
-                <td>
-                    <strong>${doc.sucursal_origen}</strong>
-                    <br><small class="text-muted">${doc.empresa_origen}</small>
-                </td>
+                <td class="text-center align-middle">${rolBadge}</td>
+                <td>${flujoHtml}</td>
                 <td>
                     ${fechaEmision}
                     <br>${config.indicador}
@@ -2853,12 +3124,6 @@ function actualizarConteoEstados(conteo) {
     const rechazado = conteo['RECHAZADO'] || 0;
     const total = Object.values(conteo).reduce((s, v) => s + v, 0);
 
-    $('#conteoEmitido').text(emitido);
-    $('#conteoRecepcionado').text(completo);
-    $('#conteoParcial').text(parcial);
-    $('#conteoRegularizacion').text(regularizacion);
-    $('#conteoRechazado').text(rechazado);
-    $('#conteoTodos').text(total);
     $('#kpiPendientesCompacto').text(emitido);
     $('#kpiRecibidosCompacto').text($('#resumenRecibidos').text() || '0');
     $('#kpiProblemasCompacto').text((parcial || 0) + (regularizacion || 0));
@@ -2932,6 +3197,14 @@ function verDetalle(id) {
     const documento = recepcionesData.find(doc => doc.id === id);
     if (!documento) {
         Swal.fire('Documento no encontrado', 'No se pudo encontrar la información del documento seleccionado.', 'error');
+        return;
+    }
+
+    // Vista unificada: si la sucursal actual es ORIGEN (emisor) del DTE, no
+    // puede recepcionar — redirigir al modal de solo lectura para evitar
+    // exponer el flujo de "Confirmar recepción".
+    if (documento.rol_sucursal_actual === 'origen') {
+        verDTERecepcionado(id);
         return;
     }
 
@@ -3125,14 +3398,18 @@ function renderizarProductosVerificacion() {
 
 function getEstadoBadge(estado) {
     const badges = {
-        'RECEPCIONADO_OK': '<span class="badge bg-success">OK</span>',
-        'RECEPCIONADO_PARCIAL': '<span class="badge bg-warning">Parcial</span>',
-        'FALTANTE': '<span class="badge bg-secondary">Faltante</span>',
-        'EN_REGULARIZACION': '<span class="badge bg-info">En Reg.</span>',
-        'RECEPCIONADO_SOBRANTE': '<span class="badge bg-info">Sobrante</span>',
-        'SOBRANTE_PENDIENTE': '<span class="badge bg-info">Sobrante Pend.</span>'
+        'RECEPCIONADO_OK': '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>OK</span>',
+        'RECEPCIONADO_PARCIAL': '<span class="badge bg-warning text-dark"><i class="bi bi-pie-chart me-1"></i>Parcial</span>',
+        'RECEPCIONADO_DANADO': '<span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Dañado</span>',
+        'FALTANTE': '<span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>Faltante</span>',
+        'EN_REGULARIZACION': '<span class="badge bg-info text-dark"><i class="bi bi-arrow-repeat me-1"></i>En regularización</span>',
+        'EN_SOLICITUD_REGULARIZACION': '<span class="badge bg-info text-dark"><i class="bi bi-envelope-paper me-1"></i>Solicitud enviada</span>',
+        'RECEPCIONADO_SOBRANTE': '<span class="badge bg-info text-dark"><i class="bi bi-plus-circle me-1"></i>Sobrante</span>',
+        'SOBRANTE_PENDIENTE': '<span class="badge bg-info text-dark"><i class="bi bi-hourglass me-1"></i>Sobrante pend.</span>',
+        'REGULARIZADO': '<span class="badge bg-success"><i class="bi bi-check2-all me-1"></i>Regularizado</span>',
+        'PENDIENTE': '<span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pendiente</span>',
     };
-    return badges[estado] || '<span class="badge bg-secondary">-</span>';
+    return badges[estado] || `<span class="badge bg-secondary">${estado || '-'}</span>`;
 }
 
 function toggleProductoOK(index) {
@@ -4054,7 +4331,7 @@ function procesarRecepcion(incluirProblemas) {
                             <i class="bi bi-exclamation-triangle me-2"></i>
                             <strong>Próximos pasos:</strong> Los productos con problemas quedan pendientes de regularización.
                             <br>
-                            <a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="btn btn-warning btn-sm mt-2">
+                            <a href="/app/recepcion-dte/?vista=regularizar&tab=todos&buscar=${encodeURIComponent(documentoSeleccionado ? documentoSeleccionado.numero_documento : '')}" class="btn btn-warning btn-sm mt-2">
                                 <i class="bi bi-tools me-1"></i> Ir a Regularización
                             </a>
                         </div>
@@ -4092,25 +4369,119 @@ function verDTEsConProblemas() {
 // ========== FUNCIONES PARA DTEs RECHAZADOS (que yo envié) ==========
 
 function cargarDTEsRechazados() {
-    $.getJSON('/app/dte/obtener_rechazados/')
+    // Respeta el switch "Ver todas las sucursales": si está activo, pedimos
+    // los rechazados de todas las sucursales visibles para que el conteo del
+    // banner y del badge lateral coincida con lo que muestra el modal.
+    const alcanceParam = (typeof obtenerAlcanceDte === 'function' && obtenerAlcanceDte() === 'todas') ? '?alcance=todas' : '';
+    $.getJSON('/app/dte/obtener_rechazados/' + alcanceParam)
         .done(response => {
             if (response.success && response.items && response.items.length > 0) {
-                // Mostrar la card si hay rechazados
+                // Mostrar la card lateral
                 $('#cardDTEsRechazados').removeClass('d-none');
                 $('#badgeRechazados').text(response.items.length);
+                // Mostrar el banner superior prominente
+                $('#bannerDTEsRechazados').removeClass('d-none');
+                $('#bannerCountRechazados').text(response.items.length);
             } else {
                 $('#cardDTEsRechazados').addClass('d-none');
+                $('#bannerDTEsRechazados').addClass('d-none');
             }
         })
         .fail(() => {
             console.warn('No fue posible cargar los DTEs rechazados.');
+            $('#bannerDTEsRechazados').addClass('d-none');
         });
 }
 
 function verDTEsRechazados() {
-    cambiarVistaUnificada('regularizar');
-    $('#regularizarTabFiltro').val('rechazado');
-    cargarRegularizaciones();
+    // Abrir modal propio con los DTEs rechazados emitidos por mi sucursal.
+    // No usar 'regularizar' porque esa vista lee Productos_Recepcionados,
+    // y los DTEs rechazados (sin recepcion iniciada) no estan ahi.
+    Swal.fire({
+        title: '<i class="bi bi-x-octagon-fill text-danger me-2"></i>DTEs Rechazados',
+        html: `
+            <div id="listaRechazadosContainer" class="text-start">
+                <div class="text-center py-3">
+                    <div class="spinner-border text-danger"></div>
+                    <p class="text-muted mt-2">Cargando DTEs rechazados...</p>
+                </div>
+            </div>
+        `,
+        width: '900px',
+        showCloseButton: true,
+        showConfirmButton: false,
+    });
+
+    const alcanceParam = (obtenerAlcanceDte && obtenerAlcanceDte() === 'todas') ? '?alcance=todas' : '';
+    $.getJSON('/app/dte/obtener_rechazados/' + alcanceParam)
+        .done(response => {
+            if (!response.success || !response.items || !response.items.length) {
+                $('#listaRechazadosContainer').html(`
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle me-2"></i>No tienes DTEs rechazados pendientes.
+                    </div>
+                `);
+                return;
+            }
+            const mostrarOrigen = response.items.some(i => i.sucursal_origen);
+            const rows = response.items.map(item => {
+                const tipoEsc = String(item.tipo_documento || '').replace(/'/g, "\\'");
+                return `
+                <tr>
+                    <td><strong>#${item.numero_documento}</strong></td>
+                    <td>${item.tipo_documento}</td>
+                    <td>${item.fecha_emision}</td>
+                    ${mostrarOrigen ? `<td><span class="badge bg-light text-dark">${item.sucursal_origen || '-'}</span></td>` : ''}
+                    <td>${item.receptor}</td>
+                    <td><span class="text-danger">${item.motivo_rechazo}</span></td>
+                    <td class="text-end">$${Number(item.monto).toLocaleString('es-CL')}</td>
+                    <td class="text-nowrap">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${item.id})" title="Ver detalle">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${item.id}, '${item.numero_documento}')" title="Rehabilitar">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="anularDteRechazadoSegunTipo(${item.id}, '${item.numero_documento}', '${tipoEsc}')" title="Anular (genera NC si es factura)">
+                            <i class="bi bi-x-circle me-1"></i>Anular
+                        </button>
+                    </td>
+                </tr>
+            `;
+            }).join('');
+            $('#listaRechazadosContainer').html(`
+                <div class="alert alert-warning small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    El stock origen sigue descontado mientras estos DTEs estan rechazados.
+                    Al <strong>Rehabilitar</strong> el destino podra recibir; al <strong>Anular</strong> se libera el stock.
+                    ${alcanceParam ? '<br><i class="bi bi-globe2 me-1"></i><strong>Mostrando todas las sucursales del usuario.</strong>' : ''}
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>N°</th>
+                                <th>Tipo</th>
+                                <th>Fecha</th>
+                                ${mostrarOrigen ? '<th>Origen</th>' : ''}
+                                <th>Receptor</th>
+                                <th>Motivo rechazo</th>
+                                <th class="text-end">Monto</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `);
+        })
+        .fail(() => {
+            $('#listaRechazadosContainer').html(`
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Error cargando los DTEs rechazados.
+                </div>
+            `);
+        });
 }
 
 function rehabilitarDTE(dteId, numeroDocumento) {
@@ -4197,6 +4568,7 @@ function rehabilitarDTE(dteId, numeroDocumento) {
                 
                 cargarDTEsRechazados();
                 cargarRecepciones();
+                if (window.modoVista === 'regularizar') cargarRegularizaciones();
             } else {
                 Swal.fire('Error', response.error || 'No se pudo rehabilitar el DTE', 'error');
             }
@@ -4204,6 +4576,24 @@ function rehabilitarDTE(dteId, numeroDocumento) {
             Swal.fire('Error', xhr.responseJSON?.error || 'Error de conexión', 'error');
         });
     });
+}
+
+// Despacha la anulación al flujo correcto según el tipo de documento.
+// - FACTURA/BOLETA ELECTRONICA → anularFacturaRechazada: genera NC tipo 61
+//   SII + descarga TXT Acepta + revierte stock + marca ANULADO.
+// - GUIA u otros (no tributarios) → anularDTERechazado: solo revierte stock
+//   y marca CANCELADO, sin NC.
+function anularDteRechazadoSegunTipo(dteId, numeroDocumento, tipoDocumento) {
+    const tipo = String(tipoDocumento || '').toUpperCase();
+    const esTributario = (
+        tipo === 'FACTURA ELECTRONICA' || tipo === 'FACTURA_ELECTRONICA' ||
+        tipo === 'BOLETA ELECTRONICA'  || tipo === 'BOLETA_ELECTRONICA'
+    );
+    if (esTributario) {
+        anularFacturaRechazada(dteId, numeroDocumento, tipoDocumento);
+    } else {
+        anularDTERechazado(dteId, numeroDocumento);
+    }
 }
 
 function anularDTERechazado(dteId, numeroDocumento) {
@@ -4295,6 +4685,7 @@ function anularDTERechazado(dteId, numeroDocumento) {
                 }
                 cargarDTEsRechazados();
                 cargarRecepciones();
+                if (window.modoVista === 'regularizar') cargarRegularizaciones();
             } else {
                 Swal.fire('Error', response.error || 'No se pudo anular el DTE', 'error');
             }
@@ -4393,6 +4784,7 @@ function anularFacturaRechazada(dteId, numeroDocumento, tipoDocumento) {
                 }
                 cargarDTEsRechazados();
                 cargarRecepciones();
+                if (window.modoVista === 'regularizar') cargarRegularizaciones();
             } else {
                 blob.text().then(text => {
                     try {
@@ -4565,6 +4957,14 @@ function verDTERecepcionado(dteId) {
                 estadoHtml = '<span class="badge bg-warning">⚠️ Recepcionado Parcial</span>';
             } else if (dte.estado_dte === 'EN_REGULARIZACION') {
                 estadoHtml = '<span class="badge bg-info">🔄 En Regularización</span>';
+            } else if (dte.estado_dte === 'RECHAZADO') {
+                const motivo = dte.motivo_rechazo || dte.referencias || 'Sin motivo registrado';
+                estadoHtml = `<span class="badge bg-danger">❌ Rechazado</span>`
+                    + `<div class="mt-2 alert alert-danger py-2 px-3 mb-0" style="font-size:13px;">`
+                    + `<i class="bi bi-chat-left-text me-1"></i><strong>Motivo:</strong> ${motivo}`
+                    + `</div>`;
+            } else if (dte.estado_dte === 'EMITIDO') {
+                estadoHtml = '<span class="badge bg-primary">📤 Emitido (pendiente recepción)</span>';
             } else {
                 estadoHtml = `<span class="badge bg-secondary">${dte.estado_dte}</span>`;
             }
@@ -4598,6 +4998,10 @@ function verDTERecepcionado(dteId) {
                     rowClass = 'table-warning';
                 } else if (prod.estado === 'FALTANTE') {
                     rowClass = 'table-secondary';
+                } else if (prod.estado === 'RECHAZADO') {
+                    rowClass = 'table-danger';
+                } else if (prod.estado === 'PENDIENTE') {
+                    rowClass = 'table-light';
                 }
                 
                 const estadoBadge = getEstadoBadge(prod.estado);
@@ -4636,7 +5040,8 @@ let correccionDteId = null;
 let correccionProductos = [];
 
 function cargarDTEsParaCorregir() {
-    $.getJSON('/app/dtes-pendientes-regularizar/')
+    const alcanceParam = (typeof obtenerAlcanceDte === 'function' && obtenerAlcanceDte() === 'todas') ? '?alcance=todas' : '';
+    $.getJSON('/app/dtes-pendientes-regularizar/' + alcanceParam)
         .done(response => {
             if (response.success && response.dtes && response.dtes.length > 0) {
                 dtesParaCorregirData = response.dtes;
@@ -4925,7 +5330,10 @@ function cambiarModoVista(nuevoModoEmitidos, modo) {
     $('.vista-unificada-btn').removeClass('active');
     $(`.vista-unificada-btn[data-vista="${window.modoVista}"]`).addClass('active');
     $('#panelRegularizaciones').hide();
+    $('#panelMisRegularizaciones').hide();
     $('#panelRecepciones').show();
+    // Restaurar la filter-section por si veníamos de regularizar (donde se oculta)
+    $('.filter-section').show();
     $('#filterTipoDocumento').closest('.col-md-2').show();
 
     if (window.modoVista === 'emitidos') {
@@ -4971,11 +5379,22 @@ function cargarRecepcionados() {
 }
 
 function _cargarListadoEmisor(opts) {
+    // Mapear el select de estado a los valores que entiende el backend
+    // del endpoint emitidos_pendientes_api: '', EMITIDO, RECHAZADO, TODOS.
+    const estadoUi = ($('#filterEstadoDte').val() || '').trim().toUpperCase();
+    let estadoBackend = '';
+    if (estadoUi === 'EMITIDO') estadoBackend = 'EMITIDO';
+    else if (estadoUi === 'RECHAZADO') estadoBackend = 'RECHAZADO';
+    // Cualquier otro estado (recepcionado, etc.) no aplica al modo emisor:
+    // dejamos default = EMITIDO + RECHAZADO juntos.
+
     const filtros = {
         tipo_documento: $('#filterTipoDocumento').val(),
         fecha_inicio: $('#filterFechaInicio').val(),
         fecha_fin: $('#filterFechaFin').val(),
         pagina: paginaActual,
+        alcance: obtenerAlcanceDte() === 'todas' ? 'todas' : 'sucursal',
+        estado: estadoBackend,
     };
 
     $('#recepcionesBody').html(`
@@ -5019,8 +5438,8 @@ function renderTablaEmitidos() {
             <tr><td colspan="7">
                 <div class="empty-state">
                     <i class="bi bi-clipboard-check"></i>
-                    <h5 class="mt-2">Sin DTEs emitidos pendientes</h5>
-                    <p class="text-muted">Todos los DTEs que emitiste ya fueron recepcionados por su destino, o no hay ninguno en estado "Emitido".</p>
+                    <h5 class="mt-2">Sin DTEs emitidos pendientes ni rechazados</h5>
+                    <p class="text-muted">No hay DTEs emitidos pendientes de recepción ni rechazados por el destino con los filtros actuales.</p>
                 </div>
             </td></tr>
         `);
@@ -5028,22 +5447,43 @@ function renderTablaEmitidos() {
     }
 
     window.emitidosData.forEach(d => {
+        const esRechazado = d.estado_dte === 'RECHAZADO';
+        let estadoHtml, accionesHtml;
+        if (esRechazado) {
+            const motivo = (d.motivo_rechazo || 'Sin motivo').replace(/'/g, "\\'");
+            const tipoEsc = String(d.tipo_documento || '').replace(/'/g, "\\'");
+            estadoHtml = `<span class="badge bg-danger">❌ Rechazado</span>`
+                + `<br><small class="text-danger" title="${motivo}">${motivo.substring(0,60)}${motivo.length>60?'...':''}</small>`;
+            accionesHtml = `
+                <button class="btn btn-sm btn-success" onclick="rehabilitarDTE(${d.id}, '${d.numero_documento}')" title="Rehabilitar para reintentar">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="anularDteRechazadoSegunTipo(${d.id}, '${d.numero_documento}', '${tipoEsc}')" title="Anular (genera NC si es factura)">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="verDTERecepcionado(${d.id})" title="Ver detalle">
+                    <i class="bi bi-eye"></i>
+                </button>`;
+        } else {
+            estadoHtml = `<span class="badge bg-warning text-dark">Pendiente de recepción</span>`;
+            accionesHtml = `
+                <button class="btn btn-sm btn-warning btn-abrir-ajuste" data-dte-id="${d.id}">
+                    <i class="bi bi-pencil-square me-1"></i>Ajustar
+                </button>
+                <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${d.id}" title="Ver trazabilidad">
+                    <i class="bi bi-diagram-3"></i>
+                </button>`;
+        }
+        const origenHtml = d.sucursal_origen ? `<br><small class="text-muted">desde ${d.sucursal_origen}</small>` : '';
         tbody.append(`
-            <tr>
-                <td><strong>${d.tipo_documento}</strong><br><span class="text-muted">#${d.numero_documento}</span></td>
+            <tr class="${esRechazado ? 'table-danger' : ''}">
+                <td><strong>${d.tipo_documento}</strong><br><span class="text-muted">#${d.numero_documento}</span>${origenHtml}</td>
                 <td>${d.sucursal_destino || d.receptor || '-'}</td>
                 <td>${d.fecha_emision || '-'}</td>
                 <td>${d.unidades_productos} uds</td>
                 <td>${_ajusteFormatearPesos(d.monto_con_iva)}</td>
-                <td><span class="badge bg-warning text-dark">Pendiente de recepción</span></td>
-                <td>
-                    <button class="btn btn-sm btn-warning btn-abrir-ajuste" data-dte-id="${d.id}">
-                        <i class="bi bi-pencil-square me-1"></i>Ajustar
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary btn-ver-trazabilidad" data-dte-id="${d.id}" title="Ver trazabilidad">
-                        <i class="bi bi-diagram-3"></i>
-                    </button>
-                </td>
+                <td>${estadoHtml}</td>
+                <td>${accionesHtml}</td>
             </tr>
         `);
     });
@@ -5381,7 +5821,13 @@ document.addEventListener('nc-stock-reparada', function () {
 });
 
 function abrirModalAjusteEmisor(dteId, opciones) {
-    const dte = (window.emitidosData || []).find(d => d.id === dteId);
+    // Fallback: la vista unificada (recepcionesData) puede invocar esta
+    // función para DTEs donde la sucursal actual es ORIGEN. Buscar en ambas
+    // listas para permitir el ajuste desde el modo default.
+    let dte = (window.emitidosData || []).find(d => d.id === dteId);
+    if (!dte) {
+        dte = (recepcionesData || []).find(d => d.id === dteId);
+    }
     if (!dte) {
         Swal.fire('Error', 'DTE no encontrado en la lista actual.', 'error');
         return;

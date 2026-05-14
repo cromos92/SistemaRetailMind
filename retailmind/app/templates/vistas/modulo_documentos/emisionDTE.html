@@ -1314,17 +1314,18 @@
                                 <table id="tabla_productos_busqueda" class="table table-hover table-sm mb-0" style="font-size:0.78rem;">
                                     <thead style="background: var(--nexo-secondary); color: white;">
                                         <tr>
+                                            <th class="text-center py-1 d-none d-md-table-cell" style="width:84px;"><i class="bi bi-image"></i> Foto</th>
                                             <th class="py-1" style="white-space:nowrap;">Artículo</th>
                                             <th class="py-1">Descripción / Atributos</th>
-                                            <th class="text-end py-1">Costo</th>
-                                            <th class="text-end py-1">Sobreprecio</th>
+                                            <th class="text-end py-1 d-none d-lg-table-cell">Costo</th>
+                                            <th class="text-end py-1 d-none d-lg-table-cell">Sobreprecio</th>
                                             <th class="text-center py-1">Stock</th>
                                             <th class="text-center py-1">Agregar</th>
                                         </tr>
                                     </thead>
                                     <tbody id="datos_tabla_productos">
                                         <tr>
-                                            <td colspan="6" class="text-center text-muted py-4">
+                                            <td colspan="7" class="text-center text-muted py-4">
                                                 <i class="bi bi-search me-2"></i>
                                                 Use los filtros para buscar productos
                                             </td>
@@ -3324,7 +3325,7 @@ function searchProducts() {
     // Mostrar loading en la tabla también
     $('#datos_tabla_productos').html(`
         <tr>
-            <td colspan="6" class="text-center py-4">
+            <td colspan="7" class="text-center py-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Buscando productos...</span>
                 </div>
@@ -3452,7 +3453,7 @@ function displayProductsInTable(products) {
     if (!products || products.length === 0) {
         tbody.append(`
             <tr>
-                <td colspan="6" class="text-center text-muted py-4">
+                <td colspan="7" class="text-center text-muted py-4">
                     <i class="bi bi-search me-2"></i>
                     No se encontraron productos con los filtros aplicados
                 </td>
@@ -3461,6 +3462,7 @@ function displayProductsInTable(products) {
         return;
     }
     
+    const placeholderFotoEmision = '{% static "images/producto_placeholder.svg" %}';
     products.forEach(product => {
         const marca = product.marca || '-';
         const color = product.color || '-';
@@ -3469,6 +3471,7 @@ function displayProductsInTable(products) {
         const sobreprecio = product.sobreprecio || 0;
         const stockTotal = product.stock_total || 0;
         const descripcion = product.descripcion || '-';
+        const fotoUrl = product.foto_portada_url || placeholderFotoEmision;
         
         // ═══════════════════════════════════════════════════════════════
         // CALCULAR ESTADO BASADO EN STOCK EN DESPACHO
@@ -3503,13 +3506,18 @@ function displayProductsInTable(products) {
 
         const rowHtml = `
             <tr data-product-id="${product.id}" class="${estadoClass}">
+                <td class="text-center align-middle d-none d-md-table-cell" style="padding:4px;">
+                    <img src="${fotoUrl}" class="producto-portada-img" loading="lazy" alt=""
+                         style="width:70px;height:70px;border-radius:8px;object-fit:cover;border:1px solid #e0e0e0;background:#f5f5f7;"
+                         onerror="this.src='${placeholderFotoEmision}';">
+                </td>
                 <td class="align-middle fw-semibold" style="white-space:nowrap;">${product.articulo}</td>
                 <td class="align-middle" style="max-width:200px;">
                     <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${descripcion}">${descripcion}</div>
                     ${attrBadges ? `<div class="mt-1">${attrBadges}</div>` : ''}
                 </td>
-                <td class="text-end align-middle" style="white-space:nowrap;">$${parseInt(costo).toLocaleString()}</td>
-                <td class="text-end align-middle text-muted" style="white-space:nowrap;">$${parseInt(sobreprecio).toLocaleString()}</td>
+                <td class="text-end align-middle d-none d-lg-table-cell" style="white-space:nowrap;">$${parseInt(costo).toLocaleString()}</td>
+                <td class="text-end align-middle text-muted d-none d-lg-table-cell" style="white-space:nowrap;">$${parseInt(sobreprecio).toLocaleString()}</td>
                 <td class="text-center align-middle">
                     <span class="badge rounded-pill ${stockTotal <= 0 ? 'bg-danger' : stockTotal <= 4 ? 'bg-warning text-dark' : 'bg-success'} px-2" style="font-size:0.8rem;min-width:2rem;">${stockTotal}</span>
                     ${stockEnDespacho > 0 ? `<div class="text-muted" style="font-size:0.65rem;">${stockEnDespacho} en doc.</div>` : ''}
@@ -5558,7 +5566,7 @@ function buscarPorReferencia(referencia) {
     
     $('#datos_tabla_productos').html(`
         <tr>
-            <td colspan="6" class="text-center py-4">
+            <td colspan="7" class="text-center py-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Buscando...</span>
                 </div>
@@ -5579,7 +5587,7 @@ function buscarPorReferencia(referencia) {
             } else {
                 $('#datos_tabla_productos').html(`
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-4">
+                        <td colspan="7" class="text-center text-muted py-4">
                             <i class="bi bi-search me-2"></i>
                             No se encontraron productos en DTEs para "<strong>${$('<span>').text(referencia).html()}</strong>"
                             <br><small>Intente con número de documento, emisor, SKU o artículo</small>
@@ -5593,7 +5601,7 @@ function buscarPorReferencia(referencia) {
             if (xhr.responseJSON && xhr.responseJSON.error) msg = xhr.responseJSON.error;
             $('#datos_tabla_productos').html(`
                 <tr>
-                    <td colspan="6" class="text-center text-danger py-4">
+                    <td colspan="7" class="text-center text-danger py-4">
                         <i class="bi bi-exclamation-triangle me-2"></i>${msg}
                     </td>
                 </tr>
@@ -6133,3 +6141,6 @@ function initializeSelect2Filters() {
     console.log('✅ Select2 inicializado para filtros de Marca, Categoría y Empresa Cliente');
 }
 </script>
+
+<!-- Lightbox para ampliar miniaturas de portada -->
+<script src="{% static 'js/foto_lightbox.js' %}"></script>

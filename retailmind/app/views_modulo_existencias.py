@@ -276,11 +276,17 @@ def crear_producto_desde_recepcion(request):
                 })
             
             recepcion = get_object_or_404(Productos_Recepcionados, id=recepcion_id)
-            
-            # Crear producto usando la función existente
+
+            # Crear producto usando la función existente.
+            # Pasamos la fecha de recepción para que el producto y el movimiento
+            # queden con la fecha real del DTE/recepción (no la fecha actual).
             from .views import crear_producto
-            producto = crear_producto(data, request.user)
-            
+            producto = crear_producto(
+                data,
+                request.user,
+                fecha_creacion=recepcion.fecha_recepcion,
+            )
+
             # Marcar recepción como procesada
             recepcion.producto_creado = True
             recepcion.producto = producto

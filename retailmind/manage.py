@@ -3,6 +3,16 @@
 import os
 import sys
 
+# En Windows el stdout/stderr default es cp1252 y rompe con emojis usados
+# en prints de debug del proyecto (📊, ✓, ❌, etc.). Reconfiguramos a UTF-8
+# con errors='replace' para que ningún print de debug pueda tumbar un endpoint.
+for _stream in (sys.stdout, sys.stderr):
+    if _stream is not None and hasattr(_stream, 'reconfigure'):
+        try:
+            _stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 
 def main():
     """Run administrative tasks."""

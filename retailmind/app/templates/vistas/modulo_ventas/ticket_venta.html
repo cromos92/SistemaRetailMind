@@ -1546,6 +1546,7 @@ div[style*="border: 1px solid #000"] {
                                            id="precioProducto" placeholder="$0">
                                     <input type="hidden" id="precioOriginal">
                                     <input type="hidden" id="skuCargado">
+                                    <input type="hidden" id="fotoPortadaProducto" value="">
                                 </div>
 
                                 <div class="pos-unified-input">
@@ -1624,7 +1625,7 @@ div[style*="border: 1px solid #000"] {
                                         </thead>
                                         <tbody id="tbodyTicket">
                                             <tr>
-                                                <td colspan="10" class="text-center text-muted py-4">
+                                                <td colspan="9" class="text-center text-muted py-4">
                                                     <i class="ri-shopping-cart-line" style="font-size:2rem;display:block;opacity:0.25;margin-bottom:0.4rem;"></i>
                                                     Sin productos — escanea o busca un artículo
                                                 </td>
@@ -1786,20 +1787,18 @@ div[style*="border: 1px solid #000"] {
                     <table class="table table-hover table-sm mb-0">
                         <thead class="table-light text-center" id="theadBusquedaProductos">
                             <tr>
+                                <th style="width:110px;"><i class="ri-image-line"></i> Foto</th>
                                 <th class="sortable" data-sort="sku" style="cursor: pointer;">
                                     SKU <i class="ri-arrow-up-down-line"></i>
                                 </th>
                                 <th class="sortable" data-sort="articulo" style="cursor: pointer;">
                                     Artículo <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th class="sortable" data-sort="marca" style="cursor: pointer;">
-                                    Marca <i class="ri-arrow-up-down-line"></i>
-                                </th>
                                 <th class="sortable" data-sort="color" style="cursor: pointer;">
                                     Color <i class="ri-arrow-up-down-line"></i>
                                 </th>
                                 <th class="sortable" data-sort="descripcion" style="cursor: pointer;">
-                                    Descripción <i class="ri-arrow-up-down-line"></i>
+                                    Descripción · Marca <i class="ri-arrow-up-down-line"></i>
                                 </th>
                                 <th class="col-sucursal" style="display: none;">Sucursal</th>
                                 <th class="sortable" data-sort="stock" style="cursor: pointer;">
@@ -2207,6 +2206,7 @@ $(document).ready(function() {
                     $('#precioOriginal').val(producto.precio_venta);
                     $('#stockProducto').val(producto.stock);
                     $('#skuCargado').val(sku);
+                    $('#fotoPortadaProducto').val(producto.foto_portada_url || '');
                     // Mostrar banner + panel de info del producto cargado
                     $('#bannerNombreProducto').text(producto.articulo + (producto.talla ? ' — ' + producto.talla : ''));
                     $('#bannerInfoProducto').text(
@@ -2251,6 +2251,7 @@ $(document).ready(function() {
         const precioOriginal = parseFloat($('#precioOriginal').val()) || 0;
         const cantidad = parseInt($('#cantidadProducto').val());
         const stock = parseInt($('#stockProducto').val()) || 0;
+        const fotoPortadaUrl = ($('#fotoPortadaProducto').val() || '').trim();
 
         // Validaciones
         if (!sku || !articulo || articulo === '—') {
@@ -2386,7 +2387,7 @@ $(document).ready(function() {
                     confirmButtonColor: '#3085d6'
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock);
+                        agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock, fotoPortadaUrl);
                         actualizarTablaTicket();
                         actualizarTotales();
                         limpiarFormularioProducto();
@@ -2397,7 +2398,7 @@ $(document).ready(function() {
             }
             
             // Producto nuevo o mismo producto con mismo precio
-            agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock);
+            agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock, fotoPortadaUrl);
         }
 
         actualizarTablaTicket();
@@ -2406,7 +2407,7 @@ $(document).ready(function() {
         setTimeout(function() { $('#skuProducto').trigger('focus').select(); }, 50);
     }
 
-    function agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock) {
+    function agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock, fotoPortadaUrl = '') {
         contadorProductos++;
         const nuevoProducto = {
             id: contadorProductos,
@@ -2418,6 +2419,7 @@ $(document).ready(function() {
             precio: precio,
             cantidad: cantidad,
             stock: stock,
+            foto_portada_url: fotoPortadaUrl || '',
             subtotal: precio * cantidad
         };
         productosTicket.push(nuevoProducto);
@@ -2487,7 +2489,7 @@ $(document).ready(function() {
 
         if (productosTicket.length === 0) {
             tbody.html(`<tr>
-                <td colspan="10" class="text-center text-muted py-4">
+                <td colspan="9" class="text-center text-muted py-4">
                     <i class="ri-shopping-cart-line" style="font-size:2rem;display:block;opacity:0.25;margin-bottom:0.4rem;"></i>
                     Sin productos — escanea o busca un artículo
                 </td>
@@ -2496,12 +2498,21 @@ $(document).ready(function() {
         }
 
         productosTicket.forEach(producto => {
+            const portadaImg = producto.foto_portada_url
+                ? `<img src="${producto.foto_portada_url}" class="producto-portada-img" loading="lazy" alt=""
+                        style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #e0e0e0;background:#f5f5f7;flex-shrink:0;">`
+                : '';
             const fila = `
                 <tr>
                     <td class="text-center"><small>${producto.sku}</small></td>
                     <td>
-                        <div class="fw-semibold" style="line-height:1.2;">${producto.articulo}</div>
-                        <div class="text-muted d-xl-none" style="font-size:0.75rem;">${producto.marca} | ${producto.talla}</div>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            ${portadaImg}
+                            <div style="min-width:0;">
+                                <div class="fw-semibold" style="line-height:1.2;">${producto.articulo}</div>
+                                <div class="text-muted d-xl-none" style="font-size:0.75rem;">${producto.marca} | ${producto.talla}</div>
+                            </div>
+                        </div>
                     </td>
                     <td class="d-none d-xxl-table-cell"><small class="text-muted">${producto.descripcion}</small></td>
                     <td class="d-none d-xl-table-cell"><small>${producto.marca}</small></td>
@@ -2817,7 +2828,8 @@ $(document).ready(function() {
                             p.talla || slot.talla || '',
                             parseFloat(p.precio_venta || slot.precio),
                             1,
-                            p.stock
+                            p.stock,
+                            p.foto_portada_url || ''
                         );
                         actualizarTablaTicket();
                         actualizarTotales();
@@ -3186,24 +3198,40 @@ $(document).ready(function() {
             // Información de sucursal (si está disponible)
             const sucursalNombre = producto.sucursal || '-';
             
+            const fotoUrl = producto.foto_portada_url || '{% static "images/producto_placeholder.svg" %}';
+            const placeholder = '{% static "images/producto_placeholder.svg" %}';
+            const fotoCell = `<td class="text-center" style="padding:6px;">
+                <img src="${fotoUrl}" alt="" loading="lazy"
+                     style="width:90px;height:90px;border-radius:8px;object-fit:cover;border:1px solid #e0e0e0;background:#f5f5f7;"
+                     onerror="this.src='${placeholder}';">
+            </td>`;
+
             if (producto.tallas_stock && producto.tallas_stock.length > 0) {
                 producto.tallas_stock.forEach(tallaStock => {
                     const stockDisponible = tallaStock.stock || 0;
-                    
+
                     // Columna de sucursal (condicional)
-                    const colSucursal = mostrarSucursal ? 
-                        `<td class="col-sucursal"><span class="badge bg-secondary">${sucursalNombre}</span></td>` : 
+                    const colSucursal = mostrarSucursal ?
+                        `<td class="col-sucursal"><span class="badge bg-secondary">${sucursalNombre}</span></td>` :
                         '';
-                    
+
+                    // Descripción + Marca fusionadas (descripcion arriba, marca como badge debajo).
+                    const marcaBadge = marca && marca !== '-'
+                        ? `<span class="badge bg-info-subtle text-info-emphasis" style="font-size:0.7rem;font-weight:600;">${marca}</span>`
+                        : '';
+                    const tallaBadge = tallaStock.talla
+                        ? `<span class="badge bg-secondary" style="font-size:0.65rem;">${tallaStock.talla}</span>`
+                        : '';
+
                     const fila = `
                         <tr class="${stockDisponible <= 0 ? 'table-secondary opacity-75' : ''}">
+                            ${fotoCell}
                             <td><strong>${tallaStock.sku || '-'}</strong></td>
                             <td>${producto.articulo || '-'}</td>
-                            <td>${marca}</td>
                             <td>${color}</td>
                             <td>
-                                <span class="text-truncate d-inline-block" style="max-width:180px;" title="${producto.descripcion || ''}">${producto.descripcion || '-'}</span>
-                                ${tallaStock.talla ? `<br><span class="badge bg-secondary" style="font-size:0.65rem;">${tallaStock.talla}</span>` : ''}
+                                <div style="font-weight:500;" title="${producto.descripcion || ''}">${producto.descripcion || '-'}</div>
+                                <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">${marcaBadge}${tallaBadge}</div>
                             </td>
                             ${colSucursal}
                             <td>
@@ -3214,7 +3242,7 @@ $(document).ready(function() {
                             <td><strong>$${precioFormateado}</strong></td>
                             <td>
                                 ${stockDisponible > 0
-                                    ? `<button class="btn btn-sm btn-primary seleccionar-producto" 
+                                    ? `<button class="btn btn-sm btn-primary seleccionar-producto"
                                                data-sku="${tallaStock.sku || ''}"
                                                data-articulo="${producto.articulo || ''}"
                                                data-descripcion="${producto.descripcion || ''}"
@@ -3223,7 +3251,8 @@ $(document).ready(function() {
                                                data-precio="${precioVenta}"
                                                data-stock="${stockDisponible}"
                                                data-sucursal-id="${producto.sucursal_id || ''}"
-                                               data-sucursal="${sucursalNombre}">
+                                               data-sucursal="${sucursalNombre}"
+                                               data-foto-portada="${producto.foto_portada_url || ''}">
                                            <i class="ri-add-line"></i> Seleccionar
                                        </button>`
                                     : `<button class="btn btn-sm btn-outline-secondary" disabled title="Sin stock disponible">
@@ -3331,7 +3360,8 @@ $(document).ready(function() {
             marca: $(this).data('marca'),
             talla: $(this).data('talla'),
             precio: $(this).data('precio'),
-            stock: $(this).data('stock')
+            stock: $(this).data('stock'),
+            foto_portada_url: $(this).data('foto-portada') || ''
         };
 
         // ── Si viene de un slot de acceso rápido en modo configuración ──
@@ -3370,6 +3400,7 @@ $(document).ready(function() {
         $('#precioOriginal').val(producto.precio || 0);
         $('#stockProducto').val(producto.stock || 0);
         $('#skuCargado').val(producto.sku || '');
+        $('#fotoPortadaProducto').val(producto.foto_portada_url || '');
         $('#cantidadProducto').val(1);
 
         // Mostrar banner + panel info de producto cargado
@@ -4340,3 +4371,6 @@ if (QZ_CONFIG.habilitado) {
     });
 }
 </script>
+
+<!-- Lightbox para ampliar miniaturas de portada (carrito + modal búsqueda) -->
+<script src="{% static 'js/foto_lightbox.js' %}"></script>

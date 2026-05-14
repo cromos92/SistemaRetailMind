@@ -150,7 +150,10 @@
 .table-responsive {
     border-radius: 12px;
     border: 1px solid #e9ecef;
-    overflow: hidden;
+    /* overflow-x auto habilita scroll horizontal cuando la tabla excede el ancho,
+       necesario para que la columna 'Acciones' sticky funcione. */
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 #tablaCompras {
@@ -164,31 +167,56 @@
 #tablaCompras thead th {
     color: white;
     font-weight: 600;
-    font-size: 0.73rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 0.7rem 0.6rem;
+    letter-spacing: 0.4px;
+    padding: 0.55rem 0.5rem;
     border: none;
     white-space: nowrap;
     background: inherit;
 }
 
 #tablaCompras tbody tr {
-    transition: all 0.2s ease;
-    border-bottom: 1px solid #f8f9fa;
+    transition: background 0.15s ease;
+    border-bottom: 1px solid #f1f3f5;
 }
 
 #tablaCompras tbody tr:hover {
-    background: rgba(64, 81, 137, 0.05);
-    transform: scale(1.002);
+    background: rgba(64, 81, 137, 0.045);
 }
 
 #tablaCompras tbody td {
-    padding: 0.875rem 0.75rem;
+    padding: 0.55rem 0.55rem;
     vertical-align: middle;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     color: #495057;
+    line-height: 1.35;
 }
+
+/* Meta-línea con fecha/responsable bajo el nombre de la compra */
+#tablaCompras .compra-meta {
+    font-size: 0.68rem;
+    color: #8a92a3;
+    margin-top: 2px;
+    line-height: 1.3;
+}
+#tablaCompras .compra-meta i { font-size: 0.7rem; opacity: .7; }
+#tablaCompras .compra-meta .dot { color: #ced4da; margin: 0 4px; }
+
+/* Inversión compacta (costo + unidades) */
+#tablaCompras .td-inversion .monto {
+    font-weight: 600; color: #1a1a2e; font-size: 0.82rem;
+    font-family: 'Inter', monospace;
+}
+#tablaCompras .td-inversion .uds {
+    font-size: 0.68rem; color: #8a92a3; margin-top: 1px;
+}
+
+/* Badges más finos en la grilla */
+#tablaCompras .badge { padding: 0.32em 0.55em; font-size: 0.68rem; }
+#tablaCompras .td-proveedor { font-weight: 600; color: #344053; }
+#tablaCompras .td-nombre { min-width: 180px; max-width: 280px; }
+#tablaCompras .td-nombre > div > span:first-child { font-weight: 600; color: #1a1a2e; }
 
 /* Badges mejorados */
 .badge {
@@ -611,27 +639,259 @@
     .table-responsive { -webkit-overflow-scrolling: touch; }
 }
 
-/* --- Botones de acción de compra - vincular responsive --- */
-#tablaCompras .btn-group-sm .btn.btn-soft-purple,
-#tablaCompras .btn-group-sm .vincular-retroactivo {
-    transition: all .2s;
+/* === Autocompletado inline para Vinculación Retroactiva === */
+.vincRetro-search-wrapper {
+    position: relative;
 }
-@media (max-width: 767.98px) {
-    #tablaCompras .btn-group-sm { gap: 1px; }
-    #tablaCompras .btn-group-sm .btn { padding: 2px 4px; font-size: .7rem; }
+.vincRetro-autocomplete {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 1080;
+    width: 760px;
+    max-width: 94vw;
+    max-height: 480px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #c8a4f5;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(124,58,237,0.18);
 }
+.vincRetro-grupo {
+    border-bottom: 2px solid #ede4fc;
+}
+.vincRetro-grupo:last-child { border-bottom: 0; }
+.vincRetro-grupo-header {
+    background: linear-gradient(135deg, #faf5ff 0%, #f3ebff 100%);
+    padding: 8px 12px;
+    border-bottom: 1px solid #ede4fc;
+    font-size: 0.76rem;
+}
+.vincRetro-grupo-header .articulo {
+    font-weight: 700;
+    color: #4c1d95;
+    font-size: 0.82rem;
+}
+.vincRetro-grupo-header .atributos {
+    color: #6c757d;
+    font-size: 0.7rem;
+    margin-top: 2px;
+}
+.vincRetro-grupo-header .atributos .chip {
+    display: inline-block;
+    background: #fff;
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    margin-right: 3px;
+    font-size: 0.66rem;
+}
+.vincRetro-talla-row {
+    padding: 7px 12px;
+    border-bottom: 1px solid #f1f3f5;
+    cursor: pointer;
+    transition: background 0.12s;
+    font-size: 0.74rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.vincRetro-talla-row:last-child { border-bottom: 0; }
+.vincRetro-talla-row:hover { background: #faf5ff; }
+.vincRetro-talla-row.disabled { cursor: not-allowed; opacity: 0.55; background: #f8f9fa; }
+.vincRetro-talla-row.disabled:hover { background: #f8f9fa; }
+.vincRetro-talla-row .principal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.vincRetro-talla-row .talla-badge {
+    background: #7c3aed;
+    color: #fff;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    min-width: 38px;
+    text-align: center;
+}
+.vincRetro-talla-row .trace {
+    font-size: 0.7rem;
+    color: #6c757d;
+    line-height: 1.5;
+    padding-left: 6px;
+    border-left: 2px solid #ede4fc;
+    margin-left: 2px;
+}
+.vincRetro-talla-row .trace i { opacity: 0.85; }
+.vincRetro-talla-row .trace .label {
+    font-weight: 600;
+    color: #495057;
+    margin-right: 3px;
+}
+.vincRetro-talla-row .ingresos-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.vincRetro-talla-row .ingreso-chip {
+    display: inline-block;
+    background: #e8fbf5;
+    color: #0a7d65;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    border: 1px solid #b7ebdb;
+}
+.vincRetro-talla-row .chip-compra {
+    display: inline-block;
+    background: #faf5ff;
+    color: #4c1d95;
+    padding: 2px 8px;
+    border-radius: 8px;
+    margin-right: 4px;
+    margin-top: 2px;
+    font-size: 0.68rem;
+    border: 1px solid #d8c4f0;
+}
+/* === Vista a nivel artículo (sin desglose por talla) === */
+.vincRetro-grupo-body {
+    padding: 10px 14px 12px;
+    font-size: 0.74rem;
+    color: #495057;
+    background: #fff;
+}
+.vincRetro-grupo.grupo-vinculado .vincRetro-grupo-body {
+    background: #f8faf8;
+    opacity: 0.85;
+}
+.vincRetro-info-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+    line-height: 1.5;
+}
+.vincRetro-info-line:last-child { margin-bottom: 0; }
+.vincRetro-info-line .label {
+    font-weight: 600;
+    color: #495057;
+    white-space: nowrap;
+}
+.vincRetro-info-line .ingresos-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.vincRetro-info-line .ingreso-chip {
+    display: inline-block;
+    background: #e8fbf5;
+    color: #0a7d65;
+    padding: 2px 9px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    border: 1px solid #b7ebdb;
+}
+.vincRetro-info-line .sucursal-chip {
+    display: inline-block;
+    background: #eef2ff;
+    color: #3730a3;
+    padding: 2px 9px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    border: 1px solid #c7d2fe;
+}
+.vincRetro-info-line .chip-compra {
+    display: inline-block;
+    background: #faf5ff;
+    color: #4c1d95;
+    padding: 2px 9px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    border: 1px solid #d8c4f0;
+}
+.vincRetro-info-line.totales-line { gap: 8px; }
+.vincRetro-info-line .totales-badge {
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+.vincRetro-info-line .totales-badge.bg-info { background: #0dcaf0 !important; color: #084c61; }
+.vincRetro-info-line .totales-badge.bg-success { background: #198754 !important; }
+.vincRetro-info-line .totales-badge.bg-secondary { background: #6c757d !important; }
+.vincRetro-talla-row .cta {
+    color: #7c3aed;
+    font-weight: 600;
+    font-size: 0.68rem;
+    white-space: nowrap;
+}
+.vincRetro-autocomplete .vincRetro-empty,
+.vincRetro-autocomplete .vincRetro-loading {
+    padding: 12px;
+    text-align: center;
+    color: #8a92a3;
+    font-size: 0.78rem;
+}
+/* Aviso de qué hace la vinculación */
+.vincRetro-autocomplete .vincRetro-aviso {
+    background: #fffbe6;
+    border-bottom: 1px solid #ffeaa7;
+    padding: 5px 10px;
+    font-size: 0.66rem;
+    color: #8a6d3b;
+}
+/* La celda con el buscador necesita overflow visible para que el autocomplete asome */
+#vincRetro_contenido td.td-buscar { overflow: visible !important; }
 
 /* Animaciones suaves */
 .btn, .badge, .dropdown-item, tr {
     transition: all 0.2s ease;
 }
 
-/* Dropdown acciones mobile */
+/* === Columna Acciones: dropdown único responsivo + sticky a la derecha === */
+.td-actions,
+.th-actions {
+    width: 1%;
+    white-space: nowrap;
+    text-align: center;
+    position: sticky;
+    right: 0;
+    background: #ffffff;
+    /* Sombra hacia la izquierda cuando hay contenido oculto detrás */
+    box-shadow: -6px 0 8px -6px rgba(0,0,0,0.12);
+}
+/* Header sticky: debe ir por encima del thead horizontal sticky y de las celdas del body */
+#tablaCompras thead .th-actions {
+    z-index: 3;
+    background: #f8f9fa;
+}
+#tablaCompras tbody .td-actions {
+    z-index: 1;
+}
+/* Hover y filas históricas: mantener fondo consistente bajo sticky */
+#tablaCompras tbody tr:hover .td-actions {
+    background: #f5f7fb;
+}
+#tablaCompras tbody tr.row-historica .td-actions {
+    background: #faf5ff;
+}
+#tablaCompras tbody tr.row-historica:hover .td-actions {
+    background: #f3ebff;
+}
 .td-actions .dropdown-menu {
     font-size: 0.85rem;
-    min-width: 190px;
+    min-width: 230px;
     border-radius: 10px;
     border: 1px solid #e9ecef;
+    padding: 6px 0;
+}
+.td-actions .dropdown-header {
+    color: #7c3aed;
+    font-weight: 700;
 }
 .td-actions .dropdown-item {
     padding: 8px 14px;
@@ -640,6 +900,28 @@
 .td-actions .dropdown-item i {
     width: 18px;
     text-align: center;
+}
+.td-actions .dropdown .btn.btn-acciones {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(64,81,137,0.2);
+}
+.td-actions .dropdown .btn.btn-acciones:hover,
+.td-actions .dropdown .btn.btn-acciones:focus,
+.td-actions .dropdown .btn.btn-acciones.show {
+    background: linear-gradient(135deg, #344577 0%, #089a85 100%);
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(64,81,137,0.35);
+    transform: translateY(-1px);
+}
+.td-actions .dropdown .btn.btn-acciones .bi-caret-down-fill { opacity: .8; }
+@media (max-width: 767.98px) {
+    .td-actions .dropdown .btn.btn-acciones { padding: 5px 8px; font-size: 0.72rem; }
 }
 
 /* Stats cards en tabla */
@@ -1355,22 +1637,13 @@
                                 <th class="col-hide-md">
                                     <i class="bi bi-calendar-range me-1"></i>Temporada
                                 </th>
-                                <th class="col-hide-sm">
-                                    <i class="bi bi-calendar-check me-1"></i>Fecha
-                                </th>
                                 <th class="text-end col-hide-md">
-                                    <i class="bi bi-currency-dollar me-1"></i>Costo
-                                </th>
-                                <th class="text-center col-hide-sm">
-                                    <i class="bi bi-box-seam me-1"></i>Uds.
+                                    <i class="bi bi-currency-dollar me-1"></i>Inversión
                                 </th>
                                 <th class="text-center">
                                     <i class="bi bi-check2-circle me-1 d-none d-md-inline"></i>Avance
                                 </th>
-                                <th class="col-hide-lg">
-                                    <i class="bi bi-person me-1"></i>Responsable
-                                </th>
-                                <th class="text-center" style="min-width: 40px;"><i class="bi bi-gear"></i></th>
+                                <th class="text-center th-actions" style="min-width: 60px;" title="Acciones"><i class="bi bi-gear"></i></th>
                             </tr>
                         </thead>
                         <tbody id="tbodyCompras">
@@ -1539,6 +1812,26 @@
                                 </div>
                             </div>
 
+                            <!-- Sección: Compra histórica -->
+                            <div class="mb-3">
+                                <div class="card border-0 shadow-sm" style="border-radius: 12px; background: #faf5ff; border-left: 4px solid #7c3aed !important;">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="form-check d-flex align-items-start gap-2 mb-0">
+                                            <input class="form-check-input mt-1" type="checkbox" id="es_historica" name="es_historica" value="1" style="cursor: pointer;">
+                                            <label class="form-check-label" for="es_historica" style="cursor: pointer;">
+                                                <span class="fw-semibold" style="color: #7c3aed;">
+                                                    <i class="bi bi-clock-history me-1"></i> Compra histórica (ya recibida)
+                                                </span>
+                                                <br>
+                                                <small class="text-muted" style="font-size: 11px;">
+                                                    Marca esta compra si la mercadería ya fue creada y despachada en el sistema. Al guardar se abrirá automáticamente el modal para vincularla a productos existentes. <strong>No modificará stock</strong> — solo trazabilidad para reportes (compra, rendimiento de proveedor).
+                                                </small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Sección opcional: Datos adicionales (lead time) -->
                             <div class="mb-3">
                                 <div class="accordion" id="accordionDatosAdicionales">
@@ -1602,6 +1895,238 @@
                                     </button>
                                     <button type="submit" class="btn text-white px-3 px-sm-4" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; border-radius: 10px;">
                                         <i class="bi bi-check2-circle me-1"></i>Crear Compra
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Editar Compra -->
+        <div class="modal fade" id="modalEditarCompra" tabindex="-1" aria-labelledby="modalEditarCompraLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+                    <form id="formEditarCompra">
+                        {% csrf_token %}
+                        <input type="hidden" id="editCompraId" name="compra_id">
+
+                        <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="rounded-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background: rgba(255,255,255,0.2);">
+                                    <i class="bi bi-pencil-square fs-4 text-white"></i>
+                                </div>
+                                <div>
+                                    <h5 class="modal-title mb-0 fw-bold text-white" id="modalEditarCompraLabel">
+                                        Editar Compra
+                                    </h5>
+                                    <small class="text-white opacity-75" id="editCompraSubtitulo">Modifica los datos de la compra</small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+
+                        <div class="modal-body p-4" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);">
+
+                            <div id="editCompraLoader" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <div class="mt-2 text-muted">Cargando datos de la compra...</div>
+                            </div>
+
+                            <div id="editCompraContenido" style="display:none;">
+
+                                <!-- Aviso fecha → reportes -->
+                                <div class="alert d-flex align-items-start gap-2 mb-3 py-2" style="background:#fff8e1;border-left:4px solid #f7b84b;border-radius:10px;font-size:.78rem;">
+                                    <i class="bi bi-info-circle-fill mt-1" style="color:#f7b84b;"></i>
+                                    <div>
+                                        <strong style="color:#92400e;">Sobre la fecha:</strong>
+                                        la <em>Fecha real</em> que pongas decide en qué año aparece la compra en el <strong>Dashboard de Compras</strong> y en el <strong>Reporte de Rendimiento Proveedor</strong>. Si emitiste la compra en un año pero la mercadería llegó en otro, pon la fecha que quieres que cuente en los reportes.
+                                    </div>
+                                </div>
+
+                                <!-- Proveedor -->
+                                <div class="mb-4">
+                                    <div class="d-flex align-items-center gap-2 mb-3">
+                                        <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                            <i class="bi bi-building me-1"></i> Proveedor
+                                        </span>
+                                        <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                    </div>
+                                    <div class="card border-0 shadow-sm" style="border-radius: 12px;">
+                                        <div class="card-body">
+                                            <label for="edit_empresa" class="form-label fw-semibold" style="color: #405189;">
+                                                <i class="bi bi-shop me-1"></i>Empresa Proveedora
+                                            </label>
+                                            <select class="form-select" id="edit_empresa" name="empresa" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                <option value="" disabled>Seleccione una empresa</option>
+                                                {% for empresa in empresas %}
+                                                <option value="{{ empresa.id }}">{{ empresa.nombre }} - {{ empresa.rut }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Información -->
+                                <div class="mb-4">
+                                    <div class="d-flex align-items-center gap-2 mb-3">
+                                        <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                            <i class="bi bi-info-circle me-1"></i> Información
+                                        </span>
+                                        <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                    </div>
+                                    <div class="card border-0 shadow-sm" style="border-radius: 12px;">
+                                        <div class="card-body">
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label for="edit_nombre" class="form-label fw-semibold" style="color: #405189;">
+                                                        <i class="bi bi-tag me-1"></i>Nombre de la Compra
+                                                    </label>
+                                                    <input type="text" class="form-control" id="edit_nombre" name="nombre" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label for="edit_tipo" class="form-label fw-semibold" style="color: #405189;">
+                                                        <i class="bi bi-diagram-3 me-1"></i>Tipo de Compra
+                                                    </label>
+                                                    <select class="form-select" id="edit_tipo" name="tipo" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                        <option value="inicial">Compra Inicial</option>
+                                                        <option value="reposicion">Reposición</option>
+                                                        <option value="urgente">Urgente</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label for="edit_fecha" class="form-label fw-semibold d-flex align-items-center gap-1" style="color: #405189;">
+                                                        <i class="bi bi-calendar-date me-1"></i>Fecha Real de la Compra
+                                                        <i class="bi bi-question-circle-fill text-warning" data-bs-toggle="tooltip" data-bs-html="true"
+                                                           title="Esta fecha define en qué <strong>año fiscal</strong> aparece la compra en los reportes. Si cambias el año, la compra se moverá de período."></i>
+                                                    </label>
+                                                    <input type="date" class="form-control" id="edit_fecha" name="fecha" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <small class="text-muted d-block mt-1" style="font-size: 11px;">
+                                                        <i class="bi bi-info-circle me-1"></i>
+                                                        Si esta compra es histórica y ya está vinculada, al cambiarla se propagará a las recepciones asociadas.
+                                                    </small>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label for="edit_temporada_familia" class="form-label fw-semibold" style="color: #405189;">
+                                                        <i class="bi bi-cloud-sun me-1"></i>Temporada
+                                                    </label>
+                                                    <select class="form-select" id="edit_temporada_familia" name="temporada_familia" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                        <option value="">Sin definir</option>
+                                                        <option value="VERANO">Verano</option>
+                                                        <option value="OTONO">Otoño</option>
+                                                        <option value="INVIERNO">Invierno</option>
+                                                        <option value="PRIMAVERA">Primavera</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label for="edit_temporada_anio" class="form-label fw-semibold" style="color: #405189;">
+                                                        <i class="bi bi-123 me-1"></i>Año
+                                                    </label>
+                                                    <input type="number" class="form-control" id="edit_temporada_anio" name="temporada_anio" min="2000" max="2100" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Período -->
+                                <div class="mb-3">
+                                    <div class="d-flex align-items-center gap-2 mb-3">
+                                        <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                            <i class="bi bi-calendar-range me-1"></i> Período de Temporada
+                                        </span>
+                                        <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                    </div>
+                                    <div class="card border-0 shadow-sm" style="border-radius: 12px;">
+                                        <div class="card-body">
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label for="edit_fechaInicioTemporada" class="form-label fw-semibold" style="color: #405189;">
+                                                        <i class="bi bi-calendar-event me-1"></i>Fecha Inicio
+                                                    </label>
+                                                    <input type="date" class="form-control" id="edit_fechaInicioTemporada" name="fechaInicioTemporada" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label for="edit_fechaTerminoTemporada" class="form-label fw-semibold" style="color: #405189;">
+                                                        <i class="bi bi-calendar-check me-1"></i>Fecha Término
+                                                    </label>
+                                                    <input type="date" class="form-control" id="edit_fechaTerminoTemporada" name="fechaTerminoTemporada" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Histórica -->
+                                <div class="mb-3">
+                                    <div class="card border-0 shadow-sm" style="border-radius: 12px; background: #faf5ff; border-left: 4px solid #7c3aed !important;">
+                                        <div class="card-body py-2 px-3">
+                                            <div class="form-check d-flex align-items-start gap-2 mb-0">
+                                                <input class="form-check-input mt-1" type="checkbox" id="edit_es_historica" name="es_historica" value="1" style="cursor: pointer;">
+                                                <label class="form-check-label" for="edit_es_historica" style="cursor: pointer;">
+                                                    <span class="fw-semibold" style="color: #7c3aed;">
+                                                        <i class="bi bi-clock-history me-1"></i> Compra histórica (ya recibida)
+                                                    </span>
+                                                    <br>
+                                                    <small class="text-muted" style="font-size: 11px;">
+                                                        Si esta compra ya tiene movimientos de stock reales, este flag está bloqueado.
+                                                    </small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Datos adicionales -->
+                                <div class="mb-3">
+                                    <div class="accordion" id="accordionEditDatosAdicionales">
+                                        <div class="accordion-item" style="border-radius: 12px; overflow: hidden; border: 1px solid #e9ecef;">
+                                            <h2 class="accordion-header" id="headingEditDatosAdicionales">
+                                                <button class="accordion-button collapsed fw-semibold" type="button"
+                                                    data-bs-toggle="collapse" data-bs-target="#collapseEditDatosAdicionales"
+                                                    aria-expanded="false" aria-controls="collapseEditDatosAdicionales"
+                                                    style="color: #405189; background: #f8f9fa;">
+                                                    <i class="bi bi-truck me-2"></i>Datos adicionales (lead time)
+                                                </button>
+                                            </h2>
+                                            <div id="collapseEditDatosAdicionales" class="accordion-collapse collapse" aria-labelledby="headingEditDatosAdicionales" data-bs-parent="#accordionEditDatosAdicionales">
+                                                <div class="accordion-body">
+                                                    <div class="row g-3">
+                                                        <div class="col-md-6">
+                                                            <label for="edit_fecha_envio_proveedor" class="form-label fw-semibold" style="color: #405189;">
+                                                                <i class="bi bi-box-seam me-1"></i>Fecha envío del proveedor
+                                                            </label>
+                                                            <input type="date" class="form-control" id="edit_fecha_envio_proveedor" name="fecha_envio_proveedor" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label for="edit_fecha_entrega_real" class="form-label fw-semibold" style="color: #405189;">
+                                                                <i class="bi bi-check-circle me-1"></i>Fecha entrega real
+                                                            </label>
+                                                            <input type="date" class="form-control" id="edit_fecha_entrega_real" name="fecha_entrega_real" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div class="modal-footer border-0 py-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                            <div class="d-flex justify-content-between w-100 align-items-center flex-wrap gap-2">
+                                <small class="d-none d-sm-block" style="color: #405189;">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Los cambios se aplican al guardar
+                                </small>
+                                <div class="d-flex gap-2 flex-grow-1 flex-sm-grow-0 justify-content-end">
+                                    <button type="button" class="btn btn-outline-secondary px-3 px-sm-4" data-bs-dismiss="modal" style="border-radius: 10px;">
+                                        <i class="bi bi-x-lg me-1"></i>Cancelar
+                                    </button>
+                                    <button type="submit" class="btn text-white px-3 px-sm-4" id="btnGuardarEdicionCompra" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; border-radius: 10px;">
+                                        <i class="bi bi-check2-circle me-1"></i>Guardar Cambios
                                     </button>
                                 </div>
                             </div>
@@ -3089,52 +3614,65 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-3">
-                <div class="alert alert-info d-flex align-items-start gap-2 py-2 mb-3" style="font-size:.82rem;">
-                    <i class="bi bi-info-circle-fill mt-1"></i>
-                    <div>
-                        Muestra solo productos <strong>rebajados con factura</strong> que aún no tienen producto vinculado en el sistema.
-                        Usa <strong>Auto-vincular</strong> para match automático por nombre + talla, o busca manualmente por SKU.
+                <!-- Guía de uso paso a paso -->
+                <div class="card border-0 mb-3" style="background:#faf5ff;border-radius:10px;">
+                    <div class="card-body p-2 px-3">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <i class="bi bi-info-circle-fill" style="color:#7c3aed;"></i>
+                            <strong style="color:#4c1d95;font-size:.82rem;">Flujo</strong>
+                        </div>
+                        <ol class="mb-0 ps-3" style="font-size:.75rem;color:#495057;line-height:1.5;">
+                            <li>Opcional: elige el <strong>DTE</strong> (factura) que respalda esta compra.</li>
+                            <li>Pulsa <strong style="color:#7c3aed;">Auto-vincular</strong> para asociar automáticamente las tallas que matcheen por nombre + talla.</li>
+                            <li>Para el resto, usa el buscador de cada fila. <strong>Se aplica al instante</strong> — si te equivocas, usa <strong>Desvincular</strong> en la fila o "Deshacer última" arriba.</li>
+                        </ol>
                     </div>
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                    <div class="d-flex gap-2 align-items-center">
-                        <button class="btn btn-primary btn-sm" id="btnAutoVincular" onclick="vincRetro_autoVincular()">
-                            <i class="bi bi-magic me-1"></i> Auto-vincular
+                <!-- Selector DTE + Filtro -->
+                <div class="row g-2 mb-2 align-items-end">
+                    <div class="col-md-6">
+                        <label for="vincRetro_dteSelect" class="form-label mb-1" style="font-size:.74rem;color:#4c1d95;font-weight:600;">
+                            <i class="bi bi-receipt me-1"></i>DTE asociada a esta compra (opcional)
+                        </label>
+                        <select id="vincRetro_dteSelect" class="form-select form-select-sm" style="border-color:#c8a4f5;font-size:.78rem;">
+                            <option value="">— Sin DTE asignado —</option>
+                        </select>
+                        <small class="text-muted" style="font-size:.65rem;">Se asociará a todas las recepciones generadas en esta vinculación.</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="vincRetro_filtro" class="form-label mb-1" style="font-size:.74rem;color:#4c1d95;font-weight:600;">
+                            <i class="bi bi-funnel me-1"></i>Filtrar productos
+                        </label>
+                        <input type="text" id="vincRetro_filtro" class="form-control form-control-sm" placeholder="Nombre, marca, color o talla..." autocomplete="off" style="border-color:#c8a4f5;font-size:.78rem;">
+                    </div>
+                </div>
+
+                <!-- Acción primaria + resumen + undo -->
+                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <button class="btn btn-sm text-white" id="btnAutoVincular" onclick="vincRetro_autoVincular()" style="background:linear-gradient(135deg,#7c3aed,#4c1d95);font-weight:500;">
+                            <i class="bi bi-magic me-1"></i> Auto-vincular tallas
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary d-none" id="btnExpandirTodos" onclick="vincRetro_toggleColapsoTodos()" type="button" style="font-size:.72rem;">
+                            <i class="bi bi-arrows-expand me-1"></i>Expandir todos
                         </button>
                         <span class="badge bg-light text-dark border" id="vincRetro_resumen" style="font-size:.78rem;">Cargando...</span>
                     </div>
-                    <div class="input-group" style="max-width:320px;">
-                        <input type="text" class="form-control form-control-sm" id="vincRetro_buscarSku" placeholder="Buscar SKU o artículo..." autocomplete="off">
-                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="vincRetro_buscarSkuManual()">
-                            <i class="bi bi-search"></i>
+                    <div id="vincRetro_undoWrapper" class="d-none">
+                        <button class="btn btn-sm btn-warning" id="btnDeshacerUltima" onclick="vincRetro_deshacerUltima()" type="button" style="font-size:.74rem;">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Deshacer última
+                            <span class="badge bg-light text-dark ms-1" id="undoTimer" style="font-size:.62rem;"></span>
                         </button>
                     </div>
                 </div>
 
                 <div id="vincRetro_contenido" style="max-height:55vh;overflow-y:auto;"></div>
-
-                <div id="vincRetro_resultadosBusqueda" class="mt-2" style="display:none;">
-                    <div class="card border-primary">
-                        <div class="card-header bg-primary text-white py-1 d-flex justify-content-between align-items-center" style="font-size:.8rem;">
-                            <span><i class="bi bi-search me-1"></i>Resultados de búsqueda</span>
-                            <button class="btn btn-sm btn-light py-0 px-2" onclick="$('#vincRetro_resultadosBusqueda').hide();" style="font-size:.72rem;">Cerrar</button>
-                        </div>
-                        <div class="card-body p-2" style="max-height:250px;overflow-y:auto;">
-                            <div id="vincRetro_busquedaCount" class="mb-1 px-1" style="font-size:.7rem;color:#6c757d;"></div>
-                            <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
-                                <thead><tr><th>SKU</th><th>Artículo</th><th>Talla</th><th>Stock</th><th class="d-none d-md-table-cell">Marca</th><th class="d-none d-md-table-cell">Color</th><th>Sucursal</th><th></th></tr></thead>
-                                <tbody id="vincRetro_tbodyBusqueda"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
             </div>
             <div class="modal-footer border-0 bg-light">
                 <span class="me-auto text-muted" style="font-size:.78rem;" id="vincRetro_footerInfo"></span>
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn text-white" id="btnConfirmarVinculacion" onclick="vincRetro_confirmar()" style="background:linear-gradient(135deg,#7c3aed,#4c1d95);" disabled>
-                    <i class="bi bi-check-lg me-1"></i> Confirmar Vinculación
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cerrar
                 </button>
             </div>
         </div>
@@ -6894,13 +7432,32 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             // Usar las funciones exportadas del módulo GestionCompras
             GestionCompras.ajaxPost(url, data, function (response) {
                 if (response.success) {
+                    const esHistorica = !!response.es_historica;
+                    const nuevaCompraId = response.compra_id;
                     GestionCompras.showSuccess(response.message || 'Compra creada correctamente');
                     $('#modalCrearCompra').modal('hide');
                     form[0].reset();
-                    
+
                     // Recargar las compras del año seleccionado en el input
                     const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
                     cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
+
+                    // Si es histórica abrimos el modal de carga CSV con la nueva
+                    // compra para que el usuario pueda cargar productos y luego
+                    // vincularlos retroactivamente.
+                    if (esHistorica && nuevaCompraId) {
+                        setTimeout(function() {
+                            const modalCsv = $('#modalImportarCSV');
+                            modalCsv.data('compraId', nuevaCompraId);
+                            modalCsv.find('[name="compra_id"]').val(nuevaCompraId);
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'Compra histórica creada',
+                                html: 'Ahora carga los productos por CSV o manualmente. Al terminar usa <strong>Vincular Productos Existentes</strong> para asociarlos al catálogo.',
+                                confirmButtonText: 'Entendido',
+                            });
+                        }, 200);
+                    }
                 } else {
                     GestionCompras.showError(response.error || 'No se pudo crear la compra');
                 }
@@ -6918,15 +7475,132 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             });
         });
 
-   
+    // ==================== EDITAR COMPRA ====================
+    $(document).on('click', '.editar-compra', function(e) {
+        e.preventDefault();
+        const compraId = $(this).data('id');
+        const nombre = $(this).data('nombre') || '';
+        if (!compraId) return;
 
+        $('#editCompraId').val(compraId);
+        $('#editCompraSubtitulo').text(`Compra #${compraId} - ${nombre}`);
+        $('#editCompraLoader').show();
+        $('#editCompraContenido').hide();
+        $('#btnGuardarEdicionCompra').prop('disabled', true);
+
+        const modal = new bootstrap.Modal('#modalEditarCompra');
+        modal.show();
+
+        $.getJSON(`/app/obtener_compra/${compraId}/`)
+            .done(function(r) {
+                if (!r.success) {
+                    Swal.fire('Error', r.error || 'No se pudo cargar la compra', 'error');
+                    bootstrap.Modal.getInstance(document.getElementById('modalEditarCompra')).hide();
+                    return;
+                }
+                const c = r.compra;
+                $('#edit_empresa').val(c.empresa_id || '');
+                $('#edit_nombre').val(c.nombre || '');
+                $('#edit_tipo').val(c.tipo || 'inicial');
+                $('#edit_fecha').val(c.fecha || '');
+                $('#edit_temporada_familia').val(c.temporada_familia || '');
+                $('#edit_temporada_anio').val(c.temporada_anio || '');
+                $('#edit_fechaInicioTemporada').val(c.fechaInicioTemporada || '');
+                $('#edit_fechaTerminoTemporada').val(c.fechaTerminoTemporada || '');
+                $('#edit_fecha_envio_proveedor').val(c.fecha_envio_proveedor || '');
+                $('#edit_fecha_entrega_real').val(c.fecha_entrega_real || '');
+                $('#edit_es_historica').prop('checked', !!c.es_historica);
+
+                $('#editCompraLoader').hide();
+                $('#editCompraContenido').show();
+                $('#btnGuardarEdicionCompra').prop('disabled', false);
+
+                // Inicializar tooltips dentro del modal
+                $('#modalEditarCompra [data-bs-toggle="tooltip"]').each(function() {
+                    if (!$(this).data('bs.tooltip')) {
+                        new bootstrap.Tooltip(this);
+                    }
+                });
+            })
+            .fail(function() {
+                Swal.fire('Error', 'No se pudo conectar al servidor', 'error');
+                bootstrap.Modal.getInstance(document.getElementById('modalEditarCompra')).hide();
+            });
+    });
+
+    $('#formEditarCompra').on('submit', function(e) {
+        e.preventDefault();
+        const compraId = $('#editCompraId').val();
+        if (!compraId) return;
+
+        const fecha = $('#edit_fecha').val();
+        const fechaInicio = $('#edit_fechaInicioTemporada').val();
+        const fechaTermino = $('#edit_fechaTerminoTemporada').val();
+
+        if (!fecha) {
+            Swal.fire({ icon: 'warning', title: 'Fecha requerida', text: 'Debes indicar la fecha real de la compra.' });
+            return;
+        }
+        if (fechaInicio && fechaTermino && new Date(fechaInicio) > new Date(fechaTermino)) {
+            Swal.fire({ icon: 'warning', title: 'Fechas inválidas', text: 'La fecha de inicio de temporada debe ser anterior a la de término.' });
+            return;
+        }
+
+        const payload = {
+            empresa: $('#edit_empresa').val(),
+            nombre: $('#edit_nombre').val().trim(),
+            tipo: $('#edit_tipo').val(),
+            fecha: fecha,
+            temporada_familia: $('#edit_temporada_familia').val() || '',
+            temporada_anio: $('#edit_temporada_anio').val() || null,
+            fechaInicioTemporada: fechaInicio || '',
+            fechaTerminoTemporada: fechaTermino || '',
+            fecha_envio_proveedor: $('#edit_fecha_envio_proveedor').val() || '',
+            fecha_entrega_real: $('#edit_fecha_entrega_real').val() || '',
+            es_historica: $('#edit_es_historica').is(':checked'),
+        };
+
+        const $btn = $('#btnGuardarEdicionCompra');
+        const html = $btn.html();
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Guardando...');
+
+        $.ajax({
+            url: `/app/actualizar_compra/${compraId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify(payload),
+            success: function(r) {
+                if (!r.success) {
+                    Swal.fire('Error', r.error || 'No se pudo actualizar la compra', 'error');
+                    return;
+                }
+                let msg = r.message || 'Compra actualizada';
+                if (r.recepciones_actualizadas > 0) {
+                    msg += `<br><small class="text-muted">Se actualizó la fecha de ${r.recepciones_actualizadas} recepción(es) vinculada(s) retroactivamente.</small>`;
+                }
+                Swal.fire({ icon: 'success', title: 'Cambios guardados', html: msg, timer: 2800, showConfirmButton: false });
+                bootstrap.Modal.getInstance(document.getElementById('modalEditarCompra')).hide();
+                const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+                cargarComprasPorAnio(anio, currentPageCompras, currentSearchCompras);
+            },
+            error: function(xhr) {
+                let err = 'Error de servidor';
+                try { err = JSON.parse(xhr.responseText).error || err; } catch (e) {}
+                Swal.fire('Error', err, 'error');
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html(html);
+            }
+        });
+    });
 
     function cargarComprasPorAnio(anio, page = 1, search = '') {
         const startTime = performance.now();
         showGlobalLoader();
 
         // Mostrar mensaje de carga específico
-        $('#tbodyCompras').html('<tr><td colspan="10" class="text-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando compras del año ' + anio + '...</td></tr>');
+        $('#tbodyCompras').html('<tr><td colspan="7" class="text-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando compras del año ' + anio + '...</td></tr>');
 
         const sucursalFiltroId = $('#filtroSucursalCompras').val() || '';
 
@@ -6959,7 +7633,7 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                     $('#btnNextPageCompras').prop('disabled', !response.pagination.has_next);
                     
                     if (response.compras.length === 0) {
-                        tbody.append('<tr><td colspan="10" class="text-center text-muted">No hay compras para el año ' + anio + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
+                        tbody.append('<tr><td colspan="7" class="text-center text-muted">No hay compras para el año ' + anio + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
                     } else {
                         // Mostrar información de rendimiento
                         console.log(`✅ Compras cargadas en ${loadTime}s - ${response.compras.length} de ${response.pagination.total_count} compras encontradas`);
@@ -6986,13 +7660,21 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                                     <i class="bi bi-geo-alt-fill me-1"></i>${s.sucursal}: ${s.unidades}u
                                 </span>`
                             ).join('');
+                            const historicaBadge = compra.es_historica
+                                ? `<span class="badge ms-2" style="background:#7c3aed;color:#fff;font-size:.62rem;" title="Compra histórica: solo para trazabilidad y reportes; no toca stock"><i class="bi bi-clock-history me-1"></i>Histórica</span>`
+                                : '';
                             const fila = `
-<tr>
-    <td class="text-nowrap col-hide-sm">${compra.id}</td>
+<tr${compra.es_historica ? ' class="row-historica"' : ''}>
+    <td class="text-nowrap col-hide-sm text-muted" style="font-size:.72rem;">#${compra.id}</td>
     <td class="td-proveedor">${resaltarBusquedaCompras(compra.proveedor ?? '-', search)}</td>
     <td class="td-nombre">
         <div class="d-flex flex-column">
-            <span>${resaltarBusquedaCompras(compra.nombre, search)}</span>
+            <span>${resaltarBusquedaCompras(compra.nombre, search)}${historicaBadge}</span>
+            <div class="compra-meta d-none d-md-block">
+                <i class="bi bi-calendar3"></i> ${compra.fecha}
+                <span class="dot">·</span>
+                <i class="bi bi-person"></i> ${resaltarBusquedaCompras(compra.responsable, search)}
+            </div>
             ${sucursalesChips ? `<div class="mt-1" style="line-height:1.4;">${sucursalesChips}</div>` : ''}
             <span class="d-md-none text-muted" style="font-size:0.7rem;">${compra.fecha} · $${compra.costo_total.toLocaleString()}</span>
             <span class="d-md-none mt-1">${diasBadge} ${estadoBadge}</span>
@@ -7001,13 +7683,19 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
     <td class="col-hide-md">
         ${resaltarBusquedaCompras(compra.temporada, search)}<br>${diasBadge}
     </td>
-    <td class="text-nowrap col-hide-sm">${compra.fecha}</td>
-    <td class="text-nowrap col-hide-md text-end">$${compra.costo_total.toLocaleString()}</td>
-    <td class="text-nowrap text-center col-hide-sm">${compra.unidades}</td>
+    <td class="text-nowrap col-hide-md text-end td-inversion">
+        <div class="monto">$${compra.costo_total.toLocaleString()}</div>
+        <div class="uds">${compra.unidades.toLocaleString()} uds.</div>
+    </td>
     <td class="text-nowrap text-center td-recep">
         <div class="d-none d-md-block">
-            ${compra.recepcionado}/${compra.unidades}
-            ${estadoBadge}
+            <div class="d-flex align-items-center justify-content-center gap-2">
+                <div style="width:60px;height:5px;background:#e9ecef;border-radius:3px;overflow:hidden;">
+                    <div style="width:${Math.min(progreso,100)}%;height:100%;background:${progresoColor};border-radius:3px;"></div>
+                </div>
+                <span style="font-size:.72rem;color:#495057;">${compra.recepcionado}/${compra.unidades}</span>
+            </div>
+            <div class="mt-1">${estadoBadge}</div>
         </div>
         <div class="d-md-none">
             <div class="d-flex align-items-center gap-1">
@@ -7018,43 +7706,31 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             </div>
         </div>
     </td>
-    <td class="col-hide-lg">${resaltarBusquedaCompras(compra.responsable, search)}</td>
-    <td class="td-actions">
-        <div class="btn-group btn-group-sm d-none d-md-flex">
-            <a class="btn btn-soft-primary" href="#" data-bs-toggle="modal" data-bs-target="#modalImportarCSV" data-id="${compra.id}" title="Cargar CSV">
-                <i class="bi bi-upload"></i>
-            </a>
-            <a class="btn btn-soft-info agregar-producto-manual" href="#" data-id="${compra.id}" data-empresa-id="${compra.empresa_id}" data-proveedor-nombre="${compra.proveedor || ''}" data-bs-toggle="modal" data-bs-target="#modalProductoManual" title="Agregar Producto">
-                <i class="bi bi-plus"></i>
-            </a>
-            <a class="btn btn-soft-success gestionar-compra" href="#" data-id="${compra.id}" title="Gestionar/Recepcionar">
-                <i class="bi bi-box-seam"></i>
-            </a>
-            ${compra.recepcionado > 0 ? `<a class="btn btn-soft-warning editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}" title="Editar Recepciones">
-                <i class="bi bi-pencil-square"></i>
-            </a>` : ''}
-            <a class="btn btn-soft-purple vincular-retroactivo" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}" title="Vincular Productos Existentes" style="color:#7c3aed;border-color:#7c3aed;">
-                <i class="bi bi-link-45deg"></i>
-            </a>
-            ${compra.recepcionado > 0 ? `<a class="btn btn-soft-teal" href="/app/verGestionProducto/" title="Crear Productos" style="color:#0ab39c;border-color:#0ab39c;">
-                <i class="bi bi-archive"></i>
-            </a>` : ''}
-            ${PUEDE_ELIMINAR_COMPRA ? `<a class="btn btn-soft-danger eliminar-compra" href="#" data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}" title="Eliminar compra">
-                <i class="bi bi-trash"></i>
-            </a>` : ''}
-        </div>
-        <div class="dropdown d-md-none">
-            <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="bi bi-three-dots-vertical"></i>
+    <td class="td-actions text-center">
+        <div class="dropdown">
+            <button class="btn btn-sm btn-acciones d-inline-flex align-items-center gap-1"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    title="Acciones">
+                <i class="bi bi-gear-fill"></i>
+                <span class="d-none d-lg-inline">Acciones</span>
+                <i class="bi bi-caret-down-fill" style="font-size:.55rem;"></i>
             </button>
-            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="min-width:230px;">
+                <li><h6 class="dropdown-header py-1 text-uppercase" style="font-size:.65rem;letter-spacing:.5px;">Datos</h6></li>
+                <li><a class="dropdown-item editar-compra" href="#" data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}"><i class="bi bi-pencil-square me-2" style="color:#405189;"></i>Editar Compra</a></li>
+                <li><hr class="dropdown-divider my-1"></li>
+                <li><h6 class="dropdown-header py-1 text-uppercase" style="font-size:.65rem;letter-spacing:.5px;">Carga</h6></li>
                 <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalImportarCSV" data-id="${compra.id}"><i class="bi bi-upload me-2 text-primary"></i>Cargar CSV</a></li>
-                <li><a class="dropdown-item agregar-producto-manual" href="#" data-id="${compra.id}" data-empresa-id="${compra.empresa_id}" data-proveedor-nombre="${compra.proveedor || ''}" data-bs-toggle="modal" data-bs-target="#modalProductoManual"><i class="bi bi-plus me-2 text-info"></i>Agregar Producto</a></li>
-                <li><a class="dropdown-item gestionar-compra" href="#" data-id="${compra.id}"><i class="bi bi-box-seam me-2 text-success"></i>Recepcionar</a></li>
+                <li><a class="dropdown-item agregar-producto-manual" href="#" data-id="${compra.id}" data-empresa-id="${compra.empresa_id}" data-proveedor-nombre="${compra.proveedor || ''}" data-bs-toggle="modal" data-bs-target="#modalProductoManual"><i class="bi bi-plus-lg me-2 text-info"></i>Agregar Producto</a></li>
+                <li><hr class="dropdown-divider my-1"></li>
+                <li><h6 class="dropdown-header py-1 text-uppercase" style="font-size:.65rem;letter-spacing:.5px;">Recepción</h6></li>
+                ${!compra.es_historica ? `<li><a class="dropdown-item gestionar-compra" href="#" data-id="${compra.id}"><i class="bi bi-box-seam me-2 text-success"></i>Recepcionar</a></li>` : ''}
                 ${compra.recepcionado > 0 ? `<li><a class="dropdown-item editar-recepcion-compra" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}"><i class="bi bi-pencil-square me-2 text-warning"></i>Editar Recepciones</a></li>` : ''}
-                <li><a class="dropdown-item vincular-retroactivo" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}"><i class="bi bi-link-45deg me-2" style="color:#7c3aed;"></i>Vincular Productos</a></li>
+                <li><a class="dropdown-item vincular-retroactivo" href="#" data-id="${compra.id}" data-nombre="${compra.nombre}"><i class="bi bi-link-45deg me-2" style="color:#7c3aed;"></i>${compra.es_historica ? 'Vincular Productos (Histórica)' : 'Vincular Productos'}</a></li>
                 ${compra.recepcionado > 0 ? `<li><a class="dropdown-item" href="/app/verGestionProducto/"><i class="bi bi-archive me-2" style="color:#0ab39c;"></i>Crear Productos</a></li>` : ''}
-                ${PUEDE_ELIMINAR_COMPRA ? `<li><hr class="dropdown-divider"></li>
+                ${PUEDE_ELIMINAR_COMPRA ? `<li><hr class="dropdown-divider my-1"></li>
                     <li><a class="dropdown-item text-danger eliminar-compra" href="#" data-id="${compra.id}" data-nombre="${(compra.nombre||'').replace(/"/g,'&quot;')}"><i class="bi bi-trash me-2"></i>Eliminar Compra</a></li>` : ''}
             </ul>
         </div>
@@ -7127,16 +7803,106 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
     $('#btnSearchCompras').on('click', function() {
         const search = $('#searchCompras').val().trim();
         const anioSeleccionado = $('#anioSeleccionado').val();
-        
+
         if (!anioSeleccionado || isNaN(anioSeleccionado)) {
             GestionCompras.showError('Por favor, ingresá un año válido.');
             return;
         }
-        
+
         currentSearchCompras = search;
         currentPageCompras = 1;
         cargarComprasPorAnio(anioSeleccionado, 1, search);
     });
+
+    // Enter en el input de año dispara "Filtrar", Enter en el input de búsqueda dispara "Buscar"
+    $('#anioSeleccionado').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            $('#btnBusquedaCompra').trigger('click');
+        }
+    });
+    $('#searchCompras').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            $('#btnSearchCompras').trigger('click');
+        }
+    });
+
+    // Dropdown de acciones: mover el menú al <body> al abrirse para escapar
+    // del clipping del contenedor .table-responsive (overflow). Restaurarlo
+    // al cerrarse para que Bootstrap mantenga la asociación con su trigger.
+    (function() {
+        let originParent = null;
+        let openMenu = null;
+
+        function posicionarMenu($menu, $btn) {
+            const rect = $btn[0].getBoundingClientRect();
+            const menuW = $menu.outerWidth();
+            const menuH = $menu.outerHeight();
+            const margin = 8;
+
+            // Alinear borde derecho con el botón
+            let left = rect.right - menuW;
+            if (left < margin) left = margin;
+            if (left + menuW > window.innerWidth - margin) left = window.innerWidth - menuW - margin;
+
+            // Debajo del botón, o arriba si no cabe
+            let top = rect.bottom + 4;
+            if (top + menuH > window.innerHeight - margin) {
+                top = rect.top - menuH - 4;
+                if (top < margin) top = margin;
+            }
+
+            $menu.css({
+                position: 'fixed',
+                top: top + 'px',
+                left: left + 'px',
+                right: 'auto',
+                bottom: 'auto',
+                margin: 0,
+                transform: 'none',
+                inset: 'auto',
+                zIndex: 1080,
+            });
+        }
+
+        $(document).on('show.bs.dropdown', '.td-actions .dropdown', function() {
+            const $menu = $(this).children('.dropdown-menu');
+            if (!$menu.length) return;
+            originParent = this;
+            openMenu = $menu;
+            $('body').append($menu);
+        });
+
+        $(document).on('shown.bs.dropdown', '.td-actions .dropdown', function() {
+            if (!openMenu) return;
+            const $btn = $(this).find('[data-bs-toggle="dropdown"]');
+            posicionarMenu(openMenu, $btn);
+        });
+
+        $(document).on('hidden.bs.dropdown', '.td-actions .dropdown', function() {
+            if (openMenu && originParent) {
+                $(originParent).append(openMenu);
+                openMenu.removeAttr('style');
+            }
+            openMenu = null;
+            originParent = null;
+        });
+
+        // Reposicionar al scrollear o resize mientras el menú está abierto
+        $(window).on('scroll resize', function() {
+            if (openMenu && originParent) {
+                const $btn = $(originParent).find('[data-bs-toggle="dropdown"]');
+                if ($btn.length) posicionarMenu(openMenu, $btn);
+            }
+        });
+        $('.table-responsive').on('scroll', function() {
+            if (openMenu && originParent) {
+                const $btn = $(originParent).find('[data-bs-toggle="dropdown"]');
+                if ($btn.length) posicionarMenu(openMenu, $btn);
+            }
+        });
+    })();
 
     // Auto-busqueda desde parametro URL (?buscar=...)
     (function() {
@@ -7274,10 +8040,22 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
                     $('#totalCosto').text('$0');
                     $('#tablaCSVPreview tbody').empty();
                     $('#archivoCSV').val('');
-                    
+
                     // Recargar la tabla de compras con el año actual del input
                     const anioSeleccionado = $('#anioSeleccionado').val() || new Date().getFullYear();
                     cargarComprasPorAnio(anioSeleccionado, currentPageCompras, currentSearchCompras);
+
+                    // Si la compra es histórica, abrimos automáticamente el
+                    // modal de vinculación retroactiva con la compra recién cargada.
+                    if (data.es_historica && data.compra_id) {
+                        setTimeout(function() {
+                            if (typeof vincRetro_abrir === 'function') {
+                                vincRetro_abrir(data.compra_id, '');
+                            } else {
+                                $('.vincular-retroactivo[data-id="' + data.compra_id + '"]').first().trigger('click');
+                            }
+                        }, 400);
+                    }
                 } else {
                     GestionCompras.showError('Error al importar: ' + (data.error || 'Error desconocido.'));
                 }
@@ -8220,95 +8998,217 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
     // ==================== VINCULACIÓN RETROACTIVA ====================
     let vincRetro_compraId = null;
     let vincRetro_productos = [];
-    let vincRetro_asignaciones = {};  // { cpt_id: { producto_talla_id, sku } }
-    let vincRetro_activeCptId = null;
+    let vincRetro_esHistorica = false;
+    let vincRetro_filtroTexto = '';
+    let vincRetro_undoStack = [];         // [{tipo:'vincular', vinculaciones:[...]}, ...]
+    let vincRetro_undoTimer = null;
+    let vincRetro_colapsadosCpId = new Set();  // Set de compra_producto_id colapsados
+    const VINCRETRO_UNDO_SECONDS = 10;
+
+    function vincRetro_abrir(compraId, nombre) {
+        vincRetro_compraId = compraId;
+        $('#vincRetro_compraNombre').text(`Compra: ${nombre || ''} (#${vincRetro_compraId})`);
+        vincRetro_filtroTexto = '';
+        $('#vincRetro_filtro').val('');
+        $('#vincRetro_undoWrapper').addClass('d-none');
+        vincRetro_undoStack = [];
+        vincRetro_colapsadosCpId = new Set();
+        vincRetro_cargarItems();
+        new bootstrap.Modal('#modalVincularRetroactivo').show();
+    }
 
     $(document).on('click', '.vincular-retroactivo', function(e) {
         e.preventDefault();
-        vincRetro_compraId = $(this).data('id');
-        const nombre = $(this).data('nombre') || '';
-        $('#vincRetro_compraNombre').text(`Compra: ${nombre} (#${vincRetro_compraId})`);
-        vincRetro_asignaciones = {};
-        vincRetro_activeCptId = null;
-        vincRetro_cargarItems();
-        new bootstrap.Modal('#modalVincularRetroactivo').show();
+        vincRetro_abrir($(this).data('id'), $(this).data('nombre'));
+    });
+
+    // Filtro en vivo (debounce mínimo)
+    let vincRetro_filtroTimer = null;
+    $(document).on('input', '#vincRetro_filtro', function() {
+        clearTimeout(vincRetro_filtroTimer);
+        const val = $(this).val();
+        vincRetro_filtroTimer = setTimeout(function() {
+            vincRetro_filtroTexto = val;
+            vincRetro_renderGrupos();
+        }, 180);
     });
 
     function vincRetro_cargarItems() {
         const cont = $('#vincRetro_contenido');
-        cont.html('<div class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando productos rebajados sin vincular...</div>');
-        $('#btnConfirmarVinculacion').prop('disabled', true);
+        cont.html('<div class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando tallas pendientes de vincular...</div>');
 
         $.getJSON('/app/api/compra/items-para-vincular/', { compra_id: vincRetro_compraId }, function(r) {
             if (!r.success) { cont.html(`<div class="alert alert-danger">${r.error}</div>`); return; }
             vincRetro_productos = r.productos;
+            vincRetro_esHistorica = !!r.es_historica;
+
+            // Poblar el selector de DTE con las facturas del proveedor.
+            const $dte = $('#vincRetro_dteSelect');
+            const dteActual = $dte.val();
+            $dte.find('option:gt(0)').remove();
+            (r.facturas || []).forEach(function(f) {
+                const monto = f.monto_con_iva != null
+                    ? ` · $${Number(f.monto_con_iva).toLocaleString('es-CL')}`
+                    : '';
+                $dte.append(`<option value="${f.id}">Factura #${f.numero_documento}${monto}</option>`);
+            });
+            if (dteActual) $dte.val(dteActual);
+
+            // Inicialmente: colapsar todos los productos para que la lista
+            // sea manejable cuando hay muchos pendientes. El usuario expande
+            // los que quiere trabajar.
+            vincRetro_colapsadosCpId = new Set(
+                r.productos.map(p => p.compra_producto_id)
+            );
+
+            // Si la compra es histórica, mostrar banner explicativo.
+            const banner = vincRetro_esHistorica
+                ? `<div class="alert alert-purple d-flex align-items-start gap-2 py-2 mb-2" style="background:#faf5ff;border-left:4px solid #7c3aed;font-size:.82rem;">
+                       <i class="bi bi-clock-history mt-1" style="color:#7c3aed;"></i>
+                       <div>
+                           <strong style="color:#7c3aed;">Compra histórica</strong> — Esta vinculación es solo para reportes (compra, rendimiento de proveedor). <strong>No se modificará stock</strong>: la mercadería ya está en el sistema desde su flujo original. Fecha que se usará en reportes: <strong>${r.compra_fecha || ''}</strong>.
+                       </div>
+                   </div>`
+                : '';
+
             if (r.productos.length === 0) {
-                cont.html(`<div class="alert alert-warning mb-0"><i class="bi bi-info-circle me-2"></i>No hay productos rebajados pendientes de vincular en esta compra. Primero debes recepcionar con factura desde la gestión normal.</div>`);
+                cont.html(banner + `<div class="alert alert-warning mb-0"><i class="bi bi-info-circle me-2"></i>No hay tallas pendientes de vincular en esta compra (todas ya tienen producto asignado o no hay productos cargados).</div>`);
                 return;
             }
-            vincRetro_renderGrupos();
+            vincRetro_renderGrupos(banner);
         }).fail(function() { cont.html('<div class="alert alert-danger">Error al cargar</div>'); });
     }
 
-    function vincRetro_renderGrupos() {
+    // Estado local de cantidades editadas en el modal antes de vincular.
+    // Una vez que el usuario asigna un SKU, esta cantidad se envía al backend.
+    let vincRetro_cantidadesEditadas = {};   // { cpt_id: cantidad_editada }
+
+    function vincRetro_normalizeForFilter(s) {
+        return (s == null ? '' : String(s))
+            .toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .trim();
+    }
+
+    function vincRetro_productoMatchesFilter(prod) {
+        if (!vincRetro_filtroTexto) return true;
+        const q = vincRetro_normalizeForFilter(vincRetro_filtroTexto);
+        const haystack = [
+            prod.nombre, prod.atributo1, prod.atributo2, prod.atributo3,
+            ...(prod.tallas || []).map(t => t.talla),
+        ].map(vincRetro_normalizeForFilter).join(' | ');
+        return haystack.includes(q);
+    }
+
+    function vincRetro_renderGrupos(bannerHtml) {
         const cont = $('#vincRetro_contenido');
         cont.empty();
-        let totalPendientes = 0, totalNuevos = 0;
+        if (bannerHtml) cont.append(bannerHtml);
+
+        let totalPendientes = 0;
+        let totalVinculadas = 0;
+        let productosVisibles = 0;
 
         vincRetro_productos.forEach(function(prod) {
-            const tallasHtml = prod.tallas.filter(t => t.recibido > 0 && !t.vinculado).map(function(t) {
-                const asignado = vincRetro_asignaciones[t.cpt_id];
-                if (asignado) totalNuevos++;
-                else totalPendientes++;
+            const sinVincular = prod.tallas.filter(t => !t.vinculado).length;
+            const vinculadas = prod.tallas.length - sinVincular;
+            totalPendientes += sinVincular;
+            totalVinculadas += vinculadas;
 
-                return `<tr class="${asignado ? 'table-warning' : ''}">
+            if (!vincRetro_productoMatchesFilter(prod)) return;
+            productosVisibles++;
+
+            const isColapsado = vincRetro_colapsadosCpId.has(prod.compra_producto_id);
+
+            const tallasHtml = prod.tallas.map(function(t) {
+                const recibidoCell = t.tiene_recepcion
+                    ? t.recibido
+                    : '<span class="badge bg-light text-muted border" style="font-size:.62rem;">sin recepción</span>';
+
+                // ===== Talla YA VINCULADA: mostrar SKU + botón Desvincular =====
+                if (t.vinculado) {
+                    return `<tr class="table-success">
+                        <td class="text-center">${t.talla}</td>
+                        <td class="text-center text-muted">${t.stock}</td>
+                        <td class="text-center">${recibidoCell}</td>
+                        <td class="text-center">${t.tiene_factura ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-dash text-muted"></i>'}</td>
+                        <td>
+                            <span class="text-success fw-semibold">${t.sku_vinculado || '-'}</span>
+                            <span class="badge bg-success ms-1" style="font-size:.6rem;"><i class="bi bi-check-lg"></i></span>
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-outline-danger vincRetro_btnDesvincular"
+                                    data-cpt="${t.cpt_id}" data-sku="${t.sku_vinculado || ''}"
+                                    style="font-size:.7rem;padding:2px 8px;"
+                                    title="Deshacer vinculación de esta talla">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Desvincular
+                            </button>
+                        </td>
+                    </tr>`;
+                }
+
+                // ===== Talla PENDIENTE: input cantidad + buscador =====
+                const cantidadActual = (vincRetro_cantidadesEditadas[t.cpt_id] != null)
+                    ? vincRetro_cantidadesEditadas[t.cpt_id]
+                    : t.stock;
+                const cantidadEditada = cantidadActual !== t.stock;
+                return `<tr>
                     <td class="text-center">${t.talla}</td>
-                    <td class="text-center">${t.stock}</td>
-                    <td class="text-center">${t.recibido}</td>
+                    <td class="text-center">
+                        <input type="number" min="0" class="form-control form-control-sm vincRetro_cantidad text-center"
+                               data-cpt="${t.cpt_id}" data-original="${t.stock}"
+                               value="${cantidadActual}"
+                               style="font-size:.74rem;width:64px;display:inline-block;padding:2px 4px;${cantidadEditada ? 'border-color:#f7b84b;background:#fff8e1;' : ''}"
+                               title="Cantidad recibida en esta compra. Editar si difiere del valor cargado originalmente.">
+                        ${cantidadEditada ? `<i class="bi bi-pencil-fill ms-1" style="color:#f7b84b;font-size:.6rem;" title="Editado (original: ${t.stock})"></i>` : ''}
+                    </td>
+                    <td class="text-center">${recibidoCell}</td>
                     <td class="text-center">${t.tiene_factura ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-dash text-muted"></i>'}</td>
-                    <td>${asignado
-                        ? `<span class="text-success fw-semibold">${asignado.sku}</span>
-                           <button class="btn btn-outline-danger btn-sm py-0 px-1 ms-1" onclick="vincRetro_quitarAsignacion(${t.cpt_id})" style="font-size:.6rem;" title="Quitar"><i class="bi bi-x"></i></button>`
-                        : '<span class="text-muted fst-italic">-</span>'
-                    }</td>
-                    <td>
-                        ${!asignado ? `<div class="input-group input-group-sm">
-                            <input type="text" class="form-control vincRetro_skuInput" data-cpt="${t.cpt_id}" placeholder="SKU..." style="font-size:.72rem;">
-                            <button class="btn btn-outline-primary" onclick="vincRetro_buscarParaFila(${t.cpt_id})" style="font-size:.68rem;"><i class="bi bi-search"></i></button>
-                        </div>` : `<span class="badge bg-warning text-dark" style="font-size:.68rem;"><i class="bi bi-arrow-repeat me-1"></i>Por confirmar</span>`}
+                    <td><span class="text-muted fst-italic">pendiente</span></td>
+                    <td class="td-buscar">
+                        <div class="vincRetro-search-wrapper">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-white border-end-0" style="border-color:#c8a4f5;"><i class="bi bi-search" style="color:#7c3aed;font-size:.7rem;"></i></span>
+                                <input type="text" class="form-control vincRetro_skuInput border-start-0" data-cpt="${t.cpt_id}" placeholder="SKU, artículo, marca, color..." autocomplete="off" style="font-size:.72rem;border-color:#c8a4f5;">
+                            </div>
+                            <div class="vincRetro-autocomplete" style="display:none;"></div>
+                        </div>
                     </td>
                 </tr>`;
             }).join('');
 
-            const tallasVinculadas = prod.tallas.filter(t => t.vinculado);
-            const tallasVinculadasHtml = tallasVinculadas.length > 0
-                ? `<div class="mt-1" style="font-size:.7rem;color:#198754;"><i class="bi bi-check-lg me-1"></i>${tallasVinculadas.length} talla(s) ya vinculadas: ${tallasVinculadas.map(t => `${t.talla}→${t.sku_vinculado}`).join(', ')}</div>`
+            const headerBadge = sinVincular > 0
+                ? `<span class="badge bg-warning text-dark" style="font-size:.7rem;">${sinVincular} pendiente${sinVincular === 1 ? '' : 's'}</span>`
+                : `<span class="badge bg-success" style="font-size:.7rem;"><i class="bi bi-check-all me-1"></i>completo</span>`;
+            const vincBadge = vinculadas > 0
+                ? `<span class="badge bg-success ms-1" style="font-size:.7rem;">${vinculadas}✓</span>`
                 : '';
 
-            const sinVincular = prod.tallas.filter(t => t.recibido > 0 && !t.vinculado).length;
             const card = `
-            <div class="card mb-2 border-0 shadow-sm">
-                <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#f8f6ff;border-bottom:2px solid #7c3aed20;">
-                    <div>
-                        <span class="fw-bold" style="color:#4c1d95;">${prod.nombre}</span>
-                        <span class="text-muted ms-2" style="font-size:.75rem;">${prod.atributo1 ? prod.atributo1 : ''} ${prod.atributo2 ? '· ' + prod.atributo2 : ''}</span>
-                        <span class="badge bg-secondary ms-2" style="font-size:.68rem;">Costo: $${prod.costo.toLocaleString()}</span>
-                        ${tallasVinculadasHtml}
+            <div class="card mb-2 border-0 shadow-sm vincRetro-card" data-cp-id="${prod.compra_producto_id}">
+                <div class="card-header py-2 vincRetro-card-header" style="background:#f8f6ff;border-bottom:2px solid #7c3aed20;cursor:pointer;" data-cp-id="${prod.compra_producto_id}">
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <div class="d-flex align-items-center gap-2" style="flex:1;min-width:0;">
+                            <i class="bi ${isColapsado ? 'bi-chevron-right' : 'bi-chevron-down'} vincRetro-card-toggle" style="color:#7c3aed;"></i>
+                            <span class="fw-bold" style="color:#4c1d95;">${prod.nombre}</span>
+                            <span class="text-muted" style="font-size:.72rem;">${prod.atributo1 ? prod.atributo1 : ''} ${prod.atributo2 ? '· ' + prod.atributo2 : ''}</span>
+                            <span class="badge bg-secondary" style="font-size:.65rem;">$${prod.costo.toLocaleString()}</span>
+                        </div>
+                        <div class="d-flex gap-1 align-items-center">
+                            ${headerBadge}${vincBadge}
+                        </div>
                     </div>
-                    <span class="badge ${sinVincular > 0 ? 'bg-warning text-dark' : 'bg-success'}" style="font-size:.72rem;">
-                        ${sinVincular} talla(s) por vincular
-                    </span>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body p-0 vincRetro-card-body" ${isColapsado ? 'style="display:none;"' : ''}>
                     <table class="table table-sm table-hover align-middle mb-0" style="font-size:.78rem;">
                         <thead style="background:#f0f0f0;">
                             <tr>
                                 <th class="text-center" style="width:60px;">Talla</th>
-                                <th class="text-center" style="width:70px;">Comprado</th>
+                                <th class="text-center" style="width:90px;" title="Cantidad recibida en esta compra. Editable.">Comprado <i class="bi bi-pencil-fill" style="font-size:.55rem;color:#f7b84b;"></i></th>
                                 <th class="text-center" style="width:70px;">Rebajado</th>
                                 <th class="text-center" style="width:60px;">Factura</th>
                                 <th>SKU Asignado</th>
-                                <th style="width:180px;">Buscar</th>
+                                <th class="text-center" style="width:130px;">Acción</th>
                             </tr>
                         </thead>
                         <tbody>${tallasHtml}</tbody>
@@ -8318,203 +9218,735 @@ $(document).on('click', '#btnLimpiarFiltroCSV', function () {
             cont.append(card);
         });
 
+        if (productosVisibles === 0 && vincRetro_filtroTexto) {
+            cont.append(`<div class="alert alert-info"><i class="bi bi-funnel me-1"></i>Sin productos que coincidan con "<strong>${vincRetro_filtroTexto}</strong>". <a href="#" id="vincRetro_limpiarFiltro">Limpiar filtro</a></div>`);
+        }
+
         $('#vincRetro_resumen').html(
-            `<i class="bi bi-hourglass text-secondary me-1"></i>${totalPendientes} por vincular` +
-            (totalNuevos > 0 ? ` · <i class="bi bi-arrow-repeat text-warning me-1"></i>${totalNuevos} por confirmar` : '')
+            `<i class="bi bi-hourglass text-secondary me-1"></i>${totalPendientes} pendiente${totalPendientes === 1 ? '' : 's'}` +
+            (totalVinculadas > 0 ? ` · <i class="bi bi-check-circle-fill text-success me-1"></i>${totalVinculadas} vinculada${totalVinculadas === 1 ? '' : 's'}` : '') +
+            (vincRetro_filtroTexto ? ` · <i class="bi bi-funnel text-primary me-1"></i>${productosVisibles} visible${productosVisibles === 1 ? '' : 's'}` : '')
         );
-        $('#vincRetro_footerInfo').text(totalNuevos > 0 ? `${totalNuevos} vinculación(es) pendiente(s) de confirmar` : 'Usa Auto-vincular o busca por SKU');
-        $('#btnConfirmarVinculacion').prop('disabled', totalNuevos === 0);
+        $('#vincRetro_footerInfo').text(
+            totalPendientes > 0 ? 'Asigna SKU directamente — cada elección se guarda al instante' : 'Todas las tallas vinculadas. Cierra el modal.'
+        );
+        $('#btnExpandirTodos').toggleClass('d-none', vincRetro_productos.length < 2)
+            .html(vincRetro_colapsadosCpId.size > 0
+                ? '<i class="bi bi-arrows-expand me-1"></i>Expandir todos'
+                : '<i class="bi bi-arrows-collapse me-1"></i>Colapsar todos');
+    }
+
+    // Normaliza para comparación fuzzy: lowercase, sin acentos, sin
+    // puntuación, espacios colapsados. Tolera divergencias entre los
+    // nombres migrados de Laravel y los del sistema actual.
+    function vincRetro_normalize(s) {
+        return (s == null ? '' : String(s))
+            .toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, '')    // acentos
+            .replace(/[^\w\s]/g, ' ')                            // puntuación → espacio
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
     function vincRetro_autoVincular() {
         const sinVincular = [];
         vincRetro_productos.forEach(p => {
-            p.tallas.filter(t => t.recibido > 0 && !t.vinculado && !vincRetro_asignaciones[t.cpt_id]).forEach(t => {
-                sinVincular.push({ ...t, nombre: p.nombre });
+            p.tallas.filter(t => !t.vinculado).forEach(t => {
+                sinVincular.push({ ...t, nombre: p.nombre, marca: p.atributo1, color: p.atributo2 });
             });
         });
         if (sinVincular.length === 0) {
-            Swal.fire('Info', 'Todos los items ya están vinculados o asignados.', 'info');
+            Swal.fire('Sin pendientes', 'Todas las tallas ya están asignadas o vinculadas.', 'info');
             return;
         }
 
-        $('#btnAutoVincular').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Buscando...');
+        $('#btnAutoVincular').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Buscando candidatos...');
 
+        // Buscar por cada nombre único de producto en la compra
         const nombres = [...new Set(sinVincular.map(i => i.nombre))];
-        let busquedas = nombres.map(n => $.getJSON('/app/api/compra/buscar-sku-vincular/', { q: n, compra_id: vincRetro_compraId }));
+        const busquedas = nombres.map(n => $.getJSON('/app/api/compra/buscar-sku-vincular/', { q: n, compra_id: vincRetro_compraId }));
 
         Promise.all(busquedas).then(function(resultados) {
-            let matchCount = 0;
             const todosResultados = resultados.flatMap(r => r.results || []);
 
+            // Clasificar: exacto (1 candidato), parcial (1 candidato fuzzy),
+            // ambiguo (>1), sin match.
+            // Estrategia: primero buscamos match EXACTO (nombre normalizado
+            // idéntico + talla normalizada idéntica). Si no hay, fallback
+            // a match PARCIAL (uno contiene al otro) — útil cuando los
+            // nombres Laravel difieren ligeramente del catálogo actual.
+            const matches = [];
+            const ambiguos = [];
+            const noMatch = [];
+
             sinVincular.forEach(function(item) {
-                const candidatos = todosResultados.filter(r =>
-                    r.articulo.toLowerCase() === item.nombre.toLowerCase() &&
-                    r.talla.toLowerCase() === item.talla.toLowerCase() &&
-                    !r.ya_vinculado_esta_compra
+                const compraName = vincRetro_normalize(item.nombre);
+                const compraTalla = vincRetro_normalize(item.talla);
+
+                // Pre-filtrar por talla (la talla SIEMPRE debe coincidir
+                // exacta normalizada; tolerar diferencia en talla es muy
+                // riesgoso).
+                const porTalla = todosResultados.filter(r =>
+                    !r.ya_vinculado_esta_compra &&
+                    vincRetro_normalize(r.talla) === compraTalla
                 );
+
+                if (porTalla.length === 0) {
+                    noMatch.push(item);
+                    return;
+                }
+
+                // 1) Intento exacto por nombre (normalizado)
+                let candidatos = porTalla.filter(r =>
+                    vincRetro_normalize(r.articulo) === compraName
+                );
+                let tipoMatch = 'exacto';
+
+                // 2) Fallback: inclusión (uno contiene al otro)
+                if (candidatos.length === 0) {
+                    candidatos = porTalla.filter(r => {
+                        const sysName = vincRetro_normalize(r.articulo);
+                        return sysName.includes(compraName) || compraName.includes(sysName);
+                    });
+                    tipoMatch = 'parcial';
+                }
+
                 if (candidatos.length === 1) {
-                    vincRetro_asignaciones[item.cpt_id] = {
-                        producto_talla_id: candidatos[0].producto_talla_id,
-                        sku: candidatos[0].sku,
-                    };
-                    matchCount++;
+                    matches.push({ item: item, producto: candidatos[0], tipoMatch: tipoMatch });
+                } else if (candidatos.length > 1) {
+                    // Cuando hay varios fuzzy candidatos, intenta desempate por
+                    // similitud de longitud (el más cercano en tamaño suele ser
+                    // el correcto). Si la diferencia es ínfima, deja ambiguo.
+                    if (tipoMatch === 'parcial') {
+                        const ordenado = candidatos.slice().sort((a, b) =>
+                            Math.abs(vincRetro_normalize(a.articulo).length - compraName.length) -
+                            Math.abs(vincRetro_normalize(b.articulo).length - compraName.length)
+                        );
+                        const diff0 = Math.abs(vincRetro_normalize(ordenado[0].articulo).length - compraName.length);
+                        const diff1 = Math.abs(vincRetro_normalize(ordenado[1].articulo).length - compraName.length);
+                        if (diff1 - diff0 >= 3) {
+                            matches.push({ item: item, producto: ordenado[0], tipoMatch: 'parcial' });
+                        } else {
+                            ambiguos.push({ item: item, candidatos: candidatos });
+                        }
+                    } else {
+                        ambiguos.push({ item: item, candidatos: candidatos });
+                    }
+                } else {
+                    noMatch.push(item);
                 }
             });
 
-            vincRetro_renderGrupos();
-            const noMatch = sinVincular.length - matchCount;
+            // Construir HTML de preview
+            let html = '';
+
+            if (matches.length > 0) {
+                const matchesExactos = matches.filter(m => m.tipoMatch === 'exacto').length;
+                const matchesParciales = matches.length - matchesExactos;
+
+                const filas = matches.map(m => {
+                    const stockBadge = m.producto.stock > 0
+                        ? `<span class="badge bg-success">${m.producto.stock}u</span>`
+                        : `<span class="badge bg-secondary">0u</span>`;
+                    const compraDesc = [m.item.marca, m.item.color].filter(Boolean).join(' · ');
+                    const sistemaDesc = [m.producto.marca, m.producto.color, m.producto.genero].filter(Boolean).join(' · ');
+                    const rowStyle = m.tipoMatch === 'parcial' ? 'background:#fff8e1;' : '';
+                    const tipoBadge = m.tipoMatch === 'parcial'
+                        ? `<span class="badge" style="background:#f7b84b;color:#fff;font-size:.6rem;" title="Match parcial: el nombre no es idéntico, revisa con cuidado.">parcial</span>`
+                        : `<span class="badge bg-success" style="font-size:.6rem;">exacto</span>`;
+                    return `<tr style="${rowStyle}">
+                        <td class="text-start">
+                            <strong>${m.item.nombre}</strong> ${tipoBadge}
+                            <div class="text-muted" style="font-size:.7rem;">Talla ${m.item.talla}${compraDesc ? ' · ' + compraDesc : ''}</div>
+                        </td>
+                        <td class="text-center" style="color:#0ab39c;"><i class="bi bi-arrow-right-circle-fill fs-5"></i></td>
+                        <td class="text-start">
+                            <span style="color:#4c1d95;font-weight:700;">${m.producto.sku}</span>
+                            <div class="text-muted" style="font-size:.7rem;">${m.producto.articulo} · T.${m.producto.talla}${sistemaDesc ? ' · ' + sistemaDesc : ''}</div>
+                            <div class="text-muted" style="font-size:.68rem;"><i class="bi bi-geo-alt"></i> ${m.producto.sucursal || '-'} · stock actual: ${stockBadge}</div>
+                        </td>
+                    </tr>`;
+                }).join('');
+
+                const resumen = matchesParciales > 0
+                    ? `<strong>${matches.length} coincidencia(s)</strong> <span class="text-success">(${matchesExactos} exacta${matchesExactos === 1 ? '' : 's'})</span> <span style="color:#92400e;">(${matchesParciales} parcial${matchesParciales === 1 ? '' : 'es'} — fila amarilla, verifica con cuidado)</span>`
+                    : `<strong>${matches.length} coincidencia(s) exacta(s)</strong>`;
+
+                html += `
+                    <div class="text-start mb-3">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-check-circle-fill" style="color:#0ab39c;font-size:1.1rem;"></i>
+                            ${resumen}
+                            <small class="text-muted">— Revisa que el SKU corresponda al producto correcto</small>
+                        </div>
+                        <div style="max-height:280px;overflow-y:auto;border:1px solid #dee2e6;border-radius:8px;">
+                            <table class="table table-sm table-striped mb-0 align-middle" style="font-size:.78rem;">
+                                <thead style="background:#e8fbf5;position:sticky;top:0;z-index:1;">
+                                    <tr>
+                                        <th class="text-start">Línea de la compra</th>
+                                        <th></th>
+                                        <th class="text-start">Producto del sistema</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${filas}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            }
+
+            if (ambiguos.length > 0) {
+                html += `
+                    <div class="text-start mb-3">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-question-circle-fill" style="color:#f7b84b;font-size:1.1rem;"></i>
+                            <strong>${ambiguos.length} con múltiples candidatos</strong>
+                            <small class="text-muted">— Asígnalos manualmente desde la búsqueda de cada fila</small>
+                        </div>
+                        <ul class="mb-0" style="font-size:.76rem;">
+                            ${ambiguos.map(a => `<li><strong>${a.item.nombre}</strong> · T.${a.item.talla} — ${a.candidatos.length} candidatos: <code>${a.candidatos.map(c => c.sku).join(', ')}</code></li>`).join('')}
+                        </ul>
+                    </div>`;
+            }
+
+            if (noMatch.length > 0) {
+                html += `
+                    <div class="text-start mb-3">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-x-circle-fill" style="color:#f06548;font-size:1.1rem;"></i>
+                            <strong>${noMatch.length} sin coincidencia</strong>
+                            <small class="text-muted">— Búscalos manualmente por SKU u otros campos</small>
+                        </div>
+                        <ul class="mb-0" style="font-size:.76rem;">
+                            ${noMatch.map(n => `<li><strong>${n.nombre}</strong> · T.${n.talla}</li>`).join('')}
+                        </ul>
+                    </div>`;
+            }
+
+            html += `<div class="alert alert-light border mt-2 mb-0 py-2" style="font-size:.74rem;">
+                <i class="bi bi-info-circle me-1 text-primary"></i>
+                <strong>Nota sobre fechas:</strong> los datos del "Producto del sistema" reflejan su estado <strong>actual</strong>
+                (stock, sucursal). La vinculación usará la fecha real de la compra
+                (${vincRetro_esHistorica ? 'histórica' : 'actual'}) para los reportes. Verifica que el SKU sea el
+                mismo artículo, no uno con el mismo nombre pero otro modelo.
+            </div>`;
+
+            if (matches.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin coincidencias automáticas',
+                    html: html,
+                    width: '760px',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#7c3aed',
+                });
+                return;
+            }
+
             Swal.fire({
-                icon: matchCount > 0 ? 'success' : 'warning',
-                title: `Auto-vinculación: ${matchCount} match(es)`,
-                html: matchCount > 0
-                    ? `Se encontraron <b>${matchCount}</b> coincidencia(s) exacta(s) por nombre + talla.` + (noMatch > 0 ? `<br><small class="text-muted">${noMatch} item(s) requieren vinculación manual por SKU.</small>` : '')
-                    : 'No se encontraron coincidencias exactas. Usa la búsqueda por SKU en cada fila.',
-                timer: 3500,
-                showConfirmButton: matchCount === 0,
+                icon: 'info',
+                title: `Vista previa: ${matches.length} asignación(es)`,
+                html: html,
+                width: '780px',
+                showCancelButton: true,
+                confirmButtonText: `<i class="bi bi-check2-all me-1"></i> Aplicar ${matches.length} asignación(es)`,
+                confirmButtonColor: '#7c3aed',
+                cancelButtonText: 'Revisar manualmente',
+                focusCancel: true,
+            }).then(function(result) {
+                if (!result.isConfirmed) return;
+                // Auto-aplicar: armar batch y enviar al backend.
+                const vinculaciones = matches.map(function(m) {
+                    const cantidadEditada = vincRetro_cantidadesEditadas[m.item.cpt_id];
+                    return {
+                        cpt_id: m.item.cpt_id,
+                        producto_talla_id: m.producto.producto_talla_id,
+                        stock_compra: (cantidadEditada != null) ? cantidadEditada : m.item.stock,
+                    };
+                });
+                vincRetro_aplicarVinculaciones(vinculaciones, {
+                    articuloLabel: `Auto-vincular (${matches.length} tallas)`,
+                });
             });
         }).catch(function() {
             Swal.fire('Error', 'Error al buscar productos', 'error');
         }).finally(function() {
-            $('#btnAutoVincular').prop('disabled', false).html('<i class="bi bi-magic me-1"></i> Auto-vincular');
+            $('#btnAutoVincular').prop('disabled', false).html('<i class="bi bi-magic me-1"></i> Auto-vincular tallas');
         });
     }
 
-    function vincRetro_buscarParaFila(cptId) {
-        vincRetro_activeCptId = cptId;
-        const input = $(`.vincRetro_skuInput[data-cpt="${cptId}"]`);
-        const q = input.val().trim();
-        if (q.length < 1) { Swal.fire('', 'Ingresa al menos 1 caracter', 'info'); return; }
-        vincRetro_ejecutarBusqueda(q);
+    // === Autocompletado inline agrupado por artículo ===
+    const vincRetro_searchTimers = {};
+    // Cache de grupos del último search, indexado por idx (lo usa el handler
+    // del botón "Asignar artículo completo")
+    let vincRetro_ultimosGrupos = [];
+
+    function vincRetro_escapeHtml(s) {
+        return $('<div>').text(s == null ? '' : s).html();
     }
 
-    function vincRetro_buscarSkuManual() {
-        vincRetro_activeCptId = null;
-        const q = $('#vincRetro_buscarSku').val().trim();
-        if (q.length < 1) { Swal.fire('', 'Ingresa al menos 1 caracter', 'info'); return; }
-        vincRetro_ejecutarBusqueda(q);
-    }
+    // Asigna TODAS las tallas pendientes del compra_producto activo
+    // matcheando por talla con las tallas disponibles del grupo seleccionado.
+    // AUTO-APLICA: hace POST inmediato al backend, sin paso de confirmación.
+    function vincRetro_asignarGrupoCompleto(cptId, grupoIdx) {
+        const grupo = vincRetro_ultimosGrupos[grupoIdx];
+        if (!grupo) return;
+        const cp = vincRetro_productos.find(p => p.tallas.some(t => t.cpt_id === cptId));
+        if (!cp) return;
 
-    function vincRetro_ejecutarBusqueda(q) {
-        const tbodyBusq = $('#vincRetro_tbodyBusqueda');
-        tbodyBusq.html('<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm"></div></td></tr>');
-        $('#vincRetro_resultadosBusqueda').show();
-        $('#vincRetro_busquedaCount').text('Buscando...');
+        const vinculaciones = [];
+        const sinMatch = [];
 
-        $.getJSON('/app/api/compra/buscar-sku-vincular/', { q: q, compra_id: vincRetro_compraId }, function(r) {
-            tbodyBusq.empty();
-            if (!r.results || r.results.length === 0) {
-                tbodyBusq.html('<tr><td colspan="8" class="text-muted text-center">Sin resultados para "' + q + '"</td></tr>');
-                $('#vincRetro_busquedaCount').text('0 resultados');
-                return;
+        cp.tallas.forEach(function(cpt) {
+            if (cpt.vinculado) return;
+            const match = grupo.tallas.find(t =>
+                !t.ya_vinculado_esta_compra &&
+                String(t.talla).toLowerCase().trim() === String(cpt.talla).toLowerCase().trim()
+            );
+            if (match) {
+                const sugerencia = (match.ingresos && match.ingresos.length > 0)
+                    ? match.ingresos[match.ingresos.length - 1].cantidad
+                    : null;
+                const stockCompra = (vincRetro_cantidadesEditadas[cpt.cpt_id] != null)
+                    ? vincRetro_cantidadesEditadas[cpt.cpt_id]
+                    : (sugerencia != null ? sugerencia : cpt.stock);
+                vinculaciones.push({
+                    cpt_id: cpt.cpt_id,
+                    producto_talla_id: match.producto_talla_id,
+                    stock_compra: stockCompra,
+                });
+            } else {
+                sinMatch.push(cpt.talla);
             }
-            $('#vincRetro_busquedaCount').html(`<i class="bi bi-check2 text-success me-1"></i>${r.total || r.results.length} resultado(s) para "<b>${q}</b>"`);
-            r.results.forEach(function(pt) {
-                const stockBadge = pt.stock > 0
-                    ? `<span class="badge bg-success" style="font-size:.65rem;">${pt.stock}</span>`
-                    : `<span class="badge bg-secondary" style="font-size:.65rem;">0</span>`;
-                tbodyBusq.append(`
-                    <tr class="${pt.ya_vinculado_esta_compra ? 'table-success' : ''}">
-                        <td class="fw-semibold">${pt.sku}</td>
-                        <td>${pt.articulo}</td>
-                        <td>${pt.talla}</td>
-                        <td class="text-center">${stockBadge}</td>
-                        <td class="d-none d-md-table-cell">${pt.marca}</td>
-                        <td class="d-none d-md-table-cell">${pt.color || ''}</td>
-                        <td>${pt.sucursal}</td>
-                        <td>
-                            ${pt.ya_vinculado_esta_compra
-                                ? '<span class="badge bg-success" style="font-size:.65rem;">Ya vinculado</span>'
-                                : `<button class="btn btn-sm btn-primary py-0 px-2" onclick="vincRetro_seleccionarPT(${pt.producto_talla_id}, '${pt.sku.replace(/'/g,"\\'")}');" style="font-size:.7rem;"><i class="bi bi-link me-1"></i>Asignar</button>`
-                            }
-                        </td>
-                    </tr>
-                `);
+        });
+
+        $('.vincRetro-autocomplete').hide();
+
+        if (vinculaciones.length === 0) {
+            Swal.fire({
+                toast: true, position: 'top-end',
+                icon: 'warning',
+                title: 'Sin match',
+                text: `Las tallas del compra (${sinMatch.join(', ')}) no existen en el artículo del sistema.`,
+                showConfirmButton: false, timer: 4000,
+            });
+            return;
+        }
+
+        vincRetro_aplicarVinculaciones(vinculaciones, {
+            articuloLabel: grupo.articulo,
+            sinMatch: sinMatch,
+        });
+    }
+
+    function vincRetro_renderGrupoHtml(cptId, grupo, grupoIdx) {
+        const atribs = [];
+        if (grupo.marca)             atribs.push(`<span class="chip"><i class="bi bi-tag-fill"></i> ${vincRetro_escapeHtml(grupo.marca)}</span>`);
+        if (grupo.color)             atribs.push(`<span class="chip"><i class="bi bi-palette-fill"></i> ${vincRetro_escapeHtml(grupo.color)}</span>`);
+        if (grupo.genero)            atribs.push(`<span class="chip">${vincRetro_escapeHtml(grupo.genero)}</span>`);
+        if (grupo.sucursal_catalogo) atribs.push(`<span class="chip"><i class="bi bi-geo-alt-fill"></i> ${vincRetro_escapeHtml(grupo.sucursal_catalogo)}</span>`);
+        if (grupo.categoria)         atribs.push(`<span class="chip text-muted">${vincRetro_escapeHtml(grupo.categoria)}</span>`);
+
+        // === Agregaciones a nivel ARTÍCULO (sin desglose por talla) ===
+        let totalIngresado = 0;
+        let totalRemanente = 0;
+        const ingresosByFecha = {};      // {fecha_iso: {fecha, cantidad}}
+        const sucursalesUnicas = new Set();
+        const comprasAsocMap = {};       // dedup por compra_id
+        let tallasVinculadasACompra = 0;
+
+        (grupo.tallas || []).forEach(function(t) {
+            totalIngresado += (t.total_ingresado || 0);
+            totalRemanente += (t.remanente != null ? t.remanente : (t.stock || 0));
+            if (t.ya_vinculado_esta_compra) tallasVinculadasACompra++;
+
+            (t.ingresos || []).forEach(function(ing) {
+                const key = ing.fecha_iso || ing.fecha || '';
+                if (!ingresosByFecha[key]) {
+                    ingresosByFecha[key] = {
+                        fecha: ing.fecha,
+                        fecha_iso: ing.fecha_iso,
+                        cantidad: 0,
+                    };
+                }
+                ingresosByFecha[key].cantidad += (ing.cantidad || 0);
+                if (ing.sucursal) sucursalesUnicas.add(ing.sucursal);
+            });
+
+            (t.compras_asociadas || []).forEach(function(c) {
+                if (!comprasAsocMap[c.compra_id]) {
+                    comprasAsocMap[c.compra_id] = {
+                        compra_id: c.compra_id,
+                        compra_nombre: c.compra_nombre,
+                        compra_fecha: c.compra_fecha,
+                        total_stock: 0,
+                    };
+                }
+                comprasAsocMap[c.compra_id].total_stock += (c.stock_compra || 0);
             });
         });
+
+        const ingresosAgrupados = Object.values(ingresosByFecha).sort(function(a, b) {
+            return (a.fecha_iso || '').localeCompare(b.fecha_iso || '');
+        });
+        const comprasAsoc = Object.values(comprasAsocMap);
+        const sucursales = Array.from(sucursalesUnicas);
+        const tallasCount = grupo.tallas.length;
+        const tallasDisponibles = tallasCount - tallasVinculadasACompra;
+        const allLinked = tallasDisponibles === 0;
+
+        // === Bloques visuales ===
+        const ingresosHtml = ingresosAgrupados.length > 0
+            ? `<div class="vincRetro-info-line">
+                <span class="label"><i class="bi bi-box-arrow-in-down"></i> Ingresos:</span>
+                <div class="ingresos-lista">
+                    ${ingresosAgrupados.map(ing =>
+                        `<span class="ingreso-chip">
+                            <i class="bi bi-calendar-event me-1" style="color:#0ab39c;"></i>
+                            <strong>${vincRetro_escapeHtml(ing.fecha)}</strong>
+                            <span class="text-primary ms-1">${ing.cantidad}u</span>
+                        </span>`
+                    ).join('')}
+                </div>
+            </div>`
+            : `<div class="vincRetro-info-line text-muted"><i class="bi bi-dash-circle"></i> Sin registro de ingreso</div>`;
+
+        const sucursalesHtml = sucursales.length > 0
+            ? `<div class="vincRetro-info-line">
+                <span class="label"><i class="bi bi-geo-alt-fill"></i> Sucursal ingreso:</span>
+                ${sucursales.map(s => `<span class="sucursal-chip">${vincRetro_escapeHtml(s)}</span>`).join(' ')}
+            </div>`
+            : '';
+
+        const totalesHtml = `<div class="vincRetro-info-line totales-line">
+            <span class="totales-badge bg-info"><i class="bi bi-box-seam me-1"></i>${totalIngresado}u ingresados</span>
+            <span class="totales-badge bg-success"><i class="bi bi-check-circle me-1"></i>${totalRemanente}u quedan</span>
+            <span class="totales-badge bg-secondary"><i class="bi bi-rulers me-1"></i>${tallasCount} talla${tallasCount === 1 ? '' : 's'}</span>
+        </div>`;
+
+        const comprasAsocHtml = comprasAsoc.length > 0
+            ? `<div class="vincRetro-info-line">
+                <span class="label" style="color:#7c3aed;"><i class="bi bi-link-45deg"></i> Ya vinculado a:</span>
+                ${comprasAsoc.map(c =>
+                    `<span class="chip-compra" title="Compra #${c.compra_id}">
+                        ${vincRetro_escapeHtml(c.compra_nombre || ('#' + c.compra_id))} · ${vincRetro_escapeHtml(c.compra_fecha)} · ${c.total_stock}u
+                    </span>`
+                ).join(' ')}
+            </div>`
+            : '';
+
+        const estadoBadge = allLinked
+            ? `<span class="badge bg-success" style="font-size:.65rem;"><i class="bi bi-check-all me-1"></i>Todas las tallas ya vinculadas a esta compra</span>`
+            : `<button type="button"
+                    class="btn btn-sm text-white vincRetro-asignar-grupo flex-shrink-0"
+                    data-cpt="${cptId}" data-grupo-idx="${grupoIdx}"
+                    style="background:linear-gradient(135deg,#7c3aed,#4c1d95);font-size:.72rem;padding:6px 12px;white-space:nowrap;"
+                    title="Asocia todas las tallas pendientes de la compra a este artículo, matcheando por número de talla.">
+                    <i class="bi bi-check-all me-1"></i>Asignar artículo completo
+                </button>`;
+
+        return `<div class="vincRetro-grupo ${allLinked ? 'grupo-vinculado' : ''}">
+            <div class="vincRetro-grupo-header">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div style="flex:1;min-width:0;">
+                        <div class="articulo">${vincRetro_escapeHtml(grupo.articulo)}</div>
+                        <div class="atributos">${atribs.join(' ')}</div>
+                    </div>
+                    ${estadoBadge}
+                </div>
+            </div>
+            <div class="vincRetro-grupo-body">
+                ${totalesHtml}
+                ${ingresosHtml}
+                ${sucursalesHtml}
+                ${comprasAsocHtml}
+            </div>
+        </div>`;
     }
 
-    function vincRetro_seleccionarPT(ptId, sku) {
-        if (vincRetro_activeCptId) {
-            vincRetro_asignaciones[vincRetro_activeCptId] = { producto_talla_id: ptId, sku: sku };
-            vincRetro_renderGrupos();
-            $('#vincRetro_resultadosBusqueda').hide();
+    function vincRetro_buscarInline(cptId, q, $ac) {
+        clearTimeout(vincRetro_searchTimers[cptId]);
+        if (!q || q.length < 1) {
+            $ac.hide().empty();
+            return;
+        }
+        $ac.show().html('<div class="vincRetro-loading"><div class="spinner-border spinner-border-sm me-2"></div>Buscando productos y trazabilidad...</div>');
+        vincRetro_searchTimers[cptId] = setTimeout(function() {
+            $.getJSON('/app/api/compra/buscar-producto-agrupado-vincular/', { q: q, compra_id: vincRetro_compraId }, function(r) {
+                if (!r.grupos || r.grupos.length === 0) {
+                    vincRetro_ultimosGrupos = [];
+                    $ac.html(`<div class="vincRetro-empty"><i class="bi bi-search me-1"></i>Sin resultados para "${vincRetro_escapeHtml(q)}"</div>`);
+                    return;
+                }
+                vincRetro_ultimosGrupos = r.grupos;
+                const aviso = `<div class="vincRetro-aviso">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Usa <strong>"Asignar artículo completo"</strong> para vincular todas las tallas pendientes
+                    en un click (match por número de talla), o selecciona una talla individual.
+                    <strong>NO se modifica stock</strong> — solo se crea la trazabilidad para los reportes
+                    (compras, despachos por proveedor, rendimiento) con la fecha real de la compra.
+                    <div class="mt-1" style="font-size:.7rem;color:#7c3aed;">
+                        <i class="bi bi-info-square me-1"></i>
+                        <strong>Si el mismo SKU llegó en varias fechas:</strong> carga una compra por cada llegada
+                        (con su factura y cantidad real) y vincula las dos al mismo producto.
+                        Las cantidades se suman correctamente en los reportes.
+                    </div>
+                </div>`;
+                const html = r.grupos.map((g, idx) => vincRetro_renderGrupoHtml(cptId, g, idx)).join('');
+                $ac.html(aviso + html);
+            }).fail(function() {
+                $ac.html('<div class="vincRetro-empty text-danger">Error al buscar</div>');
+            });
+        }, 250);
+    }
+
+    // ===== Handlers de búsqueda y aplicación (auto-aplicar) =====
+
+    // Input en buscador → autocomplete
+    $(document).on('input focus', '.vincRetro_skuInput', function() {
+        const cptId = parseInt($(this).data('cpt'));
+        const q = $(this).val().trim();
+        const $ac = $(this).closest('.vincRetro-search-wrapper').find('.vincRetro-autocomplete');
+        vincRetro_buscarInline(cptId, q, $ac);
+    });
+
+    // Cantidad editable: persiste en vincRetro_cantidadesEditadas para
+    // enviarse cuando el usuario seleccione SKU.
+    $(document).on('input change', '.vincRetro_cantidad', function() {
+        const cptId = parseInt($(this).data('cpt'));
+        const original = parseInt($(this).data('original'));
+        const val = parseInt($(this).val());
+        if (!cptId || isNaN(val) || val < 0) return;
+        if (val === original) {
+            delete vincRetro_cantidadesEditadas[cptId];
         } else {
-            Swal.fire('', 'Usa el buscador de cada fila para asignar un SKU específico, o usa Auto-vincular.', 'info');
+            vincRetro_cantidadesEditadas[cptId] = val;
+        }
+    });
+
+    // Click en "Asignar artículo completo" → aplica inmediatamente
+    $(document).on('mousedown', '.vincRetro-asignar-grupo', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const cptId = parseInt($(this).data('cpt'));
+        const grupoIdx = parseInt($(this).data('grupo-idx'));
+        vincRetro_asignarGrupoCompleto(cptId, grupoIdx);
+    });
+
+    // Cerrar autocomplete al hacer click fuera
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.vincRetro-search-wrapper').length) {
+            $('.vincRetro-autocomplete').hide();
+        }
+    });
+
+    // Toggle colapso/expand del card de un compra_producto
+    $(document).on('click', '.vincRetro-card-header', function(e) {
+        if ($(e.target).closest('button, a, input').length) return;
+        const cpId = parseInt($(this).data('cp-id'));
+        if (!cpId) return;
+        if (vincRetro_colapsadosCpId.has(cpId)) {
+            vincRetro_colapsadosCpId.delete(cpId);
+        } else {
+            vincRetro_colapsadosCpId.add(cpId);
+        }
+        vincRetro_renderGrupos();
+    });
+
+    // Botón Desvincular en cada talla ya vinculada
+    $(document).on('click', '.vincRetro_btnDesvincular', function(e) {
+        e.preventDefault();
+        const cptId = parseInt($(this).data('cpt'));
+        const sku = $(this).data('sku') || '';
+        Swal.fire({
+            title: '¿Desvincular?',
+            html: `Se quitará la vinculación SKU <code>${sku}</code> de esta talla. ${vincRetro_esHistorica ? 'No se tocará stock (compra histórica).' : ''}`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, desvincular',
+            confirmButtonColor: '#dc3545',
+            cancelButtonText: 'Cancelar',
+        }).then(function(r) {
+            if (!r.isConfirmed) return;
+            vincRetro_desvincularCpt(cptId);
+        });
+    });
+
+    // Limpiar filtro desde el link del mensaje "sin resultados"
+    $(document).on('click', '#vincRetro_limpiarFiltro', function(e) {
+        e.preventDefault();
+        vincRetro_filtroTexto = '';
+        $('#vincRetro_filtro').val('');
+        vincRetro_renderGrupos();
+    });
+
+    // Enter/Escape sobre el input del buscador
+    $(document).on('keydown', '.vincRetro_skuInput', function(e) {
+        if (e.key === 'Escape') {
+            $(this).closest('.vincRetro-search-wrapper').find('.vincRetro-autocomplete').hide();
+            $(this).blur();
+        }
+    });
+
+    // ===== Aplicar / desvincular / undo =====
+
+    // Envía una o más vinculaciones al backend de inmediato y registra en
+    // undo stack para que el usuario pueda revertir durante VINCRETRO_UNDO_SECONDS.
+    function vincRetro_aplicarVinculaciones(vinculaciones, opts) {
+        opts = opts || {};
+        if (!vinculaciones || vinculaciones.length === 0) return;
+
+        const dteId = $('#vincRetro_dteSelect').val() || null;
+
+        $.ajax({
+            url: '/app/api/compra/vincular-retroactivo/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+            data: JSON.stringify({
+                compra_id: vincRetro_compraId,
+                vinculaciones: vinculaciones,
+                es_historica: vincRetro_esHistorica,
+                dte_id: dteId ? parseInt(dteId) : null,
+            }),
+            success: function(r) {
+                if (!r.success) {
+                    Swal.fire('Error', r.error || 'Error al vincular', 'error');
+                    return;
+                }
+                // Registrar en undo stack para deshacer en los próximos N segundos
+                const cptIdsAplicados = vinculaciones
+                    .filter(v => (r.detalle || []).some(d => d.cpt_id === v.cpt_id))
+                    .map(v => v.cpt_id);
+                if (cptIdsAplicados.length > 0) {
+                    vincRetro_pushUndo({
+                        tipo: 'vincular',
+                        cpt_ids: cptIdsAplicados,
+                        articuloLabel: opts.articuloLabel || `${r.exitosas} talla(s)`,
+                    });
+                }
+
+                // Toast de éxito
+                Swal.fire({
+                    toast: true, position: 'top-end',
+                    icon: 'success',
+                    title: `${r.exitosas} talla(s) vinculada(s)`,
+                    text: opts.articuloLabel ? `→ ${opts.articuloLabel}` : '',
+                    showConfirmButton: false, timer: 3500,
+                });
+
+                if (r.errores && r.errores.length > 0) {
+                    console.warn('Vinculación con errores:', r.errores);
+                }
+                vincRetro_cargarItems();
+
+                const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+                cargarComprasPorAnio(anio, currentPageCompras, currentSearchCompras);
+            },
+            error: function(xhr) {
+                Swal.fire('Error', xhr.responseJSON?.error || 'Error de servidor', 'error');
+            },
+        });
+    }
+
+    // Desvincula una talla específica (solo histórica, sin tocar stock)
+    function vincRetro_desvincularCpt(cptId, opts) {
+        opts = opts || {};
+        $.ajax({
+            url: '/app/api/compra/desvincular-retroactivo/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+            data: JSON.stringify({ cpt_id: cptId }),
+            success: function(r) {
+                if (!r.success) {
+                    Swal.fire('Error', r.error || 'Error al desvincular', 'error');
+                    return;
+                }
+                if (!opts.silent) {
+                    Swal.fire({
+                        toast: true, position: 'top-end',
+                        icon: 'success',
+                        title: 'Desvinculada',
+                        text: r.message,
+                        showConfirmButton: false, timer: 3000,
+                    });
+                }
+                vincRetro_cargarItems();
+                const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+                cargarComprasPorAnio(anio, currentPageCompras, currentSearchCompras);
+            },
+            error: function(xhr) {
+                Swal.fire('Error', xhr.responseJSON?.error || 'Error de servidor', 'error');
+            },
+        });
+    }
+
+    function vincRetro_pushUndo(entry) {
+        vincRetro_undoStack.push(entry);
+        $('#vincRetro_undoWrapper').removeClass('d-none');
+        let remaining = VINCRETRO_UNDO_SECONDS;
+        $('#undoTimer').text(`${remaining}s`);
+        if (vincRetro_undoTimer) clearInterval(vincRetro_undoTimer);
+        vincRetro_undoTimer = setInterval(function() {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(vincRetro_undoTimer);
+                vincRetro_undoTimer = null;
+                vincRetro_undoStack = [];
+                $('#vincRetro_undoWrapper').addClass('d-none');
+            } else {
+                $('#undoTimer').text(`${remaining}s`);
+            }
+        }, 1000);
+    }
+
+    function vincRetro_deshacerUltima() {
+        const ultima = vincRetro_undoStack.pop();
+        if (!ultima) return;
+        if (vincRetro_undoTimer) {
+            clearInterval(vincRetro_undoTimer);
+            vincRetro_undoTimer = null;
+        }
+        $('#vincRetro_undoWrapper').addClass('d-none');
+
+        if (ultima.tipo === 'vincular') {
+            // Desvincular en serie cada cpt_id
+            const ids = ultima.cpt_ids || [];
+            if (ids.length === 0) return;
+            // Ejecutamos secuencial para evitar carreras en el backend
+            (async function() {
+                for (const id of ids) {
+                    await new Promise(function(resolve) {
+                        $.ajax({
+                            url: '/app/api/compra/desvincular-retroactivo/',
+                            method: 'POST',
+                            contentType: 'application/json',
+                            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                            data: JSON.stringify({ cpt_id: id }),
+                            success: () => resolve(),
+                            error: () => resolve(),
+                        });
+                    });
+                }
+                Swal.fire({
+                    toast: true, position: 'top-end',
+                    icon: 'success', title: `Deshecho: ${ids.length} talla(s)`,
+                    showConfirmButton: false, timer: 3000,
+                });
+                vincRetro_cargarItems();
+            })();
         }
     }
 
-    function vincRetro_quitarAsignacion(cptId) {
-        delete vincRetro_asignaciones[cptId];
+    function vincRetro_toggleColapsoTodos() {
+        if (vincRetro_colapsadosCpId.size > 0) {
+            vincRetro_colapsadosCpId = new Set();  // expandir
+        } else {
+            vincRetro_colapsadosCpId = new Set(
+                vincRetro_productos.map(p => p.compra_producto_id)
+            );  // colapsar
+        }
         vincRetro_renderGrupos();
     }
-
-    function vincRetro_confirmar() {
-        const keys = Object.keys(vincRetro_asignaciones);
-        if (keys.length === 0) return;
-
-        Swal.fire({
-            title: `¿Confirmar vinculación de ${keys.length} talla(s)?`,
-            html: `Se vincularán <b>${keys.length}</b> talla(s) a productos existentes.<br>
-                   <small class="text-muted">Las recepciones rebajadas se actualizarán con el producto vinculado. Esto alimenta Trazabilidad DTE y Rendimiento Proveedor.</small>`,
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, vincular',
-            confirmButtonColor: '#7c3aed',
-            cancelButtonText: 'Cancelar',
-        }).then(function(result) {
-            if (!result.isConfirmed) return;
-
-            const vinculaciones = keys.map(k => ({
-                cpt_id: parseInt(k),
-                producto_talla_id: vincRetro_asignaciones[k].producto_talla_id,
-            }));
-
-            $('#btnConfirmarVinculacion').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Vinculando...');
-
-            $.ajax({
-                url: '/app/api/compra/vincular-retroactivo/',
-                method: 'POST',
-                contentType: 'application/json',
-                headers: { 'X-CSRFToken': '{{ csrf_token }}' },
-                data: JSON.stringify({ compra_id: vincRetro_compraId, vinculaciones: vinculaciones }),
-                success: function(r) {
-                    if (r.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Vinculación exitosa',
-                            html: r.message + (r.errores && r.errores.length > 0
-                                ? `<br><br><small class="text-danger">${r.errores.join('<br>')}</small>` : ''),
-                            timer: 4000,
-                            showConfirmButton: true,
-                        });
-                        vincRetro_asignaciones = {};
-                        vincRetro_cargarItems();
-                        const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
-                        cargarComprasPorAnio(anio, currentPageCompras, currentSearchCompras);
-                    } else {
-                        Swal.fire('Error', r.error || 'Error desconocido', 'error');
-                    }
-                },
-                error: function(xhr) {
-                    Swal.fire('Error', xhr.responseJSON?.error || 'Error de servidor', 'error');
-                },
-                complete: function() {
-                    $('#btnConfirmarVinculacion').prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Confirmar Vinculación');
-                }
-            });
-        });
-    }
-
-    $('#vincRetro_buscarSku').on('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); vincRetro_buscarSkuManual(); }
-    });
-
-    $(document).on('keydown', '.vincRetro_skuInput', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            vincRetro_buscarParaFila(parseInt($(this).data('cpt')));
-        }
-    });
 
 </script>

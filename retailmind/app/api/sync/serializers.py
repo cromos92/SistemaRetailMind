@@ -48,8 +48,9 @@ class ProductoSyncSerializer(serializers.ModelSerializer):
     categoria_nombre = serializers.CharField(source='categoria.nombre', allow_null=True)
     marca = serializers.SerializerMethodField()
     color = serializers.SerializerMethodField()
+    foto_portada_url = serializers.SerializerMethodField()
     variantes = ProductoTallaSyncSerializer(source='producto_talla', many=True, read_only=True)
-    
+
     class Meta:
         model = Producto
         fields = [
@@ -63,19 +64,25 @@ class ProductoSyncSerializer(serializers.ModelSerializer):
             'categoria_nombre',
             'marca',
             'color',
+            'foto_portada_url',
             'tipo_talla',
             'variantes',
         ]
-    
+
     def get_marca(self, obj):
         if obj.atributo1:
             return obj.atributo1.valor
         return None
-    
+
     def get_color(self, obj):
         if obj.atributo2:
             return obj.atributo2.valor
         return None
+
+    def get_foto_portada_url(self, obj):
+        from app.services.realsport_imagenes_service import resolver_foto_portada_url
+        empresa_id = getattr(getattr(obj, 'sucursal', None), 'empresa_id', None)
+        return resolver_foto_portada_url(obj.articulo, empresa_id) or ''
 
 
 class CategoriaSyncSerializer(serializers.ModelSerializer):

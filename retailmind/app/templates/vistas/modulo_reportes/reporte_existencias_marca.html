@@ -1524,9 +1524,9 @@ async function cargarReporte(forzarSinFiltro = false) {
         if (marcaId) params.append('marca_id', marcaId);
         if (deptId) params.append('departamento_id', deptId);
         if (busqueda.length >= 3) params.append('busqueda', busqueda);
-        if (sucursalId && sucursalId !== 'todas') params.append('sucursal_id', sucursalId);
+        if (sucursalId) params.append('sucursal_id', sucursalId);
         params.append('limite', limite);
-        
+
         // Si no hay filtros, indicar al backend que permita sin filtro
         if (!tieneFiltroValido()) {
             params.append('sin_filtro', 'true');
@@ -1706,11 +1706,11 @@ async function exportarExcel() {
         if (marcaId) params.append('marca_id', marcaId);
         if (deptId) params.append('departamento_id', deptId);
         if (busqueda.length >= 3) params.append('busqueda', busqueda);
-        if (sucursalId && sucursalId !== 'todas') params.append('sucursal_id', sucursalId);
+        if (sucursalId) params.append('sucursal_id', sucursalId);
         params.append('limite', limite);
-        
+
         if (params.toString()) url += '?' + params.toString();
-        
+
         window.location.href = url;
     } catch (error) {
         console.error('Error al exportar:', error);

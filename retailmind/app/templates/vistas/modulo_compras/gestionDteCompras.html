@@ -1581,14 +1581,14 @@
                         </div>
                     </div>
 
-                    <!-- Datos específicos del cheque (visibles solo cuando metodo=Cheque) -->
-                    <div id="bloqueCheque" class="row g-3 mb-3" style="display:none;">
+                    <!-- Fecha del pago (todos los métodos; permite retroactivos y cheques a fecha) -->
+                    <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label for="fechaCheque" class="form-label">
-                                Fecha del cheque <span class="text-danger">*</span>
+                            <label for="fechaPago" class="form-label">
+                                Fecha del pago <span class="text-danger">*</span>
                             </label>
-                            <input type="date" class="form-control" id="fechaCheque">
-                            <div class="form-text">Fecha en que debe depositarse el cheque.</div>
+                            <input type="date" class="form-control" id="fechaPago" required>
+                            <div class="form-text">Fecha en que se realizó el pago. Puede ser pasada o futura (cheques a fecha).</div>
                         </div>
                         <div class="col-md-6 d-flex align-items-end">
                             <div id="recordatorioCheque" class="alert alert-warning py-2 px-3 mb-0 w-100" style="font-size:0.82rem; display:none;">
@@ -1645,8 +1645,8 @@
                         <i class="bi bi-calendar2-week"></i>
                     </div>
                     <div>
-                        <h5 class="rm-modal-title" id="modalPendientesMesLabel">Facturas pendientes por mes</h5>
-                        <p class="rm-modal-subtitle">Resumen de pagos pendientes agrupados por mes de emisión</p>
+                        <h5 class="rm-modal-title" id="modalPendientesMesLabel">Facturas pendientes del mes</h5>
+                        <p class="rm-modal-subtitle">Detalle de pagos pendientes para el mes seleccionado</p>
                     </div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -1655,15 +1655,14 @@
                 <!-- Filtros -->
                 <div class="row g-2 mb-3 align-items-end">
                     <div class="col-md-3">
-                        <label class="form-label small mb-1">Año</label>
-                        <select id="filtroPendientesAnio" class="form-select form-select-sm"></select>
+                        <label class="form-label small mb-1">Mes</label>
+                        <input type="month" id="filtroPendientesMes" class="form-select form-select-sm">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small mb-1">Tipo de fecha</label>
                         <select id="filtroPendientesTipoFecha" class="form-select form-select-sm">
                             <option value="emision" selected>Emisión</option>
                             <option value="recepcion">Recepción</option>
-                            <option value="vencimiento">Vencimiento (estimado)</option>
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -1719,16 +1718,18 @@
                     <table class="table table-sm align-middle mb-0">
                         <thead style="background:#f8fafc;">
                             <tr>
-                                <th class="py-2">Mes</th>
-                                <th class="text-end py-2">N° Facturas</th>
-                                <th class="text-end py-2">Monto pendiente</th>
-                                <th class="text-end py-2">Vencidas</th>
-                                <th class="text-end py-2">Monto vencido</th>
-                                <th class="py-2" style="width:30px;"></th>
+                                <th class="py-2">Proveedor</th>
+                                <th class="py-2">N° Doc</th>
+                                <th class="py-2">Tipo</th>
+                                <th class="py-2">F. Emisión</th>
+                                <th class="text-end py-2">Monto c/IVA</th>
+                                <th class="text-end py-2">Abonado</th>
+                                <th class="text-end py-2">Saldo</th>
+                                <th class="py-2">Estado</th>
                             </tr>
                         </thead>
                         <tbody id="tablaPendientesMesBody">
-                            <tr><td colspan="6" class="text-center text-muted py-3">Cargando…</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-3">Cargando…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1871,6 +1872,13 @@
                         <div class="col-md-6">
                             <label for="voucherMasivo" class="form-label">N° Documento / Voucher</label>
                             <input type="text" class="form-control" id="voucherMasivo" placeholder="Ej: TRF-2025-001">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="fechaPagoMasivo" class="form-label">
+                                Fecha del pago <span class="text-danger">*</span>
+                            </label>
+                            <input type="date" class="form-control" id="fechaPagoMasivo" required>
+                            <div class="form-text">Se aplicará a todas las facturas del lote.</div>
                         </div>
                         <div class="col-12">
                             <label for="observacionesMasivo" class="form-label">Observaciones</label>
@@ -3200,23 +3208,19 @@
                     tbody.append('<tr><td colspan="4" class="text-center">Sin pagos registrados.</td></tr>');
                 } else {
                     data.forEach(pago => {
-                        // Info adicional para cheque: fecha de depósito
+                        // Cheques a fecha: recordatorio de depósito cuando la fecha del pago aún no llega.
                         let infoCheque = '';
-                        if (pago.metodo_pago === 'Cheque' && pago.fecha_cheque) {
-                            const fc = new Date(pago.fecha_cheque + 'T00:00:00');
+                        if (pago.metodo_pago === 'Cheque' && pago.fecha_pago) {
+                            const fc = new Date(pago.fecha_pago + 'T00:00:00');
                             const hoy = new Date(); hoy.setHours(0,0,0,0);
                             const dias = Math.round((fc - hoy) / 86400000);
-                            let cls = 'bg-info';
-                            let icon = 'bi-calendar-event';
-                            if (dias < 0) { cls = 'bg-danger'; icon = 'bi-exclamation-octagon-fill'; }
-                            else if (dias <= 3) { cls = 'bg-warning text-dark'; icon = 'bi-bell-fill'; }
-                            const txt = dias < 0
-                                ? `Depositar (vencido ${Math.abs(dias)}d)`
-                                : dias === 0 ? 'Depositar HOY'
-                                : `Depositar en ${dias}d`;
-                            infoCheque = `<br><span class="badge ${cls}" style="font-size:0.68rem;" title="Fecha cheque: ${fc.toLocaleDateString('es-CL')}">
-                                <i class="bi ${icon}"></i> ${txt}
-                            </span>`;
+                            if (dias > 0) {
+                                const cls = dias <= 3 ? 'bg-warning text-dark' : 'bg-info';
+                                const icon = dias <= 3 ? 'bi-bell-fill' : 'bi-calendar-event';
+                                infoCheque = `<br><span class="badge ${cls}" style="font-size:0.68rem;" title="Fecha cheque: ${fc.toLocaleDateString('es-CL')}">
+                                    <i class="bi ${icon}"></i> Depositar en ${dias}d
+                                </span>`;
+                            }
                         }
                         const fila = `
                         <tr data-id="${pago.id}">
@@ -3983,8 +3987,7 @@
         $('#voucher').val('');
         $('#montoPago').val('');
         $('#pagarTodo').prop('checked', false);
-        $('#fechaCheque').val('');
-        $('#bloqueCheque').hide();
+        $('#fechaPago').val(new Date().toISOString().slice(0, 10));
         $('#recordatorioCheque').hide();
 
         // Reset textos y etiquetas
@@ -4023,19 +4026,9 @@
                     });
                 }
 
-                // Mostrar/ocultar bloque cheque según método
-                $('#metodoPago').off('change.cheque').on('change.cheque', function () {
-                    if ($(this).val() === 'Cheque') {
-                        $('#bloqueCheque').slideDown(150);
-                    } else {
-                        $('#bloqueCheque').slideUp(150);
-                        $('#fechaCheque').val('');
-                        $('#recordatorioCheque').hide();
-                    }
-                });
-
-                // Recordatorio dinámico según fecha del cheque
-                $('#fechaCheque').off('change.recordatorio').on('change.recordatorio', actualizarRecordatorioCheque);
+                // El recordatorio "Depositar en N días" depende del método y de la fecha.
+                $('#metodoPago').off('change.cheque').on('change.cheque', actualizarRecordatorioCheque);
+                $('#fechaPago').off('change.recordatorio').on('change.recordatorio', actualizarRecordatorioCheque);
 
                 const modal = new bootstrap.Modal(document.getElementById('modalPago'));
                 modal.show();
@@ -4050,29 +4043,38 @@
         });
     }
 
-    // ==================== MODAL: FACTURAS PENDIENTES POR MES ====================
+    // ==================== MODAL: FACTURAS PENDIENTES DEL MES ====================
     function abrirModalPendientesMes() {
-        // Poblar selector de años (5 atrás → 1 adelante)
-        const $anio = $('#filtroPendientesAnio');
-        if ($anio.find('option').length === 0) {
-            const anioActual = new Date().getFullYear();
-            for (let y = anioActual + 1; y >= anioActual - 5; y--) {
-                $anio.append(`<option value="${y}" ${y === anioActual ? 'selected' : ''}>${y}</option>`);
-            }
+        // Pre-seleccionar mes actual si no hay valor
+        const $mes = $('#filtroPendientesMes');
+        if (!$mes.val()) {
+            const hoy = new Date();
+            const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+            $mes.val(mesActual);
         }
         cargarPendientesMes();
         const modal = new bootstrap.Modal(document.getElementById('modalPendientesMes'));
         modal.show();
     }
 
+    function getMesSeleccionado() {
+        let v = $('#filtroPendientesMes').val();
+        if (!v) {
+            const hoy = new Date();
+            v = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+            $('#filtroPendientesMes').val(v);
+        }
+        return v; // formato YYYY-MM
+    }
+
     function cargarPendientesMes() {
         const params = {
-            anio: $('#filtroPendientesAnio').val() || new Date().getFullYear(),
+            mes: getMesSeleccionado(),
             tipo_fecha: $('#filtroPendientesTipoFecha').val() || 'emision',
             tipo_documento: $('#filtroPendientesTipoDoc').val() || ''
         };
         const $tbody = $('#tablaPendientesMesBody');
-        $tbody.html('<tr><td colspan="6" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando…</td></tr>');
+        $tbody.html('<tr><td colspan="8" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando…</td></tr>');
 
         $.ajax({
             url: '/app/facturasPendientesPorMes/',
@@ -4081,43 +4083,49 @@
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function (resp) {
                 if (!resp.success) {
-                    $tbody.html(`<tr><td colspan="6" class="text-center text-danger py-3">${resp.error || 'Error al cargar datos'}</td></tr>`);
+                    $tbody.html(`<tr><td colspan="8" class="text-center text-danger py-3">${resp.error || 'Error al cargar datos'}</td></tr>`);
                     return;
                 }
                 renderPendientesMes(resp);
             },
             error: function () {
-                $tbody.html('<tr><td colspan="6" class="text-center text-danger py-3">Error al cargar datos.</td></tr>');
+                $tbody.html('<tr><td colspan="8" class="text-center text-danger py-3">Error al cargar datos.</td></tr>');
             }
         });
     }
 
     function renderPendientesMes(resp) {
-        const meses = resp.meses || [];
+        const facturas = resp.facturas || [];
         const $tbody = $('#tablaPendientesMesBody');
         $tbody.empty();
 
-        if (meses.length === 0) {
-            $tbody.html('<tr><td colspan="6" class="text-center text-muted py-3">Sin facturas pendientes en este período.</td></tr>');
+        if (facturas.length === 0) {
+            $tbody.html('<tr><td colspan="8" class="text-center text-muted py-3">Sin facturas pendientes en este mes.</td></tr>');
         } else {
-            const mesNombre = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-            meses.forEach((m, idx) => {
-                const rowId = `pendmes-${m.mes}`;
+            facturas.forEach(f => {
+                const vencida = f.dias_restantes !== null && f.dias_restantes <= 0;
+                const proxima = f.dias_restantes !== null && f.dias_restantes > 0 && f.dias_restantes <= 7;
+                let estadoBadge;
+                if (vencida) {
+                    estadoBadge = `<span class="badge bg-danger">Vencida ${Math.abs(f.dias_restantes)}d</span>`;
+                } else if (proxima) {
+                    estadoBadge = `<span class="badge bg-warning text-dark">Vence en ${f.dias_restantes}d</span>`;
+                } else if (f.dias_restantes !== null) {
+                    estadoBadge = `<span class="badge bg-light text-dark">${f.dias_restantes}d restantes</span>`;
+                } else {
+                    estadoBadge = `<span class="badge bg-secondary">-</span>`;
+                }
+
                 $tbody.append(`
-                    <tr class="pendientes-mes-row" data-row-id="${rowId}" style="cursor:pointer;">
-                        <td><strong>${mesNombre[m.mes - 1]} ${resp.anio}</strong></td>
-                        <td class="text-end">${m.cantidad.toLocaleString()}</td>
-                        <td class="text-end fw-bold" style="color:#92400e;">$${m.monto_pendiente.toLocaleString()}</td>
-                        <td class="text-end">${m.vencidas.toLocaleString()}</td>
-                        <td class="text-end" style="color:${m.monto_vencido > 0 ? '#991b1b' : '#6b7280'};">$${m.monto_vencido.toLocaleString()}</td>
-                        <td class="text-center"><i class="bi bi-chevron-down toggle-icon"></i></td>
-                    </tr>
-                    <tr class="pendientes-mes-detalle" data-row-id="${rowId}" style="display:none;">
-                        <td colspan="6" style="background:#fafafa; padding:0;">
-                            <div class="p-2">
-                                ${renderDetalleMes(m.facturas || [])}
-                            </div>
-                        </td>
+                    <tr${vencida ? ' style="background:#fef2f2;"' : ''}>
+                        <td>${f.proveedor || '-'}</td>
+                        <td>${f.numero_documento || '-'}</td>
+                        <td><small>${f.tipo_documento || '-'}</small></td>
+                        <td>${f.fecha_emision || '-'}</td>
+                        <td class="text-end">$${(f.monto_con_iva || 0).toLocaleString()}</td>
+                        <td class="text-end text-muted">$${(f.abonado || 0).toLocaleString()}</td>
+                        <td class="text-end fw-bold" style="color:#92400e;">$${(f.saldo || 0).toLocaleString()}</td>
+                        <td>${estadoBadge}</td>
                     </tr>
                 `);
             });
@@ -4130,56 +4138,14 @@
         $('#resPendientesProximas').text((resp.total_proximas || 0).toLocaleString());
     }
 
-    function renderDetalleMes(facturas) {
-        if (!facturas || facturas.length === 0) {
-            return '<div class="text-center text-muted small py-2">Sin detalle.</div>';
-        }
-        let html = `<table class="table table-sm mb-0" style="font-size:0.78rem;">
-            <thead><tr>
-                <th>Proveedor</th><th>N° Doc</th><th>Tipo</th><th>F. Emisión</th>
-                <th class="text-end">Monto c/IVA</th><th class="text-end">Abonado</th>
-                <th class="text-end">Saldo</th><th>Estado</th>
-            </tr></thead><tbody>`;
-        facturas.forEach(f => {
-            const vencida = f.dias_restantes !== null && f.dias_restantes <= 0;
-            html += `<tr${vencida ? ' style="background:#fef2f2;"' : ''}>
-                <td>${f.proveedor || '-'}</td>
-                <td>${f.numero_documento || '-'}</td>
-                <td>${f.tipo_documento || '-'}</td>
-                <td>${f.fecha_emision || '-'}</td>
-                <td class="text-end">$${(f.monto_con_iva || 0).toLocaleString()}</td>
-                <td class="text-end">$${(f.abonado || 0).toLocaleString()}</td>
-                <td class="text-end fw-bold">$${(f.saldo || 0).toLocaleString()}</td>
-                <td>${
-                    vencida
-                        ? `<span class="badge bg-danger">Vencida ${Math.abs(f.dias_restantes)}d</span>`
-                        : f.dias_restantes !== null && f.dias_restantes <= 7
-                            ? `<span class="badge bg-warning text-dark">${f.dias_restantes}d</span>`
-                            : `<span class="badge bg-light text-dark">${f.dias_restantes ?? '-'}d</span>`
-                }</td>
-            </tr>`;
-        });
-        html += '</tbody></table>';
-        return html;
-    }
-
-    // Toggle detalle por mes
-    $(document).on('click', '.pendientes-mes-row', function () {
-        const rowId = $(this).data('row-id');
-        const $det = $(`.pendientes-mes-detalle[data-row-id="${rowId}"]`);
-        const $icon = $(this).find('.toggle-icon');
-        $det.toggle();
-        $icon.toggleClass('bi-chevron-down bi-chevron-up');
-    });
-
     // Recargar al cambiar filtros
-    $(document).on('change', '#filtroPendientesAnio, #filtroPendientesTipoFecha, #filtroPendientesTipoDoc', function () {
+    $(document).on('change', '#filtroPendientesMes, #filtroPendientesTipoFecha, #filtroPendientesTipoDoc', function () {
         cargarPendientesMes();
     });
 
     function exportarPendientesMes() {
         const params = $.param({
-            anio: $('#filtroPendientesAnio').val() || new Date().getFullYear(),
+            mes: getMesSeleccionado(),
             tipo_fecha: $('#filtroPendientesTipoFecha').val() || 'emision',
             tipo_documento: $('#filtroPendientesTipoDoc').val() || '',
             formato: 'csv'
@@ -4187,33 +4153,27 @@
         window.location.href = `/app/facturasPendientesPorMes/?${params}`;
     }
 
-    // Actualiza el banner de recordatorio según la fecha del cheque
+    // Recordatorio "Depositar en N días": sólo aplica a cheques con fecha futura.
     function actualizarRecordatorioCheque() {
-        const fechaStr = $('#fechaCheque').val();
         const $alert = $('#recordatorioCheque');
         const $txt = $('#textoRecordatorioCheque');
-        if (!fechaStr) { $alert.hide(); return; }
+        const fechaStr = $('#fechaPago').val();
+        const metodo = $('#metodoPago').val();
 
-        const fechaCheque = new Date(fechaStr + 'T00:00:00');
+        if (metodo !== 'Cheque' || !fechaStr) { $alert.hide(); return; }
+
+        const fechaPago = new Date(fechaStr + 'T00:00:00');
         const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-        const diffMs = fechaCheque - hoy;
-        const dias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        const dias = Math.round((fechaPago - hoy) / (1000 * 60 * 60 * 24));
 
-        let texto = '';
-        let clase = 'alert-warning';
-        if (dias < 0) {
-            texto = `Vencido hace ${Math.abs(dias)} día${Math.abs(dias) !== 1 ? 's' : ''} — depositar cuanto antes.`;
-            clase = 'alert-danger';
-        } else if (dias === 0) {
-            texto = 'Depositar HOY.';
-            clase = 'alert-danger';
-        } else if (dias <= 3) {
-            texto = `Depositar en ${dias} día${dias !== 1 ? 's' : ''} (${fechaCheque.toLocaleDateString('es-CL')}).`;
-            clase = 'alert-warning';
-        } else {
-            texto = `Depositar el ${fechaCheque.toLocaleDateString('es-CL')} (en ${dias} días).`;
-            clase = 'alert-info';
-        }
+        // Cheque al día o ya depositado: no se muestra recordatorio.
+        if (dias <= 0) { $alert.hide(); return; }
+
+        const clase = dias <= 3 ? 'alert-warning' : 'alert-info';
+        const texto = dias <= 3
+            ? `Depositar en ${dias} día${dias !== 1 ? 's' : ''} (${fechaPago.toLocaleDateString('es-CL')}).`
+            : `Depositar el ${fechaPago.toLocaleDateString('es-CL')} (en ${dias} días).`;
+
         $alert.removeClass('alert-warning alert-danger alert-info').addClass(clase);
         $txt.text(texto);
         $alert.show();
@@ -4227,15 +4187,15 @@
         const metodo_pago = $('#metodoPago').val();
         const voucher = $('#voucher').val().trim();
         const monto = unformatMoney($('#montoPago').val());
-        const fecha_cheque = $('#fechaCheque').val() || null;
+        const fecha_pago = $('#fechaPago').val() || null;
         const saldoPermitido = parseInt($('#inputSaldoPendiente').text()?.replace(/[^\d]/g, '') || 0);
 
         if (!metodo_pago || isNaN(monto) || monto <= 0) {
             return Swal.fire('Faltan datos', 'Completa todos los campos obligatorios.', 'warning');
         }
 
-        if (metodo_pago === 'Cheque' && !fecha_cheque) {
-            return Swal.fire('Falta fecha del cheque', 'Debes indicar la fecha del cheque para saber cuándo depositarlo.', 'warning');
+        if (!fecha_pago) {
+            return Swal.fire('Falta fecha del pago', 'Debes indicar la fecha en que se realizó el pago.', 'warning');
         }
 
         // Solo validar el saldo si NO estamos editando (ya que el backend lo valida correctamente)
@@ -4248,7 +4208,7 @@
             metodo_pago,
             voucher: voucher || '',
             monto,
-            fecha_cheque: metodo_pago === 'Cheque' ? fecha_cheque : null
+            fecha_pago,
         };
 
         const url = pagoId ? `/app/editarPago/${pagoId}/` : '/app/registrarPagoDTE/';
@@ -4385,16 +4345,9 @@
                         $('#voucher').val(pago.voucher || '');
                         setMoneyVal('#montoPago', pago.monto);
 
-                        // Pre-cargar fecha del cheque si aplica
-                        if (pago.metodo_pago === 'Cheque') {
-                            $('#bloqueCheque').show();
-                            $('#fechaCheque').val(pago.fecha_cheque || '');
-                            actualizarRecordatorioCheque();
-                        } else {
-                            $('#bloqueCheque').hide();
-                            $('#fechaCheque').val('');
-                            $('#recordatorioCheque').hide();
-                        }
+                        // Pre-cargar fecha del pago (puede venir vacía en pagos históricos previos a la migración 0154)
+                        $('#fechaPago').val(pago.fecha_pago || '');
+                        actualizarRecordatorioCheque();
 
                         $('#inputMontoOriginal').text(`$${totalDTE.toLocaleString()}`);
                         $('#inputMontoAbonado').text(`$${abonadoSinEste.toLocaleString()}`);
@@ -4676,6 +4629,13 @@
         }
     });
 
+    // Al abrir el modal de pago masivo, pre-cargar la fecha del pago con hoy si está vacía.
+    $('#modalPagoMasivo').on('show.bs.modal', function () {
+        if (!$('#fechaPagoMasivo').val()) {
+            $('#fechaPagoMasivo').val(new Date().toISOString().slice(0, 10));
+        }
+    });
+
     // Procesar pago masivo
     $('#formPagoMasivo').on('submit', function (e) {
         e.preventDefault();
@@ -4684,6 +4644,7 @@
         const metodoPago = $('#metodoPagoMasivo').val();
         const voucher = $('#voucherMasivo').val().trim();
         const observaciones = $('#observacionesMasivo').val().trim();
+        const fechaPago = $('#fechaPagoMasivo').val();
 
         if (checkboxes.length === 0) {
             Swal.fire('Error', 'No hay facturas seleccionadas', 'warning');
@@ -4692,6 +4653,11 @@
 
         if (!metodoPago) {
             Swal.fire('Error', 'Selecciona un método de pago', 'warning');
+            return;
+        }
+
+        if (!fechaPago) {
+            Swal.fire('Falta fecha del pago', 'Debes indicar la fecha del pago para el lote.', 'warning');
             return;
         }
 
@@ -4714,12 +4680,12 @@
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
-                procesarPagoMasivo(facturas, metodoPago, voucher, observaciones);
+                procesarPagoMasivo(facturas, metodoPago, voucher, observaciones, fechaPago);
             }
         });
     });
 
-    function procesarPagoMasivo(facturas, metodoPago, voucher, observaciones) {
+    function procesarPagoMasivo(facturas, metodoPago, voucher, observaciones, fechaPago) {
         $.ajax({
             url: '/app/procesar_pago_masivo/',
             method: 'POST',
@@ -4729,7 +4695,8 @@
                 facturas: facturas,
                 metodo_pago: metodoPago,
                 voucher: voucher,
-                observaciones: observaciones
+                observaciones: observaciones,
+                fecha_pago: fechaPago
             }),
             success: function (response) {
                 if (response.success) {

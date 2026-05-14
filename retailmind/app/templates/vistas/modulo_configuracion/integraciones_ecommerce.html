@@ -1,0 +1,535 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-accent: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-900: #1A1A2E;
+    }
+
+    .module-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 6px rgba(26, 26, 46, 0.1);
+    }
+
+    .module-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .module-header p {
+        margin: 0.5rem 0 0 0;
+        opacity: 0.9;
+        font-size: 0.9rem;
+    }
+
+    .kpi-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .kpi-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 2px rgba(26, 26, 46, 0.05);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .kpi-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        color: white;
+    }
+
+    .kpi-icon.primary { background: linear-gradient(135deg, #405189, #0ab39c); }
+    .kpi-icon.accent { background: var(--nexo-accent); }
+    .kpi-icon.warning { background: var(--nexo-warning); }
+
+    .kpi-value { font-weight: 700; font-size: 1.25rem; color: var(--nexo-gray-900); line-height: 1; }
+    .kpi-label { font-size: 0.75rem; color: var(--nexo-gray-500); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .integraciones-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(26, 26, 46, 0.05);
+        padding: 1.25rem;
+    }
+
+    .integraciones-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .integraciones-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .integraciones-table th {
+        text-align: left;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--nexo-gray-500);
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--nexo-gray-300);
+    }
+
+    .integraciones-table td {
+        padding: 0.75rem;
+        border-bottom: 1px solid var(--nexo-gray-100);
+        font-size: 0.875rem;
+        vertical-align: middle;
+    }
+
+    .integraciones-table tr:hover { background: var(--nexo-gray-100); }
+
+    .badge-tipo {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary-dark);
+    }
+
+    .badge-activo {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    .badge-activo.si { background: #e8f9f3; color: #008060; }
+    .badge-activo.no { background: #f9eaea; color: #a13030; }
+
+    .btn-icon-action {
+        background: transparent;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        margin-right: 4px;
+    }
+    .btn-icon-action:hover { background: var(--nexo-gray-100); }
+    .btn-icon-action.danger:hover { background: #ffeded; border-color: #f5b5b5; color: #a13030; }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--nexo-gray-500);
+    }
+    .empty-state i { font-size: 3rem; color: var(--nexo-gray-300); }
+    .empty-state p { margin: 0.75rem 0 0 0; }
+
+    .modal-content { border-radius: 12px; border: none; }
+    .form-label-required::after { content: ' *'; color: var(--nexo-error); }
+
+    .ultima-sync-info {
+        font-size: 0.75rem;
+        color: var(--nexo-gray-500);
+        line-height: 1.3;
+    }
+    .ultima-sync-info strong { color: var(--nexo-gray-900); display: block; }
+
+    .resultado-log {
+        background: #1A1A2E;
+        color: #ddd;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.8rem;
+        padding: 0.75rem;
+        border-radius: 6px;
+        max-height: 300px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="module-header">
+            <h2><i class="ri-image-line"></i> Integraciones Ecommerce</h2>
+            <p>Credenciales de APIs externas para traer fotos de portada (realsport.cl, paola.cl, etc).</p>
+        </div>
+
+        <div class="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-icon primary"><i class="ri-plug-line"></i></div>
+                <div>
+                    <div class="kpi-value">{{ credenciales.count }}</div>
+                    <div class="kpi-label">Integraciones</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon accent"><i class="ri-checkbox-circle-line"></i></div>
+                <div>
+                    <div class="kpi-value">{{ credenciales|dictsortreversed:"activo"|first|default_if_none:"-" }}</div>
+                    <div class="kpi-label">Activas (de {{ credenciales.count }})</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon warning"><i class="ri-image-2-line"></i></div>
+                <div>
+                    <div class="kpi-value" id="kpi-total-fotos">
+                        {% with total=0 %}{% for c in credenciales %}{{ total|add:c.total_fotos }}{% endfor %}{% endwith %}
+                    </div>
+                    <div class="kpi-label">Fotos sincronizadas</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="integraciones-card">
+            <div class="integraciones-card-header">
+                <h5 style="margin:0;">Credenciales configuradas</h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalIntegracion" onclick="abrirModalNueva()">
+                    <i class="ri-add-line"></i> Nueva integración
+                </button>
+            </div>
+
+            {% if credenciales %}
+            <div style="overflow-x:auto;">
+            <table class="integraciones-table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Empresa</th>
+                        <th>Tipo</th>
+                        <th>URL API</th>
+                        <th>Prioridad</th>
+                        <th>Activo</th>
+                        <th>Fotos</th>
+                        <th>Última sync</th>
+                        <th style="text-align:right;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for c in credenciales %}
+                    <tr data-id="{{ c.id }}">
+                        <td><strong>{{ c.nombre }}</strong><br><small style="color:var(--nexo-gray-500);">{{ c.codigo }}</small></td>
+                        <td>{{ c.empresa.nombre }}<br><small style="color:var(--nexo-gray-500);">{{ c.empresa.rut }}</small></td>
+                        <td><span class="badge-tipo">{{ c.get_tipo_display }}</span></td>
+                        <td style="font-family:monospace;font-size:0.75rem;">{{ c.url_api }}</td>
+                        <td>{{ c.prioridad }}</td>
+                        <td>
+                            {% if c.activo %}
+                                <span class="badge-activo si">Activa</span>
+                            {% else %}
+                                <span class="badge-activo no">Inactiva</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ c.total_fotos }}</td>
+                        <td>
+                            <div class="ultima-sync-info">
+                                {% if c.ultima_sync_at %}
+                                    <strong>{{ c.ultima_sync_at|date:"d/m/Y H:i" }}</strong>
+                                    {{ c.ultima_sync_resultado|truncatechars:60 }}
+                                {% else %}
+                                    Nunca sincronizado
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td style="text-align:right;white-space:nowrap;">
+                            <button class="btn-icon-action" title="Probar conexión" onclick="probarConexion({{ c.id }}, '{{ c.nombre|escapejs }}')">
+                                <i class="ri-pulse-line"></i>
+                            </button>
+                            <button class="btn-icon-action" title="Sincronizar ahora" onclick="sincronizarAhora({{ c.id }}, '{{ c.nombre|escapejs }}')">
+                                <i class="ri-refresh-line"></i>
+                            </button>
+                            <button class="btn-icon-action" title="Editar" onclick="abrirModalEditar({{ c.id }})">
+                                <i class="ri-pencil-line"></i>
+                            </button>
+                            <button class="btn-icon-action danger" title="Eliminar" onclick="eliminarIntegracion({{ c.id }}, '{{ c.nombre|escapejs }}')">
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+                <div class="empty-state">
+                    <i class="ri-plug-2-line"></i>
+                    <p>No hay integraciones configuradas.</p>
+                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalIntegracion" onclick="abrirModalNueva()">
+                        <i class="ri-add-line"></i> Crear la primera
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal: crear/editar integración -->
+<div class="modal fade" id="modalIntegracion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{% url 'guardar_integracion_ecommerce' %}" id="formIntegracion">
+                {% csrf_token %}
+                <input type="hidden" name="id" id="form-id" value="">
+                <div class="modal-header" style="background:linear-gradient(135deg,#405189,#0ab39c);color:white;border-radius:12px 12px 0 0;">
+                    <h5 class="modal-title" id="modalIntegracionTitulo">Nueva integración</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label form-label-required">Nombre</label>
+                            <input type="text" name="nombre" id="form-nombre" class="form-control" required maxlength="100">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-required">Código (slug)</label>
+                            <input type="text" name="codigo" id="form-codigo" class="form-control" required maxlength="50" pattern="[a-z0-9_-]+">
+                            <small class="text-muted">Sólo minúsculas, números, guiones. Ej: realsport, paola.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-required">Tipo</label>
+                            <select name="tipo" id="form-tipo" class="form-select" required>
+                                <option value="">Seleccione...</option>
+                                {% for v, label in tipos %}
+                                    <option value="{{ v }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-required">Empresa propietaria</label>
+                            <select name="empresa_id" id="form-empresa" class="form-select" required>
+                                <option value="">Seleccione...</option>
+                                {% for e in empresas %}
+                                    <option value="{{ e.id }}">{{ e.nombre }} ({{ e.rut }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label form-label-required">URL API base</label>
+                            <input type="url" name="url_api" id="form-url-api" class="form-control" required placeholder="https://realsport.cl">
+                            <small class="text-muted">Sin <code>/api/v1/</code> al final — RetailMind lo agrega solo.</small>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label form-label-required">API Key</label>
+                            <input type="text" name="api_key" id="form-api-key" class="form-control" required>
+                            <small class="text-muted">Al editar, dejar el placeholder <code>__sin_cambio__</code> para no reemplazar.</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Header name</label>
+                            <input type="text" name="header_name" id="form-header" class="form-control" value="X-AllConnected-Key">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Prioridad</label>
+                            <input type="number" name="prioridad" id="form-prioridad" class="form-control" value="0">
+                            <small class="text-muted">Mayor = gana en conflictos.</small>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="activo" id="form-activo" checked>
+                                <label class="form-check-label" for="form-activo">Activa</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: resultado de sync/probar -->
+<div class="modal fade" id="modalResultado" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalResultadoTitulo">Resultado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalResultadoCuerpo">
+                    <div class="text-center" style="padding:1rem;">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-2">Procesando...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+const CREDENCIALES = {
+    {% for c in credenciales %}
+    "{{ c.id }}": {
+        id: {{ c.id }},
+        nombre: "{{ c.nombre|escapejs }}",
+        codigo: "{{ c.codigo|escapejs }}",
+        tipo: "{{ c.tipo|escapejs }}",
+        empresa_id: {{ c.empresa.id }},
+        url_api: "{{ c.url_api|escapejs }}",
+        header_name: "{{ c.header_name|escapejs }}",
+        activo: {{ c.activo|yesno:"true,false" }},
+        prioridad: {{ c.prioridad }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+};
+
+function csrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+function abrirModalNueva() {
+    document.getElementById('modalIntegracionTitulo').textContent = 'Nueva integración';
+    document.getElementById('formIntegracion').reset();
+    document.getElementById('form-id').value = '';
+    document.getElementById('form-activo').checked = true;
+}
+
+function abrirModalEditar(id) {
+    const c = CREDENCIALES[id];
+    if (!c) return;
+    document.getElementById('modalIntegracionTitulo').textContent = `Editar: ${c.nombre}`;
+    document.getElementById('form-id').value = c.id;
+    document.getElementById('form-nombre').value = c.nombre;
+    document.getElementById('form-codigo').value = c.codigo;
+    document.getElementById('form-tipo').value = c.tipo;
+    document.getElementById('form-empresa').value = c.empresa_id;
+    document.getElementById('form-url-api').value = c.url_api;
+    document.getElementById('form-header').value = c.header_name;
+    document.getElementById('form-prioridad').value = c.prioridad;
+    document.getElementById('form-activo').checked = c.activo;
+    document.getElementById('form-api-key').value = '__sin_cambio__';
+    new bootstrap.Modal(document.getElementById('modalIntegracion')).show();
+}
+
+function probarConexion(id, nombre) {
+    document.getElementById('modalResultadoTitulo').textContent = `Probar: ${nombre}`;
+    document.getElementById('modalResultadoCuerpo').innerHTML = `
+        <div class="text-center" style="padding:1rem;">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">Conectando...</p>
+        </div>`;
+    new bootstrap.Modal(document.getElementById('modalResultado')).show();
+
+    fetch(`/app/configuracion/integraciones-ecommerce/${id}/probar/`)
+        .then(r => r.json())
+        .then(data => {
+            const color = data.ok ? 'success' : 'danger';
+            const icon = data.ok ? 'ri-checkbox-circle-line' : 'ri-error-warning-line';
+            document.getElementById('modalResultadoCuerpo').innerHTML = `
+                <div class="alert alert-${color}">
+                    <i class="${icon}"></i>
+                    <strong>${data.ok ? 'Conexión OK' : 'Falló'}</strong>
+                </div>
+                <table class="table table-sm">
+                    <tr><th>URL probada</th><td>${data.url}/api/v1/health/</td></tr>
+                    <tr><th>HTTP status</th><td>${data.status ?? '(sin respuesta)'}</td></tr>
+                    <tr><th>Detalle</th><td><code>${data.detalle || '(vacío)'}</code></td></tr>
+                </table>`;
+        })
+        .catch(err => {
+            document.getElementById('modalResultadoCuerpo').innerHTML =
+                `<div class="alert alert-danger">Error: ${err}</div>`;
+        });
+}
+
+function sincronizarAhora(id, nombre) {
+    if (!confirm(`Sincronizar fotos de "${nombre}" ahora?\n\nPuede tardar varios minutos si hay muchos articulos sin foto.`)) return;
+
+    document.getElementById('modalResultadoTitulo').textContent = `Sincronizando: ${nombre}`;
+    document.getElementById('modalResultadoCuerpo').innerHTML = `
+        <div class="text-center" style="padding:1rem;">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">Sincronizando... puede tardar.</p>
+        </div>`;
+    new bootstrap.Modal(document.getElementById('modalResultado')).show();
+
+    fetch(`/app/configuracion/integraciones-ecommerce/${id}/sincronizar/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken()},
+    })
+        .then(r => r.json())
+        .then(data => {
+            const color = data.ok ? 'success' : 'danger';
+            const icon = data.ok ? 'ri-checkbox-circle-line' : 'ri-error-warning-line';
+            const ultima = data.ultima_sync_at
+                ? new Date(data.ultima_sync_at).toLocaleString('es-CL')
+                : 'sin registro';
+            document.getElementById('modalResultadoCuerpo').innerHTML = `
+                <div class="alert alert-${color}">
+                    <i class="${icon}"></i>
+                    <strong>${data.ok ? 'Sync completado' : 'Sync con errores'}</strong>
+                </div>
+                <p><strong>Última sync:</strong> ${ultima}</p>
+                <p><strong>Resumen:</strong> ${data.ultima_sync_resultado || '(no actualizado)'}</p>
+                <details open>
+                    <summary>Log completo</summary>
+                    <div class="resultado-log mt-2">${data.stdout || ''}${data.stderr ? '\n\n[STDERR]\n' + data.stderr : ''}</div>
+                </details>
+                <p class="text-muted mt-2"><small>Recargá la página para ver los contadores actualizados.</small></p>`;
+        })
+        .catch(err => {
+            document.getElementById('modalResultadoCuerpo').innerHTML =
+                `<div class="alert alert-danger">Error: ${err}</div>`;
+        });
+}
+
+function eliminarIntegracion(id, nombre) {
+    if (!confirm(`Eliminar integración "${nombre}"?\n\nSe borrarán también todas las URLs de portada que vinieron de esta integración.`)) return;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/app/configuracion/integraciones-ecommerce/${id}/eliminar/`;
+    form.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken()}">`;
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>

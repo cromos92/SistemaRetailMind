@@ -388,7 +388,7 @@ def buscar_productos(request):
             ultimo_cambio = HistorialCambioPrecio.objects.filter(
                 producto=producto
             ).select_related('usuario').first()
-            
+
             # Buscar productos similares en otras sucursales (con stock agregado por sucursal)
             productos_similares = Producto.objects.filter(
                 articulo=producto.articulo,
@@ -397,6 +397,23 @@ def buscar_productos(request):
             ).exclude(sucursal=producto.sucursal).select_related('sucursal').annotate(
                 stock_sucursal=Sum('producto_talla__stock')
             )
+
+            # ===== FECHAS DE TRAZABILIDAD =====
+            # 1) fecha_creacion del producto en ESTA sucursal (campo directo).
+            # 2) fecha_ultimo_despacho: último INGRESO de stock considerando TODAS
+            #    las bodegas (sucursal actual + todas las similares con mismo
+            #    articulo y atributos). Útil para decisiones de descuento/precio.
+            productos_red_ids = list(productos_similares.values_list('id', flat=True)) + [producto.id]
+            agg_ingreso = Movimientos_Producto.objects.filter(
+                ProductoTalla__producto_id__in=productos_red_ids,
+                tipo_movimiento='INGRESO',
+            ).aggregate(ultima_fecha=Max('fecha'))
+            fecha_ultimo_despacho_red = agg_ingreso['ultima_fecha']
+            dias_desde_ultimo_despacho = (
+                (timezone.localdate() - fecha_ultimo_despacho_red).days
+                if fecha_ultimo_despacho_red else None
+            )
+            fecha_creacion_local = producto.fecha_creacion.date() if producto.fecha_creacion else None
 
             # Detalle de stock por sucursal: incluye la sucursal actual + las similares
             sucursales_detalle = []
@@ -454,6 +471,10 @@ def buscar_productos(request):
                 'sucursales_lista': sucursales_lista,
                 'sucursales_detalle': sucursales_detalle,
                 'stock_total_red': stock_total_red,
+                # Fechas de trazabilidad
+                'fecha_creacion': fecha_creacion_local.strftime('%d/%m/%Y') if fecha_creacion_local else None,
+                'fecha_ultimo_despacho': fecha_ultimo_despacho_red.strftime('%d/%m/%Y') if fecha_ultimo_despacho_red else None,
+                'dias_desde_ultimo_despacho': dias_desde_ultimo_despacho,
             })
         
         # Paginación manual

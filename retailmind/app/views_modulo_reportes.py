@@ -3684,13 +3684,18 @@ def obtener_reporte_existencias_marca(request):
         limite = int(request.GET.get('limite', 500))
         sin_filtro = request.GET.get('sin_filtro', 'false') == 'true'
         
-        # Obtener sucursal actual del usuario si no se especifica
-        if not sucursal_id:
+        # 'todas' indica explícitamente todas las sucursales del usuario (no aplicar fallback a sesión)
+        todas_sucursales = (str(sucursal_id).lower() == 'todas') if sucursal_id else False
+        if todas_sucursales:
+            sucursal_id = None
+
+        # Obtener sucursal actual del usuario si no se especifica (y no se pidió 'todas')
+        if not sucursal_id and not todas_sucursales:
             sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        
+
         # ========== VALIDACIÓN: REQUIERE AL MENOS UN FILTRO (A MENOS QUE FUERCE SIN FILTRO) ==========
         tiene_filtro = any([marca_id, departamento_id, busqueda])
-        
+
         if not tiene_filtro and not sin_filtro:
             return JsonResponse({
                 'success': False,
@@ -3698,13 +3703,13 @@ def obtener_reporte_existencias_marca(request):
                 'error': 'Por favor selecciona al menos un filtro: Marca, Departamento o usa el buscador de artículos.',
                 'sugerencia': 'Esto optimiza la consulta y evita cargar los 50,000+ productos.'
             })
-        
+
         # Si no hay filtro, limitar más estrictamente
         if not tiene_filtro:
             limite = min(limite, 500)  # Máximo 500 sin filtro
-        
+
         # ========== OBTENER SUCURSALES ==========
-        # Si hay sucursal específica, solo esa; si no, todas las del usuario
+        # Si hay sucursal específica, solo esa; si se pidió 'todas' o no hay sesión, todas las del usuario
         if sucursal_id:
             sucursales = Sucursal.objects.filter(id=sucursal_id)
         else:
@@ -6717,17 +6722,25 @@ def api_reporte_recepciones_detallado(request):
             fecha_inicio_dt = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
             fecha_fin_dt = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
 
+        # Para compras históricas vinculadas retroactivamente, fecha_recepcion
+        # se setea con compra.fecha (fecha real). Filtramos por ese campo
+        # cuando existe, y caemos a `fecha` (auto_now) para registros legados.
         recepciones_qs = Productos_Recepcionados.objects.filter(
-            fecha__range=[fecha_inicio_dt, fecha_fin_dt],
+            Q(fecha_recepcion__date__range=[fecha_inicio_dt, fecha_fin_dt]) |
+            (Q(fecha_recepcion__isnull=True) & Q(fecha__range=[fecha_inicio_dt, fecha_fin_dt]))
         ).select_related(
-            'compra_producto_talla__compra_producto__compras',
+            'compra_producto_talla__compra_producto__compras__empresa',
             'producto_talla__producto',
             'dte__emisor',
             'sucursal_destino',
         )
 
         if proveedor_id:
-            recepciones_qs = recepciones_qs.filter(dte__emisor_id=proveedor_id)
+            # Match por proveedor en DTE o en la compra vinculada (cubre históricas sin DTE).
+            recepciones_qs = recepciones_qs.filter(
+                Q(dte__emisor_id=proveedor_id) |
+                Q(compra_producto_talla__compra_producto__compras__empresa_id=proveedor_id)
+            )
         if sucursal_id:
             recepciones_qs = recepciones_qs.filter(sucursal_destino_id=sucursal_id)
 
@@ -6736,6 +6749,7 @@ def api_reporte_recepciones_detallado(request):
         total_unidades = recepciones_qs.aggregate(t=Sum('stockArribado'))['t'] or 0
         total_reposicion = recepciones_qs.filter(es_reposicion=True).count()
         total_nuevo = recepciones_qs.filter(es_reposicion=False).count()
+        total_historicas = recepciones_qs.filter(es_historica=True).count()
         total_con_cambio_precio = recepciones_qs.exclude(
             precio_anterior__isnull=True,
         ).exclude(
@@ -6769,7 +6783,8 @@ def api_reporte_recepciones_detallado(request):
         ]
 
         # --- By proveedor ---
-        por_proveedor = (
+        # Rama 1: recepciones con DTE → proveedor es dte.emisor
+        por_proveedor_dte = (
             recepciones_qs
             .filter(dte__isnull=False)
             .values('dte__emisor__nombre', 'dte__emisor__rut')
@@ -6779,19 +6794,64 @@ def api_reporte_recepciones_detallado(request):
                 reposiciones=Count('id', filter=Q(es_reposicion=True)),
                 nuevos=Count('id', filter=Q(es_reposicion=False)),
             )
-            .order_by('-unidades')
         )
-        por_proveedor_data = [
-            {
-                'proveedor': row['dte__emisor__nombre'],
-                'rut': row['dte__emisor__rut'],
+        # Rama 2: recepciones sin DTE (típico de compras históricas vinculadas)
+        # → proveedor es la empresa de la compra.
+        por_proveedor_compra = (
+            recepciones_qs
+            .filter(dte__isnull=True, compra_producto_talla__isnull=False)
+            .values(
+                'compra_producto_talla__compra_producto__compras__empresa__nombre',
+                'compra_producto_talla__compra_producto__compras__empresa__rut',
+            )
+            .annotate(
+                items=Count('id'),
+                unidades=Sum('stockArribado'),
+                reposiciones=Count('id', filter=Q(es_reposicion=True)),
+                nuevos=Count('id', filter=Q(es_reposicion=False)),
+            )
+        )
+
+        # Merge por nombre+rut acumulando contadores.
+        merged_proveedor = {}
+        for row in por_proveedor_dte:
+            key = (row['dte__emisor__nombre'], row['dte__emisor__rut'])
+            if not key[0]:
+                continue
+            merged_proveedor[key] = {
+                'proveedor': key[0],
+                'rut': key[1],
                 'items': row['items'],
                 'unidades': row['unidades'] or 0,
                 'reposiciones': row['reposiciones'],
                 'nuevos': row['nuevos'],
             }
-            for row in por_proveedor
-        ]
+        for row in por_proveedor_compra:
+            nombre = row['compra_producto_talla__compra_producto__compras__empresa__nombre']
+            rut = row['compra_producto_talla__compra_producto__compras__empresa__rut']
+            if not nombre:
+                continue
+            key = (nombre, rut)
+            if key in merged_proveedor:
+                bucket = merged_proveedor[key]
+                bucket['items'] += row['items']
+                bucket['unidades'] += row['unidades'] or 0
+                bucket['reposiciones'] += row['reposiciones']
+                bucket['nuevos'] += row['nuevos']
+            else:
+                merged_proveedor[key] = {
+                    'proveedor': nombre,
+                    'rut': rut,
+                    'items': row['items'],
+                    'unidades': row['unidades'] or 0,
+                    'reposiciones': row['reposiciones'],
+                    'nuevos': row['nuevos'],
+                }
+        por_proveedor_data = sorted(
+            merged_proveedor.values(),
+            key=lambda d: d['unidades'],
+            reverse=True,
+        )
 
         # --- Cambios de precio detectados ---
         cambios_precio = []
@@ -6820,6 +6880,7 @@ def api_reporte_recepciones_detallado(request):
                 'total_unidades': total_unidades,
                 'total_reposicion': total_reposicion,
                 'total_nuevo': total_nuevo,
+                'total_historicas': total_historicas,
                 'total_con_cambio_precio': total_con_cambio_precio,
             },
             'por_sucursal': por_sucursal_data,
@@ -6961,11 +7022,26 @@ def api_reporte_rendimiento_proveedor(request):
         sucursal_id = request.GET.get('sucursal_id')
 
         compras_qs = Compras.objects.filter(estado__in=['ACTIVA', 'COMPLETADA'])
-        recep_filter = Q(compras_producto__compras_producto_talla__productos_recepcionados__fecha__year=anio)
+        # Para vinculaciones retroactivas, fecha_recepcion lleva la fecha real
+        # de la compra; para recepciones normales puede ser NULL y usamos `fecha`.
+        rec_path = 'compras_producto__compras_producto_talla__productos_recepcionados'
+        recep_filter = (
+            Q(**{f'{rec_path}__fecha_recepcion__year': anio}) |
+            (Q(**{f'{rec_path}__fecha_recepcion__isnull': True}) &
+             Q(**{f'{rec_path}__fecha__year': anio}))
+        )
         if fecha_inicio:
-            recep_filter &= Q(compras_producto__compras_producto_talla__productos_recepcionados__fecha__gte=fecha_inicio)
+            recep_filter &= (
+                Q(**{f'{rec_path}__fecha_recepcion__date__gte': fecha_inicio}) |
+                (Q(**{f'{rec_path}__fecha_recepcion__isnull': True}) &
+                 Q(**{f'{rec_path}__fecha__gte': fecha_inicio}))
+            )
         if fecha_fin:
-            recep_filter &= Q(compras_producto__compras_producto_talla__productos_recepcionados__fecha__lte=fecha_fin)
+            recep_filter &= (
+                Q(**{f'{rec_path}__fecha_recepcion__date__lte': fecha_fin}) |
+                (Q(**{f'{rec_path}__fecha_recepcion__isnull': True}) &
+                 Q(**{f'{rec_path}__fecha__lte': fecha_fin}))
+            )
 
         ids_con_recep = set(Compras.objects.filter(recep_filter).values_list('id', flat=True).distinct())
         ids_del_anio = set(Compras.objects.filter(estado__in=['ACTIVA', 'COMPLETADA'], fecha__year=anio).values_list('id', flat=True))

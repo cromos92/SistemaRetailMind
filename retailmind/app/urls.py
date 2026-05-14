@@ -2,6 +2,7 @@ from retailmind import settings
 from . import views
 from django.shortcuts import render
 from . import views_modulo_compras
+from . import views_modulo_configuracion
 from . import views_modulo_reportes
 from . import views_gestion_sucursales
 from . import views_resumen_existencias
@@ -417,6 +418,8 @@ urlpatterns = [
      path('api/exportar-compras-csv/', views_modulo_compras.exportar_compras_csv, name='exportar_compras_csv'),
      path('crear_compra/', views.crear_compra, name='crear_compra'),
      path('eliminar_compra/', views.eliminar_compra, name='eliminar_compra'),
+     path('obtener_compra/<int:compra_id>/', views.obtener_compra_para_editar, name='obtener_compra_para_editar'),
+     path('actualizar_compra/<int:compra_id>/', views.actualizar_compra, name='actualizar_compra'),
      path('validar_factura_proveedor/', views.validar_factura_proveedor, name='validar_factura_proveedor'),
      path('obtener_compras/', views.obtener_compras_por_anio, name='obtener_compras'),
      path('verGestionProducto/', views.verGestionProducto, name='verGestionProducto'),
@@ -510,7 +513,9 @@ urlpatterns = [
      # === Vinculación retroactiva: productos existentes → compra ===
      path('api/compra/items-para-vincular/', views.items_compra_para_vincular, name='items_compra_para_vincular'),
      path('api/compra/buscar-sku-vincular/', views.buscar_sku_para_vincular, name='buscar_sku_para_vincular'),
+     path('api/compra/buscar-producto-agrupado-vincular/', views.buscar_producto_agrupado_para_vincular, name='buscar_producto_agrupado_para_vincular'),
      path('api/compra/vincular-retroactivo/', views.vincular_productos_retroactivo, name='vincular_productos_retroactivo'),
+     path('api/compra/desvincular-retroactivo/', views.desvincular_cpt_retroactivo, name='desvincular_cpt_retroactivo'),
 
      # === Revertir / Editar productos ya creados ===
      path('api/producto/revertir-a-pendiente/', views.revertir_producto_a_pendiente, name='revertir_producto_a_pendiente'),
@@ -642,6 +647,7 @@ urlpatterns = [
     path('dte/devolucion_pendiente_detalle/<int:dte_hijo_id>/', views.obtener_devolucion_pendiente_detalle_api, name='obtener_devolucion_pendiente_detalle_api'),
     path('regularizar-recepciones/', views.regularizar_recepciones, name='regularizar_recepciones'),
     path('dte/obtener_productos_regularizar/', views.obtener_productos_regularizar, name='obtener_productos_regularizar'),
+    path('dte/exportar_productos_regularizar_pdf/', views.exportar_productos_regularizar_pdf, name='exportar_productos_regularizar_pdf'),
     path('dte/obtener_solicitudes_recibidas/', views.obtener_solicitudes_recibidas, name='obtener_solicitudes_recibidas'),
     path('dte/documento-regularizacion/<int:recepcion_id>/', views.documento_regularizacion, name='documento_regularizacion'),
     path('dte/ajuste_interno_individual/', views.procesar_ajuste_interno_individual, name='procesar_ajuste_interno_individual'),
@@ -650,6 +656,7 @@ urlpatterns = [
     path('dte/decidir_solicitud/', views.decidir_solicitud_api, name='decidir_solicitud_api'),
     path('dte/buscar_productos_emisor/', views.buscar_productos_emisor, name='buscar_productos_emisor'),
     path('dte/regularizar_producto/', views.regularizar_producto_api, name='regularizar_producto_api'),
+    path('dte/<int:nc_id>/txt-acepta/', views.descargar_txt_nc_api, name='descargar_txt_nc_api'),
     path('dte/regularizar_dte_masivo/', views.regularizar_dte_masivo, name='regularizar_dte_masivo'),
     path('dte/anular_regularizacion_dte/', views.anular_regularizacion_dte, name='anular_regularizacion_dte'),
     path('dte/obtener_dtes_con_problemas/', views.obtener_dtes_con_problemas, name='obtener_dtes_con_problemas'),
@@ -784,6 +791,7 @@ urlpatterns = [
     path('documentos/editar-folio-dte/', views.editar_folio_dte, name='editar_folio_dte'),
     path('documentos/asignar-receptor-dte/', views.asignar_receptor_dte, name='asignar_receptor_dte'),
     path('documentos/api/cargar-dte-ventas/', views.cargar_dte_ventas, name='cargar_dte_ventas'),
+    path('documentos/dte/<int:dte_id>/lineas-disponibles-nc/', views.lineas_disponibles_nc_api, name='lineas_disponibles_nc_api'),
     path('documentos/api/dte/<int:dte_id>/', views.detalle_dte, name='detalle_dte'),
     path('detalle_dte/<int:dte_id>/', views.vista_detalle_dte, name='vista_detalle_dte'),  # Vista HTML
     path('api/detalle_dte_completo/<int:dte_id>/', views.api_detalle_dte_completo, name='api_detalle_dte_completo'),  # API completa
@@ -1026,6 +1034,23 @@ urlpatterns = [
     
     # Endpoint temporal de debug
     path('gestion-precios/debug-session/', debug_session_precios, name='debug_session_precios'),
+
+    # ========== MÓDULO CONFIGURACIÓN — INTEGRACIONES ECOMMERCE ==========
+    path('configuracion/integraciones-ecommerce/',
+         views_modulo_configuracion.integraciones_ecommerce,
+         name='integraciones_ecommerce'),
+    path('configuracion/integraciones-ecommerce/guardar/',
+         views_modulo_configuracion.guardar_integracion_ecommerce,
+         name='guardar_integracion_ecommerce'),
+    path('configuracion/integraciones-ecommerce/<int:pk>/eliminar/',
+         views_modulo_configuracion.eliminar_integracion_ecommerce,
+         name='eliminar_integracion_ecommerce'),
+    path('configuracion/integraciones-ecommerce/<int:pk>/probar/',
+         views_modulo_configuracion.probar_integracion_ecommerce,
+         name='probar_integracion_ecommerce'),
+    path('configuracion/integraciones-ecommerce/<int:pk>/sincronizar/',
+         views_modulo_configuracion.sincronizar_integracion_ecommerce,
+         name='sincronizar_integracion_ecommerce'),
 
     # ========== MÓDULO DE GENERACIÓN DE ARCHIVOS TXT ACEPTA ==========
     path('configuracion/interfaz-prueba-acepta/', views_modulo_documentos.interfaz_prueba_acepta, name='interfaz_prueba_acepta'),

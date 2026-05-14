@@ -200,3 +200,8 @@ from .ecommerce import (  # noqa: F401
     HistorialPedidoEcommerce,
     MetricaAsignacionPedido,
 )
+
+from .configuracion import (  # noqa: F401
+    CredencialesEcommerce,
+    FotoPortadaArticulo,
+)

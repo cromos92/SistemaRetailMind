@@ -1990,9 +1990,12 @@ def guardar_o_actualizar_cliente(datos_cliente, usuario=None):
 
 def construir_ticket_data(ticket):
     """Construir datos completos del ticket para POS"""
+    from app.services.realsport_imagenes_service import resolver_foto_portada_url
     productos_procesados = []
     total_items = 0
     subtotal = 0
+
+    empresa_id_ticket = ticket.sucursal.empresa_id if ticket.sucursal_id else None
 
     for tp in ticket.ticket_productos.select_related(
         'ProductoTalla',
@@ -2010,6 +2013,11 @@ def construir_ticket_data(ticket):
             atributo_marca = getattr(producto, 'atributo1', None)
             if atributo_marca:
                 marca = getattr(atributo_marca, 'valor', '') or ''
+
+        # Foto de portada (cacheada por el service — cero queries si ya estaba).
+        foto_url = ''
+        if producto and producto.articulo:
+            foto_url = resolver_foto_portada_url(producto.articulo, empresa_id_ticket)
 
         subtotal += tp.subtotal
         total_items += tp.stock
@@ -2033,6 +2041,7 @@ def construir_ticket_data(ticket):
             'lotes_utilizados': tp.lotes_utilizados,
             'stock_actual': producto_talla.stock if producto_talla else None,
             'stock': producto_talla.stock_sucursal(ticket.sucursal_id) if producto_talla else 0,  # Stock real de la sucursal del ticket
+            'foto_portada_url': foto_url,
         })
 
     sucursal = ticket.sucursal

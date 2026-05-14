@@ -2574,6 +2574,13 @@
                                         </a>
                                     </li>
                                     {% endif %}
+                                    {% if user|puede_ver_opcion:'integraciones_ecommerce' %}
+                                    <li class="nav-item">
+                                        <a href="/app/configuracion/integraciones-ecommerce/" class="nav-link" data-key="t-integraciones-ecommerce">
+                                            <i class="ri-image-line"></i> Integraciones Ecommerce
+                                        </a>
+                                    </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>

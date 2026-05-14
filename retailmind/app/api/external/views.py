@@ -52,6 +52,7 @@ _VALUES_FIELDS = (
     'producto__precioventa',
     'producto__precioSugerido',
     'producto__sucursal__alias',
+    'producto__sucursal__empresa_id',  # para resolver foto_portada_url
     'producto__guia_talla_id',
     'producto__tipo_talla',
 )
@@ -545,6 +546,13 @@ class PreciosActualesView(APIView):
     AllConnected usa como referencia de antigüedad de stock para calcular
     descuentos por antigüedad.
 
+    `fecha_creacion` es la fecha de alta del PRODUCTO (no del SKU) más antigua
+    entre todas las sucursales que lo manejan. Útil para diferenciar entre
+    "modelo viejo del catálogo" y "modelo reciente que llegó hace tiempo".
+
+    `dias_antiguedad_stock` es days(today - ultima_fecha_ingreso) — útil para
+    aplicar reglas de descuento por antigüedad sin recalcularlo en el cliente.
+
     Respuesta:
     {
         "success": true,
@@ -555,7 +563,9 @@ class PreciosActualesView(APIView):
                 "precio_venta": 59990,
                 "precio_costo": 25000,
                 "precio_sugerido": 64990,
-                "ultima_fecha_ingreso": "2026-03-15"
+                "ultima_fecha_ingreso": "2026-03-15",
+                "fecha_creacion": "2024-08-01",
+                "dias_antiguedad_stock": 60
             }
         ],
         "total": 123,
@@ -579,7 +589,7 @@ class PreciosActualesView(APIView):
         logger.info(f"[external/precios-actuales] rut={rut}")
 
         # 1 fila por (sku × sucursal) con la última fecha_ingreso de los lotes
-        # activos de ese Producto_Talla (la fecha es propia de cada lote).
+        # activos de ese Producto_Talla y la fecha_creacion del producto padre.
         rows = list(
             Producto_Talla.objects
             .filter(producto__sucursal__empresa__rut=rut)
@@ -595,6 +605,7 @@ class PreciosActualesView(APIView):
                 'producto__costo',
                 'producto__precioventa',
                 'producto__precioSugerido',
+                'producto__fecha_creacion',
                 'ultima_fecha_lote',
             )
         )
@@ -610,6 +621,7 @@ class PreciosActualesView(APIView):
             precio_venta = int(row.get('producto__precioventa', 0) or 0)
             precio_sugerido = int(row.get('producto__precioSugerido', 0) or 0)
             fecha_lote = row.get('ultima_fecha_lote')
+            fecha_creacion = row.get('producto__fecha_creacion')
 
             if sku not in consolidado:
                 consolidado[sku] = {
@@ -619,6 +631,7 @@ class PreciosActualesView(APIView):
                     'precio_costo': costo,
                     'precio_sugerido': precio_sugerido,
                     '_fecha_lote': fecha_lote,
+                    '_fecha_creacion': fecha_creacion,
                 }
             else:
                 base = consolidado[sku]
@@ -628,15 +641,28 @@ class PreciosActualesView(APIView):
                     base['precio_costo'] = costo
                 if precio_sugerido > base['precio_sugerido']:
                     base['precio_sugerido'] = precio_sugerido
-                # Fecha más reciente entre sucursales
+                # Fecha de lote más reciente entre sucursales
                 if fecha_lote and (not base['_fecha_lote'] or fecha_lote > base['_fecha_lote']):
                     base['_fecha_lote'] = fecha_lote
+                # fecha_creacion: la MÁS ANTIGUA entre sucursales (alta original del SKU)
+                if fecha_creacion and (
+                    not base['_fecha_creacion'] or fecha_creacion < base['_fecha_creacion']
+                ):
+                    base['_fecha_creacion'] = fecha_creacion
 
+        hoy = timezone.localdate()
         data = []
         for sku, info in consolidado.items():
             fecha_lote = info.pop('_fecha_lote', None)
+            fecha_creacion = info.pop('_fecha_creacion', None)
             info['ultima_fecha_ingreso'] = (
                 fecha_lote.strftime('%Y-%m-%d') if fecha_lote else None
+            )
+            info['fecha_creacion'] = (
+                fecha_creacion.date().strftime('%Y-%m-%d') if fecha_creacion else None
+            )
+            info['dias_antiguedad_stock'] = (
+                (hoy - fecha_lote).days if fecha_lote else None
             )
             data.append(info)
 

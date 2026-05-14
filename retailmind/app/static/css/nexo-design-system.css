@@ -1241,3 +1241,21 @@
     background: var(--nexo-gray-100);
     color: var(--nexo-gray-500);
 }
+
+/* ========== Foto de portada de productos ==========
+   Imagen miniatura cargada desde un ecommerce externo (realsport.cl, etc).
+   La URL viene del template tag {% foto_portada producto %} o de
+   ``producto.foto_portada_url`` cuando el rendering es por JS. */
+.producto-portada-img {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    flex-shrink: 0;
+}
+.producto-portada-img.sm { width: 32px; height: 32px; border-radius: 4px; }
+.producto-portada-img.md { width: 48px; height: 48px; }
+.producto-portada-img.lg { width: 80px; height: 80px; border-radius: 8px; }
+.producto-portada-img.xl { width: 120px; height: 120px; border-radius: 10px; }

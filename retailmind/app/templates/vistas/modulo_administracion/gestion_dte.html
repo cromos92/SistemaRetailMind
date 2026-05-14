@@ -1211,6 +1211,43 @@
     </div>
 </div>
 
+<!-- ============================================================== -->
+<!-- Modal: Generar Nota de Crédito (reemplaza el SweetAlert) -->
+<!-- ============================================================== -->
+<div class="modal fade nexo-modal" id="modalGenerarNC" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden;">
+            <div class="modal-header text-white py-3" style="background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); border: 0;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; background: rgba(255,255,255,0.2);">
+                        <i class="bi bi-x-circle fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0 fw-bold text-white" id="modalGenerarNC_title">Generar Nota de Crédito</h5>
+                        <small class="opacity-75" id="modalGenerarNC_subtitle">Selecciona productos, modalidad y motivo</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-3" id="modalGenerarNC_body">
+                <!-- Contenido inyectado dinámicamente por anularDocumento() -->
+            </div>
+            <div class="modal-footer bg-light border-0 py-2 px-3">
+                <div id="modalGenerarNC_errorMsg" class="me-auto text-danger small" style="display:none;">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    <span id="modalGenerarNC_errorText"></span>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" id="modalGenerarNC_btnConfirmar">
+                    <i class="bi bi-arrow-right-circle me-1"></i>Continuar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% include '../../layout/footer.html' %}
 
 <script src="{% static 'js/trazabilidad_dte.js' %}"></script>
@@ -3358,6 +3395,33 @@
         const tieneNCPrevias = (ncAcumulado || 0) > 0;
         const fmtCLP = (n) => '$' + Math.round(n).toLocaleString('es-CL');
 
+        // Pre-cargar las líneas del DTE con info de NCs previas por línea.
+        // Permite mostrar la tabla de productos en el modal y bloquear las
+        // líneas ya regularizadas (evita doble compensación).
+        let lineasNC = [];
+        let ncsGenericasMonto = [];
+        try {
+            Swal.fire({
+                title: 'Cargando productos del DTE...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+            const respLineas = await fetch(`/app/documentos/dte/${dteId}/lineas-disponibles-nc/`, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            });
+            const dataLineas = await respLineas.json();
+            Swal.close();
+            if (!respLineas.ok || !dataLineas.success) {
+                throw new Error(dataLineas.error || 'No se pudieron cargar las líneas del DTE.');
+            }
+            lineasNC = dataLineas.lineas || [];
+            ncsGenericasMonto = dataLineas.ncs_genericas_monto || [];
+        } catch (e) {
+            Swal.fire('Error', e.message || 'No se pudieron cargar las líneas del DTE.', 'error');
+            return;
+        }
+
         // Buscar datos extra del DTE en la tabla actual para mostrar contexto
         let dteDelListado = null;
         try {
@@ -3401,46 +3465,170 @@
                </div>`
             : '';
 
-        // Paso 1: tipo de anulación + monto + datos del cliente + motivo
-        const { value: formData, isConfirmed } = await Swal.fire({
-            title: `Generar NC — ${nombreDoc} #${numeroDoc}`,
-            html: `
+        // Banner de NCs legacy "por monto" (sin productoTalla, no se pueden
+        // atribuir a una línea concreta).
+        let bannerNCsGenericas = '';
+        if (ncsGenericasMonto && ncsGenericasMonto.length > 0) {
+            const totalGen = ncsGenericasMonto.reduce((s, x) => s + (Number(x.monto) || 0), 0);
+            const lista = ncsGenericasMonto
+                .map(x => `#${x.numero_documento || x.nc_id} (${fmtCLP(x.monto)})`)
+                .join(', ');
+            bannerNCsGenericas = `
+                <div class="alert alert-warning py-2 px-3 mb-3 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Existen ${ncsGenericasMonto.length} NC(s) sin detalle de productos por <strong>${fmtCLP(totalGen)}</strong>: ${lista}.
+                    Esas NCs no descuentan de líneas específicas; tenlas en cuenta al elegir cantidades.
+                </div>`;
+        }
+
+        // Tabla de productos con cantidad disponible por línea.
+        const filasTabla = lineasNC.map(l => {
+            const disabled = l.cantidad_disponible <= 0;
+            const parcial = !disabled && l.cantidad_ya_acreditada > 0;
+            let estadoHtml = '';
+            if (disabled) {
+                const numeros = (l.ncs_previas || []).map(n => `#${n.numero_documento}`).join(', ');
+                estadoHtml = `<span class="badge bg-danger" title="NC previas: ${numeros}"><i class="bi bi-shield-x me-1"></i>Ya regularizada</span>`;
+            } else if (parcial) {
+                estadoHtml = `<span class="badge bg-warning text-dark"><i class="bi bi-pie-chart me-1"></i>${l.cantidad_ya_acreditada} de ${l.cantidad_original} ya NC</span>`;
+            } else {
+                estadoHtml = `<span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Disponible</span>`;
+            }
+            const rowOpacity = disabled ? 'opacity:0.55;' : '';
+            const rowTd = disabled ? 'text-decoration:line-through;' : '';
+            // Subtotal NC con IVA por línea (precio_neto × cantidad × 1.19)
+            const cantInicial = l.cantidad_disponible || 0;
+            const subtotalConIva = Math.round((l.precio_unitario || 0) * cantInicial * 1.19);
+            return `
+                <tr data-dte-prod-id="${l.dte_producto_id}" data-precio="${l.precio_unitario}" style="${rowOpacity}">
+                    <td class="text-center">
+                        <input type="checkbox" class="form-check-input nc-linea-check"
+                            data-dte-prod-id="${l.dte_producto_id}"
+                            ${disabled ? 'disabled' : 'checked'}>
+                    </td>
+                    <td style="${rowTd}">
+                        <div class="small"><strong>${l.sku}</strong> · ${l.talla}</div>
+                        <div class="text-muted" style="font-size:0.72rem;">${l.descripcion || ''}</div>
+                    </td>
+                    <td class="text-end">
+                        <div>${fmtCLP(l.precio_unitario)}</div>
+                        <small class="text-muted" style="font-size:0.7rem;">neto</small>
+                    </td>
+                    <td class="text-center">${l.cantidad_original}</td>
+                    <td class="text-center">${estadoHtml}</td>
+                    <td class="text-center">${l.cantidad_disponible}</td>
+                    <td class="text-center" style="min-width:80px;">
+                        <input type="number" class="form-control form-control-sm nc-linea-cant"
+                            data-dte-prod-id="${l.dte_producto_id}"
+                            min="1" max="${l.cantidad_disponible}" value="${l.cantidad_disponible || 1}"
+                            ${disabled ? 'disabled' : ''} style="width:70px; margin:auto;">
+                    </td>
+                    <td class="text-end nc-linea-subtotal" style="min-width:90px; font-weight:600;">
+                        ${disabled ? '<span class="text-muted">-</span>' : fmtCLP(subtotalConIva)}
+                    </td>
+                </tr>`;
+        }).join('');
+
+        const tablaProductosHtml = `
+            <p class="mb-2 fw-bold" style="font-size:0.9rem;">
+                <i class="bi bi-box-seam me-1"></i>Productos a acreditar:
+                <span class="badge bg-light text-dark border ms-1" title="El precio NETO que aparece es el del DTE original; el subtotal NC suma cantidad × precio + IVA 19%." style="cursor:help; font-weight:400;">
+                    <i class="bi bi-info-circle"></i> ¿qué precio usa?
+                </span>
+            </p>
+            <div style="max-height:280px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
+                <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;">
+                    <thead class="table-light" style="position:sticky; top:0;">
+                        <tr>
+                            <th class="text-center" style="width:32px;"></th>
+                            <th>SKU · Talla</th>
+                            <th class="text-end">Precio Unit.</th>
+                            <th class="text-center" title="Cantidad original en el DTE">Cant. DTE</th>
+                            <th class="text-center">Estado</th>
+                            <th class="text-center" title="Cantidad que aún se puede acreditar (descontando NCs previas)">Disp.</th>
+                            <th class="text-center">A acreditar</th>
+                            <th class="text-end" title="Cantidad × Precio + IVA 19%">Subtotal NC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filasTabla || '<tr><td colspan="8" class="text-center text-muted py-3">El DTE no tiene líneas de productos.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2 small">
+                <span class="text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    NC usa el mismo precio neto del DTE original. Cambia las cantidades a acreditar o desmarca líneas que no quieras incluir.
+                </span>
+                <span>
+                    <strong>Total NC (con IVA):</strong>
+                    <span id="anulTotalNC" class="badge bg-primary" style="font-size:0.85rem;">$0</span>
+                </span>
+            </div>
+            <input type="hidden" id="anulMontoNC" value="0">
+            <hr class="my-3">
+            `;
+
+        // POS-origen: la modalidad DEVOLUCION (que afecta caja) sólo aplica a
+        // boletas/facturas emitidas desde el POS (tipo_transaccion = VENTA_PUBLICO).
+        // Para traspasos internos (TRASPASO) o compras a proveedores externos
+        // (COMPRA), o ventas mayoristas (VENTA), no se devuelve dinero a caja.
+        const tipoTransaccion = (dteDelListado && dteDelListado.tipo_transaccion) || '';
+        const esOriginadoEnPOS = tipoTransaccion === 'VENTA_PUBLICO';
+
+        const cardDevolucionHtml = esOriginadoEnPOS
+            ? `<label class="p-2 border rounded modalidad-card" data-modalidad="DEVOLUCION" style="cursor:pointer;">
+                <input type="radio" name="modalidadNC" value="DEVOLUCION" checked class="me-2">
+                <strong><i class="bi bi-cash-coin me-1"></i>A. Devolución que afecta cuadratura</strong>
+                <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
+                    <span class="badge bg-warning text-dark">Resta del método de pago</span>
+                    <span class="badge bg-info text-dark">Aparece en cuadratura</span>
+                    <span class="badge bg-info text-dark">Aparece en Gestión DTE</span>
+                </div>
+                <div id="subDevolucion" class="mt-2 ms-4" style="font-size:0.85rem;">
+                    <label class="me-3"><input type="radio" name="metodoDevolucion" value="EFECTIVO_CAJA" checked class="me-1"><i class="bi bi-cash me-1"></i>Efectivo</label>
+                    <label><input type="radio" name="metodoDevolucion" value="TRANSFERENCIA_BANCARIA" class="me-1"><i class="bi bi-bank me-1"></i>Transferencia</label>
+                </div>
+            </label>`
+            : `<div class="p-2 border rounded mb-1" style="background:#f8f9fa;opacity:0.7;">
+                <div class="d-flex align-items-start gap-2">
+                    <i class="bi bi-lock-fill text-muted mt-1"></i>
+                    <div style="font-size:0.78rem;">
+                        <strong class="text-muted"><i class="bi bi-cash-coin me-1"></i>Devolución que afecta cuadratura — no disponible</strong>
+                        <div class="text-muted mt-1" style="font-size:0.72rem;">
+                            Este documento no fue emitido desde el POS (tipo: <code>${tipoTransaccion || 'no identificado'}</code>).
+                            La devolución a caja sólo aplica a boletas emitidas desde el punto de venta.
+                            Usa <strong>Informativa</strong> u <strong>Oculta</strong>.
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        // Si no es POS, INFORMATIVA queda como default checked
+        const informativaChecked = esOriginadoEnPOS ? '' : 'checked';
+
+        // Modal Bootstrap nativo (reemplaza el Swal.fire principal)
+        const modalEl = document.getElementById('modalGenerarNC');
+        document.getElementById('modalGenerarNC_title').textContent = `Generar NC — ${nombreDoc} #${numeroDoc}`;
+        document.getElementById('modalGenerarNC_subtitle').textContent = esOriginadoEnPOS
+            ? `DTE de POS — todas las modalidades disponibles`
+            : `DTE no-POS (${tipoTransaccion || 'sin tipo'}) — sólo Informativa/Oculta`;
+
+        const errorMsgEl = document.getElementById('modalGenerarNC_errorMsg');
+        const errorTextEl = document.getElementById('modalGenerarNC_errorText');
+        errorMsgEl.style.display = 'none';
+
+        document.getElementById('modalGenerarNC_body').innerHTML = `
                 <div class="text-start">
                     ${prefillDteCard}
                     ${infoNCPrevias}
-                    <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-cash-stack me-1"></i>Monto de la Nota de Crédito:</p>
-                    <div class="row g-2 mb-3 align-items-center">
-                        <div class="col-7">
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text">$</span>
-                                <input type="number" id="anulMontoNC" class="form-control" value="${montoRestante}" min="1" max="${montoRestante}" step="1">
-                            </div>
-                            <small class="text-muted">Máximo: ${fmtCLP(montoRestante)}</small>
-                        </div>
-                        <div class="col-5">
-                            <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="document.getElementById('anulMontoNC').value=${montoRestante}">
-                                Monto completo
-                            </button>
-                        </div>
-                    </div>
-
+                    ${bannerNCsGenericas}
+                    ${tablaProductosHtml}
                     <p class="mb-2 fw-bold" style="font-size:0.9rem;"><i class="bi bi-shield-exclamation me-1"></i>Modalidad de la Nota de Crédito:</p>
                     <div class="d-flex flex-column gap-2 mb-2" id="modalidadNCContainer">
-                        <label class="p-2 border rounded modalidad-card" data-modalidad="DEVOLUCION" style="cursor:pointer;">
-                            <input type="radio" name="modalidadNC" value="DEVOLUCION" checked class="me-2">
-                            <strong><i class="bi bi-cash-coin me-1"></i>A. Devolución que afecta cuadratura</strong>
-                            <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
-                                <span class="badge bg-warning text-dark">Resta del método de pago</span>
-                                <span class="badge bg-info text-dark">Aparece en cuadratura</span>
-                                <span class="badge bg-info text-dark">Aparece en Gestión DTE</span>
-                            </div>
-                            <div id="subDevolucion" class="mt-2 ms-4" style="font-size:0.85rem;">
-                                <label class="me-3"><input type="radio" name="metodoDevolucion" value="EFECTIVO_CAJA" checked class="me-1"><i class="bi bi-cash me-1"></i>Efectivo</label>
-                                <label><input type="radio" name="metodoDevolucion" value="TRANSFERENCIA_BANCARIA" class="me-1"><i class="bi bi-bank me-1"></i>Transferencia</label>
-                            </div>
-                        </label>
+                        ${cardDevolucionHtml}
                         <label class="p-2 border rounded modalidad-card" data-modalidad="INFORMATIVA" style="cursor:pointer;">
-                            <input type="radio" name="modalidadNC" value="INFORMATIVA" class="me-2">
+                            <input type="radio" name="modalidadNC" value="INFORMATIVA" ${informativaChecked} class="me-2">
                             <strong><i class="bi bi-info-circle me-1"></i>B. NC informativa (sin afectar montos)</strong>
                             <div class="mt-1 d-flex gap-1 flex-wrap" style="font-size:0.68rem;">
                                 <span class="badge bg-secondary">No resta nada</span>
@@ -3551,13 +3739,14 @@
                         <span id="anulInfoTotal"></span>
                     </div>
                 </div>
-            `,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: '<i class="bi bi-x-circle me-1"></i>Continuar',
-            cancelButtonText: 'Cancelar',
-            width: '580px',
-            didOpen: () => {
+            `;
+
+        // --- Mostrar modal Bootstrap y esperar resultado ---
+        const formData = await new Promise((resolve) => {
+            const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+            // Listeners internos del formulario (mismos que tenía didOpen del Swal)
+            const setupListeners = () => {
                 const rutEl = document.getElementById('anulClienteRut');
                 if (rutEl) {
                     rutEl.addEventListener('keydown', (e) => {
@@ -3566,15 +3755,47 @@
                 }
                 const montoEl = document.getElementById('anulMontoNC');
                 const infoEl = document.getElementById('anulInfoTotal');
+                const totalLabel = document.getElementById('anulTotalNC');
+
+                // Suma líneas marcadas (neto × 1.19) y refresca subtotal por fila.
+                const recalcularTotalNC = () => {
+                    let neto = 0;
+                    document.querySelectorAll('tr[data-dte-prod-id]').forEach(row => {
+                        const chk = row.querySelector('.nc-linea-check');
+                        const cantInput = row.querySelector('.nc-linea-cant');
+                        const subtotalCell = row.querySelector('.nc-linea-subtotal');
+                        const precio = parseFloat(row.dataset.precio || '0');
+                        const cant = parseInt((cantInput && cantInput.value) || '0', 10) || 0;
+                        const incluida = chk && chk.checked && !chk.disabled;
+                        const subtConIva = Math.round(precio * cant * 1.19);
+                        if (subtotalCell) {
+                            if (!chk || chk.disabled) {
+                                subtotalCell.innerHTML = '<span class="text-muted">-</span>';
+                            } else if (incluida && cant > 0) {
+                                subtotalCell.textContent = fmtCLP(subtConIva);
+                                subtotalCell.classList.add('text-success');
+                                subtotalCell.classList.remove('text-muted');
+                            } else {
+                                subtotalCell.innerHTML = `<span class="text-muted">${fmtCLP(subtConIva)}</span>`;
+                                subtotalCell.classList.remove('text-success');
+                            }
+                        }
+                        if (incluida) neto += precio * cant;
+                    });
+                    const conIva = Math.round(neto * 1.19);
+                    if (totalLabel) totalLabel.textContent = fmtCLP(conIva);
+                    if (montoEl) montoEl.value = conIva;
+                    return conIva;
+                };
+
                 const actualizarInfo = () => {
-                    const v = parseInt(montoEl.value) || 0;
-                    const modSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
+                    const v = recalcularTotalNC();
+                    const modSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'INFORMATIVA';
+                    if (v <= 0) {
+                        infoEl.innerHTML = '<br>Selecciona al menos una línea para generar la NC.';
+                        return;
+                    }
                     if (v >= montoRestante) {
-                        // En modalidad OCULTA marcamos el DTE como ANULADO
-                        // (es el flujo de "borrar" todo el rastro). En las
-                        // otras modalidades el DTE preserva su estado para
-                        // que cuadratura del día original siga contando la
-                        // venta y el balance lo haga la NC en su día.
                         if (modSel === 'OCULTA') {
                             infoEl.innerHTML = '<br>El documento quedará <strong>ANULADO</strong> y se revertirá el stock (modalidad OCULTA).';
                         } else {
@@ -3584,26 +3805,52 @@
                         infoEl.innerHTML = '<br>NC parcial: el documento <strong>no</strong> se marcará como anulado. Podrá generar otra NC por el restante.';
                     }
                 };
-                montoEl.addEventListener('input', actualizarInfo);
+
+                // Checkbox: alterna inclusión de la línea en el total NC.
+                // Como las filas arrancan pre-marcadas, desmarcar quita la
+                // línea del total. El input queda siempre habilitado mientras
+                // la línea tenga disponibilidad (para permitir editar antes
+                // de marcar / después de desmarcar y volver a marcar).
+                document.querySelectorAll('.nc-linea-check').forEach(chk => {
+                    chk.addEventListener('change', () => { actualizarInfo(); });
+                });
+                // Input cantidad: si el usuario edita y el checkbox está
+                // desmarcado, lo auto-marca (asumimos que quiere acreditar).
+                document.querySelectorAll('.nc-linea-cant').forEach(inp => {
+                    const handler = () => {
+                        const maxV = parseInt(inp.max || '0', 10) || 0;
+                        let v = parseInt(inp.value || '0', 10) || 0;
+                        if (v > maxV) { inp.value = maxV; v = maxV; }
+                        if (v < 1) { inp.value = 1; v = 1; }
+                        const row = inp.closest('tr');
+                        const chk = row && row.querySelector('.nc-linea-check');
+                        if (chk && !chk.disabled && v > 0 && !chk.checked) {
+                            chk.checked = true;
+                        }
+                        actualizarInfo();
+                    };
+                    inp.addEventListener('input', handler);
+                    inp.addEventListener('change', handler);
+                    const maxV = parseInt(inp.max || '0', 10) || 0;
+                    inp.disabled = (maxV <= 0);
+                });
                 document.querySelectorAll('input[name="modalidadNC"]').forEach(r => r.addEventListener('change', actualizarInfo));
                 actualizarInfo();
 
-                // Alerta dinamica del efecto segun la modalidad seleccionada.
                 const setBadge = (id, ok, label) => {
                     const el = document.getElementById(id);
                     if (!el) return;
                     el.className = 'badge border ' + (ok === true
                         ? 'bg-success'
-                        : ok === false
-                            ? 'bg-secondary'
-                            : 'bg-light text-dark');
+                        : ok === false ? 'bg-secondary' : 'bg-light text-dark');
                     el.innerHTML = (ok === true ? '<i class="bi bi-check-circle me-1"></i>' :
                                     ok === false ? '<i class="bi bi-x-circle me-1"></i>' :
                                     '<i class="bi bi-dash-circle me-1"></i>') + label;
                 };
                 const subDev = document.getElementById('subDevolucion');
+                const defaultSel = esOriginadoEnPOS ? 'DEVOLUCION' : 'INFORMATIVA';
                 const actualizarEfecto = () => {
-                    const sel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
+                    const sel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || defaultSel;
                     const metodo = (document.querySelector('input[name="metodoDevolucion"]:checked') || {}).value || 'EFECTIVO_CAJA';
                     if (subDev) subDev.style.display = (sel === 'DEVOLUCION') ? '' : 'none';
                     if (sel === 'DEVOLUCION') {
@@ -3628,10 +3875,8 @@
                         card.style.background = isSel ? 'rgba(0, 102, 255, 0.04)' : '';
                     });
                 };
-                // Mostrar/ocultar la marca "(obligatorio)" segun modalidad.
-                // En OCULTA el receptor es opcional porque no se envia TXT al SII.
                 const actualizarHintCliente = () => {
-                    const sel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
+                    const sel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || defaultSel;
                     const mark = document.getElementById('anulClienteRequiredMark');
                     const hint = document.getElementById('anulClienteHint');
                     const rutInput = document.getElementById('anulClienteRut');
@@ -3641,9 +3886,7 @@
                         hint.textContent = obligatorio
                             ? '(obligatorio para emitir NC con TXT al SII)'
                             : '(opcional en NC oculta — no se envía al SII)';
-                        hint.className = obligatorio
-                            ? 'text-danger ms-1'
-                            : 'text-muted ms-1';
+                        hint.className = obligatorio ? 'text-danger ms-1' : 'text-muted ms-1';
                     }
                     if (rutInput) rutInput.required = obligatorio;
                 };
@@ -3653,54 +3896,76 @@
                 });
                 actualizarEfecto();
                 actualizarHintCliente();
-            },
-            preConfirm: () => {
+            };
+
+            // Mostrar error inline en el footer del modal
+            const mostrarError = (msg) => {
+                errorTextEl.textContent = msg;
+                errorMsgEl.style.display = '';
+                clearTimeout(mostrarError._t);
+                mostrarError._t = setTimeout(() => { errorMsgEl.style.display = 'none'; }, 5000);
+            };
+
+            // Validación al click en Continuar (equivalente al preConfirm del Swal)
+            const validarYExtraer = () => {
+                errorMsgEl.style.display = 'none';
+                const productosAfectados = [];
+                document.querySelectorAll('.nc-linea-check').forEach(chk => {
+                    if (!chk.checked || chk.disabled) return;
+                    const row = chk.closest('tr');
+                    const cantInput = row && row.querySelector('.nc-linea-cant');
+                    const dteProdId = parseInt(chk.dataset.dteProdId, 10);
+                    const cant = parseInt((cantInput && cantInput.value) || '0', 10) || 0;
+                    if (dteProdId && cant > 0) {
+                        productosAfectados.push({ dte_producto_id: dteProdId, cantidad: cant });
+                    }
+                });
+                if (productosAfectados.length === 0) {
+                    mostrarError('Debes marcar al menos una línea con cantidad mayor a 0.');
+                    return null;
+                }
                 const montoVal = parseInt(document.getElementById('anulMontoNC').value) || 0;
                 if (montoVal <= 0) {
-                    Swal.showValidationMessage('El monto debe ser mayor a 0');
-                    return false;
+                    mostrarError('Las líneas seleccionadas no suman un monto válido.');
+                    return null;
                 }
                 if (montoVal > montoRestante) {
-                    Swal.showValidationMessage('El monto excede el saldo disponible (' + fmtCLP(montoRestante) + ')');
-                    return false;
+                    mostrarError('El total NC excede el saldo disponible (' + fmtCLP(montoRestante) + ')');
+                    return null;
                 }
                 const selectVal = document.getElementById('anulMotivoSelect').value;
                 const txtVal = document.getElementById('anulMotivo').value.trim();
                 if (!selectVal) {
-                    Swal.showValidationMessage('Debe seleccionar un motivo de anulación');
-                    return false;
+                    mostrarError('Debe seleccionar un motivo de anulación');
+                    return null;
                 }
                 if (selectVal === 'OTRO' && !txtVal) {
-                    Swal.showValidationMessage('Debe especificar el motivo');
-                    return false;
+                    mostrarError('Debe especificar el motivo');
+                    return null;
                 }
                 const motivoFinal = selectVal === 'OTRO' ? txtVal : (txtVal ? `${selectVal}. ${txtVal}` : selectVal);
-                const modalidadSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value || 'DEVOLUCION';
+                const modalidadSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value
+                    || (esOriginadoEnPOS ? 'DEVOLUCION' : 'INFORMATIVA');
                 const metodoSel = (document.querySelector('input[name="metodoDevolucion"]:checked') || {}).value || 'EFECTIVO_CAJA';
+
+                // Defensa extra contra elección de DEVOLUCION en DTE no-POS
+                if (modalidadSel === 'DEVOLUCION' && !esOriginadoEnPOS) {
+                    mostrarError('La modalidad Devolución sólo aplica a documentos emitidos desde el POS. Usa Informativa u Oculta.');
+                    return null;
+                }
 
                 const clienteRut = document.getElementById('anulClienteRut').value.trim();
                 const clienteNombre = document.getElementById('anulClienteNombre').value.trim();
                 const clienteId = document.getElementById('anulClienteId').value || null;
 
-                // Validar receptor obligatorio cuando NO es modalidad OCULTA.
-                // Sin receptor con datos territoriales (giro/dir/comuna/ciudad)
-                // el TXT Acepta no es descargable y la NC queda huerfana.
                 if (modalidadSel !== 'OCULTA') {
                     if (!clienteRut) {
-                        Swal.showValidationMessage(
-                            'Debe ingresar el RUT del cliente y buscarlo (o crearlo si no existe). ' +
-                            'Para NC sin cliente identificado seleccione la modalidad "NC oculta".'
-                        );
-                        return false;
+                        mostrarError('Debe ingresar el RUT del cliente y buscarlo (o crearlo si no existe). Para NC sin cliente identificado seleccione "NC oculta".');
+                        return null;
                     }
-                    // Si tiene RUT pero no se encontró/creó (no hay cliente_id ni
-                    // nombre completado por la búsqueda), bloqueamos también.
                     if (!clienteId && !clienteNombre) {
-                        Swal.showValidationMessage(
-                            'El RUT ingresado no se ha buscado en la base. ' +
-                            'Presione el botón de buscar; si no existe, créelo con "Crear Cliente".'
-                        );
-                        return false;
+                        mostrarError('El RUT ingresado no se ha buscado en la base. Presione el botón de buscar; si no existe, créelo con "Crear Cliente".');
+                        return null;
                     }
                 }
 
@@ -3708,15 +3973,42 @@
                     modalidadNC: modalidadSel,
                     metodoDevolucion: modalidadSel === 'DEVOLUCION' ? metodoSel : 'NO_AFECTA_CAJA',
                     montoNC: montoVal,
+                    productosAfectados: productosAfectados,
                     clienteNombre: clienteNombre,
                     clienteRut: clienteRut,
                     clienteId: clienteId,
                     motivo: motivoFinal
                 };
-            }
+            };
+
+            // Click en Continuar
+            const btnConfirmar = document.getElementById('modalGenerarNC_btnConfirmar');
+            const onConfirm = () => {
+                const data = validarYExtraer();
+                if (!data) return; // hay error visible
+                bsModal.hide();
+                resolve(data);
+            };
+            btnConfirmar.addEventListener('click', onConfirm);
+
+            // Cerrar (cancelar) → resolver null
+            const onHidden = () => {
+                btnConfirmar.removeEventListener('click', onConfirm);
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                // Si el resolve ya fue llamado por onConfirm, este queda sin efecto
+                resolve(null);
+            };
+            modalEl.addEventListener('hidden.bs.modal', onHidden);
+
+            // Mostrar el modal y atachear listeners después
+            modalEl.addEventListener('shown.bs.modal', function once() {
+                modalEl.removeEventListener('shown.bs.modal', once);
+                setupListeners();
+            });
+            bsModal.show();
         });
 
-        if (!isConfirmed) return;
+        if (!formData) return;
 
         const modalidadNC = formData.modalidadNC;
         const metodoDevolucion = formData.metodoDevolucion;
@@ -3749,11 +4041,21 @@
             ? `Devolución (${metodoDevolucion === 'EFECTIVO_CAJA' ? 'Efectivo' : 'Transferencia'})`
             : modalidadNC === 'INFORMATIVA' ? 'NC Informativa' : 'NC Oculta';
 
+        // Resumen de líneas seleccionadas
+        const lineasResumen = (formData.productosAfectados || []).map(p => {
+            const meta = lineasNC.find(l => l.dte_producto_id === p.dte_producto_id);
+            const nombre = meta ? `${meta.sku} · ${meta.talla}` : `Línea #${p.dte_producto_id}`;
+            return `<li>${nombre} — <strong>${p.cantidad}</strong> uds</li>`;
+        }).join('');
+
         const { isConfirmed: okResumen } = await Swal.fire({
             title: 'Confirmar Generación de NC',
             html: `
                 <div class="text-start small">
                     <div class="mb-2"><strong>Documento:</strong> ${nombreDoc} #${numeroDoc}</div>
+                    <div class="mb-2"><strong>Productos:</strong>
+                        <ul class="mb-0 mt-1" style="padding-left:1.2rem;">${lineasResumen || '<li class="text-muted">(ninguno)</li>'}</ul>
+                    </div>
                     <div class="mb-2"><strong>Monto NC:</strong> ${fmtCLP(formData.montoNC)} ${formData.montoNC >= montoRestante ? '<span class="badge bg-danger ms-1">Total — anulará el documento</span>' : '<span class="badge bg-info text-dark ms-1">Parcial</span>'}</div>
                     <div class="mb-2"><strong>Modalidad:</strong> ${tituloModalidad}</div>
                     <div class="mb-2"><strong>Motivo:</strong> ${formData.motivo}</div>
@@ -3789,7 +4091,8 @@
                     dte_id: dteId,
                     modalidad_nc: modalidadNC,
                     metodo_devolucion: metodoDevolucion,
-                    monto_nc: formData.montoNC,
+                    productos_afectados: formData.productosAfectados,
+                    // monto_nc se calcula en backend desde las líneas
                     cliente_id: formData.clienteId,
                     cliente_nombre: formData.clienteNombre,
                     cliente_rut: formData.clienteRut,

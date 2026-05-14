@@ -2462,6 +2462,26 @@ function renderizarResultadosBusqueda(productos) {
                 <i class="ri-notification-line"></i> Sincronización
             </span>`;
         }
+
+        // Badges de fechas: alta del producto en su sucursal y último despacho en TODA la red
+        let fechaCreacionBadge = '';
+        if (producto.fecha_creacion) {
+            fechaCreacionBadge = `<span class="info-badge" style="background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;" title="Fecha de alta de este producto en su sucursal (${producto.sucursal})">
+                <i class="ri-add-circle-line"></i> Alta: ${producto.fecha_creacion}
+            </span>`;
+        }
+        let fechaDespachoBadge = '';
+        if (producto.fecha_ultimo_despacho) {
+            const dias = producto.dias_desde_ultimo_despacho;
+            // Color según cuán fresco está: verde <30d, amarillo 30-180d, rojo >180d
+            let color = '#166534', bg = '#dcfce7', border = '#bbf7d0';
+            if (dias !== null && dias > 180) { color = '#991b1b'; bg = '#fee2e2'; border = '#fecaca'; }
+            else if (dias !== null && dias > 30) { color = '#854d0e'; bg = '#fef9c3'; border = '#fde68a'; }
+            const diasTxt = (dias !== null) ? ` · hace ${dias}d` : '';
+            fechaDespachoBadge = `<span class="info-badge" style="background:${bg};color:${color};border:1px solid ${border};" title="Último ingreso de stock en cualquier bodega del articulo (incluye toda la red de sucursales)">
+                <i class="ri-truck-line"></i> Último despacho: ${producto.fecha_ultimo_despacho}${diasTxt}
+            </span>`;
+        }
         
         div.innerHTML = `
             <div class="product-info-line">
@@ -2492,6 +2512,8 @@ function renderizarResultadosBusqueda(productos) {
                 ${sucursalesInfo}
                 ${historialInfo}
                 ${alertaSync}
+                ${fechaCreacionBadge}
+                ${fechaDespachoBadge}
             </div>
             ${yaAgregado ? '<div style="color: var(--nexo-primary); font-size: 11px; margin-top: 6px; font-weight: 600;"><i class="ri-check-line"></i> Ya agregado a la lista</div>' : ''}
         `;

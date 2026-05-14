@@ -652,6 +652,7 @@
                                             <table class="table table-hover table-sm mb-0">
                                                 <thead class="table-light">
                                                     <tr>
+                                                        <th class="fw-bold text-center" style="width:78px;padding:4px;"><i class="ri-image-line"></i> Foto</th>
                                                         <th class="fw-bold">SKU</th>
                                                         <th class="fw-bold">Producto</th>
                                                         <th class="fw-bold">Talla</th>
@@ -664,7 +665,7 @@
                                                 </thead>
                                                 <tbody id="tablaProductos">
                                                     <tr>
-                                                        <td colspan="8" class="text-center py-3">
+                                                        <td colspan="9" class="text-center py-3">
                                                             <i class="ri-shopping-cart-line fs-3 text-muted"></i>
                                                             <p class="text-muted mb-0 small">Seleccione un ticket para ver los productos</p>
                                                         </td>
@@ -5284,7 +5285,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!productos || productos.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center py-4">
+                    <td colspan="9" class="text-center py-4">
                         <i class="ri-shopping-cart-line display-4 text-muted"></i>
                         <p class="text-muted mt-2">No hay productos en este ticket</p>
                     </td>
@@ -5338,7 +5339,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }).join('');
                 htmlStockAlert = `
                     <tr class="stock-alert-banner">
-                        <td colspan="8" class="p-0">
+                        <td colspan="9" class="p-0">
                             <div class="d-flex align-items-start gap-2 px-3 py-2 bg-danger bg-opacity-10 border-start border-danger border-3">
                                 <i class="ri-error-warning-fill text-danger fs-5 mt-1 flex-shrink-0"></i>
                                 <div class="w-100">
@@ -5366,7 +5367,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             htmlHeader += `
                 <tr class="table-warning">
-                    <td colspan="8" class="py-2">
+                    <td colspan="9" class="py-2">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <i class="ri-exchange-line me-2"></i>
@@ -5450,8 +5451,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? `<span class="text-muted fst-italic">S/SKU</span>`
                 : `<code>${producto.sku || '-'}</code>`;
             
+            // Miniatura de portada (clickeable para ampliar con lightbox).
+            const fotoPlaceholder = '{% static "images/producto_placeholder.svg" %}';
+            const fotoUrl = producto.foto_portada_url || fotoPlaceholder;
+            const fotoCell = `<td class="text-center" style="padding:4px;">
+                <img class="producto-portada-img" src="${fotoUrl}" alt="" loading="lazy"
+                     style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #e0e0e0;background:#f5f5f7;"
+                     onerror="this.src='${fotoPlaceholder}';">
+            </td>`;
+
             return `
             <tr data-producto-index="${index}" class="${rowClass}">
+                ${fotoCell}
                 <td>${skuDisplay}</td>
                 <td>
                     <div>
@@ -12056,5 +12067,8 @@ document.addEventListener('keydown', function(e) {
 
 <!-- QZ TRAY — módulo ESC/POS compartido -->
 {% include 'vistas/modulo_ventas/_qz_tray_module.html' %}
+
+<!-- Lightbox para ampliar miniaturas de portada -->
+<script src="{% static 'js/foto_lightbox.js' %}"></script>
 
 {% endblock content %}

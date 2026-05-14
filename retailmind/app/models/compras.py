@@ -64,6 +64,11 @@ class Compras(models.Model):
         help_text='Año de la temporada (ej. 2025) para comparativas YoY',
     )
 
+    es_historica = models.BooleanField(
+        default=False,
+        help_text='True = compra cargada retroactivamente, solo para reportes (no toca stock).',
+    )
+
     def __str__(self):
         return f"Compras   {self.nombre} - {self.temporada}"
     
@@ -244,6 +249,11 @@ class Productos_Recepcionados(models.Model):
         blank=True,
         related_name='recepciones_asociadas',
         help_text="Movimiento de ingreso generado por esta recepción"
+    )
+
+    es_historica = models.BooleanField(
+        default=False,
+        help_text='True = recepción de compra histórica vinculada retroactivamente, sin movimiento de stock.',
     )
     
     class Meta:

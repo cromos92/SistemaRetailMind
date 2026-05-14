@@ -2913,10 +2913,9 @@ def generar_txt_dte_acepta(datos):
     # ✅ Obtener nombre de impresora para FACTURAS desde configuración de sucursal
     nombre_impresora_factura = datos.get('emisor', {}).get('nombre_impresora_factura', 'factura') or 'factura'
     
-    # Factura (33/34) usa 6 vacíos (7 pipes con la impresora) según el comentario
-    # del formato real arriba. Guía (52) cae en el mismo bloque pero mantiene los
-    # 7 vacíos históricos porque hoy "funciona" en producción y no se debe tocar.
-    campos_vacios_post_obs = 6 if tipo_doc in (33, 34) else 7
+    # FACTURA (33/34) y GUÍA (52) comparten el mismo formato Acepta:
+    # 6 campos vacíos post-observación → 7 pipes hasta el nombre de impresora.
+    campos_vacios_post_obs = 6
     info_adicional = [
         vendedor_codigo,  # 1. Código vendedor
         '',  # 2. Campo vacío
