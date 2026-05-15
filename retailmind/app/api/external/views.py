@@ -92,6 +92,8 @@ class SkusPorEmpresaView(APIView):
     permission_classes = [ApiKeyPermission]
 
     def get(self, request):
+        from django.core.cache import cache
+
         rut = request.query_params.get('rut_empresa', '').strip()
         if not rut:
             return Response(
@@ -100,17 +102,28 @@ class SkusPorEmpresaView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        logger.info(f"[external/skus] rut={rut}")
+        # Cache de 15 min: el catálogo casi no cambia en ese rango y el endpoint
+        # es muy pesado (19K productos, 19K lookups de fotos). Esto absorbe el
+        # polling agresivo de AllConected mientras se investiga la causa raíz.
+        cache_key = f'external_skus_v1:{rut}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.info(f"[external/skus] rut={rut} → CACHE HIT")
+            return Response(cached)
+
+        logger.info(f"[external/skus] rut={rut} → CACHE MISS, calculando")
         rows = list(_build_qs(rut))
         productos = agrupar_por_producto(rows)
         serializer = ProductoExternalSerializer(productos, many=True)
         logger.info(f"[external/skus] rut={rut} → {len(productos)} productos ({len(rows)} filas raw)")
-        return Response({
+        response_data = {
             'success': True,
             'data': serializer.data,
             'total': len(productos),
             'error': None,
-        })
+        }
+        cache.set(cache_key, response_data, timeout=900)  # 15 minutos
+        return Response(response_data)
 
 
 # ──────────────────────────────────────────────
