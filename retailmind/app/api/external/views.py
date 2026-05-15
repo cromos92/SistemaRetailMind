@@ -308,56 +308,61 @@ class StockPorSkusView(APIView):
 class StockGlobalView(APIView):
     """
     Retorna stock TOTAL por SKU sumando TODAS las sucursales de la empresa.
-    Opcionalmente filtra por una lista de SKUs (CSV).
 
-    Usado por AllConnected para actualizar stock en marketplaces externos
-    (Shopify, Paris, Ripley, Walmart, etc.) donde se publica un stock
-    unificado que no distingue sucursales.
+    Soporta dos modos:
+      * GET  /api/stock/global/?rut_empresa=X[&skus=A,B,C]  (legacy)
+      * POST /api/stock/global/  body={"rut_empresa": "X", "skus": [...]}
 
-    Cada canal en AllConnected tiene `rut_empresa` que identifica la empresa
-    en RetailMind. La suma se resuelve en una sola query SQL.
+    El POST permite listas de SKUs de cualquier tamaño sin chocar con el
+    límite de URL del servidor (4094 bytes para Request Line). El cliente
+    AllConnected lo usa cuando la lista supera ~400 SKUs.
+
+    SKUs no-numéricos en la lista se IGNORAN silenciosamente (RetailMind
+    almacena `sku` como IntegerField; SKUs con guiones u otros caracteres
+    no existen en este lado y devolverlos no sirve).
 
     Respuesta:
     {
       "success": true,
-      "data": [
-        {"sku": "4810070", "stock_total": 15},
-        {"sku": "4810071", "stock_total": 8}
-      ],
-      "total": 2,
-      "rut_empresa": "76104936-4"
+      "data": [{"sku": "4810070", "stock_total": 15}, ...],
+      "total": N,
+      "rut_empresa": "76104936-4",
+      "skus_invalidos": ["4775856-792BF6", ...],   # solo si hubo
+      "error": null
     }
     """
     authentication_classes = [ApiKeyAuthentication]
     permission_classes = [ApiKeyPermission]
 
-    def get(self, request):
+    # ── Helpers ──────────────────────────────────────────────────────────
+    @staticmethod
+    def _parse_skus(raw_skus):
+        """Acepta lista|str CSV. Separa válidos (numéricos) e inválidos."""
+        if isinstance(raw_skus, str):
+            items = [s.strip() for s in raw_skus.split(',') if s.strip()]
+        elif isinstance(raw_skus, (list, tuple)):
+            items = [str(s).strip() for s in raw_skus if str(s).strip()]
+        else:
+            items = []
+        validos, invalidos = [], []
+        for s in items:
+            if s.isdigit():
+                validos.append(int(s))
+            else:
+                invalidos.append(s)
+        return validos, invalidos
+
+    def _build_response(self, rut, skus_validos, skus_invalidos):
         from django.db.models import Sum
 
-        rut = request.query_params.get('rut_empresa', '').strip()
-        if not rut:
-            return Response(
-                {'success': False, 'data': [], 'total': 0,
-                 'error': 'El parámetro rut_empresa es obligatorio.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        qs = Producto_Talla.objects.filter(producto__sucursal__empresa__rut=rut)
+        if skus_validos:
+            qs = qs.filter(sku__in=skus_validos)
 
-        skus_raw = request.query_params.get('skus', '').strip()
-        skus_list = [s.strip() for s in skus_raw.split(',') if s.strip()]
-
-        qs = (
-            Producto_Talla.objects
-            .filter(producto__sucursal__empresa__rut=rut)
-        )
-        if skus_list:
-            qs = qs.filter(sku__in=skus_list)
-
-        # Una sola query: GROUP BY sku, SUM(stock)
         aggregated = (
-            qs
-            .values('sku')
-            .annotate(stock_total=Sum('stock'))
-            .order_by('sku')
+            qs.values('sku')
+              .annotate(stock_total=Sum('stock'))
+              .order_by('sku')
         )
 
         data = [
@@ -366,15 +371,50 @@ class StockGlobalView(APIView):
         ]
 
         logger.info(
-            f"[external/stock/global] rut={rut} skus_filter={len(skus_list)} → {len(data)} SKUs"
+            "[external/stock/global] rut=%s validos=%d invalidos=%d -> %d SKUs",
+            rut, len(skus_validos), len(skus_invalidos), len(data),
         )
-        return Response({
+
+        payload = {
             'success': True,
             'data': data,
             'total': len(data),
             'rut_empresa': rut,
             'error': None,
-        })
+        }
+        if skus_invalidos:
+            payload['skus_invalidos'] = skus_invalidos[:50]  # acotado por log
+            payload['skus_invalidos_total'] = len(skus_invalidos)
+        return Response(payload)
+
+    # ── GET (legacy, soporta query string) ───────────────────────────────
+    def get(self, request):
+        rut = request.query_params.get('rut_empresa', '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'El parámetro rut_empresa es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        skus_validos, skus_invalidos = self._parse_skus(
+            request.query_params.get('skus', '')
+        )
+        return self._build_response(rut, skus_validos, skus_invalidos)
+
+    # ── POST (preferido para listas grandes, sin límite de URL) ──────────
+    def post(self, request):
+        body = request.data if isinstance(request.data, dict) else {}
+        rut = str(body.get('rut_empresa') or '').strip()
+        if not rut:
+            return Response(
+                {'success': False, 'data': [], 'total': 0,
+                 'error': 'rut_empresa es obligatorio en el body JSON.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        skus_validos, skus_invalidos = self._parse_skus(body.get('skus') or [])
+        return self._build_response(rut, skus_validos, skus_invalidos)
 
 
 # ──────────────────────────────────────────────
