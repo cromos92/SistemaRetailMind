@@ -1688,38 +1688,22 @@ def validar_datos_dte_acepta(datos):
         return False, "Falta la razón social del emisor"
     if not emisor.get('giro'):
         return False, "Falta el giro del emisor"
-    tipo_doc_raw = doc.get('tipo_documento')
-    try:
-        tipo_doc = int(tipo_doc_raw) if tipo_doc_raw is not None else None
-    except (TypeError, ValueError):
-        tipo_doc = tipo_doc_raw
-    exige_datos_territoriales = tipo_doc not in (39, 41)
-    if exige_datos_territoriales:
-        if not emisor.get('direccion'):
-            return False, "Falta la dirección del emisor"
-        if not emisor.get('comuna'):
-            return False, "Falta la comuna del emisor"
-        if not emisor.get('ciudad'):
-            return False, "Falta la ciudad del emisor"
-    
+    # Nota: dirección/comuna/ciudad del emisor y receptor + giro del receptor
+    # son requeridos por SII para facturas/NC/guías (33/34/52/61), pero NO
+    # bloqueamos la generación del TXT cuando faltan. La generación rellena
+    # con cadena vacía y `validar_dte_antes_de_guardar()` los reporta como
+    # warnings (header X-DTE-Warnings) para que el usuario los corrija antes
+    # de subir el TXT a Acepta.
+
     # Validar datos del receptor
     if 'receptor' not in datos:
         return False, "Falta la sección 'receptor'"
-    
+
     receptor = datos['receptor']
     if not receptor.get('rut'):
         return False, "Falta el RUT del receptor"
     if not receptor.get('razon_social'):
         return False, "Falta la razón social del receptor"
-    if exige_datos_territoriales:
-        if not receptor.get('giro'):
-            return False, "Falta el giro del receptor"
-        if not receptor.get('direccion'):
-            return False, "Falta la dirección del receptor"
-        if not receptor.get('comuna'):
-            return False, "Falta la comuna del receptor"
-        if not receptor.get('ciudad'):
-            return False, "Falta la ciudad del receptor"
     
     # Validar totales
     if 'totales' not in datos:
@@ -1863,6 +1847,20 @@ def validar_dte_antes_de_guardar(datos):
             "FchVenc presente en boleta (39/41): el XSD no lo permite, "
             "se omitirá al generar el TXT."
         )
+
+    # Datos territoriales requeridos por SII para facturas/NC/guías
+    # (33/34/52/61). No se bloquea la descarga (decisión de producto), pero
+    # se advierte para que el usuario complete antes de subir a Acepta.
+    if tipo not in (39, 41):
+        emisor_chk = datos.get('emisor') or {}
+        receptor_chk = datos.get('receptor') or {}
+        for campo in ('direccion', 'comuna', 'ciudad'):
+            if not emisor_chk.get(campo):
+                warnings.append(f"Falta {campo} del emisor (requerido por SII).")
+            if not receptor_chk.get(campo):
+                warnings.append(f"Falta {campo} del receptor (requerido por SII).")
+        if not receptor_chk.get('giro'):
+            warnings.append("Falta giro del receptor (requerido por SII).")
 
     # Receptor 66666666-6 con razón social distinta de CONSUMIDOR FINAL.
     receptor = datos.get('receptor') or {}
