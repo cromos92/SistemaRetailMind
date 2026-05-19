@@ -1579,6 +1579,72 @@ def actualizar_perfil(request):
 @login_required
 @require_POST
 @csrf_exempt
+def configurar_pin_autorizacion(request):
+    """
+    Configura/cambia el PIN de autorización del usuario actual.
+    Solo administradores y jefes de local pueden tener PIN.
+    Requiere contraseña actual para confirmar la identidad.
+    """
+    try:
+        data = json.loads(request.body)
+        usuario = request.user
+
+        if not usuario.puede_tener_pin_autorizacion():
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo administradores o jefes de local pueden configurar un PIN de autorización'
+            }, status=403)
+
+        password_actual = (data.get('password_actual') or '').strip()
+        pin_nuevo = (data.get('pin_nuevo') or '').strip()
+        pin_confirmacion = (data.get('pin_confirmacion') or '').strip()
+
+        if not password_actual:
+            return JsonResponse({'success': False, 'error': 'Debe ingresar su contraseña actual'}, status=400)
+        if not usuario.check_password(password_actual):
+            return JsonResponse({'success': False, 'error': 'La contraseña actual es incorrecta'}, status=400)
+
+        if not pin_nuevo or not pin_confirmacion:
+            return JsonResponse({'success': False, 'error': 'Debe ingresar el PIN nuevo y la confirmación'}, status=400)
+        if pin_nuevo != pin_confirmacion:
+            return JsonResponse({'success': False, 'error': 'El PIN y su confirmación no coinciden'}, status=400)
+
+        try:
+            usuario.set_pin_autorizacion(pin_nuevo)
+        except ValueError as ve:
+            return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'PIN de autorización actualizado correctamente',
+            'pin_actualizado': usuario.pin_autorizacion_actualizado.isoformat() if usuario.pin_autorizacion_actualizado else None,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def eliminar_pin_autorizacion(request):
+    """Elimina el PIN de autorización del usuario actual."""
+    try:
+        data = json.loads(request.body or '{}')
+        usuario = request.user
+        password_actual = (data.get('password_actual') or '').strip()
+
+        if not password_actual or not usuario.check_password(password_actual):
+            return JsonResponse({'success': False, 'error': 'Contraseña incorrecta'}, status=400)
+
+        usuario.quitar_pin_autorizacion()
+        return JsonResponse({'success': True, 'message': 'PIN de autorización eliminado'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+@csrf_exempt
 def cambiar_password(request):
     """Cambiar contraseña del usuario actual"""
     try:

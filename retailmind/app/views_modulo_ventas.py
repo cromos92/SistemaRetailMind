@@ -12564,12 +12564,14 @@ def crear_cambio_devolucion(request):
         fecha_limite = fecha_base_plazo + timedelta(days=30)
         fuera_de_plazo = timezone.localdate() > fecha_limite
         
-        # Permitir cambios fuera de plazo SOLO con autorización de supervisor
+        # Permitir cambios fuera de plazo SOLO con PIN de Administrador
+        supervisor_pin = str(data.get('supervisor_pin', '') or '').strip()
+        # Retrocompat: aceptar usuario+contraseña de clientes/integraciones antiguas
         supervisor_username = data.get('supervisor_username', '').strip()
         supervisor_password = data.get('supervisor_password', '')
-        # Retrocompatibilidad: si solo viene codigo_autorizacion_supervisor, usar como password
         if not supervisor_password and data.get('codigo_autorizacion_supervisor'):
             supervisor_password = data.get('codigo_autorizacion_supervisor')
+
         supervisor_autorizo = False
         supervisor = None
         dias_fuera = 0
@@ -12577,7 +12579,7 @@ def crear_cambio_devolucion(request):
         if fuera_de_plazo:
             dias_fuera = (timezone.localdate() - fecha_limite).days
 
-            if not supervisor_password:
+            if not supervisor_pin and not supervisor_password:
                 return JsonResponse({
                     'success': False,
                     'error': f'El plazo para cambios venció el {fecha_limite.strftime("%d/%m/%Y")}',
@@ -12588,41 +12590,30 @@ def crear_cambio_devolucion(request):
                     'dias_fuera_de_plazo': dias_fuera,
                 })
 
-            from django.contrib.auth import authenticate
-            from django.contrib.auth.models import User
+            # 1) Vía preferida: PIN de Administrador
+            if supervisor_pin:
+                from users.models import Usuario as UsuarioModel
+                supervisor = UsuarioModel.buscar_admin_por_pin(supervisor_pin)
 
-            # Autenticación segura con username directo (O(1) en vez de O(n))
-            if supervisor_username:
-                supervisor = authenticate(username=supervisor_username, password=supervisor_password)
-            else:
-                # Fallback: intentar con username más comunes (email, rut)
-                for field in ['username', 'email']:
-                    try:
-                        user_obj = User.objects.filter(
-                            is_active=True, **{field: supervisor_password}
-                        ).first()
-                        if user_obj:
-                            break
-                    except Exception:
-                        pass
-                # Si no se proporcionó username, autenticar por password con intento limitado
-                if not supervisor:
-                    supervisor = authenticate(username=supervisor_username, password=supervisor_password) if supervisor_username else None
-
-            if supervisor:
-                # Verificar rol de supervisor
-                rol = getattr(supervisor, 'rol', '')
-                tiene_rol = rol in ['administrador', 'administracion', 'jefe_local']
-                tiene_grupo = supervisor.groups.filter(
-                    name__in=['Supervisor', 'Administrador', 'Encargado', 'Gerente']
-                ).exists()
-                if not tiene_rol and not tiene_grupo:
-                    supervisor = None
+            # 2) Retrocompat: usuario + contraseña
+            if not supervisor and supervisor_password and supervisor_username:
+                from django.contrib.auth import authenticate
+                supervisor = authenticate(
+                    username=supervisor_username, password=supervisor_password
+                )
+                if supervisor:
+                    rol = getattr(supervisor, 'rol', '')
+                    tiene_rol = rol in ['administrador', 'administracion', 'jefe_local']
+                    tiene_grupo = supervisor.groups.filter(
+                        name__in=['Supervisor', 'Administrador', 'Encargado', 'Gerente']
+                    ).exists()
+                    if not tiene_rol and not tiene_grupo:
+                        supervisor = None
 
             if not supervisor:
                 return JsonResponse({
                     'success': False,
-                    'error': 'Credenciales inválidas o el usuario no tiene permisos de supervisor. Ingrese usuario y contraseña del supervisor.',
+                    'error': 'PIN de Administrador inválido. Ingrese el PIN de 6 dígitos de un administrador autorizado.',
                     'requiere_autorizacion': True,
                 })
 

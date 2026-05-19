@@ -4546,6 +4546,45 @@ def descargar_txt_nc_api(request, nc_id):
     return response
 
 
+# Mapeo tipo_documento (modelo) → código SII para la referencia NC (TpoDocRef).
+# Cubre los alias usados a lo largo del codebase (FACTURA / FACTURA ELECTRONICA, etc.).
+_MAPA_TIPO_SII_REF_NC = {
+    'FACTURA ELECTRONICA': 33,
+    'FACTURA_ELECTRONICA': 33,
+    'FACTURA': 33,
+    'FACTURA AFECTA': 33,
+    'FACTURA EXENTA': 34,
+    'FACTURA_EXENTA': 34,
+    'BOLETA ELECTRONICA': 39,
+    'BOLETA_ELECTRONICA': 39,
+    'BOLETA': 39,
+    'BOLETA EXENTA': 41,
+    'BOLETA_EXENTA': 41,
+    'GUIA': 52,
+    'GUIA DE DESPACHO': 52,
+    'GUIA_DE_DESPACHO': 52,
+}
+
+
+def _construir_referencias_nc_json(dte_original, razon='1'):
+    """Construye el JSON que va en `Dte.referencias` para una NC que acredita
+    a `dte_original`. El formato coincide con el usado por `anular_factura_dte`
+    para que `_construir_datos_txt_nc` (y `descargar_txt_nc_api`) pueda regenerar
+    el TXT Acepta con la referencia al folio original.
+
+    razon: código SII (1=anula, 2=corrige texto, 3=corrige montos).
+    """
+    if not dte_original:
+        return ''
+    tipo_sii = _MAPA_TIPO_SII_REF_NC.get(dte_original.tipo_documento, 33)
+    return json.dumps([{
+        'tipo_documento': tipo_sii,
+        'folio': dte_original.numero_documento,
+        'fecha': dte_original.fecha_emision.strftime('%Y-%m-%d'),
+        'razon': razon,
+    }])
+
+
 def _validar_disponible_nc_linea(dte_original, dte_producto, cantidad_nueva):
     """Suma las NCs vivas vinculadas a `dte_original` que afectan la misma
     productoTalla que `dte_producto`. Retorna None si la nueva cantidad
@@ -4757,7 +4796,7 @@ def regularizar_producto_api(request):
                             es_nota_credito=True,
                             documento_afectado=dte_original,
                             motivo_nc=motivo,
-                            referencias=f"NC por regularización DTE #{dte_original.numero_documento}. {motivo}"
+                            referencias=_construir_referencias_nc_json(dte_original)
                         )
                         
                         from .models import Dte_Productos
@@ -4966,7 +5005,7 @@ def regularizar_producto_api(request):
                         es_nota_credito=True,
                         documento_afectado=dte_original,
                         motivo_nc=motivo_nc,
-                        referencias=f"NC por regularización DTE #{dte_original.numero_documento}. {motivo_nc}"
+                        referencias=_construir_referencias_nc_json(dte_original)
                     )
                     
                     # Crear detalle de la NC
@@ -5224,7 +5263,7 @@ def regularizar_producto_api(request):
                         es_nota_credito=True,
                         documento_afectado=dte_original,
                         motivo_nc=f"NC por producto dañado - Envío de reemplazo. {motivo_envio}",
-                        referencias=f"NC por regularización DTE #{dte_original.numero_documento}"
+                        referencias=_construir_referencias_nc_json(dte_original)
                     )
                     
                     Dte_Productos.objects.create(
@@ -5682,9 +5721,9 @@ def regularizar_dte_masivo(request):
                 es_nota_credito=True,
                 documento_afectado=dte_original,
                 motivo_nc=motivo,
-                referencias=f"NC por regularización DTE #{dte_original.numero_documento}. {motivo}"
+                referencias=_construir_referencias_nc_json(dte_original)
             )
-            
+
             print(f"✅ NC #{numero_nc} creada - DTE original #{dte_original.numero_documento}")
             print(f"   Total productos: {len(productos_nc)}, Total unidades: {total_unidades}")
             print(f"   Monto neto: ${monto_neto_total}, Total con IVA: ${total_con_iva}")
@@ -6374,9 +6413,9 @@ def generar_nota_credito_automatica(dte_original, productos_afectados, usuario, 
         es_nota_credito=True,
         documento_afectado=dte_original,
         motivo_nc=motivo,
-        referencias=f"NC por regularización DTE #{dte_original.numero_documento}. {motivo}"
+        referencias=_construir_referencias_nc_json(dte_original)
     )
-    
+
     # Crear detalle de productos afectados
     for prod_data in productos_afectados:
         dte_producto_original = Dte_Productos.objects.get(id=prod_data['dte_producto_id'])

@@ -63,7 +63,18 @@ class Usuario(AbstractUser):
     
     # Campo para forzar cambio de contraseña
     requiere_cambio_password = models.BooleanField(default=False, verbose_name="Requiere Cambio de Contraseña")
-    
+
+    # PIN de autorización para administradores (cambios fuera de plazo y otras operaciones especiales)
+    pin_autorizacion = models.CharField(
+        max_length=128, null=True, blank=True,
+        verbose_name="PIN de Autorización (hasheado)",
+        help_text="PIN de 6 dígitos para autorizar operaciones especiales. Solo administradores/jefes."
+    )
+    pin_autorizacion_actualizado = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="Última Actualización del PIN"
+    )
+
     # Campos de permisos
     puede_crear_usuarios = models.BooleanField(default=False, verbose_name="Puede Crear Usuarios")
     puede_editar_usuarios = models.BooleanField(default=False, verbose_name="Puede Editar Usuarios")
@@ -206,6 +217,56 @@ class Usuario(AbstractUser):
         
         return password_temporal
     
+    # ===== PIN de Autorización (solo admins) =====
+    ROLES_CON_PIN = ('administrador', 'administracion', 'jefe_local')
+
+    def puede_tener_pin_autorizacion(self):
+        """Solo administradores/jefes pueden configurar un PIN de autorización."""
+        return self.rol in self.ROLES_CON_PIN
+
+    def set_pin_autorizacion(self, pin):
+        """Hashea y guarda el PIN. Valida que sean 6 dígitos numéricos y que el rol lo permita."""
+        from django.contrib.auth.hashers import make_password
+        if not self.puede_tener_pin_autorizacion():
+            raise ValueError('Solo administradores o jefes de local pueden tener PIN de autorización')
+        if not pin or not re.match(r'^\d{6}$', str(pin)):
+            raise ValueError('El PIN debe tener exactamente 6 dígitos numéricos')
+        self.pin_autorizacion = make_password(str(pin))
+        self.pin_autorizacion_actualizado = timezone.now()
+        self.save(update_fields=['pin_autorizacion', 'pin_autorizacion_actualizado'])
+
+    def quitar_pin_autorizacion(self):
+        """Elimina el PIN del usuario."""
+        self.pin_autorizacion = None
+        self.pin_autorizacion_actualizado = timezone.now()
+        self.save(update_fields=['pin_autorizacion', 'pin_autorizacion_actualizado'])
+
+    def verificar_pin_autorizacion(self, pin):
+        """Verifica si el PIN provisto coincide con el almacenado."""
+        from django.contrib.auth.hashers import check_password
+        if not self.pin_autorizacion or not pin:
+            return False
+        return check_password(str(pin), self.pin_autorizacion)
+
+    @classmethod
+    def buscar_admin_por_pin(cls, pin):
+        """
+        Busca un administrador activo cuyo PIN coincida.
+        Retorna el primer Usuario que matchea o None.
+        El PIN debe ser de exactamente 6 dígitos.
+        """
+        if not pin or not re.match(r'^\d{6}$', str(pin)):
+            return None
+        candidatos = cls.objects.filter(
+            is_active=True,
+            es_activo=True,
+            rol__in=cls.ROLES_CON_PIN,
+        ).exclude(pin_autorizacion__isnull=True).exclude(pin_autorizacion='')
+        for admin in candidatos:
+            if admin.verificar_pin_autorizacion(pin):
+                return admin
+        return None
+
     def get_iniciales(self):
         """Retorna las iniciales del usuario (máximo 2 letras)"""
         if self.first_name and self.last_name:

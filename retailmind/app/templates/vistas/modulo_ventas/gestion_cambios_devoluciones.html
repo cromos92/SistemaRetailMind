@@ -6569,7 +6569,7 @@ function enviarSolicitudCambio(datos) {
 function solicitarAutorizacionSupervisor(datos, responseOriginal) {
     const diasFuera = responseOriginal.dias_fuera_de_plazo || responseOriginal.dias_transcurridos || '';
     Swal.fire({
-        title: 'Autorización de Supervisor',
+        title: 'PIN de Administrador',
         html: `
             <div class="text-start">
                 <div class="alert alert-warning py-2 mb-3">
@@ -6581,19 +6581,16 @@ function solicitarAutorizacionSupervisor(datos, responseOriginal) {
                         ${diasFuera ? ` · <span class="text-danger fw-bold">${diasFuera} días fuera</span>` : ''}
                     </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold small">Usuario del supervisor:</label>
-                    <input type="text" id="swal-supervisor-username" class="form-control"
-                           placeholder="Nombre de usuario del supervisor" autocomplete="off">
+                <div class="mb-2 text-center">
+                    <label class="form-label fw-bold small d-block mb-2">Ingrese el PIN de 6 dígitos de un Administrador:</label>
+                    <input type="password" id="swal-supervisor-pin" class="form-control text-center fw-bold"
+                           inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="one-time-code"
+                           placeholder="● ● ● ● ● ●"
+                           style="letter-spacing: 0.6rem; font-size: 1.5rem; max-width: 220px; margin: 0 auto;">
                 </div>
-                <div class="mb-2">
-                    <label class="form-label fw-bold small">Contraseña del supervisor:</label>
-                    <input type="password" id="swal-supervisor-password" class="form-control"
-                           placeholder="Contraseña" autocomplete="off">
-                </div>
-                <div class="small text-muted mt-2">
-                    <i class="ri-information-line"></i> El supervisor debe ingresar sus credenciales para autorizar.
-                    <br><i class="ri-git-branch-line"></i> Se permite autorización desde otra sucursal (quedará registrada para revisión).
+                <div class="small text-muted mt-3">
+                    <i class="ri-information-line"></i> El PIN lo configura cada Administrador desde su perfil.
+                    <br><i class="ri-shield-check-line"></i> La autorización queda registrada para auditoría.
                 </div>
             </div>
         `,
@@ -6604,27 +6601,28 @@ function solicitarAutorizacionSupervisor(datos, responseOriginal) {
         confirmButtonColor: '#e67e22',
         focusConfirm: false,
         didOpen: () => {
-            const usernameInput = document.getElementById('swal-supervisor-username');
-            if (usernameInput) {
-                usernameInput.focus();
-                document.getElementById('swal-supervisor-password').addEventListener('keypress', (e) => {
+            const pinInput = document.getElementById('swal-supervisor-pin');
+            if (pinInput) {
+                pinInput.focus();
+                pinInput.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                });
+                pinInput.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') Swal.clickConfirm();
                 });
             }
         },
         preConfirm: () => {
-            const username = document.getElementById('swal-supervisor-username').value.trim();
-            const password = document.getElementById('swal-supervisor-password').value;
-            if (!username || !password) {
-                Swal.showValidationMessage('Ingrese usuario y contraseña del supervisor');
+            const pin = (document.getElementById('swal-supervisor-pin').value || '').trim();
+            if (!/^\d{6}$/.test(pin)) {
+                Swal.showValidationMessage('El PIN debe tener exactamente 6 dígitos numéricos');
                 return false;
             }
-            return { username, password };
+            return { pin };
         }
     }).then((result) => {
         if (result.isConfirmed && result.value) {
-            datos.supervisor_username = result.value.username;
-            datos.supervisor_password = result.value.password;
+            datos.supervisor_pin = result.value.pin;
             enviarSolicitudCambio(datos);
         }
     });

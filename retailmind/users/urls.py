@@ -36,6 +36,8 @@ urlpatterns = [
     path('mi-perfil/', views.mi_perfil, name='mi_perfil'),
     path('actualizar-perfil/', views.actualizar_perfil, name='actualizar_perfil'),
     path('cambiar-password/', views.cambiar_password, name='cambiar_password'),
+    path('configurar-pin-autorizacion/', views.configurar_pin_autorizacion, name='configurar_pin_autorizacion'),
+    path('eliminar-pin-autorizacion/', views.eliminar_pin_autorizacion, name='eliminar_pin_autorizacion'),
     path('subir-foto-perfil/', views.subir_foto_perfil, name='subir_foto_perfil'),
     path('eliminar-foto-perfil/', views.eliminar_foto_perfil, name='eliminar_foto_perfil'),
     
