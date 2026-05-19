@@ -2858,7 +2858,7 @@
                             const documentoCompleto = !dte.requiere_factura || dte.tiene_factura_anexada;
 
                             const elegiblePagoMasivo = esFacturaElectronica && tieneEstadoValido && sinIncidencias && documentoCompleto;
-                            
+
                             console.log(`DTE ${dte.numero_documento}: tipo='${dte.tipo}', elegible=${elegiblePagoMasivo}`);
                             const saldoPendiente = parseFloat(dte.monto_con_iva || 0) - parseFloat(dte.notas_credito || 0);
 
@@ -2867,7 +2867,7 @@
                             if (dte.factura_asociada_info && dte.factura_asociada_info.factura_numero) {
                                 facturaAsociadaNumero = dte.factura_asociada_info.factura_numero;
                             }
-                            
+
                             // Determinar clases CSS especiales para NC y descartados
                             const esNotaCredito = dte.es_nota_credito || dte.tipo === 'NOTA DE CREDITO';
                             const estaDescartado = dte.descartado;
@@ -2875,21 +2875,33 @@
                             if (esNotaCredito) clasesFilaExtra.push('fila-nota-credito');
                             if (estaDescartado) clasesFilaExtra.push('fila-descartado');
 
+                            // Elegibilidad para Comprobante de Pago (más permisiva que Pago Masivo):
+                            // basta con que sea factura electrónica, no rechazada y no descartada.
+                            // Las pagadas/abonadas también pueden incluirse para enviar el comprobante
+                            // al proveedor después o al momento del pago.
+                            const elegibleComprobante = esFacturaElectronica && dte.estado !== 'Rechazado' && !estaDescartado;
+                            const estaPagada = dte.estado_pago === 'Pagado';
+                            const mostrarCheckbox = !estaDescartado && (
+                                (elegiblePagoMasivo && saldoPendiente > 0) || elegibleComprobante
+                            );
+
                             const fila = `
 <tr class="${clasesFilaExtra.join(' ')}">
     <td style="display: none;">${dte.id || ''}</td>
     <td>
-        ${estaDescartado 
+        ${estaDescartado
             ? `<span class="badge badge-descartado" title="Descartado: ${dte.motivo_descarte || 'Sin motivo'}">
                 <i class="bi bi-trash"></i>
                </span>`
-            : (elegiblePagoMasivo && saldoPendiente > 0
-                                    ? `<input type="checkbox" class="form-check-input checkbox-factura" 
-                      value="${dte.id}" 
-                      data-proveedor="${dte.nombre}" 
-                      data-proveedor-id="${dte.rut}" 
+            : (mostrarCheckbox
+                                    ? `<input type="checkbox" class="form-check-input checkbox-factura"
+                      value="${dte.id}"
+                      data-proveedor="${dte.nombre}"
+                      data-proveedor-id="${dte.rut}"
                       data-monto="${saldoPendiente}"
                       data-numero="${dte.numero_documento}"
+                      data-pagado="${estaPagada ? '1' : '0'}"
+                      data-pago-masivo="${(elegiblePagoMasivo && saldoPendiente > 0) ? '1' : '0'}"
                       onchange="actualizarSeleccionMasiva()">`
                                     : '')
                                 }
@@ -4608,30 +4620,47 @@
 
         $('#contadorSeleccionadas').text(cantidad);
 
-        if (cantidad > 0) {
+        if (cantidad === 0) {
+            $('#btnPagoMasivo').hide();
+            $('#btnComprobantePago').hide();
+            return;
+        }
+
+        $('#btnComprobantePago').show();
+
+        // Validar que todas sean del mismo proveedor (requerido para comprobante)
+        const proveedores = new Set();
+        let todasAptasPagoMasivo = true;
+        checkboxes.each(function () {
+            proveedores.add($(this).data('proveedor-id'));
+            const apta = String($(this).attr('data-pago-masivo')) === '1';
+            if (!apta) todasAptasPagoMasivo = false;
+        });
+
+        const unSoloProveedor = proveedores.size === 1;
+
+        // Comprobante: exige un solo proveedor
+        if (unSoloProveedor) {
+            $('#btnComprobantePago').prop('disabled', false)
+                .attr('title', 'Comprobante de pago programado (PDF)');
+        } else {
+            $('#btnComprobantePago').prop('disabled', true)
+                .attr('title', 'El comprobante requiere que todas las facturas sean del mismo proveedor');
+        }
+
+        // Pago Masivo: solo aparece si todas las seleccionadas son aptas (con saldo pendiente).
+        // Si alguna ya está pagada/abonada/etc., se oculta para evitar confusión.
+        if (todasAptasPagoMasivo) {
             $('#btnPagoMasivo').show();
-            $('#btnComprobantePago').show();
-
-            // Validar que todas sean del mismo proveedor
-            const proveedores = new Set();
-            checkboxes.each(function () {
-                proveedores.add($(this).data('proveedor-id'));
-            });
-
-            if (proveedores.size > 1) {
-                $('#btnPagoMasivo').addClass('btn-warning').removeClass('btn-primary');
-                $('#btnPagoMasivo').attr('title', 'Advertencia: Facturas de diferentes proveedores seleccionadas');
-                $('#btnComprobantePago').prop('disabled', true)
-                    .attr('title', 'El comprobante requiere que todas las facturas sean del mismo proveedor');
+            if (unSoloProveedor) {
+                $('#btnPagoMasivo').addClass('btn-primary').removeClass('btn-warning')
+                    .attr('title', 'Procesar pago masivo');
             } else {
-                $('#btnPagoMasivo').addClass('btn-primary').removeClass('btn-warning');
-                $('#btnPagoMasivo').attr('title', 'Procesar pago masivo');
-                $('#btnComprobantePago').prop('disabled', false)
-                    .attr('title', 'Comprobante de pago programado (PDF)');
+                $('#btnPagoMasivo').addClass('btn-warning').removeClass('btn-primary')
+                    .attr('title', 'Advertencia: Facturas de diferentes proveedores seleccionadas');
             }
         } else {
             $('#btnPagoMasivo').hide();
-            $('#btnComprobantePago').hide();
         }
     }
 
