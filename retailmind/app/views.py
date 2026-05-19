@@ -611,8 +611,13 @@ def confirmar_recepcion_api(request):
             recepciones_a_crear = []
             movimientos_a_crear = []
             tallas_a_actualizar = {}  # sku -> cantidad a agregar
+            # Guías: auto-devolución de faltantes/dañados al origen. Las
+            # facturas/boletas requieren NC manual desde Regularizar.
+            es_guia = dte.tipo_documento == 'GUIA'
+            ids_origen_a_actualizar = {}  # producto_talla_id (origen) -> cantidad a devolver
+            productos_auto_regularizados = 0
             productos_con_problemas_data = []
-            
+
             # ✅ Variables para el resumen
             total_esperado = 0
             total_recepcionado = 0
@@ -652,14 +657,46 @@ def confirmar_recepcion_api(request):
 
                 if tiene_problemas:
                     productos_problemas += 1
+                    cantidad_devolver_origen = cantidad_faltante + cantidad_danada
+                    es_sobrante_puro = (cantidad_sobrante > 0 and cantidad_faltante == 0 and cantidad_danada == 0)
                     # Estado inicial al DETECTAR el problema. No usamos
                     # EN_REGULARIZACION aquí porque ese estado significa
                     # "flujo de regularización en curso" (NC emitida o
                     # solicitud al emisor); en este punto nadie ha tocado
                     # nada todavía. EN_REGULARIZACION lo asigna después el
                     # flujo de NC o el de Solicitud_Regularizacion.
-                    if cantidad_sobrante > 0 and cantidad_faltante == 0 and cantidad_danada == 0:
+                    if es_sobrante_puro:
                         estado_final = 'RECEPCIONADO_SOBRANTE'
+                    elif es_guia and cantidad_devolver_origen > 0 and cantidad_sobrante == 0:
+                        # Auto-devolución al origen: para guías no aplica NC, el
+                        # stock vuelve a la bodega emisora y la línea queda
+                        # cerrada (REGULARIZADO) sin pasar por pestaña Regularizar.
+                        # Si además hay sobrante, NO auto-resolvemos porque el
+                        # sobrante requiere decisión manual de bodega.
+                        estado_final = 'REGULARIZADO'
+                        productos_auto_regularizados += 1
+                        ids_origen_a_actualizar[producto_talla.id] = (
+                            ids_origen_a_actualizar.get(producto_talla.id, 0) + cantidad_devolver_origen
+                        )
+                        movimientos_a_crear.append(Movimientos_Producto(
+                            dte=dte,
+                            ProductoTalla=producto_talla,
+                            sucursal_origen=sucursal_destino,
+                            sucursal_destino=dte.sucursal,
+                            cantidad=cantidad_devolver_origen,
+                            costo=producto_talla.producto.costo if producto_talla.producto else 0,
+                            sobreprecio=producto_talla.producto.sobreprecio if producto_talla.producto else 0,
+                            precio=producto_talla.producto.precioventa if producto_talla.producto else 0,
+                            concepto='REGULARIZACION_TRASPASO',
+                            tipo_movimiento='INGRESO',
+                            estado='COMPLETADO',
+                            responsable=usuario,
+                            observaciones=(
+                                f'Devolución automática a origen ({dte.sucursal.alias}): '
+                                f'{cantidad_devolver_origen} und ({cantidad_faltante} faltante + {cantidad_danada} dañado) '
+                                f'- Recepción DTE GUIA #{dte.numero_documento}'
+                            ),
+                        ))
                     elif cantidad_recepcionada == 0 and cantidad_faltante > 0:
                         estado_final = 'FALTANTE'
                     elif cantidad_danada > 0 and cantidad_faltante == 0:
@@ -686,6 +723,7 @@ def confirmar_recepcion_api(request):
                     estado_final = 'RECEPCIONADO_OK'
 
                 # Preparar registro de recepción
+                es_auto_regularizado = (estado_final == 'REGULARIZADO')
                 recepciones_a_crear.append(Productos_Recepcionados(
                     dte=dte,
                     dte_producto=dte_producto,
@@ -696,9 +734,16 @@ def confirmar_recepcion_api(request):
                     cantidad_faltante=cantidad_faltante,
                     cantidad_sobrante=cantidad_sobrante,
                     estado=estado_final,
-                    observaciones=observaciones,
+                    observaciones=(
+                        observaciones + (
+                            f'\n[{hoy.strftime("%Y-%m-%d %H:%M")}] Auto-devolución a origen: '
+                            f'{cantidad_faltante + cantidad_danada} und (faltante/dañado).'
+                        ) if es_auto_regularizado else observaciones
+                    ),
                     fecha_recepcion=hoy,
-                    recepcionado_por=usuario
+                    recepcionado_por=usuario,
+                    fecha_regularizacion=hoy if es_auto_regularizado else None,
+                    regularizado_por=usuario if es_auto_regularizado else None,
                 ))
 
                 # Calcular cantidad a ingresar al inventario
@@ -841,17 +886,38 @@ def confirmar_recepcion_api(request):
                         output_field=IntegerField(),
                     )
                 )
-            
+
+            # Stock origen (guías con auto-devolución de faltantes/dañados)
+            if ids_origen_a_actualizar:
+                whens_origen = [
+                    When(id=pt_id, then=Value(cant))
+                    for pt_id, cant in ids_origen_a_actualizar.items()
+                ]
+                Producto_Talla.objects.filter(id__in=ids_origen_a_actualizar.keys()).update(
+                    stock=F('stock') + Case(
+                        *whens_origen,
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    )
+                )
+
             # ============================================
             # FASE 5: Actualizar DTE
             # ============================================
             # Contar sobrantes para diferenciar tipo de problema
             productos_sobrantes = sum(1 for p in productos_con_problemas_data if p.get('cantidad_sobrante', 0) > 0)
-            productos_faltantes_danados = productos_problemas - productos_sobrantes
+            productos_faltantes_danados = productos_problemas - productos_sobrantes - productos_auto_regularizados
 
             if productos_problemas == 0:
                 dte.estado_dte = 'RECEPCIONADO_COMPLETO'
                 mensaje = 'Recepción completada. Todos los productos OK.'
+            elif productos_faltantes_danados == 0 and productos_sobrantes == 0 and productos_auto_regularizados > 0:
+                # Guía con faltantes/dañados auto-devueltos al origen: queda cerrada.
+                dte.estado_dte = 'RECEPCIONADO_COMPLETO'
+                mensaje = (
+                    f'Recepción completada. {productos_auto_regularizados} producto(s) con '
+                    f'faltante/daño devueltos automáticamente al origen ({dte.sucursal.alias}).'
+                )
             elif productos_faltantes_danados == 0 and productos_sobrantes > 0:
                 # Solo sobrantes, sin faltantes ni dañados
                 dte.estado_dte = 'RECEPCIONADO_PARCIAL'
@@ -863,6 +929,8 @@ def confirmar_recepcion_api(request):
                     msg_parts.append(f'{productos_faltantes_danados} con faltante/daño')
                 if productos_sobrantes > 0:
                     msg_parts.append(f'{productos_sobrantes} con sobrantes')
+                if productos_auto_regularizados > 0:
+                    msg_parts.append(f'{productos_auto_regularizados} devueltos al origen')
                 mensaje = f'Recepción procesada. {", ".join(msg_parts)} requieren atención.'
             
             dte.fecha_recepcion = hoy.date()
@@ -4568,7 +4636,7 @@ def regularizar_producto_api(request):
                     concepto='REGULARIZACION_TRASPASO',
                     tipo_movimiento='INGRESO',
                     estado='COMPLETADO',
-                    responsable_ingreso=usuario,
+                    responsable=usuario,
                     fecha=hoy.date(),
                     hora=hoy.time(),
                     observaciones=f"Mercadería encontrada: +{cantidad_encontrada} unidades ingresadas a {sucursal_destino.alias}. {observaciones}"
@@ -4644,7 +4712,7 @@ def regularizar_producto_api(request):
                         concepto='DEVOLUCION_NC' if hacer_nc else 'REGULARIZACION_TRASPASO',
                         tipo_movimiento='INGRESO',
                         estado='COMPLETADO',
-                        responsable_ingreso=usuario,
+                        responsable=usuario,
                         fecha=hoy.date(),
                         hora=hoy.time(),
                         observaciones=f"{'NC' if hacer_nc else 'Regularización sin NC'}: Devolución de {cantidad_nc} unidades a {sucursal_origen.alias}. {motivo}"
