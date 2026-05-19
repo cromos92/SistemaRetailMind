@@ -1203,21 +1203,9 @@
         </div>
 
         <!-- Tabla DataTables -->
-        <div id="contenedor-tabla" style="display:none; background:#fff; border-radius:8px; padding:16px 20px; border:1px solid var(--nexo-gray-300); box-shadow: var(--nexo-shadow-sm);">
+        <div id="contenedor-tabla" style="display:none; background:#fff; border-radius:8px; padding:16px 20px; border:1px solid var(--nexo-gray-300); box-shadow: var(--nexo-shadow-sm); overflow-x:auto;">
             <table id="tabla-existencias" class="table table-sm table-hover table-bordered" style="width:100%">
-                <thead>
-                    <tr>
-                        <th>Artículo</th>
-                        <th>Marca</th>
-                        <th>Color</th>
-                        <th>Departamento</th>
-                        <th>Sucursal</th>
-                        <th>Costo</th>
-                        <th>P. Venta</th>
-                        <th>Stock</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
+                <thead></thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -1270,12 +1258,79 @@ function mostrarAlertaFiltro(mostrar) {
     }
 }
 
-// ========== INICIALIZAR DATATABLE ==========
-function inicializarDataTable() {
+// ========== INICIALIZAR DATATABLE (columnas dinámicas por sucursal) ==========
+function inicializarDataTable(sucursales) {
     if (dt) {
         dt.destroy();
         dt = null;
+        $('#tabla-existencias thead').empty();
+        $('#tabla-existencias tbody').empty();
     }
+
+    sucursales = sucursales || [];
+
+    // Construir columnas: fijas + 1 por sucursal + totales
+    const columns = [
+        { data: 'articulo', title: 'Artículo' },
+        { data: 'marca', title: 'Marca' },
+        { data: 'color', title: 'Color' },
+        { data: 'departamento', title: 'Departamento' },
+        {
+            data: 'costo', title: 'Costo',
+            render: (d, type) => type === 'display' ? '$' + formatearNumero(d) : d,
+            className: 'text-end'
+        },
+        {
+            data: 'precio_venta', title: 'P. Venta',
+            render: (d, type) => type === 'display' ? '<strong>$' + formatearNumero(d) + '</strong>' : d,
+            className: 'text-end'
+        },
+    ];
+
+    // Una columna por cada sucursal del usuario
+    sucursales.forEach(suc => {
+        columns.push({
+            data: null,
+            title: suc.alias,
+            className: 'text-center th-sucursal',
+            orderable: true,
+            render: (row, type) => {
+                const stock = (row.stock_por_sucursal && row.stock_por_sucursal[suc.id]) || 0;
+                if (type === 'display') {
+                    if (!stock) return '<span class="text-muted">-</span>';
+                    return `<span class="stock-badge ${getStockClass(stock)}">${stock}</span>`;
+                }
+                return stock;
+            }
+        });
+    });
+
+    // Total + Estado
+    columns.push({
+        data: 'total_stock', title: 'Total',
+        render: (d, type) => {
+            if (type === 'display') {
+                return `<strong class="stock-badge ${getStockClass(d)}">${d}</strong>`;
+            }
+            return d;
+        },
+        className: 'text-center'
+    });
+    columns.push({
+        data: 'total_stock', title: 'Estado',
+        render: (d, type) => {
+            if (type === 'display') {
+                if (d < 5) return '<span class="badge rounded-pill" style="background:#FF4D4D;font-size:0.7rem;">Crítico</span>';
+                if (d < 10) return '<span class="badge rounded-pill" style="background:#FFB020;font-size:0.7rem;">Bajo</span>';
+                return '<span class="badge rounded-pill" style="background:#00D4AA;font-size:0.7rem;">OK</span>';
+            }
+            if (d < 5) return 'critico';
+            if (d < 10) return 'bajo';
+            return 'ok';
+        },
+        className: 'text-center'
+    });
+
     dt = $('#tabla-existencias').DataTable({
         language: {
             emptyTable:     'Sin datos para mostrar',
@@ -1296,49 +1351,10 @@ function inicializarDataTable() {
         },
         pageLength: 25,
         lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
-        responsive: true,
+        responsive: false,
+        scrollX: true,
         order: [[1, 'asc'], [0, 'asc']],
-        columns: [
-            { data: 'articulo', title: 'Artículo' },
-            { data: 'marca', title: 'Marca' },
-            { data: 'color', title: 'Color' },
-            { data: 'departamento', title: 'Departamento' },
-            { data: 'sucursal_alias', title: 'Sucursal' },
-            {
-                data: 'costo', title: 'Costo',
-                render: (d, type) => type === 'display' ? '$' + formatearNumero(d) : d,
-                className: 'text-end'
-            },
-            {
-                data: 'precio_venta', title: 'P. Venta',
-                render: (d, type) => type === 'display' ? '<strong>$' + formatearNumero(d) + '</strong>' : d,
-                className: 'text-end'
-            },
-            {
-                data: 'total_stock', title: 'Stock',
-                render: (d, type) => {
-                    if (type === 'display') {
-                        return `<span class="stock-badge ${getStockClass(d)}">${d}</span>`;
-                    }
-                    return d;
-                },
-                className: 'text-center'
-            },
-            {
-                data: 'total_stock', title: 'Estado',
-                render: (d, type) => {
-                    if (type === 'display') {
-                        if (d < 5) return '<span class="badge rounded-pill" style="background:#FF4D4D;font-size:0.7rem;">Crítico</span>';
-                        if (d < 10) return '<span class="badge rounded-pill" style="background:#FFB020;font-size:0.7rem;">Bajo</span>';
-                        return '<span class="badge rounded-pill" style="background:#00D4AA;font-size:0.7rem;">OK</span>';
-                    }
-                    if (d < 5) return 'critico';
-                    if (d < 10) return 'bajo';
-                    return 'ok';
-                },
-                className: 'text-center'
-            }
-        ]
+        columns: columns
     });
 }
 
@@ -1631,8 +1647,11 @@ function actualizarKPIs(datos) {
 }
 
 // ========== RENDERIZAR REPORTE ==========
+// Firma usada por sucursales visibles para detectar cambios y reinicializar DataTable
+let firmaSucursalesActual = '';
+
 function renderizarReporte(datos) {
-    // Aplicar filtro rápido activo
+    // Aplicar filtro rápido activo (sobre el total agregado)
     let datosFiltrados = datos;
     if (filtroActivo === 'critico') {
         datosFiltrados = datos.filter(d => d.total_stock < 5);
@@ -1642,25 +1661,25 @@ function renderizarReporte(datos) {
         datosFiltrados = datos.filter(d => d.total_stock >= 10);
     }
 
-    // Aplanar campo sucursal para la tabla
-    const datosPlanos = datosFiltrados.map(item => ({
-        ...item,
-        sucursal_alias: Object.keys(item.sucursales || {})[0] || '-'
-    }));
+    // Sucursales a mostrar como columnas
+    const sucursales = (sucursalesDisponibles || []).slice();
+    const firma = sucursales.map(s => s.id).join(',');
 
-    if (!dt) {
-        inicializarDataTable();
+    // Si cambió el set de sucursales, reconstruir la tabla
+    if (!dt || firma !== firmaSucursalesActual) {
+        inicializarDataTable(sucursales);
+        firmaSucursalesActual = firma;
     }
 
     dt.clear();
-    dt.rows.add(datosPlanos);
+    dt.rows.add(datosFiltrados);
     dt.draw();
 
     // Mostrar tabla / ocultar mensaje
-    document.getElementById('estado-mensaje').style.display = datosPlanos.length === 0 ? 'block' : 'none';
-    document.getElementById('contenedor-tabla').style.display = datosPlanos.length === 0 ? 'none' : 'block';
+    document.getElementById('estado-mensaje').style.display = datosFiltrados.length === 0 ? 'block' : 'none';
+    document.getElementById('contenedor-tabla').style.display = datosFiltrados.length === 0 ? 'none' : 'block';
 
-    if (datosPlanos.length === 0) {
+    if (datosFiltrados.length === 0) {
         document.getElementById('estado-mensaje').innerHTML = `
             <div class="nexo-empty-state">
                 <div class="nexo-empty-icon">📦</div>
@@ -1731,7 +1750,13 @@ function limpiarFiltros() {
     document.getElementById('btn-exportar').disabled = true;
     
     // Destruir DataTable y mostrar estado inicial
-    if (dt) { dt.destroy(); dt = null; }
+    if (dt) {
+        dt.destroy();
+        dt = null;
+        $('#tabla-existencias thead').empty();
+        $('#tabla-existencias tbody').empty();
+        firmaSucursalesActual = '';
+    }
     document.getElementById('contenedor-tabla').style.display = 'none';
     document.getElementById('estado-mensaje').style.display = 'block';
     document.getElementById('estado-mensaje').innerHTML = `

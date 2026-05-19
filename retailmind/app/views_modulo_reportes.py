@@ -3766,14 +3766,16 @@ def obtener_reporte_existencias_marca(request):
         # Ordenar y limitar
         queryset = queryset.order_by('atributo1__valor', 'articulo')[:limite]
         
-        # ========== PROCESAR DATOS ==========
-        datos_reporte = []
-        productos_procesados = 0
-        
-        # Prefetch de tallas para los productos filtrados
-        productos_ids = [p.id for p in queryset]
+        # ========== PROCESAR DATOS (PIVOT POR SKU) ==========
+        # Cada producto en BD pertenece a 1 sucursal. Aquí agrupamos por
+        # (articulo, marca, color, departamento) y armamos un dict
+        # stock_por_sucursal: {sucursal_id: stock} con TODAS las sucursales del usuario.
+        productos_lista = list(queryset)
+        productos_procesados = len(productos_lista)
+
+        # Prefetch de tallas para los productos filtrados (stock real por producto)
+        productos_ids = [p.id for p in productos_lista]
         tallas_por_producto = {}
-        
         if productos_ids:
             from django.db.models import Sum as DjangoSum
             tallas = Producto_Talla.objects.filter(
@@ -3782,35 +3784,55 @@ def obtener_reporte_existencias_marca(request):
                 stock_total=DjangoSum('stock')
             )
             tallas_por_producto = {t['producto_id']: t['stock_total'] or 0 for t in tallas}
-        
-        for producto in queryset:
-            productos_procesados += 1
-            
-            # Stock ya viene anotado, pero usamos el de tallas para precisión
-            stock_total = tallas_por_producto.get(producto.id, 0)
-            
-            if solo_con_stock and stock_total <= 0:
-                continue
-            
-            # Construir datos de sucursal
-            stock_por_sucursal = {}
-            if producto.sucursal:
-                stock_por_sucursal[producto.sucursal.alias] = {
-                    'stock': stock_total,
-                    'sucursal_id': producto.sucursal_id
+
+        # Agrupar productos por (articulo, marca_id, atributo2_id, categoria_id)
+        # para fusionar variantes que existen en distintas sucursales en una sola fila.
+        agrupados = {}
+        for producto in productos_lista:
+            stock_total_producto = tallas_por_producto.get(producto.id, 0)
+            clave = (
+                producto.articulo,
+                producto.atributo1_id,
+                producto.atributo2_id,
+                producto.categoria_id,
+            )
+            if clave not in agrupados:
+                agrupados[clave] = {
+                    'articulo': producto.articulo,
+                    'marca': producto.atributo1.valor if producto.atributo1 else 'Sin Marca',
+                    'marca_id': producto.atributo1.id if producto.atributo1 else None,
+                    'color': producto.atributo2.valor if producto.atributo2 else '-',
+                    'departamento': producto.categoria.nombre if producto.categoria else '-',
+                    'costo': float(producto.costo) if producto.costo else 0,
+                    'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
+                    'stock_por_sucursal': {},  # {sucursal_id: stock}
+                    'sucursales': {},          # {alias: {stock, sucursal_id}} — retrocompat
+                    'total_stock': 0,
                 }
-            
-            datos_reporte.append({
-                'articulo': producto.articulo,
-                'marca': producto.atributo1.valor if producto.atributo1 else 'Sin Marca',
-                'marca_id': producto.atributo1.id if producto.atributo1 else None,
-                'color': producto.atributo2.valor if producto.atributo2 else '-',
-                'departamento': producto.categoria.nombre if producto.categoria else '-',
-                'costo': float(producto.costo) if producto.costo else 0,
-                'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
-                'sucursales': stock_por_sucursal,
-                'total_stock': stock_total
-            })
+
+            fila = agrupados[clave]
+            if producto.sucursal_id:
+                # Si el SKU aparece varias veces en la misma sucursal (no debería),
+                # sumamos para no perder stock.
+                key_id = str(producto.sucursal_id)
+                fila['stock_por_sucursal'][key_id] = (
+                    fila['stock_por_sucursal'].get(key_id, 0) + stock_total_producto
+                )
+                if producto.sucursal:
+                    fila['sucursales'][producto.sucursal.alias] = {
+                        'stock': fila['sucursales'].get(producto.sucursal.alias, {}).get('stock', 0) + stock_total_producto,
+                        'sucursal_id': producto.sucursal_id,
+                    }
+            fila['total_stock'] += stock_total_producto
+
+        # Aplicar filtro solo_con_stock sobre el TOTAL agrupado
+        datos_reporte = [
+            fila for fila in agrupados.values()
+            if (not solo_con_stock) or fila['total_stock'] > 0
+        ]
+
+        # Ordenar por marca, luego artículo
+        datos_reporte.sort(key=lambda f: (f.get('marca') or '', f.get('articulo') or ''))
         
         # ========== RESPUESTA ==========
         sucursales_data = [{'id': s.id, 'alias': s.alias} for s in sucursales_list]
