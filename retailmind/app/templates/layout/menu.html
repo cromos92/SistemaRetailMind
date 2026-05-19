@@ -1814,19 +1814,6 @@
                                     <span class="align-middle">Mi Perfil</span>
                                 </a>
 
-                                {% if user.rol == 'administrador' or user.rol == 'administracion' or user.rol == 'jefe_local' %}
-                                <!-- PIN de Autorización (solo admins / jefes) -->
-                                <a class="dropdown-item" href="javascript:void(0);" onclick="if(window.abrirModalPin){window.abrirModalPin();}return false;">
-                                    <i class="ri-key-2-line fs-16 align-middle me-2" style="color: #FFB020;"></i>
-                                    <span class="align-middle">PIN de Autorización</span>
-                                    {% if user.pin_autorizacion %}
-                                    <span class="badge bg-success ms-2" style="font-size:0.6rem;">Configurado</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary ms-2" style="font-size:0.6rem;">Sin configurar</span>
-                                    {% endif %}
-                                </a>
-                                {% endif %}
-
                                 <!-- Ajuste de Stock -->
                                 <a class="dropdown-item" href="{% url 'ajuste_stock_rapido' %}">
                                     <i class="ri-inbox-line fs-16 align-middle me-2" style="color: #FFB020;"></i>
