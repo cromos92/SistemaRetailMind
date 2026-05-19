@@ -1,0 +1,195 @@
+{# Parcial reutilizable: modal y JS para configurar/eliminar PIN de Autorización del usuario actual.
+   Se autocontiene: incluye su propio <style>, modal y <script>. Solo se renderiza si el usuario es
+   administrador, administracion o jefe_local. Se puede incluir en cualquier template que ya cargue
+   jQuery, Bootstrap 5 y SweetAlert2 (todos disponibles vía layout/menu.html).
+   Para abrirlo desde cualquier página: window.abrirModalPin(). #}
+{% if user.rol == 'administrador' or user.rol == 'administracion' or user.rol == 'jefe_local' %}
+<div class="modal fade" id="modalPinAutorizacionGlobal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #FFB020 0%, #E6A100 100%); border: none;">
+                <h5 class="modal-title" style="color: #1A1A2E;">
+                    <i class="ri-key-2-line me-2"></i>
+                    PIN de Autorización
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert" style="background: #E6F0FF; color: #0052CC; border: none; font-size: 0.85rem;">
+                    <i class="ri-information-line me-1"></i>
+                    Tu PIN de 6 dígitos te permite autorizar operaciones especiales (cambios fuera de plazo, descuentos manuales, anulaciones, etc.) sin usar tu contraseña en cada caja.
+                </div>
+                <form id="formPinAutorizacionGlobal" autocomplete="off">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Contraseña Actual</label>
+                        <input type="password" class="form-control" name="password_actual" id="pinGlobal_password_actual" required autocomplete="current-password">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nuevo PIN (6 dígitos)</label>
+                        <input type="password" class="form-control text-center fw-bold" name="pin_nuevo" id="pinGlobal_nuevo"
+                               inputmode="numeric" pattern="\d{6}" maxlength="6" required
+                               style="letter-spacing: 0.6rem; font-size: 1.5rem;" autocomplete="new-password">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Confirmar PIN</label>
+                        <input type="password" class="form-control text-center fw-bold" name="pin_confirmacion" id="pinGlobal_confirmacion"
+                               inputmode="numeric" pattern="\d{6}" maxlength="6" required
+                               style="letter-spacing: 0.6rem; font-size: 1.5rem;" autocomplete="new-password">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer d-flex justify-content-between" style="border: none;">
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="btnEliminarPinGlobal"
+                            style="{% if not user.pin_autorizacion %}display:none;{% endif %}">
+                        <i class="ri-delete-bin-line"></i> Eliminar PIN
+                    </button>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="formPinAutorizacionGlobal" class="btn btn-warning">
+                        <i class="ri-check-line"></i>
+                        Guardar PIN
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Idempotente: no registrar dos veces si el parcial se incluye más de una vez
+    if (window.__pinAutorizacionGlobalInit) return;
+    window.__pinAutorizacionGlobalInit = true;
+
+    function getCookie(name) {
+        const m = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]+)'));
+        return m ? decodeURIComponent(m[2]) : null;
+    }
+
+    window.abrirModalPin = function() {
+        const form = document.getElementById('formPinAutorizacionGlobal');
+        if (form) form.reset();
+        const modalEl = document.getElementById('modalPinAutorizacionGlobal');
+        if (!modalEl) return;
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        setTimeout(() => {
+            const inp = document.getElementById('pinGlobal_password_actual');
+            if (inp) inp.focus();
+        }, 250);
+    };
+
+    // Solo dígitos en inputs de PIN
+    document.addEventListener('input', function(e) {
+        if (e.target && (e.target.id === 'pinGlobal_nuevo' || e.target.id === 'pinGlobal_confirmacion')) {
+            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+        }
+    });
+
+    // Submit configurar PIN
+    document.addEventListener('submit', function(e) {
+        if (!e.target || e.target.id !== 'formPinAutorizacionGlobal') return;
+        e.preventDefault();
+
+        const pinNuevo = document.getElementById('pinGlobal_nuevo').value;
+        const pinConfirmacion = document.getElementById('pinGlobal_confirmacion').value;
+
+        if (!/^\d{6}$/.test(pinNuevo)) {
+            Swal.fire({icon: 'error', title: 'PIN inválido', text: 'El PIN debe tener exactamente 6 dígitos numéricos', confirmButtonColor: '#FF4D4D'});
+            return;
+        }
+        if (pinNuevo !== pinConfirmacion) {
+            Swal.fire({icon: 'error', title: 'Error', text: 'El PIN y su confirmación no coinciden', confirmButtonColor: '#FF4D4D'});
+            return;
+        }
+
+        const data = {
+            password_actual: document.getElementById('pinGlobal_password_actual').value,
+            pin_nuevo: pinNuevo,
+            pin_confirmacion: pinConfirmacion
+        };
+
+        fetch("{% url 'users:configurar_pin_autorizacion' %}", {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.success) {
+                Swal.fire({
+                    icon: 'success', title: 'PIN Actualizado',
+                    text: resp.message || 'PIN guardado correctamente',
+                    confirmButtonColor: '#00D4AA'
+                }).then(() => {
+                    bootstrap.Modal.getInstance(document.getElementById('modalPinAutorizacionGlobal')).hide();
+                    const btnDel = document.getElementById('btnEliminarPinGlobal');
+                    if (btnDel) btnDel.style.display = '';
+                });
+            } else {
+                Swal.fire({icon: 'error', title: 'Error', text: resp.error || 'No se pudo guardar el PIN', confirmButtonColor: '#FF4D4D'});
+            }
+        })
+        .catch(err => {
+            Swal.fire({icon: 'error', title: 'Error de conexión', text: 'No se pudo guardar el PIN', confirmButtonColor: '#FF4D4D'});
+        });
+    });
+
+    // Eliminar PIN
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#btnEliminarPinGlobal')) return;
+        Swal.fire({
+            icon: 'warning',
+            title: '¿Eliminar PIN de Autorización?',
+            html: `
+                <p>Después de eliminarlo no podrás autorizar operaciones especiales con tu PIN hasta configurar uno nuevo.</p>
+                <input type="password" id="swal-pin-pwd-del" class="swal2-input" placeholder="Tu contraseña actual" autocomplete="current-password">
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Eliminar PIN',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#FF4D4D',
+            focusConfirm: false,
+            preConfirm: () => {
+                const pwd = document.getElementById('swal-pin-pwd-del').value;
+                if (!pwd) {
+                    Swal.showValidationMessage('Ingrese su contraseña actual');
+                    return false;
+                }
+                return { password_actual: pwd };
+            }
+        }).then((result) => {
+            if (!result.isConfirmed || !result.value) return;
+            fetch("{% url 'users:eliminar_pin_autorizacion' %}", {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') || ''
+                },
+                body: JSON.stringify(result.value)
+            })
+            .then(r => r.json())
+            .then(resp => {
+                if (resp.success) {
+                    Swal.fire({icon: 'success', title: 'PIN Eliminado', text: resp.message, confirmButtonColor: '#00D4AA'})
+                        .then(() => {
+                            const btnDel = document.getElementById('btnEliminarPinGlobal');
+                            if (btnDel) btnDel.style.display = 'none';
+                            bootstrap.Modal.getInstance(document.getElementById('modalPinAutorizacionGlobal'))?.hide();
+                        });
+                } else {
+                    Swal.fire({icon: 'error', title: 'Error', text: resp.error || 'No se pudo eliminar el PIN', confirmButtonColor: '#FF4D4D'});
+                }
+            });
+        });
+    });
+})();
+</script>
+{% endif %}

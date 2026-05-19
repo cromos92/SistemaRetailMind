@@ -3665,14 +3665,18 @@ def ver_reporte_existencias_marca(request):
 @login_required
 def obtener_reporte_existencias_marca(request):
     """
-    API OPTIMIZADA para reporte de existencias por marca.
-    
-    CAMBIOS DE OPTIMIZACIÓN:
-    1. Requiere al menos un filtro obligatorio (marca, departamento, búsqueda o sucursal)
-    2. Usa la sucursal actual del usuario por defecto
-    3. Limita resultados a 500 productos máximo
-    4. Usa agregación en BD en lugar de Python
-    5. Solo carga los campos necesarios con .only()
+    API para reporte de existencias por marca con matriz sucursales-como-columnas
+    y stock inicial histórico.
+
+    Por cada grupo (artículo+marca+color+departamento) y cada sucursal entrega:
+        - inicial: stock real a `fecha_corte` (default = hoy → equivale al actual)
+        - actual:  stock denormalizado de Producto_Talla.stock
+
+    Fórmula histórica (idéntica a calcular_stock_historico en views_resumen_existencias.py):
+        stock_inicial = stock_actual - ingresos_post + |egresos_post|
+    donde "post" = movimientos con fecha > fecha_corte.
+
+    Queries: 2 si fecha_corte >= hoy, 4 si es histórica. Independiente del N.
     """
     try:
         # ========== PARÁMETROS DE FILTRO ==========
@@ -3683,19 +3687,27 @@ def obtener_reporte_existencias_marca(request):
         solo_con_stock = request.GET.get('solo_con_stock', 'true') == 'true'
         limite = int(request.GET.get('limite', 500))
         sin_filtro = request.GET.get('sin_filtro', 'false') == 'true'
-        
+        fecha_corte_str = request.GET.get('fecha_corte', '').strip()
+
+        hoy = timezone.localdate()
+        if fecha_corte_str:
+            try:
+                fecha_corte = datetime.strptime(fecha_corte_str, '%Y-%m-%d').date()
+            except ValueError:
+                fecha_corte = hoy
+        else:
+            fecha_corte = hoy
+        es_historico = fecha_corte < hoy
+
         # 'todas' indica explícitamente todas las sucursales del usuario (no aplicar fallback a sesión)
         todas_sucursales = (str(sucursal_id).lower() == 'todas') if sucursal_id else False
         if todas_sucursales:
             sucursal_id = None
 
-        # Obtener sucursal actual del usuario si no se especifica (y no se pidió 'todas')
         if not sucursal_id and not todas_sucursales:
             sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
 
-        # ========== VALIDACIÓN: REQUIERE AL MENOS UN FILTRO (A MENOS QUE FUERCE SIN FILTRO) ==========
         tiene_filtro = any([marca_id, departamento_id, busqueda])
-
         if not tiene_filtro and not sin_filtro:
             return JsonResponse({
                 'success': False,
@@ -3704,27 +3716,23 @@ def obtener_reporte_existencias_marca(request):
                 'sugerencia': 'Esto optimiza la consulta y evita cargar los 50,000+ productos.'
             })
 
-        # Si no hay filtro, limitar más estrictamente
         if not tiene_filtro:
-            limite = min(limite, 500)  # Máximo 500 sin filtro
+            limite = min(limite, 500)
 
         # ========== OBTENER SUCURSALES ==========
-        # Si hay sucursal específica, solo esa; si se pidió 'todas' o no hay sesión, todas las del usuario
         if sucursal_id:
             sucursales = Sucursal.objects.filter(id=sucursal_id)
         else:
-            # Obtener sucursales del usuario
             empresas_usuario = EmpresaUser.objects.filter(
-                user=request.user,
-                status=True
+                user=request.user, status=True
             ).values_list('empresa_id', flat=True)
             sucursales = Sucursal.objects.filter(empresa_id__in=empresas_usuario).order_by('alias')
-        
+
         sucursales_list = list(sucursales)
         sucursales_ids = [s.id for s in sucursales_list]
-        
-        # ========== CONSULTA OPTIMIZADA ==========
-        # Base: productos de las sucursales del usuario
+        sucursales_map = {s.id: s.alias for s in sucursales_list}
+
+        # ========== Q1: PRODUCTOS BASE ==========
         queryset = Producto.objects.filter(
             sucursal_id__in=sucursales_ids,
             excluir_de_analitica=False
@@ -3738,124 +3746,172 @@ def obtener_reporte_existencias_marca(request):
             'sucursal__id', 'sucursal__alias'
         )
 
-        # ========== APLICAR FILTROS ==========
         if marca_id:
             queryset = queryset.filter(atributo1_id=marca_id)
-        
         if departamento_id:
             queryset = queryset.filter(categoria_id=departamento_id)
-        
         if busqueda:
-            # Búsqueda por artículo, marca o color
             queryset = queryset.filter(
                 Q(articulo__icontains=busqueda) |
                 Q(atributo1__valor__icontains=busqueda) |
                 Q(atributo2__valor__icontains=busqueda)
             )
-        
-        # ========== AGREGAR STOCK CON ANOTACIÓN ==========
-        # Anotar el stock total por producto (suma de todas las tallas)
-        queryset = queryset.annotate(
-            total_stock_anotado=Sum('producto_talla__stock')
-        )
-        
-        # Filtrar solo productos con stock si se requiere
-        if solo_con_stock:
+
+        # Pre-filtrado opcional por stock actual (denormalizado, mismo criterio que antes)
+        queryset = queryset.annotate(total_stock_anotado=Sum('producto_talla__stock'))
+        if solo_con_stock and not es_historico:
             queryset = queryset.filter(total_stock_anotado__gt=0)
-        
-        # Ordenar y limitar
+
         queryset = queryset.order_by('atributo1__valor', 'articulo')[:limite]
-        
-        # ========== PROCESAR DATOS (PIVOT POR SKU) ==========
-        # Cada producto en BD pertenece a 1 sucursal. Aquí agrupamos por
-        # (articulo, marca, color, departamento) y armamos un dict
-        # stock_por_sucursal: {sucursal_id: stock} con TODAS las sucursales del usuario.
+
         productos_lista = list(queryset)
         productos_procesados = len(productos_lista)
-
-        # Prefetch de tallas para los productos filtrados (stock real por producto)
         productos_ids = [p.id for p in productos_lista]
-        tallas_por_producto = {}
+        productos_meta = {
+            p.id: {
+                'sucursal_id': p.sucursal_id,
+                'articulo': p.articulo,
+                'marca_id': p.atributo1_id,
+                'marca': p.atributo1.valor if p.atributo1 else 'Sin Marca',
+                'color_id': p.atributo2_id,
+                'color': p.atributo2.valor if p.atributo2 else '-',
+                'categoria_id': p.categoria_id,
+                'departamento': p.categoria.nombre if p.categoria else '-',
+                'costo': float(p.costo) if p.costo else 0,
+                'precio_venta': float(p.precioventa) if p.precioventa else 0,
+            } for p in productos_lista
+        }
+
+        # ========== Q2: TALLAS (stock actual por talla) ==========
+        tallas_data = []
         if productos_ids:
-            from django.db.models import Sum as DjangoSum
-            tallas = Producto_Talla.objects.filter(
-                producto_id__in=productos_ids
-            ).values('producto_id').annotate(
-                stock_total=DjangoSum('stock')
+            tallas_data = list(
+                Producto_Talla.objects.filter(producto_id__in=productos_ids)
+                .values('id', 'producto_id', 'stock')
             )
-            tallas_por_producto = {t['producto_id']: t['stock_total'] or 0 for t in tallas}
 
-        # Agrupar productos por (articulo, marca_id, atributo2_id, categoria_id)
-        # para fusionar variantes que existen en distintas sucursales en una sola fila.
-        agrupados = {}
-        for producto in productos_lista:
-            stock_total_producto = tallas_por_producto.get(producto.id, 0)
-            clave = (
-                producto.articulo,
-                producto.atributo1_id,
-                producto.atributo2_id,
-                producto.categoria_id,
-            )
-            if clave not in agrupados:
-                agrupados[clave] = {
-                    'articulo': producto.articulo,
-                    'marca': producto.atributo1.valor if producto.atributo1 else 'Sin Marca',
-                    'marca_id': producto.atributo1.id if producto.atributo1 else None,
-                    'color': producto.atributo2.valor if producto.atributo2 else '-',
-                    'departamento': producto.categoria.nombre if producto.categoria else '-',
-                    'costo': float(producto.costo) if producto.costo else 0,
-                    'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
-                    'stock_por_sucursal': {},  # {sucursal_id: stock}
-                    'sucursales': {},          # {alias: {stock, sucursal_id}} — retrocompat
-                    'total_stock': 0,
-                }
+        # ========== Q3 + Q4: stock histórico (solo si fecha_corte < hoy) ==========
+        ingresos_map = {}
+        egresos_map = {}
+        if es_historico and tallas_data:
+            talla_ids = [t['id'] for t in tallas_data]
 
-            fila = agrupados[clave]
-            if producto.sucursal_id:
-                # Si el SKU aparece varias veces en la misma sucursal (no debería),
-                # sumamos para no perder stock.
-                key_id = str(producto.sucursal_id)
-                fila['stock_por_sucursal'][key_id] = (
-                    fila['stock_por_sucursal'].get(key_id, 0) + stock_total_producto
+            ingresos = (
+                Movimientos_Producto.objects
+                .filter(
+                    ProductoTalla_id__in=talla_ids,
+                    fecha__gt=fecha_corte,
+                    estado='COMPLETADO',
                 )
-                if producto.sucursal:
-                    fila['sucursales'][producto.sucursal.alias] = {
-                        'stock': fila['sucursales'].get(producto.sucursal.alias, {}).get('stock', 0) + stock_total_producto,
-                        'sucursal_id': producto.sucursal_id,
-                    }
-            fila['total_stock'] += stock_total_producto
+                .filter(Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA'))
+                .values('ProductoTalla_id', 'sucursal_destino_id')
+                .annotate(total=Sum('cantidad'))
+            )
+            ingresos_map = {
+                (r['ProductoTalla_id'], r['sucursal_destino_id']): int(r['total'] or 0)
+                for r in ingresos
+            }
 
-        # Aplicar filtro solo_con_stock sobre el TOTAL agrupado
+            egresos = (
+                Movimientos_Producto.objects
+                .filter(
+                    ProductoTalla_id__in=talla_ids,
+                    fecha__gt=fecha_corte,
+                    estado='COMPLETADO',
+                )
+                .filter(Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA'))
+                .values('ProductoTalla_id', 'sucursal_origen_id')
+                .annotate(total=Sum('cantidad'))
+            )
+            egresos_map = {
+                (r['ProductoTalla_id'], r['sucursal_origen_id']): int(r['total'] or 0)
+                for r in egresos
+            }
+
+        # ========== AGRUPAR POR (articulo, marca_id, color_id, categoria_id) ==========
+        agrupados = {}
+        for t in tallas_data:
+            meta = productos_meta.get(t['producto_id'])
+            if not meta:
+                continue
+            suc_id = meta['sucursal_id']
+            if suc_id not in sucursales_map:
+                continue
+
+            stock_actual = int(t['stock'] or 0)
+            if es_historico:
+                ing = ingresos_map.get((t['id'], suc_id), 0)
+                egr = egresos_map.get((t['id'], suc_id), 0)
+                stock_inicial = max(0, stock_actual - ing + abs(egr))
+            else:
+                stock_inicial = stock_actual
+
+            clave = (meta['articulo'], meta['marca_id'], meta['color_id'], meta['categoria_id'])
+            fila = agrupados.get(clave)
+            if fila is None:
+                fila = {
+                    'articulo': meta['articulo'],
+                    'marca': meta['marca'],
+                    'marca_id': meta['marca_id'],
+                    'color': meta['color'],
+                    'departamento': meta['departamento'],
+                    'costo': meta['costo'],
+                    'precio_venta': meta['precio_venta'],
+                    'sucursales': {},  # {alias: {sucursal_id, inicial, actual}}
+                    'total_inicial': 0,
+                    'total_actual': 0,
+                }
+                agrupados[clave] = fila
+
+            alias = sucursales_map[suc_id]
+            cell = fila['sucursales'].get(alias)
+            if cell is None:
+                cell = {'sucursal_id': suc_id, 'inicial': 0, 'actual': 0, 'stock': 0}
+                fila['sucursales'][alias] = cell
+            cell['inicial'] += stock_inicial
+            cell['actual'] += stock_actual
+            cell['stock'] = cell['actual']  # alias retrocompat
+            fila['total_inicial'] += stock_inicial
+            fila['total_actual'] += stock_actual
+
+        # Filtro solo_con_stock sobre el TOTAL agrupado (cubre el caso histórico)
         datos_reporte = [
             fila for fila in agrupados.values()
-            if (not solo_con_stock) or fila['total_stock'] > 0
+            if (not solo_con_stock) or fila['total_actual'] > 0 or fila['total_inicial'] > 0
         ]
 
-        # Ordenar por marca, luego artículo
-        datos_reporte.sort(key=lambda f: (f.get('marca') or '', f.get('articulo') or ''))
-        
-        # ========== RESPUESTA ==========
+        # Campo retrocompat: total_stock = stock actual sumado
+        for fila in datos_reporte:
+            fila['total_stock'] = fila['total_actual']
+
+        datos_reporte.sort(key=lambda f: (f.get('marca') or '', f.get('articulo') or '', f.get('color') or ''))
+
         sucursales_data = [{'id': s.id, 'alias': s.alias} for s in sucursales_list]
-        
+
         return JsonResponse({
             'success': True,
             'datos': datos_reporte,
             'sucursales': sucursales_data,
+            'fecha_corte': fecha_corte.isoformat(),
+            'es_historico': es_historico,
             'filtros_aplicados': {
                 'marca_id': marca_id,
                 'departamento_id': departamento_id,
                 'busqueda': busqueda,
                 'sucursal_id': sucursal_id,
                 'solo_con_stock': solo_con_stock,
+                'fecha_corte': fecha_corte.isoformat(),
             },
             'debug': {
                 'productos_procesados': productos_procesados,
+                'grupos': len(agrupados),
                 'registros_reporte': len(datos_reporte),
                 'total_sucursales': len(sucursales_data),
-                'limite_aplicado': limite
+                'limite_aplicado': limite,
+                'queries': 4 if es_historico else 2,
             }
         })
-        
+
     except Exception as e:
         import traceback
         print(f"❌ Error en reporte de existencias por marca: {str(e)}")
@@ -3930,17 +3986,20 @@ def exportar_existencias_marca_excel(request):
         
         # Procesar cada marca
         for marca, productos in sorted(por_marca.items()):
-            # Filtrar solo sucursales con stock en esta marca
+            # Filtrar solo sucursales con stock (inicial o actual) en esta marca
             sucursales_con_stock = []
             for sucursal in sucursales_lista:
+                alias = sucursal['alias']
                 tiene_stock = any(
-                    sucursal['alias'] in p['sucursales'] and 
-                    p['sucursales'][sucursal['alias']]['stock'] > 0 
+                    alias in p['sucursales'] and (
+                        p['sucursales'][alias].get('inicial', 0) > 0 or
+                        p['sucursales'][alias].get('actual', p['sucursales'][alias].get('stock', 0)) > 0
+                    )
                     for p in productos
                 )
                 if tiene_stock:
                     sucursales_con_stock.append(sucursal)
-            
+
             # Título de la marca
             ws.merge_cells(f'A{fila_actual}:E{fila_actual}')
             cell = ws[f'A{fila_actual}']
@@ -3949,19 +4008,15 @@ def exportar_existencias_marca_excel(request):
             cell.font = Font(bold=True, color="FFFFFF", size=14)
             cell.alignment = Alignment(horizontal='center', vertical='center')
             fila_actual += 1
-            
-            # Encabezados principales
+
+            # Fila 1: encabezados principales (sucursal y TOTAL ocupan 2 columnas cada uno)
             headers_row1 = ['Artículo', 'Color', 'Depart', 'Costo', 'PrecioV.']
-            
-            # Agregar solo columnas de sucursales con stock
             for sucursal in sucursales_con_stock:
                 headers_row1.append(sucursal['alias'])
-                headers_row1.append('')  # Para el stock
-                
-            headers_row1.append('TT (TOTAL)')
-            headers_row1.append('')  # Para el stock total
-            
-            # Escribir primera fila de encabezados
+                headers_row1.append('')  # placeholder para merge
+            headers_row1.append('TOTAL')
+            headers_row1.append('')
+
             for idx, header in enumerate(headers_row1, start=1):
                 cell = ws.cell(row=fila_actual, column=idx, value=header if header else None)
                 if header and header not in ['Artículo', 'Color', 'Depart', 'Costo', 'PrecioV.']:
@@ -3972,31 +4027,40 @@ def exportar_existencias_marca_excel(request):
                     cell.font = header_font
                 cell.alignment = Alignment(horizontal='center', vertical='center')
                 cell.border = border
-            
+
+            # Merges para que cada alias de sucursal cubra sus 2 sub-columnas
+            col_merge = 6
+            for _ in sucursales_con_stock:
+                ws.merge_cells(start_row=fila_actual, start_column=col_merge,
+                               end_row=fila_actual, end_column=col_merge + 1)
+                col_merge += 2
+            ws.merge_cells(start_row=fila_actual, start_column=col_merge,
+                           end_row=fila_actual, end_column=col_merge + 1)
+
             fila_actual += 1
-            
-            # Subencabezados (Stock)
-            headers_row2 = ['', '', '', '', '']  # Columnas fijas sin subencabezado
-            for sucursal in sucursales_con_stock:
-                headers_row2.extend(['Stock', 'Stock'])
-            headers_row2.extend(['Stock', 'Stock'])
-            
+
+            # Fila 2: sub-encabezados Inicial / Actual
+            headers_row2 = ['', '', '', '', '']
+            for _ in sucursales_con_stock:
+                headers_row2.extend(['Inicial', 'Actual'])
+            headers_row2.extend(['Inicial', 'Actual'])
+
             for idx, header in enumerate(headers_row2, start=1):
                 if header:
                     cell = ws.cell(row=fila_actual, column=idx, value=header)
-                    if idx > 5:  # Solo las columnas de sucursales
+                    if idx > 5:
                         cell.fill = sucursal_fill
                         cell.font = sucursal_font
                     cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = border
-            
-            fila_actual += 1
-            
-            # Inicializar totales por columna
-            totales_por_sucursal = {suc['alias']: {'stock': 0} for suc in sucursales_con_stock}
-            gran_total_stock = 0
 
-            # Datos de productos
+            fila_actual += 1
+
+            # Acumuladores por sucursal y gran totales
+            totales_por_sucursal = {suc['alias']: {'inicial': 0, 'actual': 0} for suc in sucursales_con_stock}
+            gran_total_inicial = 0
+            gran_total_actual = 0
+
             for producto in productos:
                 row_data = [
                     producto['articulo'],
@@ -4006,46 +4070,42 @@ def exportar_existencias_marca_excel(request):
                     producto['precio_venta']
                 ]
 
-                # Datos por sucursal (solo las que tienen stock)
                 for sucursal in sucursales_con_stock:
                     stock_suc = producto['sucursales'].get(sucursal['alias'])
                     if stock_suc:
-                        stock_val = stock_suc.get('stock', 0)
-                        row_data.append(stock_val)
-                        row_data.append(stock_val)
-                        # Acumular totales
-                        totales_por_sucursal[sucursal['alias']]['stock'] += stock_val
+                        inicial_val = int(stock_suc.get('inicial', 0) or 0)
+                        actual_val = int(stock_suc.get('actual', stock_suc.get('stock', 0)) or 0)
+                        row_data.append(inicial_val if inicial_val else '-')
+                        row_data.append(actual_val if actual_val else '-')
+                        totales_por_sucursal[sucursal['alias']]['inicial'] += inicial_val
+                        totales_por_sucursal[sucursal['alias']]['actual'] += actual_val
                     else:
                         row_data.append('-')
                         row_data.append('-')
 
-                # Totales del producto
-                total_stock_prod = producto.get('total_stock', 0)
-                row_data.append(total_stock_prod)
-                row_data.append(total_stock_prod)
-                gran_total_stock += total_stock_prod
-                
-                # Escribir fila
+                total_inicial_prod = int(producto.get('total_inicial', 0) or 0)
+                total_actual_prod = int(producto.get('total_actual', producto.get('total_stock', 0)) or 0)
+                row_data.append(total_inicial_prod)
+                row_data.append(total_actual_prod)
+                gran_total_inicial += total_inicial_prod
+                gran_total_actual += total_actual_prod
+
                 for idx, value in enumerate(row_data, start=1):
                     cell = ws.cell(row=fila_actual, column=idx, value=value)
-                    
-                    # Aplicar formato
-                    if idx > 5:  # Columnas numéricas
-                        if idx in [len(row_data) - 1, len(row_data)]:  # Columnas de total
+                    if idx > 5:
+                        if idx in [len(row_data) - 1, len(row_data)]:
                             cell.fill = total_fill
                             cell.font = total_font
-                        
                         if isinstance(value, (int, float)):
                             cell.alignment = Alignment(horizontal='right')
                         else:
                             cell.alignment = Alignment(horizontal='center')
                     else:
                         cell.alignment = Alignment(horizontal='left' if idx <= 2 else 'center')
-                    
                     cell.border = border
-                
+
                 fila_actual += 1
-            
+
             # Fila de TOTALES
             total_fill_yellow = PatternFill(start_color="FFC107", end_color="FFC107", fill_type="solid")
             ws.merge_cells(f'A{fila_actual}:E{fila_actual}')
@@ -4055,42 +4115,36 @@ def exportar_existencias_marca_excel(request):
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.fill = total_fill
             cell.border = border
-            
+
             col_idx = 6
             for sucursal in sucursales_con_stock:
-                total_suc = totales_por_sucursal[sucursal['alias']]
-                stock_val = total_suc['stock']
-
-                cell = ws.cell(row=fila_actual, column=col_idx, value=stock_val)
+                tot = totales_por_sucursal[sucursal['alias']]
+                cell = ws.cell(row=fila_actual, column=col_idx, value=tot['inicial'])
+                cell.font = total_font
+                cell.fill = total_fill
+                cell.alignment = Alignment(horizontal='right')
+                cell.border = border
+                col_idx += 1
+                cell = ws.cell(row=fila_actual, column=col_idx, value=tot['actual'])
                 cell.font = total_font
                 cell.fill = total_fill
                 cell.alignment = Alignment(horizontal='right')
                 cell.border = border
                 col_idx += 1
 
-                cell = ws.cell(row=fila_actual, column=col_idx, value=stock_val)
-                cell.font = total_font
-                cell.fill = total_fill
-                cell.alignment = Alignment(horizontal='right')
-                cell.border = border
-                col_idx += 1
-
-            # Gran total
-            cell = ws.cell(row=fila_actual, column=col_idx, value=gran_total_stock)
+            cell = ws.cell(row=fila_actual, column=col_idx, value=gran_total_inicial)
             cell.font = Font(bold=True, size=12)
             cell.fill = total_fill_yellow
             cell.alignment = Alignment(horizontal='right')
             cell.border = border
 
-            cell = ws.cell(row=fila_actual, column=col_idx + 1, value=gran_total_stock)
+            cell = ws.cell(row=fila_actual, column=col_idx + 1, value=gran_total_actual)
             cell.font = Font(bold=True, size=12)
             cell.fill = total_fill_yellow
             cell.alignment = Alignment(horizontal='right')
             cell.border = border
-            
+
             fila_actual += 1
-            
-            # Espacio entre marcas
             fila_actual += 2
         
         # Ajustar anchos de columna

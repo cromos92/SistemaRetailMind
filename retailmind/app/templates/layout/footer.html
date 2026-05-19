@@ -435,6 +435,11 @@ function copiarCodigoAutorizacion() {
 {% include 'assistant/widget.html' %}
 {% endif %}
 
+{# Modal PIN de Autorización (solo admins/jefes) — disponible globalmente vía window.abrirModalPin() #}
+{% if user.is_authenticated %}
+{% include 'users/_modal_pin_autorizacion.html' %}
+{% endif %}
+
 </body>
 
 </html>

@@ -1007,6 +1007,175 @@
             display: none;
         }
     }
+
+    /* ========== TABLA MATRIZ SUCURSALES (compacta, patrón de movimientos-sucursal) ========== */
+    .nexo-table-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+        overflow: hidden;
+        border: 1px solid var(--nexo-gray-300);
+    }
+    .nexo-table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+    }
+    .nexo-table-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .nexo-table-info {
+        font-size: 0.75rem;
+        color: var(--nexo-gray-300);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+    .nexo-table-wrapper {
+        overflow-x: auto;
+        max-height: calc(100vh - 400px);
+        overflow-y: auto;
+    }
+    .nexo-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.75rem;
+    }
+    .nexo-table thead {
+        background: var(--nexo-gray-100);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .nexo-table th {
+        padding: 10px 8px;
+        text-align: center;
+        font-weight: 700;
+        color: var(--nexo-gray-700);
+        border-bottom: 2px solid var(--nexo-gray-300);
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+    .nexo-table td {
+        padding: 8px 6px;
+        text-align: center;
+        border-bottom: 1px solid var(--nexo-gray-200);
+        vertical-align: middle;
+    }
+    .nexo-table tbody tr:hover { background: var(--nexo-primary-light); }
+    .nexo-table tbody tr:nth-child(even) { background: rgba(245, 245, 247, 0.5); }
+    .nexo-table tbody tr:nth-child(even):hover { background: var(--nexo-primary-light); }
+
+    .td-articulo {
+        text-align: left !important;
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .td-marca {
+        text-align: left !important;
+        font-size: 0.7rem;
+        color: var(--nexo-primary);
+        font-weight: 600;
+    }
+    .td-color {
+        text-align: left !important;
+        font-size: 0.7rem;
+        color: var(--nexo-gray-700);
+    }
+    .td-costo, .td-precio {
+        text-align: right !important;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.72rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .td-costo { color: var(--nexo-gray-700); }
+    .td-precio { color: var(--nexo-success); }
+
+    .th-sucursal {
+        background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #d4e4ff 100%) !important;
+        color: var(--nexo-primary-dark) !important;
+        min-width: 90px;
+    }
+    .th-sub {
+        font-size: 0.55rem !important;
+        padding: 6px 4px !important;
+    }
+    .th-inicial {
+        background: rgba(0, 212, 170, 0.12) !important;
+        color: #00a884 !important;
+    }
+    .th-actual {
+        background: rgba(255, 176, 32, 0.12) !important;
+        color: #cc8c00 !important;
+    }
+    .th-total {
+        background: var(--nexo-secondary) !important;
+        color: var(--nexo-white) !important;
+    }
+
+    .cell-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        padding: 2px 6px;
+        border-radius: var(--nexo-radius-sm);
+        font-weight: 700;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.7rem;
+    }
+    .cell-inicial { background: rgba(0, 212, 170, 0.1); color: var(--nexo-success); }
+    .cell-actual  { background: rgba(255, 176, 32, 0.1); color: #996B00; }
+    .cell-empty {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-400);
+        font-size: 0.6rem;
+    }
+
+    .nexo-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        background: var(--nexo-gray-100);
+        border-top: 1px solid var(--nexo-gray-300);
+    }
+    .nexo-pagination-info { font-size: 0.75rem; color: var(--nexo-gray-700); }
+    .nexo-pagination-controls { display: flex; align-items: center; gap: 8px; }
+    .nexo-pagination-btn {
+        padding: 6px 12px;
+        border: 1px solid var(--nexo-gray-300);
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-sm);
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+    }
+    .nexo-pagination-btn:hover:not(:disabled) {
+        background: var(--nexo-primary-light);
+        border-color: var(--nexo-primary);
+    }
+    .nexo-pagination-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .nexo-pagination-select {
+        padding: 6px 10px;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-sm);
+        font-size: 0.75rem;
+    }
 </style>
 
 <!-- ========== LOADING OVERLAY ========== -->
@@ -1033,10 +1202,10 @@
                     <span>{{ sucursal_actual.alias }}</span>
                 </div>
                 {% endif %}
-                <a href="{% url 'ver_reporte_movimientos_sucursal' %}" class="nexo-header-badge" style="text-decoration: none; cursor: pointer;">
-                    <i class="ri-exchange-line"></i>
-                    <span>Ver Inicial vs Restante</span>
-                </a>
+                <div class="nexo-header-badge" id="badge-fecha-corte" style="display:none;">
+                    <i class="ri-calendar-line"></i>
+                    <span>Stock al <span id="badge-fecha-corte-valor">hoy</span></span>
+                </div>
             </div>
         </div>
     </div>
@@ -1139,6 +1308,12 @@
             </select>
         </div>
 
+        <div class="nexo-control-group" style="min-width: 140px; max-width: 160px;">
+            <label class="nexo-control-label">📅 Stock al</label>
+            <input type="date" id="filtro-fecha-corte" class="nexo-input"
+                   title="Fecha del stock inicial histórico. Vacío o futuro = hoy (stock actual).">
+        </div>
+
         <div class="nexo-btn-group">
             <button class="nexo-btn nexo-btn-secondary" onclick="limpiarFiltros()">
                 <i class="ri-delete-bin-line"></i> Limpiar
@@ -1202,13 +1377,8 @@
             </div>
         </div>
 
-        <!-- Tabla DataTables -->
-        <div id="contenedor-tabla" style="display:none; background:#fff; border-radius:8px; padding:16px 20px; border:1px solid var(--nexo-gray-300); box-shadow: var(--nexo-shadow-sm); overflow-x:auto;">
-            <table id="tabla-existencias" class="table table-sm table-hover table-bordered" style="width:100%">
-                <thead></thead>
-                <tbody></tbody>
-            </table>
-        </div>
+        <!-- Tabla matriz (sucursales como columnas compactas) -->
+        <div id="contenedor-tabla" style="display:none;"></div>
     </div>
 </div>
 
@@ -1217,11 +1387,13 @@ let datosCompletos = [];
 let todasLasMarcas = [];
 let sucursalesDisponibles = [];
 let filtroActivo = 'todos';
-let dt = null;
+let fechaCorteActual = '';
+let esHistoricoActual = false;
+let paginaActual = 1;
+let registrosPorPagina = 50;
 const SUCURSAL_ACTUAL_ID = '{{ sucursal_actual_id|default:"" }}';
 const SUCURSAL_ACTUAL_ALIAS = '{{ sucursal_actual.alias|default:"" }}';
 
-// ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
     cargarMarcas();
     cargarDepartamentos();
@@ -1229,12 +1401,10 @@ document.addEventListener('DOMContentLoaded', function() {
     mostrarAlertaFiltro(false);
 });
 
-// ========== LOADING OVERLAY ==========
 function mostrarLoading(mostrar, texto = 'Cargando inventario...', subtexto = 'Esto puede tomar unos segundos') {
     const overlay = document.getElementById('loading-overlay');
     const loadingText = document.getElementById('loading-text');
     const loadingSubtext = document.getElementById('loading-subtext');
-    
     if (overlay) {
         overlay.style.display = mostrar ? 'flex' : 'none';
         if (loadingText) loadingText.textContent = texto;
@@ -1242,120 +1412,16 @@ function mostrarLoading(mostrar, texto = 'Cargando inventario...', subtexto = 'E
     }
 }
 
-// ========== VALIDACIÓN DE FILTROS ==========
 function tieneFiltroValido() {
     const marca = document.getElementById('filtro-marca').value;
     const depto = document.getElementById('filtro-departamento').value;
     const busqueda = document.getElementById('busqueda-articulo').value.trim();
-    
     return marca || depto || busqueda.length >= 3;
 }
 
 function mostrarAlertaFiltro(mostrar) {
     const alerta = document.getElementById('alerta-filtro');
-    if (alerta) {
-        alerta.style.display = mostrar ? 'block' : 'none';
-    }
-}
-
-// ========== INICIALIZAR DATATABLE (columnas dinámicas por sucursal) ==========
-function inicializarDataTable(sucursales) {
-    if (dt) {
-        dt.destroy();
-        dt = null;
-        $('#tabla-existencias thead').empty();
-        $('#tabla-existencias tbody').empty();
-    }
-
-    sucursales = sucursales || [];
-
-    // Construir columnas: fijas + 1 por sucursal + totales
-    const columns = [
-        { data: 'articulo', title: 'Artículo' },
-        { data: 'marca', title: 'Marca' },
-        { data: 'color', title: 'Color' },
-        { data: 'departamento', title: 'Departamento' },
-        {
-            data: 'costo', title: 'Costo',
-            render: (d, type) => type === 'display' ? '$' + formatearNumero(d) : d,
-            className: 'text-end'
-        },
-        {
-            data: 'precio_venta', title: 'P. Venta',
-            render: (d, type) => type === 'display' ? '<strong>$' + formatearNumero(d) + '</strong>' : d,
-            className: 'text-end'
-        },
-    ];
-
-    // Una columna por cada sucursal del usuario
-    sucursales.forEach(suc => {
-        columns.push({
-            data: null,
-            title: suc.alias,
-            className: 'text-center th-sucursal',
-            orderable: true,
-            render: (row, type) => {
-                const stock = (row.stock_por_sucursal && row.stock_por_sucursal[suc.id]) || 0;
-                if (type === 'display') {
-                    if (!stock) return '<span class="text-muted">-</span>';
-                    return `<span class="stock-badge ${getStockClass(stock)}">${stock}</span>`;
-                }
-                return stock;
-            }
-        });
-    });
-
-    // Total + Estado
-    columns.push({
-        data: 'total_stock', title: 'Total',
-        render: (d, type) => {
-            if (type === 'display') {
-                return `<strong class="stock-badge ${getStockClass(d)}">${d}</strong>`;
-            }
-            return d;
-        },
-        className: 'text-center'
-    });
-    columns.push({
-        data: 'total_stock', title: 'Estado',
-        render: (d, type) => {
-            if (type === 'display') {
-                if (d < 5) return '<span class="badge rounded-pill" style="background:#FF4D4D;font-size:0.7rem;">Crítico</span>';
-                if (d < 10) return '<span class="badge rounded-pill" style="background:#FFB020;font-size:0.7rem;">Bajo</span>';
-                return '<span class="badge rounded-pill" style="background:#00D4AA;font-size:0.7rem;">OK</span>';
-            }
-            if (d < 5) return 'critico';
-            if (d < 10) return 'bajo';
-            return 'ok';
-        },
-        className: 'text-center'
-    });
-
-    dt = $('#tabla-existencias').DataTable({
-        language: {
-            emptyTable:     'Sin datos para mostrar',
-            info:           'Mostrando _START_ a _END_ de _TOTAL_ productos',
-            infoEmpty:      'Sin productos',
-            infoFiltered:   '(filtrado de _MAX_ total)',
-            lengthMenu:     'Mostrar _MENU_ productos',
-            loadingRecords: 'Cargando...',
-            processing:     'Procesando...',
-            search:         'Buscar:',
-            zeroRecords:    'No se encontraron productos',
-            paginate: {
-                first:    'Primero',
-                last:     'Último',
-                next:     'Siguiente',
-                previous: 'Anterior'
-            }
-        },
-        pageLength: 25,
-        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
-        responsive: false,
-        scrollX: true,
-        order: [[1, 'asc'], [0, 'asc']],
-        columns: columns
-    });
+    if (alerta) alerta.style.display = mostrar ? 'block' : 'none';
 }
 
 // ========== CARGAR FILTROS ==========
@@ -1364,7 +1430,6 @@ async function cargarMarcas() {
         const response = await fetch('/app/obtener_marcas/');
         const data = await response.json();
         todasLasMarcas = data;
-        
         const select = document.getElementById('filtro-marca');
         const optionInfo = document.createElement('option');
         optionInfo.value = '';
@@ -1380,9 +1445,7 @@ function filtrarMarcas() {
     const searchInput = document.getElementById('search-marca');
     const select = document.getElementById('filtro-marca');
     const searchText = searchInput.value.toLowerCase().trim();
-    
     select.innerHTML = '<option value="">-- Selecciona una marca --</option>';
-    
     if (!searchText) {
         const optionInfo = document.createElement('option');
         optionInfo.value = '';
@@ -1391,7 +1454,6 @@ function filtrarMarcas() {
         select.appendChild(optionInfo);
         return;
     }
-    
     if (searchText.length < 2) {
         const option = document.createElement('option');
         option.value = '';
@@ -1400,12 +1462,7 @@ function filtrarMarcas() {
         select.appendChild(option);
         return;
     }
-    
-    const marcasFiltradas = todasLasMarcas.filter(marca => 
-        marca.valor.toLowerCase().includes(searchText)
-    );
-    
-    // Agregar contador
+    const marcasFiltradas = todasLasMarcas.filter(m => m.valor.toLowerCase().includes(searchText));
     if (marcasFiltradas.length > 0) {
         const optCount = document.createElement('option');
         optCount.value = '';
@@ -1413,14 +1470,12 @@ function filtrarMarcas() {
         optCount.disabled = true;
         select.appendChild(optCount);
     }
-    
     marcasFiltradas.forEach(marca => {
         const option = document.createElement('option');
         option.value = marca.id;
         option.textContent = marca.valor;
         select.appendChild(option);
     });
-    
     if (marcasFiltradas.length === 0) {
         const option = document.createElement('option');
         option.value = '';
@@ -1434,7 +1489,6 @@ async function cargarDepartamentos() {
     try {
         const response = await fetch('/app/obtener_categorias/');
         const data = await response.json();
-        
         const select = document.getElementById('filtro-departamento');
         data.forEach(cat => {
             const option = document.createElement('option');
@@ -1451,22 +1505,15 @@ async function cargarSucursales() {
     try {
         const response = await fetch('/app/api/sucursales-usuario/');
         const data = await response.json();
-        
         if (data.success && data.sucursales) {
             const select = document.getElementById('filtro-sucursal');
-            
-            // Opción por defecto: sucursal actual
             if (SUCURSAL_ACTUAL_ALIAS) {
                 select.innerHTML = `<option value="">${SUCURSAL_ACTUAL_ALIAS} (actual)</option>`;
             }
-            
-            // Agregar opción "Todas mis sucursales"
             const optTodas = document.createElement('option');
             optTodas.value = 'todas';
             optTodas.textContent = '📍 Todas mis sucursales';
             select.appendChild(optTodas);
-            
-            // Agregar cada sucursal
             data.sucursales.forEach(suc => {
                 if (suc.sucursal_id != SUCURSAL_ACTUAL_ID) {
                     const option = document.createElement('option');
@@ -1475,7 +1522,6 @@ async function cargarSucursales() {
                     select.appendChild(option);
                 }
             });
-            
             sucursalesDisponibles = data.sucursales;
         }
     } catch (error) {
@@ -1486,223 +1532,289 @@ async function cargarSucursales() {
 // ========== FILTRO RÁPIDO ==========
 function filtroRapido(tipo) {
     filtroActivo = tipo;
-    
-    // Actualizar chips
     document.querySelectorAll('.nexo-chip').forEach(chip => {
         chip.classList.remove('active');
-        if (chip.dataset.filter === tipo) {
-            chip.classList.add('active');
-        }
+        if (chip.dataset.filter === tipo) chip.classList.add('active');
     });
-    
-    // Re-renderizar con filtro
-    if (datosCompletos.length > 0) {
-        renderizarReporte(datosCompletos);
-    }
+    paginaActual = 1;
+    if (datosCompletos.length > 0) renderizarReporte();
 }
 
 // ========== CARGAR REPORTE ==========
 async function cargarReporte(forzarSinFiltro = false) {
     const limite = 5000;
-    
-    // Validar filtros (pero permitir sin filtro con confirmación)
     if (!tieneFiltroValido() && !forzarSinFiltro) {
-        // Preguntar si quiere cargar sin filtro
         const confirmar = confirm(
             '⚠️ No has seleccionado ningún filtro.\n\n' +
             'Se cargarán todos los productos de tu sucursal.\n' +
             'Esto puede tomar unos segundos.\n\n' +
             '¿Deseas continuar?'
         );
-        
         if (!confirmar) return;
     }
-    
     mostrarAlertaFiltro(false);
-    
-    // Mostrar loading de pantalla completa
     const sinFiltro = !tieneFiltroValido();
-    mostrarLoading(
-        true, 
-        sinFiltro ? 'Cargando productos...' : 'Buscando productos...', 
-        sinFiltro ? 'Obteniendo todos los productos de tu sucursal' : 'Aplicando filtros seleccionados'
-    );
-    
+    const fechaCorte = document.getElementById('filtro-fecha-corte').value;
+    const textoLoading = fechaCorte ? `Calculando stock al ${fechaCorte}...` : 'Buscando productos...';
+    mostrarLoading(true, textoLoading,
+        sinFiltro ? 'Obteniendo productos sin filtro' : 'Aplicando filtros seleccionados');
+
     try {
         const marcaId = document.getElementById('filtro-marca').value;
         const deptId = document.getElementById('filtro-departamento').value;
         const busqueda = document.getElementById('busqueda-articulo').value.trim();
         const sucursalId = document.getElementById('filtro-sucursal').value;
-        
+
         let url = '/app/api/reporte-existencias-marca/';
         const params = new URLSearchParams();
-        
         if (marcaId) params.append('marca_id', marcaId);
         if (deptId) params.append('departamento_id', deptId);
         if (busqueda.length >= 3) params.append('busqueda', busqueda);
         if (sucursalId) params.append('sucursal_id', sucursalId);
+        if (fechaCorte) params.append('fecha_corte', fechaCorte);
         params.append('limite', limite);
-
-        // Si no hay filtros, indicar al backend que permita sin filtro
-        if (!tieneFiltroValido()) {
-            params.append('sin_filtro', 'true');
-        }
-        
+        if (!tieneFiltroValido()) params.append('sin_filtro', 'true');
         if (params.toString()) url += '?' + params.toString();
-        
-        console.log('📊 Consultando:', url);
-        
+
         const response = await fetch(url);
         const data = await response.json();
-        
         mostrarLoading(false);
-        
+
         if (data.success) {
             datosCompletos = data.datos;
             sucursalesDisponibles = data.sucursales || [];
-            
+            fechaCorteActual = data.fecha_corte || '';
+            esHistoricoActual = !!data.es_historico;
+            paginaActual = 1;
+
+            actualizarBadgeFechaCorte();
             actualizarKPIs(data.datos);
-            renderizarReporte(data.datos);
-            
-            // Habilitar exportación
+            renderizarReporte();
+
             document.getElementById('btn-exportar').disabled = data.datos.length === 0;
-            
-            // Mostrar info de debug
-            if (data.debug) {
-                console.log('📊 Reporte cargado:', data.debug);
-            }
+            if (data.debug) console.log('📊 Reporte cargado:', data.debug);
         } else if (data.requiere_filtro) {
             mostrarAlertaFiltro(true);
-            document.getElementById('contenedor-tabla').style.display = 'none';
-            document.getElementById('estado-mensaje').style.display = 'block';
-            document.getElementById('estado-mensaje').innerHTML = `
-                <div class="nexo-empty-state">
-                    <div class="nexo-empty-icon">⚙️</div>
-                    <div class="nexo-empty-title">Filtro Requerido</div>
-                    <div class="nexo-empty-text">${data.error || 'Selecciona al menos un filtro'}</div>
-                </div>
-            `;
+            mostrarEstadoVacio('⚙️', 'Filtro Requerido', data.error || 'Selecciona al menos un filtro');
         } else {
-            document.getElementById('contenedor-tabla').style.display = 'none';
-            document.getElementById('estado-mensaje').style.display = 'block';
-            document.getElementById('estado-mensaje').innerHTML = `
-                <div class="nexo-empty-state">
-                    <div class="nexo-empty-icon">⚠️</div>
-                    <div class="nexo-empty-title">Error al cargar</div>
-                    <div class="nexo-empty-text">${data.error || 'Error desconocido'}</div>
-                </div>
-            `;
+            mostrarEstadoVacio('⚠️', 'Error al cargar', data.error || 'Error desconocido');
         }
     } catch (error) {
         mostrarLoading(false);
         console.error('Error:', error);
-        document.getElementById('contenedor-tabla').style.display = 'none';
-        document.getElementById('estado-mensaje').style.display = 'block';
-        document.getElementById('estado-mensaje').innerHTML = `
-            <div class="nexo-empty-state">
-                <div class="nexo-empty-icon">❌</div>
-                <div class="nexo-empty-title">Error de conexión</div>
-                <div class="nexo-empty-text">No se pudo conectar con el servidor</div>
-            </div>
-        `;
+        mostrarEstadoVacio('❌', 'Error de conexión', 'No se pudo conectar con el servidor');
     }
 }
 
-// ========== ACTUALIZAR KPIs ==========
+function mostrarEstadoVacio(icono, titulo, texto) {
+    document.getElementById('contenedor-tabla').style.display = 'none';
+    document.getElementById('estado-mensaje').style.display = 'block';
+    document.getElementById('estado-mensaje').innerHTML = `
+        <div class="nexo-empty-state">
+            <div class="nexo-empty-icon">${icono}</div>
+            <div class="nexo-empty-title">${titulo}</div>
+            <div class="nexo-empty-text">${texto}</div>
+        </div>`;
+}
+
+function actualizarBadgeFechaCorte() {
+    const badge = document.getElementById('badge-fecha-corte');
+    const valor = document.getElementById('badge-fecha-corte-valor');
+    if (!badge || !valor) return;
+    if (esHistoricoActual && fechaCorteActual) {
+        valor.textContent = fechaCorteActual;
+        badge.style.display = 'inline-flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// ========== KPIs ==========
 function actualizarKPIs(datos) {
     let totalSKUs = datos.length;
-    let totalUnidades = 0;
+    let totalInicial = 0;
+    let totalActual = 0;
     let valorCosto = 0;
     let valorVenta = 0;
-    let stockBajo = 0;
-    let stockCritico = 0;
-    let stockOK = 0;
-    
+    let stockBajo = 0, stockCritico = 0, stockOK = 0;
+
     datos.forEach(item => {
-        totalUnidades += item.total_stock;
-        valorCosto += item.costo * item.total_stock;
-        valorVenta += item.precio_venta * item.total_stock;
-        
-        if (item.total_stock < 5) {
-            stockCritico++;
-        } else if (item.total_stock < 10) {
-            stockBajo++;
-        } else {
-            stockOK++;
-        }
+        const actual = item.total_actual ?? item.total_stock ?? 0;
+        const inicial = item.total_inicial ?? actual;
+        totalInicial += inicial;
+        totalActual += actual;
+        valorCosto += (item.costo || 0) * actual;
+        valorVenta += (item.precio_venta || 0) * actual;
+        if (actual < 5) stockCritico++;
+        else if (actual < 10) stockBajo++;
+        else stockOK++;
     });
-    
-    // Actualizar valores en UI
+
     document.getElementById('kpi-skus').textContent = formatearNumero(totalSKUs);
-    document.getElementById('kpi-unidades').textContent = formatearNumero(totalUnidades);
+    // "Unidades Totales" ahora muestra stock actual; "Valor Inventario" lo respeta también
+    document.getElementById('kpi-unidades').textContent = formatearNumero(totalActual);
     document.getElementById('kpi-valor-costo').textContent = '$' + formatearNumero(valorCosto);
     document.getElementById('kpi-valor-venta').textContent = '$' + formatearNumero(valorVenta);
     document.getElementById('kpi-bajo').textContent = stockBajo;
     document.getElementById('kpi-critico').textContent = stockCritico;
-    
-    // Actualizar contadores de chips
     document.getElementById('chip-count-critico').textContent = stockCritico;
     document.getElementById('chip-count-bajo').textContent = stockBajo;
     document.getElementById('chip-count-ok').textContent = stockOK;
 }
 
-// ========== RENDERIZAR REPORTE ==========
-// Firma usada por sucursales visibles para detectar cambios y reinicializar DataTable
-let firmaSucursalesActual = '';
+// ========== RENDERIZAR (tabla matriz sucursales-como-columnas) ==========
+function renderizarReporte() {
+    let datosFiltrados = datosCompletos;
+    if (filtroActivo === 'critico')      datosFiltrados = datosCompletos.filter(d => (d.total_actual ?? d.total_stock ?? 0) < 5);
+    else if (filtroActivo === 'bajo')    datosFiltrados = datosCompletos.filter(d => { const v = d.total_actual ?? d.total_stock ?? 0; return v >= 5 && v < 10; });
+    else if (filtroActivo === 'ok')      datosFiltrados = datosCompletos.filter(d => (d.total_actual ?? d.total_stock ?? 0) >= 10);
 
-function renderizarReporte(datos) {
-    // Aplicar filtro rápido activo (sobre el total agregado)
-    let datosFiltrados = datos;
-    if (filtroActivo === 'critico') {
-        datosFiltrados = datos.filter(d => d.total_stock < 5);
-    } else if (filtroActivo === 'bajo') {
-        datosFiltrados = datos.filter(d => d.total_stock >= 5 && d.total_stock < 10);
-    } else if (filtroActivo === 'ok') {
-        datosFiltrados = datos.filter(d => d.total_stock >= 10);
-    }
-
-    // Sucursales a mostrar como columnas
-    const sucursales = (sucursalesDisponibles || []).slice();
-    const firma = sucursales.map(s => s.id).join(',');
-
-    // Si cambió el set de sucursales, reconstruir la tabla
-    if (!dt || firma !== firmaSucursalesActual) {
-        inicializarDataTable(sucursales);
-        firmaSucursalesActual = firma;
-    }
-
-    dt.clear();
-    dt.rows.add(datosFiltrados);
-    dt.draw();
-
-    // Mostrar tabla / ocultar mensaje
-    document.getElementById('estado-mensaje').style.display = datosFiltrados.length === 0 ? 'block' : 'none';
-    document.getElementById('contenedor-tabla').style.display = datosFiltrados.length === 0 ? 'none' : 'block';
+    const contenedor = document.getElementById('contenedor-tabla');
+    const mensaje = document.getElementById('estado-mensaje');
 
     if (datosFiltrados.length === 0) {
-        document.getElementById('estado-mensaje').innerHTML = `
+        contenedor.style.display = 'none';
+        mensaje.style.display = 'block';
+        mensaje.innerHTML = `
             <div class="nexo-empty-state">
                 <div class="nexo-empty-icon">📦</div>
                 <div class="nexo-empty-title">Sin resultados</div>
                 <div class="nexo-empty-text">No se encontraron productos ${filtroActivo !== 'todos' ? 'con el filtro rápido aplicado' : 'con stock'}.</div>
             </div>`;
+        return;
     }
+
+    // Sucursales como columnas (solo las que aparecen en los datos visibles)
+    const sucursalesSet = new Set();
+    datosFiltrados.forEach(item => Object.keys(item.sucursales || {}).forEach(suc => sucursalesSet.add(suc)));
+    const sucursalesList = Array.from(sucursalesSet).sort();
+
+    // Paginación cliente
+    const totalRegistros = datosFiltrados.length;
+    const totalPaginas = Math.max(1, Math.ceil(totalRegistros / registrosPorPagina));
+    if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+    const inicio = (paginaActual - 1) * registrosPorPagina;
+    const fin = Math.min(inicio + registrosPorPagina, totalRegistros);
+    const datosPagina = datosFiltrados.slice(inicio, fin);
+
+    const subHeaderInicial = esHistoricoActual ? `Inic. (${fechaCorteActual})` : 'Inic.';
+
+    let html = `
+        <div class="nexo-table-card">
+            <div class="nexo-table-header">
+                <div class="nexo-table-title">
+                    <i class="ri-table-line"></i> Matriz Artículo × Sucursal
+                </div>
+                <div class="nexo-table-info">
+                    <span><i class="ri-file-list-line"></i> ${formatearNumero(totalRegistros)} grupos</span>
+                    <span><i class="ri-store-2-line"></i> ${sucursalesList.length} sucursales</span>
+                    ${esHistoricoActual ? `<span><i class="ri-history-line"></i> Inicial al ${fechaCorteActual}</span>` : ''}
+                </div>
+            </div>
+            <div class="nexo-table-wrapper">
+                <table class="nexo-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;" rowspan="2">Artículo</th>
+                            <th style="text-align:left;" rowspan="2">Marca</th>
+                            <th style="text-align:left;" rowspan="2">Color</th>
+                            <th rowspan="2">Costo</th>
+                            <th rowspan="2">P. Venta</th>`;
+    sucursalesList.forEach(suc => {
+        html += `<th class="th-sucursal" colspan="2" title="${suc}">${suc}</th>`;
+    });
+    html += `<th class="th-total" colspan="2">TOTAL</th></tr><tr>`;
+    sucursalesList.forEach(() => {
+        html += `<th class="th-sub th-inicial" title="Stock inicial${esHistoricoActual ? ' al ' + fechaCorteActual : ''}">Inic.</th>`;
+        html += `<th class="th-sub th-actual" title="Stock actual">Act.</th>`;
+    });
+    html += `<th class="th-sub th-total">Inic.</th><th class="th-sub th-total">Act.</th></tr></thead><tbody>`;
+
+    datosPagina.forEach(producto => {
+        html += `
+            <tr>
+                <td class="td-articulo" title="${escapeHtml(producto.articulo)}">${escapeHtml(producto.articulo)}</td>
+                <td class="td-marca">${escapeHtml(producto.marca)}</td>
+                <td class="td-color">${escapeHtml(producto.color)}</td>
+                <td class="td-costo">${formatearMoneda(producto.costo)}</td>
+                <td class="td-precio">${formatearMoneda(producto.precio_venta)}</td>`;
+        sucursalesList.forEach(suc => {
+            const sucData = (producto.sucursales || {})[suc];
+            const ini = sucData ? (sucData.inicial || 0) : 0;
+            const act = sucData ? (sucData.actual ?? sucData.stock ?? 0) : 0;
+            if (ini > 0 || act > 0) {
+                html += `<td>${ini > 0 ? `<span class="cell-badge cell-inicial">${ini}</span>` : '<span class="cell-badge cell-empty">-</span>'}</td>`;
+                html += `<td>${act > 0 ? `<span class="cell-badge cell-actual">${act}</span>` : '<span class="cell-badge cell-empty">-</span>'}</td>`;
+            } else {
+                html += `<td><span class="cell-badge cell-empty">-</span></td><td><span class="cell-badge cell-empty">-</span></td>`;
+            }
+        });
+        const totalInicial = producto.total_inicial ?? (producto.total_actual ?? producto.total_stock ?? 0);
+        const totalActual = producto.total_actual ?? producto.total_stock ?? 0;
+        html += `<td><span class="cell-badge cell-inicial">${totalInicial}</span></td>`;
+        html += `<td><span class="cell-badge cell-actual">${totalActual}</span></td></tr>`;
+    });
+
+    html += `</tbody></table></div>
+        <div class="nexo-pagination">
+            <div class="nexo-pagination-info">
+                Mostrando ${inicio + 1} - ${fin} de ${formatearNumero(totalRegistros)} grupos
+            </div>
+            <div class="nexo-pagination-controls">
+                <select class="nexo-pagination-select" onchange="cambiarRegistrosPorPagina(this.value)">
+                    <option value="25" ${registrosPorPagina === 25 ? 'selected' : ''}>25 por página</option>
+                    <option value="50" ${registrosPorPagina === 50 ? 'selected' : ''}>50 por página</option>
+                    <option value="100" ${registrosPorPagina === 100 ? 'selected' : ''}>100 por página</option>
+                    <option value="200" ${registrosPorPagina === 200 ? 'selected' : ''}>200 por página</option>
+                </select>
+                <button class="nexo-pagination-btn" onclick="irPagina(1)" ${paginaActual === 1 ? 'disabled' : ''}><i class="ri-skip-back-line"></i></button>
+                <button class="nexo-pagination-btn" onclick="irPagina(${paginaActual - 1})" ${paginaActual === 1 ? 'disabled' : ''}><i class="ri-arrow-left-s-line"></i></button>
+                <span style="font-size:0.75rem; padding:0 8px;">Página ${paginaActual} de ${totalPaginas}</span>
+                <button class="nexo-pagination-btn" onclick="irPagina(${paginaActual + 1})" ${paginaActual === totalPaginas ? 'disabled' : ''}><i class="ri-arrow-right-s-line"></i></button>
+                <button class="nexo-pagination-btn" onclick="irPagina(${totalPaginas})" ${paginaActual === totalPaginas ? 'disabled' : ''}><i class="ri-skip-forward-line"></i></button>
+            </div>
+        </div>`;
+
+    contenedor.innerHTML = html;
+    contenedor.style.display = 'block';
+    mensaje.style.display = 'none';
+}
+
+function irPagina(p) {
+    const total = Math.max(1, Math.ceil(datosCompletos.length / registrosPorPagina));
+    if (p < 1 || p > total) return;
+    paginaActual = p;
+    renderizarReporte();
+    document.querySelector('.nexo-table-wrapper')?.scrollTo(0, 0);
+}
+
+function cambiarRegistrosPorPagina(valor) {
+    registrosPorPagina = parseInt(valor);
+    paginaActual = 1;
+    renderizarReporte();
 }
 
 // ========== HELPERS ==========
-function getStockClass(stock) {
-    if (stock === 0) return 'stock-out';
-    if (stock < 5) return 'stock-critical';
-    if (stock < 10) return 'stock-warning';
-    return 'stock-ok';
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function formatearNumero(num) {
     if (!num) return '0';
-    return parseFloat(num).toLocaleString('es-CL', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    });
+    return parseFloat(num).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function formatearMoneda(num) {
+    if (num === null || num === undefined || num === '' || isNaN(num) || parseFloat(num) === 0) {
+        return '<span class="cell-badge cell-empty">-</span>';
+    }
+    return '$' + parseFloat(num).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 // ========== EXPORTAR EXCEL ==========
@@ -1711,23 +1823,22 @@ async function exportarExcel() {
         alert('⚠️ Selecciona al menos un filtro antes de exportar');
         return;
     }
-    
     try {
         const marcaId = document.getElementById('filtro-marca').value;
         const deptId = document.getElementById('filtro-departamento').value;
         const busqueda = document.getElementById('busqueda-articulo').value.trim();
         const sucursalId = document.getElementById('filtro-sucursal').value;
+        const fechaCorte = document.getElementById('filtro-fecha-corte').value;
         const limite = 5000;
-        
+
         let url = '/app/api/exportar-existencias-marca-excel/';
         const params = new URLSearchParams();
-        
         if (marcaId) params.append('marca_id', marcaId);
         if (deptId) params.append('departamento_id', deptId);
         if (busqueda.length >= 3) params.append('busqueda', busqueda);
         if (sucursalId) params.append('sucursal_id', sucursalId);
+        if (fechaCorte) params.append('fecha_corte', fechaCorte);
         params.append('limite', limite);
-
         if (params.toString()) url += '?' + params.toString();
 
         window.location.href = url;
@@ -1744,30 +1855,24 @@ function limpiarFiltros() {
     document.getElementById('busqueda-articulo').value = '';
     document.getElementById('search-marca').value = '';
     document.getElementById('filtro-sucursal').value = '';
+    document.getElementById('filtro-fecha-corte').value = '';
     filtrarMarcas();
     mostrarAlertaFiltro(true);
     datosCompletos = [];
+    fechaCorteActual = '';
+    esHistoricoActual = false;
+    paginaActual = 1;
+    actualizarBadgeFechaCorte();
     document.getElementById('btn-exportar').disabled = true;
-    
-    // Destruir DataTable y mostrar estado inicial
-    if (dt) {
-        dt.destroy();
-        dt = null;
-        $('#tabla-existencias thead').empty();
-        $('#tabla-existencias tbody').empty();
-        firmaSucursalesActual = '';
-    }
     document.getElementById('contenedor-tabla').style.display = 'none';
+    document.getElementById('contenedor-tabla').innerHTML = '';
     document.getElementById('estado-mensaje').style.display = 'block';
     document.getElementById('estado-mensaje').innerHTML = `
         <div class="nexo-empty-state">
             <div class="nexo-empty-icon">🔍</div>
             <div class="nexo-empty-title">Listo para Analizar</div>
-            <div class="nexo-empty-text">
-                Selecciona filtros y haz clic en "Buscar" para cargar el reporte de existencias por marca.
-            </div>
-        </div>
-    `;
+            <div class="nexo-empty-text">Selecciona filtros y haz clic en "Buscar" para cargar el reporte de existencias por marca.</div>
+        </div>`;
 }
 </script>
 
