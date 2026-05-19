@@ -10207,7 +10207,10 @@ def cargarDteCompra(request):
 def facturasPendientesPorMes(request):
     """
     Devuelve facturas (DTE) pendientes de pago para el mes seleccionado (YYYY-MM),
-    con totales y detalle plano por documento. Soporta exportación CSV con ?formato=csv.
+    con totales y detalle plano por documento. Soporta exportación CSV con ?formato=csv
+    y PDF con ?formato=pdf. Si se envía ?proveedor=<id> (emisor_id), opera como
+    estado de cuenta: ignora el filtro de mes y devuelve todos los DTE pendientes
+    del proveedor.
     """
     if request.method != 'GET':
         return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
@@ -10237,6 +10240,11 @@ def facturasPendientesPorMes(request):
         tipo_fecha = request.GET.get('tipo_fecha', 'emision')
         tipo_documento = request.GET.get('tipo_documento', '').strip()
         formato = request.GET.get('formato', 'json').lower()
+        proveedor_str = (request.GET.get('proveedor') or '').strip()
+        try:
+            proveedor_id = int(proveedor_str) if proveedor_str else None
+        except (TypeError, ValueError):
+            proveedor_id = None
 
         qs = Dte.objects.filter(
             tipo_transaccion='COMPRA',
@@ -10257,18 +10265,22 @@ def facturasPendientesPorMes(request):
 
         fecha_field = 'fecha_recepcion' if tipo_fecha == 'recepcion' else 'fecha_emision'
 
-        # Filtrar por año Y mes específicos
-        qs = qs.filter(**{
-            f'{fecha_field}__year': anio,
-            f'{fecha_field}__month': mes_num,
-        })
+        # En modo estado de cuenta (proveedor seleccionado) se omite el filtro de mes
+        # para mostrar todas las facturas pendientes del proveedor.
+        if proveedor_id:
+            qs = qs.filter(emisor_id=proveedor_id)
+        else:
+            qs = qs.filter(**{
+                f'{fecha_field}__year': anio,
+                f'{fecha_field}__month': mes_num,
+            })
 
         qs = qs.select_related('emisor').only(
             'id', 'numero_documento', 'tipo_documento',
             'fecha_emision', 'fecha_recepcion',
             'monto_con_iva', 'estado_dte', 'estado_pago',
             'diasCredito',
-            'emisor__id', 'emisor__nombre',
+            'emisor__id', 'emisor__nombre', 'emisor__rut',
         ).order_by(fecha_field)
 
         # Pre-calcular abonos por DTE en una sola consulta
@@ -10323,9 +10335,12 @@ def facturasPendientesPorMes(request):
             facturas.append({
                 'id': dte.id,
                 'proveedor': dte.emisor.nombre if dte.emisor else '',
+                'proveedor_id': dte.emisor.id if dte.emisor else None,
+                'proveedor_rut': getattr(dte.emisor, 'rut', '') if dte.emisor else '',
                 'numero_documento': dte.numero_documento,
                 'tipo_documento': dte.tipo_documento,
                 'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
+                'fecha_recepcion': dte.fecha_recepcion.strftime('%Y-%m-%d') if dte.fecha_recepcion else '',
                 'monto_con_iva': monto,
                 'abonado': abonado + ncs,
                 'saldo': saldo,
@@ -10339,24 +10354,233 @@ def facturasPendientesPorMes(request):
             if es_proxima:
                 total_proximas += 1
 
+        # Identificación del proveedor para títulos y nombre de archivo
+        proveedor_nombre = ''
+        proveedor_rut = ''
+        if proveedor_id and facturas:
+            proveedor_nombre = facturas[0].get('proveedor') or ''
+            proveedor_rut = facturas[0].get('proveedor_rut') or ''
+        elif proveedor_id:
+            from app.models import Empresa
+            emp = Empresa.objects.filter(id=proveedor_id).only('nombre', 'rut').first()
+            if emp:
+                proveedor_nombre = emp.nombre or ''
+                proveedor_rut = getattr(emp, 'rut', '') or ''
+
         if formato == 'csv':
             response = HttpResponse(content_type='text/csv; charset=utf-8')
-            response['Content-Disposition'] = (
-                f'attachment; filename="facturas_pendientes_{anio}-{mes_num:02d}_{tipo_fecha}.csv"'
-            )
+            if proveedor_id:
+                safe_prov = (proveedor_nombre or 'proveedor').replace(' ', '_').replace('/', '-')
+                filename = f'estado_cuenta_{safe_prov}.csv'
+            else:
+                filename = f'facturas_pendientes_{anio}-{mes_num:02d}_{tipo_fecha}.csv'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
             response.write('﻿')  # BOM para Excel
             writer = csv.writer(response, delimiter=';')
             writer.writerow([
-                'Proveedor', 'N° Documento', 'Tipo', 'Fecha Emisión',
+                'Proveedor', 'N° Documento', 'Tipo', 'Fecha Emisión', 'Fecha Recepción',
                 'Monto c/IVA', 'Abonado', 'Saldo', 'Días Restantes'
             ])
             for f in facturas:
                 writer.writerow([
                     f['proveedor'], f['numero_documento'], f['tipo_documento'],
-                    f['fecha_emision'],
+                    f['fecha_emision'], f['fecha_recepcion'],
                     int(f['monto_con_iva']), int(f['abonado']), int(f['saldo']),
                     f['dias_restantes'] if f['dias_restantes'] is not None else '',
                 ])
+            return response
+
+        if formato == 'pdf':
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib import colors
+            from reportlab.lib.units import cm
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+            from io import BytesIO
+
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=landscape(A4),
+                leftMargin=1.2 * cm,
+                rightMargin=1.2 * cm,
+                topMargin=1.5 * cm,
+                bottomMargin=1.5 * cm,
+            )
+
+            styles = getSampleStyleSheet()
+            azul = colors.HexColor('#405189')
+            verde = colors.HexColor('#0ab39c')
+            gris_claro = colors.HexColor('#F8F9FA')
+            rojo_claro = colors.HexColor('#FEE2E2')
+            amarillo_claro = colors.HexColor('#FEF3C7')
+
+            title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=15, textColor=azul, spaceAfter=2, alignment=0)
+            sub_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=9, textColor=colors.grey, spaceAfter=10)
+            prov_cell_style = ParagraphStyle('ProvCell', parent=styles['Normal'], fontSize=7, leading=8.5, alignment=0)
+            tipo_cell_style = ParagraphStyle('TipoCell', parent=styles['Normal'], fontSize=7, leading=8.5, alignment=1)
+
+            # Abreviaciones para tipo_documento (evita columnas anchas)
+            TIPO_ABREV = {
+                'FACTURA ELECTRONICA': 'Factura E.',
+                'FACTURA EXENTA': 'Factura Ex.',
+                'BOLETA ELECTRONICA': 'Boleta E.',
+                'BOLETA PAPEL': 'Boleta P.',
+                'GUIA': 'Guía',
+                'NOTA DE PEDIDO': 'N. Pedido',
+                'NOTA DE CREDITO': 'N. Crédito',
+                'NOTA DE DEBITO': 'N. Débito',
+                'COTIZACION': 'Cotiz.',
+                'COMPRA': 'Compra',
+                'TICKET': 'Ticket',
+                'TICKET CAMBIO': 'T. Cambio',
+                'TRASPASO': 'Traspaso',
+                'AJUSTE': 'Ajuste',
+                'AJUSTE TRASPASO': 'Aj. Trasp.',
+            }
+            def _abrev_tipo(t):
+                return TIPO_ABREV.get((t or '').upper(), (t or '-'))
+
+            elements = []
+            meses_es = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+            if proveedor_id:
+                titulo = f"Estado de Cuenta — {proveedor_nombre or 'Proveedor'}"
+                detalle_periodo = f"Proveedor: {proveedor_nombre} ({proveedor_rut})" if proveedor_rut else f"Proveedor: {proveedor_nombre}"
+            else:
+                titulo = f"Facturas Pendientes — {meses_es[mes_num - 1]} {anio}"
+                detalle_periodo = f"Período: {meses_es[mes_num - 1]} {anio}  |  Filtro fecha: {'Recepción' if tipo_fecha == 'recepcion' else 'Emisión'}"
+
+            elements.append(Paragraph(titulo, title_style))
+            elements.append(Paragraph(
+                f"{detalle_periodo}  |  Generado: {timezone.localdate().strftime('%d/%m/%Y')}  |  "
+                f"Total pendiente: ${int(total_monto):,}  |  "
+                f"N° facturas: {total_cantidad}  |  Vencidas: {total_vencidas}  |  Por vencer (≤7d): {total_proximas}",
+                sub_style
+            ))
+
+            if proveedor_id:
+                col_labels = ['N° Doc', 'Tipo', 'F. Emisión', 'F. Recepción',
+                              'Monto c/IVA', 'Abonado', 'Saldo', 'Estado']
+                col_widths_pdf = [2.5*cm, 2.4*cm, 2.4*cm, 2.6*cm,
+                                  3.0*cm, 2.8*cm, 3.0*cm, 3.4*cm]
+            else:
+                col_labels = ['Proveedor', 'N° Doc', 'Tipo', 'F. Emisión', 'F. Recepción',
+                              'Monto c/IVA', 'Abonado', 'Saldo', 'Estado']
+                col_widths_pdf = [4.6*cm, 2.2*cm, 2.0*cm, 2.3*cm, 2.5*cm,
+                                  2.8*cm, 2.5*cm, 2.8*cm, 3.0*cm]
+
+            table_data = [col_labels]
+            estados_pdf = []
+            for f in facturas:
+                dr = f['dias_restantes']
+                if dr is None:
+                    estado_txt = '-'
+                    estado_tag = 'normal'
+                elif dr <= 0:
+                    estado_txt = f"Vencida {abs(dr)}d"
+                    estado_tag = 'vencida'
+                elif dr <= 7:
+                    estado_txt = f"Vence en {dr}d"
+                    estado_tag = 'proxima'
+                else:
+                    estado_txt = f"{dr}d restantes"
+                    estado_tag = 'normal'
+                estados_pdf.append(estado_tag)
+
+                tipo_cell = Paragraph(_abrev_tipo(f['tipo_documento']), tipo_cell_style)
+
+                if proveedor_id:
+                    row = [
+                        f['numero_documento'] or '-',
+                        tipo_cell,
+                        f['fecha_emision'] or '-',
+                        f['fecha_recepcion'] or '-',
+                        f"${int(f['monto_con_iva']):,}",
+                        f"${int(f['abonado']):,}",
+                        f"${int(f['saldo']):,}",
+                        estado_txt,
+                    ]
+                else:
+                    proveedor_txt = f['proveedor'] or '-'
+                    row = [
+                        Paragraph(proveedor_txt, prov_cell_style),
+                        f['numero_documento'] or '-',
+                        tipo_cell,
+                        f['fecha_emision'] or '-',
+                        f['fecha_recepcion'] or '-',
+                        f"${int(f['monto_con_iva']):,}",
+                        f"${int(f['abonado']):,}",
+                        f"${int(f['saldo']):,}",
+                        estado_txt,
+                    ]
+                table_data.append(row)
+
+            # Fila de totales
+            if facturas:
+                if proveedor_id:
+                    total_row = ['', '', '', 'TOTAL',
+                                 '', '', f"${int(total_monto):,}", '']
+                else:
+                    total_row = ['', '', '', '', 'TOTAL',
+                                 '', '', f"${int(total_monto):,}", '']
+                table_data.append(total_row)
+
+            table = Table(table_data, colWidths=col_widths_pdf, repeatRows=1)
+            saldo_col = 6 if proveedor_id else 7
+            style_cmds = [
+                ('BACKGROUND', (0, 0), (-1, 0), azul),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 7.5),
+                ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#DEE2E6')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2 if facturas else -1),
+                 [colors.white, gris_claro]),
+                ('ALIGN', (saldo_col - 2, 1), (saldo_col, -1), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]
+            for row_idx, tag in enumerate(estados_pdf, start=1):
+                if tag == 'vencida':
+                    style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), rojo_claro))
+                elif tag == 'proxima':
+                    style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), amarillo_claro))
+            if facturas:
+                style_cmds.append(('BACKGROUND', (0, -1), (-1, -1), verde))
+                style_cmds.append(('TEXTCOLOR', (0, -1), (-1, -1), colors.white))
+                style_cmds.append(('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'))
+
+            table.setStyle(TableStyle(style_cmds))
+            elements.append(table)
+
+            if not facturas:
+                elements.append(Spacer(1, 12))
+                elements.append(Paragraph("Sin facturas pendientes en este período.", sub_style))
+
+            def footer(canvas, doc):
+                canvas.saveState()
+                canvas.setFont('Helvetica', 7)
+                canvas.setFillColor(colors.grey)
+                canvas.drawString(1.2*cm, 0.8*cm,
+                                  f"RetailMind  —  {titulo}  —  {timezone.localdate().strftime('%d/%m/%Y')}")
+                canvas.drawRightString(landscape(A4)[0] - 1.2*cm, 0.8*cm, f"Página {doc.page}")
+                canvas.restoreState()
+
+            doc.build(elements, onFirstPage=footer, onLaterPages=footer)
+            buffer.seek(0)
+
+            response = HttpResponse(content_type='application/pdf')
+            if proveedor_id:
+                safe_prov = (proveedor_nombre or 'proveedor').replace(' ', '_').replace('/', '-')
+                filename = f'estado_cuenta_{safe_prov}.pdf'
+            else:
+                filename = f'facturas_pendientes_{anio}-{mes_num:02d}_{tipo_fecha}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response.write(buffer.read())
             return response
 
         return JsonResponse({
@@ -10365,12 +10589,267 @@ def facturasPendientesPorMes(request):
             'mes': mes_num,
             'tipo_fecha': tipo_fecha,
             'tipo_documento': tipo_documento,
+            'proveedor_id': proveedor_id,
+            'proveedor_nombre': proveedor_nombre,
+            'proveedor_rut': proveedor_rut,
+            'modo_estado_cuenta': bool(proveedor_id),
             'facturas': facturas,
             'total_monto': total_monto,
             'total_cantidad': total_cantidad,
             'total_vencidas': total_vencidas,
             'total_proximas': total_proximas,
         })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def comprobantePagoDTE(request):
+    """
+    Genera PDF tipo "Comprobante de Pago Programado" para un conjunto de DTEs
+    (recibidos en ?dte_ids=1,2,3). Todos deben pertenecer al mismo proveedor
+    (emisor) y a la empresa activa en sesión. Para cada factura muestra:
+      FACTURA | FECHA EMISIÓN | MONTO | NOTA DE CRÉDITO | VALOR N/C |
+      CHEQUE N° | MONTOS | FECHA PAGO
+    """
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+
+    try:
+        empresa_id = request.session.get('idEmpresaActual')
+        if not empresa_id:
+            return JsonResponse({'success': False, 'error': 'Empresa no identificada en sesión'}, status=403)
+
+        ids_raw = (request.GET.get('dte_ids') or '').strip()
+        if not ids_raw:
+            return JsonResponse({'success': False, 'error': 'Debe indicar al menos un DTE.'}, status=400)
+        try:
+            dte_ids = [int(x) for x in ids_raw.split(',') if x.strip()]
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Lista de DTEs inválida.'}, status=400)
+        if not dte_ids:
+            return JsonResponse({'success': False, 'error': 'Debe indicar al menos un DTE.'}, status=400)
+
+        dtes = list(
+            Dte.objects.filter(
+                id__in=dte_ids,
+                receptor_id=empresa_id,
+                tipo_transaccion='COMPRA',
+            ).select_related('emisor').order_by('fecha_emision', 'numero_documento')
+        )
+
+        if not dtes:
+            return JsonResponse({'success': False, 'error': 'No se encontraron DTEs válidos.'}, status=404)
+
+        emisores = {d.emisor_id for d in dtes if d.emisor_id}
+        if len(emisores) != 1:
+            return JsonResponse({
+                'success': False,
+                'error': 'Todas las facturas deben pertenecer al mismo proveedor.'
+            }, status=400)
+
+        emisor = dtes[0].emisor
+        proveedor_nombre = (emisor.nombre or '').strip() if emisor else 'PROVEEDOR'
+        proveedor_rut = getattr(emisor, 'rut', '') if emisor else ''
+
+        # Pagos (no NC) y NCs por DTE en consultas únicas
+        pagos_qs = Dte_Detalle_Pago.objects.filter(dte_id__in=dte_ids).exclude(
+            metodo_pago='Nota de Crédito'
+        ).order_by('fecha_pago', 'id')
+        ncs_qs = Dte_Detalle_Pago.objects.filter(
+            dte_id__in=dte_ids, metodo_pago='Nota de Crédito'
+        ).order_by('id')
+
+        pagos_por_dte = {}
+        for p in pagos_qs:
+            pagos_por_dte.setdefault(p.dte_id, []).append(p)
+        ncs_por_dte = {}
+        for n in ncs_qs:
+            ncs_por_dte.setdefault(n.dte_id, []).append(n)
+
+        # === PDF (vertical / portrait) ===
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+        from io import BytesIO
+        import re as _re
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            leftMargin=1.5 * cm,
+            rightMargin=1.5 * cm,
+            topMargin=1.5 * cm,
+            bottomMargin=1.5 * cm,
+        )
+
+        styles = getSampleStyleSheet()
+        azul = colors.HexColor('#405189')
+        verde = colors.HexColor('#0ab39c')
+        gris_claro = colors.HexColor('#F8F9FA')
+
+        intro_style = ParagraphStyle(
+            'Intro', parent=styles['Normal'], fontSize=10, leading=13,
+            alignment=TA_JUSTIFY, spaceAfter=12,
+        )
+        proveedor_style = ParagraphStyle(
+            'Prov', parent=styles['Title'], fontSize=14, textColor=azul,
+            alignment=TA_CENTER, spaceAfter=10,
+        )
+        cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, leading=10, alignment=1)
+        cell_left = ParagraphStyle('CellL', parent=styles['Normal'], fontSize=8, leading=10, alignment=0)
+        cell_right = ParagraphStyle('CellR', parent=styles['Normal'], fontSize=8, leading=10, alignment=2)
+
+        _re_prefijo_cheque = _re.compile(r'^\s*(cheque|cheq\.?|chq\.?)\s*(n[°º\.]?)?\s*:?\s*', _re.IGNORECASE)
+
+        def limpiar_voucher(v):
+            """Quita prefijos tipo 'Cheque N°' del voucher para no duplicar el header."""
+            if not v:
+                return '-'
+            return _re_prefijo_cheque.sub('', str(v)).strip() or '-'
+
+        def fecha_pago_efectiva(p):
+            """fecha_pago tiene prioridad; si no, cae a fecha_cheque (migración 0153)."""
+            return getattr(p, 'fecha_pago', None) or getattr(p, 'fecha_cheque', None)
+
+        elements = []
+
+        # Cabecera
+        elements.append(Paragraph(
+            "Por medio del presente, le informamos que nuestro compromiso de pago "
+            "ha sido gestionado y está programado para la siguiente fecha:",
+            intro_style
+        ))
+        titulo_proveedor = proveedor_nombre.upper()
+        if proveedor_rut:
+            titulo_proveedor = f"{titulo_proveedor}  —  {proveedor_rut}"
+        elements.append(Paragraph(titulo_proveedor, proveedor_style))
+
+        # Tabla principal (portrait A4 útil ≈ 18 cm)
+        headers = [
+            'FACTURA', 'FECHA EMISIÓN', 'MONTO',
+            'NOTA DE CRÉDITO', 'VALOR N/C',
+            'CHEQUE N°', 'MONTOS', 'FECHA PAGO'
+        ]
+        col_widths = [1.9*cm, 2.0*cm, 2.3*cm, 2.4*cm, 2.3*cm, 2.4*cm, 2.4*cm, 2.3*cm]
+
+        def fmt_fecha(d):
+            if not d:
+                return '-'
+            meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
+                     'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+            return f"{d.day:02d}-{meses[d.month - 1]}"
+
+        def fmt_monto(v):
+            try:
+                return f"{int(round(float(v))):,}".replace(',', '.')
+            except (TypeError, ValueError):
+                return '-'
+
+        table_data = [headers]
+        total_factura = 0
+        total_nc = 0
+        total_pago = 0
+
+        for dte in dtes:
+            ncs = ncs_por_dte.get(dte.id, [])
+            pagos = pagos_por_dte.get(dte.id, [])
+
+            ncs_numeros = '<br/>'.join((p.voucher or '-') for p in ncs) if ncs else '-'
+            ncs_montos_total = sum(int(p.monto or 0) for p in ncs)
+            ncs_montos_txt = fmt_monto(ncs_montos_total) if ncs else '-'
+
+            if pagos:
+                cheques_numeros = '<br/>'.join(limpiar_voucher(p.voucher) for p in pagos)
+                pagos_montos = '<br/>'.join(fmt_monto(p.monto) for p in pagos)
+                pagos_fechas = '<br/>'.join(fmt_fecha(fecha_pago_efectiva(p)) for p in pagos)
+                pago_total = sum(int(p.monto or 0) for p in pagos)
+            else:
+                # Sin pagos registrados: estima monto sugerido = monto - NCs
+                cheques_numeros = '-'
+                pago_sugerido = max(int(round(float(dte.monto_con_iva or 0))) - ncs_montos_total, 0)
+                pagos_montos = fmt_monto(pago_sugerido)
+                pagos_fechas = '-'
+                pago_total = pago_sugerido
+
+            row = [
+                Paragraph(str(dte.numero_documento or '-'), cell_style),
+                Paragraph(fmt_fecha(dte.fecha_emision), cell_style),
+                Paragraph(fmt_monto(dte.monto_con_iva), cell_right),
+                Paragraph(ncs_numeros, cell_style),
+                Paragraph(ncs_montos_txt, cell_right),
+                Paragraph(cheques_numeros, cell_style),
+                Paragraph(pagos_montos, cell_right),
+                Paragraph(pagos_fechas, cell_style),
+            ]
+            table_data.append(row)
+
+            total_factura += int(round(float(dte.monto_con_iva or 0)))
+            total_nc += ncs_montos_total
+            total_pago += pago_total
+
+        # Fila de totales
+        total_row = [
+            Paragraph('<b>TOTAL</b>', cell_left),
+            Paragraph('', cell_style),
+            Paragraph(f'<b>{fmt_monto(total_factura)}</b>', cell_right),
+            Paragraph('', cell_style),
+            Paragraph(f'<b>{fmt_monto(total_nc)}</b>', cell_right),
+            Paragraph('', cell_style),
+            Paragraph(f'<b>{fmt_monto(total_pago)}</b>', cell_right),
+            Paragraph('', cell_style),
+        ]
+        table_data.append(total_row)
+
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), azul),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#B7C4D8')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, gris_claro]),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('BACKGROUND', (0, -1), (-1, -1), verde),
+            ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
+        ]))
+        elements.append(table)
+
+        elements.append(Spacer(1, 24))
+        elements.append(Paragraph(
+            "Sin otro particular, le saluda atentamente.",
+            ParagraphStyle('Closing', parent=styles['Normal'], fontSize=10, leading=13, alignment=0)
+        ))
+
+        def footer(canvas, doc_):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 7)
+            canvas.setFillColor(colors.grey)
+            canvas.drawString(
+                1.5*cm, 1*cm,
+                f"Comprobante de pago programado — {proveedor_nombre}  —  "
+                f"Generado {timezone.localdate().strftime('%d/%m/%Y')}"
+            )
+            canvas.drawRightString(A4[0] - 1.5*cm, 1*cm, f"Página {doc_.page}")
+            canvas.restoreState()
+
+        doc.build(elements, onFirstPage=footer, onLaterPages=footer)
+        buffer.seek(0)
+
+        response = HttpResponse(content_type='application/pdf')
+        safe_prov = (proveedor_nombre or 'proveedor').replace(' ', '_').replace('/', '-')
+        response['Content-Disposition'] = (
+            f'attachment; filename="comprobante_pago_{safe_prov}.pdf"'
+        )
+        response.write(buffer.read())
+        return response
+
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
@@ -10480,14 +10959,23 @@ def obtenerDetallePago(request, dte_id):
 
 def pagosDTE(request, dte_id):
     if request.method == 'GET':
-        pagos = Dte_Detalle_Pago.objects.filter(
+        pagos_qs = Dte_Detalle_Pago.objects.filter(
             dte_id=dte_id
         ).exclude(
             metodo_pago='Nota de Crédito'
-        ).values(
-            'id', 'metodo_pago', 'voucher', 'monto', 'fecha_pago'
-        )
-        return JsonResponse(list(pagos), safe=False)
+        ).order_by('id')
+
+        pagos = []
+        for p in pagos_qs:
+            fecha = p.fecha_pago or getattr(p, 'fecha_cheque', None)
+            pagos.append({
+                'id': p.id,
+                'metodo_pago': p.metodo_pago,
+                'voucher': p.voucher,
+                'monto': p.monto,
+                'fecha_pago': fecha.isoformat() if fecha else None,
+            })
+        return JsonResponse(pagos, safe=False)
 
  
 def eliminarPago(request, pago_id):

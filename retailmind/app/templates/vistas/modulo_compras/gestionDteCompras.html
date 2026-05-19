@@ -1187,11 +1187,16 @@
 
                 <div class="table-responsive mb-4" style="border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
                     <div class="d-flex justify-content-between align-items-center mb-3 p-2" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px;">
-                        <div>
+                        <div class="d-flex gap-2">
                             <button class="btn btn-primary" id="btnPagoMasivo" style="display: none;"
                                 onclick="abrirModalPagoMasivo()">
                                 <i class="bi bi-cash-stack me-1"></i>Pago Masivo (<span
                                     id="contadorSeleccionadas">0</span>)
+                            </button>
+                            <button class="btn btn-outline-danger" id="btnComprobantePago" style="display: none;"
+                                onclick="generarComprobantePago()"
+                                title="Comprobante de pago programado (PDF)">
+                                <i class="bi bi-filetype-pdf me-1"></i>Comprobante Pago
                             </button>
                         </div>
                         <div>
@@ -1651,21 +1656,30 @@
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="rm-modal-body rm-modal-body--white" style="padding: 16px 24px;">
+            <div class="rm-modal-body rm-modal-body--white rm-modal-body--scroll" style="padding: 16px 24px;">
                 <!-- Filtros -->
                 <div class="row g-2 mb-3 align-items-end">
-                    <div class="col-md-3">
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1">
+                            Proveedor
+                            <span class="text-muted" style="font-weight:400;">(opcional — activa modo estado de cuenta)</span>
+                        </label>
+                        <select id="filtroPendientesProveedor" class="form-select form-select-sm" style="width:100%;">
+                            <option value="">Todos los proveedores</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label small mb-1">Mes</label>
                         <input type="month" id="filtroPendientesMes" class="form-select form-select-sm">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label small mb-1">Tipo de fecha</label>
                         <select id="filtroPendientesTipoFecha" class="form-select form-select-sm">
-                            <option value="emision" selected>Emisión</option>
-                            <option value="recepcion">Recepción</option>
+                            <option value="emision">Emisión</option>
+                            <option value="recepcion" selected>Recepción</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label small mb-1">Tipo documento</label>
                         <select id="filtroPendientesTipoDoc" class="form-select form-select-sm">
                             <option value="">Todos</option>
@@ -1675,14 +1689,26 @@
                             <option value="NOTA DE DEBITO">Nota de Débito</option>
                         </select>
                     </div>
-                    <div class="col-md-3 text-end">
-                        <button class="btn btn-sm btn-primary me-1" onclick="cargarPendientesMes()">
-                            <i class="bi bi-arrow-clockwise"></i> Actualizar
-                        </button>
-                        <button class="btn btn-sm btn-outline-success" onclick="exportarPendientesMes()" title="Exportar CSV">
-                            <i class="bi bi-download"></i> CSV
-                        </button>
+                    <div class="col-md-2 text-end">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-primary" onclick="cargarPendientesMes()" title="Actualizar">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                            <button class="btn btn-outline-success" onclick="exportarPendientesMes('csv')" title="Exportar CSV">
+                                <i class="bi bi-filetype-csv"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="exportarPendientesMes('pdf')" title="Exportar PDF">
+                                <i class="bi bi-filetype-pdf"></i>
+                            </button>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Aviso modo estado de cuenta -->
+                <div id="avisoEstadoCuenta" class="alert alert-info py-2 px-3 mb-3" style="display:none; font-size:0.85rem;">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Modo Estado de Cuenta:</strong>
+                    Mostrando <span id="avisoEstadoCuentaNombre"></span> — todas las facturas pendientes (se ignora el filtro de mes).
                 </div>
 
                 <!-- Tarjetas resumen -->
@@ -1716,12 +1742,13 @@
                 <!-- Tabla -->
                 <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
                     <table class="table table-sm align-middle mb-0">
-                        <thead style="background:#f8fafc;">
+                        <thead style="background:#f8fafc; position:sticky; top:0; z-index:2;">
                             <tr>
                                 <th class="py-2">Proveedor</th>
                                 <th class="py-2">N° Doc</th>
                                 <th class="py-2">Tipo</th>
                                 <th class="py-2">F. Emisión</th>
+                                <th class="py-2">F. Recepción</th>
                                 <th class="text-end py-2">Monto c/IVA</th>
                                 <th class="text-end py-2">Abonado</th>
                                 <th class="text-end py-2">Saldo</th>
@@ -1729,7 +1756,7 @@
                             </tr>
                         </thead>
                         <tbody id="tablaPendientesMesBody">
-                            <tr><td colspan="8" class="text-center text-muted py-3">Cargando…</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-3">Cargando…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1762,6 +1789,7 @@
                                 <th class="py-3">Método</th>
                                 <th class="py-3">Voucher</th>
                                 <th class="py-3">Monto</th>
+                                <th class="py-3">Fecha Pago</th>
                                 <th class="py-3">Acciones</th>
                             </tr>
                         </thead>
@@ -3205,7 +3233,7 @@
                 tbody.empty();
 
                 if (data.length === 0) {
-                    tbody.append('<tr><td colspan="4" class="text-center">Sin pagos registrados.</td></tr>');
+                    tbody.append('<tr><td colspan="5" class="text-center">Sin pagos registrados.</td></tr>');
                 } else {
                     data.forEach(pago => {
                         // Cheques a fecha: recordatorio de depósito cuando la fecha del pago aún no llega.
@@ -3222,11 +3250,15 @@
                                 </span>`;
                             }
                         }
+                        const fechaPagoTxt = pago.fecha_pago
+                            ? new Date(pago.fecha_pago + 'T00:00:00').toLocaleDateString('es-CL')
+                            : '<span class="text-muted">Sin fecha</span>';
                         const fila = `
                         <tr data-id="${pago.id}">
                             <td>${pago.metodo_pago}${infoCheque}</td>
                             <td>${pago.voucher ?? '-'}</td>
                             <td>$${parseFloat(pago.monto).toLocaleString()}</td>
+                            <td>${fechaPagoTxt}</td>
                             <td>
     <div class="d-flex justify-content-center gap-2">
         <button class="btn btn-sm btn-outline-primary" onclick="editarPago(${pago.id})" title="Editar">
@@ -4044,6 +4076,8 @@
     }
 
     // ==================== MODAL: FACTURAS PENDIENTES DEL MES ====================
+    let _proveedoresPendientesCargados = false;
+
     function abrirModalPendientesMes() {
         // Pre-seleccionar mes actual si no hay valor
         const $mes = $('#filtroPendientesMes');
@@ -4052,9 +4086,44 @@
             const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
             $mes.val(mesActual);
         }
+        cargarProveedoresPendientesMes();
         cargarPendientesMes();
         const modal = new bootstrap.Modal(document.getElementById('modalPendientesMes'));
         modal.show();
+    }
+
+    function cargarProveedoresPendientesMes() {
+        if (_proveedoresPendientesCargados) return;
+        const $sel = $('#filtroPendientesProveedor');
+        $.ajax({
+            url: '/app/empresas_proveedoras/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function (data) {
+                if ($sel.hasClass('select2-hidden-accessible')) {
+                    $sel.select2('destroy');
+                }
+                $sel.empty().append('<option value="">Todos los proveedores</option>');
+                (data || []).forEach(emp => {
+                    $sel.append(`<option value="${emp.id}">${emp.nombre} (${emp.rut})</option>`);
+                });
+                $sel.select2({
+                    width: '100%',
+                    dropdownParent: $('#modalPendientesMes'),
+                    placeholder: 'Todos los proveedores',
+                    allowClear: true,
+                    language: {
+                        noResults: function () { return 'Sin resultados'; },
+                        searching: function () { return 'Buscando...'; }
+                    }
+                });
+                _proveedoresPendientesCargados = true;
+            },
+            error: function () {
+                console.error('No se pudo cargar la lista de proveedores para el modal de pendientes.');
+            }
+        });
     }
 
     function getMesSeleccionado() {
@@ -4067,14 +4136,30 @@
         return v; // formato YYYY-MM
     }
 
-    function cargarPendientesMes() {
+    function getParamsPendientesMes() {
+        const proveedor = $('#filtroPendientesProveedor').val() || '';
         const params = {
-            mes: getMesSeleccionado(),
-            tipo_fecha: $('#filtroPendientesTipoFecha').val() || 'emision',
+            tipo_fecha: $('#filtroPendientesTipoFecha').val() || 'recepcion',
             tipo_documento: $('#filtroPendientesTipoDoc').val() || ''
         };
+        if (proveedor) {
+            // Modo estado de cuenta: ignora mes
+            params.proveedor = proveedor;
+        } else {
+            params.mes = getMesSeleccionado();
+        }
+        return params;
+    }
+
+    function cargarPendientesMes() {
+        const params = getParamsPendientesMes();
+        const proveedorActivo = !!params.proveedor;
+
+        // Aplicar bloqueo visual al filtro de mes cuando hay proveedor
+        $('#filtroPendientesMes').prop('disabled', proveedorActivo);
+
         const $tbody = $('#tablaPendientesMesBody');
-        $tbody.html('<tr><td colspan="8" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando…</td></tr>');
+        $tbody.html('<tr><td colspan="9" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando…</td></tr>');
 
         $.ajax({
             url: '/app/facturasPendientesPorMes/',
@@ -4083,13 +4168,13 @@
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function (resp) {
                 if (!resp.success) {
-                    $tbody.html(`<tr><td colspan="8" class="text-center text-danger py-3">${resp.error || 'Error al cargar datos'}</td></tr>`);
+                    $tbody.html(`<tr><td colspan="9" class="text-center text-danger py-3">${resp.error || 'Error al cargar datos'}</td></tr>`);
                     return;
                 }
                 renderPendientesMes(resp);
             },
             error: function () {
-                $tbody.html('<tr><td colspan="8" class="text-center text-danger py-3">Error al cargar datos.</td></tr>');
+                $tbody.html('<tr><td colspan="9" class="text-center text-danger py-3">Error al cargar datos.</td></tr>');
             }
         });
     }
@@ -4099,8 +4184,22 @@
         const $tbody = $('#tablaPendientesMesBody');
         $tbody.empty();
 
+        // Banner modo estado de cuenta
+        const $aviso = $('#avisoEstadoCuenta');
+        if (resp.modo_estado_cuenta) {
+            const nombre = resp.proveedor_nombre || 'proveedor';
+            const rut = resp.proveedor_rut ? ` (${resp.proveedor_rut})` : '';
+            $('#avisoEstadoCuentaNombre').text(`${nombre}${rut}`);
+            $aviso.show();
+        } else {
+            $aviso.hide();
+        }
+
         if (facturas.length === 0) {
-            $tbody.html('<tr><td colspan="8" class="text-center text-muted py-3">Sin facturas pendientes en este mes.</td></tr>');
+            const msg = resp.modo_estado_cuenta
+                ? 'Este proveedor no tiene facturas pendientes.'
+                : 'Sin facturas pendientes en este mes.';
+            $tbody.html(`<tr><td colspan="9" class="text-center text-muted py-3">${msg}</td></tr>`);
         } else {
             facturas.forEach(f => {
                 const vencida = f.dias_restantes !== null && f.dias_restantes <= 0;
@@ -4122,6 +4221,7 @@
                         <td>${f.numero_documento || '-'}</td>
                         <td><small>${f.tipo_documento || '-'}</small></td>
                         <td>${f.fecha_emision || '-'}</td>
+                        <td>${f.fecha_recepcion || '-'}</td>
                         <td class="text-end">$${(f.monto_con_iva || 0).toLocaleString()}</td>
                         <td class="text-end text-muted">$${(f.abonado || 0).toLocaleString()}</td>
                         <td class="text-end fw-bold" style="color:#92400e;">$${(f.saldo || 0).toLocaleString()}</td>
@@ -4139,18 +4239,15 @@
     }
 
     // Recargar al cambiar filtros
-    $(document).on('change', '#filtroPendientesMes, #filtroPendientesTipoFecha, #filtroPendientesTipoDoc', function () {
+    $(document).on('change', '#filtroPendientesMes, #filtroPendientesTipoFecha, #filtroPendientesTipoDoc, #filtroPendientesProveedor', function () {
         cargarPendientesMes();
     });
 
-    function exportarPendientesMes() {
-        const params = $.param({
-            mes: getMesSeleccionado(),
-            tipo_fecha: $('#filtroPendientesTipoFecha').val() || 'emision',
-            tipo_documento: $('#filtroPendientesTipoDoc').val() || '',
-            formato: 'csv'
-        });
-        window.location.href = `/app/facturasPendientesPorMes/?${params}`;
+    function exportarPendientesMes(formato) {
+        formato = formato || 'csv';
+        const data = getParamsPendientesMes();
+        data.formato = formato;
+        window.location.href = `/app/facturasPendientesPorMes/?${$.param(data)}`;
     }
 
     // Recordatorio "Depositar en N días": sólo aplica a cheques con fecha futura.
@@ -4513,6 +4610,7 @@
 
         if (cantidad > 0) {
             $('#btnPagoMasivo').show();
+            $('#btnComprobantePago').show();
 
             // Validar que todas sean del mismo proveedor
             const proveedores = new Set();
@@ -4523,13 +4621,43 @@
             if (proveedores.size > 1) {
                 $('#btnPagoMasivo').addClass('btn-warning').removeClass('btn-primary');
                 $('#btnPagoMasivo').attr('title', 'Advertencia: Facturas de diferentes proveedores seleccionadas');
+                $('#btnComprobantePago').prop('disabled', true)
+                    .attr('title', 'El comprobante requiere que todas las facturas sean del mismo proveedor');
             } else {
                 $('#btnPagoMasivo').addClass('btn-primary').removeClass('btn-warning');
                 $('#btnPagoMasivo').attr('title', 'Procesar pago masivo');
+                $('#btnComprobantePago').prop('disabled', false)
+                    .attr('title', 'Comprobante de pago programado (PDF)');
             }
         } else {
             $('#btnPagoMasivo').hide();
+            $('#btnComprobantePago').hide();
         }
+    }
+
+    function generarComprobantePago() {
+        const checkboxes = $('.checkbox-factura:checked');
+        if (checkboxes.length === 0) {
+            return Swal.fire('Sin selección', 'Selecciona al menos una factura.', 'info');
+        }
+
+        const proveedores = new Set();
+        const ids = [];
+        checkboxes.each(function () {
+            ids.push($(this).val());
+            proveedores.add($(this).data('proveedor-id'));
+        });
+
+        if (proveedores.size > 1) {
+            return Swal.fire(
+                'Proveedores distintos',
+                'El comprobante de pago programado debe generarse por proveedor. Selecciona facturas de un solo proveedor.',
+                'warning'
+            );
+        }
+
+        const params = $.param({ dte_ids: ids.join(',') });
+        window.open(`/app/comprobantePagoDTE/?${params}`, '_blank');
     }
 
     // Seleccionar/Deseleccionar todas las facturas elegibles
