@@ -10132,10 +10132,17 @@ def cargarDteCompra(request):
                         'numero': d.documento_padre.numero_documento
                     }
                 
-                # Verificar si tiene documentos hijos (facturas anexadas)
-                tiene_factura_anexada = d.documentos_hijos.filter(
+                # Verificar si tiene documentos hijos (facturas anexadas) y cuál
+                factura_anexada_obj = d.documentos_hijos.filter(
                     tipo_documento='FACTURA ELECTRONICA'
-                ).exists()
+                ).only('id', 'numero_documento').first()
+                tiene_factura_anexada = factura_anexada_obj is not None
+                factura_anexada_info = None
+                if factura_anexada_obj:
+                    factura_anexada_info = {
+                        'id': factura_anexada_obj.id,
+                        'numero': factura_anexada_obj.numero_documento,
+                    }
                 
                 # Para NCs, verificar si está asociada a alguna factura
                 nc_esta_asociada = False
@@ -10174,6 +10181,7 @@ def cargarDteCompra(request):
                     'incidencias_pendientes': incidencias_pendientes,
                     'documento_padre': documento_padre_info,
                     'tiene_factura_anexada': tiene_factura_anexada,
+                    'factura_anexada_info': factura_anexada_info,
                     'requiere_factura': d.tipo_documento in ['COTIZACION', 'GUIA'],
                     'nc_esta_asociada': nc_esta_asociada,
                     'factura_asociada_info': factura_asociada_info,
@@ -11377,24 +11385,40 @@ def eliminar_incidencia(request, incidencia_id):
 
 def obtener_documentos_base(request):
     """
-    Obtiene cotizaciones y guías de despacho que pueden ser usadas como base para una factura
+    Obtiene cotizaciones y guías de despacho que pueden ser usadas como base para una factura.
+
+    Por defecto solo devuelve documentos SIN factura anexada (disponibles). Si se pasa
+    ?dte_id=<id> (factura en edición), incluye además la guía/cotización que esa factura
+    ya tiene asociada, para que la selección actual se vea y se pueda reasignar/quitar.
     """
     if request.method == 'GET':
         try:
             empresa_id = request.session.get('idEmpresaActual')
             if not empresa_id:
                 return JsonResponse({'error': 'Empresa no identificada en sesión'}, status=403)
-            
-            # Obtener cotizaciones y guías sin factura anexada
+
+            # Documento padre actualmente asociado a la factura en edición (si aplica)
+            documento_padre_actual_id = None
+            dte_id = request.GET.get('dte_id')
+            if dte_id:
+                try:
+                    factura_edit = Dte.objects.only('documento_padre_id').get(id=dte_id)
+                    documento_padre_actual_id = factura_edit.documento_padre_id
+                except (Dte.DoesNotExist, ValueError):
+                    documento_padre_actual_id = None
+
+            # Cotizaciones y guías sin factura anexada (disponibles)
             documentos = Dte.objects.filter(
                 tipo_transaccion='COMPRA',
                 receptor_id=empresa_id,
                 tipo_documento__in=['COTIZACION', 'GUIA'],
                 documentos_hijos__isnull=True  # Sin facturas anexadas
             ).select_related('emisor').order_by('-fecha_emision')
-            
+
+            ids_incluidos = set()
             resultado = []
             for doc in documentos:
+                ids_incluidos.add(doc.id)
                 resultado.append({
                     'id': doc.id,
                     'tipo': doc.tipo_documento,
@@ -11402,10 +11426,32 @@ def obtener_documentos_base(request):
                     'proveedor': doc.emisor.nombre if doc.emisor else 'N/A',
                     'fecha': doc.fecha_emision.strftime('%Y-%m-%d'),
                     'monto': float(doc.monto_con_iva),
+                    'es_actual': doc.id == documento_padre_actual_id,
                     'display': f"{doc.tipo_documento} #{doc.numero_documento} - {doc.emisor.nombre if doc.emisor else 'N/A'} - ${float(doc.monto_con_iva):,.0f}"
                 })
-            
-            return JsonResponse({'success': True, 'documentos': resultado})
+
+            # Incluir la guía/cotización actual aunque ya tenga esta factura como hija
+            if documento_padre_actual_id and documento_padre_actual_id not in ids_incluidos:
+                doc_actual = Dte.objects.select_related('emisor').filter(
+                    id=documento_padre_actual_id
+                ).first()
+                if doc_actual:
+                    resultado.insert(0, {
+                        'id': doc_actual.id,
+                        'tipo': doc_actual.tipo_documento,
+                        'numero': doc_actual.numero_documento,
+                        'proveedor': doc_actual.emisor.nombre if doc_actual.emisor else 'N/A',
+                        'fecha': doc_actual.fecha_emision.strftime('%Y-%m-%d'),
+                        'monto': float(doc_actual.monto_con_iva),
+                        'es_actual': True,
+                        'display': f"{doc_actual.tipo_documento} #{doc_actual.numero_documento} - {doc_actual.emisor.nombre if doc_actual.emisor else 'N/A'} - ${float(doc_actual.monto_con_iva):,.0f} (actual)"
+                    })
+
+            return JsonResponse({
+                'success': True,
+                'documentos': resultado,
+                'documento_padre_actual_id': documento_padre_actual_id,
+            })
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)

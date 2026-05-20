@@ -594,17 +594,34 @@ class PreciosActualesView(APIView):
     precio_sugerido (regla de negocio: el SKU expuesto al ecommerce debe
     publicarse con el mayor precio/costo entre sucursales).
 
-    `ultima_fecha_ingreso` es la fecha del lote ACTIVO más reciente de cualquier
-    sucursal de la empresa para ese SKU (formato YYYY-MM-DD). Es lo que
-    AllConnected usa como referencia de antigüedad de stock para calcular
-    descuentos por antigüedad.
+    Todas las fechas salen de Movimientos_Producto (historial real preservado en
+    la migración legacy), NO de los lotes (que son sintéticos/consolidados y no
+    sirven como referencia de antigüedad).
 
-    `fecha_creacion` es la fecha de alta del PRODUCTO (no del SKU) más antigua
-    entre todas las sucursales que lo manejan. Útil para diferenciar entre
-    "modelo viejo del catálogo" y "modelo reciente que llegó hace tiempo".
+    `ultima_fecha_ingreso`  = fecha del ÚLTIMO movimiento de INGRESO del SKU
+                              (última recepción real). Formato YYYY-MM-DD.
 
-    `dias_antiguedad_stock` es days(today - ultima_fecha_ingreso) — útil para
-    aplicar reglas de descuento por antigüedad sin recalcularlo en el cliente.
+    `fecha_creacion`        = alta del PRODUCTO (no del SKU) más antigua entre
+                              sucursales. Antigüedad del MODELO en catálogo.
+
+    `stock_actual`          = unidades en mano del SKU (suma entre sucursales).
+
+    `ultima_fecha_venta`    = fecha del último EGRESO/venta del SKU (o null).
+
+    `fecha_antiguedad_stock`= FIFO: fecha de la entrada más vieja que TODAVÍA no
+                              se vendió (se recorren los ingresos de más nuevo a
+                              más viejo acumulando cantidad hasta cubrir el stock
+                              actual). Es la antigüedad REAL del stock en góndola
+                              — no se infla cuando hay reposiciones. null si no
+                              hay stock o no hay ingresos registrados.
+
+    `dias_antiguedad_stock` = days(today - fecha_antiguedad_stock). ESTE es el
+                              número que debe usar AllConnected para descuentos
+                              por antigüedad (ya precalculado). null si no aplica.
+
+    Nota de consolidación: la antigüedad se calcula sobre el stock e ingresos
+    AGRUPADOS por SKU (pooled entre sucursales), coherente con un SKU = una fila
+    de ecommerce.
 
     Respuesta:
     {
@@ -616,20 +633,24 @@ class PreciosActualesView(APIView):
                 "precio_venta": 59990,
                 "precio_costo": 25000,
                 "precio_sugerido": 64990,
-                "ultima_fecha_ingreso": "2026-03-15",
+                "stock_actual": 12,
+                "ultima_fecha_ingreso": "2025-09-15",
                 "fecha_creacion": "2024-08-01",
-                "dias_antiguedad_stock": 60
+                "ultima_fecha_venta": "2026-05-02",
+                "fecha_antiguedad_stock": "2025-01-20",
+                "dias_antiguedad_stock": 120
             }
         ],
         "total": 123,
-        "timestamp": "2026-04-15T12:00:00Z"
+        "timestamp": "2026-05-20T12:00:00Z"
     }
     """
     authentication_classes = [ApiKeyAuthentication]
     permission_classes = [ApiKeyPermission]
 
     def get(self, request):
-        from django.db.models import Max, Q
+        from django.db.models import Max
+        from app.models import Movimientos_Producto
 
         rut = request.query_params.get('rut_empresa', '').strip()
         if not rut:
@@ -641,31 +662,20 @@ class PreciosActualesView(APIView):
 
         logger.info(f"[external/precios-actuales] rut={rut}")
 
-        # 1 fila por (sku × sucursal) con la última fecha_ingreso de los lotes
-        # activos de ese Producto_Talla y la fecha_creacion del producto padre.
-        rows = list(
+        # ── 1. Precios (MAX), fecha_creacion (MIN) y stock (SUM) por SKU ──
+        # 1 fila por (sku × sucursal); se consolida a 1 fila por SKU.
+        consolidado: dict = {}
+        pt_rows = (
             Producto_Talla.objects
             .filter(producto__sucursal__empresa__rut=rut)
-            .annotate(
-                ultima_fecha_lote=Max(
-                    'lotes__fecha_ingreso',
-                    filter=Q(lotes__activo=True),
-                )
-            )
             .values(
-                'sku',
-                'producto__articulo',
-                'producto__costo',
-                'producto__precioventa',
-                'producto__precioSugerido',
+                'sku', 'stock',
+                'producto__articulo', 'producto__costo',
+                'producto__precioventa', 'producto__precioSugerido',
                 'producto__fecha_creacion',
-                'ultima_fecha_lote',
             )
         )
-
-        # Consolidar a 1 fila por SKU usando MAX de cada métrica.
-        consolidado: dict = {}
-        for row in rows:
+        for row in pt_rows.iterator(chunk_size=2000):
             sku = str(row['sku'])
             if not sku:
                 continue
@@ -673,49 +683,117 @@ class PreciosActualesView(APIView):
             costo = int(row.get('producto__costo', 0) or 0)
             precio_venta = int(row.get('producto__precioventa', 0) or 0)
             precio_sugerido = int(row.get('producto__precioSugerido', 0) or 0)
-            fecha_lote = row.get('ultima_fecha_lote')
+            stock = max(int(row.get('stock', 0) or 0), 0)
             fecha_creacion = row.get('producto__fecha_creacion')
 
-            if sku not in consolidado:
+            base = consolidado.get(sku)
+            if base is None:
                 consolidado[sku] = {
                     'codigo_sku': sku,
                     'articulo': row.get('producto__articulo', '') or '',
                     'precio_venta': precio_venta,
                     'precio_costo': costo,
                     'precio_sugerido': precio_sugerido,
-                    '_fecha_lote': fecha_lote,
+                    'stock_actual': stock,
                     '_fecha_creacion': fecha_creacion,
                 }
             else:
-                base = consolidado[sku]
-                if precio_venta > base['precio_venta']:
-                    base['precio_venta'] = precio_venta
-                if costo > base['precio_costo']:
-                    base['precio_costo'] = costo
-                if precio_sugerido > base['precio_sugerido']:
-                    base['precio_sugerido'] = precio_sugerido
-                # Fecha de lote más reciente entre sucursales
-                if fecha_lote and (not base['_fecha_lote'] or fecha_lote > base['_fecha_lote']):
-                    base['_fecha_lote'] = fecha_lote
+                base['precio_venta'] = max(base['precio_venta'], precio_venta)
+                base['precio_costo'] = max(base['precio_costo'], costo)
+                base['precio_sugerido'] = max(base['precio_sugerido'], precio_sugerido)
+                base['stock_actual'] += stock
                 # fecha_creacion: la MÁS ANTIGUA entre sucursales (alta original del SKU)
                 if fecha_creacion and (
                     not base['_fecha_creacion'] or fecha_creacion < base['_fecha_creacion']
                 ):
                     base['_fecha_creacion'] = fecha_creacion
 
+        # Solo los SKU con stock > 0 son relevantes para antigüedad/descuento.
+        skus_con_stock = [
+            int(s) for s, b in consolidado.items() if b['stock_actual'] > 0
+        ]
+
+        # ── 2. Movimientos de INGRESO (fecha, cantidad) por SKU, para FIFO ──
+        # Acotado a SKU con stock vía subquery server-side (menos filas).
+        ingresos_por_sku: dict = {}
+        if skus_con_stock:
+            ingresos_qs = (
+                Movimientos_Producto.objects
+                .filter(
+                    tipo_movimiento='INGRESO',
+                    ProductoTalla__sku__in=skus_con_stock,
+                    ProductoTalla__producto__sucursal__empresa__rut=rut,
+                )
+                .values('ProductoTalla__sku', 'fecha', 'cantidad')
+                .order_by('ProductoTalla__sku', '-fecha')
+            )
+            for m in ingresos_qs.iterator(chunk_size=5000):
+                ingresos_por_sku.setdefault(str(m['ProductoTalla__sku']), []).append(
+                    (m['fecha'], int(m['cantidad'] or 0))
+                )
+
+        # ── 3. Última venta (EGRESO) por SKU ──
+        ultima_venta_por_sku: dict = {}
+        if skus_con_stock:
+            for v in (
+                Movimientos_Producto.objects
+                .filter(
+                    tipo_movimiento='EGRESO',
+                    ProductoTalla__sku__in=skus_con_stock,
+                    ProductoTalla__producto__sucursal__empresa__rut=rut,
+                )
+                .values('ProductoTalla__sku')
+                .annotate(ultima=Max('fecha'))
+            ):
+                ultima_venta_por_sku[str(v['ProductoTalla__sku'])] = v['ultima']
+
+        # ── 4. Armar respuesta con la antigüedad FIFO del stock en mano ──
         hoy = timezone.localdate()
         data = []
         for sku, info in consolidado.items():
-            fecha_lote = info.pop('_fecha_lote', None)
             fecha_creacion = info.pop('_fecha_creacion', None)
+            stock = info['stock_actual']
+            ingresos = ingresos_por_sku.get(sku, [])  # ya ordenado desc por fecha
+
+            # Última recepción real (MAX) = primer elemento (orden desc).
+            ultima_ingreso = ingresos[0][0] if ingresos else None
+
+            # FIFO: por convención se vende primero lo más antiguo, así que el
+            # stock en mano son las entradas más recientes. Recorremos los
+            # ingresos de más nuevo a más viejo acumulando cantidad hasta cubrir
+            # el stock actual; esa fecha es la del stock más viejo que aún queda
+            # (= antigüedad real del stock, lo que importa para descuentos).
+            fecha_antiguedad = None
+            if stock > 0 and ingresos:
+                acc = 0
+                for fecha_mov, cant in ingresos:
+                    acc += max(cant, 0)
+                    if acc >= stock:
+                        fecha_antiguedad = fecha_mov
+                        break
+                if fecha_antiguedad is None:
+                    # Ingresos registrados < stock → usar el más antiguo disponible.
+                    fecha_antiguedad = ingresos[-1][0]
+
+            fecha_creacion_local = (
+                timezone.localtime(fecha_creacion).date() if fecha_creacion else None
+            )
+
             info['ultima_fecha_ingreso'] = (
-                fecha_lote.strftime('%Y-%m-%d') if fecha_lote else None
+                ultima_ingreso.strftime('%Y-%m-%d') if ultima_ingreso else None
             )
             info['fecha_creacion'] = (
-                fecha_creacion.date().strftime('%Y-%m-%d') if fecha_creacion else None
+                fecha_creacion_local.strftime('%Y-%m-%d') if fecha_creacion_local else None
+            )
+            info['ultima_fecha_venta'] = (
+                ultima_venta_por_sku[sku].strftime('%Y-%m-%d')
+                if ultima_venta_por_sku.get(sku) else None
+            )
+            info['fecha_antiguedad_stock'] = (
+                fecha_antiguedad.strftime('%Y-%m-%d') if fecha_antiguedad else None
             )
             info['dias_antiguedad_stock'] = (
-                (hoy - fecha_lote).days if fecha_lote else None
+                (hoy - fecha_antiguedad).days if fecha_antiguedad else None
             )
             data.append(info)
 

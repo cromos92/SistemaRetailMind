@@ -2701,10 +2701,13 @@
         }
     });
 
-    function cargarDocumentosBase() {
+    function cargarDocumentosBase(dteId, onLoaded) {
+        const data = {};
+        if (dteId) data.dte_id = dteId;
         $.ajax({
             url: '/app/obtener_documentos_base/',
             method: 'GET',
+            data: data,
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function (response) {
                 if (response.success) {
@@ -2717,10 +2720,20 @@
                             select.append(`<option value="${doc.id}">${doc.display}</option>`);
                         });
                     }
+
+                    // Preseleccionar la guía/cotización actualmente asociada (modo edición)
+                    if (response.documento_padre_actual_id) {
+                        select.val(String(response.documento_padre_actual_id));
+                    }
+                    if (select.hasClass('select2-hidden-accessible')) {
+                        select.trigger('change.select2');
+                    }
                 }
+                if (typeof onLoaded === 'function') onLoaded(response);
             },
             error: function () {
                 console.error('Error al cargar documentos base');
+                if (typeof onLoaded === 'function') onLoaded(null);
             }
         });
     }
@@ -2914,13 +2927,19 @@
     <td>
         ${resaltarBusquedaDTE(dte.numero_documento || '', search)}
         ${dte.documento_padre
-                                    ? `<br><small class="text-muted">Anexa a: ${dte.documento_padre.tipo} #${dte.documento_padre.numero}</small>`
+                                    ? `<br><small class="text-muted" title="Click para editar la asociación" style="cursor:pointer;" onclick="editarDTE(${dte.id})">
+                                         <i class="bi bi-paperclip"></i> Anexa a: ${dte.documento_padre.tipo} #${dte.documento_padre.numero}
+                                       </small>`
                                     : ''}
         ${dte.requiere_factura && !dte.tiene_factura_anexada
                                     ? '<br><span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> Requiere Factura</span>'
                                     : ''}
         ${dte.requiere_factura && dte.tiene_factura_anexada
-                                    ? '<br><span class="badge bg-success"><i class="bi bi-check-circle"></i> Factura Anexada</span>'
+                                    ? (dte.factura_anexada_info
+                                        ? `<br><span class="badge bg-success" title="Click para editar la factura asociada" style="cursor:pointer;" onclick="editarDTE(${dte.factura_anexada_info.id})">
+                                             <i class="bi bi-check-circle"></i> Factura #${dte.factura_anexada_info.numero} anexada
+                                           </span>`
+                                        : '<br><span class="badge bg-success"><i class="bi bi-check-circle"></i> Factura Anexada</span>')
                                     : ''}
         ${dte.tipo === 'NOTA DE CREDITO'
                                     ? (dte.nc_esta_asociada
@@ -3205,14 +3224,10 @@
                         }
 
                         // === Documento base / NC ===
-                        if (dte.tipo_documento === 'FACTURA ELECTRONICA' && dte.documento_padre_id) {
-                            cargarDocumentosBase();
-                            $('#divDocumentoBase').show();
-                            setTimeout(() => {
-                                $('#documentoBase').val(dte.documento_padre_id);
-                            }, 300);
-                        } else if (dte.tipo_documento === 'FACTURA ELECTRONICA') {
-                            cargarDocumentosBase();
+                        if (dte.tipo_documento === 'FACTURA ELECTRONICA') {
+                            // Pasamos el dte_id para que el backend incluya y preseleccione
+                            // la guía/cotización ya asociada (permite verla y reasignarla).
+                            cargarDocumentosBase(dte.id);
                             $('#divDocumentoBase').show();
                         } else {
                             $('#divDocumentoBase').hide();

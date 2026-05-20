@@ -138,12 +138,12 @@ class Command(BaseCommand):
 
             if not p.fecha_creacion:
                 sin_fecha_creacion += 1
-                a_actualizar_lista.append((p.id, p.articulo, None, min_dt))
+                a_actualizar_lista.append((p, p.articulo, None, min_dt))
                 continue
 
             diff_dias = (p.fecha_creacion.date() - min_fecha).days
             if diff_dias >= margen_dias:
-                a_actualizar_lista.append((p.id, p.articulo, p.fecha_creacion, min_dt))
+                a_actualizar_lista.append((p, p.articulo, p.fecha_creacion, min_dt))
             else:
                 sin_cambio += 1
 
@@ -153,19 +153,29 @@ class Command(BaseCommand):
         ))
 
         self.stdout.write(f'\n--- Muestra (primeros {n_muestras}) ---')
-        for pid, art, antigua, nueva in a_actualizar_lista[:n_muestras]:
+        for p, art, antigua, nueva in a_actualizar_lista[:n_muestras]:
             antigua_str = antigua.strftime('%Y-%m-%d') if antigua else 'NULL'
             self.stdout.write(
-                f'  #{pid:>7} ({art}): {antigua_str} → {nueva.strftime("%Y-%m-%d")}'
+                f'  #{p.id:>7} ({art}): {antigua_str} → {nueva.strftime("%Y-%m-%d")}'
             )
 
         self.stdout.write('\n[3/3] ' + ('Aplicando cambios...' if apply_changes else 'Dry-run, no se escribirá nada.'))
 
         actualizados = 0
         if apply_changes and a_actualizar_lista:
-            for pid, _art, _antigua, nueva in a_actualizar_lista:
-                Producto.objects.filter(pk=pid).update(fecha_creacion=nueva)
-                actualizados += 1
+            # bulk_update salta auto_now_add (pre_save con add=False devuelve el
+            # valor seteado) → 1 UPDATE por batch en vez de 1 por producto.
+            batch = []
+            for p, _art, _antigua, nueva in a_actualizar_lista:
+                p.fecha_creacion = nueva
+                batch.append(p)
+                if len(batch) >= 1000:
+                    Producto.objects.bulk_update(batch, ['fecha_creacion'])
+                    actualizados += len(batch)
+                    batch = []
+            if batch:
+                Producto.objects.bulk_update(batch, ['fecha_creacion'])
+                actualizados += len(batch)
             logger.info(
                 'corregir_fecha_creacion_productos: actualizados %d productos '
                 '(margen=%d días, producto_id=%s, limit=%s)',
