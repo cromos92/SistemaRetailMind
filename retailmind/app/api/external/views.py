@@ -586,6 +586,23 @@ class GuiasTallaExternalView(APIView):
 # GET /api/precios-actuales/?rut_empresa=XXXXXXXX-X
 # ──────────────────────────────────────────────
 
+# Conceptos de Movimientos_Producto que representan una RECEPCIÓN REAL de
+# mercadería nueva (compra a proveedor / saldo de apertura / reposición).
+# Se usan para la antigüedad FIFO en vez de tipo_movimiento='INGRESO', porque
+# ese bucket también contiene traspasos internos (TRASPASO_ENTRADA) y, en datos
+# migrados, ventas mal clasificadas (VENTA_MAYORISTA con tipo 'Ingreso' heredado
+# del legacy). Filtrar por concepto da la antigüedad real del stock comprado,
+# tanto en datos migrados (RECEPCION_COMPRA / INGRESO_INICIAL) como en los nuevos
+# (INGRESO_INICIAL para recepción de compra, SOBRANTE_INGRESO, etc.).
+CONCEPTOS_RECEPCION_STOCK = (
+    'RECEPCION_COMPRA',
+    'INGRESO_INICIAL',
+    'INGRESO_MANUAL',
+    'REPOSICION_STOCK',
+    'SOBRANTE_INGRESO',
+)
+
+
 class PreciosActualesView(APIView):
     """
     Retorna precios, costos y última fecha de ingreso a nivel EMPRESA, una fila
@@ -598,8 +615,13 @@ class PreciosActualesView(APIView):
     la migración legacy), NO de los lotes (que son sintéticos/consolidados y no
     sirven como referencia de antigüedad).
 
-    `ultima_fecha_ingreso`  = fecha del ÚLTIMO movimiento de INGRESO del SKU
-                              (última recepción real). Formato YYYY-MM-DD.
+    IMPORTANTE: las recepciones se identifican por `concepto`
+    (CONCEPTOS_RECEPCION_STOCK), NO por tipo_movimiento, porque en datos migrados
+    el tipo no es confiable (hay traspasos internos y ventas marcados como
+    INGRESO). Las ventas se detectan por concepto 'VENTA_*'.
+
+    `ultima_fecha_ingreso`  = fecha de la ÚLTIMA recepción real del SKU
+                              (concepto de recepción). Formato YYYY-MM-DD.
 
     `fecha_creacion`        = alta del PRODUCTO (no del SKU) más antigua entre
                               sucursales. Antigüedad del MODELO en catálogo.
@@ -615,13 +637,20 @@ class PreciosActualesView(APIView):
                               — no se infla cuando hay reposiciones. null si no
                               hay stock o no hay ingresos registrados.
 
-    `dias_antiguedad_stock` = days(today - fecha_antiguedad_stock). ESTE es el
-                              número que debe usar AllConnected para descuentos
-                              por antigüedad (ya precalculado). null si no aplica.
+    `dias_antiguedad_stock` = days(today - fecha_antiguedad_stock). OJO: en datos
+                              migrados queda aplanado al saldo de apertura
+                              (2026-01-22), porque la llegada real del stock
+                              pre-migración no se preservó. Informativo, no es el
+                              driver principal de descuento.
 
-    Nota de consolidación: la antigüedad se calcula sobre el stock e ingresos
-    AGRUPADOS por SKU (pooled entre sucursales), coherente con un SKU = una fila
-    de ecommerce.
+    `dias_sin_venta`        = DRIVER PRINCIPAL de descuento. days(today - última
+                              venta); si el SKU nunca vendió, days(today -
+                              fecha_creacion). Identifica stock estancado de forma
+                              fiable (las ventas migradas conservan fecha real).
+                              AllConnected debe usar ESTE campo. null si no aplica.
+
+    Nota de consolidación: todo se agrupa por SKU (pooled entre sucursales),
+    coherente con un SKU = una fila de ecommerce.
 
     Respuesta:
     {
@@ -638,7 +667,8 @@ class PreciosActualesView(APIView):
                 "fecha_creacion": "2024-08-01",
                 "ultima_fecha_venta": "2026-05-02",
                 "fecha_antiguedad_stock": "2025-01-20",
-                "dias_antiguedad_stock": 120
+                "dias_antiguedad_stock": 120,
+                "dias_sin_venta": 18
             }
         ],
         "total": 123,
@@ -720,7 +750,7 @@ class PreciosActualesView(APIView):
             ingresos_qs = (
                 Movimientos_Producto.objects
                 .filter(
-                    tipo_movimiento='INGRESO',
+                    concepto__in=CONCEPTOS_RECEPCION_STOCK,
                     ProductoTalla__sku__in=skus_con_stock,
                     ProductoTalla__producto__sucursal__empresa__rut=rut,
                 )
@@ -738,7 +768,7 @@ class PreciosActualesView(APIView):
             for v in (
                 Movimientos_Producto.objects
                 .filter(
-                    tipo_movimiento='EGRESO',
+                    concepto__startswith='VENTA_',
                     ProductoTalla__sku__in=skus_con_stock,
                     ProductoTalla__producto__sucursal__empresa__rut=rut,
                 )
@@ -785,15 +815,25 @@ class PreciosActualesView(APIView):
             info['fecha_creacion'] = (
                 fecha_creacion_local.strftime('%Y-%m-%d') if fecha_creacion_local else None
             )
+            ultima_venta = ultima_venta_por_sku.get(sku)
             info['ultima_fecha_venta'] = (
-                ultima_venta_por_sku[sku].strftime('%Y-%m-%d')
-                if ultima_venta_por_sku.get(sku) else None
+                ultima_venta.strftime('%Y-%m-%d') if ultima_venta else None
             )
             info['fecha_antiguedad_stock'] = (
                 fecha_antiguedad.strftime('%Y-%m-%d') if fecha_antiguedad else None
             )
             info['dias_antiguedad_stock'] = (
                 (hoy - fecha_antiguedad).days if fecha_antiguedad else None
+            )
+
+            # Driver PRINCIPAL de descuento: días sin vender. Es lo que la data
+            # soporta de forma fiable (las ventas migradas conservan fecha real,
+            # a diferencia de la antigüedad de stock, aplanada por el saldo de
+            # apertura de la migración). Si nunca vendió, se mide el estancamiento
+            # desde la fecha de creación del modelo.
+            ref_estancamiento = ultima_venta or fecha_creacion_local
+            info['dias_sin_venta'] = (
+                (hoy - ref_estancamiento).days if ref_estancamiento else None
             )
             data.append(info)
 

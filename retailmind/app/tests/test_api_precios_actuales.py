@@ -37,10 +37,12 @@ class PreciosActualesFechasTest(TestCase):
         params.setdefault('rut_empresa', self.empresa.rut)
         return self.client.get(self.url, params, **self.auth)
 
-    def _mov(self, dias_atras, cantidad, tipo='INGRESO', pt=None):
+    def _mov(self, dias_atras, cantidad, concepto='INGRESO_INICIAL',
+             tipo='INGRESO', pt=None):
         return Movimientos_Producto.objects.create(
             ProductoTalla=pt or self.producto_talla,
             tipo_movimiento=tipo,
+            concepto=concepto,
             cantidad=cantidad,
             fecha=timezone.localdate() - timedelta(days=dias_atras),
         )
@@ -90,13 +92,53 @@ class PreciosActualesFechasTest(TestCase):
 
     def test_stock_actual_y_ultima_venta(self):
         self._mov(dias_atras=10, cantidad=10)
-        self._mov(dias_atras=2, cantidad=-1, tipo='EGRESO')
+        self._mov(dias_atras=2, cantidad=-1, concepto='VENTA_PUBLICO', tipo='EGRESO')
 
         item = self._item()
 
         self.assertEqual(item['stock_actual'], 10)
         self.assertEqual(item['ultima_fecha_venta'],
                          (timezone.localdate() - timedelta(days=2)).strftime('%Y-%m-%d'))
+
+    def test_dias_sin_venta_desde_ultima_venta(self):
+        self._mov(dias_atras=200, cantidad=10, concepto='INGRESO_INICIAL')
+        self._mov(dias_atras=15, cantidad=-1, concepto='VENTA_PUBLICO', tipo='EGRESO')
+
+        item = self._item()
+
+        self.assertEqual(item['dias_sin_venta'], 15)
+
+    def test_dias_sin_venta_sin_ventas_usa_fecha_creacion(self):
+        # Nunca vendió → estancamiento se mide desde la creación del producto.
+        self._mov(dias_atras=200, cantidad=10, concepto='INGRESO_INICIAL')
+        fecha_alta = timezone.now() - timedelta(days=400)
+        # fecha_creacion es auto_now_add; se fija por queryset para el test.
+        from app.models import Producto
+        Producto.objects.filter(pk=self.producto.pk).update(fecha_creacion=fecha_alta)
+
+        item = self._item()
+
+        self.assertIsNone(item['ultima_fecha_venta'])
+        self.assertEqual(item['dias_sin_venta'], 400)
+
+    def test_traspaso_y_venta_no_cuentan_como_recepcion(self):
+        # Solo una recepción real (vieja). Un TRASPASO_ENTRADA y una
+        # VENTA_MAYORISTA recientes NO deben tomarse como "llegada de stock".
+        self._mov(dias_atras=300, cantidad=10, concepto='INGRESO_INICIAL')
+        self._mov(dias_atras=5, cantidad=10, concepto='TRASPASO_ENTRADA')
+        # VENTA_MAYORISTA mal tipada como INGRESO (caso real de datos migrados)
+        self._mov(dias_atras=3, cantidad=5, concepto='VENTA_MAYORISTA', tipo='INGRESO')
+
+        item = self._item()
+
+        # La antigüedad debe salir de la recepción de hace 300 días, no del
+        # traspaso (5) ni de la venta (3).
+        self.assertEqual(item['dias_antiguedad_stock'], 300)
+        self.assertEqual(item['ultima_fecha_ingreso'],
+                         (timezone.localdate() - timedelta(days=300)).strftime('%Y-%m-%d'))
+        # La VENTA_MAYORISTA sí debe contar como última venta (por concepto).
+        self.assertEqual(item['ultima_fecha_venta'],
+                         (timezone.localdate() - timedelta(days=3)).strftime('%Y-%m-%d'))
 
     def test_sin_stock_antiguedad_none(self):
         Movimientos_Producto.objects.create(
