@@ -602,6 +602,14 @@ CONCEPTOS_RECEPCION_STOCK = (
     'SOBRANTE_INGRESO',
 )
 
+# El saldo de apertura de la migración Laravel se cargó como INGRESO_INICIAL
+# pero con `fecha = fecha de la carga` (≈2026-01-22), NO la llegada real del
+# stock (que el legacy no guardaba a nivel SKU). Marca: referencia_externa.
+# Estos movimientos NO son recepciones reales y aplanan la antigüedad, así que
+# se excluyen del cálculo de fechas; para esos SKU se usa `fecha_creacion`, que
+# sí refleja la antigüedad real (corregida desde los movimientos migrados).
+REF_SALDO_INICIAL_SINTETICO = 'MIGRACION_LARAVEL'
+
 
 class PreciosActualesView(APIView):
     """
@@ -622,11 +630,15 @@ class PreciosActualesView(APIView):
 
     `ultima_fecha_ingreso`  = fecha de la ÚLTIMA recepción real del SKU
                               (concepto de recepción). Formato YYYY-MM-DD.
-                              FALLBACK: si el SKU entró solo por traspaso/ventas
-                              (sin recepción registrada), cae a `fecha_creacion`
-                              del producto. El ecommerce solo necesita una fecha
-                              no-null para marcar descuentos; el día exacto no es
-                              crítico. La recepción real, si existe, manda.
+                              Se EXCLUYE el saldo de apertura sintético de la
+                              migración (referencia_externa=MIGRACION_LARAVEL),
+                              cuya fecha es la de la carga (~2026-01-22) y no la
+                              recepción real.
+                              FALLBACK: si el SKU no tiene recepción real (entró
+                              solo por traspaso/ventas, o su único ingreso era el
+                              saldo sintético), cae a `fecha_creacion`, que sí
+                              refleja la antigüedad real (corregida desde los
+                              movimientos migrados). La recepción real manda.
 
     `fecha_creacion`        = alta del PRODUCTO (no del SKU) más antigua entre
                               sucursales. Antigüedad del MODELO en catálogo.
@@ -639,14 +651,14 @@ class PreciosActualesView(APIView):
                               se vendió (se recorren los ingresos de más nuevo a
                               más viejo acumulando cantidad hasta cubrir el stock
                               actual). Es la antigüedad REAL del stock en góndola
-                              — no se infla cuando hay reposiciones. null si no
-                              hay stock o no hay ingresos registrados.
+                              — no se infla cuando hay reposiciones. Si tras
+                              excluir el saldo sintético no quedan recepciones,
+                              cae a `fecha_creacion`. null solo si no hay stock.
 
-    `dias_antiguedad_stock` = days(today - fecha_antiguedad_stock). OJO: en datos
-                              migrados queda aplanado al saldo de apertura
-                              (2026-01-22), porque la llegada real del stock
-                              pre-migración no se preservó. Informativo, no es el
-                              driver principal de descuento.
+    `dias_antiguedad_stock` = days(today - fecha_antiguedad_stock). En datos
+                              migrados sin recepción real cae a fecha_creacion
+                              (antigüedad real). Informativo; el driver principal
+                              de descuento sigue siendo `dias_sin_venta`.
 
     `dias_sin_venta`        = DRIVER PRINCIPAL de descuento. days(today - última
                               venta); si el SKU nunca vendió, days(today -
@@ -759,6 +771,10 @@ class PreciosActualesView(APIView):
                     ProductoTalla__sku__in=skus_con_stock,
                     ProductoTalla__producto__sucursal__empresa__rut=rut,
                 )
+                # Excluir el saldo de apertura sintético de la migración: su fecha
+                # es la de la carga (~2026-01-22), no la recepción real. Sin esto,
+                # el bulk migrado quedaría aplanado a esa fecha.
+                .exclude(referencia_externa=REF_SALDO_INICIAL_SINTETICO)
                 .values('ProductoTalla__sku', 'fecha', 'cantidad')
                 .order_by('ProductoTalla__sku', '-fecha')
             )
@@ -829,11 +845,17 @@ class PreciosActualesView(APIView):
             info['ultima_fecha_venta'] = (
                 ultima_venta.strftime('%Y-%m-%d') if ultima_venta else None
             )
+            # Si el FIFO no arrojó fecha (no quedan recepciones reales tras excluir
+            # el saldo sintético) pero hay stock, usar fecha_creacion como antigüedad
+            # real en vez de devolver null o la fecha aplanada de la carga.
+            fecha_antiguedad_efectiva = fecha_antiguedad or (
+                fecha_creacion_local if stock > 0 else None
+            )
             info['fecha_antiguedad_stock'] = (
-                fecha_antiguedad.strftime('%Y-%m-%d') if fecha_antiguedad else None
+                fecha_antiguedad_efectiva.strftime('%Y-%m-%d') if fecha_antiguedad_efectiva else None
             )
             info['dias_antiguedad_stock'] = (
-                (hoy - fecha_antiguedad).days if fecha_antiguedad else None
+                (hoy - fecha_antiguedad_efectiva).days if fecha_antiguedad_efectiva else None
             )
 
             # Driver PRINCIPAL de descuento: días sin vender. Es lo que la data

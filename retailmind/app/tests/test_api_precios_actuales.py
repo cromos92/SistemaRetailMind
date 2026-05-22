@@ -38,13 +38,14 @@ class PreciosActualesFechasTest(TestCase):
         return self.client.get(self.url, params, **self.auth)
 
     def _mov(self, dias_atras, cantidad, concepto='INGRESO_INICIAL',
-             tipo='INGRESO', pt=None):
+             tipo='INGRESO', pt=None, ref=None):
         return Movimientos_Producto.objects.create(
             ProductoTalla=pt or self.producto_talla,
             tipo_movimiento=tipo,
             concepto=concepto,
             cantidad=cantidad,
             fecha=timezone.localdate() - timedelta(days=dias_atras),
+            referencia_externa=ref,
         )
 
     def _item(self):
@@ -154,21 +155,50 @@ class PreciosActualesFechasTest(TestCase):
         self.assertIsNone(item['fecha_antiguedad_stock'])
         self.assertIsNone(item['dias_antiguedad_stock'])
 
-    def test_sin_movimientos_ultima_fecha_ingreso_cae_a_fecha_creacion(self):
+    def test_sin_movimientos_cae_a_fecha_creacion(self):
         # Sin recepción registrada (entró solo por traspaso/ventas o nunca tuvo
-        # movimiento), ultima_fecha_ingreso cae a fecha_creacion del producto
-        # para que el ecommerce siempre tenga una fecha no-null que mostrar.
-        # La antigüedad FIFO sí queda en None (no hay ingresos reales).
+        # movimiento) pero CON stock: tanto ultima_fecha_ingreso como la
+        # antigüedad caen a fecha_creacion (antigüedad real), nunca null.
         from app.models import Producto
         fecha_alta = timezone.now() - timedelta(days=120)
         Producto.objects.filter(pk=self.producto.pk).update(fecha_creacion=fecha_alta)
 
         item = self._item()
 
+        esperado = timezone.localtime(fecha_alta).date().strftime('%Y-%m-%d')
+        self.assertEqual(item['ultima_fecha_ingreso'], esperado)
+        self.assertEqual(item['fecha_antiguedad_stock'], esperado)
+        self.assertEqual(item['dias_antiguedad_stock'], 120)
+
+    def test_saldo_inicial_sintetico_no_cuenta_como_recepcion(self):
+        # El saldo de apertura sintético de la migración (ref MIGRACION_LARAVEL)
+        # tiene fecha de la carga, no la recepción real. Debe ignorarse y la
+        # antigüedad caer a fecha_creacion (= antigüedad real).
+        from app.models import Producto
+        fecha_alta = timezone.now() - timedelta(days=300)
+        Producto.objects.filter(pk=self.producto.pk).update(fecha_creacion=fecha_alta)
+        # Único ingreso = saldo sintético reciente (hace 5 días).
+        self._mov(dias_atras=5, cantidad=10, concepto='INGRESO_INICIAL',
+                  ref='MIGRACION_LARAVEL')
+
+        item = self._item()
+
+        esperado = timezone.localtime(fecha_alta).date().strftime('%Y-%m-%d')
+        self.assertEqual(item['ultima_fecha_ingreso'], esperado)   # no la de hace 5 días
+        self.assertEqual(item['fecha_antiguedad_stock'], esperado)
+        self.assertEqual(item['dias_antiguedad_stock'], 300)
+
+    def test_recepcion_real_prevalece_sobre_saldo_sintetico(self):
+        # Recepción real (hace 20 días) + saldo sintético (hace 2 días).
+        # Debe ganar la recepción real, no el saldo sintético.
+        self._mov(dias_atras=2, cantidad=10, concepto='INGRESO_INICIAL',
+                  ref='MIGRACION_LARAVEL')
+        self._mov(dias_atras=20, cantidad=10, concepto='RECEPCION_COMPRA')
+
+        item = self._item()
+
         self.assertEqual(item['ultima_fecha_ingreso'],
-                         timezone.localtime(fecha_alta).date().strftime('%Y-%m-%d'))
-        self.assertIsNone(item['fecha_antiguedad_stock'])
-        self.assertIsNone(item['dias_antiguedad_stock'])
+                         (timezone.localdate() - timedelta(days=20)).strftime('%Y-%m-%d'))
 
     def test_rut_obligatorio(self):
         resp = self.client.get(self.url, **self.auth)
