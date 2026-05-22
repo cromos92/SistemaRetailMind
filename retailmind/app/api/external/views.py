@@ -622,6 +622,11 @@ class PreciosActualesView(APIView):
 
     `ultima_fecha_ingreso`  = fecha de la ÚLTIMA recepción real del SKU
                               (concepto de recepción). Formato YYYY-MM-DD.
+                              FALLBACK: si el SKU entró solo por traspaso/ventas
+                              (sin recepción registrada), cae a `fecha_creacion`
+                              del producto. El ecommerce solo necesita una fecha
+                              no-null para marcar descuentos; el día exacto no es
+                              crítico. La recepción real, si existe, manda.
 
     `fecha_creacion`        = alta del PRODUCTO (no del SKU) más antigua entre
                               sucursales. Antigüedad del MODELO en catálogo.
@@ -809,8 +814,13 @@ class PreciosActualesView(APIView):
                 timezone.localtime(fecha_creacion).date() if fecha_creacion else None
             )
 
+            # Fallback: si el SKU no tiene recepción real (entró solo por traspaso o
+            # ventas), usar la fecha de creación del producto como referencia de
+            # antigüedad. El día exacto no es crítico para el descuento del ecommerce;
+            # lo importante es no devolver null. La recepción real, si existe, manda.
+            ultima_ingreso_efectiva = ultima_ingreso or fecha_creacion_local
             info['ultima_fecha_ingreso'] = (
-                ultima_ingreso.strftime('%Y-%m-%d') if ultima_ingreso else None
+                ultima_ingreso_efectiva.strftime('%Y-%m-%d') if ultima_ingreso_efectiva else None
             )
             info['fecha_creacion'] = (
                 fecha_creacion_local.strftime('%Y-%m-%d') if fecha_creacion_local else None

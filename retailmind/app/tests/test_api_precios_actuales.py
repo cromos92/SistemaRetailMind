@@ -154,9 +154,19 @@ class PreciosActualesFechasTest(TestCase):
         self.assertIsNone(item['fecha_antiguedad_stock'])
         self.assertIsNone(item['dias_antiguedad_stock'])
 
-    def test_sin_movimientos_fechas_none(self):
+    def test_sin_movimientos_ultima_fecha_ingreso_cae_a_fecha_creacion(self):
+        # Sin recepción registrada (entró solo por traspaso/ventas o nunca tuvo
+        # movimiento), ultima_fecha_ingreso cae a fecha_creacion del producto
+        # para que el ecommerce siempre tenga una fecha no-null que mostrar.
+        # La antigüedad FIFO sí queda en None (no hay ingresos reales).
+        from app.models import Producto
+        fecha_alta = timezone.now() - timedelta(days=120)
+        Producto.objects.filter(pk=self.producto.pk).update(fecha_creacion=fecha_alta)
+
         item = self._item()
-        self.assertIsNone(item['ultima_fecha_ingreso'])
+
+        self.assertEqual(item['ultima_fecha_ingreso'],
+                         timezone.localtime(fecha_alta).date().strftime('%Y-%m-%d'))
         self.assertIsNone(item['fecha_antiguedad_stock'])
         self.assertIsNone(item['dias_antiguedad_stock'])
 
