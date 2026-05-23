@@ -17343,7 +17343,7 @@ def generar_nc_devolucion(request):
     from datetime import date
     from decimal import Decimal
     from collections import defaultdict
-    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto
+    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto, normalizar_detalle_para_tipo
     import logging
     logger = logging.getLogger(__name__)
 
@@ -17632,6 +17632,10 @@ def generar_nc_devolucion(request):
             'detalle': detalle_txt,
             'referencias': referencias_nc
         }
+
+        # Las líneas vienen CON IVA (precio público); para el TXT NC tipo 61
+        # deben ir NETAS y sumar el MntNeto. Normaliza contra el cabezal.
+        normalizar_detalle_para_tipo(datos_txt['detalle'], datos_txt['totales'], 61)
 
         contenido_txt = generar_txt_nota_credito_acepta(datos_txt)
 

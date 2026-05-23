@@ -1056,6 +1056,128 @@ def formatear_decimal(numero, enteros=12, decimales=6):
     return formato.format(numero)
 
 
+def base_lineas_dte(dte):
+    """Detecta si los precios por línea de un DTE están en NETO o CON IVA (BRUTO).
+
+    El precio de `Dte_Productos.precio` no tiene base consistente en el sistema:
+    boletas y ventas POS lo guardan CON IVA (precio público); facturas de
+    emisión-DTE y traspasos lo guardan NETO. Para reconstruir montos sin
+    equivocarse, comparamos Σ(precio*stock) contra `monto_neto` y
+    `monto_con_iva` del propio DTE (su ratio es 1 : 1.19).
+
+    Devuelve 'NETO', 'BRUTO' o 'DESCONOCIDO'.
+    """
+    try:
+        productos = list(dte.dte_productos.all())
+    except Exception:
+        return 'DESCONOCIDO'
+    if not productos:
+        return 'DESCONOCIDO'
+
+    suma = sum(int(dp.precio or 0) * int(dp.stock or 0) for dp in productos)
+    neto = int(dte.monto_neto or 0)
+    bruto = int(dte.monto_con_iva or 0)
+    if suma <= 0 or (neto <= 0 and bruto <= 0):
+        return 'DESCONOCIDO'
+
+    candidatos = []
+    if neto > 0:
+        candidatos.append(('NETO', abs(suma - neto) / neto))
+    if bruto > 0:
+        candidatos.append(('BRUTO', abs(suma - bruto) / bruto))
+    base, err_rel = min(candidatos, key=lambda x: x[1])
+    # 2% de tolerancia relativa: cubre redondeos de IVA proporcional.
+    return base if err_rel <= 0.02 else 'DESCONOCIDO'
+
+
+def calcular_montos_nc(dte_original, lineas):
+    """Calcula (monto_neto, monto_con_iva) de una NC SIN doble IVA.
+
+    `lineas` es un iterable de tuplas (dte_producto, cantidad). Detecta si el
+    precio del documento original está en NETO o CON IVA y deriva el bruto
+    acreditado:
+      - base BRUTO:  bruto = Σ cant * dp.precio          (precio ya con IVA)
+      - base NETO:   bruto = Σ cant * dp.precio * 1.19    (precio neto + IVA)
+    `monto_neto = round(bruto / 1.19)`. Para originales netos da el mismo
+    resultado que el cálculo legacy; para brutos elimina el 19% duplicado.
+    """
+    base = base_lineas_dte(dte_original)
+    if base == 'DESCONOCIDO':
+        tipo = (getattr(dte_original, 'tipo_documento', '') or '').upper()
+        base = 'BRUTO' if 'BOLETA' in tipo else 'NETO'
+
+    bruto = Decimal('0')
+    for dp, cant in lineas:
+        cant_d = Decimal(str(int(cant or 0)))
+        precio_d = Decimal(str(int(dp.precio or 0)))
+        if base == 'BRUTO':
+            bruto += cant_d * precio_d
+        else:  # NETO -> el precio es neto, el bruto agrega IVA
+            bruto += cant_d * precio_d * Decimal('1.19')
+
+    monto_con_iva = int(bruto.quantize(Decimal('1')))
+    monto_neto = int((bruto / Decimal('1.19')).quantize(Decimal('1')))
+    return monto_neto, monto_con_iva
+
+
+def normalizar_detalle_para_tipo(detalle, totales, tipo_numerico):
+    """Lleva las líneas del detalle a la base que exige el tipo de documento:
+      - 39/41 (boleta): líneas CON IVA, deben sumar `monto_total`.
+      - 33/34/52/61 (factura/NC/guía): líneas NETAS, deben sumar `monto_neto`.
+
+    Idempotente: si la suma ya coincide con el objetivo, no hace nada. Solo
+    convierte cuando la suma coincide con la OTRA base (escala proporcional al
+    objetivo) y reparte el residuo de redondeo en la última línea para cuadrar
+    exacto. Si no reconoce la base, deja el detalle intacto (no arriesga).
+
+    Muta y devuelve `detalle`.
+    """
+    if not detalle:
+        return detalle
+    try:
+        tipo = int(tipo_numerico)
+    except (TypeError, ValueError):
+        return detalle
+
+    es_boleta = tipo in (39, 41)
+    monto_neto = int(totales.get('monto_neto') or 0)
+    monto_total = int(totales.get('monto_total') or 0)
+    objetivo = monto_total if es_boleta else monto_neto
+    otra_base = monto_neto if es_boleta else monto_total
+    if objetivo <= 0:
+        return detalle
+
+    suma_actual = sum(int(it.get('monto_item') or 0) for it in detalle)
+    if suma_actual <= 0:
+        return detalle
+
+    tol = max(2, len(detalle) * 2)
+    if abs(suma_actual - objetivo) <= tol:
+        return detalle  # ya está en la base correcta
+    if otra_base <= 0 or abs(suma_actual - otra_base) > tol:
+        return detalle  # base no reconocida -> no tocar
+
+    factor = Decimal(str(objetivo)) / Decimal(str(suma_actual))
+    for it in detalle:
+        cant = int(it.get('cantidad') or 0)
+        nuevo_monto = int((Decimal(str(int(it.get('monto_item') or 0))) * factor).quantize(Decimal('1')))
+        it['monto_item'] = nuevo_monto
+        if cant:
+            it['precio_unitario'] = int((Decimal(str(nuevo_monto)) / Decimal(str(cant))).quantize(Decimal('1')))
+        else:
+            it['precio_unitario'] = int((Decimal(str(int(it.get('precio_unitario') or 0))) * factor).quantize(Decimal('1')))
+
+    # Repartir el residuo de redondeo en la última línea para cuadrar exacto.
+    residuo = objetivo - sum(int(it.get('monto_item') or 0) for it in detalle)
+    if residuo != 0:
+        ult = detalle[-1]
+        ult['monto_item'] = int(ult.get('monto_item') or 0) + residuo
+        cant_ult = int(ult.get('cantidad') or 0)
+        if cant_ult:
+            ult['precio_unitario'] = int(round(ult['monto_item'] / cant_ult))
+    return detalle
+
+
 def limpiar_texto(texto, max_length=None):
     """
     Limpia un texto eliminando caracteres especiales problemáticos para Acepta TXT
@@ -3611,6 +3733,12 @@ def generar_txt_desde_dte_existente(request):
             ),
             tipo_numerico,
         )
+
+        # Las líneas en BD pueden estar CON IVA (boletas/ventas POS) o NETAS
+        # (emisión-DTE/traspasos). Acepta exige que para factura/NC/guía sumen
+        # el neto y para boleta sumen el total. Normalizamos contra el cabezal:
+        # es idempotente, así que los DTE que ya estaban bien (netos) no cambian.
+        normalizar_detalle_para_tipo(datos['detalle'], datos['totales'], tipo_numerico)
 
         # Poblar descuentos/recargos globales desde BD
         from .models import DescuentoRecargo

@@ -4769,11 +4769,13 @@ def regularizar_producto_api(request):
                         )
                         if err_disp:
                             return JsonResponse({'success': False, 'error': err_disp}, status=400)
-                        precio_unitario = recepcion.dte_producto.precio
-                        total_neto = cantidad_nc * precio_unitario
-                        iva = total_neto * DecimalNC('0.19')
-                        total_con_iva = total_neto + iva
-                        
+                        # Montos sin doble IVA: calcular_montos_nc detecta si el
+                        # precio del original es neto (traspaso) o con IVA (boleta).
+                        from .views_modulo_documentos import calcular_montos_nc
+                        total_neto, total_con_iva = calcular_montos_nc(
+                            dte_original, [(recepcion.dte_producto, cantidad_nc)]
+                        )
+
                         numero_nc = obtener_siguiente_correlativo(dte_original.sucursal, 'NOTA DE CREDITO')
                         
                         nota_credito = Dte.objects.create(
@@ -4967,11 +4969,15 @@ def regularizar_producto_api(request):
                     # obtener_siguiente_correlativo está en este mismo módulo (views.py)
                     
                     # Calcular montos
-                    precio_unitario = recepcion.dte_producto.precio  # Este es NETO
-                    total_neto = cantidad_nc * precio_unitario
-                    iva = total_neto * Decimal('0.19')
-                    total_con_iva = total_neto + iva
-                    
+                    # Montos sin doble IVA: detecta si el precio del original es
+                    # neto (traspaso) o con IVA (boleta) y deriva (neto, total).
+                    from .views_modulo_documentos import calcular_montos_nc, normalizar_detalle_para_tipo
+                    precio_unitario = recepcion.dte_producto.precio
+                    total_neto, total_con_iva = calcular_montos_nc(
+                        dte_original, [(recepcion.dte_producto, cantidad_nc)]
+                    )
+                    iva = total_con_iva - total_neto
+
                     print(f"💰 DEBUG Cálculo NC:")
                     print(f"   - Cantidad NC: {cantidad_nc}")
                     print(f"   - Precio unitario NETO (del DTE original): ${precio_unitario}")
@@ -5124,7 +5130,7 @@ def regularizar_producto_api(request):
                                 'cantidad': cantidad_nc,
                                 'unidad': 'UN',
                                 'precio_unitario': int(precio_unitario),
-                                'monto_item': int(total_neto),
+                                'monto_item': int(cantidad_nc * precio_unitario),
                                 'indicador_exencion': ''
                             }],
                             'referencias': [{
@@ -5134,9 +5140,12 @@ def regularizar_producto_api(request):
                                 'razon': '1'
                             }]
                         }
-                        
+
+                        # NC tipo 61: las líneas deben ir NETAS y sumar el MntNeto.
+                        normalizar_detalle_para_tipo(datos_txt['detalle'], datos_txt['totales'], 61)
+
                         contenido_txt = generar_txt_dte_acepta(datos_txt)
-                        
+
                         txt_dir = os.path.join(settings.MEDIA_ROOT, 'documentos_electronicos', 'nc')
                         os.makedirs(txt_dir, exist_ok=True)
                         
@@ -5237,10 +5246,14 @@ def regularizar_producto_api(request):
                     if err_disp:
                         return JsonResponse({'success': False, 'error': err_disp}, status=400)
 
-                    total_neto_nc = cantidad_problema * precio_unitario_original
-                    iva_nc = total_neto_nc * Decimal('0.19')
-                    total_con_iva_nc = total_neto_nc + iva_nc
-                    
+                    # Montos sin doble IVA: detecta si el precio del original es
+                    # neto (traspaso) o con IVA (boleta) y deriva (neto, total).
+                    from .views_modulo_documentos import calcular_montos_nc
+                    total_neto_nc, total_con_iva_nc = calcular_montos_nc(
+                        dte_original, [(recepcion.dte_producto, cantidad_problema)]
+                    )
+                    iva_nc = total_con_iva_nc - total_neto_nc
+
                     numero_nc = obtener_siguiente_correlativo(dte_original.sucursal, 'NOTA DE CREDITO')
                     
                     nota_credito = Dte.objects.create(
@@ -5692,10 +5705,13 @@ def regularizar_dte_masivo(request):
                     'error': 'No hay productos con cantidades a acreditar'
                 }, status=400)
             
-            # Calcular IVA y total
-            iva_total = monto_neto_total * Decimal('0.19')
-            total_con_iva = monto_neto_total + iva_total
-            
+            # Montos sin doble IVA: detecta si el precio del original es neto
+            # (traspaso) o con IVA (boleta) y deriva (neto, total) desde las líneas.
+            from .views_modulo_documentos import calcular_montos_nc, normalizar_detalle_para_tipo
+            lineas_nc = [(p['recepcion'].dte_producto, p['cantidad']) for p in productos_nc]
+            monto_neto_total, total_con_iva = calcular_montos_nc(dte_original, lineas_nc)
+            iva_total = total_con_iva - monto_neto_total
+
             # ============================================
             # GENERAR 1 SOLA NOTA DE CRÉDITO
             # ============================================
@@ -5863,7 +5879,10 @@ def regularizar_dte_masivo(request):
                         'monto_item': cantidad * precio_unitario,
                         'indicador_exencion': ''
                     })
-                
+
+                # NC tipo 61: las líneas deben ir NETAS y sumar el MntNeto.
+                normalizar_detalle_para_tipo(datos_txt['detalle'], datos_txt['totales'], 61)
+
                 # Generar contenido TXT
                 contenido_txt = generar_txt_dte_acepta(datos_txt)
                 
@@ -6373,21 +6392,19 @@ def generar_nota_credito_automatica(dte_original, productos_afectados, usuario, 
     from django.utils.dateparse import parse_date
     from django.utils import timezone
     
-    # Calcular totales de productos afectados
-    total_neto = Decimal('0')
+    # Calcular totales de productos afectados (sin doble IVA: detecta si el
+    # precio del original es neto o con IVA y deriva neto/total desde las líneas).
+    from .views_modulo_documentos import calcular_montos_nc
     total_unidades = 0
-    
+    lineas_nc = []
     for prod_data in productos_afectados:
         dte_producto = Dte_Productos.objects.get(id=prod_data['dte_producto_id'])
         cantidad_nc = prod_data['cantidad_faltante']
-        precio_unitario = Decimal(str(dte_producto.precio))
-        
-        total_neto += cantidad_nc * precio_unitario
+        lineas_nc.append((dte_producto, cantidad_nc))
         total_unidades += cantidad_nc
-    
-    # Calcular IVA
-    iva = total_neto * Decimal('0.19')
-    total_con_iva = total_neto + iva
+
+    total_neto, total_con_iva = calcular_montos_nc(dte_original, lineas_nc)
+    iva = total_con_iva - total_neto
     
     # Obtener correlativo para NC
     numero_nc = obtener_siguiente_correlativo(dte_original.sucursal, 'NOTA DE CREDITO')
@@ -26968,7 +26985,7 @@ def anular_factura_dte(request):
     import json as _json
     from decimal import Decimal
     from datetime import date
-    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto
+    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto, calcular_montos_nc, normalizar_detalle_para_tipo
 
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
@@ -27193,7 +27210,6 @@ def anular_factura_dte(request):
             ):
                 ya_acreditado_por_talla[row['productoTalla_id']] = int(row['total'] or 0)
 
-        neto_calc = Decimal('0')
         unidades_calc = 0
         for pid, cant in ajustes_por_id.items():
             dp = dte_productos_map[pid]
@@ -27217,24 +27233,23 @@ def anular_factura_dte(request):
                             f'disponibles ({ya} ya tienen NC previa sobre este DTE).'
                         ),
                     }, status=400)
-            neto_calc += Decimal(cant) * Decimal(dp.precio or 0)
             unidades_calc += cant
             lineas_afectadas.append((dp, cant))
 
-        iva_calc = (neto_calc * Decimal('0.19')).quantize(Decimal('1'))
-        monto_con_iva_calc = int((neto_calc + iva_calc).quantize(Decimal('1')))
+        # Montos sin doble IVA: `dp.precio` puede venir CON IVA (boleta/venta
+        # POS) o NETO (factura/traspaso). calcular_montos_nc detecta la base del
+        # DTE original y deriva (neto, total) correctamente.
+        monto_neto_nc, monto_con_iva_nc = calcular_montos_nc(dte, lineas_afectadas)
 
-        if monto_con_iva_calc > monto_restante:
+        if monto_con_iva_nc > monto_restante:
             return JsonResponse({
                 'error': (
                     f'El monto resultante de las líneas seleccionadas '
-                    f'(${monto_con_iva_calc:,}) excede el saldo disponible '
+                    f'(${monto_con_iva_nc:,}) excede el saldo disponible '
                     f'de NC sobre este DTE (${monto_restante:,}).'
                 )
             }, status=400)
 
-        monto_con_iva_nc = monto_con_iva_calc
-        monto_neto_nc = int(neto_calc)
         unidades_nc = unidades_calc
         descuento_nc = 0
         # Determinar si queda todo consumido tras aplicar estas líneas.
@@ -27242,7 +27257,7 @@ def anular_factura_dte(request):
             s=Sum('stock')
         )['s'] or 0
         es_anulacion_total = (unidades_calc >= int(total_stock_dte or 0) and
-                              int(total_nc_previas) + monto_con_iva_calc >= monto_original)
+                              int(total_nc_previas) + monto_con_iva_nc >= monto_original)
     else:
         # Determinar monto de la NC (legacy por monto)
         monto_nc_solicitado = body.get('monto_nc')
@@ -27916,6 +27931,10 @@ def anular_factura_dte(request):
         'detalle': detalle,
         'referencias': referencias_nc
     }
+
+    # Las líneas de la NC heredan la base del original (con IVA si era boleta).
+    # Para el TXT tipo 61 deben ir NETAS y sumar el MntNeto del cabezal.
+    normalizar_detalle_para_tipo(datos['detalle'], datos['totales'], 61)
 
     # 7. Generar TXT y retornar
     contenido_txt = generar_txt_nota_credito_acepta(datos)
