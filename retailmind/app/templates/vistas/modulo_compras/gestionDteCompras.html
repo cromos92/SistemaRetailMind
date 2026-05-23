@@ -4358,13 +4358,8 @@
 
                 // Verificar si la respuesta indica éxito
                 if (response.success === true || response.mensaje) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: pagoId ? 'Pago actualizado' : 'Pago registrado',
-                        text: response.mensaje || response.message || 'Operación exitosa',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => {
+                    // Pasos de limpieza/cierre comunes tras guardar el pago.
+                    const finalizarPago = () => {
                         // Cerrar modal de pago
                         const modalPago = bootstrap.Modal.getInstance(document.getElementById('modalPago'));
                         if (modalPago) {
@@ -4387,7 +4382,37 @@
 
                         // Recargar tabla principal de DTEs (IMPORTANTE para reflejar cambios)
                         cargarDTEs(currentPageDTE, currentSearchDTE);
-                    });
+                    };
+
+                    if (pagoId) {
+                        // Edición: confirmación rápida (sin comprobante).
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Pago actualizado',
+                            text: response.mensaje || response.message || 'Operación exitosa',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(finalizarPago);
+                    } else {
+                        // Registro: ofrecer descargar el comprobante de pago de la factura
+                        // (mismo PDF que el botón "Comprobante Pago" al seleccionar checkbox).
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Pago registrado',
+                            text: response.mensaje || response.message || 'Operación exitosa',
+                            showConfirmButton: true,
+                            confirmButtonText: '<i class="bi bi-filetype-pdf me-1"></i>Descargar comprobante',
+                            confirmButtonColor: '#0ab39c',
+                            showCancelButton: true,
+                            cancelButtonText: 'Cerrar'
+                        }).then((result) => {
+                            if (result.isConfirmed && dteId) {
+                                const params = $.param({ dte_ids: dteId });
+                                window.open(`/app/comprobantePagoDTE/?${params}`, '_blank');
+                            }
+                            finalizarPago();
+                        });
+                    }
                 } else {
                     Swal.fire({
                         icon: 'error',
