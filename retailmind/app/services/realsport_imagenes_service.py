@@ -257,6 +257,85 @@ def resolver_foto_portada_url(articulo: str, empresa_id: Optional[int] = None) -
     return url
 
 
+def resolver_fotos_portada_bulk(
+    articulos: Iterable[str],
+    empresa_id: Optional[int] = None,
+) -> Dict[str, str]:
+    """Resuelve la portada de MUCHOS articulos en 1-2 queries (sin N+1).
+
+    Equivalente a llamar ``resolver_foto_portada_url()`` por cada articulo,
+    pero sin disparar una query por producto. Comparte el mismo cache
+    por-articulo (misma clave y TTL que el resolver puntual), así queda
+    coherente con ``resolver_foto_portada_url()`` y con ``_invalidar_cache()``.
+
+    Misma lógica de preferencia que el resolver puntual:
+      1. Foto de la propia empresa del producto (``origen.empresa_id``).
+      2. Fallback: cualquier foto activa, gana la de mayor ``origen.prioridad``.
+
+    Devuelve ``{articulo: url}`` (``''`` cuando no hay foto). Los articulos
+    vacíos/None se ignoran.
+    """
+    from django.core.cache import cache
+
+    unicos = {a for a in articulos if a}
+    resultado: Dict[str, str] = {}
+    if not unicos:
+        return resultado
+
+    # 1) Lo que ya esté en cache se resuelve sin tocar la BD.
+    claves = {a: _cache_key(a, empresa_id) for a in unicos}
+    cacheados = cache.get_many(list(claves.values()))
+    faltantes = set()
+    for art, clave in claves.items():
+        val = cacheados.get(clave)
+        if val is not None:
+            resultado[art] = val
+        else:
+            faltantes.add(art)
+
+    if not faltantes:
+        return resultado
+
+    # 2) Preferencia 1: foto de la propia empresa (mayor prioridad primero).
+    if empresa_id:
+        empresa_rows = (
+            FotoPortadaArticulo.objects
+            .filter(
+                articulo__in=faltantes,
+                es_principal=True,
+                origen__empresa_id=empresa_id,
+                origen__activo=True,
+            )
+            .order_by('-origen__prioridad')
+            .values_list('articulo', 'url_foto')
+        )
+        for art, url in empresa_rows:
+            resultado.setdefault(art, url or '')
+
+    # 3) Preferencia 2 (fallback): cualquier foto activa, mayor prioridad gana.
+    aun_faltan = [a for a in faltantes if a not in resultado]
+    if aun_faltan:
+        fallback_rows = (
+            FotoPortadaArticulo.objects
+            .filter(articulo__in=aun_faltan, es_principal=True, origen__activo=True)
+            .order_by('-origen__prioridad')
+            .values_list('articulo', 'url_foto')
+        )
+        for art, url in fallback_rows:
+            resultado.setdefault(art, url or '')
+
+    # 4) Los que siguen sin foto → '' (se cachean igual para no re-consultar).
+    for art in faltantes:
+        resultado.setdefault(art, '')
+
+    # 5) Persistir en el mismo cache por-articulo que usa el resolver puntual.
+    cache.set_many(
+        {claves[art]: resultado[art] for art in faltantes},
+        timeout=CACHE_TTL_RESOLUCION,
+    )
+    return resultado
+
+
 def sincronizar_credencial(
     credencial: CredencialesEcommerce,
     page_size: int = 500,

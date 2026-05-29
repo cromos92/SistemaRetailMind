@@ -12575,6 +12575,7 @@ def crear_cambio_devolucion(request):
         supervisor_autorizo = False
         supervisor = None
         dias_fuera = 0
+        codigo_dinamico_obj = None  # Código de Autorización dinámico (navbar) usado, si aplica
 
         if fuera_de_plazo:
             dias_fuera = (timezone.localdate() - fecha_limite).days
@@ -12590,10 +12591,21 @@ def crear_cambio_devolucion(request):
                     'dias_fuera_de_plazo': dias_fuera,
                 })
 
-            # 1) Vía preferida: PIN de Administrador
+            # 1) Vía preferida: PIN fijo de Administrador (configurado en su perfil)
             if supervisor_pin:
                 from users.models import Usuario as UsuarioModel
                 supervisor = UsuarioModel.buscar_admin_por_pin(supervisor_pin)
+
+            # 1b) Código de Autorización dinámico del navbar (cualquier admin lo dicta).
+            #     Mismo formato de 6 dígitos, así que reutilizamos el campo supervisor_pin.
+            if not supervisor and supervisor_pin:
+                from .models import CodigoAutorizacionDinamico
+                es_valido_cod, _msg_cod, codigo_dinamico_obj = \
+                    CodigoAutorizacionDinamico.validar_codigo(supervisor_pin)
+                if es_valido_cod and codigo_dinamico_obj:
+                    supervisor = codigo_dinamico_obj.generado_por
+                else:
+                    codigo_dinamico_obj = None
 
             # 2) Retrocompat: usuario + contraseña
             if not supervisor and supervisor_password and supervisor_username:
@@ -12613,7 +12625,7 @@ def crear_cambio_devolucion(request):
             if not supervisor:
                 return JsonResponse({
                     'success': False,
-                    'error': 'PIN de Administrador inválido. Ingrese el PIN de 6 dígitos de un administrador autorizado.',
+                    'error': 'Código inválido o vencido. Ingrese el Código de Autorización vigente de la barra superior, o el PIN de 6 dígitos de un administrador.',
                     'requiere_autorizacion': True,
                 })
 
@@ -12698,11 +12710,13 @@ def crear_cambio_devolucion(request):
             registro_auth = None
             if supervisor_autorizo:
                 from .models import RegistroAutorizacion
+                metodo_auth = 'código de autorización del navbar' if codigo_dinamico_obj else 'PIN de administrador'
                 registro_auth = RegistroAutorizacion.objects.create(
+                    codigo_usado=codigo_dinamico_obj,
                     usuario_solicitante=request.user,
                     usuario_autorizador=supervisor,
                     tipo_operacion='APROBACION_CAMBIO',
-                    descripcion=f'Autorización fuera de plazo ({dias_fuera} días) por {supervisor.get_full_name() or supervisor.username}',
+                    descripcion=f'Autorización fuera de plazo ({dias_fuera} días) vía {metodo_auth} por {supervisor.get_full_name() or supervisor.username}',
                     ip_origen=request.META.get('REMOTE_ADDR'),
                     exitoso=True,
                     sucursal_solicitante=sucursal,
@@ -12715,8 +12729,12 @@ def crear_cambio_devolucion(request):
                         'fecha_compra': fecha_base_plazo.strftime('%Y-%m-%d'),
                         'supervisor_username': supervisor.username,
                         'supervisor_sucursal': str(sucursal_supervisor) if sucursal_supervisor else None,
+                        'metodo_autorizacion': metodo_auth,
                     }
                 )
+                # Marcar el código dinámico como usado (único uso) una vez registrada la autorización
+                if codigo_dinamico_obj:
+                    codigo_dinamico_obj.marcar_como_usado()
 
             # Determinar si requiere revisión gerencial (auto-escalamiento)
             requiere_revision = (

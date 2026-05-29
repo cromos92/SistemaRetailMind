@@ -3417,6 +3417,10 @@
             }
             lineasNC = dataLineas.lineas || [];
             ncsGenericasMonto = dataLineas.ncs_genericas_monto || [];
+            // Base de precios del DTE original (misma decisión que el backend al
+            // crear la NC). En boletas el precio guardado YA incluye IVA, así que
+            // NO debe multiplicarse otra vez por 1.19.
+            var precioEsBruto = (dataLineas.dte && dataLineas.dte.precio_base === 'BRUTO');
         } catch (e) {
             Swal.fire('Error', e.message || 'No se pudieron cargar las líneas del DTE.', 'error');
             return;
@@ -3496,9 +3500,12 @@
             }
             const rowOpacity = disabled ? 'opacity:0.55;' : '';
             const rowTd = disabled ? 'text-decoration:line-through;' : '';
-            // Subtotal NC con IVA por línea (precio_neto × cantidad × 1.19)
+            // Subtotal NC con IVA por línea. Si el precio del DTE ya incluye IVA
+            // (boleta), no se vuelve a multiplicar; si es neto (factura), se agrega IVA.
             const cantInicial = l.cantidad_disponible || 0;
-            const subtotalConIva = Math.round((l.precio_unitario || 0) * cantInicial * 1.19);
+            const subtotalConIva = precioEsBruto
+                ? Math.round((l.precio_unitario || 0) * cantInicial)
+                : Math.round((l.precio_unitario || 0) * cantInicial * 1.19);
             return `
                 <tr data-dte-prod-id="${l.dte_producto_id}" data-precio="${l.precio_unitario}" style="${rowOpacity}">
                     <td class="text-center">
@@ -3512,7 +3519,7 @@
                     </td>
                     <td class="text-end">
                         <div>${fmtCLP(l.precio_unitario)}</div>
-                        <small class="text-muted" style="font-size:0.7rem;">neto</small>
+                        <small class="text-muted" style="font-size:0.7rem;">${precioEsBruto ? 'con IVA' : 'neto'}</small>
                     </td>
                     <td class="text-center">${l.cantidad_original}</td>
                     <td class="text-center">${estadoHtml}</td>
@@ -3532,7 +3539,7 @@
         const tablaProductosHtml = `
             <p class="mb-2 fw-bold" style="font-size:0.9rem;">
                 <i class="bi bi-box-seam me-1"></i>Productos a acreditar:
-                <span class="badge bg-light text-dark border ms-1" title="El precio NETO que aparece es el del DTE original; el subtotal NC suma cantidad × precio + IVA 19%." style="cursor:help; font-weight:400;">
+                <span class="badge bg-light text-dark border ms-1" title="${precioEsBruto ? 'El precio mostrado YA incluye IVA (precio de la boleta); el subtotal NC suma cantidad × precio, sin volver a sumar IVA.' : 'El precio mostrado es NETO (factura); el subtotal NC suma cantidad × precio + IVA 19%.'}" style="cursor:help; font-weight:400;">
                     <i class="bi bi-info-circle"></i> ¿qué precio usa?
                 </span>
             </p>
@@ -3558,7 +3565,9 @@
             <div class="d-flex justify-content-between align-items-center mt-2 small">
                 <span class="text-muted">
                     <i class="bi bi-info-circle me-1"></i>
-                    NC usa el mismo precio neto del DTE original. Cambia las cantidades a acreditar o desmarca líneas que no quieras incluir.
+                    ${precioEsBruto
+                        ? 'La NC usa el precio (con IVA) de la boleta original. Cambia las cantidades a acreditar o desmarca líneas que no quieras incluir.'
+                        : 'La NC usa el mismo precio neto del DTE original. Cambia las cantidades a acreditar o desmarca líneas que no quieras incluir.'}
                 </span>
                 <span>
                     <strong>Total NC (con IVA):</strong>
@@ -3757,9 +3766,11 @@
                 const infoEl = document.getElementById('anulInfoTotal');
                 const totalLabel = document.getElementById('anulTotalNC');
 
-                // Suma líneas marcadas (neto × 1.19) y refresca subtotal por fila.
+                // Suma líneas marcadas y refresca subtotal por fila. Si el precio
+                // del DTE ya incluye IVA (boleta) no se vuelve a sumar 19%; si es
+                // neto (factura) se agrega IVA al total.
                 const recalcularTotalNC = () => {
-                    let neto = 0;
+                    let baseSum = 0;
                     document.querySelectorAll('tr[data-dte-prod-id]').forEach(row => {
                         const chk = row.querySelector('.nc-linea-check');
                         const cantInput = row.querySelector('.nc-linea-cant');
@@ -3767,7 +3778,9 @@
                         const precio = parseFloat(row.dataset.precio || '0');
                         const cant = parseInt((cantInput && cantInput.value) || '0', 10) || 0;
                         const incluida = chk && chk.checked && !chk.disabled;
-                        const subtConIva = Math.round(precio * cant * 1.19);
+                        const subtConIva = precioEsBruto
+                            ? Math.round(precio * cant)
+                            : Math.round(precio * cant * 1.19);
                         if (subtotalCell) {
                             if (!chk || chk.disabled) {
                                 subtotalCell.innerHTML = '<span class="text-muted">-</span>';
@@ -3780,9 +3793,9 @@
                                 subtotalCell.classList.remove('text-success');
                             }
                         }
-                        if (incluida) neto += precio * cant;
+                        if (incluida) baseSum += precio * cant;
                     });
-                    const conIva = Math.round(neto * 1.19);
+                    const conIva = precioEsBruto ? Math.round(baseSum) : Math.round(baseSum * 1.19);
                     if (totalLabel) totalLabel.textContent = fmtCLP(conIva);
                     if (montoEl) montoEl.value = conIva;
                     return conIva;

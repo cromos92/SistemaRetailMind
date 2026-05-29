@@ -28682,6 +28682,15 @@ def lineas_disponibles_nc_api(request, dte_id):
             'ncs_previas': info_nc['detalle'],
         })
 
+    # Base de precios del DTE original: misma decisión (y fallback) que usa
+    # calcular_montos_nc al crear la NC, para que el modal muestre subtotales y
+    # total consistentes con la NC realmente emitida (boletas guardan precio CON
+    # IVA; facturas/traspasos lo guardan NETO).
+    from .views_modulo_documentos import base_lineas_dte
+    precio_base = base_lineas_dte(dte)
+    if precio_base == 'DESCONOCIDO':
+        precio_base = 'BRUTO' if 'BOLETA' in (dte.tipo_documento or '').upper() else 'NETO'
+
     return JsonResponse({
         'success': True,
         'dte': {
@@ -28689,6 +28698,8 @@ def lineas_disponibles_nc_api(request, dte_id):
             'numero_documento': dte.numero_documento,
             'tipo_documento': dte.tipo_documento,
             'monto_con_iva': float(dte.monto_con_iva or 0),
+            'monto_neto': float(dte.monto_neto or 0),
+            'precio_base': precio_base,  # 'BRUTO' (precio con IVA) | 'NETO'
             'es_nota_credito': bool(dte.es_nota_credito),
         },
         'lineas': lineas,

@@ -31,11 +31,16 @@ Clave de agrupación: (articulo, marca, color, genero, categoria)
 from rest_framework import serializers
 
 
-def agrupar_por_producto(rows: list) -> list:
+def agrupar_por_producto(rows: list, fotos_map: dict = None) -> list:
     """
     Toma una lista de dicts planos (una fila por sku×sucursal) y los agrupa
     en una lista de dicts donde cada entrada representa un PRODUCTO ÚNICO
     (articulo + marca + color + genero + categoria) con sus tallas anidadas.
+
+    Si ``fotos_map`` ({articulo: url}) se pasa, la portada se resuelve desde
+    ese dict (resuelto en bloque, sin N+1). Si es None, cae al resolver
+    puntual ``resolver_foto_portada_url`` (1-2 queries por producto) — útil
+    para llamadas con pocos productos (ej. /tallas/ de un solo articulo).
 
     Cada talla incluye:
       - sku, talla
@@ -73,7 +78,11 @@ def agrupar_por_producto(rows: list) -> list:
         prod_key = (articulo, marca, color, genero, categoria)
 
         if prod_key not in productos:
-            from app.services.realsport_imagenes_service import resolver_foto_portada_url
+            if fotos_map is not None:
+                foto_portada_url = fotos_map.get(articulo, '')
+            else:
+                from app.services.realsport_imagenes_service import resolver_foto_portada_url
+                foto_portada_url = resolver_foto_portada_url(articulo, empresa_id)
             productos[prod_key] = {
                 'articulo':         articulo,
                 'descripcion':      row.get('producto__descripcion', '') or '',
@@ -86,7 +95,7 @@ def agrupar_por_producto(rows: list) -> list:
                 'precio_costo':     int(row.get('producto__costo', 0) or 0),
                 'precio_interno':   int(row.get('producto__precioSugerido', 0) or 0),
                 'imagenes':         [],   # llegan por webhook Shopify
-                'foto_portada_url': resolver_foto_portada_url(articulo, empresa_id),
+                'foto_portada_url': foto_portada_url,
                 'guia_talla_id':    row.get('producto__guia_talla_id'),
                 'tipo_talla':       row.get('producto__tipo_talla', '') or '',
                 'tallas':           [],

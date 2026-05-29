@@ -35,6 +35,14 @@ from .serializers import ProductoExternalSerializer, agrupar_por_producto
 
 logger = logging.getLogger(__name__)
 
+# Anti-stampede para /api/skus/:
+#   LOCK_TIMEOUT  — vida del lock que toma el worker que recalcula (segundos).
+#                   Debe superar el peor tiempo de cálculo del catálogo.
+#   STALE_TIMEOUT — vida de la copia "stale" que se sirve mientras un worker
+#                   recalcula (más larga que la caché fresca de 15 min).
+LOCK_TIMEOUT = 120
+STALE_TIMEOUT = 3600
+
 # Columnas compartidas para el queryset plano (una fila por sku × sucursal).
 # NOTA: no incluir campos que no se usen en agrupar_por_producto() para
 #       evitar JOINs innecesarios (ej. empresa__nombre_fantasia eliminado).
@@ -93,6 +101,7 @@ class SkusPorEmpresaView(APIView):
 
     def get(self, request):
         from django.core.cache import cache
+        from app.services.realsport_imagenes_service import resolver_fotos_portada_bulk
 
         rut = request.query_params.get('rut_empresa', '').strip()
         if not rut:
@@ -103,27 +112,62 @@ class SkusPorEmpresaView(APIView):
             )
 
         # Cache de 15 min: el catálogo casi no cambia en ese rango y el endpoint
-        # es muy pesado (19K productos, 19K lookups de fotos). Esto absorbe el
-        # polling agresivo de AllConected mientras se investiga la causa raíz.
+        # es pesado (~19K productos). Esto absorbe el polling agresivo de
+        # AllConected.
         cache_key = f'external_skus_v1:{rut}'
         cached = cache.get(cache_key)
         if cached is not None:
-            logger.info(f"[external/skus] rut={rut} → CACHE HIT")
+            logger.info(f"[external/skus] rut={rut} -> CACHE HIT")
             return Response(cached)
 
-        logger.info(f"[external/skus] rut={rut} → CACHE MISS, calculando")
-        rows = list(_build_qs(rut))
-        productos = agrupar_por_producto(rows)
-        serializer = ProductoExternalSerializer(productos, many=True)
-        logger.info(f"[external/skus] rut={rut} → {len(productos)} productos ({len(rows)} filas raw)")
-        response_data = {
-            'success': True,
-            'data': serializer.data,
-            'total': len(productos),
-            'error': None,
-        }
-        cache.set(cache_key, response_data, timeout=900)  # 15 minutos
-        return Response(response_data)
+        # Anti-stampede: cuando expira la caché de 15 min, varias requests
+        # concurrentes (reintentos 1/3, 2/3 + polling) caen en MISS a la vez.
+        # Sin esto, TODAS recalcularían el catálogo completo en paralelo y
+        # saturarían la BD. Solo un worker toma el lock y recalcula; el resto
+        # sirve la copia "stale" (válida 1h) en vez de recalcular.
+        stale_key = f'{cache_key}:stale'
+        lock_key = f'{cache_key}:lock'
+        got_lock = cache.add(lock_key, '1', timeout=LOCK_TIMEOUT)
+        if not got_lock:
+            stale = cache.get(stale_key)
+            if stale is not None:
+                logger.info(f"[external/skus] rut={rut} -> MISS, lock tomado -> STALE")
+                return Response(stale)
+            # Cold start sin copia stale y con el lock ya tomado por otro worker:
+            # no podemos devolver vacío, así que recalculamos igual. Caso raro
+            # (primer arranque bajo carga concurrente).
+            logger.info(f"[external/skus] rut={rut} -> MISS, sin stale -> recalcula igual")
+
+        try:
+            logger.info(f"[external/skus] rut={rut} -> CACHE MISS, calculando")
+            rows = list(_build_qs(rut))
+
+            # Resolver TODAS las portadas en 1-2 queries (antes: 1-2 por
+            # producto → ~38K queries). Todas las filas comparten empresa_id
+            # (filtradas por el mismo rut).
+            articulos = {r.get('producto__articulo') for r in rows}
+            empresa_id = next(
+                (r.get('producto__sucursal__empresa_id') for r in rows
+                 if r.get('producto__sucursal__empresa_id')),
+                None,
+            )
+            fotos_map = resolver_fotos_portada_bulk(articulos, empresa_id)
+
+            productos = agrupar_por_producto(rows, fotos_map=fotos_map)
+            serializer = ProductoExternalSerializer(productos, many=True)
+            logger.info(f"[external/skus] rut={rut} -> {len(productos)} productos ({len(rows)} filas raw)")
+            response_data = {
+                'success': True,
+                'data': serializer.data,
+                'total': len(productos),
+                'error': None,
+            }
+            cache.set(cache_key, response_data, timeout=900)         # 15 min (fresca)
+            cache.set(stale_key, response_data, timeout=STALE_TIMEOUT)  # 1h (respaldo)
+            return Response(response_data)
+        finally:
+            if got_lock:
+                cache.delete(lock_key)
 
 
 # ──────────────────────────────────────────────

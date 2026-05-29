@@ -5573,12 +5573,13 @@ function actualizarEstadoBotonVerResumen() {
 
     const faltantes = [];
     if (!motivo) faltantes.push('seleccionar motivo');
-    if (escaneados === 0 && seleccionados === 0) {
-        faltantes.push('escanear al menos 1 producto');
-    }
     if (esCambio && !hayProductosNuevos) {
         faltantes.push('agregar producto nuevo para el cambio');
     }
+    // Nota: la falta de producto original a devolver/cambiar NO bloquea el avance;
+    // se informa como aviso confirmable al momento de crear (ver crearCambioDevolucion).
+    // Mostramos solo un hint suave para guiar al usuario.
+    const sinProductoOriginal = (escaneados === 0 && seleccionados === 0);
 
     const $btn = $('#btn-siguiente');
     const $hint = $('#footer-hint');
@@ -5591,8 +5592,13 @@ function actualizarEstadoBotonVerResumen() {
         $btn.prop('disabled', false)
             .attr('title', 'Continuar al resumen')
             .removeClass('btn-outline-secondary').addClass('btn-primary');
-        $hint.hide();
         $motivo.removeClass('border-warning');
+        // Aviso suave (no bloquea) si aún no hay producto original seleccionado
+        if (sinProductoOriginal) {
+            $hint.html('<i class="ri-information-line"></i> Aún no seleccionas un producto a devolver/cambiar').show();
+        } else {
+            $hint.hide();
+        }
     } else {
         // Dejar el botón HABILITADO pero con estilo atenuado
         $btn.prop('disabled', false)
@@ -6443,18 +6449,49 @@ function crearCambioDevolucion(event) {
     
     console.log('📦 Productos originales seleccionados:', productosOriginalesSeleccionados.length);
     console.log('📦 Productos nuevos a entregar:', productosNuevos.length);
-    
+
+    // ── Aviso (no bloqueante) si no se seleccionó ningún producto original ──
+    // Un cambio/devolución normalmente incluye al menos un producto del documento
+    // original. Informamos claramente pero permitimos continuar si el usuario insiste.
+    if (productosOriginalesSeleccionados.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: '¿Continuar sin producto a cambiar?',
+            html: `No seleccionaste ningún <strong>producto original</strong> a devolver/cambiar.
+                   <br>Normalmente un cambio o devolución incluye al menos un producto del documento original.`,
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-arrow-right-line me-1"></i> Continuar de todos modos',
+            cancelButtonText: '<i class="ri-arrow-left-line me-1"></i> Volver a seleccionar',
+            confirmButtonColor: '#e67e22',
+            reverseButtons: true,
+        }).then((r) => {
+            if (r.isConfirmed) {
+                continuarCreacionCambio(datos, productosOriginalesSeleccionados);
+            }
+        });
+        return;
+    }
+
+    continuarCreacionCambio(datos, productosOriginalesSeleccionados);
+}
+
+/**
+ * Arma el payload de productos y envía la solicitud de cambio/devolución.
+ * Separado de crearCambioDevolucion() para poder invocarlo tras el aviso
+ * confirmable cuando no hay producto original seleccionado.
+ */
+function continuarCreacionCambio(datos, productosOriginalesSeleccionados) {
     // Si es cambio, necesitamos enviar todos los productos nuevos
     if (datos.tipo_operacion === 'CAMBIO_SIMPLE' || datos.tipo_operacion === 'CAMBIO_CON_DIFERENCIA') {
         if (productosNuevos.length === 0) {
             mostrarError('Para un cambio debe seleccionar al menos un producto nuevo a entregar');
             return;
         }
-        
+
         // ✅ CORREGIDO V2: Crear entradas separadas
         // 1. Productos DEVUELTOS (originales) - cada uno con su primer producto nuevo correspondiente
         // 2. Productos NUEVOS ADICIONALES - sin vincular a ningún original
-        
+
         productosOriginalesSeleccionados.forEach((origData, origIndex) => {
             // El primer producto nuevo para este original (si existe)
             const productoNuevoCorrespondiente = productosNuevos[origIndex];
@@ -6482,20 +6519,27 @@ function crearCambioDevolucion(event) {
         if (productosNuevos.length > productosOriginalesSeleccionados.length) {
             const productosAdicionales = productosNuevos.slice(productosOriginalesSeleccionados.length);
             const primerOriginal = productosOriginalesSeleccionados[0];
-            
-            productosAdicionales.forEach((productoNuevo) => {
-                datos.productos.push({
-                    ticket_producto_id: primerOriginal.producto.id,
-                    cantidad: 0,  // No devuelve nada adicional
-                    condicion_producto: 'PERFECTO',
-                    apto_para_venta: true,
-                    producto_nuevo_id: productoNuevo.id,
-                    cantidad_nueva: productoNuevo.cantidad,
-                    precio_nuevo: productoNuevo.precio_venta,
-                    es_producto_adicional: true  // Marcador para el backend
+
+            // Guarda: sin producto original no hay referencia para vincular los adicionales.
+            // No rompemos en JS; dejamos que el backend responda con su mensaje claro
+            // ("Debe incluir al menos un producto").
+            if (!primerOriginal) {
+                console.warn('Cambio sin producto original seleccionado: no se vinculan adicionales; el backend validará.');
+            } else {
+                productosAdicionales.forEach((productoNuevo) => {
+                    datos.productos.push({
+                        ticket_producto_id: primerOriginal.producto.id,
+                        cantidad: 0,  // No devuelve nada adicional
+                        condicion_producto: 'PERFECTO',
+                        apto_para_venta: true,
+                        producto_nuevo_id: productoNuevo.id,
+                        cantidad_nueva: productoNuevo.cantidad,
+                        precio_nuevo: productoNuevo.precio_venta,
+                        es_producto_adicional: true  // Marcador para el backend
+                    });
+                    console.log(`  📦 Adicional: Recibe ${productoNuevo.articulo} (sin devolución asociada)`);
                 });
-                console.log(`  📦 Adicional: Recibe ${productoNuevo.articulo} (sin devolución asociada)`);
-            });
+            }
         }
     } else {
         // DEVOLUCIÓN: Solo productos originales, sin nuevos
@@ -6569,7 +6613,7 @@ function enviarSolicitudCambio(datos) {
 function solicitarAutorizacionSupervisor(datos, responseOriginal) {
     const diasFuera = responseOriginal.dias_fuera_de_plazo || responseOriginal.dias_transcurridos || '';
     Swal.fire({
-        title: 'PIN de Administrador',
+        title: 'Autorización de Administrador',
         html: `
             <div class="text-start">
                 <div class="alert alert-warning py-2 mb-3">
@@ -6582,14 +6626,15 @@ function solicitarAutorizacionSupervisor(datos, responseOriginal) {
                     </div>
                 </div>
                 <div class="mb-2 text-center">
-                    <label class="form-label fw-bold small d-block mb-2">Ingrese el PIN de 6 dígitos de un Administrador:</label>
+                    <label class="form-label fw-bold small d-block mb-2">Ingrese el Código de Autorización (el de la barra superior) o el PIN de 6 dígitos de un Administrador:</label>
                     <input type="password" id="swal-supervisor-pin" class="form-control text-center fw-bold"
                            inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="one-time-code"
                            placeholder="● ● ● ● ● ●"
                            style="letter-spacing: 0.6rem; font-size: 1.5rem; max-width: 220px; margin: 0 auto;">
                 </div>
                 <div class="small text-muted mt-3">
-                    <i class="ri-information-line"></i> El PIN lo configura cada Administrador desde su perfil.
+                    <i class="ri-shield-quarter-line"></i> Cualquier Administrador puede leer su <strong>Código de Autorización</strong> en la barra superior (ícono escudo) y dictarlo.
+                    <br><i class="ri-information-line"></i> También sirve el PIN de 6 dígitos configurado en el perfil del Administrador.
                     <br><i class="ri-shield-check-line"></i> La autorización queda registrada para auditoría.
                 </div>
             </div>

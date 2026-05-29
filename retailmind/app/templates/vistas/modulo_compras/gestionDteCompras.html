@@ -4897,22 +4897,40 @@
             }),
             success: function (response) {
                 if (response.success) {
+                    // IDs de las facturas pagadas, para el comprobante (mismo PDF que
+                    // "Comprobante Pago"). Todas son del mismo proveedor (validado al abrir el modal).
+                    const dteIds = facturas.map(f => f.id).join(',');
+
+                    // Pasos comunes de cierre/limpieza tras procesar el lote.
+                    const finalizarPagoMasivo = () => {
+                        $('#modalPagoMasivo').modal('hide');
+
+                        // Limpiar selecciones
+                        $('.checkbox-factura').prop('checked', false);
+                        $('#selectAllFacturas').prop('checked', false);
+                        actualizarSeleccionMasiva();
+
+                        // Recargar tabla
+                        cargarDTEs(currentPageDTE, currentSearchDTE);
+                    };
+
+                    // Ofrecer descargar el comprobante de pago del lote completo.
                     Swal.fire({
                         icon: 'success',
                         title: 'Pago masivo procesado',
                         html: `<strong>${response.procesadas}</strong> facturas procesadas correctamente<br>Total: <strong>$${response.total_procesado.toLocaleString()}</strong>`,
-                        timer: 3000
+                        showConfirmButton: true,
+                        confirmButtonText: '<i class="bi bi-filetype-pdf me-1"></i>Descargar comprobante',
+                        confirmButtonColor: '#0ab39c',
+                        showCancelButton: true,
+                        cancelButtonText: 'Cerrar'
+                    }).then((result) => {
+                        if (result.isConfirmed && dteIds) {
+                            const params = $.param({ dte_ids: dteIds });
+                            window.open(`/app/comprobantePagoDTE/?${params}`, '_blank');
+                        }
+                        finalizarPagoMasivo();
                     });
-
-                    $('#modalPagoMasivo').modal('hide');
-
-                    // Limpiar selecciones
-                    $('.checkbox-factura').prop('checked', false);
-                    $('#selectAllFacturas').prop('checked', false);
-                    actualizarSeleccionMasiva();
-
-                    // Recargar tabla
-                    cargarDTEs(currentPageDTE, currentSearchDTE);
                 } else {
                     Swal.fire('Error', response.error || 'Error al procesar pago masivo', 'error');
                 }
