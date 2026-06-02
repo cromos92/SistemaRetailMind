@@ -97,8 +97,15 @@ def _crear_boleta(env, numero, monto_con_iva, tipo_transaccion='VENTA_PUBLICO',
 
 
 def _crear_nc_directa(env, numero, monto_con_iva, tipo_transaccion,
-                      metodo_pago_nc='EFECTIVO', documento_afectado=None):
-    """Crea directamente una NC con su pago asociado (sin pasar por la vista)."""
+                      metodo_pago_nc='EFECTIVO', documento_afectado=None,
+                      fecha_pago_nc=None):
+    """Crea directamente una NC con su pago asociado (sin pasar por la vista).
+
+    `fecha_pago_nc` permite simular una NC imputada a un día distinto al de
+    emisión (la cuadratura usa `Dte_Detalle_Pago.fecha_pago` para las NC de
+    devolución). Si es None, replica el comportamiento legacy (efecto en el
+    día de emisión).
+    """
     monto_neto = int(round(monto_con_iva / Decimal('1.19')))
     nc = Dte.objects.create(
         emisor=env['empresa'],
@@ -125,6 +132,7 @@ def _crear_nc_directa(env, numero, monto_con_iva, tipo_transaccion,
     if metodo_pago_nc:
         Dte_Detalle_Pago.objects.create(
             dte=nc, metodo_pago=metodo_pago_nc, monto=int(monto_con_iva),
+            fecha_pago=fecha_pago_nc,
         )
     return nc
 
@@ -177,6 +185,43 @@ class CuadraturaNotaCreditoTest(TestCase):
         self.assertEqual(int(c['total_nc_efectivo']), 2000)
         self.assertEqual(int(c['total_efectivo']), 28000)
         self.assertEqual(int(c['total_notas_credito']), 2000)
+
+    def test_nc_devolucion_efecto_se_imputa_a_fecha_pago(self):
+        """
+        NUEVO — Una NC de devolución en efectivo emitida HOY pero con
+        `fecha_pago` = ayer debe restar del efectivo teórico de AYER, no de
+        hoy. La `fecha_emision` (hoy, la que viaja al SII) no debe anclar el
+        efecto de caja.
+        """
+        from datetime import timedelta
+        ayer = timezone.localdate() - timedelta(days=1)
+        # Boleta de hoy (efectivo $30.000).
+        _crear_boleta(self.env, numero=1201, monto_con_iva=30000)
+        # NC emitida hoy, pero imputada a la cuadratura de ayer.
+        boleta_nc = _crear_boleta(self.env, numero=1202, monto_con_iva=30000)
+        _crear_nc_directa(
+            self.env, numero=9201, monto_con_iva=5000,
+            tipo_transaccion='DEVOLUCION', metodo_pago_nc='EFECTIVO',
+            documento_afectado=boleta_nc, fecha_pago_nc=ayer,
+        )
+
+        # Cuadratura de HOY: la NC NO resta (su efecto cae en ayer) ni cuenta
+        # como documento del día. El efectivo de hoy queda intacto ($60.000 =
+        # dos boletas de $30.000).
+        c_hoy = _calcular_cuadratura_data(self.env['sucursal'], self.hoy)
+        self.assertEqual(int(c_hoy['total_nc_efectivo']), 0)
+        self.assertEqual(int(c_hoy['total_notas_credito']), 0)
+        self.assertEqual(c_hoy['cantidad_notas_credito'], 0)
+        self.assertEqual(int(c_hoy['total_efectivo']), 60000)
+
+        # Cuadratura de AYER: la NC resta $5.000 del efectivo teórico y
+        # aparece como 1 documento. Ayer no hubo ventas → teórico = -$5.000.
+        ayer_str = ayer.strftime('%Y-%m-%d')
+        c_ayer = _calcular_cuadratura_data(self.env['sucursal'], ayer_str)
+        self.assertEqual(int(c_ayer['total_nc_efectivo']), 5000)
+        self.assertEqual(int(c_ayer['total_notas_credito']), 5000)
+        self.assertEqual(c_ayer['cantidad_notas_credito'], 1)
+        self.assertEqual(int(c_ayer['total_efectivo']), -5000)
 
     def test_nc_oculta_no_figura_en_cuadratura(self):
         """
@@ -284,6 +329,8 @@ class AnularFacturaDteTest(TestCase):
         else:
             body['tipo_anulacion'] = kwargs.get('tipo_anulacion', 'DEVOLUCION')
             body['metodo_devolucion'] = kwargs.get('metodo_devolucion', 'EFECTIVO_CAJA')
+        if 'fecha_devolucion_caja' in kwargs:
+            body['fecha_devolucion_caja'] = kwargs['fecha_devolucion_caja']
         return self.client.post(
             reverse('anular_factura_dte'),
             data=json.dumps(body),
@@ -386,6 +433,64 @@ class AnularFacturaDteTest(TestCase):
         # Efectivo bruto boleta = $30.000; NC efectivo = $2.000
         # → efectivo teórico = $30.000 - $2.000 = $28.000
         self.assertEqual(int(c['total_efectivo']), 28000)
+
+    def test_nc_devolucion_fecha_caja_se_guarda_en_fecha_pago(self):
+        """
+        NUEVO — Al emitir una NC de devolución con `fecha_devolucion_caja` de
+        un día anterior, el pago de la NC debe guardar esa fecha en
+        `fecha_pago`, mientras la `fecha_emision` de la NC sigue siendo hoy
+        (correcta para el SII).
+        """
+        from datetime import timedelta
+        boleta = _crear_boleta(self.env, numero=2200, monto_con_iva=15000)
+        # La boleta original debe ser anterior para que la fecha elegida sea
+        # válida (rango [emisión original, hoy]).
+        hace_5 = timezone.localdate() - timedelta(days=5)
+        Dte.objects.filter(pk=boleta.pk).update(
+            fecha_emision=hace_5, fecha_vencimiento=hace_5,
+        )
+        hace_3 = timezone.localdate() - timedelta(days=3)
+
+        resp = self._post_anular(
+            dte_id=boleta.id,
+            modalidad_nc='DEVOLUCION',
+            metodo_devolucion='EFECTIVO_CAJA',
+            monto_nc=15000,
+            fecha_devolucion_caja=hace_3.strftime('%Y-%m-%d'),
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        nc = Dte.objects.filter(
+            documento_afectado=boleta, es_nota_credito=True,
+        ).first()
+        self.assertIsNotNone(nc)
+        # fecha_emision de la NC = hoy (no se backdatea al SII).
+        self.assertEqual(nc.fecha_emision, timezone.localdate())
+        # El pago de la NC lleva la fecha de cuadratura elegida.
+        pago = nc.dte_asociado.first()
+        self.assertIsNotNone(pago)
+        self.assertEqual(pago.metodo_pago, 'EFECTIVO')
+        self.assertEqual(pago.fecha_pago, hace_3)
+
+    def test_nc_devolucion_fecha_futura_rechazada(self):
+        """La fecha que afecta la cuadratura no puede ser futura (400)."""
+        from datetime import timedelta
+        boleta = _crear_boleta(self.env, numero=2201, monto_con_iva=15000)
+        manana = timezone.localdate() + timedelta(days=1)
+        resp = self._post_anular(
+            dte_id=boleta.id,
+            modalidad_nc='DEVOLUCION',
+            metodo_devolucion='EFECTIVO_CAJA',
+            monto_nc=15000,
+            fecha_devolucion_caja=manana.strftime('%Y-%m-%d'),
+        )
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertFalse(
+            Dte.objects.filter(
+                documento_afectado=boleta, es_nota_credito=True,
+            ).exists(),
+            'No debe crearse la NC si la fecha de cuadratura es inválida.',
+        )
 
     def test_modalidad_devolucion_via_modalidad_nc(self):
         """

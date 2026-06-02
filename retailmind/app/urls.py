@@ -461,6 +461,13 @@ urlpatterns = [
      path('obtener_info_asociacion_nc/<int:nc_id>/', views.obtener_info_asociacion_nc, name='obtener_info_asociacion_nc'),
      path('desasociar_nc/<int:nc_id>/', views.desasociar_nc, name='desasociar_nc'),
      path('asociar_nc_existente/', views.asociar_nc_existente, name='asociar_nc_existente'),
+
+     # Compensación factura-contra-factura ("Pagar con Factura")
+     path('obtener_facturas_compensar_disponibles/', views_modulo_compras.obtener_facturas_compensar_disponibles, name='obtener_facturas_compensar_disponibles'),
+     path('asociar_factura_compensacion/', views_modulo_compras.asociar_factura_compensacion, name='asociar_factura_compensacion'),
+     path('desasociar_factura_compensacion/<int:pago_id>/', views_modulo_compras.desasociar_factura_compensacion, name='desasociar_factura_compensacion'),
+     path('obtener_info_compensacion/<int:dte_id>/', views_modulo_compras.obtener_info_compensacion, name='obtener_info_compensacion'),
+
      path('procesar_pago_masivo/', views.procesar_pago_masivo, name='procesar_pago_masivo'),
      path('guardar_recepcion/', views.guardar_recepcion, name='guardar_recepcion'),
      path('actualizar_sucursal_recepciones/', views.actualizar_sucursal_recepciones, name='actualizar_sucursal_recepciones'),

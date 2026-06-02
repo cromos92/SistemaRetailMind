@@ -10145,7 +10145,17 @@ def cargarDteCompra(request):
                 
                 notas_credito_total = sum(nc['monto'] for nc in notas_credito_objs) if notas_credito_objs else 0
                 notas_credito_numeros = [nc['voucher'] for nc in notas_credito_objs if nc.get('voucher')]
-                
+
+                # Compensaciones con factura asociadas (otra factura usada como pago/neteo).
+                # 'Compensación con Factura' = constante METODO_COMPENSACION (views_modulo_compras.py).
+                compensaciones_objs = Dte_Detalle_Pago.objects.filter(
+                    dte=d,
+                    metodo_pago='Compensación con Factura'
+                ).values('id', 'monto', 'voucher')
+
+                compensaciones_total = sum(c['monto'] for c in compensaciones_objs) if compensaciones_objs else 0
+                compensaciones_numeros = [c['voucher'] for c in compensaciones_objs if c.get('voucher')]
+
                 # Contar incidencias pendientes y totales
                 incidencias_count = Dte_Incidencia.objects.filter(dte=d).count()
                 incidencias_pendientes = Dte_Incidencia.objects.filter(dte=d, estado='PENDIENTE').count()
@@ -10200,6 +10210,8 @@ def cargarDteCompra(request):
                     'descuento': float(d.descuento or 0),
                     'notas_credito': float(notas_credito_total),
                     'notas_credito_numeros': notas_credito_numeros,
+                    'compensaciones': float(compensaciones_total),
+                    'compensaciones_numeros': compensaciones_numeros,
                     'estado': d.estado_dte,
                     'estado_pago': d.estado_pago,
                     'diasCredito': d.diasCredito,
@@ -10285,8 +10297,6 @@ def facturasPendientesPorMes(request):
             tipo_transaccion='COMPRA',
             receptor_id=empresa_id,
         ).exclude(
-            estado_pago__in=['Pagado', 'PAGADO']
-        ).exclude(
             estado_dte__in=['RECHAZADO', 'Rechazado']
         )
 
@@ -10300,15 +10310,23 @@ def facturasPendientesPorMes(request):
 
         fecha_field = 'fecha_recepcion' if tipo_fecha == 'recepcion' else 'fecha_emision'
 
-        # En modo estado de cuenta (proveedor seleccionado) se omite el filtro de mes
-        # para mostrar todas las facturas pendientes del proveedor.
+        # Modo estado de cuenta (proveedor seleccionado): se omite el filtro de mes
+        # y se muestran SOLO los documentos con saldo pendiente del proveedor
+        # (es un estado de cuenta de deuda, no un historial completo).
+        #
+        # Modo mes (sin proveedor): se muestra TODO lo recepcionado del mes del
+        # filtro, incluyendo documentos ya pagados.
         if proveedor_id:
-            qs = qs.filter(emisor_id=proveedor_id)
+            qs = qs.filter(emisor_id=proveedor_id).exclude(
+                estado_pago__in=['Pagado', 'PAGADO']
+            )
+            solo_pendientes = True
         else:
             qs = qs.filter(**{
                 f'{fecha_field}__year': anio,
                 f'{fecha_field}__month': mes_num,
             })
+            solo_pendientes = False
 
         qs = qs.select_related('emisor').only(
             'id', 'numero_documento', 'tipo_documento',
@@ -10339,7 +10357,9 @@ def facturasPendientesPorMes(request):
         hoy = datetime.now().date()
 
         facturas = []
-        total_monto = 0
+        total_recepcionado = 0
+        total_pendiente = 0
+        total_pagado = 0
         total_cantidad = 0
         total_vencidas = 0
         total_proximas = 0
@@ -10348,9 +10368,22 @@ def facturasPendientesPorMes(request):
             monto = float(dte.monto_con_iva or 0)
             abonado = float(abonos_map.get(dte.id, 0) or 0)
             ncs = float(ncs_map.get(dte.id, 0) or 0)
-            saldo = max(monto - abonado - ncs, 0)
-            if saldo <= 0:
+            abonado_total = abonado + ncs
+            saldo = max(monto - abonado_total, 0)
+
+            # En estado de cuenta solo interesan documentos con saldo pendiente.
+            if solo_pendientes and saldo <= 0:
                 continue
+
+            pagado_doc = monto - saldo  # = min(monto, abonado+ncs)
+
+            # Estado de pago calculado a partir del saldo real.
+            if saldo <= 0:
+                estado_pago_calc = 'pagado'
+            elif abonado_total > 0:
+                estado_pago_calc = 'parcial'
+            else:
+                estado_pago_calc = 'pendiente'
 
             # Días restantes según fecha de emisión + días de crédito (default 30)
             dias_restantes = None
@@ -10364,8 +10397,10 @@ def facturasPendientesPorMes(request):
                 except (TypeError, ValueError):
                     dias_restantes = None
 
-            es_vencida = dias_restantes is not None and dias_restantes <= 0
-            es_proxima = dias_restantes is not None and 0 < dias_restantes <= 7
+            # El vencimiento solo aplica a documentos con saldo pendiente.
+            tiene_saldo = saldo > 0
+            es_vencida = tiene_saldo and dias_restantes is not None and dias_restantes <= 0
+            es_proxima = tiene_saldo and dias_restantes is not None and 0 < dias_restantes <= 7
 
             facturas.append({
                 'id': dte.id,
@@ -10377,17 +10412,26 @@ def facturasPendientesPorMes(request):
                 'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d') if dte.fecha_emision else '',
                 'fecha_recepcion': dte.fecha_recepcion.strftime('%Y-%m-%d') if dte.fecha_recepcion else '',
                 'monto_con_iva': monto,
-                'abonado': abonado + ncs,
+                'abonado': abonado_total,
                 'saldo': saldo,
-                'dias_restantes': dias_restantes,
+                'pagado': pagado_doc,
+                'estado_pago': estado_pago_calc,
+                'dias_restantes': dias_restantes if tiene_saldo else None,
             })
 
-            total_monto += saldo
+            total_recepcionado += monto
+            total_pendiente += saldo
+            total_pagado += pagado_doc
             total_cantidad += 1
             if es_vencida:
                 total_vencidas += 1
             if es_proxima:
                 total_proximas += 1
+
+        # total_monto mantiene el significado histórico según el modo:
+        #   - estado de cuenta -> total pendiente del proveedor
+        #   - mes -> total recepcionado del mes
+        total_monto = total_pendiente if solo_pendientes else total_recepcionado
 
         # Identificación del proveedor para títulos y nombre de archivo
         proveedor_nombre = ''
@@ -10402,25 +10446,28 @@ def facturasPendientesPorMes(request):
                 proveedor_nombre = emp.nombre or ''
                 proveedor_rut = getattr(emp, 'rut', '') or ''
 
+        ESTADO_PAGO_LABEL = {'pagado': 'Pagado', 'parcial': 'Parcial', 'pendiente': 'Pendiente'}
+
         if formato == 'csv':
             response = HttpResponse(content_type='text/csv; charset=utf-8')
             if proveedor_id:
                 safe_prov = (proveedor_nombre or 'proveedor').replace(' ', '_').replace('/', '-')
                 filename = f'estado_cuenta_{safe_prov}.csv'
             else:
-                filename = f'facturas_pendientes_{anio}-{mes_num:02d}_{tipo_fecha}.csv'
+                filename = f'recepcionado_{anio}-{mes_num:02d}_{tipo_fecha}.csv'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             response.write('﻿')  # BOM para Excel
             writer = csv.writer(response, delimiter=';')
             writer.writerow([
                 'Proveedor', 'N° Documento', 'Tipo', 'Fecha Emisión', 'Fecha Recepción',
-                'Monto c/IVA', 'Abonado', 'Saldo', 'Días Restantes'
+                'Monto c/IVA', 'Abonado', 'Saldo', 'Estado Pago', 'Días Restantes'
             ])
             for f in facturas:
                 writer.writerow([
                     f['proveedor'], f['numero_documento'], f['tipo_documento'],
                     f['fecha_emision'], f['fecha_recepcion'],
                     int(f['monto_con_iva']), int(f['abonado']), int(f['saldo']),
+                    ESTADO_PAGO_LABEL.get(f['estado_pago'], ''),
                     f['dias_restantes'] if f['dias_restantes'] is not None else '',
                 ])
             return response
@@ -10449,6 +10496,7 @@ def facturasPendientesPorMes(request):
             gris_claro = colors.HexColor('#F8F9FA')
             rojo_claro = colors.HexColor('#FEE2E2')
             amarillo_claro = colors.HexColor('#FEF3C7')
+            verde_claro = colors.HexColor('#D1FAE5')
 
             title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=15, textColor=azul, spaceAfter=2, alignment=0)
             sub_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=9, textColor=colors.grey, spaceAfter=10)
@@ -10482,15 +10530,21 @@ def facturasPendientesPorMes(request):
             if proveedor_id:
                 titulo = f"Estado de Cuenta — {proveedor_nombre or 'Proveedor'}"
                 detalle_periodo = f"Proveedor: {proveedor_nombre} ({proveedor_rut})" if proveedor_rut else f"Proveedor: {proveedor_nombre}"
+                resumen_pdf = (
+                    f"Total pendiente: ${int(total_pendiente):,}  |  "
+                    f"N° facturas: {total_cantidad}  |  Vencidas: {total_vencidas}  |  Por vencer (≤7d): {total_proximas}"
+                )
             else:
-                titulo = f"Facturas Pendientes — {meses_es[mes_num - 1]} {anio}"
+                titulo = f"Recepcionado — {meses_es[mes_num - 1]} {anio}"
                 detalle_periodo = f"Período: {meses_es[mes_num - 1]} {anio}  |  Filtro fecha: {'Recepción' if tipo_fecha == 'recepcion' else 'Emisión'}"
+                resumen_pdf = (
+                    f"Total recepcionado: ${int(total_recepcionado):,}  |  "
+                    f"N° docs: {total_cantidad}  |  Pendiente: ${int(total_pendiente):,}  |  Pagado: ${int(total_pagado):,}"
+                )
 
             elements.append(Paragraph(titulo, title_style))
             elements.append(Paragraph(
-                f"{detalle_periodo}  |  Generado: {timezone.localdate().strftime('%d/%m/%Y')}  |  "
-                f"Total pendiente: ${int(total_monto):,}  |  "
-                f"N° facturas: {total_cantidad}  |  Vencidas: {total_vencidas}  |  Por vencer (≤7d): {total_proximas}",
+                f"{detalle_periodo}  |  Generado: {timezone.localdate().strftime('%d/%m/%Y')}  |  {resumen_pdf}",
                 sub_style
             ))
 
@@ -10509,8 +10563,12 @@ def facturasPendientesPorMes(request):
             estados_pdf = []
             for f in facturas:
                 dr = f['dias_restantes']
-                if dr is None:
-                    estado_txt = '-'
+                ep = f['estado_pago']
+                if ep == 'pagado':
+                    estado_txt = 'Pagado'
+                    estado_tag = 'pagado'
+                elif dr is None:
+                    estado_txt = 'Parcial' if ep == 'parcial' else 'Pendiente'
                     estado_tag = 'normal'
                 elif dr <= 0:
                     estado_txt = f"Vencida {abs(dr)}d"
@@ -10555,10 +10613,11 @@ def facturasPendientesPorMes(request):
             if facturas:
                 if proveedor_id:
                     total_row = ['', '', '', 'TOTAL',
-                                 '', '', f"${int(total_monto):,}", '']
+                                 '', '', f"${int(total_pendiente):,}", '']
                 else:
+                    # Total recepcionado bajo "Monto c/IVA" y pendiente bajo "Saldo".
                     total_row = ['', '', '', '', 'TOTAL',
-                                 '', '', f"${int(total_monto):,}", '']
+                                 f"${int(total_recepcionado):,}", '', f"${int(total_pendiente):,}", '']
                 table_data.append(total_row)
 
             table = Table(table_data, colWidths=col_widths_pdf, repeatRows=1)
@@ -10584,6 +10643,8 @@ def facturasPendientesPorMes(request):
                     style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), rojo_claro))
                 elif tag == 'proxima':
                     style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), amarillo_claro))
+                elif tag == 'pagado':
+                    style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), verde_claro))
             if facturas:
                 style_cmds.append(('BACKGROUND', (0, -1), (-1, -1), verde))
                 style_cmds.append(('TEXTCOLOR', (0, -1), (-1, -1), colors.white))
@@ -10594,7 +10655,10 @@ def facturasPendientesPorMes(request):
 
             if not facturas:
                 elements.append(Spacer(1, 12))
-                elements.append(Paragraph("Sin facturas pendientes en este período.", sub_style))
+                msg_vacio = ("Este proveedor no tiene facturas pendientes."
+                             if proveedor_id else
+                             "Sin documentos recepcionados en este período.")
+                elements.append(Paragraph(msg_vacio, sub_style))
 
             def footer(canvas, doc):
                 canvas.saveState()
@@ -10613,7 +10677,7 @@ def facturasPendientesPorMes(request):
                 safe_prov = (proveedor_nombre or 'proveedor').replace(' ', '_').replace('/', '-')
                 filename = f'estado_cuenta_{safe_prov}.pdf'
             else:
-                filename = f'facturas_pendientes_{anio}-{mes_num:02d}_{tipo_fecha}.pdf'
+                filename = f'recepcionado_{anio}-{mes_num:02d}_{tipo_fecha}.pdf'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             response.write(buffer.read())
             return response
@@ -10630,6 +10694,9 @@ def facturasPendientesPorMes(request):
             'modo_estado_cuenta': bool(proveedor_id),
             'facturas': facturas,
             'total_monto': total_monto,
+            'total_recepcionado': total_recepcionado,
+            'total_pendiente': total_pendiente,
+            'total_pagado': total_pagado,
             'total_cantidad': total_cantidad,
             'total_vencidas': total_vencidas,
             'total_proximas': total_proximas,
@@ -10997,7 +11064,10 @@ def pagosDTE(request, dte_id):
         pagos_qs = Dte_Detalle_Pago.objects.filter(
             dte_id=dte_id
         ).exclude(
-            metodo_pago='Nota de Crédito'
+            # Excluir instrumentos no-efectivo: se muestran aparte (NC y compensaciones
+            # con factura). 'Compensación con Factura' = constante METODO_COMPENSACION
+            # en views_modulo_compras.py.
+            metodo_pago__in=['Nota de Crédito', 'Compensación con Factura']
         ).order_by('id')
 
         pagos = []
@@ -27094,6 +27164,40 @@ def anular_factura_dte(request):
         }, status=400)
 
     # ------------------------------------------------------------------
+    # Fecha de cuadratura de la devolución (solo modalidad DEVOLUCION).
+    #
+    # Por defecto la NC resta del efectivo/transferencia teórico del DÍA EN
+    # QUE SE EMITE (hoy). Pero el operador puede imputar ese egreso de caja a
+    # un día anterior (la devolución física ocurrió otro día, o se concilia la
+    # caja de una fecha pasada). Esta fecha NO cambia la `fecha_emision` del
+    # DTE (que sigue siendo hoy, correcta para el SII): sólo se guarda en
+    # `Dte_Detalle_Pago.fecha_pago` y la cuadratura la usa para decidir a qué
+    # día imputar el efecto de caja. Rango permitido: [emisión original, hoy].
+    # ------------------------------------------------------------------
+    fecha_devolucion_caja = timezone.localdate()
+    if modalidad_nc == 'DEVOLUCION':
+        fecha_dev_raw = (body.get('fecha_devolucion_caja') or '').strip()
+        if fecha_dev_raw:
+            try:
+                fecha_devolucion_caja = date.fromisoformat(fecha_dev_raw)
+            except (ValueError, TypeError):
+                return JsonResponse({
+                    'error': 'Fecha que afecta la cuadratura inválida. Use formato YYYY-MM-DD.'
+                }, status=400)
+            hoy_local = timezone.localdate()
+            if fecha_devolucion_caja > hoy_local:
+                return JsonResponse({
+                    'error': 'La fecha que afecta la cuadratura no puede ser futura.'
+                }, status=400)
+            if fecha_devolucion_caja < dte.fecha_emision:
+                return JsonResponse({
+                    'error': (
+                        'La fecha que afecta la cuadratura no puede ser anterior a la '
+                        f'emisión del documento original ({dte.fecha_emision:%d/%m/%Y}).'
+                    )
+                }, status=400)
+
+    # ------------------------------------------------------------------
     # Resolver receptor de la NC
     #
     # Para que el TXT Acepta de la NC sea descargable, el receptor con sus
@@ -27458,13 +27562,18 @@ def anular_factura_dte(request):
             }])
         )
 
+        # `fecha_pago` = día al que se imputa el egreso de caja en la
+        # cuadratura (default hoy; el operador pudo elegir un día anterior).
+        # La `fecha_emision` de la NC sigue siendo hoy para el SII.
         if metodo_devolucion == 'EFECTIVO_CAJA':
             Dte_Detalle_Pago.objects.create(
-                dte=nc, metodo_pago='EFECTIVO', monto=nc.monto_con_iva
+                dte=nc, metodo_pago='EFECTIVO', monto=nc.monto_con_iva,
+                fecha_pago=fecha_devolucion_caja,
             )
         elif metodo_devolucion == 'TRANSFERENCIA_BANCARIA':
             Dte_Detalle_Pago.objects.create(
-                dte=nc, metodo_pago='TRANSFERENCIA', monto=nc.monto_con_iva
+                dte=nc, metodo_pago='TRANSFERENCIA', monto=nc.monto_con_iva,
+                fecha_pago=fecha_devolucion_caja,
             )
 
         # Modalidad OCULTA: marcar la NC como descartada para excluirla

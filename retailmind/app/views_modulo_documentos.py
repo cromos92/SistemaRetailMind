@@ -3647,7 +3647,11 @@ def generar_txt_desde_dte_existente(request):
                 if p.notas:
                     partes.append(' '.join(str(p.notas).split())[:80])
                 pagos_str.append(' - '.join(partes))
-            metodos_pago_texto = ' | '.join(pagos_str)
+            # Limpiar cada trozo por separado (acentos, pipes internos de notas
+            # Transbank, etc.) y recién después unir con '|'. Si limpiáramos la
+            # cadena ya unida, limpiar_texto() borraría los '|' separadores y
+            # _resumir_metodos_pago() solo vería el primer método de pago.
+            metodos_pago_texto = ' | '.join(limpiar_texto(s) for s in pagos_str)
 
         codigo_vendedor_boleta = (
             ticket_asoc.vendedor.codigo_vendedor
@@ -3699,7 +3703,8 @@ def generar_txt_desde_dte_existente(request):
                 'ciudad': limpiar_texto((dte.sucursal.ciudad if dte.sucursal else '') or (dte.emisor.ciudad if dte.emisor else '') or ''),
                 'codigo_vendedor': limpiar_texto(codigo_vendedor_boleta or dte.responsable or 'USUARIO'),
                 'correlativo_ticket': ticket_asoc.correlativo if ticket_asoc else '',
-                'metodos_pago': limpiar_texto(metodos_pago_texto),
+                # Ya viene limpio trozo a trozo (preservando los '|' entre métodos).
+                'metodos_pago': metodos_pago_texto,
                 'sucursal': limpiar_texto(dte.sucursal.alias if dte.sucursal else ''),
                 'telefono': dte.emisor.contacto1 or '',
                 'nombre_impresora_boleta': getattr(dte.sucursal, 'nombre_impresora_boleta', 'boleta') if dte.sucursal else 'boleta',

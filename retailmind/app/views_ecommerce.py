@@ -1265,7 +1265,13 @@ def descargar_txt_dte_ecommerce(request, dte_id):
                 notas_compactas = ' '.join(str(pago.notas).split())[:80]
                 partes.append(notas_compactas)
             metodos_pago_info.append(' - '.join(partes))
-        metodos_pago_texto = ' | '.join(metodos_pago_info) if metodos_pago_info else 'VENTA INTERNET'
+        # Limpiar cada método por separado y unir con '|' DESPUÉS. Limpiar la
+        # cadena ya unida borraría los '|' (separador de campos Acepta) y la
+        # observación del TXT perdería todos los métodos salvo el primero.
+        metodos_pago_texto = (
+            ' | '.join(limpiar_texto(m) for m in metodos_pago_info)
+            if metodos_pago_info else 'VENTA INTERNET'
+        )
 
         productos_txt = []
         for dp in dte.dte_productos.all():
@@ -1305,7 +1311,8 @@ def descargar_txt_dte_ecommerce(request, dte_id):
                 'ciudad': limpiar_texto((dte.sucursal.ciudad if dte.sucursal else '') or empresa.ciudad or ''),
                 'codigo_vendedor': limpiar_texto(str(dte.vendedor.codigo_vendedor) if dte.vendedor else '1000'),
                 'nombre_vendedor': limpiar_texto(dte.vendedor.nombre if dte.vendedor else 'Venta Internet'),
-                'metodos_pago': limpiar_texto(metodos_pago_texto),
+                # Ya viene limpio método a método (preservando los '|').
+                'metodos_pago': metodos_pago_texto,
                 'correlativo_ticket': dte.referencias or '',
                 'telefono': empresa.contacto1 or '',
                 'nombre_impresora_boleta': getattr(dte.sucursal, 'nombre_impresora_boleta', 'boleta') or 'boleta',

@@ -3593,6 +3593,21 @@
         const tipoTransaccion = (dteDelListado && dteDelListado.tipo_transaccion) || '';
         const esOriginadoEnPOS = tipoTransaccion === 'VENTA_PUBLICO';
 
+        // Fechas para el selector "fecha que afecta la cuadratura" (solo
+        // modalidad Devolución). Por defecto hoy; rango permitido entre la
+        // emisión del documento original y hoy. `dteFecha` viene como
+        // DD/MM/YYYY desde el listado; se convierte a ISO para el <input date>.
+        const hoyISO = (() => {
+            const d = new Date();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${d.getFullYear()}-${mm}-${dd}`;
+        })();
+        const boletaISO = (() => {
+            const m = String(dteFecha || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+            return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+        })();
+
         const cardDevolucionHtml = esOriginadoEnPOS
             ? `<label class="p-2 border rounded modalidad-card" data-modalidad="DEVOLUCION" style="cursor:pointer;">
                 <input type="radio" name="modalidadNC" value="DEVOLUCION" checked class="me-2">
@@ -3605,6 +3620,11 @@
                 <div id="subDevolucion" class="mt-2 ms-4" style="font-size:0.85rem;">
                     <label class="me-3"><input type="radio" name="metodoDevolucion" value="EFECTIVO_CAJA" checked class="me-1"><i class="bi bi-cash me-1"></i>Efectivo</label>
                     <label><input type="radio" name="metodoDevolucion" value="TRANSFERENCIA_BANCARIA" class="me-1"><i class="bi bi-bank me-1"></i>Transferencia</label>
+                    <div class="mt-2">
+                        <label class="d-block mb-1" style="font-size:0.8rem;font-weight:600;"><i class="bi bi-calendar-event me-1"></i>Fecha que afecta la cuadratura</label>
+                        <input type="date" id="anulFechaDevolucionCaja" class="form-control form-control-sm" style="max-width:200px;" value="${hoyISO}" max="${hoyISO}"${boletaISO ? ` min="${boletaISO}"` : ''}>
+                        <small class="text-muted d-block mt-1" style="font-size:0.72rem;">Día al que se le resta el efectivo/transferencia teórico. Por defecto hoy. <strong>No</strong> cambia la fecha de emisión al SII.</small>
+                    </div>
                 </div>
             </label>`
             : `<div class="p-2 border rounded mb-1" style="background:#f8f9fa;opacity:0.7;">
@@ -4068,6 +4088,7 @@
                 const modalidadSel = (document.querySelector('input[name="modalidadNC"]:checked') || {}).value
                     || (esOriginadoEnPOS ? 'DEVOLUCION' : 'INFORMATIVA');
                 const metodoSel = (document.querySelector('input[name="metodoDevolucion"]:checked') || {}).value || 'EFECTIVO_CAJA';
+                const fechaDevolucionCajaSel = (document.getElementById('anulFechaDevolucionCaja') || {}).value || '';
 
                 // Defensa extra contra elección de DEVOLUCION en DTE no-POS
                 if (modalidadSel === 'DEVOLUCION' && !esOriginadoEnPOS) {
@@ -4095,6 +4116,7 @@
                     esCorreccionMonto: esCorrige,
                     modalidadNC: modalidadSel,
                     metodoDevolucion: modalidadSel === 'DEVOLUCION' ? metodoSel : 'NO_AFECTA_CAJA',
+                    fechaDevolucionCaja: modalidadSel === 'DEVOLUCION' ? fechaDevolucionCajaSel : null,
                     montoNC: montoVal,
                     productosAfectados: esCorrige ? [] : productosAfectados,
                     correcciones: esCorrige ? correcciones : [],
@@ -4188,6 +4210,7 @@
                     </div>
                     <div class="mb-2"><strong>${formData.esCorreccionMonto ? 'Monto a corregir' : 'Monto NC'}:</strong> ${fmtCLP(formData.montoNC)} ${formData.esCorreccionMonto ? '<span class="badge bg-warning text-dark ms-1">Corrige montos (razón 3)</span>' : (formData.montoNC >= montoRestante ? '<span class="badge bg-danger ms-1">Total — anulará el documento</span>' : '<span class="badge bg-info text-dark ms-1">Parcial</span>')}</div>
                     <div class="mb-2"><strong>Modalidad:</strong> ${tituloModalidad}</div>
+                    ${modalidadNC === 'DEVOLUCION' && formData.fechaDevolucionCaja ? `<div class="mb-2"><strong>Afecta cuadratura del:</strong> ${formData.fechaDevolucionCaja.split('-').reverse().join('/')}${formData.fechaDevolucionCaja === hoyISO ? ' <span class="badge bg-secondary ms-1">hoy</span>' : ' <span class="badge bg-warning text-dark ms-1">día anterior</span>'}</div>` : ''}
                     <div class="mb-2"><strong>Motivo:</strong> ${formData.motivo}</div>
                     ${formData.clienteNombre ? `<div class="mb-2"><strong>Cliente:</strong> ${formData.clienteNombre}${formData.clienteRut ? ` (${formData.clienteRut})` : ''}</div>` : ''}
                     <hr class="my-2">
@@ -4221,6 +4244,7 @@
                     dte_id: dteId,
                     modalidad_nc: modalidadNC,
                     metodo_devolucion: metodoDevolucion,
+                    fecha_devolucion_caja: formData.fechaDevolucionCaja,
                     es_correccion_monto: formData.esCorreccionMonto,
                     productos_afectados: formData.productosAfectados,
                     correcciones: formData.correcciones,

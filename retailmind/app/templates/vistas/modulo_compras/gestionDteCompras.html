@@ -1012,8 +1012,8 @@
                         data-bs-target="#modalGestionProveedores">
                         <i class="bi bi-building me-1"></i>Proveedores
                     </button>
-                    <button class="btn btn-light" type="button" onclick="abrirModalPendientesMes()" data-bs-toggle="tooltip" title="Facturas pendientes de pago agrupadas por mes">
-                        <i class="bi bi-calendar2-week me-1"></i>Pendientes/mes
+                    <button class="btn btn-light" type="button" onclick="abrirModalPendientesMes()" data-bs-toggle="tooltip" title="Documentos recepcionados del mes (pagados y pendientes)">
+                        <i class="bi bi-calendar2-week me-1"></i>Recepcionado/mes
                     </button>
                     <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#modalNuevoDTE">
                         <i class="bi bi-plus-circle me-1"></i>Nuevo DTE
@@ -1650,8 +1650,8 @@
                         <i class="bi bi-calendar2-week"></i>
                     </div>
                     <div>
-                        <h5 class="rm-modal-title" id="modalPendientesMesLabel">Facturas pendientes del mes</h5>
-                        <p class="rm-modal-subtitle">Detalle de pagos pendientes para el mes seleccionado</p>
+                        <h5 class="rm-modal-title" id="modalPendientesMesLabel">Recepcionado del mes</h5>
+                        <p class="rm-modal-subtitle">Documentos recepcionados en el mes (pagados y pendientes)</p>
                     </div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -1711,30 +1711,30 @@
                     Mostrando <span id="avisoEstadoCuentaNombre"></span> — todas las facturas pendientes (se ignora el filtro de mes).
                 </div>
 
-                <!-- Tarjetas resumen -->
+                <!-- Tarjetas resumen (las etiquetas cambian según el modo: mes / estado de cuenta) -->
                 <div class="row g-2 mb-3" id="pendientesMesResumen">
                     <div class="col-md-3">
-                        <div class="p-2 rounded" style="background:#fef3c7; border:1px solid #fcd34d;">
-                            <small class="text-muted d-block">Total pendiente</small>
-                            <strong id="resPendientesMonto" style="color:#92400e;">$0</strong>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
                         <div class="p-2 rounded" style="background:#dbeafe; border:1px solid #93c5fd;">
-                            <small class="text-muted d-block">N° de facturas</small>
-                            <strong id="resPendientesCantidad" style="color:#1e40af;">0</strong>
+                            <small class="text-muted d-block" id="lblResumen1">Total recepcionado</small>
+                            <strong id="resResumen1" style="color:#1e40af;">$0</strong>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="p-2 rounded" style="background:#fee2e2; border:1px solid #fca5a5;">
-                            <small class="text-muted d-block">Vencidas</small>
-                            <strong id="resPendientesVencidas" style="color:#991b1b;">0</strong>
+                        <div class="p-2 rounded" style="background:#e0e7ff; border:1px solid #a5b4fc;">
+                            <small class="text-muted d-block" id="lblResumen2">N° de documentos</small>
+                            <strong id="resResumen2" style="color:#3730a3;">0</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-2 rounded" style="background:#fef3c7; border:1px solid #fcd34d;">
+                            <small class="text-muted d-block" id="lblResumen3">Pendiente</small>
+                            <strong id="resResumen3" style="color:#92400e;">$0</strong>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="p-2 rounded" style="background:#d1fae5; border:1px solid #6ee7b7;">
-                            <small class="text-muted d-block">Por vencer (≤7d)</small>
-                            <strong id="resPendientesProximas" style="color:#065f46;">0</strong>
+                            <small class="text-muted d-block" id="lblResumen4">Pagado</small>
+                            <strong id="resResumen4" style="color:#065f46;">$0</strong>
                         </div>
                     </div>
                 </div>
@@ -1752,11 +1752,12 @@
                                 <th class="text-end py-2">Monto c/IVA</th>
                                 <th class="text-end py-2">Abonado</th>
                                 <th class="text-end py-2">Saldo</th>
-                                <th class="py-2">Estado</th>
+                                <th class="py-2">Estado pago</th>
+                                <th class="py-2">Vencimiento</th>
                             </tr>
                         </thead>
                         <tbody id="tablaPendientesMesBody">
-                            <tr><td colspan="9" class="text-center text-muted py-3">Cargando…</td></tr>
+                            <tr><td colspan="10" class="text-center text-muted py-3">Cargando…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2016,6 +2017,75 @@
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" id="btnAsociarNC" disabled>
                     <i class="bi bi-link-45deg me-1"></i>Asociar NC Seleccionada
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Compensar / Pagar con Factura -->
+<div class="modal fade rm-modal" id="modalCompensarFactura" tabindex="-1" aria-labelledby="modalCompensarFacturaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rm-accent--blue">
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--blue">
+                        <i class="bi bi-arrow-left-right"></i>
+                    </div>
+                    <div>
+                        <h5 class="rm-modal-title" id="modalCompensarFacturaLabel">Compensar / Pagar con Factura</h5>
+                        <p class="rm-modal-subtitle">Saldar esta factura asociando otra del mismo proveedor</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="rm-modal-body rm-modal-body--scroll">
+                <input type="hidden" id="compensarTargetDteId">
+
+                <div class="p-3 mb-3" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: 0.85rem; color: #1e40af;">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Selecciona otra factura del mismo proveedor para usarla como compensación de esta factura.
+                    <strong>Esto registra una compensación de tesorería; ambas facturas siguen siendo documentos tributarios válidos.</strong>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Saldo de esta factura</label>
+                        <div class="form-control bg-light" id="compensarSaldoObjetivo">—</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="buscarFacturaCompensar" class="form-label">Buscar por número</label>
+                        <input type="text" id="buscarFacturaCompensar" class="form-control" placeholder="Número de factura...">
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="py-3">Seleccionar</th>
+                                <th class="py-3">Número</th>
+                                <th class="py-3">Fecha</th>
+                                <th class="py-3">Monto</th>
+                                <th class="py-3">Saldo disp.</th>
+                                <th class="py-3">Monto a aplicar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaFacturasCompensarBody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Cargando facturas...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="rm-modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnCompensarFactura" disabled>
+                    <i class="bi bi-arrow-left-right me-1"></i>Compensar con Factura Seleccionada
                 </button>
             </div>
         </div>
@@ -2980,7 +3050,9 @@
                                 }
         </div>
     </td>
-   <td>${pagoBadge(dte.estado_pago, dte.dias_credito_restantes)}</td>
+   <td>${pagoBadge(dte.estado_pago, dte.dias_credito_restantes)}${(dte.compensaciones_numeros && dte.compensaciones_numeros.length)
+                                    ? ` <span class="badge bg-info" style="font-size:0.7rem;" title="Saldada por compensación con factura #${dte.compensaciones_numeros.join(', #')}"><i class="bi bi-arrow-left-right"></i> Compensada</span>`
+                                    : ''}</td>
 
 
   <td>${accionesDropdownHtml(dte, facturaAsociadaNumero)}</td>
@@ -3436,6 +3508,23 @@
             items.push(`<li><a class="dropdown-item action-anexar" href="#" onclick="abrirModalAnexarNCaFactura(${id}); return false;">
                             <i class="bi bi-link-45deg"></i> Anexar NC a Factura
                         </a></li>`);
+
+            // Compensar / Pagar con otra Factura (cuando ya no se puede asociar NC)
+            const estaPagadaFc = (dte.estado_pago || '').toString().toUpperCase() === 'PAGADO';
+            if (rechazado || tieneIncPend || estaPagadaFc) {
+                const tipC = rechazado
+                    ? 'No disponible para DTEs rechazados'
+                    : estaPagadaFc
+                        ? 'La factura ya está pagada/saldada'
+                        : 'Resuelve incidencias pendientes antes de compensar';
+                items.push(`<li><span class="dropdown-item action-anexar disabled" title="${tipC}">
+                                <i class="bi bi-arrow-left-right"></i> Compensar con Factura
+                            </span></li>`);
+            } else {
+                items.push(`<li><a class="dropdown-item action-anexar" href="#" onclick="abrirModalCompensarFactura(${id}); return false;">
+                                <i class="bi bi-arrow-left-right"></i> Compensar con Factura
+                            </a></li>`);
+            }
         }
 
         // Incidencias (para todos)
@@ -4186,7 +4275,7 @@
         $('#filtroPendientesMes').prop('disabled', proveedorActivo);
 
         const $tbody = $('#tablaPendientesMesBody');
-        $tbody.html('<tr><td colspan="9" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando…</td></tr>');
+        $tbody.html('<tr><td colspan="10" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando…</td></tr>');
 
         $.ajax({
             url: '/app/facturasPendientesPorMes/',
@@ -4195,13 +4284,13 @@
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function (resp) {
                 if (!resp.success) {
-                    $tbody.html(`<tr><td colspan="9" class="text-center text-danger py-3">${resp.error || 'Error al cargar datos'}</td></tr>`);
+                    $tbody.html(`<tr><td colspan="10" class="text-center text-danger py-3">${resp.error || 'Error al cargar datos'}</td></tr>`);
                     return;
                 }
                 renderPendientesMes(resp);
             },
             error: function () {
-                $tbody.html('<tr><td colspan="9" class="text-center text-danger py-3">Error al cargar datos.</td></tr>');
+                $tbody.html('<tr><td colspan="10" class="text-center text-danger py-3">Error al cargar datos.</td></tr>');
             }
         });
     }
@@ -4225,25 +4314,44 @@
         if (facturas.length === 0) {
             const msg = resp.modo_estado_cuenta
                 ? 'Este proveedor no tiene facturas pendientes.'
-                : 'Sin facturas pendientes en este mes.';
-            $tbody.html(`<tr><td colspan="9" class="text-center text-muted py-3">${msg}</td></tr>`);
+                : 'Sin documentos recepcionados en este mes.';
+            $tbody.html(`<tr><td colspan="10" class="text-center text-muted py-3">${msg}</td></tr>`);
         } else {
             facturas.forEach(f => {
-                const vencida = f.dias_restantes !== null && f.dias_restantes <= 0;
-                const proxima = f.dias_restantes !== null && f.dias_restantes > 0 && f.dias_restantes <= 7;
-                let estadoBadge;
-                if (vencida) {
-                    estadoBadge = `<span class="badge bg-danger">Vencida ${Math.abs(f.dias_restantes)}d</span>`;
-                } else if (proxima) {
-                    estadoBadge = `<span class="badge bg-warning text-dark">Vence en ${f.dias_restantes}d</span>`;
-                } else if (f.dias_restantes !== null) {
-                    estadoBadge = `<span class="badge bg-light text-dark">${f.dias_restantes}d restantes</span>`;
+                const pagado = f.estado_pago === 'pagado';
+                const vencida = !pagado && f.dias_restantes !== null && f.dias_restantes <= 0;
+                const proxima = !pagado && f.dias_restantes !== null && f.dias_restantes > 0 && f.dias_restantes <= 7;
+
+                // Badge de estado de pago
+                let pagoBadge;
+                if (pagado) {
+                    pagoBadge = `<span class="badge bg-success">Pagado</span>`;
+                } else if (f.estado_pago === 'parcial') {
+                    pagoBadge = `<span class="badge bg-info text-dark">Parcial</span>`;
                 } else {
-                    estadoBadge = `<span class="badge bg-secondary">-</span>`;
+                    pagoBadge = `<span class="badge bg-secondary">Pendiente</span>`;
                 }
 
+                // Badge de vencimiento (solo aplica a documentos con saldo)
+                let vencBadge;
+                if (pagado) {
+                    vencBadge = `<span class="text-muted">—</span>`;
+                } else if (vencida) {
+                    vencBadge = `<span class="badge bg-danger">Vencida ${Math.abs(f.dias_restantes)}d</span>`;
+                } else if (proxima) {
+                    vencBadge = `<span class="badge bg-warning text-dark">Vence en ${f.dias_restantes}d</span>`;
+                } else if (f.dias_restantes !== null) {
+                    vencBadge = `<span class="badge bg-light text-dark">${f.dias_restantes}d restantes</span>`;
+                } else {
+                    vencBadge = `<span class="badge bg-secondary">-</span>`;
+                }
+
+                let rowStyle = '';
+                if (vencida) rowStyle = ' style="background:#fef2f2;"';
+                else if (pagado) rowStyle = ' style="background:#f0fdf4;"';
+
                 $tbody.append(`
-                    <tr${vencida ? ' style="background:#fef2f2;"' : ''}>
+                    <tr${rowStyle}>
                         <td>${f.proveedor || '-'}</td>
                         <td>${f.numero_documento || '-'}</td>
                         <td><small>${f.tipo_documento || '-'}</small></td>
@@ -4252,17 +4360,35 @@
                         <td class="text-end">$${(f.monto_con_iva || 0).toLocaleString()}</td>
                         <td class="text-end text-muted">$${(f.abonado || 0).toLocaleString()}</td>
                         <td class="text-end fw-bold" style="color:#92400e;">$${(f.saldo || 0).toLocaleString()}</td>
-                        <td>${estadoBadge}</td>
+                        <td>${pagoBadge}</td>
+                        <td>${vencBadge}</td>
                     </tr>
                 `);
             });
         }
 
-        // Resumen
-        $('#resPendientesMonto').text('$' + (resp.total_monto || 0).toLocaleString());
-        $('#resPendientesCantidad').text((resp.total_cantidad || 0).toLocaleString());
-        $('#resPendientesVencidas').text((resp.total_vencidas || 0).toLocaleString());
-        $('#resPendientesProximas').text((resp.total_proximas || 0).toLocaleString());
+        // Resumen — las tarjetas cambian de significado según el modo
+        if (resp.modo_estado_cuenta) {
+            // Estado de cuenta: deuda pendiente del proveedor
+            $('#lblResumen1').text('Total pendiente');
+            $('#resResumen1').text('$' + (resp.total_pendiente || 0).toLocaleString());
+            $('#lblResumen2').text('N° de facturas');
+            $('#resResumen2').text((resp.total_cantidad || 0).toLocaleString());
+            $('#lblResumen3').text('Vencidas');
+            $('#resResumen3').text((resp.total_vencidas || 0).toLocaleString());
+            $('#lblResumen4').text('Por vencer (≤7d)');
+            $('#resResumen4').text((resp.total_proximas || 0).toLocaleString());
+        } else {
+            // Mes: todo lo recepcionado
+            $('#lblResumen1').text('Total recepcionado');
+            $('#resResumen1').text('$' + (resp.total_recepcionado || 0).toLocaleString());
+            $('#lblResumen2').text('N° de documentos');
+            $('#resResumen2').text((resp.total_cantidad || 0).toLocaleString());
+            $('#lblResumen3').text('Pendiente');
+            $('#resResumen3').text('$' + (resp.total_pendiente || 0).toLocaleString());
+            $('#lblResumen4').text('Pagado');
+            $('#resResumen4').text('$' + (resp.total_pagado || 0).toLocaleString());
+        }
     }
 
     // Recargar al cambiar filtros
@@ -5172,6 +5298,123 @@
             },
             error: function () {
                 Swal.fire('Error', 'Error de conexión al anexar la NC', 'error');
+            }
+        });
+    });
+
+    // ========== COMPENSAR / PAGAR CON FACTURA ==========
+
+    let compensarSaldoObjetivoVal = 0;
+
+    function abrirModalCompensarFactura(dteId) {
+        $('#compensarTargetDteId').val(dteId);
+        $('#buscarFacturaCompensar').val('');
+        $('#btnCompensarFactura').prop('disabled', true);
+        $('#compensarSaldoObjetivo').text('—');
+        compensarSaldoObjetivoVal = 0;
+        cargarFacturasCompensar(dteId);
+        const modal = new bootstrap.Modal(document.getElementById('modalCompensarFactura'));
+        modal.show();
+    }
+
+    function cargarFacturasCompensar(dteId, busqueda = '') {
+        const tbody = $('#tablaFacturasCompensarBody');
+        tbody.html('<tr><td colspan="6" class="text-center text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando facturas...</td></tr>');
+
+        // Saldo de la factura objetivo: para acotar y prellenar el monto a aplicar.
+        $.get(`/app/obtenerDetallePago/${dteId}/`, function (resp) {
+            compensarSaldoObjetivoVal = Math.max((resp.total_dte || 0) - (resp.total_abonado || 0), 0);
+            $('#compensarSaldoObjetivo').text('$' + Math.round(compensarSaldoObjetivoVal).toLocaleString('es-CL'));
+        });
+
+        $.ajax({
+            url: '/app/obtener_facturas_compensar_disponibles/',
+            method: 'GET',
+            data: { dte_id: dteId, busqueda: busqueda },
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function (response) {
+                tbody.empty();
+                if (response.success && response.facturas && response.facturas.length > 0) {
+                    response.facturas.forEach(f => {
+                        const tope = Math.min(compensarSaldoObjetivoVal || f.saldo_disponible, f.saldo_disponible);
+                        const fila = `
+                        <tr>
+                            <td><input type="radio" name="facturaCompensar" value="${f.id}" class="form-check-input"
+                                       onchange="seleccionarFacturaCompensar(${f.id}, ${f.saldo_disponible})"></td>
+                            <td>${f.numero_documento}</td>
+                            <td>${f.fecha_emision}</td>
+                            <td>$${parseFloat(f.monto_con_iva).toLocaleString('es-CL')}</td>
+                            <td>$${parseFloat(f.saldo_disponible).toLocaleString('es-CL')}</td>
+                            <td style="max-width:150px;">
+                                <input type="number" min="1" step="1" class="form-control form-control-sm monto-aplicar-input"
+                                       id="montoAplicar_${f.id}" value="${Math.round(tope)}" disabled>
+                            </td>
+                        </tr>`;
+                        tbody.append(fila);
+                    });
+                } else {
+                    tbody.append('<tr><td colspan="6" class="text-center text-muted">No hay facturas del mismo proveedor disponibles para compensar</td></tr>');
+                }
+            },
+            error: function () {
+                tbody.html('<tr><td colspan="6" class="text-center text-danger">Error al cargar las facturas</td></tr>');
+            }
+        });
+    }
+
+    function seleccionarFacturaCompensar(facturaId, saldoDisponible) {
+        // Habilitar sólo el input de la fila elegida; acotar a min(saldo objetivo, saldo instrumento).
+        $('.monto-aplicar-input').prop('disabled', true);
+        const tope = Math.round(Math.min(compensarSaldoObjetivoVal || saldoDisponible, saldoDisponible));
+        const input = $('#montoAplicar_' + facturaId);
+        input.prop('disabled', false).attr('max', tope);
+        const actual = parseFloat(input.val());
+        if (!actual || actual > tope || actual <= 0) {
+            input.val(tope);
+        }
+        $('#btnCompensarFactura').prop('disabled', false);
+    }
+
+    $('#buscarFacturaCompensar').on('keyup', function () {
+        const dteId = $('#compensarTargetDteId').val();
+        if (dteId) cargarFacturasCompensar(dteId, $(this).val());
+    });
+
+    $('#btnCompensarFactura').on('click', function () {
+        const dteId = $('#compensarTargetDteId').val();
+        const facturaId = $('input[name="facturaCompensar"]:checked').val();
+        if (!facturaId) {
+            Swal.fire('Atención', 'Selecciona una factura para compensar', 'warning');
+            return;
+        }
+        const monto = parseInt($('#montoAplicar_' + facturaId).val(), 10);
+        if (!monto || monto <= 0) {
+            Swal.fire('Atención', 'Indica un monto a aplicar mayor a cero', 'warning');
+            return;
+        }
+        const btn = $(this);
+        btn.prop('disabled', true);
+        $.ajax({
+            url: '/app/asociar_factura_compensacion/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ dte_id: dteId, factura_compensadora_id: facturaId, monto: monto }),
+            success: function (response) {
+                if (response.success) {
+                    Swal.fire('Éxito', response.message || 'Factura compensada correctamente', 'success');
+                    $('#modalCompensarFactura').modal('hide');
+                    cargarDTEs(currentPageDTE, currentSearchDTE);
+                } else {
+                    btn.prop('disabled', false);
+                    Swal.fire('Error', response.error || 'No se pudo compensar', 'error');
+                }
+            },
+            error: function (xhr) {
+                btn.prop('disabled', false);
+                let msg = 'Error de conexión al compensar';
+                try { msg = JSON.parse(xhr.responseText).error || msg; } catch (e) { }
+                Swal.fire('Error', msg, 'error');
             }
         });
     });

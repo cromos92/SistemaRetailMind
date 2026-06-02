@@ -21,10 +21,18 @@ import csv
 from decimal import Decimal
 
 from .models import (
-    Compras, Compras_Producto, Compras_Producto_Talla, Dte, Dte_Detalle_Pago, 
+    Compras, Compras_Producto, Compras_Producto_Talla, Dte, Dte_Detalle_Pago,
     Dte_Productos, Empresa, Producto, Producto_Talla, Productos_Recepcionados,
     Sucursal, EmpresaUser, Movimientos_Producto, LoteProducto, Dte_Incidencia
 )
+
+# Método de pago usado para registrar una compensación factura-contra-factura
+# (neteo de tesorería / cuentas por pagar, NO una relación tributaria SII: ambas
+# facturas siguen siendo documentos tributarios válidos). Se guarda en el libro de
+# pagos Dte_Detalle_Pago igual que una Nota de Crédito. Ver asociar_factura_compensacion.
+# IMPORTANTE: este string debe coincidir EXACTO en todos los lugares que lo filtran
+# (cargarDteCompra, pagosDTE, obtener_resumen_pendientes_anio).
+METODO_COMPENSACION = 'Compensación con Factura'
 
 
 # ========== GESTIÓN DE COMPRAS ==========
@@ -1503,12 +1511,12 @@ def obtener_resumen_pendientes_anio(request):
         for dte in pendientes:
             monto_dte = dte.monto_con_iva
             
-            # Restar notas de crédito asociadas
+            # Restar notas de crédito y compensaciones con factura asociadas
             notas_credito = Dte_Detalle_Pago.objects.filter(
                 dte=dte,
-                metodo_pago='Nota de Crédito'
+                metodo_pago__in=['Nota de Crédito', METODO_COMPENSACION]
             ).aggregate(total=Sum('monto'))['total'] or 0
-            
+
             saldo_pendiente = float(monto_dte - notas_credito)
             monto_total_pendiente += saldo_pendiente
             
@@ -4095,5 +4103,265 @@ def calcular_rentabilidad_por_tipo_sucursal(anio):
             })
         except Exception as e:
             continue
-    
+
     return resultado
+
+
+# ========== COMPENSACIÓN FACTURA-CONTRA-FACTURA ("Pagar con Factura") ==========
+#
+# Cuando ya no se puede emitir/asociar una Nota de Crédito a una factura de compra
+# antigua, el proveedor puede pedir saldarla asociándole OTRA factura del mismo
+# proveedor como instrumento de pago. Esto es una compensación de tesorería / neteo
+# de cuentas por pagar, NO una relación tributaria SII: ambas facturas siguen siendo
+# documentos tributarios válidos. Se registra en el libro de pagos (Dte_Detalle_Pago)
+# con metodo_pago=METODO_COMPENSACION, igual que una Nota de Crédito.
+# Espeja el patrón de obtener_ncs_disponibles / asociar_nc_existente / desasociar_nc.
+
+
+@login_required
+@require_GET
+def obtener_facturas_compensar_disponibles(request):
+    """
+    Lista facturas de compra del mismo proveedor que pueden usarse como instrumento
+    de compensación contra una factura objetivo. Excluye la propia factura objetivo,
+    las ya usadas como instrumento de compensación y las que no tienen saldo propio
+    disponible. Espeja obtener_ncs_disponibles (views.py).
+    """
+    try:
+        empresa_id = request.session.get('idEmpresaActual')
+        if not empresa_id:
+            return JsonResponse({'success': False, 'error': 'Empresa no identificada en sesión'}, status=403)
+
+        dte_id = request.GET.get('dte_id')
+        if not dte_id:
+            return JsonResponse({'success': False, 'error': 'ID de factura objetivo requerido'}, status=400)
+
+        try:
+            objetivo = Dte.objects.get(id=dte_id)
+        except Dte.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Factura objetivo no encontrada'}, status=404)
+
+        busqueda = (request.GET.get('busqueda', '') or '').strip()
+        try:
+            limit = int(request.GET.get('limit', 200))
+        except (TypeError, ValueError):
+            limit = 200
+
+        candidatos = Dte.objects.filter(
+            tipo_transaccion='COMPRA',
+            receptor_id=empresa_id,
+            tipo_documento='FACTURA ELECTRONICA',
+            emisor=objetivo.emisor,           # mismo proveedor
+        ).exclude(id=objetivo.id)
+
+        if busqueda:
+            candidatos = candidatos.filter(numero_documento__icontains=busqueda)
+
+        # Excluir facturas ya usadas como instrumento de compensación (mismo idiom que NC).
+        numeros_usados = set(
+            Dte_Detalle_Pago.objects.filter(
+                metodo_pago=METODO_COMPENSACION,
+                dte__receptor_id=empresa_id,
+            ).exclude(voucher__isnull=True)
+             .values_list('voucher', flat=True)
+        )
+        if numeros_usados:
+            candidatos = candidatos.exclude(numero_documento__in=numeros_usados)
+
+        candidatos = list(
+            candidatos.select_related('emisor').order_by('-fecha_emision')[:limit]
+        )
+
+        # Saldo propio disponible de cada candidato (monto - sus propios pagos),
+        # en una sola consulta. Sólo se ofrecen facturas con saldo > 0.
+        ids = [c.id for c in candidatos]
+        pagos_map = dict(
+            Dte_Detalle_Pago.objects.filter(dte_id__in=ids)
+                .values_list('dte_id')
+                .annotate(total=Sum('monto'))
+                .values_list('dte_id', 'total')
+        )
+
+        resultado = []
+        for c in candidatos:
+            pagado = float(pagos_map.get(c.id, 0) or 0)
+            saldo_disponible = float(c.monto_con_iva or 0) - pagado
+            if saldo_disponible <= 0:
+                continue
+            resultado.append({
+                'id': c.id,
+                'numero_documento': c.numero_documento,
+                'proveedor': c.emisor.nombre if c.emisor else 'N/A',
+                'fecha_emision': c.fecha_emision.strftime('%Y-%m-%d') if c.fecha_emision else '',
+                'monto_con_iva': float(c.monto_con_iva or 0),
+                'saldo_disponible': saldo_disponible,
+                'estado': c.estado_dte,
+            })
+
+        return JsonResponse({'success': True, 'facturas': resultado})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def asociar_factura_compensacion(request):
+    """
+    Asocia una factura existente como instrumento de compensación (pago no en
+    efectivo) sobre una factura objetivo. Espeja asociar_nc_existente, pero el
+    instrumento es una factura del mismo proveedor y el monto es editable/parcial.
+
+    NOTA TRIBUTARIA: compensación de tesorería / neteo de cuentas por pagar, NO una
+    relación tributaria SII. Ambas facturas siguen siendo documentos tributarios
+    válidos; sólo se registra en el libro de pagos (Dte_Detalle_Pago).
+    """
+    try:
+        data = json.loads(request.body)
+        dte_id = data.get('dte_id')
+        instrumento_id = data.get('factura_compensadora_id')
+        monto_pedido = data.get('monto')
+
+        if not dte_id or not instrumento_id:
+            return JsonResponse({'success': False, 'error': 'Datos incompletos'}, status=400)
+
+        try:
+            objetivo = Dte.objects.get(id=dte_id)
+            instrumento = Dte.objects.get(
+                id=instrumento_id,
+                tipo_documento='FACTURA ELECTRONICA',
+                tipo_transaccion='COMPRA',
+            )
+        except Dte.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Documento no encontrado'}, status=404)
+
+        # Guard: no auto-compensar
+        if instrumento.id == objetivo.id:
+            return JsonResponse({'success': False, 'error': 'Una factura no puede compensarse a sí misma'}, status=400)
+
+        # Guard: mismo proveedor
+        if instrumento.emisor_id != objetivo.emisor_id:
+            return JsonResponse({'success': False, 'error': 'La factura de compensación debe ser del mismo proveedor'}, status=400)
+
+        # Guard: incidencias pendientes en la factura objetivo (espeja registrarPagoDTE)
+        if Dte_Incidencia.objects.filter(dte=objetivo, estado__in=['PENDIENTE', 'EN_GESTION']).exists():
+            return JsonResponse({'success': False, 'error': 'No se puede compensar mientras existan incidencias pendientes o en gestión para esta factura.'}, status=400)
+
+        # Guard: el instrumento no debe estar ya usado como compensación (espeja NC ya_asociada)
+        if Dte_Detalle_Pago.objects.filter(
+            metodo_pago=METODO_COMPENSACION,
+            voucher=str(instrumento.numero_documento),
+        ).exists():
+            return JsonResponse({'success': False, 'error': 'Esta factura ya fue usada como compensación en otro documento'}, status=400)
+
+        with transaction.atomic():
+            # Saldos reales (monto - pagos) de ambas facturas
+            pagos_objetivo = Dte_Detalle_Pago.objects.filter(dte=objetivo).aggregate(total=Sum('monto'))['total'] or 0
+            saldo_objetivo = float(objetivo.monto_con_iva or 0) - float(pagos_objetivo)
+
+            pagos_instrumento = Dte_Detalle_Pago.objects.filter(dte=instrumento).aggregate(total=Sum('monto'))['total'] or 0
+            saldo_instrumento = float(instrumento.monto_con_iva or 0) - float(pagos_instrumento)
+
+            if saldo_objetivo <= 0:
+                return JsonResponse({'success': False, 'error': 'La factura objetivo no tiene saldo pendiente'}, status=400)
+            if saldo_instrumento <= 0:
+                return JsonResponse({'success': False, 'error': 'La factura de compensación no tiene saldo disponible'}, status=400)
+
+            # Monto a aplicar: editable, acotado por el saldo del objetivo y del instrumento.
+            try:
+                monto_default = min(saldo_objetivo, saldo_instrumento)
+                monto_aplicado = float(monto_pedido) if monto_pedido not in (None, '') else monto_default
+            except (TypeError, ValueError):
+                return JsonResponse({'success': False, 'error': 'Monto inválido'}, status=400)
+
+            # monto es IntegerField -> redondear; nunca exceder ninguno de los dos saldos.
+            monto_aplicado = int(round(min(monto_aplicado, saldo_objetivo, saldo_instrumento)))
+            if monto_aplicado <= 0:
+                return JsonResponse({'success': False, 'error': 'El monto a compensar debe ser mayor a cero'}, status=400)
+
+            Dte_Detalle_Pago.objects.create(
+                dte=objetivo,
+                metodo_pago=METODO_COMPENSACION,
+                voucher=str(instrumento.numero_documento),
+                monto=monto_aplicado,
+                notas=f'Compensación con Factura #{instrumento.numero_documento} - {instrumento.emisor.nombre if instrumento.emisor else "N/A"}',
+                fecha_pago=timezone.localdate(),
+            )
+
+            _recalcular_estado_pago(objetivo)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Factura asociada como compensación correctamente',
+            'monto_aplicado': monto_aplicado,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def desasociar_factura_compensacion(request, pago_id):
+    """
+    Revierte una compensación: elimina la fila de Dte_Detalle_Pago y recalcula el
+    estado de pago de la factura objetivo. Espeja desasociar_nc, pero por id de fila
+    (más preciso que el lookup por voucher).
+    """
+    try:
+        try:
+            pago = Dte_Detalle_Pago.objects.select_related('dte').get(
+                id=pago_id, metodo_pago=METODO_COMPENSACION
+            )
+        except Dte_Detalle_Pago.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Compensación no encontrada'}, status=404)
+
+        objetivo = pago.dte
+
+        if Dte_Incidencia.objects.filter(dte=objetivo, estado__in=['PENDIENTE', 'EN_GESTION']).exists():
+            return JsonResponse({'success': False, 'error': 'No se puede modificar la compensación mientras existan incidencias pendientes o en gestión.'}, status=400)
+
+        with transaction.atomic():
+            pago.delete()
+            _recalcular_estado_pago(objetivo)
+
+        return JsonResponse({'success': True, 'message': 'Compensación revertida correctamente'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_GET
+def obtener_info_compensacion(request, dte_id):
+    """
+    Devuelve las compensaciones (facturas usadas como pago) registradas sobre una
+    factura, para el panel 'Ver compensaciones'.
+    """
+    try:
+        compensaciones = list(
+            Dte_Detalle_Pago.objects.filter(
+                dte_id=dte_id, metodo_pago=METODO_COMPENSACION
+            ).values('id', 'voucher', 'monto', 'notas', 'fecha_pago').order_by('id')
+        )
+        for c in compensaciones:
+            if c.get('fecha_pago'):
+                c['fecha_pago'] = c['fecha_pago'].isoformat()
+        return JsonResponse({'success': True, 'compensaciones': compensaciones})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def _recalcular_estado_pago(dte):
+    """
+    Recalcula y guarda estado_pago de una factura según sus pagos (efectivo + NC +
+    compensaciones). Usa los mismos valores que el flujo de pagos existente:
+    'PAGADO' / 'Parcial' / 'Pendiente' (pagoBadge() en el front es case-insensitive).
+    Tolerancia de 1 peso por el redondeo de Dte_Detalle_Pago.monto (IntegerField).
+    """
+    total_pagos = Dte_Detalle_Pago.objects.filter(dte=dte).aggregate(total=Sum('monto'))['total'] or 0
+    monto_total = float(dte.monto_con_iva or 0)
+    if total_pagos >= monto_total - 1:
+        dte.estado_pago = 'PAGADO'
+    elif total_pagos > 0:
+        dte.estado_pago = 'Parcial'
+    else:
+        dte.estado_pago = 'Pendiente'
+    dte.save(update_fields=['estado_pago'])

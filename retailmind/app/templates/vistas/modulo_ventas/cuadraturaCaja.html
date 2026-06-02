@@ -1233,6 +1233,8 @@
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CONVENIO" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">CONVENIO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="convenio">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_TRABAJADOR" title="Ver detalle"><td style="font-size:.75rem;color:var(--nexo-primary);">CRÉD. TRABAJADOR</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-primary);"><span id="credito_trabajador">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_EXTERNO" title="Ver detalle"><td style="font-size:.75rem;color:var(--nexo-warning);">CRÉD. EXTERNO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-warning);"><span id="credito_externo">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="CHEQUE" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">CHEQUE</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="cheque">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="ORDEN_COMPRA" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">ORDEN COMPRA</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="orden_compra">$0</span></td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1319,7 +1321,7 @@
                                         </small>
                                         <div class="fw-bold font-monospace text-success" style="font-size:.95rem;" id="sum_efectivo">$0</div>
                                     </div>
-                                    <div class="text-muted" style="font-size:.68rem;">EFE + TRANS + CONV + CRED</div>
+                                    <div class="text-muted" style="font-size:.68rem;">EFE + TRANS + CONV + CRED + CHEQUE + OC</div>
                                 </div>
 
                                 <!-- Suma Venta Internet -->
@@ -3261,6 +3263,7 @@ function cargarDatosCuadratura(c) {
     $('#nc_transferencia').text(fmCLP(c.total_nc_transferencia||0));
     $('#convenio').text(fmCLP(c.total_convenio||0));
     $('#credito_trabajador').text(fmCLP(c.total_credito_trabajador||0)); $('#credito_externo').text(fmCLP(c.total_credito_externo||0));
+    $('#cheque').text(fmCLP(c.total_cheque||0)); $('#orden_compra').text(fmCLP(c.total_orden_compra||0));
     $('#falabella').text(fmCLP(c.total_falabella||0)); $('#paris').text(fmCLP(c.total_paris||0));
     $('#ripley').text(fmCLP(c.total_ripley||0)); $('#mercadopago').text(fmCLP(c.total_mercadopago||0));
     $('#klap').text(fmCLP(c.total_klap||0));
@@ -3287,8 +3290,12 @@ function cargarDatosCuadratura(c) {
     $('#cantNotasCredito').text(c.cantidad_notas_credito||0);
 
     // --- Sumas por módulo (calculadas desde raw data, no del API total) ---
+    // Cada medio de pago que registra el backend cae en exactamente un grupo, para que
+    // ninguna venta válida (incluida una factura pagada con cheque/OC/Transbank migrado)
+    // quede fuera del VENTA TOTAL. NC NO se suma aquí: efectivo y transferencia ya vienen
+    // netos de su NC desde el backend, y sumarla en positivo inflaba el total.
     const sumTarjetas = (c.total_visa_mc_amex||0) + (c.total_tarjeta_debito||0) + (c.total_presto||0) + (c.total_hites||0);
-    const sumEfectivo = (c.total_efectivo||0) + (c.total_transferencia||0) + (c.total_notas_credito||0) + (c.total_convenio||0) + (c.total_credito_trabajador||0) + (c.total_credito_externo||0);
+    const sumEfectivo = (c.total_efectivo||0) + (c.total_transferencia||0) + (c.total_convenio||0) + (c.total_credito_trabajador||0) + (c.total_credito_externo||0) + (c.total_cheque||0) + (c.total_orden_compra||0);
     const sumInternet = (c.total_falabella||0) + (c.total_paris||0) + (c.total_ripley||0) + (c.total_mercadopago||0) + (c.total_klap||0);
     const sumTotal    = sumTarjetas + sumEfectivo + sumInternet;
 

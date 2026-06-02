@@ -2483,7 +2483,14 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
 
                 metodos_pago_info.append(' - '.join(partes))
 
-            metodos_pago_texto = ' | '.join(metodos_pago_info) if metodos_pago_info else 'EFECTIVO'
+            # Limpiar cada método por separado y unir con '|' DESPUÉS. Si se
+            # limpiara la cadena ya unida, limpiar_texto() borraría los '|'
+            # separadores (es el separador de campos Acepta) y la observación
+            # del TXT solo mostraría el primer método cuando hay varios.
+            metodos_pago_texto = (
+                ' | '.join(limpiar_texto(m) for m in metodos_pago_info)
+                if metodos_pago_info else 'EFECTIVO'
+            )
             
             # ✅ DETECTAR SI ES TICKET DE CAMBIO/DEVOLUCIÓN
             es_ticket_cambio = (ticket.modulo_origen == 'CAMBIO_DEVOLUCION')
@@ -2630,7 +2637,8 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     'vendedor_impresion': limpiar_texto(
                         ticket.vendedor.nombre if ticket.vendedor else (ticket.responsable or 'VENDEDOR')
                     ),
-                    'metodos_pago': limpiar_texto(metodos_pago_texto),
+                    # Ya viene limpio método a método (preservando los '|').
+                    'metodos_pago': metodos_pago_texto,
                     'correlativo_ticket': ticket.correlativo,
                     'telefono': empresa.contacto1 or '',
                     'nombre_impresora_boleta': getattr(ticket.sucursal, 'nombre_impresora_boleta', 'boleta') or 'boleta',
@@ -6163,8 +6171,9 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_tarjeta_debito': 0,
         'total_tarjeta_credito': 0,
         'total_transbank': 0,
-        # Tarjetas Comerciales (solo Hites)
+        # Tarjetas Comerciales (Hites, Presto)
         'total_hites': 0,
+        'total_presto': 0,
         'total_tarjetas_comerciales': 0,
         # Venta Internet (Falabella, Paris, Ripley, MercadoPago, Klap)
         'total_falabella': 0,
@@ -6273,6 +6282,8 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 cuadratura_data['total_tarjetas_comerciales'] += monto
                 if 'HITES' in tipo_tarjeta:
                     cuadratura_data['total_hites'] += monto
+                elif 'PRESTO' in tipo_tarjeta:
+                    cuadratura_data['total_presto'] += monto
             elif metodo == 'VENTA_INTERNET':
                 cuadratura_data['total_venta_internet'] += monto
                 # ✅ Clasificar por tipo_tarjeta (igual que con DTEs)
@@ -6337,17 +6348,18 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         #   - OCULTA (descartado=True) → ya esta filtrada por el query (linea
         #                   `descartado=False`), no llega aqui.
         if dte.tipo_documento == 'NOTA DE CREDITO':
-            cuadratura_data['cantidad_notas_credito'] += 1
             if dte.tipo_transaccion == 'DEVOLUCION':
-                cuadratura_data['total_notas_credito'] += monto_dte
-                pagos_nc = dte.dte_asociado.all()
-                if pagos_nc.filter(metodo_pago='EFECTIVO').exists():
-                    cuadratura_data['total_nc_efectivo'] += monto_dte
-                elif pagos_nc.filter(metodo_pago='TRANSFERENCIA').exists():
-                    cuadratura_data['total_nc_transferencia'] += monto_dte
-            # ANULACION (informativa): no se suma a total_notas_credito,
-            # no resta del venta_total ni de los teoricos. Solo cuenta como
-            # documento emitido del dia.
+                # El efecto de las NC de devolución (conteo, monto y resta de
+                # efectivo/transferencia teórico) se imputa por su FECHA DE
+                # CUADRATURA = `Dte_Detalle_Pago.fecha_pago`, que puede diferir
+                # de `fecha_emision` cuando el operador eligió otro día en el
+                # modal de gestión-DTE. Se procesa en el bloque dedicado más
+                # abajo; aquí se omite para no duplicar ni anclar el efecto al
+                # día de emisión.
+                continue
+            # ANULACION (informativa): cuenta como documento emitido del día,
+            # pero NO suma a total_notas_credito ni resta venta_total/teóricos.
+            cuadratura_data['cantidad_notas_credito'] += 1
         elif not tiene_ticket_asociado:
             # Solo contar montos DTE si NO tienen ticket asociado (evita doble conteo)
             if dte.tipo_documento == 'BOLETA ELECTRONICA':
@@ -6459,6 +6471,8 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                     cuadratura_data['total_tarjetas_comerciales'] += monto
                     if 'HITES' in tarjeta_upper:
                         cuadratura_data['total_hites'] += monto
+                    elif 'PRESTO' in tarjeta_upper:
+                        cuadratura_data['total_presto'] += monto
                 
                 # Venta Internet - buscar en tipo_tarjeta para clasificar
                 elif metodo_upper == 'VENTA_INTERNET':
@@ -6475,12 +6489,61 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                     elif 'KLAP' in tarjeta_upper:
                         cuadratura_data['total_klap'] += monto
     
+    # ========== NC DE DEVOLUCIÓN: EFECTO POR FECHA DE CUADRATURA ==========
+    # A diferencia del resto de DTEs (que se imputan por `fecha_emision`), las
+    # NC de devolución afectan la caja del día elegido por el operador al
+    # emitirlas, guardado en `Dte_Detalle_Pago.fecha_pago`. La `fecha_emision`
+    # de la NC sigue siendo el día real de emisión (correcta para el SII y
+    # para gestión-DTE), pero el egreso de caja se imputa a `fecha_pago`.
+    #
+    # Compatibilidad: para NC antiguas sin `fecha_pago` (null), la fecha de
+    # efecto cae a `fecha_emision`, replicando exactamente el comportamiento
+    # anterior (los tests de regresión de cuadratura siguen pasando).
+    from django.db.models import Q
+    ncs_devolucion = (
+        Dte.objects.filter(
+            sucursal=sucursal,
+            tipo_documento='NOTA DE CREDITO',
+            tipo_transaccion='DEVOLUCION',
+            estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            descartado=False,
+        )
+        .filter(
+            Q(dte_asociado__fecha_pago=fecha_obj)
+            | Q(dte_asociado__fecha_pago__isnull=True, fecha_emision=fecha_obj)
+        )
+        .distinct()
+        .prefetch_related('dte_asociado')
+    )
+    for nc in ncs_devolucion:
+        pagos_nc = list(nc.dte_asociado.all())
+        # Fecha de efecto: la primera fecha_pago no nula del reembolso; si
+        # ninguna está fijada (NC antigua), se usa la fecha de emisión.
+        fecha_efecto = next(
+            (p.fecha_pago for p in pagos_nc if p.fecha_pago), None
+        ) or nc.fecha_emision
+        if fecha_efecto != fecha_obj:
+            continue
+        monto_nc = nc.monto_con_iva or 0
+        cuadratura_data['cantidad_notas_credito'] += 1
+        cuadratura_data['total_notas_credito'] += monto_nc
+        if any((p.metodo_pago or '').upper() == 'EFECTIVO' for p in pagos_nc):
+            cuadratura_data['total_nc_efectivo'] += monto_nc
+        elif any((p.metodo_pago or '').upper() == 'TRANSFERENCIA' for p in pagos_nc):
+            cuadratura_data['total_nc_transferencia'] += monto_nc
+
     # ========== CALCULAR TOTALES GENERALES ==========
     # Tarjetas comerciales: solo Hites
     cuadratura_data['total_tarjetas_comerciales'] = cuadratura_data['total_hites']
     
-    # Alias para compatibilidad con frontend
-    cuadratura_data['total_visa_mc_amex'] = cuadratura_data['total_tarjeta_credito']
+    # Alias para compatibilidad con frontend.
+    # total_transbank = crédito + débito + genérico/migrado (TBK_POS_INTEGRADO/TBK_MANUAL);
+    # total_tarjeta_debito = débito + prepago. La resta = crédito + genérico, así el bucket
+    # VISA-MC-AMEX incluye el Transbank migrado (coherente con el data-metodos de su fila) y
+    # ninguna venta con tarjeta queda fuera del VENTA TOTAL del Resumen de Caja.
+    cuadratura_data['total_visa_mc_amex'] = (
+        cuadratura_data['total_transbank'] - cuadratura_data['total_tarjeta_debito']
+    )
     
     # Venta Internet ya se calcula en el loop, pero asegurar el total
     # (ya se suma en cada if de venta internet arriba)
