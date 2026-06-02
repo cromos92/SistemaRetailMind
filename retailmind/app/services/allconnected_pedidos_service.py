@@ -69,12 +69,17 @@ def _extraer_lista(data) -> list:
     return []
 
 
-def traer_pedidos_pendientes(rut_empresa: Optional[str] = None) -> dict:
+def traer_pedidos_pendientes(rut_empresa: Optional[str] = None,
+                             desde: Optional[str] = None,
+                             hasta: Optional[str] = None) -> dict:
     """
     Consulta AllConnected e ingesta cada pedido vía ``_ingestar_pedido_dict``.
 
+    ``desde`` / ``hasta`` (YYYY-MM-DD, opcionales) acotan el rango de fechas que
+    AllConnected devuelve. Si se omiten, AllConnected usa el mes actual.
+
     Devuelve un dict listo para ``JsonResponse``:
-        {ok, configurado, total, nuevos, ya_existian, errores: [...], detalle}
+        {ok, configurado, total, nuevos, ya_existian, errores: [...], desde, hasta, detalle}
     Nunca lanza.
     """
     cfg = _config()
@@ -108,6 +113,10 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None) -> dict:
     params = {'estado': 'PENDIENTE'}
     if rut_empresa:
         params['rut_empresa'] = rut_empresa
+    if desde:
+        params['desde'] = desde
+    if hasta:
+        params['hasta'] = hasta
 
     try:
         r = requests.get(url, headers=headers, params=params, timeout=TIMEOUT_SEGUNDOS)
@@ -171,5 +180,7 @@ def traer_pedidos_pendientes(rut_empresa: Optional[str] = None) -> dict:
         'nuevos': nuevos,
         'ya_existian': ya_existian,
         'errores': errores,
+        'desde': (payload.get('desde') if isinstance(payload, dict) else None) or desde,
+        'hasta': (payload.get('hasta') if isinstance(payload, dict) else None) or hasta,
         'detalle': f'{nuevos} nuevos, {ya_existian} ya existían, {len(errores)} con error.',
     }

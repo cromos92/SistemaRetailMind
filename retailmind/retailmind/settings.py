@@ -634,4 +634,4 @@ ALLCONNECTED_CANAL_ORIGEN_ID = int(os.environ.get('ALLCONNECTED_CANAL_ORIGEN_ID'
 ALLCONNECTED_API_BASE_URL = os.environ.get('ALLCONNECTED_API_BASE_URL', '')        # ej: https://allconnected.host
 ALLCONNECTED_API_KEY = os.environ.get('ALLCONNECTED_API_KEY', '')                  # key de auth saliente
 ALLCONNECTED_API_HEADER_NAME = os.environ.get('ALLCONNECTED_API_HEADER_NAME', 'X-AllConnected-Key')
-ALLCONNECTED_PEDIDOS_PATH = os.environ.get('ALLCONNECTED_PEDIDOS_PATH', '/api/pedidos/pendientes/')
+ALLCONNECTED_PEDIDOS_PATH = os.environ.get('ALLCONNECTED_PEDIDOS_PATH', '/app/pedidos/pendientes/')

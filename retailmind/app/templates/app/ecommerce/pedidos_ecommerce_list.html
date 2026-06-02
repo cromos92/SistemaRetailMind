@@ -107,8 +107,13 @@
       </p>
     </div>
     <div class="d-flex gap-2 align-items-center flex-wrap">
+      <div class="d-flex gap-1 align-items-center" title="Rango de fechas a traer (por defecto, el mes actual)">
+        <input type="date" id="traer-desde" class="form-control form-control-sm" style="width:auto;">
+        <span style="opacity:.6;">→</span>
+        <input type="date" id="traer-hasta" class="form-control form-control-sm" style="width:auto;">
+      </div>
       <button class="btn btn-light btn-sm fw-bold" id="btn-traer-pedidos" onclick="traerPedidos()"
-              title="Consultar y traer pedidos pendientes desde AllConnected">
+              title="Traer pedidos del rango desde AllConnected">
         <i class="bi bi-cloud-download me-1"></i>Traer pedidos
       </button>
       <!-- Sucursal activa de sesión -->
@@ -504,10 +509,23 @@
 
 <script>
 /* ─────────────────────────────────────────────────────
-   Traer pedidos desde AllConnected (pull a demanda)
+   Traer pedidos desde AllConnected (pull por rango de fechas)
    ───────────────────────────────────────────────────── */
+// Default: el mes actual (1° del mes → hoy). Usa componentes locales (sin TZ shift).
+(function initRangoTraer(){
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const hoy = new Date();
+  const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const elDesde = document.getElementById('traer-desde');
+  const elHasta = document.getElementById('traer-hasta');
+  if (elDesde && !elDesde.value) elDesde.value = fmt(primero);
+  if (elHasta && !elHasta.value) elHasta.value = fmt(hoy);
+})();
+
 function traerPedidos(){
   const btn = document.getElementById('btn-traer-pedidos');
+  const desde = (document.getElementById('traer-desde') || {}).value || '';
+  const hasta = (document.getElementById('traer-hasta') || {}).value || '';
   const htmlOriginal = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Trayendo...';
@@ -515,7 +533,8 @@ function traerPedidos(){
 
   fetch("{% url 'traer_pedidos_allconnected' %}", {
     method: 'POST',
-    headers: { 'X-CSRFToken': csrfToken },
+    headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ desde, hasta }),
   })
     .then(r => r.json())
     .then(d => {
@@ -525,16 +544,18 @@ function traerPedidos(){
       } else if (d.ok) {
         const errs = (d.errores && d.errores.length)
           ? `<br><small class="text-danger">${d.errores.length} con error.</small>` : '';
+        const rango = (d.desde && d.hasta)
+          ? `<br><small class="text-muted">Rango: ${d.desde} → ${d.hasta}</small>` : '';
         Swal.fire({
           icon: 'success',
           title: 'Pedidos actualizados',
-          html: `<b>${d.nuevos}</b> nuevos · <b>${d.ya_existian}</b> ya estaban${errs}`,
+          html: `<b>${d.nuevos}</b> nuevos · <b>${d.ya_existian}</b> ya estaban${errs}${rango}`,
         });
       } else {
         Swal.fire('Error', d.error || 'No se pudo conectar a AllConnected', 'error');
       }
       // location.reload preserva los filtros (van en el querystring)
-      setTimeout(() => location.reload(), 1400);
+      setTimeout(() => location.reload(), 1600);
     })
     .catch(e => { Swal.fire('Error de conexión', String(e), 'error'); })
     .finally(() => { btn.disabled = false; btn.innerHTML = htmlOriginal; });

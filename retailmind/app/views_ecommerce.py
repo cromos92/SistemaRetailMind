@@ -446,11 +446,23 @@ def traer_pedidos_allconnected(request):
     if deny:
         return deny
 
+    # Rango de fechas opcional (YYYY-MM-DD). Si no viene, AllConnected usa el mes actual.
+    desde = hasta = None
+    try:
+        if request.body:
+            body = json.loads(request.body)
+            desde = (body.get('desde') or '').strip() or None
+            hasta = (body.get('hasta') or '').strip() or None
+    except (json.JSONDecodeError, ValueError):
+        pass
+
     # Import lazy para evitar import circular en la carga del módulo.
     from app.services import allconnected_pedidos_service
 
     rut_empresa = request.session.get('rutEmpresaActual')
-    resultado = allconnected_pedidos_service.traer_pedidos_pendientes(rut_empresa=rut_empresa)
+    resultado = allconnected_pedidos_service.traer_pedidos_pendientes(
+        rut_empresa=rut_empresa, desde=desde, hasta=hasta,
+    )
     return JsonResponse(resultado)
 
 
