@@ -2450,8 +2450,14 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     # Solo generar TXT si NO es BOLETA PAPEL
     if tipo_dte != 'BOLETA PAPEL':
         try:
-            from .views_modulo_documentos import generar_txt_dte_acepta
-            
+            # ✅ Importar AMBAS funciones al inicio del try. `limpiar_texto` se usa
+            #    más abajo en metodos_pago_texto (línea ~2491); como Python trata
+            #    cualquier nombre importado dentro de la función como local en TODO
+            #    el ámbito, importarlo recién antes de los datos del emisor causaba
+            #    UnboundLocalError ("referenced before assignment") y el TXT no se
+            #    generaba (archivo_txt_data quedaba None → no se descargaba el TXT).
+            from .views_modulo_documentos import generar_txt_dte_acepta, limpiar_texto
+
             # Preparar datos para TXT
             empresa = ticket.sucursal.empresa
             
@@ -2607,9 +2613,8 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                         'total': monto_item_txt
                     })
             
-            # Importar función de limpieza para eliminar acentos y caracteres especiales
-            from .views_modulo_documentos import limpiar_texto
-            
+            # (limpiar_texto ya fue importado al inicio del try, junto a generar_txt_dte_acepta)
+
             # Datos del documento - ✅ Aplicar limpiar_texto para eliminar acentos y Ñ
             datos_txt = {
                 'documento': {
