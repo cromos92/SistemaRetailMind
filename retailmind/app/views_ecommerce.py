@@ -40,6 +40,39 @@ def _verificar_permiso_ecommerce(request, tipo_permiso):
         }, status=403)
     return None
 
+
+# Marketplace ecommerce → plataforma de "Venta por Internet" (campo tipo_tarjeta).
+# El POS registra estas ventas como VENTA_INTERNET + plataforma; la cuadratura de
+# caja las categoriza por tipo_tarjeta (case-insensitive). NO usar TRANSFERENCIA.
+# Ver generacionVentas.html (opciones) y cuadraturaCaja.html (categorías).
+PLATAFORMA_INTERNET_POR_CANAL = {
+    'SHOPIFY': 'Shopify',
+    'PARIS': 'Paris',
+    'RIPLEY': 'Ripley',
+    'WALMART': 'Walmart',
+    'OTRO': 'Internet',
+}
+
+
+def _crear_pago_ecommerce(ticket, pedido):
+    """
+    Crea el TicketDetallePago de un pedido ecommerce como VENTA_INTERNET con la
+    plataforma del marketplace en `tipo_tarjeta` y el N° de pedido del canal en
+    `voucher`. Así el DTE y la cuadratura de caja lo registran como venta por
+    internet del canal correspondiente (Paris/Ripley/Walmart/Shopify) y no como
+    una transferencia genérica.
+    """
+    plataforma = PLATAFORMA_INTERNET_POR_CANAL.get(pedido.canal_origen, 'Internet')
+    return TicketDetallePago.objects.create(
+        ticket=ticket,
+        metodo_pago='VENTA_INTERNET',
+        tipo_tarjeta=plataforma,
+        voucher=(pedido.numero_pedido_canal or '')[:100],
+        monto=int(pedido.total or 0),
+        notas=f'Pago {pedido.canal_origen} #{pedido.numero_pedido_canal}',
+    )
+
+
 # ---------------------------------------------------------------------------
 # Helper: validar items del pedido contra productos de la sucursal
 # ---------------------------------------------------------------------------
@@ -425,6 +458,89 @@ def api_asignar_ticket_rm(request):
         'ticket_id': pedido.ticket_id,
         'dte_id': pedido.dte_id,
     })
+
+
+@csrf_exempt
+def api_cancelar_pedido_ecommerce(request):
+    """
+    POST /api/ecommerce/pedidos/cancelar/
+
+    AllConnected avisa que un pedido fue CANCELADO en el canal. RM lo marca
+    CANCELADO para que salga de la lista PENDIENTE y no se pueda facturar
+    (ambas vistas de facturación filtran estado='PENDIENTE').
+
+    Auth: header X-RetailMind-Key (igual que la recepción de pedidos).
+
+    Body JSON:
+        {
+            "numero_pedido_canal": "...",
+            "canal_origen": "SHOPIFY|PARIS|RIPLEY|WALMART|...",
+            "motivo": "..."   (opcional)
+        }
+
+    Respuestas:
+        200 {ok:true, estado:'CANCELADO', ya_cancelado:bool}
+        409 {ok:false, error:'ya facturado', dte_id}  -> requiere nota de crédito
+        404 {ok:false, error:'no encontrado'}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Método no permitido'}, status=405)
+
+    if not _verificar_api_key(request):
+        return JsonResponse({'ok': False, 'error': 'API key inválida'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Body JSON inválido'}, status=400)
+
+    numero_pedido_canal = (data.get('numero_pedido_canal') or '').strip()
+    canal_origen = (data.get('canal_origen') or '').strip().upper()
+    if not numero_pedido_canal or not canal_origen:
+        return JsonResponse(
+            {'ok': False, 'error': 'numero_pedido_canal y canal_origen son obligatorios'},
+            status=400,
+        )
+
+    pedido = PedidoEcommerce.objects.filter(
+        numero_pedido_canal=numero_pedido_canal,
+        canal_origen=canal_origen,
+    ).first()
+    if not pedido:
+        return JsonResponse({'ok': False, 'error': 'Pedido no encontrado'}, status=404)
+
+    # Idempotente: si ya está cancelado, OK
+    if pedido.estado == 'CANCELADO':
+        return JsonResponse({'ok': True, 'estado': 'CANCELADO', 'ya_cancelado': True})
+
+    # Si ya se facturó (DTE emitido), no se puede cancelar sin nota de crédito
+    if pedido.estado == 'FACTURADO' or pedido.dte_id:
+        return JsonResponse({
+            'ok': False,
+            'error': 'El pedido ya fue facturado (DTE emitido). Requiere nota de crédito para anular.',
+            'estado': pedido.estado,
+            'dte_id': pedido.dte_id,
+        }, status=409)
+
+    estado_anterior = pedido.estado
+    sub_estado_anterior = pedido.sub_estado
+    motivo = (data.get('motivo') or 'Cancelado en el canal (AllConnected)')[:255]
+
+    pedido.estado = 'CANCELADO'
+    pedido.sub_estado = 'CANCELADO_CLIENTE'
+    pedido.save(update_fields=['estado', 'sub_estado'])
+
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=estado_anterior,
+        estado_nuevo='CANCELADO',
+        sub_estado_anterior=sub_estado_anterior,
+        sub_estado_nuevo='CANCELADO_CLIENTE',
+        tipo_evento='CAMBIO_ESTADO',
+        motivo=motivo,
+    )
+
+    return JsonResponse({'ok': True, 'estado': 'CANCELADO', 'ya_cancelado': False})
 
 
 @login_required
@@ -878,10 +994,6 @@ def api_facturar_pedido_individual(request, pedido_id):
         vendedor = Vendedor.objects.get(codigo_vendedor=1000)
     except Vendedor.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Vendedor código 1000 no encontrado'}, status=400)
-    METODO_PAGO_POR_CANAL = {
-        'SHOPIFY': 'VENTA_INTERNET', 'PARIS': 'TRANSFERENCIA',
-        'RIPLEY': 'TRANSFERENCIA', 'WALMART': 'TRANSFERENCIA', 'OTRO': 'VENTA_INTERNET',
-    }
     from app.views import obtener_siguiente_correlativo
     from app.views_modulo_ventas import generar_dte_desde_ticket
     pedido = get_object_or_404(PedidoEcommerce.objects.filter(estado='PENDIENTE'), id=pedido_id)
@@ -914,8 +1026,7 @@ def api_facturar_pedido_individual(request, pedido_id):
                 sucursal=sucursal,
                 datos_receptor=datos_receptor,
             )
-            metodo_pago = METODO_PAGO_POR_CANAL.get(pedido.canal_origen, 'VENTA_INTERNET')
-            TicketDetallePago.objects.create(ticket=ticket, metodo_pago=metodo_pago, monto=int(pedido.total or 0), notas=f'Pago {pedido.canal_origen}')
+            _crear_pago_ecommerce(ticket, pedido)
             ticket.estado = 'PAGADO'
             ticket.save(update_fields=['estado'])
             dte = generar_dte_desde_ticket(ticket, tipo_documento, request.user)
@@ -1215,15 +1326,6 @@ def facturar_ecommerce_masivo(request):
     except Vendedor.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Vendedor código 1000 (Venta Internet) no encontrado'}, status=400)
 
-    # Mapa canal → método de pago
-    METODO_PAGO_POR_CANAL = {
-        'SHOPIFY':  'VENTA_INTERNET',
-        'PARIS':    'TRANSFERENCIA',
-        'RIPLEY':   'TRANSFERENCIA',
-        'WALMART':  'TRANSFERENCIA',
-        'OTRO':     'VENTA_INTERNET',
-    }
-
     pedidos = PedidoEcommerce.objects.filter(id__in=pedido_ids, estado='PENDIENTE').select_related('sucursal')
 
     from app.views import obtener_siguiente_correlativo
@@ -1269,13 +1371,7 @@ def facturar_ecommerce_masivo(request):
                     sucursal=sucursal,
                 )
 
-                metodo_pago = METODO_PAGO_POR_CANAL.get(pedido.canal_origen, 'VENTA_INTERNET')
-                TicketDetallePago.objects.create(
-                    ticket=ticket,
-                    metodo_pago=metodo_pago,
-                    monto=int(pedido.total or 0),
-                    notas=f'Pago marketplace {pedido.canal_origen}',
-                )
+                _crear_pago_ecommerce(ticket, pedido)
 
                 ticket.estado = 'PAGADO'
                 ticket.save(update_fields=['estado'])
