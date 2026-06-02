@@ -89,6 +89,14 @@ class PedidoEcommerce(models.Model):
         verbose_name='N° Pedido Canal',
         help_text='ID/número del pedido en el marketplace de origen',
     )
+    numero_pedido_origen = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='N° Pedido (AllConnected)',
+        help_text='Correlativo interno del pedido en AllConnected (ej. MP-000123)',
+    )
     canal_origen = models.CharField(
         max_length=20,
         choices=CANAL_ECOMMERCE_CHOICES,

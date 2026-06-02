@@ -277,6 +277,7 @@ def _ingestar_pedido_dict(data):
         pedido = PedidoEcommerce.objects.create(
             numero_ticket_rm=_generar_numero_ticket_rm(),
             numero_pedido_canal=numero_pedido_canal,
+            numero_pedido_origen=data.get('numero_pedido', '') or '',
             canal_origen=canal_origen,
             sucursal=sucursal,
             sucursal_original=sucursal,
@@ -979,7 +980,12 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
 
     Devuelve el Ticket creado.
     """
-    from app.views_modulo_productos import consumir_stock_fifo
+    # Usar la consumir_stock_fifo del POS (views.py): crea el Movimientos_Producto
+    # con tipo_movimiento='EGRESO' y concepto='VENTA_PUBLICO' explícitos y actualiza
+    # Producto_Talla.stock atómicamente con F(). La variante de views_modulo_productos
+    # delega en registrar_movimiento_producto sin pasar tipo_movimiento, lo que dejaba
+    # el default 'INGRESO' del modelo y etiquetaba mal los egresos de internet.
+    from app.views import consumir_stock_fifo
 
     sucursal = sucursal or pedido.sucursal
     total = int(pedido.total or 0)
@@ -1007,12 +1013,14 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
     )
 
     items = pedido.items or []
+    total_lineas = 0
     for item in items:
         sku = (item.get('sku') or '').strip()
         nombre = (item.get('nombre') or '').strip()
         cantidad = int(item.get('cantidad') or 1)
         precio = int(item.get('precio_unitario') or 0)
         subtotal_linea = precio * cantidad
+        total_lineas += subtotal_linea
 
         # Buscar producto: primero override guardado, luego por SKU
         producto_talla = None
@@ -1071,7 +1079,7 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
                     costo=producto_talla.producto.costo,
                     precio=precio,
                     sobreprecio=getattr(producto_talla.producto, 'sobreprecio', 0),
-                    concepto='VENTA_DIRECTA',
+                    concepto='VENTA_PUBLICO',
                     tipo_movimiento='EGRESO',
                     responsable=responsable,
                     observaciones=f'Venta ecommerce {pedido.canal_origen} #{pedido.numero_pedido_canal} — FIFO no disponible',
@@ -1086,6 +1094,75 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
                 'SKU %s del pedido %s no encontrado en sucursal %s — sin rebaje de stock',
                 sku, pedido.numero_ticket_rm, sucursal.id,
             )
+
+    # Costo de envío como línea de DESPACHO (afecto a IVA). El DTE se calcula
+    # desde las líneas reales del ticket, así que sin esta línea el envío se
+    # perdía y la boleta quedaba subfacturada (ej. pedido con envío $3.353
+    # facturaba solo el producto). No mueve stock (es un servicio, sin SKU).
+    costo_envio = int(pedido.costo_envio or 0)
+    if costo_envio > 0:
+        Ticket_Productos.objects.create(
+            ProductoTalla=None,
+            idTicket=ticket,
+            stock=1,
+            precio=costo_envio,
+            descuento_unitario=0,
+            subtotal=costo_envio,
+            precio_original=costo_envio,
+            porcentaje_descuento=0,
+            descripcion_linea='DESPACHO',
+        )
+        total_lineas += costo_envio
+
+    # ── Regla de oro de montos ──────────────────────────────────────────────
+    # El `total` del payload es el GRAN TOTAL real que cobró el marketplace y es
+    # AUTORITATIVO en todos los canales (coincide con el PDF de AllConnected). El
+    # desglose (subtotal/descuento/impuestos/costo_envio) NO es homogéneo entre
+    # marketplaces (Walmart subtotal neto, Shopify bruto, Paris solo total…), así
+    # que NUNCA reconstruimos el total desde las partes.
+    #
+    # El DTE en RM se calcula desde las líneas del ticket, por lo que reconciliamos
+    # las líneas para que sumen EXACTO el `total`: si ítems + despacho no lo cubren
+    # (ej. Paris solo informa total, o redondeos), agregamos una línea de AJUSTE
+    # por la diferencia. Así el DTE queda con monto_total = total y, vía
+    # generar_dte_desde_ticket, neto = round(total/1.19), iva = total - neto.
+    total_autoritativo = int(round(float(pedido.total or 0)))
+    if total_autoritativo > 0:
+        diff = total_autoritativo - total_lineas
+        if diff > 0:
+            # Falta monto para llegar al total del canal: línea de AJUSTE positiva.
+            Ticket_Productos.objects.create(
+                ProductoTalla=None,
+                idTicket=ticket,
+                stock=1,
+                precio=diff,
+                descuento_unitario=0,
+                subtotal=diff,
+                precio_original=diff,
+                porcentaje_descuento=0,
+                descripcion_linea='AJUSTE',
+            )
+            total_lineas += diff
+        elif diff < 0:
+            # Fuera de contrato (líneas > total). No emitimos líneas negativas;
+            # dejamos el DTE en la suma de líneas y lo marcamos para revisión.
+            logger.error(
+                'Pedido %s: ítems+despacho (%s) exceden el total del canal (%s). '
+                'DTE quedará en %s — revisar payload del canal.',
+                pedido.numero_ticket_rm, total_lineas, total_autoritativo, total_lineas,
+            )
+            total_autoritativo = total_lineas
+        final_total = total_autoritativo
+    else:
+        # Sin total fiable (no debería pasar): caer a la suma de líneas.
+        final_total = total_lineas
+
+    # El descuento ya está incorporado en el precio cobrado de los ítems y en el
+    # total; no se vuelve a aplicar (descuento=0) para no descontar dos veces.
+    ticket.subTotal = final_total
+    ticket.total = final_total
+    ticket.descuento = 0
+    ticket.save(update_fields=['subTotal', 'total', 'descuento'])
 
     return ticket
 
@@ -1340,12 +1417,20 @@ def descargar_txt_dte_ecommerce(request, dte_id):
             else:
                 sku = 'ITEM'
                 nombre = dp.descripcion or 'Ítem ecommerce'
+            # En FACTURA las líneas del TXT van NETAS (÷1.19); en BOLETA van con
+            # IVA incluido. dp.precio está con IVA, así que para factura lo
+            # convertimos a neto igual que el camino de emisión inicial
+            # (generar_dte_desde_ticket), evitando que las líneas salgan 19% altas.
+            if es_boleta:
+                precio_linea = int(dp.precio)
+            else:
+                precio_linea = int(round(Decimal(dp.precio) / Decimal('1.19')))
             productos_txt.append({
                 'sku': sku,
                 'nombre': nombre[:80],
                 'cantidad': dp.stock,
-                'precio_unitario': int(dp.precio),
-                'total': int(dp.precio * dp.stock),
+                'precio_unitario': precio_linea,
+                'total': precio_linea * dp.stock,
             })
 
         datos_txt = {

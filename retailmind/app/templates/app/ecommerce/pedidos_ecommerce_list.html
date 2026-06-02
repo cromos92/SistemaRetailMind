@@ -230,7 +230,7 @@
               <th style="width:36px;text-align:center;">
                 <input type="checkbox" id="cb-all" class="cb-pedido" title="Seleccionar todos">
               </th>
-              <th>N RM</th>
+              <th>N Pedido</th>
               <th>Canal</th>
               <th>N Pedido Canal</th>
               <th>Cliente</th>
@@ -258,7 +258,7 @@
                   {% endif %}
                 {% endif %}
               </td>
-              <td><span class="ticket-rm-badge">{{ p.numero_ticket_rm }}</span></td>
+              <td><span class="ticket-rm-badge" title="N° RM: {{ p.numero_ticket_rm }}">{{ p.numero_pedido_origen|default:p.numero_ticket_rm }}</span></td>
               <td><span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span></td>
               <td class="col-num-pedido">{{ p.numero_pedido_canal }}</td>
               <td>
