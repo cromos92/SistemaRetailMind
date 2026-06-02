@@ -1316,6 +1316,7 @@ urlpatterns = [
     path('api/ecommerce/pedidos/consultar/', views_ecommerce.api_asignar_ticket_rm, name='api_ecommerce_consultar_pedido'),
     path('api/ecommerce/facturar-masivo/', views_ecommerce.facturar_ecommerce_masivo, name='facturar_ecommerce_masivo'),
     path('ecommerce/pedidos/', views_ecommerce.PedidosEcommerceListView.as_view(), name='pedidos_ecommerce_list'),
+    path('ecommerce/pedidos/traer/', views_ecommerce.traer_pedidos_allconnected, name='traer_pedidos_allconnected'),
     path('ecommerce/pedidos/<int:pedido_id>/', views_ecommerce.pedido_ecommerce_detalle, name='pedido_ecommerce_detalle'),
     path('ecommerce/pedidos/<int:pedido_id>/buscar-producto/', views_ecommerce.api_buscar_producto_match, name='api_buscar_producto_match'),
     path('ecommerce/pedidos/<int:pedido_id>/guardar-match/', views_ecommerce.api_guardar_match_sku, name='api_guardar_match_sku'),

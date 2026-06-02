@@ -107,6 +107,10 @@
       </p>
     </div>
     <div class="d-flex gap-2 align-items-center flex-wrap">
+      <button class="btn btn-light btn-sm fw-bold" id="btn-traer-pedidos" onclick="traerPedidos()"
+              title="Consultar y traer pedidos pendientes desde AllConnected">
+        <i class="bi bi-cloud-download me-1"></i>Traer pedidos
+      </button>
       <!-- Sucursal activa de sesión -->
       {% if sucursal_sesion_obj %}
         <span style="background:rgba(0,212,170,.18);border:1px solid rgba(0,212,170,.45);border-radius:20px;padding:4px 14px;font-size:.8rem;font-weight:700;color:#6ffce0;white-space:nowrap;">
@@ -499,6 +503,43 @@
 </div>
 
 <script>
+/* ─────────────────────────────────────────────────────
+   Traer pedidos desde AllConnected (pull a demanda)
+   ───────────────────────────────────────────────────── */
+function traerPedidos(){
+  const btn = document.getElementById('btn-traer-pedidos');
+  const htmlOriginal = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Trayendo...';
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+  fetch("{% url 'traer_pedidos_allconnected' %}", {
+    method: 'POST',
+    headers: { 'X-CSRFToken': csrfToken },
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.configurado === false) {
+        Swal.fire('Sin pull configurado',
+                  d.detalle || 'Mostrando los pedidos ya recibidos.', 'info');
+      } else if (d.ok) {
+        const errs = (d.errores && d.errores.length)
+          ? `<br><small class="text-danger">${d.errores.length} con error.</small>` : '';
+        Swal.fire({
+          icon: 'success',
+          title: 'Pedidos actualizados',
+          html: `<b>${d.nuevos}</b> nuevos · <b>${d.ya_existian}</b> ya estaban${errs}`,
+        });
+      } else {
+        Swal.fire('Error', d.error || 'No se pudo conectar a AllConnected', 'error');
+      }
+      // location.reload preserva los filtros (van en el querystring)
+      setTimeout(() => location.reload(), 1400);
+    })
+    .catch(e => { Swal.fire('Error de conexión', String(e), 'error'); })
+    .finally(() => { btn.disabled = false; btn.innerHTML = htmlOriginal; });
+}
+
 /* ── Separador de miles (formato chileno: $1.234.567) ── */
 document.querySelectorAll('.fmt-miles').forEach(el => {
   const raw = parseInt(el.dataset.val, 10);

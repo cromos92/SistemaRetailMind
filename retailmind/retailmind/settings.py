@@ -623,3 +623,15 @@ ALLCONNECTED_WEBHOOK_URL = os.environ.get('ALLCONNECTED_WEBHOOK_URL', '')
 # Cada empresa puede tener un canal distinto; se configura por empresa en la
 # tabla Canal de AllConnected. Este es el ID por defecto.
 ALLCONNECTED_CANAL_ORIGEN_ID = int(os.environ.get('ALLCONNECTED_CANAL_ORIGEN_ID', '0') or '0')
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AllConnected — pull de pedidos (botón "Traer pedidos")
+# ─────────────────────────────────────────────────────────────────────────────
+# Permite que RetailMind salga a CONSULTAR pedidos pendientes a AllConnected
+# (en vez de solo recibirlos por push). Vacío = pull deshabilitado: el botón
+# solo refresca la tabla con los pedidos ya recibidos.
+# Lo consume app/services/allconnected_pedidos_service.py
+ALLCONNECTED_API_BASE_URL = os.environ.get('ALLCONNECTED_API_BASE_URL', '')        # ej: https://allconnected.host
+ALLCONNECTED_API_KEY = os.environ.get('ALLCONNECTED_API_KEY', '')                  # key de auth saliente
+ALLCONNECTED_API_HEADER_NAME = os.environ.get('ALLCONNECTED_API_HEADER_NAME', 'X-AllConnected-Key')
+ALLCONNECTED_PEDIDOS_PATH = os.environ.get('ALLCONNECTED_PEDIDOS_PATH', '/api/pedidos/pendientes/')

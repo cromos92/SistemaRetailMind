@@ -211,72 +211,37 @@ def _generar_numero_ticket_rm():
     return f'RM-{base}'
 
 
-# ---------------------------------------------------------------------------
-# API — Recepción de pedidos externos
-# ---------------------------------------------------------------------------
-
-@csrf_exempt
-def api_recibir_pedido_ecommerce(request):
+def _ingestar_pedido_dict(data):
     """
-    POST /api/ecommerce/pedidos/
+    Valida y crea (o recupera, idempotente) un PedidoEcommerce a partir de un dict
+    con el shape del body de ``POST /api/ecommerce/pedidos/``.
 
-    Recibe un pedido de VicentAllEcommercesConected y crea un PedidoEcommerce.
+    Reutilizado por el endpoint POST (``api_recibir_pedido_ecommerce``) y por el
+    pull desde AllConnected (``allconnected_pedidos_service``). NO lanza: los
+    errores se devuelven en el dict.
 
-    Body JSON esperado:
-    {
-        "numero_pedido_canal": "...",
-        "canal_origen": "SHOPIFY|PARIS|RIPLEY|WALMART|OTRO",
-        "sucursal_id": <int>,
-        "cliente_nombre": "...",
-        "cliente_email": "...",          (opcional)
-        "cliente_documento": "...",      (opcional, RUT para DTE)
-        "subtotal": 0.0,
-        "descuento": 0.0,
-        "costo_envio": 0.0,
-        "total": 0.0,
-        "items": [
-            {"sku": "...", "nombre": "...", "cantidad": 1, "precio_unitario": 0.0}
-        ],
-        "direccion_envio": "..."         (opcional)
-    }
-
-    Respuesta exitosa:
-    {
-        "ok": true,
-        "numero_ticket_rm": "RM-XXXXXXXX",
-        "pedido_ecommerce_id": <int>
-    }
+    Devuelve un dict listo para ``JsonResponse`` con una clave extra ``status``
+    (código HTTP sugerido) que el caller HTTP puede extraer con ``.pop('status')``.
     """
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'Método no permitido'}, status=405)
-
-    if not _verificar_api_key(request):
-        return JsonResponse({'ok': False, 'error': 'API key inválida'}, status=401)
-
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({'ok': False, 'error': 'Body JSON inválido'}, status=400)
-
     # Campos obligatorios
-    numero_pedido_canal = data.get('numero_pedido_canal', '').strip()
-    canal_origen = data.get('canal_origen', '').strip().upper()
+    numero_pedido_canal = (data.get('numero_pedido_canal') or '').strip()
+    canal_origen = (data.get('canal_origen') or '').strip().upper()
     sucursal_id = data.get('sucursal_id')
-    cliente_nombre = data.get('cliente_nombre', '').strip()
+    cliente_nombre = (data.get('cliente_nombre') or '').strip()
 
     if not numero_pedido_canal:
-        return JsonResponse({'ok': False, 'error': 'numero_pedido_canal es obligatorio'}, status=400)
+        return {'ok': False, 'error': 'numero_pedido_canal es obligatorio', 'status': 400}
     if not canal_origen:
-        return JsonResponse({'ok': False, 'error': 'canal_origen es obligatorio'}, status=400)
+        return {'ok': False, 'error': 'canal_origen es obligatorio', 'status': 400}
     if not sucursal_id:
-        return JsonResponse({'ok': False, 'error': 'sucursal_id es obligatorio'}, status=400)
+        return {'ok': False, 'error': 'sucursal_id es obligatorio', 'status': 400}
     if not cliente_nombre:
-        return JsonResponse({'ok': False, 'error': 'cliente_nombre es obligatorio'}, status=400)
+        return {'ok': False, 'error': 'cliente_nombre es obligatorio', 'status': 400}
 
     try:
         sucursal = Sucursal.objects.select_related('empresa').get(id=sucursal_id)
     except Sucursal.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': f'Sucursal {sucursal_id} no encontrada'}, status=400)
+        return {'ok': False, 'error': f'Sucursal {sucursal_id} no encontrada', 'status': 400}
 
     # Validar que la sucursal pertenezca a la empresa del payload (si se provee)
     rut_payload = (data.get('rut_empresa') or '').replace('.', '').replace(' ', '').upper().strip()
@@ -286,11 +251,11 @@ def api_recibir_pedido_ecommerce(request):
         except Exception:
             rut_sucursal = ''
         if not rut_sucursal or rut_sucursal != rut_payload:
-            return JsonResponse(
-                {'ok': False,
-                 'error': f'Sucursal {sucursal_id} no pertenece a la empresa {data.get("rut_empresa")}'},
-                status=400,
-            )
+            return {
+                'ok': False,
+                'error': f'Sucursal {sucursal_id} no pertenece a la empresa {data.get("rut_empresa")}',
+                'status': 400,
+            }
 
     # Verificar si ya existe un pedido para este canal+número (idempotente)
     existente = PedidoEcommerce.objects.filter(
@@ -298,12 +263,13 @@ def api_recibir_pedido_ecommerce(request):
         canal_origen=canal_origen,
     ).first()
     if existente:
-        return JsonResponse({
+        return {
             'ok': True,
             'numero_ticket_rm': existente.numero_ticket_rm,
             'pedido_ecommerce_id': existente.id,
             'ya_existia': True,
-        })
+            'status': 200,
+        }
 
     try:
         # Validar stock en la sucursal para determinar sub-estado inicial
@@ -359,16 +325,69 @@ def api_recibir_pedido_ecommerce(request):
         )
 
     except Exception as e:
-        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+        return {'ok': False, 'error': str(e), 'status': 500}
 
-    return JsonResponse({
+    return {
         'ok': True,
         'numero_ticket_rm': pedido.numero_ticket_rm,
         'pedido_ecommerce_id': pedido.id,
         'ya_existia': False,
         'sub_estado': pedido.sub_estado,
         'todos_items_con_stock': todos_con_stock,
-    }, status=201)
+        'status': 201,
+    }
+
+
+# ---------------------------------------------------------------------------
+# API — Recepción de pedidos externos
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+def api_recibir_pedido_ecommerce(request):
+    """
+    POST /api/ecommerce/pedidos/
+
+    Recibe un pedido de VicentAllEcommercesConected y crea un PedidoEcommerce.
+
+    Body JSON esperado:
+    {
+        "numero_pedido_canal": "...",
+        "canal_origen": "SHOPIFY|PARIS|RIPLEY|WALMART|OTRO",
+        "sucursal_id": <int>,
+        "cliente_nombre": "...",
+        "cliente_email": "...",          (opcional)
+        "cliente_documento": "...",      (opcional, RUT para DTE)
+        "subtotal": 0.0,
+        "descuento": 0.0,
+        "costo_envio": 0.0,
+        "total": 0.0,
+        "items": [
+            {"sku": "...", "nombre": "...", "cantidad": 1, "precio_unitario": 0.0}
+        ],
+        "direccion_envio": "..."         (opcional)
+    }
+
+    Respuesta exitosa:
+    {
+        "ok": true,
+        "numero_ticket_rm": "RM-XXXXXXXX",
+        "pedido_ecommerce_id": <int>
+    }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Método no permitido'}, status=405)
+
+    if not _verificar_api_key(request):
+        return JsonResponse({'ok': False, 'error': 'API key inválida'}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Body JSON inválido'}, status=400)
+
+    resultado = _ingestar_pedido_dict(data)
+    status = resultado.pop('status', 200)
+    return JsonResponse(resultado, status=status)
 
 
 @csrf_exempt
@@ -405,6 +424,34 @@ def api_asignar_ticket_rm(request):
         'ticket_id': pedido.ticket_id,
         'dte_id': pedido.dte_id,
     })
+
+
+@login_required
+def traer_pedidos_allconnected(request):
+    """
+    POST /ecommerce/pedidos/traer/
+
+    Botón "Traer pedidos": RetailMind sale a consultar (pull) los pedidos
+    pendientes a AllConnected y los ingresa, reutilizando la lógica de recepción
+    (``_ingestar_pedido_dict``).
+
+    Si el pull no está configurado (sin ``ALLCONNECTED_API_BASE_URL``), devuelve
+    ``{ok: True, configurado: False}`` y la UI solo refresca la tabla con los
+    pedidos ya recibidos por push.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Método no permitido'}, status=405)
+
+    deny = _verificar_permiso_ecommerce(request, 'puede_crear')
+    if deny:
+        return deny
+
+    # Import lazy para evitar import circular en la carga del módulo.
+    from app.services import allconnected_pedidos_service
+
+    rut_empresa = request.session.get('rutEmpresaActual')
+    resultado = allconnected_pedidos_service.traer_pedidos_pendientes(rut_empresa=rut_empresa)
+    return JsonResponse(resultado)
 
 
 # ---------------------------------------------------------------------------
