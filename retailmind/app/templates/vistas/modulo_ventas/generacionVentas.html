@@ -8144,6 +8144,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 );
                 
                 if (pagoCreditoTrabajador && pagoCreditoTrabajador.credito_id) {
+                    // ✅ Descargar TXT también cuando el pago es con crédito trabajador/externo.
+                    //    El backend genera `archivo_txt` igual que con cualquier otro método
+                    //    (depende del tipo de documento, no del método de pago). Esta rama
+                    //    antes no lo descargaba, por eso "con crédito trabajador no generaba TXT".
+                    if (data.dte_generado && data.archivo_txt) {
+                        try {
+                            const blob = new Blob([data.archivo_txt.contenido], { type: 'text/plain;charset=utf-8' });
+                            const link = document.createElement('a');
+                            link.href = window.URL.createObjectURL(blob);
+                            link.download = data.archivo_txt.nombre_archivo;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(link.href);
+                            console.log('✓ Archivo TXT descargado (crédito):', data.archivo_txt.nombre_archivo);
+                        } catch (error) {
+                            console.error('Error al descargar TXT (crédito):', error);
+                        }
+                    }
+
                     // Registrar uso del crédito - incluir número de boleta si hay DTE generado
                     const creditoPayload = {
                         credito_id: pagoCreditoTrabajador.credito_id,
@@ -8176,6 +8196,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (data.dte_generado) {
                                 htmlMensaje = `<p><strong>${data.dte_generado.tipo} N° ${data.dte_generado.numero}</strong></p>
                                     <p class="text-success"><i class="ri-check-circle-line"></i> Documento generado exitosamente</p>`;
+                                if (data.archivo_txt) {
+                                    htmlMensaje += `<p class="text-info"><i class="ri-file-download-line"></i> Archivo TXT descargado para Acepta</p>`;
+                                }
                             } else {
                                 htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
                             }

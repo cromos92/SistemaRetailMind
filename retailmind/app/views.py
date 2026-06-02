@@ -4473,7 +4473,7 @@ def _construir_datos_txt_nc(nc):
     except Exception:
         pass
 
-    return {
+    datos = {
         'documento': {
             'tipo_documento': 61,
             'folio': nc.numero_documento,
@@ -4513,6 +4513,16 @@ def _construir_datos_txt_nc(nc):
         'detalle': detalle,
         'referencias': referencias_nc
     }
+
+    # Las líneas conceptuales (NC parcial por monto / corrige montos) se guardan
+    # CON IVA; para el TXT tipo 61 deben ir NETAS y sumar el MntNeto del cabezal.
+    # Misma normalización que aplica anular_factura_dte en la ruta de creación,
+    # para que el TXT re-descargado no diverja del emitido al crear la NC.
+    # Es idempotente: si el detalle ya está en NETO (NCs de mercadería con
+    # productoTalla), no lo altera.
+    from .views_modulo_documentos import normalizar_detalle_para_tipo
+    normalizar_detalle_para_tipo(datos['detalle'], datos['totales'], 61)
+    return datos
 
 
 @login_required
@@ -26981,11 +26991,17 @@ def anular_factura_dte(request):
     3) NC PARCIAL POR MONTO (compatibilidad legacy, sin `productos_afectados`):
        - No reversa stock, no modifica el DTE. Queda la NC como ajuste
          contable. Se registra una advertencia en la respuesta.
+
+    4) NC CORRIGE MONTOS (`es_correccion_monto=True` + `correcciones`):
+       - Razón SII 3 (Corrige montos). Acredita un monto libre por línea
+         (corrección de un cobro erróneo). NO reversa stock ni modifica el
+         DTE original; el documento sigue vigente. Cada corrección crea una
+         línea conceptual (sin productoTalla) con el SKU en la descripción.
     """
     import json as _json
     from decimal import Decimal
     from datetime import date
-    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto, calcular_montos_nc, normalizar_detalle_para_tipo
+    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto, calcular_montos_nc, normalizar_detalle_para_tipo, base_lineas_dte
 
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
@@ -27032,6 +27048,20 @@ def anular_factura_dte(request):
     cliente_id_in = body.get('cliente_id')
     motivo_anulacion = body.get('motivo', '').strip()
     productos_afectados_input = body.get('productos_afectados') or []
+
+    # Modo "Corrige montos" (razón SII 3): NC por un monto libre por línea,
+    # SIN devolver producto ni revertir stock. El operador corrige un cobro
+    # erróneo acreditando solo la diferencia. `correcciones` =
+    # [{dte_producto_id, monto_acreditar}] con monto CON IVA. Es excluyente
+    # con `productos_afectados` (no hay devolución física de unidades).
+    es_correccion_monto = bool(body.get('es_correccion_monto'))
+    correcciones_input = body.get('correcciones') or []
+    if es_correccion_monto:
+        if not correcciones_input:
+            return JsonResponse({
+                'error': 'Modo "corrección de monto" sin líneas en `correcciones`.'
+            }, status=400)
+        productos_afectados_input = []  # no se usa en corrección de monto
 
     TIPOS_ANULABLES = [
         'FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
@@ -27121,7 +27151,9 @@ def anular_factura_dte(request):
     # destino, además de marcar el DTE como ANULADO (lo que lo sacaba
     # del listado del receptor).
     # ------------------------------------------------------------------
-    es_traspaso = (dte.tipo_transaccion == 'TRASPASO')
+    # Una corrección de monto (razón 3) jamás mueve stock: se desactiva la
+    # rama TRASPASO para que no intente reversar inventario entre sucursales.
+    es_traspaso = (dte.tipo_transaccion == 'TRASPASO') and not es_correccion_monto
     es_post_recepcion_traspaso = False
     sucursal_destino_traspaso = None
     if es_traspaso:
@@ -27156,8 +27188,93 @@ def anular_factura_dte(request):
     # ------------------------------------------------------------------
     usa_productos_afectados = bool(productos_afectados_input)
     lineas_afectadas = []  # [(dp, cantidad_a_devolver)]
+    correcciones_lineas = []  # [(dp, monto_con_iva)] para modo corrige-montos
 
-    if usa_productos_afectados:
+    if es_correccion_monto:
+        # ----------------------------------------------------------------
+        # CORRIGE MONTOS (razón SII 3): NC por un monto libre por línea.
+        # No revierte stock ni modifica el DTE original — el producto se
+        # queda con el cliente; solo se acredita la diferencia de un cobro
+        # erróneo. El monto se toma tal cual lo ingresa el operador (CON IVA).
+        # ----------------------------------------------------------------
+        correcciones_map = {}
+        for c in correcciones_input:
+            if not isinstance(c, dict):
+                return JsonResponse({
+                    'error': 'correcciones con formato inválido. Esperado {dte_producto_id, monto_acreditar}.'
+                }, status=400)
+            try:
+                pid = int(c.get('dte_producto_id'))
+                monto_ci = int(round(float(c.get('monto_acreditar'))))
+            except (TypeError, ValueError):
+                return JsonResponse({
+                    'error': 'correcciones con formato inválido. Esperado {dte_producto_id, monto_acreditar}.'
+                }, status=400)
+            if monto_ci <= 0:
+                return JsonResponse({
+                    'error': 'El monto a acreditar por cada línea debe ser mayor a 0.'
+                }, status=400)
+            if pid in correcciones_map:
+                return JsonResponse({
+                    'error': f'La línea {pid} aparece duplicada en correcciones.'
+                }, status=400)
+            correcciones_map[pid] = monto_ci
+
+        dte_productos_map = {
+            dp.id: dp for dp in (
+                dte.dte_productos
+                .filter(id__in=correcciones_map.keys(), activo=True)
+                .select_related('productoTalla__producto')
+            )
+        }
+        if len(dte_productos_map) != len(correcciones_map):
+            return JsonResponse({
+                'error': 'Alguna de las líneas indicadas no existe en el DTE o está inactiva.'
+            }, status=400)
+
+        # Tope por línea = valor VIGENTE de la línea (unidades aún no devueltas
+        # por NCs de cantidad, que reducen dp.stock). Coincide con el `max` del
+        # modal y evita sobre-acreditar una línea aunque el total quepa en el
+        # saldo. La base NETO/BRUTO se detecta como en el resto del flujo NC
+        # (base_lineas_dte), no por el nombre del documento.
+        base_lineas = base_lineas_dte(dte)
+        if base_lineas == 'DESCONOCIDO':
+            base_lineas = 'BRUTO' if 'BOLETA' in (dte.tipo_documento or '').upper() else 'NETO'
+        base_es_bruto = (base_lineas == 'BRUTO')
+        monto_con_iva_nc = 0
+        for pid, monto_ci in correcciones_map.items():
+            dp = dte_productos_map[pid]
+            vigente = int((dp.stock or 0) * (dp.precio or 0))
+            linea_con_iva = vigente if base_es_bruto else int(round(vigente * Decimal('1.19')))
+            sku = dp.productoTalla.sku if dp.productoTalla else f'#{pid}'
+            if linea_con_iva <= 0:
+                return JsonResponse({
+                    'error': f'Línea {sku}: no quedan unidades vigentes en el DTE para corregir su monto.'
+                }, status=400)
+            if monto_ci > linea_con_iva:
+                return JsonResponse({
+                    'error': (
+                        f'Línea {sku}: el monto a acreditar (${monto_ci:,}) supera '
+                        f'lo vigente en esa línea (${linea_con_iva:,}).'
+                    )
+                }, status=400)
+            correcciones_lineas.append((dp, monto_ci))
+            monto_con_iva_nc += monto_ci
+
+        if monto_con_iva_nc > monto_restante:
+            return JsonResponse({
+                'error': (
+                    f'El monto a corregir (${monto_con_iva_nc:,}) excede el saldo '
+                    f'disponible de NC sobre este DTE (${monto_restante:,}).'
+                )
+            }, status=400)
+
+        monto_neto_nc = int(round(monto_con_iva_nc / Decimal('1.19')))
+        unidades_nc = 0
+        descuento_nc = 0
+        # Una corrección de monto nunca anula el documento ni revierte stock.
+        es_anulacion_total = False
+    elif usa_productos_afectados:
         ajustes_por_id = {}
         for a in productos_afectados_input:
             try:
@@ -27301,7 +27418,9 @@ def anular_factura_dte(request):
             'Anulación de documento' if tipo_anulacion == 'ANULACION'
             else 'Devolución de documento'
         )
-        if not es_anulacion_total:
+        if es_correccion_monto:
+            motivo_nc_texto = f"Corrección de monto cobrado (${monto_con_iva_nc:,} de ${monto_original:,}). {motivo_nc_texto}"
+        elif not es_anulacion_total:
             motivo_nc_texto = f"NC parcial (${monto_con_iva_nc:,} de ${monto_original:,}). {motivo_nc_texto}"
         if cliente_nombre:
             motivo_nc_texto += f" — Cliente: {cliente_nombre}"
@@ -27334,7 +27453,8 @@ def anular_factura_dte(request):
                 'tipo_documento': tipo_sii_original,
                 'folio': dte.numero_documento,
                 'fecha': dte.fecha_emision.strftime('%Y-%m-%d'),
-                'razon': '1'
+                # 3 = Corrige montos (corrección de cobro); 1 = Anula documento.
+                'razon': '3' if es_correccion_monto else '1'
             }])
         )
 
@@ -27387,7 +27507,27 @@ def anular_factura_dte(request):
                     return derivado, monto_proporcional
             return int(dp_src.precio or 0), int((dp_src.precio or 0) * qty)
 
-        if usa_productos_afectados:
+        if es_correccion_monto:
+            # Líneas conceptuales (productoTalla=None): NO interfieren con la
+            # contabilidad por talla de futuras NC ni con el stock. El SKU
+            # viaja en la descripción para trazabilidad. El monto va tal cual
+            # (CON IVA); `normalizar_detalle_para_tipo` lo lleva a NETO en el TXT.
+            for dp, monto_ci in correcciones_lineas:
+                sku_ref = dp.productoTalla.sku if dp.productoTalla else ''
+                desc = f"[CORRIGE MONTO] {dp.descripcion}"
+                if sku_ref:
+                    desc += f" (SKU {sku_ref})"
+                Dte_Productos.objects.create(
+                    dte=nc,
+                    productoTalla=None,
+                    descripcion=desc[:255],
+                    costo=0,
+                    sobreprecio=0,
+                    precio=int(monto_ci),
+                    stock=1,
+                    activo=True,
+                )
+        elif usa_productos_afectados:
             for dp, cantidad in lineas_afectadas:
                 p_eff, mi_eff = _precio_efectivo_dp(dp, cantidad)
                 Dte_Productos.objects.create(
