@@ -3294,9 +3294,13 @@ function cargarDatosCuadratura(c) {
     // ninguna venta válida (incluida una factura pagada con cheque/OC/Transbank migrado)
     // quede fuera del VENTA TOTAL. NC NO se suma aquí: efectivo y transferencia ya vienen
     // netos de su NC desde el backend, y sumarla en positivo inflaba el total.
-    const sumTarjetas = (c.total_visa_mc_amex||0) + (c.total_tarjeta_debito||0) + (c.total_presto||0) + (c.total_hites||0);
-    const sumEfectivo = (c.total_efectivo||0) + (c.total_transferencia||0) + (c.total_convenio||0) + (c.total_credito_trabajador||0) + (c.total_credito_externo||0) + (c.total_cheque||0) + (c.total_orden_compra||0);
-    const sumInternet = (c.total_falabella||0) + (c.total_paris||0) + (c.total_ripley||0) + (c.total_mercadopago||0) + (c.total_klap||0);
+    // Coerción defensiva a número: Django serializa los Decimal como STRING en el
+    // JSON, y un `string + string` en JS CONCATENA en vez de sumar (ej. el VENTA
+    // TOTAL salía "935.030.155.460" = "935030"+"155460"). _n() garantiza la suma.
+    const _n = v => Number(v) || 0;
+    const sumTarjetas = _n(c.total_visa_mc_amex) + _n(c.total_tarjeta_debito) + _n(c.total_presto) + _n(c.total_hites);
+    const sumEfectivo = _n(c.total_efectivo) + _n(c.total_transferencia) + _n(c.total_convenio) + _n(c.total_credito_trabajador) + _n(c.total_credito_externo) + _n(c.total_cheque) + _n(c.total_orden_compra);
+    const sumInternet = _n(c.total_falabella) + _n(c.total_paris) + _n(c.total_ripley) + _n(c.total_mercadopago) + _n(c.total_klap);
     const sumTotal    = sumTarjetas + sumEfectivo + sumInternet;
 
     $('#sum_tarjetas').text(fmCLP(sumTarjetas));
