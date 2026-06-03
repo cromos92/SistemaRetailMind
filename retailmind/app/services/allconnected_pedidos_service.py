@@ -46,7 +46,7 @@ except ImportError:  # pragma: no cover
 
 logger = logging.getLogger('app')
 
-TIMEOUT_SEGUNDOS = 30
+TIMEOUT_SEGUNDOS = 90  # el endpoint remoto tarda ~34s en el mes completo; antes 30
 
 
 def _config() -> dict:
