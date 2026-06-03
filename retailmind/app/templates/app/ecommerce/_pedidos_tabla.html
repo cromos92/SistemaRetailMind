@@ -10,6 +10,7 @@
               <input type="checkbox" id="cb-all" class="cb-pedido" title="Seleccionar todos">
             </th>
             <th>N Pedido</th>
+            <th>Folio</th>
             <th>Canal</th>
             <th>N Pedido Canal</th>
             <th>Cliente</th>
@@ -38,6 +39,13 @@
               {% endif %}
             </td>
             <td><span class="ticket-rm-badge" title="N° RM: {{ p.numero_ticket_rm }}">{{ p.numero_pedido_origen|default:p.numero_ticket_rm }}</span></td>
+            <td>
+              {% if p.correlativo %}
+                <span class="folio-badge" title="Folio de despacho (etiqueta física)">{{ p.correlativo }}</span>
+              {% else %}
+                <span class="folio-pendiente" title="Aún sin folio: no impreso en AllConnected">—</span>
+              {% endif %}
+            </td>
             <td><span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span></td>
             <td class="col-num-pedido">{{ p.numero_pedido_canal }}</td>
             <td>

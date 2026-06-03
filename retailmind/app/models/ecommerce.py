@@ -97,6 +97,24 @@ class PedidoEcommerce(models.Model):
         verbose_name='N° Pedido (AllConnected)',
         help_text='Correlativo interno del pedido en AllConnected (ej. MP-000123)',
     )
+    # Folio de despacho que AllConnected imprime en la etiqueta física
+    # (ej. "PA3000198" = prefijo marketplace+canal + número con padding).
+    # Llega vacío hasta que se imprime; en un pull posterior llega con valor.
+    correlativo = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='Folio despacho',
+        help_text='Folio de despacho de AllConnected impreso en la etiqueta (ej. PA3000198). Vacío hasta que se imprime.',
+    )
+    correlativo_numero = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Folio N°',
+        help_text='Número crudo del correlativo (sin prefijo ni padding), para ordenar/buscar.',
+    )
     canal_origen = models.CharField(
         max_length=20,
         choices=CANAL_ECOMMERCE_CHOICES,

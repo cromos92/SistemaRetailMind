@@ -690,6 +690,14 @@
         </div>
         <div class="rm-card-body">
           <div class="row g-3">
+            <div class="col-12 info-cell">
+              <div class="info-label">Folio despacho <span class="text-muted" style="font-weight:400;">(etiqueta física)</span></div>
+              {% if pedido.correlativo %}
+                <div class="info-val" style="font-family:monospace;font-weight:800;color:#3730a3;font-size:1.05rem;letter-spacing:.02em;">{{ pedido.correlativo }}</div>
+              {% else %}
+                <div class="info-val" style="color:#94a3b8;font-style:italic;font-size:.85rem;"><i class="bi bi-hourglass-split me-1"></i>Pendiente de impresión</div>
+              {% endif %}
+            </div>
             <div class="col-6 info-cell">
               <div class="info-label">Sucursal pedido</div>
               <div class="info-val">{{ pedido.sucursal.nombre|default:pedido.sucursal.alias }}</div>

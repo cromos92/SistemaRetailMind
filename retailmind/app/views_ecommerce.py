@@ -290,17 +290,36 @@ def _ingestar_pedido_dict(data):
                 'status': 400,
             }
 
+    # Folio de despacho que AllConnected imprime en la etiqueta. Puede llegar
+    # vacío (aún sin imprimir) y, como el endpoint es idempotente/re-consultable,
+    # llegar con valor en un pull posterior.
+    correlativo_in = (data.get('correlativo') or '').strip()
+    correlativo_numero_in = data.get('correlativo_numero')
+    try:
+        correlativo_numero_in = (
+            int(correlativo_numero_in) if correlativo_numero_in not in (None, '') else None
+        )
+    except (TypeError, ValueError):
+        correlativo_numero_in = None
+
     # Verificar si ya existe un pedido para este canal+número (idempotente)
     existente = PedidoEcommerce.objects.filter(
         numero_pedido_canal=numero_pedido_canal,
         canal_origen=canal_origen,
     ).first()
     if existente:
+        # Actualizar el folio si AllConnected ya lo asignó y antes estaba vacío
+        # (o cambió). NUNCA pisar un folio ya seteado con un valor vacío entrante.
+        if correlativo_in and correlativo_in != (existente.correlativo or ''):
+            existente.correlativo = correlativo_in
+            existente.correlativo_numero = correlativo_numero_in
+            existente.save(update_fields=['correlativo', 'correlativo_numero'])
         return {
             'ok': True,
             'numero_ticket_rm': existente.numero_ticket_rm,
             'pedido_ecommerce_id': existente.id,
             'ya_existia': True,
+            'correlativo': existente.correlativo,
             'status': 200,
         }
 
@@ -311,6 +330,8 @@ def _ingestar_pedido_dict(data):
             numero_ticket_rm=_generar_numero_ticket_rm(),
             numero_pedido_canal=numero_pedido_canal,
             numero_pedido_origen=data.get('numero_pedido', '') or '',
+            correlativo=correlativo_in,
+            correlativo_numero=correlativo_numero_in,
             canal_origen=canal_origen,
             sucursal=sucursal,
             sucursal_original=sucursal,
@@ -366,6 +387,7 @@ def _ingestar_pedido_dict(data):
         'numero_ticket_rm': pedido.numero_ticket_rm,
         'pedido_ecommerce_id': pedido.id,
         'ya_existia': False,
+        'correlativo': pedido.correlativo,
         'sub_estado': pedido.sub_estado,
         'todos_items_con_stock': todos_con_stock,
         'status': 201,
@@ -657,6 +679,7 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
             qs = qs.filter(
                 Q(numero_ticket_rm__icontains=q) |
                 Q(numero_pedido_canal__icontains=q) |
+                Q(correlativo__icontains=q) |
                 Q(cliente_nombre__icontains=q) |
                 Q(cliente_documento__icontains=q)
             )
@@ -2127,6 +2150,7 @@ def exportar_pedidos_csv(request):
         qs = qs.filter(
             Q(numero_ticket_rm__icontains=q) |
             Q(numero_pedido_canal__icontains=q) |
+            Q(correlativo__icontains=q) |
             Q(cliente_nombre__icontains=q)
         )
 
@@ -2136,7 +2160,7 @@ def exportar_pedidos_csv(request):
 
     writer = csv.writer(response, delimiter=';')
     writer.writerow([
-        'N Ticket RM', 'N Pedido Canal', 'Canal', 'Cliente', 'RUT/Doc',
+        'N Ticket RM', 'Folio Despacho', 'N Pedido Canal', 'Canal', 'Cliente', 'RUT/Doc',
         'Sucursal', 'Total', 'Estado', 'Sub-estado', 'Fecha Recepcion',
         'Fecha Facturacion', 'Ticket #', 'DTE #',
     ])
@@ -2144,6 +2168,7 @@ def exportar_pedidos_csv(request):
     for p in qs[:5000]:
         writer.writerow([
             p.numero_ticket_rm,
+            p.correlativo,
             p.numero_pedido_canal,
             p.canal_origen,
             p.cliente_nombre,
