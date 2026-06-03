@@ -2086,27 +2086,13 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloEcommerce">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'ecommerce_pedidos_pendientes' %}
+                                    {% if user|puede_ver_opcion:'ecommerce_pedidos_todos' %}
                                     <li class="nav-item">
-                                        <a href="{% url 'pedidos_ecommerce_list' %}?estado=PENDIENTE" class="nav-link" data-key="t-pedidos-pendientes">
-                                            <i class="bi bi-hourglass-split text-warning"></i> Pendientes de Facturar
+                                        <a href="{% url 'pedidos_ecommerce_list' %}" class="nav-link" data-key="t-pedidos-ecommerce">
+                                            <i class="bi bi-cart-check"></i> Pedidos
                                             {% if pedidos_pendientes %}
                                             <span class="badge bg-warning text-dark rounded-pill ms-1" style="font-size:10px;">{{ pedidos_pendientes }}</span>
                                             {% endif %}
-                                        </a>
-                                    </li>
-                                    {% endif %}
-                                    {% if user|puede_ver_opcion:'ecommerce_pedidos_facturados' %}
-                                    <li class="nav-item">
-                                        <a href="{% url 'pedidos_ecommerce_list' %}?estado=FACTURADO" class="nav-link" data-key="t-pedidos-facturados">
-                                            <i class="bi bi-check-circle text-success"></i> Facturados
-                                        </a>
-                                    </li>
-                                    {% endif %}
-                                    {% if user|puede_ver_opcion:'ecommerce_pedidos_todos' %}
-                                    <li class="nav-item">
-                                        <a href="{% url 'pedidos_ecommerce_list' %}" class="nav-link" data-key="t-pedidos-todos">
-                                            <i class="bi bi-grid-3x3-gap"></i> Todos los Pedidos
                                         </a>
                                     </li>
                                     {% endif %}

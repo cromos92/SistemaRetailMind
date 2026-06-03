@@ -1,0 +1,143 @@
+{% load static %}
+{# ───────────────────────────────────────────────────────────────
+   Parcial de la tabla de pedidos ecommerce.
+   Se renderiza tanto en la carga inicial (incluido desde
+   pedidos_ecommerce_list.html) como en cada filtrado/paginación
+   AJAX (la vista devuelve SOLO este parcial cuando la request es
+   XMLHttpRequest). La paginación NO usa querystring: lleva
+   data-page y la intercepta el JS para hacer fetch AJAX.
+   ─────────────────────────────────────────────────────────────── #}
+{% if pedidos %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table tbl mb-0" id="tbl-pedidos">
+        <thead>
+          <tr>
+            <th style="width:36px;text-align:center;">
+              <input type="checkbox" id="cb-all" class="cb-pedido" title="Seleccionar todos">
+            </th>
+            <th>N Pedido</th>
+            <th>Canal</th>
+            <th>N Pedido Canal</th>
+            <th>Cliente</th>
+            <th>Sucursal</th>
+            <th class="text-end">Total</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th>Sub-estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pedidos %}
+          {% if p.id in pedidos_sin_stock_ids %}
+          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}" data-sin-stock="1" class="row-sin-stock">
+          {% else %}
+          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}">
+          {% endif %}
+            <td style="text-align:center;">
+              {% if p.estado == 'PENDIENTE' %}
+                {% if p.id in pedidos_sin_stock_ids %}
+                  <input type="checkbox" class="cb-pedido cb-pedido-row" value="{{ p.id }}" disabled title="Sin stock en sucursal activa">
+                {% else %}
+                  <input type="checkbox" class="cb-pedido cb-pedido-row" value="{{ p.id }}">
+                {% endif %}
+              {% endif %}
+            </td>
+            <td><span class="ticket-rm-badge" title="N° RM: {{ p.numero_ticket_rm }}">{{ p.numero_pedido_origen|default:p.numero_ticket_rm }}</span></td>
+            <td><span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span></td>
+            <td class="col-num-pedido">{{ p.numero_pedido_canal }}</td>
+            <td>
+              <div class="col-cliente-nombre">{{ p.cliente_nombre }}</div>
+              {% if p.cliente_documento %}<div class="col-cliente-doc">{{ p.cliente_documento }}</div>{% endif %}
+            </td>
+            <td class="col-sucursal">
+              {% if sucursal_sesion_obj and p.sucursal_id == sucursal_sesion_obj.id %}
+                <span class="suc-mia">{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
+                <span class="badge-mi-suc"><i class="bi bi-check-circle-fill me-1"></i>Mi suc.</span>
+              {% else %}
+                <span class="suc-otra">{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
+                <span class="badge-otra-suc"><i class="bi bi-building me-1"></i>Otra</span>
+              {% endif %}
+              {% if p.id in pedidos_sin_stock_ids %}
+                <br><span class="badge-sin-stock"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock insuf.</span>
+              {% endif %}
+            </td>
+            <td class="text-end col-total"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
+            <td class="col-fecha">{{ p.fecha_recepcion|date:"d/m/Y H:i" }}</td>
+            <td>
+              {% if p.estado == 'PENDIENTE' %}<span class="badge-p">Pendiente</span>
+              {% elif p.estado == 'FACTURADO' %}
+                <span class="badge-f">Facturado</span>
+                {% if p.ticket %}<div style="font-size:.7rem;color:#475569;">Ticket #{{ p.ticket.correlativo }}</div>{% endif %}
+                {% if p.dte %}<div style="font-size:.7rem;color:#475569;">DTE #{{ p.dte.numero_documento }}</div>{% endif %}
+              {% elif p.estado == 'CANCELADO' %}<span class="badge-c">Cancelado</span>
+              {% else %}<span>{{ p.estado }}</span>{% endif %}
+            </td>
+            <td>
+              <span class="sub-{{ p.sub_estado|lower }}">{{ p.get_sub_estado_display }}</span>
+            </td>
+            <td>
+              {% if p.id in pedidos_sin_stock_ids %}
+                <div class="d-flex gap-1">
+                  <span class="btn btn-sm btn-sin-stock disabled" title="Stock insuficiente en sucursal activa">
+                    <i class="bi bi-exclamation-circle"></i>
+                  </span>
+                  {% if p.estado == 'PENDIENTE' %}
+                  <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar a otra sucursal">
+                    <i class="bi bi-arrow-left-right"></i>
+                  </button>
+                  {% endif %}
+                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.68rem;padding:1px 6px;" title="Ver detalle">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </div>
+              {% else %}
+                <div class="d-flex gap-1">
+                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.72rem;padding:2px 8px;">
+                    {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
+                  </a>
+                  {% if p.estado == 'PENDIENTE' %}
+                  <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar">
+                    <i class="bi bi-arrow-left-right"></i>
+                  </button>
+                  {% endif %}
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if is_paginated %}
+    <div class="card-footer bg-white d-flex justify-content-center py-2">
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="#" data-page="{{ page_obj.previous_page_number }}">Anterior</a>
+            </li>
+          {% endif %}
+          <li class="page-item disabled">
+            <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+          </li>
+          {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="#" data-page="{{ page_obj.next_page_number }}">Siguiente</a>
+            </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% else %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>No hay pedidos con los filtros seleccionados.
+  </div>
+{% endif %}

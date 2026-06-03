@@ -3,6 +3,37 @@
 {% include 'layout/menu.html' %}
 
 <style>
+/* ── estructura módulo (estándar NEXO / ESTILOS_MODULOS.md) ── */
+.page-content{background:#fff !important;min-height:calc(100vh - 70px);}
+.card.shadow{border:none;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(64,81,137,.1);animation:fadeInCard .4s ease;}
+@keyframes fadeInCard{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.module-header{background:linear-gradient(135deg,#405189 0%,#0ab39c 100%);color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+.module-header-left{display:flex;align-items:center;gap:14px;}
+.module-header-icon{width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;}
+.module-header-info h5{margin:0;font-size:18px;font-weight:600;color:#fff;}
+.module-header-status{display:flex;align-items:center;gap:6px;font-size:13px;opacity:.92;margin-top:4px;}
+.status-dot{width:8px;height:8px;background:#4ade80;border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+.module-header-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.module-header-actions .btn{border-radius:10px;font-weight:500;padding:8px 14px;font-size:13px;border:none;transition:all .2s ease;}
+.module-header-actions .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.2);}
+.he-daterange{display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.15);border-radius:10px;padding:4px 8px;}
+.he-daterange input{width:auto;border:none;border-radius:6px;font-size:12px;padding:2px 6px;}
+.he-arrow{opacity:.85;color:#fff;}
+.he-badge{border-radius:20px;padding:5px 14px;font-size:.8rem;font-weight:700;white-space:nowrap;}
+.he-badge-ok{background:rgba(255,255,255,.22);color:#eafff9;border:1px solid rgba(255,255,255,.35);}
+.he-badge-warn{background:rgba(240,101,72,.3);color:#fff;border:1px solid rgba(255,255,255,.3);}
+.he-badge-sel{background:rgba(255,255,255,.2);color:#fff;}
+.card-body{padding:20px 24px;background:#fff;}
+.pagination-controls{background:linear-gradient(135deg,#f8f9fa 0%,#eef1f6 100%);border-radius:12px;padding:14px 16px;margin-bottom:16px;border:1px solid rgba(64,81,137,.1);box-shadow:0 2px 8px rgba(0,0,0,.05);}
+.filtro-label{font-size:.7rem;font-weight:700;text-transform:uppercase;color:#405189;letter-spacing:.03em;display:block;margin-bottom:3px;}
+/* quick-filter pills (estado) */
+.qf-row{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:12px;}
+.qf-label{font-size:.72rem;font-weight:700;text-transform:uppercase;color:#405189;letter-spacing:.03em;margin-right:2px;}
+.quick-filter-btn{background:#fff;border:1px solid rgba(64,81,137,.2);border-radius:20px;padding:5px 16px;font-size:12px;font-weight:600;color:#405189;transition:all .2s ease;cursor:pointer;}
+.quick-filter-btn:hover{background:#405189;color:#fff;transform:translateY(-2px);box-shadow:0 4px 12px rgba(64,81,137,.3);}
+.quick-filter-btn.active{background:linear-gradient(135deg,#405189,#0ab39c);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(64,81,137,.3);}
+
 /* ── badges y colores ── */
 .ticket-rm-badge{font-family:monospace;background:#f1f5f9;border:1px solid #cbd5e1;padding:2px 8px;border-radius:4px;font-size:.85rem;color:#1e40af;font-weight:700;}
 .badge-p{background:#fef9c3;color:#854d0e;font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;}
@@ -16,7 +47,7 @@
 .canal-b{font-size:.68rem;padding:2px 7px;border-radius:4px;font-weight:600;letter-spacing:.02em;}
 
 /* ── tabla ── */
-.tbl thead th{background:#f1f5f9;color:#334155;font-weight:700;font-size:.72rem;text-transform:uppercase;padding:10px 12px;white-space:nowrap;letter-spacing:.04em;border-bottom:2px solid #e2e8f0;}
+.tbl thead th{background:#eef2f9;color:#405189;font-weight:700;font-size:.72rem;text-transform:uppercase;padding:11px 12px;white-space:nowrap;letter-spacing:.04em;border-bottom:2px solid #0ab39c;}
 .tbl tbody td{padding:10px 12px;vertical-align:middle;font-size:.87rem;border-color:#f1f5f9;color:#1e293b;}
 .tbl tbody tr{border-bottom:1px solid #f1f5f9;}
 .tbl tbody tr:hover{background:#f0f9ff;}
@@ -96,101 +127,106 @@
 <div class="page-content">
 <div class="container-fluid">
 
-  <!-- encabezado -->
-  <div style="background:linear-gradient(135deg,#1e293b,#334155);border-radius:10px;padding:14px 22px;margin-bottom:18px;color:white;" class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <div>
-      <h4 style="margin:0;font-weight:700;font-size:1.15rem;"><i class="bi bi-cart-check me-2"></i>Pedidos Ecommerce</h4>
-      <p style="margin:3px 0 0;opacity:.7;font-size:.78rem;">Pedidos recibidos desde marketplaces · Selecciona con checkbox y factura masivamente.
-        <a href="{% url 'ecommerce_dashboard_asignacion' %}" style="color:#6ffce0;text-decoration:none;font-weight:600;margin-left:8px;">
-          <i class="bi bi-graph-up me-1"></i>Dashboard
-        </a>
-      </p>
-    </div>
-    <div class="d-flex gap-2 align-items-center flex-wrap">
-      <div class="d-flex gap-1 align-items-center" title="Rango de fechas a traer (por defecto, el mes actual)">
-        <input type="date" id="traer-desde" class="form-control form-control-sm" style="width:auto;">
-        <span style="opacity:.6;">→</span>
-        <input type="date" id="traer-hasta" class="form-control form-control-sm" style="width:auto;">
-      </div>
-      <button class="btn btn-light btn-sm fw-bold" id="btn-traer-pedidos" onclick="traerPedidos()"
-              title="Traer pedidos del rango desde AllConnected">
-        <i class="bi bi-cloud-download me-1"></i>Traer pedidos
-      </button>
-      <!-- Sucursal activa de sesión -->
-      {% if sucursal_sesion_obj %}
-        <span style="background:rgba(0,212,170,.18);border:1px solid rgba(0,212,170,.45);border-radius:20px;padding:4px 14px;font-size:.8rem;font-weight:700;color:#6ffce0;white-space:nowrap;">
-          <i class="bi bi-building me-1"></i>{{ sucursal_sesion_obj.nombre|default:sucursal_sesion_obj.alias }}
-        </span>
-      {% else %}
-        <span style="background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.4);border-radius:20px;padding:4px 14px;font-size:.8rem;font-weight:600;color:#fca5a5;white-space:nowrap;">
-          <i class="bi bi-exclamation-triangle me-1"></i>Sin sucursal activa
-        </span>
-      {% endif %}
-      <span id="sel-count-header" style="display:none;background:rgba(255,255,255,.15);border-radius:20px;padding:3px 12px;font-size:.82rem;font-weight:600;">
-        <i class="bi bi-check2-square me-1"></i><span id="sel-n">0</span> seleccionados
-      </span>
-    </div>
-  </div>
+  <div class="card shadow">
 
-  <!-- filtros -->
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body py-2 px-3">
-      <form method="get" class="row g-2 align-items-end" id="form-filtros">
-        <div class="col-md-2">
-          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Estado</label>
-          <select name="estado" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for val, lbl in estados_choices %}
-              <option value="{{ val }}" {% if estado_filtro == val %}selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
+    <!-- header con gradiente (estándar de módulos) -->
+    <div class="module-header">
+      <div class="module-header-left">
+        <div class="module-header-icon"><i class="bi bi-cart-check"></i></div>
+        <div class="module-header-info">
+          <h5>Pedidos Ecommerce</h5>
+          <div class="module-header-status">
+            <span class="status-dot"></span>
+            Recibidos desde marketplaces · factura masiva
+            <a href="{% url 'ecommerce_dashboard_asignacion' %}" class="ms-2" style="color:#d7fff6;text-decoration:none;font-weight:600;">
+              <i class="bi bi-graph-up me-1"></i>Dashboard
+            </a>
+          </div>
         </div>
-        <div class="col-md-2">
-          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Canal</label>
-          <select name="canal" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for val, lbl in canales_choices %}
-              <option value="{{ val }}" {% if canal_filtro == val %}selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
+      </div>
+      <div class="module-header-actions">
+        <div class="he-daterange" title="Rango de fechas a traer (por defecto, el mes actual)">
+          <input type="date" id="traer-desde" class="form-control form-control-sm">
+          <span class="he-arrow">→</span>
+          <input type="date" id="traer-hasta" class="form-control form-control-sm">
         </div>
-        <div class="col-md-2">
-          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Sub-estado</label>
-          <select name="sub_estado" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for val, lbl in sub_estados_choices %}
-              <option value="{{ val }}" {% if sub_estado_filtro == val %}selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Sucursal</label>
-          <select name="sucursal_id" class="form-select form-select-sm" id="filtro-sucursal">
-            <option value="" {% if sucursal_filtro == '' and not ver_todas %}selected{% endif %}>Mi sucursal</option>
-            {% for s in sucursales %}
-              <option value="{{ s.id }}" {% if sucursal_filtro == s.id|stringformat:"s" %}selected{% endif %}>{{ s.nombre|default:s.alias }}</option>
-            {% endfor %}
-          </select>
-          <label class="toggle-todas mt-1">
-            <input type="checkbox" name="ver_todas" value="1" {% if ver_todas %}checked{% endif %} onchange="this.form.submit()">
-            Ver todas las sucursales
-          </label>
-        </div>
-        <div class="col-md-2">
-          <label style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#64748b;display:block;">Buscar</label>
-          <input type="text" name="q" class="form-control form-control-sm" placeholder="N RM, pedido, cliente..." value="{{ q }}">
-        </div>
-        <div class="col-md-2 d-flex gap-1 align-self-end flex-wrap">
-          <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
-          <a href="{% url 'pedidos_ecommerce_list' %}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
-          <a href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}"
-             class="btn btn-outline-success btn-sm" title="Exportar CSV">
-            <i class="bi bi-file-earmark-spreadsheet"></i>
-          </a>
-        </div>
-      </form>
+        <button class="btn btn-light btn-sm fw-bold" id="btn-traer-pedidos" onclick="traerPedidos()"
+                title="Traer pedidos del rango desde AllConnected">
+          <i class="bi bi-cloud-download me-1"></i>Traer pedidos
+        </button>
+        {% if sucursal_sesion_obj %}
+          <span class="he-badge he-badge-ok"><i class="bi bi-building me-1"></i>{{ sucursal_sesion_obj.nombre|default:sucursal_sesion_obj.alias }}</span>
+        {% else %}
+          <span class="he-badge he-badge-warn"><i class="bi bi-exclamation-triangle me-1"></i>Sin sucursal activa</span>
+        {% endif %}
+        <span id="sel-count-header" class="he-badge he-badge-sel" style="display:none;">
+          <i class="bi bi-check2-square me-1"></i><span id="sel-n">0</span> seleccionados
+        </span>
+      </div>
     </div>
-  </div>
+
+    <div class="card-body">
+
+      <!-- filtros -->
+      <div class="pagination-controls">
+        <div class="qf-row">
+          <span class="qf-label"><i class="bi bi-funnel-fill me-1"></i>Estado</span>
+          <button type="button" class="quick-filter-btn {% if estado_filtro == '' %}active{% endif %}" data-estado="">Todos</button>
+          {% for val, lbl in estados_choices %}
+            <button type="button" class="quick-filter-btn {% if estado_filtro == val %}active{% endif %}" data-estado="{{ val }}">{{ lbl }}</button>
+          {% endfor %}
+        </div>
+        <form class="row g-2 align-items-end" id="form-filtros" onsubmit="return false;">
+          <input type="hidden" name="estado" value="{{ estado_filtro }}">
+          <div class="col-md-2">
+            <label class="filtro-label">Canal</label>
+            <select name="canal" class="form-select form-select-sm">
+              <option value="">Todos</option>
+              {% for val, lbl in canales_choices %}
+                <option value="{{ val }}" {% if canal_filtro == val %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="filtro-label">Sub-estado</label>
+            <select name="sub_estado" class="form-select form-select-sm">
+              <option value="">Todos</option>
+              {% for val, lbl in sub_estados_choices %}
+                <option value="{{ val }}" {% if sub_estado_filtro == val %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="filtro-label">Sucursal</label>
+            <select name="sucursal_id" class="form-select form-select-sm" id="filtro-sucursal">
+              <option value="" {% if sucursal_filtro == '' and not ver_todas %}selected{% endif %}>Mi sucursal</option>
+              {% for s in sucursales %}
+                <option value="{{ s.id }}" {% if sucursal_filtro == s.id|stringformat:"s" %}selected{% endif %}>{{ s.nombre|default:s.alias }}</option>
+              {% endfor %}
+            </select>
+            <label class="toggle-todas mt-1">
+              <input type="checkbox" name="ver_todas" value="1" {% if ver_todas %}checked{% endif %} onchange="aplicarFiltros(1)">
+              Ver todas las sucursales
+            </label>
+          </div>
+          <div class="col-md-3">
+            <label class="filtro-label">Buscar</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+              <input type="text" name="q" class="form-control" placeholder="N° RM, pedido, cliente..." value="{{ q }}">
+            </div>
+          </div>
+          <div class="col-md-2 d-flex gap-1 align-self-end flex-wrap">
+            <button type="button" class="btn btn-sm text-white" style="background:#405189;" onclick="aplicarFiltros(1)"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()" title="Limpiar filtros"><i class="bi bi-arrow-counterclockwise"></i></button>
+            <a id="btn-export-csv" data-base="{% url 'exportar_pedidos_csv' %}"
+               href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}"
+               class="btn btn-outline-success btn-sm" title="Exportar CSV">
+              <i class="bi bi-file-earmark-spreadsheet"></i>
+            </a>
+          </div>
+        </form>
+      </div>
 
   <!-- ═══════════════════════════════════════════════════════
        BARRA DE ACCIÓN MASIVA (entre filtros y tabla)
@@ -220,140 +256,13 @@
     </button>
   </div>
 
-  {% if pedidos %}
-  <div class="card border-0 shadow-sm">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table tbl mb-0" id="tbl-pedidos">
-          <thead>
-            <tr>
-              <th style="width:36px;text-align:center;">
-                <input type="checkbox" id="cb-all" class="cb-pedido" title="Seleccionar todos">
-              </th>
-              <th>N Pedido</th>
-              <th>Canal</th>
-              <th>N Pedido Canal</th>
-              <th>Cliente</th>
-              <th>Sucursal</th>
-              <th class="text-end">Total</th>
-              <th>Fecha</th>
-              <th>Estado</th>
-              <th>Sub-estado</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in pedidos %}
-            {% if p.id in pedidos_sin_stock_ids %}
-            <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}" data-sin-stock="1" class="row-sin-stock">
-            {% else %}
-            <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}">
-            {% endif %}
-              <td style="text-align:center;">
-                {% if p.estado == 'PENDIENTE' %}
-                  {% if p.id in pedidos_sin_stock_ids %}
-                    <input type="checkbox" class="cb-pedido cb-pedido-row" value="{{ p.id }}" disabled title="Sin stock en sucursal activa">
-                  {% else %}
-                    <input type="checkbox" class="cb-pedido cb-pedido-row" value="{{ p.id }}">
-                  {% endif %}
-                {% endif %}
-              </td>
-              <td><span class="ticket-rm-badge" title="N° RM: {{ p.numero_ticket_rm }}">{{ p.numero_pedido_origen|default:p.numero_ticket_rm }}</span></td>
-              <td><span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span></td>
-              <td class="col-num-pedido">{{ p.numero_pedido_canal }}</td>
-              <td>
-                <div class="col-cliente-nombre">{{ p.cliente_nombre }}</div>
-                {% if p.cliente_documento %}<div class="col-cliente-doc">{{ p.cliente_documento }}</div>{% endif %}
-              </td>
-              <td class="col-sucursal">
-                {% if sucursal_sesion_obj and p.sucursal_id == sucursal_sesion_obj.id %}
-                  <span class="suc-mia">{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
-                  <span class="badge-mi-suc"><i class="bi bi-check-circle-fill me-1"></i>Mi suc.</span>
-                {% else %}
-                  <span class="suc-otra">{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
-                  <span class="badge-otra-suc"><i class="bi bi-building me-1"></i>Otra</span>
-                {% endif %}
-                {% if p.id in pedidos_sin_stock_ids %}
-                  <br><span class="badge-sin-stock"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock insuf.</span>
-                {% endif %}
-              </td>
-              <td class="text-end col-total"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
-              <td class="col-fecha">{{ p.fecha_recepcion|date:"d/m/Y H:i" }}</td>
-              <td>
-                {% if p.estado == 'PENDIENTE' %}<span class="badge-p">Pendiente</span>
-                {% elif p.estado == 'FACTURADO' %}
-                  <span class="badge-f">Facturado</span>
-                  {% if p.ticket %}<div style="font-size:.7rem;color:#475569;">Ticket #{{ p.ticket.correlativo }}</div>{% endif %}
-                  {% if p.dte %}<div style="font-size:.7rem;color:#475569;">DTE #{{ p.dte.numero_documento }}</div>{% endif %}
-                {% elif p.estado == 'CANCELADO' %}<span class="badge-c">Cancelado</span>
-                {% else %}<span>{{ p.estado }}</span>{% endif %}
-              </td>
-              <td>
-                <span class="sub-{{ p.sub_estado|lower }}">{{ p.get_sub_estado_display }}</span>
-              </td>
-              <td>
-                {% if p.id in pedidos_sin_stock_ids %}
-                  <div class="d-flex gap-1">
-                    <span class="btn btn-sm btn-sin-stock disabled" title="Stock insuficiente en sucursal activa">
-                      <i class="bi bi-exclamation-circle"></i>
-                    </span>
-                    {% if p.estado == 'PENDIENTE' %}
-                    <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar a otra sucursal">
-                      <i class="bi bi-arrow-left-right"></i>
-                    </button>
-                    {% endif %}
-                    <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.68rem;padding:1px 6px;" title="Ver detalle">
-                      <i class="bi bi-eye"></i>
-                    </a>
-                  </div>
-                {% else %}
-                  <div class="d-flex gap-1">
-                    <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.72rem;padding:2px 8px;">
-                      {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
-                    </a>
-                    {% if p.estado == 'PENDIENTE' %}
-                    <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar">
-                      <i class="bi bi-arrow-left-right"></i>
-                    </button>
-                    {% endif %}
-                  </div>
-                {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-
-      {% if is_paginated %}
-      <div class="card-footer bg-white d-flex justify-content-center py-2">
-        <nav>
-          <ul class="pagination pagination-sm mb-0">
-            {% if page_obj.has_previous %}
-              <li class="page-item">
-                <a class="page-link" href="?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}&page={{ page_obj.previous_page_number }}">Anterior</a>
-              </li>
-            {% endif %}
-            <li class="page-item disabled">
-              <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-            </li>
-            {% if page_obj.has_next %}
-              <li class="page-item">
-                <a class="page-link" href="?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}&page={{ page_obj.next_page_number }}">Siguiente</a>
-              </li>
-            {% endif %}
-          </ul>
-        </nav>
-      </div>
-      {% endif %}
-
-    </div>
+  <!-- contenedor de la tabla: se reemplaza por AJAX al filtrar/paginar -->
+  <div id="tabla-container">
+    {% include 'app/ecommerce/_pedidos_tabla.html' %}
   </div>
-  {% else %}
-    <div class="alert alert-info">
-      <i class="bi bi-info-circle me-2"></i>No hay pedidos con los filtros seleccionados.
-    </div>
-  {% endif %}
+
+    </div><!-- /card-body -->
+  </div><!-- /card shadow -->
 
 </div><!-- /container -->
 </div><!-- /page-content -->
@@ -409,7 +318,7 @@
         <button class="btn btn-outline-secondary btn-sm" id="btn-imprimir-todos" style="display:none;" onclick="imprimirTodosResultados()">
           <i class="bi bi-printer me-1"></i>Imprimir todos
         </button>
-        <button class="btn btn-primary btn-sm" data-bs-dismiss="modal" onclick="location.reload()">
+        <button class="btn btn-primary btn-sm" data-bs-dismiss="modal" onclick="aplicarFiltros(_pagina)">
           <i class="bi bi-arrow-clockwise me-1"></i>Recargar lista
         </button>
       </div>
@@ -554,26 +463,118 @@ function traerPedidos(){
       } else {
         Swal.fire('Error', d.error || 'No se pudo conectar a AllConnected', 'error');
       }
-      // location.reload preserva los filtros (van en el querystring)
-      setTimeout(() => location.reload(), 1600);
+      // refresca solo la tabla por AJAX (sin recargar toda la página)
+      setTimeout(() => aplicarFiltros(_pagina), 1200);
     })
     .catch(e => { Swal.fire('Error de conexión', String(e), 'error'); })
     .finally(() => { btn.disabled = false; btn.innerHTML = htmlOriginal; });
 }
 
-/* ── Separador de miles (formato chileno: $1.234.567) ── */
-document.querySelectorAll('.fmt-miles').forEach(el => {
-  const raw = parseInt(el.dataset.val, 10);
-  if (!isNaN(raw)) {
-    el.textContent = '$' + raw.toLocaleString('es-CL');
+/* ─────────────────────────────────────────────────────
+   Filtrado AJAX — sin recargar la página y con URL limpia
+   (los filtros NO van en el querystring del navegador).
+   ───────────────────────────────────────────────────── */
+let _pagina = 1;
+let _debounceFiltro = null;
+const URL_LISTA = "{% url 'pedidos_ecommerce_list' %}";
+
+function construirParams(page){
+  const f = document.getElementById('form-filtros');
+  const params = new URLSearchParams();
+  ['estado','canal','sub_estado','sucursal_id','q'].forEach(name => {
+    const el = f.elements[name];
+    if(el && el.value !== '') params.set(name, el.value);
+  });
+  if(f.elements['ver_todas'] && f.elements['ver_todas'].checked) params.set('ver_todas','1');
+  if(page && page > 1) params.set('page', page);
+  return params;
+}
+
+function actualizarExportCsv(params){
+  const a = document.getElementById('btn-export-csv');
+  if(!a) return;
+  const p = new URLSearchParams(params);
+  p.delete('page');
+  a.href = a.dataset.base + (p.toString() ? '?' + p.toString() : '');
+}
+
+function aplicarFiltros(page, silencioso){
+  _pagina = page || 1;
+  const params = construirParams(_pagina);
+  actualizarExportCsv(params);
+  const cont = document.getElementById('tabla-container');
+  if(!silencioso){ cont.style.opacity = '.5'; cont.style.pointerEvents = 'none'; }
+  fetch(URL_LISTA + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(r => r.text())
+    .then(html => {
+      cont.innerHTML = html;
+      cont.style.opacity = ''; cont.style.pointerEvents = '';
+      formatMiles(cont);
+      actualizarContador();
+    })
+    .catch(e => {
+      cont.style.opacity = ''; cont.style.pointerEvents = '';
+      if(!silencioso) console.error('Error al filtrar pedidos:', e);
+    });
+}
+
+function limpiarFiltros(){
+  const f = document.getElementById('form-filtros');
+  f.elements['estado'].value = 'PENDIENTE';   // default de la vista
+  f.elements['canal'].value = '';
+  f.elements['sub_estado'].value = '';
+  f.elements['sucursal_id'].value = '';
+  f.elements['q'].value = '';
+  if(f.elements['ver_todas']) f.elements['ver_todas'].checked = false;
+  document.querySelectorAll('.quick-filter-btn[data-estado]').forEach(b => b.classList.toggle('active', b.dataset.estado === 'PENDIENTE'));
+  aplicarFiltros(1);
+}
+
+// Disparadores: selects → al cambiar; búsqueda → con debounce de 400ms
+(function wireFiltros(){
+  const f = document.getElementById('form-filtros');
+  if(!f) return;
+  f.addEventListener('change', function(e){
+    if(e.target.name === 'q' || e.target.name === 'ver_todas') return; // q: debounce; ver_todas: inline
+    aplicarFiltros(1);
+  });
+  const q = f.elements['q'];
+  if(q){
+    q.addEventListener('input', function(){
+      clearTimeout(_debounceFiltro);
+      _debounceFiltro = setTimeout(() => aplicarFiltros(1), 400);
+    });
   }
-});
+})();
+
+/* ── Quick-filter pills de estado ── */
+(function wirePills(){
+  const pills = document.querySelectorAll('.quick-filter-btn[data-estado]');
+  pills.forEach(btn => btn.addEventListener('click', function(){
+    const f = document.getElementById('form-filtros');
+    if(f && f.elements['estado']) f.elements['estado'].value = this.dataset.estado;
+    pills.forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    aplicarFiltros(1);
+  }));
+})();
+
+/* ── Separador de miles (formato chileno: $1.234.567) ── */
+function formatMiles(root){
+  (root || document).querySelectorAll('.fmt-miles').forEach(el => {
+    if(el.dataset.fmt === '1') return;
+    const raw = parseInt(el.dataset.val, 10);
+    if(!isNaN(raw)){ el.textContent = '$' + raw.toLocaleString('es-CL'); el.dataset.fmt = '1'; }
+  });
+}
 
 /* ─────────────────────────────────────────────────────
-   Selección de checkboxes
+   Selección de checkboxes — delegada en #tabla-container
+   para sobrevivir al reemplazo de la tabla por AJAX.
    ───────────────────────────────────────────────────── */
-const cbAll = document.getElementById('cb-all');
+const getCbAll = () => document.getElementById('cb-all');
 const getCbs = () => document.querySelectorAll('.cb-pedido-row:not(:disabled)');
+const tablaContainer = document.getElementById('tabla-container');
 
 function actualizarContador(){
   const n = document.querySelectorAll('.cb-pedido-row:not(:disabled):checked').length;
@@ -583,28 +584,36 @@ function actualizarContador(){
   const hdr = document.getElementById('sel-count-header');
   if(n > 0){ bar.classList.add('visible'); hdr.style.display=''; }
   else     { bar.classList.remove('visible'); hdr.style.display='none'; }
-  // estado indeterminado del cb-all
-  const total = getCbs().length;
-  cbAll.indeterminate = n > 0 && n < total;
-  cbAll.checked = n === total && total > 0;
+  const cbAll = getCbAll();
+  if(cbAll){
+    const total = getCbs().length;
+    cbAll.indeterminate = n > 0 && n < total;
+    cbAll.checked = n === total && total > 0;
+  }
+  actualizarMontoTotal();
 }
 
-cbAll.addEventListener('change', function(){
-  getCbs().forEach(cb => cb.checked = this.checked);
-  actualizarContador();
-});
-
-document.getElementById('tbl-pedidos')?.addEventListener('change', function(e){
-  if(e.target.classList.contains('cb-pedido-row')){
+tablaContainer.addEventListener('change', function(e){
+  if(e.target.id === 'cb-all'){
+    getCbs().forEach(cb => cb.checked = e.target.checked);
+    actualizarContador();
+  } else if(e.target.classList.contains('cb-pedido-row')){
     const tr = e.target.closest('tr');
-    tr.classList.toggle('row-selected', e.target.checked);
+    if(tr) tr.classList.toggle('row-selected', e.target.checked);
     actualizarContador();
   }
 });
 
+// Paginación AJAX: links con data-page dentro del parcial
+tablaContainer.addEventListener('click', function(e){
+  const a = e.target.closest('a.page-link[data-page]');
+  if(a){ e.preventDefault(); aplicarFiltros(parseInt(a.dataset.page, 10)); }
+});
+
 function deseleccionarTodo(){
-  getCbs().forEach(cb => { cb.checked = false; cb.closest('tr').classList.remove('row-selected'); });
-  cbAll.checked = false; cbAll.indeterminate = false;
+  getCbs().forEach(cb => { cb.checked = false; const tr = cb.closest('tr'); if(tr) tr.classList.remove('row-selected'); });
+  const cbAll = getCbAll();
+  if(cbAll){ cbAll.checked = false; cbAll.indeterminate = false; }
   actualizarContador();
 }
 
@@ -819,13 +828,6 @@ function actualizarMontoTotal(){
   }
 }
 
-// Hook into checkbox changes
-const origActualizar = actualizarContador;
-actualizarContador = function(){
-  origActualizar();
-  actualizarMontoTotal();
-};
-
 /* ─────────────────────────────────────────────────────
    Distribución masiva
    ───────────────────────────────────────────────────── */
@@ -865,7 +867,7 @@ function ejecutarDistribucion(){
       let msg = `Distribución completada: ${data.exitosos} exitoso(s)`;
       if(data.fallidos > 0) msg += `, ${data.fallidos} fallido(s)`;
       alert(msg);
-      location.reload();
+      aplicarFiltros(_pagina);
     } else {
       const errores = data.resultados?.filter(r => !r.ok).map(r => r.error).join('\n') || 'Error desconocido';
       alert('Error en distribución:\n' + errores);
@@ -937,7 +939,7 @@ function ejecutarReasignacion(){
     bootstrap.Modal.getInstance(document.getElementById('modal-reasignar'))?.hide();
     if(data.ok){
       alert(`Pedido reasignado a ${data.sucursal_nueva.nombre}` + (data.todos_items_con_stock ? ' (con stock completo)' : ` (${data.items_sin_stock} items sin stock)`));
-      location.reload();
+      aplicarFiltros(_pagina);
     } else {
       alert('Error: ' + data.error);
     }
@@ -946,12 +948,15 @@ function ejecutarReasignacion(){
 }
 
 /* ─────────────────────────────────────────────────────
-   Auto-refresh cada 60s (solo si no hay selección activa)
+   Auto-refresh AJAX cada 60s — NO recarga la página: solo
+   re-pide la tabla en segundo plano. Se salta si hay
+   selección activa o un modal abierto (para no molestar).
    ───────────────────────────────────────────────────── */
 setInterval(function() {
   const seleccionados = document.querySelectorAll('.cb-pedido-row:not(:disabled):checked').length;
-  if (seleccionados === 0) {
-    location.reload();
+  const modalAbierto = document.querySelector('.modal.show');
+  if (seleccionados === 0 && !modalAbierto) {
+    aplicarFiltros(_pagina, true);
   }
 }, 60000);
 
@@ -962,7 +967,8 @@ document.addEventListener('keydown', function(e){
   // Ctrl+A: seleccionar todos
   if(e.ctrlKey && e.key === 'a' && !e.target.closest('input,select,textarea')){
     e.preventDefault();
-    cbAll.checked = true;
+    const cbAll = getCbAll();
+    if(cbAll) cbAll.checked = true;
     getCbs().forEach(cb => cb.checked = true);
     actualizarContador();
   }
@@ -971,6 +977,10 @@ document.addEventListener('keydown', function(e){
     deseleccionarTodo();
   }
 });
+
+/* ── Inicialización (render inicial ya viene del servidor) ── */
+formatMiles(document);
+actualizarContador();
 </script>
 
 {% csrf_token %}

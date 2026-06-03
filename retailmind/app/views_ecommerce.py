@@ -597,6 +597,13 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
     context_object_name = 'pedidos'
     paginate_by = 30
 
+    def get_template_names(self):
+        # Filtrado/paginación AJAX: devolver SOLO el parcial de la tabla
+        # (sin layout) para que el front lo intercambie en #tabla-container.
+        if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return ['app/ecommerce/_pedidos_tabla.html']
+        return [self.template_name]
+
     def get_queryset(self):
         qs = PedidoEcommerce.objects.select_related('sucursal', 'ticket', 'ticket__sucursal', 'dte').order_by('-fecha_recepcion')
 
