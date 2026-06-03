@@ -1,12 +1,4 @@
 {% load static %}
-{# ───────────────────────────────────────────────────────────────
-   Parcial de la tabla de pedidos ecommerce.
-   Se renderiza tanto en la carga inicial (incluido desde
-   pedidos_ecommerce_list.html) como en cada filtrado/paginación
-   AJAX (la vista devuelve SOLO este parcial cuando la request es
-   XMLHttpRequest). La paginación NO usa querystring: lleva
-   data-page y la intercepta el JS para hacer fetch AJAX.
-   ─────────────────────────────────────────────────────────────── #}
 {% if pedidos %}
 <div class="card border-0 shadow-sm">
   <div class="card-body p-0">
