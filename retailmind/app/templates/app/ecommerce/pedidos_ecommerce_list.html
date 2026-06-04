@@ -33,6 +33,13 @@
 .quick-filter-btn{background:#fff;border:1px solid rgba(64,81,137,.2);border-radius:20px;padding:5px 16px;font-size:12px;font-weight:600;color:#405189;transition:all .2s ease;cursor:pointer;}
 .quick-filter-btn:hover{background:#405189;color:#fff;transform:translateY(-2px);box-shadow:0 4px 12px rgba(64,81,137,.3);}
 .quick-filter-btn.active{background:linear-gradient(135deg,#405189,#0ab39c);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(64,81,137,.3);}
+/* KPI cards */
+.kpi-card{border-radius:12px;border:none;transition:all .25s ease;overflow:hidden;}
+.kpi-card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.12);}
+.kpi-card .card-body{padding:10px 14px;}
+.kpi-ic{width:34px;height:34px;border-radius:10px;margin:0 auto 5px;display:flex;align-items:center;justify-content:center;font-size:1rem;color:#fff;}
+.kpi-card h4{font-size:1.5rem;margin:0;font-weight:800;}
+.kpi-card .kpi-lbl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:#64748b;margin:1px 0 0;}
 
 /* ── badges y colores ── */
 .ticket-rm-badge{font-family:monospace;background:#f1f5f9;border:1px solid #cbd5e1;padding:2px 8px;border-radius:4px;font-size:.85rem;color:#1e40af;font-weight:700;}
@@ -168,6 +175,46 @@
     </div>
 
     <div class="card-body">
+
+      <!-- KPIs -->
+      <div class="row g-2 mb-3">
+        <div class="col-md-3 col-6">
+          <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#fff8e1,#ffecb3);border-left:4px solid #ffbe0b;">
+            <div class="card-body text-center">
+              <div class="kpi-ic" style="background:linear-gradient(135deg,#ffbe0b,#f0a500);"><i class="bi bi-hourglass-split"></i></div>
+              <h4 style="color:#92400e;">{{ kpi_pendientes }}</h4>
+              <p class="kpi-lbl">Pendientes</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-left:4px solid #0ab39c;">
+            <div class="card-body text-center">
+              <div class="kpi-ic" style="background:linear-gradient(135deg,#0ab39c,#099885);"><i class="bi bi-check-circle"></i></div>
+              <h4 style="color:#15803d;">{{ kpi_facturados }}</h4>
+              <p class="kpi-lbl">Facturados</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#ffebee,#ffcdd2);border-left:4px solid #f06548;">
+            <div class="card-body text-center">
+              <div class="kpi-ic" style="background:linear-gradient(135deg,#f06548,#d9534f);"><i class="bi bi-x-circle"></i></div>
+              <h4 style="color:#b91c1c;">{{ kpi_cancelados }}</h4>
+              <p class="kpi-lbl">Cancelados</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="kpi-card card h-100" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-left:4px solid #299cdb;">
+            <div class="card-body text-center">
+              <div class="kpi-ic" style="background:linear-gradient(135deg,#299cdb,#1976d2);"><i class="bi bi-cash-stack"></i></div>
+              <h4 style="color:#1d4ed8;">$<span class="fmt-miles" data-val="{{ kpi_monto_pendiente|floatformat:0 }}">{{ kpi_monto_pendiente|floatformat:0 }}</span></h4>
+              <p class="kpi-lbl">Monto pendiente</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- filtros -->
       <div class="pagination-controls">

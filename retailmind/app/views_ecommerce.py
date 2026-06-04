@@ -626,11 +626,10 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
             return ['app/ecommerce/_pedidos_tabla.html']
         return [self.template_name]
 
-    def get_queryset(self):
-        qs = PedidoEcommerce.objects.select_related('sucursal', 'ticket', 'ticket__sucursal', 'dte').order_by('-fecha_recepcion')
-
-        # Filtrar por empresa del usuario (a través del rut_empresa del pedido)
-        # Si el usuario tiene sucursal activa, filtra por el RUT de su empresa
+    def _scope_empresa_sucursal(self, qs):
+        """Aplica el scope de empresa del usuario + sucursal (sesión/explícita/'ver
+        todas'). Compartido por el listado y por los KPIs (que cuentan sobre el
+        mismo scope pero en todos los estados)."""
         user = self.request.user
         if getattr(user, 'rol', '') != 'administrador':
             try:
@@ -645,6 +644,24 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
             except Exception:
                 pass
 
+        # Filtro de sucursal: explícito, por defecto sesión, o "todas"
+        sucursal_id = self.request.GET.get('sucursal_id', '')
+        ver_todas = self.request.GET.get('ver_todas', '')
+        if sucursal_id:
+            qs = qs.filter(sucursal_id=sucursal_id)
+        elif not ver_todas:
+            session_suc = (
+                self.request.session.get('idSucursalActual')
+                or self.request.session.get('sucursalActual')
+            )
+            if session_suc:
+                qs = qs.filter(sucursal_id=session_suc)
+        return qs
+
+    def get_queryset(self):
+        qs = PedidoEcommerce.objects.select_related('sucursal', 'ticket', 'ticket__sucursal', 'dte').order_by('-fecha_recepcion')
+        qs = self._scope_empresa_sucursal(qs)
+
         estado = self.request.GET.get('estado', 'PENDIENTE')
         if estado:
             qs = qs.filter(estado=estado)
@@ -656,22 +673,6 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         sub_estado = self.request.GET.get('sub_estado', '')
         if sub_estado:
             qs = qs.filter(sub_estado=sub_estado)
-
-        # Filtro de sucursal: explícito, por defecto sesión, o "todas"
-        sucursal_id = self.request.GET.get('sucursal_id', '')
-        ver_todas = self.request.GET.get('ver_todas', '')
-
-        if sucursal_id:
-            # Filtro explícito por sucursal seleccionada
-            qs = qs.filter(sucursal_id=sucursal_id)
-        elif not ver_todas:
-            # Por defecto: mostrar solo los pedidos asignados a MI sucursal de sesión
-            session_suc = (
-                self.request.session.get('idSucursalActual')
-                or self.request.session.get('sucursalActual')
-            )
-            if session_suc:
-                qs = qs.filter(sucursal_id=session_suc)
 
         q = self.request.GET.get('q', '').strip()
         if q:
@@ -693,6 +694,22 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         context['estados_choices'] = ESTADO_PEDIDO_ECOMMERCE_CHOICES
         context['sub_estados_choices'] = SUB_ESTADO_PEDIDO_CHOICES
         context['sub_estado_filtro'] = self.request.GET.get('sub_estado', '')
+
+        # KPIs del encabezado — solo en render completo (el parcial AJAX no los usa).
+        # Cuentan sobre el MISMO scope de empresa + sucursal que el listado, en
+        # todos los estados (1 query agregada).
+        if self.request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+            from django.db.models import Count, Sum
+            agg = self._scope_empresa_sucursal(PedidoEcommerce.objects.all()).aggregate(
+                pendientes=Count('id', filter=django_models.Q(estado='PENDIENTE')),
+                facturados=Count('id', filter=django_models.Q(estado='FACTURADO')),
+                cancelados=Count('id', filter=django_models.Q(estado='CANCELADO')),
+                monto_pendiente=Sum('total', filter=django_models.Q(estado='PENDIENTE')),
+            )
+            context['kpi_pendientes'] = agg['pendientes'] or 0
+            context['kpi_facturados'] = agg['facturados'] or 0
+            context['kpi_cancelados'] = agg['cancelados'] or 0
+            context['kpi_monto_pendiente'] = agg['monto_pendiente'] or 0
         context['tipos_documento_choices'] = [
             ('BOLETA_ELECTRONICA', 'Boleta Electrónica'),
             ('BOLETA_PAPEL', 'Boleta Papel'),
