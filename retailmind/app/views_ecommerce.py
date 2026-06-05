@@ -1116,6 +1116,7 @@ def api_facturar_pedido_individual(request, pedido_id):
             'dte_numero': dte.numero_documento,
             'dte_tipo': dte.tipo_documento,
             'archivo_txt': getattr(dte, 'archivo_txt_data', None),
+            'txt_error': getattr(dte, '_txt_error', None),
         })
     except Exception as exc:
         logger.error('Error facturando pedido individual %s: %s', pedido_id, exc, exc_info=True)
@@ -1125,6 +1126,70 @@ def api_facturar_pedido_individual(request, pedido_id):
 # ---------------------------------------------------------------------------
 # Facturación masiva — crea Ticket + DTE por cada pedido seleccionado
 # ---------------------------------------------------------------------------
+
+def _distribuir_diferencia_en_lineas(lineas, diff, ticket, fallback_descripcion='AJUSTE'):
+    """
+    Reparte ``diff`` (CLP entero, > 0) ENTRE las líneas de producto reales en vez
+    de crear una línea "AJUSTE" sin producto. Pondera por ``precio_rm × cantidad``
+    (fallback: por cantidad). Mantiene ``precio × cantidad == subtotal`` por línea y
+    garantiza que la suma de incrementos sea EXACTAMENTE ``diff`` (clave para que la
+    boleta cuadre con el SII).
+
+    ``lineas``: lista de dicts ``{'tp': Ticket_Productos, 'qty': int, 'precio_rm': int}``.
+    Si no hay líneas o no se puede repartir, cae a una línea de reconciliación con
+    ``fallback_descripcion`` (red de seguridad — no debería ocurrir en pedidos normales).
+    """
+    if not lineas:
+        Ticket_Productos.objects.create(
+            ProductoTalla=None, idTicket=ticket, stock=1, precio=diff,
+            descuento_unitario=0, subtotal=diff, precio_original=diff,
+            porcentaje_descuento=0, descripcion_linea=fallback_descripcion,
+        )
+        return
+
+    pesos = [max(int(l.get('precio_rm') or 0), 0) * max(int(l['qty']), 1) for l in lineas]
+    if sum(pesos) == 0:
+        pesos = [max(int(l['qty']), 1) for l in lineas]   # fallback: por cantidad
+    total_peso = sum(pesos) or len(lineas)
+
+    # 1) Repartir diff por línea (mayor-resto) → los delta suman EXACTO diff.
+    deltas = [diff * p // total_peso for p in pesos]
+    resto = diff - sum(deltas)
+    orden = sorted(range(len(lineas)), key=lambda i: pesos[i], reverse=True)
+    for k in range(resto):
+        deltas[orden[k % len(orden)]] += 1
+
+    # 2) Aplicar deltas manteniendo precio×qty == subtotal. La indivisibilidad de
+    #    qty > 1 deja "bolsa" de pesos que se reabsorbe en el paso 3.
+    bolsa = 0
+    for i, l in enumerate(lineas):
+        tp = l['tp']
+        qty = max(int(l['qty']), 1)
+        nuevo_sub = (int(tp.precio) * qty) + deltas[i]
+        precio_u = nuevo_sub // qty
+        bolsa += nuevo_sub - precio_u * qty
+        tp.precio = precio_u
+        tp.precio_original = precio_u
+        tp.subtotal = precio_u * qty
+        tp.save(update_fields=['precio', 'precio_original', 'subtotal'])
+
+    # 3) Reabsorber la bolsa (unos pocos pesos por redondeo de qty>1) en una línea
+    #    de qty == 1; si no hay ninguna, una mini-línea residual (caso muy raro).
+    if bolsa > 0:
+        absorbibles = [l for l in lineas if int(l['qty']) == 1]
+        if absorbibles:
+            tp = max(absorbibles, key=lambda l: int(l['tp'].precio))['tp']
+            tp.precio = int(tp.precio) + bolsa
+            tp.precio_original = tp.precio
+            tp.subtotal = tp.precio
+            tp.save(update_fields=['precio', 'precio_original', 'subtotal'])
+        else:
+            Ticket_Productos.objects.create(
+                ProductoTalla=None, idTicket=ticket, stock=1, precio=bolsa,
+                descuento_unitario=0, subtotal=bolsa, precio_original=bolsa,
+                porcentaje_descuento=0, descripcion_linea=fallback_descripcion,
+            )
+
 
 def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMMERCE', sucursal=None, datos_receptor=None):
     """
@@ -1172,6 +1237,7 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
 
     items = pedido.items or []
     total_lineas = 0
+    lineas_producto = []  # líneas con producto real, para distribuir el AJUSTE
     for item in items:
         sku = (item.get('sku') or '').strip()
         nombre = (item.get('nombre') or '').strip()
@@ -1200,7 +1266,7 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
             except (ValueError, TypeError):
                 producto_talla = None
 
-        Ticket_Productos.objects.create(
+        tp_obj = Ticket_Productos.objects.create(
             ProductoTalla=producto_talla,
             idTicket=ticket,
             stock=cantidad,
@@ -1211,6 +1277,12 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
             porcentaje_descuento=0,
             descripcion_linea=nombre if not producto_talla else '',
         )
+        if producto_talla:
+            try:
+                precio_rm_linea = int(producto_talla.producto.precioventa or 0)
+            except (ValueError, TypeError):
+                precio_rm_linea = 0
+            lineas_producto.append({'tp': tp_obj, 'qty': cantidad, 'precio_rm': precio_rm_linea})
 
         # Descontar stock y registrar movimiento de EGRESO
         if producto_talla:
@@ -1288,18 +1360,12 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
     if total_autoritativo > 0:
         diff = total_autoritativo - total_lineas
         if diff > 0:
-            # Falta monto para llegar al total del canal: línea de AJUSTE positiva.
-            Ticket_Productos.objects.create(
-                ProductoTalla=None,
-                idTicket=ticket,
-                stock=1,
-                precio=diff,
-                descuento_unitario=0,
-                subtotal=diff,
-                precio_original=diff,
-                porcentaje_descuento=0,
-                descripcion_linea='AJUSTE',
-            )
+            # Falta monto para llegar al total del canal. En vez de una línea
+            # "AJUSTE" sin producto, repartimos la diferencia ENTRE las líneas de
+            # producto reales (ponderado por precio RM × cantidad), de modo que la
+            # boleta muestre solo productos que suman el total. Mantiene
+            # precio×cantidad == subtotal por línea y la suma exacta = total.
+            _distribuir_diferencia_en_lineas(lineas_producto, diff, ticket)
             total_lineas += diff
         elif diff < 0:
             # Fuera de contrato (líneas > total). No emitimos líneas negativas;
@@ -1465,6 +1531,7 @@ def facturar_ecommerce_masivo(request):
                 'dte_tipo': dte.tipo_documento,
                 'cliente': pedido.cliente_nombre,
                 'archivo_txt': getattr(dte, 'archivo_txt_data', None),
+                'txt_error': getattr(dte, '_txt_error', None),
                 'advertencias': [],
             })
             exitosos += 1

@@ -792,6 +792,7 @@ function mostrarResultados(data){
           <div style="font-size:.75rem;color:#475569;">
             Ticket #${r.ticket_correlativo} · ${r.dte_tipo || 'DTE'} #${r.dte_numero} (id ${r.dte_id})
           </div>
+          ${(!r.archivo_txt && r.txt_error) ? `<div style="font-size:.72rem;color:#c2410c;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:4px 8px;margin-top:4px;"><i class="bi bi-exclamation-triangle-fill me-1"></i><strong>TXT no generado:</strong> ${r.txt_error} — la boleta sí se emitió; usa el botón <strong>TXT</strong> para reintentar la descarga.</div>` : ''}
         </div>
       </div>`;
     } else {

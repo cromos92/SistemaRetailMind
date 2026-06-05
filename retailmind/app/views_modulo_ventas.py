@@ -2758,14 +2758,24 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             print(f"✓ Archivo TXT generado: {nombre_archivo}")
             
         except Exception as e:
-            print(f"⚠ Error al generar TXT: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            # No fallar la generación del DTE por error en TXT
-    
+            # Antes este error se tragaba en silencio (solo print): el TXT no se
+            # generaba y la UI no descargaba nada SIN decir por qué (típico al
+            # facturar un pedido de otra sucursal desde la sesión actual). Ahora
+            # se loguea con stacktrace + contexto de sucursal y se expone el
+            # motivo en `dte._txt_error` para mostrarlo en el resultado. La boleta
+            # se sigue emitiendo (el TXT de Acepta es un export aparte).
+            import logging
+            logging.getLogger('app').error(
+                'Error al generar TXT DTE %s | sucursal_facturacion=%s | tipo=%s: %s',
+                getattr(dte, 'numero_documento', '?'),
+                getattr(ticket, 'sucursal_id', None),
+                tipo_dte, e, exc_info=True,
+            )
+            dte._txt_error = str(e)[:300]
+
     # Guardar datos del TXT en el DTE para referencia
     dte.archivo_txt_data = archivo_txt_data
-    
+
     return dte
 
 
