@@ -3496,6 +3496,9 @@
 <script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 
 <script>
+// Rol del usuario (para acciones restringidas a administrador, ej. condonar diferencia)
+window.USER_ROL = "{{ user_rol|default:'' }}";
+
 // Variables globales
 let cambiosData = [];
 let ticketActual = null;
@@ -3649,7 +3652,19 @@ function configurarEventos() {
     // Prevenir cierre accidental del modal con ESC o click fuera
     // NUEVA ESTRATEGIA: Remover el listener problemático y usar configuración de Bootstrap
     $('#modalNuevoCambio').off('hide.bs.modal');
-    
+
+    // Fix focus-trap: permite teclear en los inputs de SweetAlert2 cuando hay un modal
+    // Bootstrap abierto (ej. el SweetAlert del PIN sobre #modalNuevoCambio). Sin esto, el
+    // focus-trap de Bootstrap le roba el foco al input del Swal y no se puede escribir el PIN.
+    if (!window.__swalFocusFixInstalado) {
+        document.addEventListener('focusin', function (e) {
+            if (e.target && e.target.closest && e.target.closest('.swal2-container')) {
+                e.stopImmediatePropagation();
+            }
+        }, true); // fase de captura: antes que el listener de Bootstrap
+        window.__swalFocusFixInstalado = true;
+    }
+
     // Variable global para permitir cierre después de guardar
     window.permitirCierreModal = function() {
         permitirCierre = true;
@@ -4340,6 +4355,14 @@ function generarBotonesAccion(cambio) {
                 </a>
             `);
         }
+        // Solo administrador: condonar la diferencia (perdonar el cobro) sin anular el cambio
+        if (window.USER_ROL === 'administrador') {
+            botones.push(`
+                <button class="btn btn-outline-secondary btn-sm px-2" onclick='condonarDiferencia(${cambio.id}, ${cambio.diferencia_monto}, "${cambio.numero_operacion}")' title='Condonar: perder el cobro de la diferencia con justificación, sin anular el cambio'>
+                    <i class="ri-hand-coin-line me-1"></i>Condonar
+                </button>
+            `);
+        }
         botones.push(`
             <button class="btn btn-outline-danger btn-sm px-2" onclick='revertirCambio(${cambio.id})' title='Revertir: deshace stock y cancela ticket pendiente'>
                 <i class="ri-arrow-go-back-line me-1"></i>Revertir
@@ -4798,7 +4821,8 @@ function buscarDocumentoParaCambio(event) {
                                 </div>
                                 <div class="alert alert-warning py-2 mb-0">
                                     <i class="ri-shield-keyhole-line me-1"></i>
-                                    <strong>Se requerirá código de supervisor</strong> para autorizar este cambio fuera de plazo.
+                                    <strong>Se requerirá el Código de Autorización de un Administrador</strong>
+                                    (el de la barra superior) o su PIN de 6 dígitos para autorizar este cambio fuera de plazo al enviarlo.
                                 </div>
                             `,
                             confirmButtonText: 'Continuar con autorización',
@@ -6399,20 +6423,12 @@ function crearCambioDevolucion(event) {
         event.stopPropagation();
     }
     
-    console.log('📋 DEBUG crearCambioDevolucion - ticketActual completo:', ticketActual);
-    console.log('📦 DEBUG - productosNuevos:', productosNuevos);
-    
     // Determinar el tipo de documento y número
     // Si es DTE, usar el correlativo del ticket de referencia que se creó al buscar
     const esDTE = ticketActual.tipo === 'DTE' || ticketActual.numero_documento !== undefined;
     const documentoNumero = ticketActual.correlativo || ticketActual.numero_documento;
     const documentoTipo = 'TICKET';  // Siempre TICKET porque ya se creó el ticket de referencia
-    
-    console.log('  Es DTE original:', esDTE);
-    console.log('  Documento Número (correlativo):', documentoNumero);
-    console.log('  Documento Tipo:', documentoTipo);
-    console.log('  DTE número original:', ticketActual.numero_documento);
-    
+
     if (!tipoOperacionDetectada) {
         mostrarError('No fue posible determinar el tipo de operación. Revise la selección de productos.');
         return;
@@ -6431,10 +6447,8 @@ function crearCambioDevolucion(event) {
         observaciones_vendedor: $('#textarea-obs-vendedor').val(),
         productos: []
     };
-    
-    console.log('📋 DEBUG - Datos a enviar:', datos);
-    
-    // ✅ CORREGIDO: Recopilar productos originales seleccionados
+
+    // Recopilar productos originales seleccionados
     const productosOriginalesSeleccionados = [];
     ticketActual.productos.forEach((producto, index) => {
         if ($(`#check-producto-${index}`).is(':checked')) {
@@ -6447,9 +6461,6 @@ function crearCambioDevolucion(event) {
         }
     });
     
-    console.log('📦 Productos originales seleccionados:', productosOriginalesSeleccionados.length);
-    console.log('📦 Productos nuevos a entregar:', productosNuevos.length);
-
     // ── Aviso (no bloqueante) si no se seleccionó ningún producto original ──
     // Un cambio/devolución normalmente incluye al menos un producto del documento
     // original. Informamos claramente pero permitimos continuar si el usuario insiste.
@@ -6508,7 +6519,6 @@ function continuarCreacionCambio(datos, productosOriginalesSeleccionados) {
                 productoData.producto_nuevo_id = productoNuevoCorrespondiente.id;
                 productoData.cantidad_nueva = productoNuevoCorrespondiente.cantidad;
                 productoData.precio_nuevo = productoNuevoCorrespondiente.precio_venta;
-                console.log(`  📦 Par: Devuelve ${origData.producto.articulo} → Recibe ${productoNuevoCorrespondiente.articulo}`);
             }
             
             datos.productos.push(productoData);
@@ -6537,7 +6547,6 @@ function continuarCreacionCambio(datos, productosOriginalesSeleccionados) {
                         precio_nuevo: productoNuevo.precio_venta,
                         es_producto_adicional: true  // Marcador para el backend
                     });
-                    console.log(`  📦 Adicional: Recibe ${productoNuevo.articulo} (sin devolución asociada)`);
                 });
             }
         }
@@ -6552,16 +6561,21 @@ function continuarCreacionCambio(datos, productosOriginalesSeleccionados) {
             });
         });
     }
-    
-    console.log('📦 Total productos en payload:', datos.productos.length);
-    console.log('📦 Payload completo:', JSON.stringify(datos, null, 2));
-    
+
     enviarSolicitudCambio(datos);
 }
 
 function enviarSolicitudCambio(datos) {
+    // Anti doble-envío: deshabilitar el botón mientras se procesa el AJAX.
+    const $btnCrear = $('#btn-crear-cambio');
+    if (!$btnCrear.data('html-original')) {
+        $btnCrear.data('html-original', $btnCrear.html());
+    }
+    $btnCrear.prop('disabled', true)
+             .html('<span class="spinner-border spinner-border-sm me-1"></span>Procesando...');
+
     mostrarLoading('Creando solicitud de cambio...');
-    
+
     $.ajax({
         url: '/app/ventas/api/crear-cambio-devolucion/',
         method: 'POST',
@@ -6569,7 +6583,7 @@ function enviarSolicitudCambio(datos) {
         contentType: 'application/json',
         success: function(response) {
             ocultarLoading();
-            
+
             if (response.success) {
                 Swal.fire({
                     icon: 'success',
@@ -6577,7 +6591,7 @@ function enviarSolicitudCambio(datos) {
                     html: `
                         <p><strong>Número de operación:</strong> ${response.numero_operacion}</p>
                         <p><strong>Diferencia de monto:</strong> $${Math.abs(response.diferencia_monto).toLocaleString()}</p>
-                        ${response.diferencia_monto > 0 ? 
+                        ${response.diferencia_monto > 0 ?
                             '<p class="text-danger">Cliente debe pagar la diferencia</p>' :
                             response.diferencia_monto < 0 ?
                             '<p class="text-success">A favor del cliente</p>' :
@@ -6593,6 +6607,8 @@ function enviarSolicitudCambio(datos) {
                 cargarCambiosDevoluciones();
             } else if (response.requiere_autorizacion) {
                 solicitarAutorizacionSupervisor(datos, response);
+            } else if (response.requiere_confirmacion_condonacion) {
+                confirmarRecambioCondonado(datos, response);
             } else {
                 mostrarError(response.error);
             }
@@ -6602,20 +6618,60 @@ function enviarSolicitudCambio(datos) {
             const resp = xhr.responseJSON;
             if (resp && resp.requiere_autorizacion) {
                 solicitarAutorizacionSupervisor(datos, resp);
+            } else if (resp && resp.requiere_confirmacion_condonacion) {
+                confirmarRecambioCondonado(datos, resp);
             } else {
                 const error = resp?.error || 'Error de conexión al crear solicitud';
                 mostrarError(error);
             }
+        },
+        complete: function() {
+            // Rehabilitar el botón siempre. Si el flujo continúa (PIN o confirmación de
+            // condonación), la re-llamada a enviarSolicitudCambio() lo volverá a deshabilitar.
+            const htmlOriginal = $btnCrear.data('html-original');
+            $btnCrear.prop('disabled', false);
+            if (htmlOriginal) $btnCrear.html(htmlOriginal);
+        }
+    });
+}
+
+/**
+ * Aviso (permitir + confirmar) cuando el ticket tuvo un cambio previo con diferencia
+ * condonada (no cobrada). El backend responde con requiere_confirmacion_condonacion.
+ */
+function confirmarRecambioCondonado(datos, resp) {
+    Swal.fire({
+        icon: 'warning',
+        title: 'Diferencia anterior no cobrada',
+        html: resp.mensaje_condonacion ||
+              'Un cambio anterior de este documento tuvo una diferencia que NO se cobró (condonada). ¿Desea continuar igual?',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-arrow-right-line me-1"></i> Continuar igual',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#e67e22',
+        reverseButtons: true,
+    }).then((r) => {
+        if (r.isConfirmed) {
+            datos.aceptar_recambio_condonado = true;
+            enviarSolicitudCambio(datos);
         }
     });
 }
 
 function solicitarAutorizacionSupervisor(datos, responseOriginal) {
     const diasFuera = responseOriginal.dias_fuera_de_plazo || responseOriginal.dias_transcurridos || '';
+    // Si ya veníamos con un PIN, es un reintento por código inválido: mostrar el error
+    // y limpiar el PIN previo para no reenviar uno inválido.
+    const esReintento = !!datos.supervisor_pin;
+    datos.supervisor_pin = '';
+    const errorHtml = (esReintento && responseOriginal.error)
+        ? `<div class="alert alert-danger py-2 mb-3"><i class="ri-error-warning-line me-1"></i>${responseOriginal.error}</div>`
+        : '';
     Swal.fire({
         title: 'Autorización de Administrador',
         html: `
             <div class="text-start">
+                ${errorHtml}
                 <div class="alert alert-warning py-2 mb-3">
                     <i class="ri-shield-keyhole-line me-1"></i>
                     <strong>Cambio fuera de plazo</strong>
@@ -7882,6 +7938,82 @@ function revertirCambio(cambioId) {
                 error: function() {
                     ocultarLoading();
                     mostrarError('Error de conexión al revertir');
+                }
+            });
+        }
+    });
+}
+
+/**
+ * Condonar la diferencia de cobro de un cambio (solo administrador).
+ * Perdona el cobro con justificación SIN anular el cambio: no revierte stock ni
+ * deshace el cambio; solo lo marca como completado y lo saca de "Pend. Cobro".
+ */
+function condonarDiferencia(cambioId, montoDiferencia, numeroOperacion) {
+    const montoFmt = '$' + Number(Math.abs(montoDiferencia || 0)).toLocaleString('es-CL');
+    Swal.fire({
+        title: 'Condonar diferencia de cobro',
+        html: `
+            <div class="text-start">
+                <p class="mb-2">Vas a <strong>perdonar el cobro</strong> de la diferencia de
+                   <strong class="text-danger">${montoFmt}</strong> del cambio
+                   <strong>${numeroOperacion || ''}</strong>.</p>
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="ri-information-line me-1"></i>
+                    El cambio <strong>NO se anula</strong>: el stock y los productos entregados se mantienen.
+                    Solo se cancela el cobro pendiente y el cambio queda <strong>Completado</strong>.
+                </div>
+                <label class="form-label small fw-semibold">Justificación (obligatoria)</label>
+                <textarea id="motivo-condonacion" class="form-control" rows="3"
+                          placeholder="Ej: Error de precio de la tienda; se decide no cobrar la diferencia al cliente."></textarea>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e67e22',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="ri-hand-coin-line me-1"></i> Condonar diferencia',
+        cancelButtonText: 'Cancelar',
+        focusCancel: true,
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivo-condonacion')?.value || '').trim();
+            if (motivo.length < 5) {
+                Swal.showValidationMessage('Debes escribir una justificación (mínimo 5 caracteres)');
+                return false;
+            }
+            return { motivo };
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            mostrarLoading('Condonando diferencia...');
+            $.ajax({
+                url: '/app/ventas/api/condonar-diferencia-cobro/',
+                method: 'POST',
+                data: JSON.stringify({ cambio_id: cambioId, motivo: result.value.motivo }),
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    ocultarLoading();
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Diferencia condonada',
+                            text: response.message,
+                            timer: 3000
+                        });
+                        cargarCambiosDevoluciones();
+                    } else {
+                        mostrarError(response.error || response.mensaje || 'No se pudo condonar la diferencia');
+                    }
+                },
+                error: function(xhr) {
+                    ocultarLoading();
+                    const resp = xhr.responseJSON || {};
+                    // requiere_rol devuelve {error: true, mensaje: '...'}; mi vista devuelve {error: '<texto>'}
+                    const msg = resp.mensaje
+                        || (typeof resp.error === 'string' ? resp.error : '')
+                        || 'Error de conexión al condonar';
+                    mostrarError(msg);
                 }
             });
         }

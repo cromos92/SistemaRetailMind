@@ -414,7 +414,8 @@ def obtener_analisis_avanzado(sucursal_id=None, fecha_inicio=None, fecha_fin=Non
         estado__in=['COMPLETADO', 'EJECUTADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']
     ).aggregate(
         devoluciones=Sum('diferencia_monto', filter=Q(diferencia_monto__lt=0)),
-        cobros=Sum('diferencia_monto', filter=Q(diferencia_monto__gt=0)),
+        # Excluir condonaciones: la diferencia fue perdonada, no recaudada
+        cobros=Sum('diferencia_monto', filter=Q(diferencia_monto__gt=0) & Q(diferencia_condonada=False)),
     )
 
     # --- Top 10 productos devueltos ---

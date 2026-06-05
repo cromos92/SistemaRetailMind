@@ -54,6 +54,37 @@ PLATAFORMA_INTERNET_POR_CANAL = {
 }
 
 
+# Alias de canal que AllConnected / los marketplaces mandan con variantes de
+# nombre (mayúsc., separadores, errores). Se mapean al código canónico de
+# CANAL_ECOMMERCE_CHOICES para que el listado de pedidos y la cuadratura de caja
+# clasifiquen el marketplace correcto. La clave de búsqueda se normaliza quitando
+# espacios/guiones/puntos. AMPLIAR según lo que revele el diagnóstico de pedidos
+# (ver comando `corregir_canal_walmart`). NO se infiere un canal distinto cuando
+# el valor entrante ya es válido y sin alias conocido (no adivinamos).
+CANAL_ALIAS = {
+    'WALLMART': 'WALMART',   # doble L (error frecuente)
+    'WALMARTCL': 'WALMART',  # WALMART_CL / WALMART-CL / WALMART.CL
+    'WMT': 'WALMART',
+    'WALMARTCHILE': 'WALMART',
+    'LIDER': 'WALMART',      # Walmart Chile opera como "Líder"
+    'PARIS': 'PARIS',
+    'MERCADOLIBRE': 'MERCADO',
+    'MERCADOPAGO': 'MERCADO',
+}
+
+
+def _normalizar_canal(valor):
+    """Normaliza ``canal_origen`` entrante a un código canónico.
+
+    Aplica strip + upper y resuelve alias conocidos (WALLMART, WALMART_CL, ...)
+    al valor canónico de ``CANAL_ECOMMERCE_CHOICES``. Si no hay alias, devuelve
+    el valor en mayúsculas tal cual (no se adivina un canal distinto).
+    """
+    base = (valor or '').strip().upper()
+    clave = base.replace(' ', '').replace('-', '').replace('_', '').replace('.', '')
+    return CANAL_ALIAS.get(clave, base)
+
+
 def _crear_pago_ecommerce(ticket, pedido):
     """
     Crea el TicketDetallePago de un pedido ecommerce como VENTA_INTERNET con la
@@ -258,7 +289,7 @@ def _ingestar_pedido_dict(data):
     """
     # Campos obligatorios
     numero_pedido_canal = (data.get('numero_pedido_canal') or '').strip()
-    canal_origen = (data.get('canal_origen') or '').strip().upper()
+    canal_origen = _normalizar_canal(data.get('canal_origen'))
     sucursal_id = data.get('sucursal_id')
     cliente_nombre = (data.get('cliente_nombre') or '').strip()
 
@@ -517,7 +548,7 @@ def api_cancelar_pedido_ecommerce(request):
         return JsonResponse({'ok': False, 'error': 'Body JSON inválido'}, status=400)
 
     numero_pedido_canal = (data.get('numero_pedido_canal') or '').strip()
-    canal_origen = (data.get('canal_origen') or '').strip().upper()
+    canal_origen = _normalizar_canal(data.get('canal_origen'))
     if not numero_pedido_canal or not canal_origen:
         return JsonResponse(
             {'ok': False, 'error': 'numero_pedido_canal y canal_origen son obligatorios'},
@@ -1391,6 +1422,47 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
     return ticket
 
 
+def _print_data_pedido(pedido, ticket, sucursal):
+    """
+    Datos que el ticket térmico de pedido ecommerce necesita para imprimir
+    (los lee `_generarEscPosEcommerce` en _qz_tray_module.html). Sin esto el
+    front imprimía total $0 y sin líneas. Las líneas salen del ticket recién
+    creado por `_crear_ticket_desde_pedido` (ya traen precio/subtotal correctos).
+    """
+    empresa = getattr(sucursal, 'empresa', None)
+    productos = []
+    for tp in ticket.ticket_productos.select_related('ProductoTalla__producto').all():
+        if tp.ProductoTalla and tp.ProductoTalla.producto:
+            nombre = (
+                tp.ProductoTalla.producto.descripcion
+                or tp.ProductoTalla.producto.articulo
+                or ''
+            )
+            sku = tp.ProductoTalla.sku
+        else:
+            nombre = tp.descripcion_linea or 'Ítem'
+            sku = ''
+        productos.append({
+            'sku': sku,
+            'nombre': nombre,
+            'cantidad': tp.stock,
+            'precio_unitario': tp.precio,
+        })
+    return {
+        'canal_origen': pedido.canal_origen,
+        'numero_pedido_canal': pedido.numero_pedido_canal or '',
+        'cliente_documento': pedido.cliente_documento or '',
+        'total': int(ticket.total or 0),
+        'sucursal': {
+            'empresa': empresa.nombre if empresa else '',
+            'rut_empresa': empresa.rut if empresa else '',
+            'alias': sucursal.alias or '',
+            'direccion': sucursal.direccion or '',
+        },
+        'productos': productos,
+    }
+
+
 @login_required
 @csrf_exempt
 def facturar_ecommerce_masivo(request):
@@ -1533,6 +1605,8 @@ def facturar_ecommerce_masivo(request):
                 'archivo_txt': getattr(dte, 'archivo_txt_data', None),
                 'txt_error': getattr(dte, '_txt_error', None),
                 'advertencias': [],
+                # Datos para imprimir el ticket térmico (evita total $0 / sin líneas)
+                **_print_data_pedido(pedido, ticket, sucursal),
             })
             exitosos += 1
 

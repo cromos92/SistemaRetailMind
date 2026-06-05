@@ -102,6 +102,7 @@ from .views_modulo_ventas import (
     revertir_cambio_devolucion,
     ejecutar_cambio_devolucion,
     registrar_pago_diferencia,
+    condonar_diferencia_cobro,
     completar_cambio_devolucion,
     buscar_ticket_para_cambio,
     buscar_documento_cambio,
@@ -914,6 +915,7 @@ urlpatterns = [
     path('ventas/api/codigo-autorizacion/validar/', validar_codigo_autorizacion, name='validar_codigo_autorizacion'),
     path('ventas/api/ejecutar-cambio-devolucion/', ejecutar_cambio_devolucion, name='ejecutar_cambio_devolucion'),
     path('ventas/api/registrar-pago-diferencia/', registrar_pago_diferencia, name='registrar_pago_diferencia'),
+    path('ventas/api/condonar-diferencia-cobro/', condonar_diferencia_cobro, name='condonar_diferencia_cobro'),
     path('ventas/api/completar-cambio-devolucion/', completar_cambio_devolucion, name='completar_cambio_devolucion'),
     
     # APIs de búsqueda

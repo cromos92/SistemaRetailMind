@@ -1255,7 +1255,7 @@
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="WALMART,FALABELLA" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">WALMART</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="falabella">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="PARIS" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">PARIS</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="paris">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="RIPLEY" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">RIPLEY</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="ripley">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO,SHOPIFY" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">SHOPIFY</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="mercadopago">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO,SHOPIFY" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">MERCADO PAGO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="mercadopago">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="KLAP" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">KLAP</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="klap">$0</span></td></tr>
                                     </tbody>
                                 </table>
@@ -1332,7 +1332,7 @@
                                         </small>
                                         <div class="fw-bold font-monospace" style="font-size:.95rem;color:var(--nexo-warning);" id="sum_internet">$0</div>
                                     </div>
-                                    <div class="text-muted" style="font-size:.68rem;">WALMART + PARIS + RIPLEY + SHOPIFY + KLAP</div>
+                                    <div class="text-muted" style="font-size:.68rem;">WALMART + PARIS + RIPLEY + MERCADO PAGO + KLAP</div>
                                 </div>
 
                                 <hr class="my-1">
@@ -3381,7 +3381,7 @@ function generarContenidoTermica(d) {
     ${d.falabella!=='$0'?`<tr><td class="metodo">WALMART:</td><td class="monto">${d.falabella}</td></tr>`:''}
     ${d.paris!=='$0'?`<tr><td class="metodo">PARIS:</td><td class="monto">${d.paris}</td></tr>`:''}
     ${d.ripley!=='$0'?`<tr><td class="metodo">RIPLEY:</td><td class="monto">${d.ripley}</td></tr>`:''}
-    ${d.mercadopago!=='$0'?`<tr><td class="metodo">SHOPIFY:</td><td class="monto">${d.mercadopago}</td></tr>`:''}
+    ${d.mercadopago!=='$0'?`<tr><td class="metodo">MERCADO PAGO:</td><td class="monto">${d.mercadopago}</td></tr>`:''}
     ${d.klap!=='$0'?`<tr><td class="metodo">KLAP:</td><td class="monto">${d.klap}</td></tr>`:''}
     ${d.transferencia!=='$0'?`<tr><td class="metodo">TRANSFERENCIA:</td><td class="monto">${d.transferencia}</td></tr>`:''}
     </table></div><div class="linea"></div>
@@ -4503,7 +4503,7 @@ function _generarEscPosCuadratura(datos) {
         if (datos.falabella   && datos.falabella   !== '$0') c.push(_col2('WALMART:', datos.falabella));
         if (datos.paris       && datos.paris       !== '$0') c.push(_col2('PARIS:', datos.paris));
         if (datos.ripley      && datos.ripley      !== '$0') c.push(_col2('RIPLEY:', datos.ripley));
-        if (datos.mercadopago && datos.mercadopago !== '$0') c.push(_col2('SHOPIFY:', datos.mercadopago));
+        if (datos.mercadopago && datos.mercadopago !== '$0') c.push(_col2('MERCADO PAGO:', datos.mercadopago));
         if (datos.klap        && datos.klap        !== '$0') c.push(_col2('KLAP:', datos.klap));
         if (datos.transferencia && datos.transferencia !== '$0') c.push(_col2('TRANSFERENCIA:', datos.transferencia));
         c.push(_sep('-'));

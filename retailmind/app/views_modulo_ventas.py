@@ -44,6 +44,7 @@ from .utils_ventas import (
     ONLY_TICKET_PRODUCTO_POS,
 )
 from .utils_permisos import obtener_configuracion_rango_arqueo
+from .decorators import requiere_rol
 
 # Caching del módulo ventas (Redis / LocMem, ver app.cache_utils)
 from .cache_utils import cache_ventas_json
@@ -12724,12 +12725,36 @@ def crear_cambio_devolucion(request):
             ).first()
         
         if cambios_con_pago_pendiente:
+            monto_pend = abs(int(cambios_con_pago_pendiente.diferencia_monto or 0))
             return JsonResponse({
                 'success': False,
-                'error': f'Existe un cambio anterior ({cambios_con_pago_pendiente.numero_operacion}) con pago/devolución pendiente para este documento. '
-                         f'Debe completar esa obligación antes de crear un nuevo cambio.'
+                'error': f'El cambio anterior {cambios_con_pago_pendiente.numero_operacion} tiene una diferencia de '
+                         f'${monto_pend:,} que NO se cobró. Debe cobrarla o condonarla (administrador) '
+                         f'antes de crear un nuevo cambio sobre este documento.'
             })
-        
+
+        # Aviso (permitir + confirmar): el ticket tuvo un cambio previo con la diferencia
+        # condonada. El admin ya perdonó ese cobro, así que dejamos re-cambiar pero avisando.
+        if not data.get('aceptar_recambio_condonado'):
+            cambio_condonado = CambioDevolucion.objects.filter(
+                ticket_original=ticket_original,
+                diferencia_condonada=True,
+                estado='COMPLETADO'
+            ).order_by('-fecha_condonacion').first()
+            if cambio_condonado:
+                monto_cond = abs(int(cambio_condonado.diferencia_monto or 0))
+                admin_nombre = getattr(cambio_condonado.condonada_por, 'username', None) or 'un administrador'
+                fecha_cond = (timezone.localtime(cambio_condonado.fecha_condonacion).strftime('%d/%m/%Y')
+                              if cambio_condonado.fecha_condonacion else '')
+                mensaje = (f'El cambio anterior {cambio_condonado.numero_operacion} tuvo una diferencia de '
+                           f'${monto_cond:,} que NO se cobró (condonada por {admin_nombre}'
+                           + (f' el {fecha_cond}' if fecha_cond else '') + '). ¿Desea continuar igual?')
+                return JsonResponse({
+                    'success': False,
+                    'requiere_confirmacion_condonacion': True,
+                    'mensaje_condonacion': mensaje,
+                })
+
         with transaction.atomic():
             # Cambios por concepto: monto viene directamente del frontend
             es_concepto = tipo_operacion in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO')
@@ -13292,6 +13317,15 @@ def revertir_cambio_devolucion(request):
         if cambio.sucursal_id != int(sucursal_id):
             return JsonResponse({'success': False, 'error': 'No tiene acceso a este cambio'})
 
+        # Un cambio con la diferencia condonada ya cerró su cobro sin tocar stock; revertirlo
+        # re-movería inventario y anularía un ticket pagado, dejando todo inconsistente.
+        if cambio.diferencia_condonada:
+            return JsonResponse({
+                'success': False,
+                'error': 'Este cambio tuvo su diferencia condonada (perdonada) y no se puede revertir. '
+                         'La condonación no movió stock; revertir lo dejaría inconsistente.'
+            })
+
         estados_revertibles = ['COMPLETADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE', 'EJECUTADO']
         if cambio.estado not in estados_revertibles:
             return JsonResponse({'success': False, 'error': f'Solo se pueden revertir cambios ejecutados o completados, estado actual: {cambio.get_estado_display()}'})
@@ -13825,6 +13859,105 @@ def registrar_pago_diferencia(request):
             'success': False,
             'error': f'Error al registrar pago: {str(e)}'
         })
+
+
+@require_POST
+@csrf_exempt
+@requiere_rol('administrador')
+def condonar_diferencia_cobro(request):
+    """
+    Condonar (perdonar) la diferencia de cobro pendiente de un cambio, con justificación.
+
+    Solo administradores. NO anula el cambio: no se revierte stock ni se deshacen
+    movimientos (eso lo hace revertir_cambio_devolucion). Solo se perdona el cobro,
+    el cambio pasa a COMPLETADO y deja de contar en "Pend. Cobro".
+    """
+    try:
+        data = json.loads(request.body)
+        cambio_id = data.get('cambio_id')
+        motivo = str(data.get('motivo', '') or '').strip()
+
+        if not cambio_id:
+            return JsonResponse({'success': False, 'error': 'Falta el identificador del cambio'})
+
+        if len(motivo) < 5:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe indicar una justificación (mínimo 5 caracteres) para condonar la diferencia'
+            })
+
+        cambio = get_object_or_404(CambioDevolucion, id=cambio_id)
+
+        # Verificar acceso por sucursal (fail-closed: exigir sucursal en sesión)
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'})
+        if cambio.sucursal_id != int(sucursal_id):
+            return JsonResponse({'success': False, 'error': 'No tiene acceso a este cambio'})
+
+        with transaction.atomic():
+            # Bloquear la fila para idempotencia frente a doble click / operaciones
+            # concurrentes (cobro o reversión simultáneos): se re-lee y re-valida el estado.
+            cambio = CambioDevolucion.objects.select_for_update().get(id=cambio_id)
+
+            # Solo cambios con cobro de diferencia pendiente (re-verificado bajo el lock)
+            if cambio.estado != 'EJECUTADO_COBRO_PENDIENTE':
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Solo se puede condonar un cambio con cobro pendiente. Estado actual: {cambio.get_estado_display()}'
+                })
+
+            monto = cambio.diferencia_monto or 0
+            estado_anterior = cambio.estado
+
+            # Anular el ticket pendiente del cobro (NO se revierte stock ni movimientos).
+            ticket_pendiente = None
+            if cambio.ticket_diferencia and cambio.ticket_diferencia.estado == 'PENDIENTE':
+                ticket_pendiente = cambio.ticket_diferencia
+            elif cambio.ticket_nuevo and cambio.ticket_nuevo.estado == 'PENDIENTE':
+                ticket_pendiente = cambio.ticket_nuevo
+            if ticket_pendiente:
+                ticket_pendiente.estado = 'ANULADO'
+                nota = f'[CONDONACIÓN] Diferencia condonada por {request.user.username}: {motivo}'
+                ticket_pendiente.observaciones = ((ticket_pendiente.observaciones or '') + f'\n{nota}').strip()
+                ticket_pendiente.save()
+
+            # Marcar la condonación en el cambio sin anularlo
+            cambio.estado = 'COMPLETADO'
+            cambio.diferencia_condonada = True
+            cambio.motivo_condonacion = motivo
+            cambio.condonada_por = request.user
+            cambio.fecha_condonacion = timezone.now()
+            cambio.fecha_completado = timezone.now()
+            cambio.save()
+
+            HistorialCambioDevolucion.objects.create(
+                cambio_devolucion=cambio,
+                accion='CONDONACION_DIFERENCIA',
+                estado_anterior=estado_anterior,
+                estado_nuevo='COMPLETADO',
+                usuario=request.user,
+                descripcion=f'Diferencia de ${int(monto):,} condonada por {request.user.username}. Motivo: {motivo}',
+                datos_adicionales={
+                    'monto_condonado': float(monto),
+                    'motivo': motivo,
+                    'condonada_por': request.user.username,
+                    'fecha': timezone.now().isoformat(),
+                }
+            )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Diferencia de ${int(monto):,} condonada. El cambio quedó completado.',
+            'cambio_id': cambio.id,
+            'estado_final': cambio.get_estado_display(),
+            'estado_final_codigo': cambio.estado,
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al condonar la diferencia: {str(e)}'})
 
 
 @login_required

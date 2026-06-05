@@ -528,11 +528,34 @@ class CambioDevolucion(models.Model):
         help_text="Monto del nuevo ticket (si aplica)"
     )
     diferencia_monto = models.DecimalField(
-        max_digits=12, decimal_places=2, 
+        max_digits=12, decimal_places=2,
         default=0,
         help_text="Diferencia de precio (positivo: cliente paga, negativo: se devuelve)"
     )
-    
+
+    # === CONDONACIÓN DE DIFERENCIA (solo administrador) ===
+    # Permite que un administrador perdone una diferencia de cobro pendiente con
+    # justificación, SIN anular el cambio (no se revierte stock ni se deshace).
+    diferencia_condonada = models.BooleanField(
+        default=False,
+        help_text="Si la diferencia de cobro fue condonada (perdonada) por un administrador"
+    )
+    motivo_condonacion = models.TextField(
+        blank=True, null=True,
+        help_text="Justificación obligatoria de la condonación de la diferencia"
+    )
+    condonada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='condonaciones_cambio',
+        null=True, blank=True,
+        help_text="Administrador que condonó la diferencia"
+    )
+    fecha_condonacion = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Fecha en que se condonó la diferencia"
+    )
+
     # === RESPONSABLES ===
     solicitado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
@@ -1059,6 +1082,7 @@ class HistorialCambioDevolucion(models.Model):
             ('PRODUCTO_EVALUADO', 'Producto Evaluado'),
             ('REVERTIDO', 'Revertido'),
             ('COBRO_DIFERENCIA', 'Cobro de Diferencia'),
+            ('CONDONACION_DIFERENCIA', 'Condonación de Diferencia'),
             ('DEVOLUCION_PROCESADA', 'Devolución Procesada'),
             ('NC_GENERADA', 'Nota de Crédito Generada'),
             ('NC_ANULADA', 'Nota de Crédito Anulada'),

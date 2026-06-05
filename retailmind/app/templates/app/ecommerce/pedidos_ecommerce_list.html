@@ -839,16 +839,17 @@ async function imprimirTodosResultados() {
     const ticketData = {
       modulo_origen: 'ECOMMERCE',
       numero_ticket_rm: r.numero_ticket_rm,
-      canal_origen: '',
-      numero_pedido_canal: '',
+      canal_origen: r.canal_origen || '',
+      numero_pedido_canal: r.numero_pedido_canal || '',
       cliente_nombre: r.cliente || '',
-      total: 0,
+      cliente_documento: r.cliente_documento || '',
+      total: r.total || 0,
       fecha: new Date().toLocaleString('es-CL'),
       ticket_correlativo: r.ticket_correlativo,
       dte_numero: r.dte_numero,
       dte_tipo: r.dte_tipo,
-      sucursal: {},
-      productos: [],
+      sucursal: r.sucursal || {},
+      productos: r.productos || [],
     };
     const ok = await imprimirConQZ(ticketData);
     if (ok) impresos++;
