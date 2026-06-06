@@ -1056,6 +1056,28 @@ def formatear_decimal(numero, enteros=12, decimales=6):
     return formato.format(numero)
 
 
+def monto_real_linea_dte(dp, cant):
+    """Monto total REALMENTE COBRADO por `cant` unidades de la línea `dp`,
+    en la MISMA base (NETO/BRUTO) que `dp.precio`.
+
+    Fuente de verdad: `Dte_Productos.monto_item` (guardado al crear el DTE
+    desde el ticket como `tp.subtotal` = total de la línea ya con descuento y
+    con el precio realmente cobrado, p. ej. un "envío" con precio sistema fijo
+    cobrado a otro valor en el POS). Deriva proporcional a la cantidad cuando
+    la NC es parcial. Fallback a `precio*cant` cuando `monto_item` no está
+    (==0/None) — DTEs legacy o facturas que no capturaron monto_item — con lo
+    que el comportamiento es idéntico al cálculo anterior.
+    """
+    cant = int(cant or 0)
+    mi = int(dp.monto_item or 0)
+    if mi <= 0:
+        return int(dp.precio or 0) * cant            # fallback legacy → idéntico al actual
+    stock_src = int(dp.stock or 0) or cant
+    if cant >= stock_src:
+        return mi                                     # línea completa: monto exacto (sin round)
+    return int(round(mi * (cant / stock_src)))        # parcial: proporcional
+
+
 def base_lineas_dte(dte):
     """Detecta si los precios por línea de un DTE están en NETO o CON IVA (BRUTO).
 
@@ -1074,7 +1096,12 @@ def base_lineas_dte(dte):
     if not productos:
         return 'DESCONOCIDO'
 
-    suma = sum(int(dp.precio or 0) * int(dp.stock or 0) for dp in productos)
+    # Usamos el monto realmente cobrado por línea (monto_item con fallback a
+    # precio*stock). En docs con descuento, Σ precio*stock (lista, sin descuento)
+    # puede alejarse >2% de monto_neto/monto_con_iva y devolver 'DESCONOCIDO';
+    # con Σ monto_real_linea la suma coincide con la cabecera real → detección
+    # robusta. Sin monto_item, cae al fallback y el resultado es el de antes.
+    suma = sum(monto_real_linea_dte(dp, dp.stock) for dp in productos)
     neto = int(dte.monto_neto or 0)
     bruto = int(dte.monto_con_iva or 0)
     if suma <= 0 or (neto <= 0 and bruto <= 0):
@@ -1108,12 +1135,15 @@ def calcular_montos_nc(dte_original, lineas):
 
     bruto = Decimal('0')
     for dp, cant in lineas:
-        cant_d = Decimal(str(int(cant or 0)))
-        precio_d = Decimal(str(int(dp.precio or 0)))
+        # Monto realmente cobrado por la línea (monto_item proporcional a cant,
+        # con fallback a precio*cant), en la base de dp.precio. Esto respeta
+        # descuentos y precios editados en el POS (caso "envío"); antes se
+        # usaba dp.precio (lista/sistema) e inflaba la NC.
+        monto_linea = Decimal(str(monto_real_linea_dte(dp, cant)))
         if base == 'BRUTO':
-            bruto += cant_d * precio_d
-        else:  # NETO -> el precio es neto, el bruto agrega IVA
-            bruto += cant_d * precio_d * Decimal('1.19')
+            bruto += monto_linea
+        else:  # NETO -> el monto de línea es neto, el bruto agrega IVA
+            bruto += monto_linea * Decimal('1.19')
 
     monto_con_iva = int(bruto.quantize(Decimal('1')))
     monto_neto = int((bruto / Decimal('1.19')).quantize(Decimal('1')))

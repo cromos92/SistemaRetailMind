@@ -331,6 +331,15 @@ class AnularFacturaDteTest(TestCase):
             body['metodo_devolucion'] = kwargs.get('metodo_devolucion', 'EFECTIVO_CAJA')
         if 'fecha_devolucion_caja' in kwargs:
             body['fecha_devolucion_caja'] = kwargs['fecha_devolucion_caja']
+        # NC parcial por línea (el path real del modal de gestion-DTE) y
+        # corrección de monto. `productos_afectados` activa la rama
+        # `usa_productos_afectados` en anular_factura_dte.
+        if 'productos_afectados' in kwargs:
+            body['productos_afectados'] = kwargs['productos_afectados']
+        if 'correcciones' in kwargs:
+            body['correcciones'] = kwargs['correcciones']
+        if kwargs.get('es_correccion_monto'):
+            body['es_correccion_monto'] = True
         return self.client.post(
             reverse('anular_factura_dte'),
             data=json.dumps(body),
@@ -642,3 +651,105 @@ class AnularFacturaDteTest(TestCase):
         self.assertEqual(precio_efectivo, precio_cobrado)
         # Y cuadra con el cabezal de la NC
         self.assertEqual(int(nc.monto_con_iva), precio_cobrado)
+
+    def test_nc_productos_afectados_envio_inflado_usa_monto_cobrado(self):
+        """
+        REGRESIÓN bug envío vía el PATH DEL MODAL (`productos_afectados`):
+        si `dp.precio` quedó con el precio sistema (500) pero `monto_item`
+        refleja lo realmente cobrado (800), la CABECERA de la NC y el TXT
+        deben usar 800, NO 500.
+
+        Antes `calcular_montos_nc` sumaba `dp.precio` (sistema) → la cabecera
+        salía con el monto equivocado y `normalizar_detalle_para_tipo`
+        re-escalaba las líneas (que sí estaban en 800) hacia ese monto. El
+        test de regresión previo solo cubría el path legacy `monto_nc`, no
+        este, que es el que usa realmente el modal.
+        """
+        precio_sistema = 500
+        precio_cobrado = 800
+        boleta = _crear_boleta(self.env, numero=2110, monto_con_iva=precio_cobrado)
+        dp = boleta.dte_productos.first()
+        dp.precio = precio_sistema
+        dp.monto_item = precio_cobrado
+        dp.save(update_fields=['precio', 'monto_item'])
+
+        resp = self._post_anular(
+            dte_id=boleta.id,
+            modalidad_nc='DEVOLUCION',
+            metodo_devolucion='EFECTIVO_CAJA',
+            productos_afectados=[{'dte_producto_id': dp.id, 'cantidad': 1}],
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        nc = Dte.objects.filter(
+            documento_afectado=boleta, es_nota_credito=True,
+        ).first()
+        self.assertIsNotNone(nc)
+        # Cabecera: refleja lo cobrado (800), no el precio sistema (500).
+        self.assertEqual(int(nc.monto_con_iva), precio_cobrado)
+        self.assertEqual(int(nc.monto_neto), int(round(precio_cobrado / Decimal('1.19'))))
+        # Línea de la NC: precio y monto_item = lo cobrado.
+        ldp = nc.dte_productos.filter(productoTalla__isnull=False).first()
+        self.assertIsNotNone(ldp)
+        self.assertEqual(int(ldp.monto_item), precio_cobrado)
+        self.assertEqual(int(ldp.precio), precio_cobrado)
+        # TXT: la línea 5 (totales) lleva el MntTotal/MntNeto correctos.
+        totales = resp.content.decode('utf-8').split('\n')[4].split('|')
+        self.assertEqual(int(totales[4]), precio_cobrado)       # MntTotal
+        self.assertEqual(int(totales[0]), int(nc.monto_neto))   # MntNeto
+
+    def test_nc_productos_afectados_preserva_descuento(self):
+        """
+        REGRESIÓN bug descuento vía `productos_afectados`: si la boleta tenía
+        descuento (precio lista 100, cobrado 90 capturado en `monto_item`), la
+        NC debe acreditar 90, NO 100. Antes `calcular_montos_nc` usaba
+        `dp.precio` (100) y la NC salía SIN el descuento (monto inflado).
+        """
+        precio_lista = 100
+        cobrado = 90
+        boleta = _crear_boleta(self.env, numero=2111, monto_con_iva=cobrado)
+        dp = boleta.dte_productos.first()
+        dp.precio = precio_lista
+        dp.monto_item = cobrado
+        dp.descuento_monto = precio_lista - cobrado
+        dp.save(update_fields=['precio', 'monto_item', 'descuento_monto'])
+
+        resp = self._post_anular(
+            dte_id=boleta.id,
+            modalidad_nc='DEVOLUCION',
+            metodo_devolucion='EFECTIVO_CAJA',
+            productos_afectados=[{'dte_producto_id': dp.id, 'cantidad': 1}],
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        nc = Dte.objects.filter(
+            documento_afectado=boleta, es_nota_credito=True,
+        ).first()
+        self.assertIsNotNone(nc)
+        # El descuento ya no se pierde: 90, no 100.
+        self.assertEqual(int(nc.monto_con_iva), cobrado)
+        self.assertEqual(int(nc.monto_neto), int(round(cobrado / Decimal('1.19'))))
+        ldp = nc.dte_productos.filter(productoTalla__isnull=False).first()
+        self.assertIsNotNone(ldp)
+        self.assertEqual(int(ldp.monto_item), cobrado)
+        totales = resp.content.decode('utf-8').split('\n')[4].split('|')
+        self.assertEqual(int(totales[4]), cobrado)              # MntTotal = 90
+
+    def test_lineas_disponibles_nc_api_muestra_precio_real_cobrado(self):
+        """El modal de NC debe mostrar el precio realmente cobrado
+        (`monto_item`/stock), no el precio sistema/lista, para que el preview
+        ("Total NC con IVA") coincida con la NC/ TXT realmente emitidos."""
+        boleta = _crear_boleta(self.env, numero=2112, monto_con_iva=800)
+        dp = boleta.dte_productos.first()
+        dp.precio = 500
+        dp.monto_item = 800
+        dp.save(update_fields=['precio', 'monto_item'])
+
+        resp = self.client.get(
+            reverse('lineas_disponibles_nc_api', args=[boleta.id])
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        linea = data['lineas'][0]
+        self.assertEqual(int(linea['precio_unitario']), 800)

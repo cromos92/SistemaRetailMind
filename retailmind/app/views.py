@@ -27071,7 +27071,7 @@ def anular_factura_dte(request):
     import json as _json
     from decimal import Decimal
     from datetime import date
-    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto, calcular_montos_nc, normalizar_detalle_para_tipo, base_lineas_dte
+    from .views_modulo_documentos import generar_txt_nota_credito_acepta, limpiar_texto, calcular_montos_nc, normalizar_detalle_para_tipo, base_lineas_dte, monto_real_linea_dte
 
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
@@ -27348,7 +27348,10 @@ def anular_factura_dte(request):
         monto_con_iva_nc = 0
         for pid, monto_ci in correcciones_map.items():
             dp = dte_productos_map[pid]
-            vigente = int((dp.stock or 0) * (dp.precio or 0))
+            # Tope = monto realmente cobrado por la línea (monto_item con
+            # fallback a precio*stock), no el precio de lista/sistema. Coincide
+            # con el `max` del modal y con lo que emite calcular_montos_nc.
+            vigente = monto_real_linea_dte(dp, dp.stock)
             linea_con_iva = vigente if base_es_bruto else int(round(vigente * Decimal('1.19')))
             sku = dp.productoTalla.sku if dp.productoTalla else f'#{pid}'
             if linea_con_iva <= 0:
@@ -27604,17 +27607,14 @@ def anular_factura_dte(request):
         # de la NC respete lo realmente cobrado y que el TXT cuadre con el
         # cabezal de la NC.
         def _precio_efectivo_dp(dp_src, qty):
-            qty = qty or 0
-            mi = int(dp_src.monto_item) if dp_src.monto_item else int((dp_src.stock or 0) * (dp_src.precio or 0))
-            if qty and mi:
-                # Precio por unidad realmente cobrado (proporcional a qty
-                # respecto al stock total del dp_src).
-                stock_src = int(dp_src.stock or 0) or qty
-                monto_proporcional = int(round(mi * (qty / stock_src)))
-                derivado = int(round(monto_proporcional / qty))
-                if derivado:
-                    return derivado, monto_proporcional
-            return int(dp_src.precio or 0), int((dp_src.precio or 0) * qty)
+            # Devuelve (precio_unitario, monto_linea) realmente cobrados.
+            # Delega en `monto_real_linea_dte` (monto_item proporcional con
+            # fallback a precio*qty) para que la cabecera (calcular_montos_nc)
+            # y las líneas de la NC usen exactamente el mismo monto.
+            qty = int(qty or 0)
+            mi_eff = monto_real_linea_dte(dp_src, qty)
+            p_eff = int(round(mi_eff / qty)) if qty and mi_eff else int(dp_src.precio or 0)
+            return p_eff, mi_eff
 
         if es_correccion_monto:
             # Líneas conceptuales (productoTalla=None): NO interfieren con la
@@ -28907,6 +28907,10 @@ def lineas_disponibles_nc_api(request, dte_id):
                 'monto': float(nc_meta.get('monto_con_iva') or monto),
             })
 
+    # base_lineas_dte (más abajo) y monto_real_linea_dte (en el loop) viven en
+    # views_modulo_documentos; import único aquí para tener ambos en scope.
+    from .views_modulo_documentos import base_lineas_dte, monto_real_linea_dte
+
     lineas = []
     for dp in dte.dte_productos.filter(activo=True).select_related('productoTalla__producto'):
         talla_id = dp.productoTalla_id
@@ -28925,7 +28929,13 @@ def lineas_disponibles_nc_api(request, dte_id):
             'descripcion': descripcion,
             'talla': talla,
             'cantidad_original': cantidad_original,
-            'precio_unitario': int(dp.precio or 0),
+            # Precio por unidad realmente cobrado (monto_item/stock con fallback
+            # a dp.precio), para que el subtotal y el "Total NC" que muestra el
+            # modal coincidan con la NC/ TXT realmente emitidos.
+            'precio_unitario': (
+                int(round(monto_real_linea_dte(dp, cantidad_original) / cantidad_original))
+                if cantidad_original else int(dp.precio or 0)
+            ),
             'cantidad_ya_acreditada': cantidad_ya,
             'cantidad_disponible': disponible,
             'ncs_previas': info_nc['detalle'],
@@ -28935,7 +28945,6 @@ def lineas_disponibles_nc_api(request, dte_id):
     # calcular_montos_nc al crear la NC, para que el modal muestre subtotales y
     # total consistentes con la NC realmente emitida (boletas guardan precio CON
     # IVA; facturas/traspasos lo guardan NETO).
-    from .views_modulo_documentos import base_lineas_dte
     precio_base = base_lineas_dte(dte)
     if precio_base == 'DESCONOCIDO':
         precio_base = 'BRUTO' if 'BOLETA' in (dte.tipo_documento or '').upper() else 'NETO'
