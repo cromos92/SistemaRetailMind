@@ -11034,6 +11034,74 @@ def datos_envio_comprobante(request, dte_id):
             f'Saludos cordiales,\n{nombre_empresa}'
         )
 
+        # === Vista previa HTML (espeja el contenido del PDF para esta factura) ===
+        import re as _re
+        emisor_rut = getattr(emisor, 'rut', '') if emisor else ''
+        pagos = list(
+            Dte_Detalle_Pago.objects.filter(dte_id=dte.id)
+            .exclude(metodo_pago='Nota de Crédito').order_by('fecha_pago', 'id')
+        )
+        ncs = list(
+            Dte_Detalle_Pago.objects.filter(dte_id=dte.id, metodo_pago='Nota de Crédito').order_by('id')
+        )
+        _re_chq = _re.compile(r'^\s*(cheque|cheq\.?|chq\.?)\s*(n[°º\.]?)?\s*:?\s*', _re.IGNORECASE)
+
+        def _limpiar(v):
+            if not v:
+                return '-'
+            return _re_chq.sub('', str(v)).strip() or '-'
+
+        def _fmt_monto(v):
+            try:
+                return '$' + f"{int(round(float(v))):,}".replace(',', '.')
+            except (TypeError, ValueError):
+                return '-'
+
+        _meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+        def _fmt_fecha(f):
+            # Mismo formato que el PDF (dd-mmm) para que la vista previa coincida.
+            return f"{f.day:02d}-{_meses[f.month - 1]}" if f else '-'
+
+        nc_total = sum(int(p.monto or 0) for p in ncs)
+        # Una línea por documento/pago (espeja los <br/> del PDF), se renderiza como HTML
+        nc_numeros = '<br>'.join((p.voucher or '-') for p in ncs) if ncs else '-'
+        if pagos:
+            cheque = '<br>'.join(_limpiar(p.voucher) for p in pagos)
+            pago_total = sum(int(p.monto or 0) for p in pagos)
+            pago_monto = '<br>'.join(_fmt_monto(p.monto) for p in pagos)
+            pago_fecha = '<br>'.join(
+                _fmt_fecha(getattr(p, 'fecha_pago', None) or getattr(p, 'fecha_cheque', None)) for p in pagos
+            )
+        else:
+            cheque = '-'
+            pago_total = max(int(round(float(dte.monto_con_iva or 0))) - nc_total, 0)
+            pago_monto = _fmt_monto(pago_total)
+            pago_fecha = '-'
+
+        preview = {
+            'proveedor': proveedor_nombre,
+            'rut': emisor_rut,
+            'intro': ('Por medio del presente, le informamos que nuestro compromiso de pago '
+                      'ha sido gestionado y está programado para la siguiente fecha:'),
+            'cierre': 'Sin otro particular, le saluda atentamente.',
+            'filas': [{
+                'numero': dte.numero_documento,
+                'fecha_emision': _fmt_fecha(dte.fecha_emision),
+                'monto': _fmt_monto(dte.monto_con_iva),
+                'nc_numeros': nc_numeros,
+                'nc_valor': _fmt_monto(nc_total) if ncs else '-',
+                'cheque': cheque,
+                'pago_monto': pago_monto,
+                'pago_fecha': pago_fecha,
+            }],
+            'totales': {
+                'factura': _fmt_monto(int(round(float(dte.monto_con_iva or 0)))),
+                'nc': _fmt_monto(nc_total),
+                'pago': _fmt_monto(pago_total),
+            },
+        }
+
         return JsonResponse({
             'success': True,
             'dte_id': dte.id,
@@ -11044,6 +11112,7 @@ def datos_envio_comprobante(request, dte_id):
             'es_pagado': (dte.estado_pago or '').upper() == 'PAGADO',
             'asunto': asunto,
             'mensaje': mensaje,
+            'preview': preview,
             'enviado_en': timezone.localtime(dte.comprobante_enviado_en).strftime('%d/%m/%Y %H:%M') if dte.comprobante_enviado_en else None,
             'enviado_a': dte.comprobante_enviado_a or None,
         })
@@ -11141,9 +11210,23 @@ def enviar_comprobante_pago(request):
             d.comprobante_enviado_a = email_destino[:255]
         Dte.objects.bulk_update(dtes, ['comprobante_enviado_en', 'comprobante_enviado_a'])
 
+        # Recordar el correo del proveedor: si el correo usado difiere del guardado
+        # en la ficha del proveedor (emisor), actualizarlo para futuros envíos.
+        correo_actualizado = False
+        emisor = dtes[0].emisor if dtes else None
+        if emisor and (emisor.email or '').strip().lower() != email_destino.lower():
+            emisor.email = email_destino[:254]
+            emisor.save(update_fields=['email'])
+            correo_actualizado = True
+
+        mensaje_ok = f'Comprobante enviado a {email_destino}'
+        if correo_actualizado:
+            mensaje_ok += ' · correo del proveedor actualizado'
+
         return JsonResponse({
             'success': True,
-            'message': f'Comprobante enviado a {email_destino}',
+            'message': mensaje_ok,
+            'correo_actualizado': correo_actualizado,
             'enviado_en': timezone.localtime(ahora).strftime('%d/%m/%Y %H:%M'),
             'enviado_a': email_destino,
         })

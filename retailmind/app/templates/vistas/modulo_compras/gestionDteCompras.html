@@ -768,7 +768,27 @@
         font-weight: 600;
         animation: pulseNC 2s infinite;
     }
-    
+
+    /* ==================== CHIPS DE ESTADO EN FILA DTE ==================== */
+    /* Indicadores compactos en la columna N° documento: cortos, con icono,
+       colores distintos por significado y tooltip con el detalle completo. */
+    .dte-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .dte-chip {
+        display: inline-flex; align-items: center; gap: 3px;
+        font-size: 0.68rem; font-weight: 600; line-height: 1.1;
+        padding: 3px 7px; border-radius: 9px; white-space: nowrap;
+        border: 1px solid transparent;
+    }
+    .dte-chip i { font-size: 0.74rem; }
+    .dte-chip--link  { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; cursor:pointer; }
+    .dte-chip--warn  { background:#fffbeb; color:#b45309; border-color:#fde68a; }
+    .dte-chip--ok    { background:#ecfdf5; color:#047857; border-color:#bbf7d0; cursor:pointer; }
+    .dte-chip--cyan  { background:#ecfeff; color:#0e7490; border-color:#a5f3fc; }
+    .dte-chip--muted { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+    /* Comprobante enviado: solo icono + color índigo, distinto a los demás */
+    .dte-chip--mail  { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; padding:3px 6px; cursor:default; }
+    .dte-chip--mail i { font-size: 0.82rem; }
+
     @keyframes pulseNC {
         0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
         50% { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0); }
@@ -2184,12 +2204,12 @@
                         </div>
                     </div>
                     <div class="col-lg-7">
-                        <label class="form-label">Vista previa del comprobante (PDF)</label>
-                        <div style="border:1px solid #edf0f5;border-radius:10px;overflow:hidden;">
-                            <iframe id="envioComprobantePreview" title="Vista previa del comprobante" style="width:100%;height:470px;border:0;background:#f8fafc;"></iframe>
+                        <label class="form-label">Vista previa del comprobante</label>
+                        <div id="envioComprobantePreviewHtml" style="border:1px solid #edf0f5;border-radius:10px;padding:14px;height:470px;overflow:auto;background:#fff;">
+                            <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando vista previa...</div>
                         </div>
                         <div class="form-text">
-                            <a href="#" id="envioComprobanteAbrirPdf" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir el PDF en otra pestaña</a>
+                            <a href="#" id="envioComprobanteAbrirPdf" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-1"></i>Ver/descargar el PDF real (idéntico al adjunto)</a>
                         </div>
                     </div>
                 </div>
@@ -3139,7 +3159,7 @@
                             // Simplificar la lógica para evitar errores
                             // Verificar si es factura (código 33 o texto completo)
                             const esFacturaElectronica = dte.tipo === 'FACTURA ELECTRONICA' || dte.tipo === '33' || dte.tipo === 'FACTURA';
-                            const tieneEstadoValido = dte.estado !== 'Rechazado' && dte.estado_pago !== 'Pagado';
+                            const tieneEstadoValido = (dte.estado || '').toString().toUpperCase() !== 'RECHAZADO' && dte.estado_pago !== 'Pagado';
                             const sinIncidencias = !dte.incidencias_pendientes || dte.incidencias_pendientes === 0;
                             const documentoCompleto = !dte.requiere_factura || dte.tiene_factura_anexada;
 
@@ -3165,7 +3185,7 @@
                             // basta con que sea factura electrónica, no rechazada y no descartada.
                             // Las pagadas/abonadas también pueden incluirse para enviar el comprobante
                             // al proveedor después o al momento del pago.
-                            const elegibleComprobante = esFacturaElectronica && dte.estado !== 'Rechazado' && !estaDescartado;
+                            const elegibleComprobante = esFacturaElectronica && (dte.estado || '').toString().toUpperCase() !== 'RECHAZADO' && !estaDescartado;
                             const estaPagada = dte.estado_pago === 'Pagado';
                             const mostrarCheckbox = !estaDescartado && (
                                 (elegiblePagoMasivo && saldoPendiente > 0) || elegibleComprobante
@@ -3199,31 +3219,33 @@
     <td>${resaltarBusquedaDTE(dte.rut || '', search)}</td>
     <td>
         ${resaltarBusquedaDTE(dte.numero_documento || '', search)}
+        <div class="dte-chips">
         ${dte.documento_padre
-                                    ? `<br><small class="text-muted" title="Click para editar la asociación" style="cursor:pointer;" onclick="editarDTE(${dte.id})">
-                                         <i class="bi bi-paperclip"></i> Anexa a: ${dte.documento_padre.tipo} #${dte.documento_padre.numero}
-                                       </small>`
+                                    ? `<span class="dte-chip dte-chip--link" title="Anexada a ${dte.documento_padre.tipo} #${dte.documento_padre.numero} · clic para editar la asociación" onclick="editarDTE(${dte.id})">
+                                         <i class="bi bi-paperclip"></i>${dte.documento_padre.tipo === 'COTIZACION' ? 'Cot.' : 'Guía'} #${dte.documento_padre.numero}
+                                       </span>`
                                     : ''}
         ${dte.requiere_factura && !dte.tiene_factura_anexada
-                                    ? '<br><span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> Requiere Factura</span>'
+                                    ? '<span class="dte-chip dte-chip--warn" title="Este documento requiere una factura anexada"><i class="bi bi-exclamation-triangle"></i>Sin factura</span>'
                                     : ''}
         ${dte.requiere_factura && dte.tiene_factura_anexada
                                     ? (dte.factura_anexada_info
-                                        ? `<br><span class="badge bg-success" title="Click para editar la factura asociada" style="cursor:pointer;" onclick="editarDTE(${dte.factura_anexada_info.id})">
-                                             <i class="bi bi-check-circle"></i> Factura #${dte.factura_anexada_info.numero} anexada
+                                        ? `<span class="dte-chip dte-chip--ok" title="Factura #${dte.factura_anexada_info.numero} anexada · clic para abrirla" onclick="editarDTE(${dte.factura_anexada_info.id})">
+                                             <i class="bi bi-check-circle"></i>Factura #${dte.factura_anexada_info.numero}
                                            </span>`
-                                        : '<br><span class="badge bg-success"><i class="bi bi-check-circle"></i> Factura Anexada</span>')
+                                        : '<span class="dte-chip dte-chip--ok" title="Factura anexada"><i class="bi bi-check-circle"></i>Factura</span>')
                                     : ''}
         ${dte.tipo === 'NOTA DE CREDITO'
                                     ? (dte.nc_esta_asociada
-                                        ? '<br><span class="badge bg-success"><i class="bi bi-link-45deg"></i> Enlazada a Factura #' + facturaAsociadaNumero + '</span>'
-                                        : '<br><span class="badge bg-secondary"><i class="bi bi-circle"></i> No enlazada</span>'
+                                        ? '<span class="dte-chip dte-chip--cyan" title="NC enlazada a Factura #' + facturaAsociadaNumero + '"><i class="bi bi-link-45deg"></i>Factura #' + facturaAsociadaNumero + '</span>'
+                                        : '<span class="dte-chip dte-chip--muted" title="NC sin enlazar a ninguna factura"><i class="bi bi-circle"></i>Sin enlazar</span>'
                                     )
                                     : ''
                                 }
         ${dte.comprobante_enviado_en
-                                    ? `<br><span class="badge bg-success" title="Comprobante de pago enviado a ${dte.comprobante_enviado_a || ''} el ${dte.comprobante_enviado_en}"><i class="bi bi-envelope-check"></i> Comprobante enviado</span>`
+                                    ? `<span class="dte-chip dte-chip--mail" title="Comprobante de pago enviado a ${dte.comprobante_enviado_a || ''} el ${dte.comprobante_enviado_en}"><i class="bi bi-envelope-check-fill"></i></span>`
                                     : ''}
+        </div>
     </td>
     <td>${resaltarBusquedaDTE(dte.tipo || '', search)}</td>
     <td>${dte.fecha_emision || ''}</td>
@@ -5791,6 +5813,57 @@
 
     // ========== ENVIAR COMPROBANTE DE PAGO POR CORREO ==========
 
+    // Construye la vista previa HTML del comprobante (espeja el PDF) a partir
+    // del objeto 'preview' que devuelve /app/datos_envio_comprobante/.
+    function renderPreviewComprobante(p) {
+        const cont = $('#envioComprobantePreviewHtml');
+        if (!p) { cont.html('<div class="text-muted small">Sin datos para previsualizar.</div>'); return; }
+
+        const th = 'style="padding:5px 6px;border:1px solid #2f3e6e;background:#405189;color:#fff;font-weight:700;text-align:center;font-size:.66rem;"';
+        const td = 'style="padding:4px 6px;border:1px solid #d8dee9;text-align:center;"';
+        const tdR = 'style="padding:4px 6px;border:1px solid #d8dee9;text-align:right;"';
+        const tdT = 'style="padding:5px 6px;border:1px solid #0a9d88;background:#0ab39c;color:#fff;font-weight:700;"';
+        const tdTR = 'style="padding:5px 6px;border:1px solid #0a9d88;background:#0ab39c;color:#fff;font-weight:700;text-align:right;"';
+
+        let filas = '';
+        (p.filas || []).forEach(f => {
+            filas += `<tr>
+                <td ${td}>${f.numero}</td>
+                <td ${td}>${f.fecha_emision}</td>
+                <td ${tdR}>${f.monto}</td>
+                <td ${td}>${f.nc_numeros}</td>
+                <td ${tdR}>${f.nc_valor}</td>
+                <td ${td}>${f.cheque}</td>
+                <td ${tdR}>${f.pago_monto}</td>
+                <td ${td}>${f.pago_fecha}</td>
+            </tr>`;
+        });
+        const t = p.totales || {};
+
+        cont.html(`
+            <p style="font-size:.8rem;color:#334155;margin-bottom:8px;">${p.intro || ''}</p>
+            <h6 style="text-align:center;color:#405189;font-weight:700;margin:8px 0 12px;">${(p.proveedor || '').toUpperCase()}${p.rut ? ' — ' + p.rut : ''}</h6>
+            <table style="width:100%;border-collapse:collapse;font-size:.7rem;">
+                <thead>
+                    <tr>
+                        <th ${th}>FACTURA</th><th ${th}>F. EMISIÓN</th><th ${th}>MONTO</th>
+                        <th ${th}>NOTA CRÉDITO</th><th ${th}>VALOR N/C</th>
+                        <th ${th}>CHEQUE N°</th><th ${th}>MONTOS</th><th ${th}>F. PAGO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filas}
+                    <tr>
+                        <td ${tdT}>TOTAL</td><td ${tdT}></td><td ${tdTR}>${t.factura || ''}</td>
+                        <td ${tdT}></td><td ${tdTR}>${t.nc || ''}</td>
+                        <td ${tdT}></td><td ${tdTR}>${t.pago || ''}</td><td ${tdT}></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size:.8rem;color:#334155;margin-top:12px;">${p.cierre || ''}</p>
+        `);
+    }
+
     function abrirModalEnviarComprobante(dteId) {
         $('#envioComprobanteDteId').val(dteId);
         $('#envioComprobanteEmail').val('');
@@ -5799,22 +5872,26 @@
         $('#envioComprobanteAviso').hide();
         $('#envioComprobanteSubtitulo').text('Envío al correo del proveedor');
         $('#btnEnviarComprobante').prop('disabled', false);
+        $('#envioComprobantePreviewHtml').html('<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando vista previa...</div>');
 
-        // Vista previa del PDF (mismo endpoint de descarga, servido inline)
-        const pdfUrl = `/app/comprobantePagoDTE/?dte_ids=${dteId}&inline=1`;
-        $('#envioComprobantePreview').attr('src', pdfUrl);
-        $('#envioComprobanteAbrirPdf').attr('href', pdfUrl);
+        // El PDF real (idéntico al adjunto) se abre/descarga aparte; servido inline.
+        $('#envioComprobanteAbrirPdf').attr('href', `/app/comprobantePagoDTE/?dte_ids=${dteId}&inline=1`);
 
         $.ajax({
             url: `/app/datos_envio_comprobante/${dteId}/`,
             method: 'GET',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function (resp) {
-                if (!resp.success) { Swal.fire('Error', resp.error || 'No se pudieron cargar los datos', 'error'); return; }
+                if (!resp.success) {
+                    $('#envioComprobantePreviewHtml').html('<div class="text-danger small">' + (resp.error || 'No se pudo cargar la vista previa') + '</div>');
+                    Swal.fire('Error', resp.error || 'No se pudieron cargar los datos', 'error');
+                    return;
+                }
                 $('#envioComprobanteEmail').val(resp.email || '');
                 $('#envioComprobanteAsunto').val(resp.asunto || '');
                 $('#envioComprobanteMensaje').val(resp.mensaje || '');
                 $('#envioComprobanteSubtitulo').text(`Factura #${resp.numero} · ${resp.proveedor}`);
+                renderPreviewComprobante(resp.preview);
 
                 if (!resp.es_pagado) {
                     $('#btnEnviarComprobante').prop('disabled', true);
@@ -5825,7 +5902,10 @@
                     $('#envioComprobanteAvisoTxt').html(`Ya se envió el <b>${resp.enviado_en}</b> a <b>${resp.enviado_a || '-'}</b>. Puedes reenviarlo si lo necesitas.`);
                 }
             },
-            error: function () { Swal.fire('Error', 'Error de conexión al cargar los datos del comprobante', 'error'); }
+            error: function () {
+                $('#envioComprobantePreviewHtml').html('<div class="text-danger small">Error de conexión al cargar la vista previa.</div>');
+                Swal.fire('Error', 'Error de conexión al cargar los datos del comprobante', 'error');
+            }
         });
 
         new bootstrap.Modal(document.getElementById('modalEnviarComprobante')).show();
