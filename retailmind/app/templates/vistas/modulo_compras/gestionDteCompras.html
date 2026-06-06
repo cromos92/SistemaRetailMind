@@ -1136,6 +1136,9 @@
                     <button class="quick-filter-btn" id="qfPendientes" onclick="filtrarPendientes()">
                         <i class="bi bi-filter me-1"></i>Todos Pendientes
                     </button>
+                    <button class="quick-filter-btn" id="qfIncidencias" onclick="filtrarIncidencias()">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Con Incidencias
+                    </button>
                     <button class="quick-filter-btn" id="qfTodos" onclick="limpiarFiltrosRapidos()" style="display:none;">
                         <i class="bi bi-x-circle me-1"></i>Quitar Filtro
                     </button>
@@ -2023,6 +2026,184 @@
     </div>
 </div>
 
+<!-- Modal Asociaciones del DTE (NC / Cotización / Compensación) -->
+<div class="modal fade rm-modal" id="modalAsociaciones" tabindex="-1" aria-labelledby="modalAsociacionesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rm-accent--green">
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--green">
+                        <i class="bi bi-diagram-3"></i>
+                    </div>
+                    <div>
+                        <h5 class="rm-modal-title" id="modalAsociacionesLabel">Asociaciones del documento</h5>
+                        <p class="rm-modal-subtitle" id="asociacionesSubtitulo">Cotización/Guía, Notas de Crédito y Compensaciones</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="rm-modal-body rm-modal-body--scroll">
+                <input type="hidden" id="asociacionesDteId">
+
+                <div id="asociacionesLoader" class="text-center text-muted py-4">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    Cargando asociaciones...
+                </div>
+
+                <div id="asociacionesContenido" style="display:none;">
+                    <!-- Documento base: Cotización / Guía -->
+                    <div class="rm-section-label">
+                        <i class="bi bi-paperclip"></i>
+                        <span>Documento base (Cotización / Guía)</span>
+                    </div>
+                    <div id="seccionDocumentoBase" class="mb-4"></div>
+
+                    <!-- Notas de Crédito anexadas -->
+                    <div class="rm-section-label">
+                        <i class="bi bi-receipt-cutoff"></i>
+                        <span>Notas de Crédito anexadas</span>
+                    </div>
+                    <div id="seccionNotasCredito" class="mb-4"></div>
+
+                    <!-- Compensaciones con factura -->
+                    <div class="rm-section-label">
+                        <i class="bi bi-arrow-left-right"></i>
+                        <span>Compensaciones con factura</span>
+                    </div>
+                    <div id="seccionCompensaciones"></div>
+                </div>
+            </div>
+            <div class="rm-modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Asociar Factura a Cotización / Guía (selector) -->
+<div class="modal fade rm-modal" id="modalAsociarCotizacion" tabindex="-1" aria-labelledby="modalAsociarCotizacionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rm-accent--blue">
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--blue">
+                        <i class="bi bi-paperclip"></i>
+                    </div>
+                    <div>
+                        <h5 class="rm-modal-title" id="modalAsociarCotizacionLabel">Asociar a Cotización / Guía</h5>
+                        <p class="rm-modal-subtitle">Vincular esta factura a un documento base</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="rm-modal-body rm-modal-body--scroll">
+                <input type="hidden" id="asociarCotizacionFacturaId">
+
+                <div class="p-3 mb-3" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: 0.85rem; color: #1e40af;">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Selecciona la Cotización o Guía de Despacho que esta factura regulariza. Solo se listan documentos sin factura anexada.
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-12">
+                        <label for="buscarCotizacion" class="form-label">Buscar por número o proveedor</label>
+                        <input type="text" id="buscarCotizacion" class="form-control" placeholder="Filtrar...">
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="py-3">Seleccionar</th>
+                                <th class="py-3">Tipo</th>
+                                <th class="py-3">Número</th>
+                                <th class="py-3">Proveedor</th>
+                                <th class="py-3">Fecha</th>
+                                <th class="py-3">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCotizacionesDisponiblesBody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Cargando documentos...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="rm-modal-footer">
+                <button type="button" class="btn btn-light" id="btnVolverAsociaciones">Volver</button>
+                <button type="button" class="btn btn-primary" id="btnAsociarCotizacion" disabled>
+                    <i class="bi bi-paperclip me-1"></i>Asociar documento seleccionado
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Enviar Comprobante de Pago por correo -->
+<div class="modal fade rm-modal" id="modalEnviarComprobante" tabindex="-1" aria-labelledby="modalEnviarComprobanteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content rm-accent--green">
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--green">
+                        <i class="bi bi-envelope-paper"></i>
+                    </div>
+                    <div>
+                        <h5 class="rm-modal-title" id="modalEnviarComprobanteLabel">Enviar comprobante de pago</h5>
+                        <p class="rm-modal-subtitle" id="envioComprobanteSubtitulo">Envío al correo del proveedor</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="rm-modal-body rm-modal-body--scroll">
+                <input type="hidden" id="envioComprobanteDteId">
+
+                <div id="envioComprobanteAviso" class="p-2 mb-3" style="display:none;border-radius:10px;font-size:0.85rem;">
+                    <i class="bi bi-info-circle me-1"></i><span id="envioComprobanteAvisoTxt"></span>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-lg-5">
+                        <div class="mb-3">
+                            <label for="envioComprobanteEmail" class="form-label">Correo del proveedor <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="envioComprobanteEmail" placeholder="correo@proveedor.cl">
+                            <div class="form-text">Puedes editarlo antes de enviar.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="envioComprobanteAsunto" class="form-label">Asunto</label>
+                            <input type="text" class="form-control" id="envioComprobanteAsunto" maxlength="200">
+                        </div>
+                        <div class="mb-3">
+                            <label for="envioComprobanteMensaje" class="form-label">Mensaje</label>
+                            <textarea class="form-control" id="envioComprobanteMensaje" rows="9"></textarea>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <label class="form-label">Vista previa del comprobante (PDF)</label>
+                        <div style="border:1px solid #edf0f5;border-radius:10px;overflow:hidden;">
+                            <iframe id="envioComprobantePreview" title="Vista previa del comprobante" style="width:100%;height:470px;border:0;background:#f8fafc;"></iframe>
+                        </div>
+                        <div class="form-text">
+                            <a href="#" id="envioComprobanteAbrirPdf" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir el PDF en otra pestaña</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="rm-modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnEnviarComprobante">
+                    <i class="bi bi-send me-1"></i>Enviar por correo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Compensar / Pagar con Factura -->
 <div class="modal fade rm-modal" id="modalCompensarFactura" tabindex="-1" aria-labelledby="modalCompensarFacturaLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -2513,12 +2694,31 @@
     
     function setActiveQuickFilter(btnId) {
         $('.quick-filter-btn').removeClass('active');
+        // El filtro de incidencias es ortogonal al de vencimiento; centralizamos
+        // aquí su reseteo: solo queda activo cuando el botón activo es 'qfIncidencias'.
+        soloIncidenciasActivas = (btnId === 'qfIncidencias');
         if (btnId) {
             $('#' + btnId).addClass('active');
             $('#qfTodos').show();
         } else {
             $('#qfTodos').hide();
         }
+    }
+
+    function filtrarIncidencias() {
+        const hoy = new Date();
+        const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
+        const ultimoDiaAnio = new Date(hoy.getFullYear(), 11, 31);
+        const formato = date => date.toISOString().split('T')[0];
+
+        $('#fechaInicio').val(formato(primerDiaAnio));
+        $('#fechaFin').val(formato(ultimoDiaAnio));
+
+        setActiveQuickFilter('qfIncidencias');
+        currentPageDTE = 1;
+        currentSearchDTE = '';
+        filtroVencimientoActual = '';
+        cargarDTEs(1, '', '');
     }
 
     function filtrarPendientes() {
@@ -2837,6 +3037,8 @@
 
     // Variable global para el filtro de vencimiento actual
     let filtroVencimientoActual = '';
+    // Filtro rápido de incidencias activas (ortogonal al de vencimiento)
+    let soloIncidenciasActivas = false;
     
     function cargarDTEs(page, search, filtroVencimiento = '') {
         // Evitar múltiples llamadas simultáneas
@@ -2874,6 +3076,7 @@
                 search: search,
                 tipo_documento: $('#filtroTipoDocumento').val(),
                 filtro_vencimiento: filtroVencimientoActual,
+                solo_incidencias: soloIncidenciasActivas,
                 incluir_descartados: $('#toggleDescartados').is(':checked')
             }),
             success: function (data) {
@@ -3018,6 +3221,9 @@
                                     )
                                     : ''
                                 }
+        ${dte.comprobante_enviado_en
+                                    ? `<br><span class="badge bg-success" title="Comprobante de pago enviado a ${dte.comprobante_enviado_a || ''} el ${dte.comprobante_enviado_en}"><i class="bi bi-envelope-check"></i> Comprobante enviado</span>`
+                                    : ''}
     </td>
     <td>${resaltarBusquedaDTE(dte.tipo || '', search)}</td>
     <td>${dte.fecha_emision || ''}</td>
@@ -3524,6 +3730,25 @@
                 items.push(`<li><a class="dropdown-item action-anexar" href="#" onclick="abrirModalCompensarFactura(${id}); return false;">
                                 <i class="bi bi-arrow-left-right"></i> Compensar con Factura
                             </a></li>`);
+            }
+
+            // Ver / gestionar asociaciones (cotización/guía, NC, compensaciones)
+            items.push(`<li><a class="dropdown-item action-asociaciones" href="#" onclick="abrirModalAsociaciones(${id}); return false;">
+                            <i class="bi bi-diagram-3"></i> Asociaciones (Cotización / NC)
+                        </a></li>`);
+
+            // Enviar comprobante de pago por correo (solo facturas pagadas)
+            if (estaPagadaFc) {
+                const yaEnviado = dte.comprobante_enviado_en
+                    ? ' <span class="badge bg-success ms-1" title="Enviado el ' + dte.comprobante_enviado_en + '">enviado</span>'
+                    : '';
+                items.push(`<li><a class="dropdown-item action-comprobante" href="#" onclick="abrirModalEnviarComprobante(${id}); return false;">
+                                <i class="bi bi-envelope-paper"></i> Enviar comprobante por correo${yaEnviado}
+                            </a></li>`);
+            } else {
+                items.push(`<li><span class="dropdown-item disabled" title="Disponible solo cuando la factura está pagada">
+                                <i class="bi bi-envelope-paper"></i> Enviar comprobante por correo
+                            </span></li>`);
             }
         }
 
@@ -5298,6 +5523,344 @@
             },
             error: function () {
                 Swal.fire('Error', 'Error de conexión al anexar la NC', 'error');
+            }
+        });
+    });
+
+    // ========== HUB DE ASOCIACIONES DEL DTE (NC / Cotización / Compensación) ==========
+
+    let asociacionesDteEsFactura = false;
+
+    function abrirModalAsociaciones(dteId) {
+        $('#asociacionesDteId').val(dteId);
+        cargarAsociaciones(dteId);
+        new bootstrap.Modal(document.getElementById('modalAsociaciones')).show();
+    }
+
+    function cargarAsociaciones(dteId) {
+        $('#asociacionesLoader').show().html('<div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando asociaciones...');
+        $('#asociacionesContenido').hide();
+        $.ajax({
+            url: `/app/obtener_asociaciones_dte/${dteId}/`,
+            method: 'GET',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function (resp) {
+                if (!resp.success) {
+                    $('#asociacionesLoader').html('<span class="text-danger">' + (resp.error || 'Error al cargar asociaciones') + '</span>');
+                    return;
+                }
+                asociacionesDteEsFactura = !!(resp.dte && resp.dte.es_factura);
+                $('#asociacionesSubtitulo').text(resp.dte ? `${resp.dte.tipo} #${resp.dte.numero} · ${resp.dte.proveedor}` : '');
+                renderSeccionDocumentoBase(resp.documento_padre);
+                renderSeccionNotasCredito(resp.notas_credito || []);
+                renderSeccionCompensaciones(resp.compensaciones || []);
+                $('#asociacionesLoader').hide();
+                $('#asociacionesContenido').show();
+            },
+            error: function () {
+                $('#asociacionesLoader').html('<span class="text-danger">Error de conexión al cargar asociaciones</span>');
+            }
+        });
+    }
+
+    function renderSeccionDocumentoBase(dp) {
+        const cont = $('#seccionDocumentoBase');
+        const dteId = $('#asociacionesDteId').val();
+        if (!asociacionesDteEsFactura) {
+            cont.html('<div class="text-muted small"><i class="bi bi-info-circle me-1"></i>Solo las Facturas Electrónicas pueden anexarse a una cotización/guía.</div>');
+            return;
+        }
+        if (dp) {
+            cont.html(`
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 p-3" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
+                    <div>
+                        <div class="fw-semibold"><i class="bi bi-paperclip me-1"></i>${dp.tipo} #${dp.numero}</div>
+                        <div class="small text-muted">${dp.proveedor} · ${dp.fecha} · $${parseFloat(dp.monto || 0).toLocaleString('es-CL')}</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="abrirModalAsociarCotizacion('${dteId}'); return false;"><i class="bi bi-pencil"></i> Cambiar</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="desasociarCotizacion('${dteId}'); return false;"><i class="bi bi-x-lg"></i> Quitar</button>
+                    </div>
+                </div>`);
+        } else {
+            cont.html(`
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 p-3" style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;">
+                    <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Sin cotización/guía asociada.</span>
+                    <button class="btn btn-sm btn-primary" onclick="abrirModalAsociarCotizacion('${dteId}'); return false;"><i class="bi bi-paperclip"></i> Asociar a Cotización/Guía</button>
+                </div>`);
+        }
+    }
+
+    function renderSeccionNotasCredito(items) {
+        const cont = $('#seccionNotasCredito');
+        const dteId = $('#asociacionesDteId').val();
+        let html = '';
+        if (!items.length) {
+            html += '<div class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Sin notas de crédito anexadas.</div>';
+        } else {
+            html += '<div class="table-responsive" style="border-radius:10px;overflow:hidden;border:1px solid #edf0f5;"><table class="table table-sm mb-0"><thead><tr><th class="py-2">N° NC</th><th class="py-2">Proveedor</th><th class="py-2">Monto</th><th class="py-2 text-end">Acción</th></tr></thead><tbody>';
+            items.forEach(nc => {
+                const accion = nc.nc_id
+                    ? `<button class="btn btn-sm btn-outline-danger" onclick="desasociarNCDesdeHub(${nc.nc_id}); return false;"><i class="bi bi-x-lg"></i> Desasociar</button>`
+                    : '<span class="text-muted small" title="No se encontró la NC original para desvincular">No vinculable</span>';
+                html += `<tr><td>#${nc.numero}</td><td>${nc.proveedor || '-'}</td><td class="text-danger">-$${parseFloat(nc.monto || 0).toLocaleString('es-CL')}</td><td class="text-end">${accion}</td></tr>`;
+            });
+            html += '</tbody></table></div>';
+        }
+        if (asociacionesDteEsFactura) {
+            html += `<div class="mt-2"><button class="btn btn-sm btn-outline-secondary" onclick="anexarNCDesdeHub('${dteId}'); return false;"><i class="bi bi-link-45deg"></i> Anexar NC</button></div>`;
+        }
+        cont.html(html);
+    }
+
+    function renderSeccionCompensaciones(items) {
+        const cont = $('#seccionCompensaciones');
+        const dteId = $('#asociacionesDteId').val();
+        let html = '';
+        if (!items.length) {
+            html += '<div class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Sin compensaciones registradas.</div>';
+        } else {
+            html += '<div class="table-responsive" style="border-radius:10px;overflow:hidden;border:1px solid #edf0f5;"><table class="table table-sm mb-0"><thead><tr><th class="py-2">Factura</th><th class="py-2">Monto</th><th class="py-2">Fecha</th><th class="py-2 text-end">Acción</th></tr></thead><tbody>';
+            items.forEach(c => {
+                html += `<tr><td>#${c.numero}</td><td class="text-danger">-$${parseFloat(c.monto || 0).toLocaleString('es-CL')}</td><td>${c.fecha || '-'}</td><td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="desasociarCompensacionDesdeHub(${c.pago_id}); return false;"><i class="bi bi-x-lg"></i> Revertir</button></td></tr>`;
+            });
+            html += '</tbody></table></div>';
+        }
+        if (asociacionesDteEsFactura) {
+            html += `<div class="mt-2"><button class="btn btn-sm btn-outline-secondary" onclick="compensarDesdeHub('${dteId}'); return false;"><i class="bi bi-arrow-left-right"></i> Compensar con Factura</button></div>`;
+        }
+        cont.html(html);
+    }
+
+    function desasociarCotizacion(facturaId) {
+        Swal.fire({
+            title: '¿Quitar asociación?',
+            text: 'La factura dejará de estar anexada a la cotización/guía.',
+            icon: 'warning', showCancelButton: true,
+            confirmButtonText: 'Sí, quitar', cancelButtonText: 'Cancelar'
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            $.ajax({
+                url: `/app/desasociar_factura_cotizacion/${facturaId}/`, method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function (resp) {
+                    if (resp.success) { cargarAsociaciones(facturaId); cargarDTEs(currentPageDTE, currentSearchDTE); }
+                    else { Swal.fire('Error', resp.error || 'No se pudo quitar la asociación', 'error'); }
+                },
+                error: function () { Swal.fire('Error', 'Error de conexión', 'error'); }
+            });
+        });
+    }
+
+    function desasociarNCDesdeHub(ncId) {
+        const dteId = $('#asociacionesDteId').val();
+        Swal.fire({
+            title: '¿Desenlazar Nota de Crédito?',
+            text: 'Se quitará la NC de esta factura y se recalculará su saldo.',
+            icon: 'warning', showCancelButton: true,
+            confirmButtonText: 'Sí, desenlazar', cancelButtonText: 'Cancelar'
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            $.ajax({
+                url: `/app/desasociar_nc/${ncId}/`, method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function (resp) {
+                    if (resp.success) { cargarAsociaciones(dteId); cargarDTEs(currentPageDTE, currentSearchDTE); }
+                    else { Swal.fire('Error', resp.error || 'No se pudo desenlazar la NC', 'error'); }
+                },
+                error: function () { Swal.fire('Error', 'Error de conexión', 'error'); }
+            });
+        });
+    }
+
+    function desasociarCompensacionDesdeHub(pagoId) {
+        const dteId = $('#asociacionesDteId').val();
+        Swal.fire({
+            title: '¿Revertir compensación?',
+            text: 'Se eliminará el neteo y se recalculará el saldo de la factura.',
+            icon: 'warning', showCancelButton: true,
+            confirmButtonText: 'Sí, revertir', cancelButtonText: 'Cancelar'
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            $.ajax({
+                url: `/app/desasociar_factura_compensacion/${pagoId}/`, method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function (resp) {
+                    if (resp.success) { cargarAsociaciones(dteId); cargarDTEs(currentPageDTE, currentSearchDTE); }
+                    else { Swal.fire('Error', resp.error || 'No se pudo revertir la compensación', 'error'); }
+                },
+                error: function () { Swal.fire('Error', 'Error de conexión', 'error'); }
+            });
+        });
+    }
+
+    // Salta del hub a los modales existentes (delay para evitar backdrops apilados, como el resto del archivo)
+    function anexarNCDesdeHub(dteId) {
+        $('#modalAsociaciones').modal('hide');
+        setTimeout(() => abrirModalAnexarNCaFactura(dteId), 300);
+    }
+    function compensarDesdeHub(dteId) {
+        $('#modalAsociaciones').modal('hide');
+        setTimeout(() => abrirModalCompensarFactura(dteId), 300);
+    }
+
+    // ----- Selector de Cotización / Guía -----
+    function abrirModalAsociarCotizacion(facturaId) {
+        $('#asociarCotizacionFacturaId').val(facturaId);
+        $('#btnAsociarCotizacion').prop('disabled', true);
+        $('#buscarCotizacion').val('');
+        $('#modalAsociaciones').modal('hide');
+        setTimeout(() => {
+            cargarCotizacionesDisponibles(facturaId);
+            new bootstrap.Modal(document.getElementById('modalAsociarCotizacion')).show();
+        }, 300);
+    }
+
+    function habilitarBotonAsociarCotizacion() {
+        $('#btnAsociarCotizacion').prop('disabled', $('input[name="cotizacionSeleccionada"]:checked').length === 0);
+    }
+
+    function cargarCotizacionesDisponibles(facturaId) {
+        const tbody = $('#tablaCotizacionesDisponiblesBody');
+        tbody.html('<tr><td colspan="6" class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando documentos...</td></tr>');
+        $.ajax({
+            url: '/app/obtener_documentos_base/', method: 'GET',
+            data: { dte_id: facturaId },
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function (resp) {
+                tbody.empty();
+                if (resp.success && resp.documentos && resp.documentos.length) {
+                    resp.documentos.forEach(doc => {
+                        const checked = doc.es_actual ? 'checked' : '';
+                        const filtro = `${doc.tipo} ${doc.numero} ${doc.proveedor}`.toLowerCase();
+                        tbody.append(`
+                            <tr class="fila-cotizacion-doc" data-buscar="${filtro}">
+                                <td><input type="radio" name="cotizacionSeleccionada" value="${doc.id}" class="form-check-input" ${checked} onchange="habilitarBotonAsociarCotizacion()"></td>
+                                <td>${doc.tipo}</td>
+                                <td>#${doc.numero}</td>
+                                <td>${doc.proveedor}</td>
+                                <td>${doc.fecha}</td>
+                                <td>$${parseFloat(doc.monto || 0).toLocaleString('es-CL')}</td>
+                            </tr>`);
+                    });
+                    habilitarBotonAsociarCotizacion();
+                } else {
+                    tbody.append('<tr><td colspan="6" class="text-center text-muted py-3">No hay cotizaciones/guías disponibles para asociar.</td></tr>');
+                }
+            },
+            error: function () {
+                tbody.html('<tr><td colspan="6" class="text-center text-danger py-3">Error al cargar los documentos</td></tr>');
+            }
+        });
+    }
+
+    $('#buscarCotizacion').on('keyup', function () {
+        const q = $(this).val().toLowerCase().trim();
+        $('#tablaCotizacionesDisponiblesBody .fila-cotizacion-doc').each(function () {
+            $(this).toggle(($(this).data('buscar') || '').toString().indexOf(q) !== -1);
+        });
+    });
+
+    $('#btnAsociarCotizacion').on('click', function () {
+        const facturaId = $('#asociarCotizacionFacturaId').val();
+        const docId = $('input[name="cotizacionSeleccionada"]:checked').val();
+        if (!docId) { Swal.fire('Atención', 'Selecciona una cotización o guía.', 'warning'); return; }
+        $.ajax({
+            url: '/app/asociar_factura_cotizacion/', method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ factura_id: facturaId, documento_base_id: docId }),
+            success: function (resp) {
+                if (resp.success) {
+                    $('#modalAsociarCotizacion').modal('hide');
+                    cargarDTEs(currentPageDTE, currentSearchDTE);
+                    setTimeout(() => abrirModalAsociaciones(facturaId), 300);
+                } else {
+                    Swal.fire('Error', resp.error || 'No se pudo asociar el documento', 'error');
+                }
+            },
+            error: function () { Swal.fire('Error', 'Error de conexión al asociar', 'error'); }
+        });
+    });
+
+    $('#btnVolverAsociaciones').on('click', function () {
+        const facturaId = $('#asociarCotizacionFacturaId').val();
+        $('#modalAsociarCotizacion').modal('hide');
+        setTimeout(() => abrirModalAsociaciones(facturaId), 300);
+    });
+
+    // ========== ENVIAR COMPROBANTE DE PAGO POR CORREO ==========
+
+    function abrirModalEnviarComprobante(dteId) {
+        $('#envioComprobanteDteId').val(dteId);
+        $('#envioComprobanteEmail').val('');
+        $('#envioComprobanteAsunto').val('');
+        $('#envioComprobanteMensaje').val('');
+        $('#envioComprobanteAviso').hide();
+        $('#envioComprobanteSubtitulo').text('Envío al correo del proveedor');
+        $('#btnEnviarComprobante').prop('disabled', false);
+
+        // Vista previa del PDF (mismo endpoint de descarga, servido inline)
+        const pdfUrl = `/app/comprobantePagoDTE/?dte_ids=${dteId}&inline=1`;
+        $('#envioComprobantePreview').attr('src', pdfUrl);
+        $('#envioComprobanteAbrirPdf').attr('href', pdfUrl);
+
+        $.ajax({
+            url: `/app/datos_envio_comprobante/${dteId}/`,
+            method: 'GET',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function (resp) {
+                if (!resp.success) { Swal.fire('Error', resp.error || 'No se pudieron cargar los datos', 'error'); return; }
+                $('#envioComprobanteEmail').val(resp.email || '');
+                $('#envioComprobanteAsunto').val(resp.asunto || '');
+                $('#envioComprobanteMensaje').val(resp.mensaje || '');
+                $('#envioComprobanteSubtitulo').text(`Factura #${resp.numero} · ${resp.proveedor}`);
+
+                if (!resp.es_pagado) {
+                    $('#btnEnviarComprobante').prop('disabled', true);
+                    $('#envioComprobanteAviso').show().css({ background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309' });
+                    $('#envioComprobanteAvisoTxt').html('Esta factura no está marcada como <b>Pagada</b>. El comprobante de pago solo se envía cuando la factura está pagada.');
+                } else if (resp.enviado_en) {
+                    $('#envioComprobanteAviso').show().css({ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#047857' });
+                    $('#envioComprobanteAvisoTxt').html(`Ya se envió el <b>${resp.enviado_en}</b> a <b>${resp.enviado_a || '-'}</b>. Puedes reenviarlo si lo necesitas.`);
+                }
+            },
+            error: function () { Swal.fire('Error', 'Error de conexión al cargar los datos del comprobante', 'error'); }
+        });
+
+        new bootstrap.Modal(document.getElementById('modalEnviarComprobante')).show();
+    }
+
+    $('#btnEnviarComprobante').on('click', function () {
+        const dteId = $('#envioComprobanteDteId').val();
+        const email = $('#envioComprobanteEmail').val().trim();
+        const asunto = $('#envioComprobanteAsunto').val().trim();
+        const mensaje = $('#envioComprobanteMensaje').val().trim();
+        if (!email) { Swal.fire('Atención', 'Indica el correo del proveedor.', 'warning'); return; }
+
+        const $btn = $(this);
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1" role="status"></span>Enviando...');
+        $.ajax({
+            url: '/app/enviar_comprobante_pago/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ dte_id: dteId, email: email, asunto: asunto, mensaje: mensaje }),
+            success: function (resp) {
+                if (resp.success) {
+                    Swal.fire('Enviado', resp.message || 'Comprobante enviado correctamente', 'success');
+                    $('#modalEnviarComprobante').modal('hide');
+                    cargarDTEs(currentPageDTE, currentSearchDTE);
+                } else {
+                    Swal.fire('Error', resp.error || 'No se pudo enviar el comprobante', 'error');
+                }
+            },
+            error: function (xhr) {
+                const msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'Error de conexión al enviar el comprobante';
+                Swal.fire('Error', msg, 'error');
+            },
+            complete: function () {
+                $btn.prop('disabled', false).html('<i class="bi bi-send me-1"></i>Enviar por correo');
             }
         });
     });

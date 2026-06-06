@@ -10031,6 +10031,7 @@ def cargarDteCompra(request):
             search = data.get('search', '').strip()
             tipo_documento_filtro = data.get('tipo_documento', '').strip()
             filtro_vencimiento = data.get('filtro_vencimiento', '').strip()  # 'vencidos', 'por_vencer', 'pendientes'
+            solo_incidencias = bool(data.get('solo_incidencias', False))  # solo DTEs con incidencias activas
 
             if not fecha_inicio or not fecha_fin:
                 return JsonResponse({'error': 'Fechas inválidas'}, status=400)
@@ -10122,7 +10123,16 @@ def cargarDteCompra(request):
                 elif filtro_vencimiento == 'pendientes':
                     # Solo pendientes, sin filtro adicional
                     pass
-            
+
+            # Filtro rápido: solo DTEs con incidencias activas (PENDIENTE / EN_GESTION)
+            # dentro del período ya filtrado arriba.
+            if solo_incidencias:
+                dtes_query = dtes_query.filter(
+                    id__in=Dte_Incidencia.objects.filter(
+                        estado__in=['PENDIENTE', 'EN_GESTION']
+                    ).values('dte_id')
+                )
+
             # Contar total de registros para paginación
             total_count = dtes_query.count()
             
@@ -10227,7 +10237,10 @@ def cargarDteCompra(request):
                     # Campos adicionales para soft delete y notas de crédito
                     'descartado': d.descartado,
                     'es_nota_credito': d.es_nota_credito or d.tipo_documento == 'NOTA DE CREDITO',
-                    'motivo_descarte': d.motivo_descarte
+                    'motivo_descarte': d.motivo_descarte,
+                    # Comprobante de pago enviado por correo (indicador)
+                    'comprobante_enviado_en': timezone.localtime(d.comprobante_enviado_en).strftime('%d/%m/%Y %H:%M') if d.comprobante_enviado_en else None,
+                    'comprobante_enviado_a': d.comprobante_enviado_a or None,
                 })
 
             # Respuesta con metadatos de paginación
@@ -10705,13 +10718,243 @@ def facturasPendientesPorMes(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+class _ComprobanteError(Exception):
+    """Error de validación al armar el comprobante de pago (lleva su status HTTP)."""
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.status = status
+
+
+def _construir_pdf_comprobante_pago(empresa_id, dte_ids):
+    """
+    Construye el PDF "Comprobante de Pago Programado" para un conjunto de DTEs
+    (todos del mismo proveedor / emisor, de la empresa indicada) y devuelve
+    (pdf_bytes, proveedor_nombre, safe_prov). Lanza _ComprobanteError si la
+    selección no es válida.
+
+    Compartido por la descarga (comprobantePagoDTE) y el envío por correo
+    (enviar_comprobante_pago) para que el PDF sea idéntico en ambos casos.
+    """
+    dtes = list(
+        Dte.objects.filter(
+            id__in=dte_ids,
+            receptor_id=empresa_id,
+            tipo_transaccion='COMPRA',
+        ).select_related('emisor').order_by('fecha_emision', 'numero_documento')
+    )
+
+    if not dtes:
+        raise _ComprobanteError('No se encontraron DTEs válidos.', status=404)
+
+    emisores = {d.emisor_id for d in dtes if d.emisor_id}
+    if len(emisores) != 1:
+        raise _ComprobanteError('Todas las facturas deben pertenecer al mismo proveedor.', status=400)
+
+    emisor = dtes[0].emisor
+    proveedor_nombre = (emisor.nombre or '').strip() if emisor else 'PROVEEDOR'
+    proveedor_rut = getattr(emisor, 'rut', '') if emisor else ''
+
+    # Pagos (no NC) y NCs por DTE en consultas únicas
+    pagos_qs = Dte_Detalle_Pago.objects.filter(dte_id__in=dte_ids).exclude(
+        metodo_pago='Nota de Crédito'
+    ).order_by('fecha_pago', 'id')
+    ncs_qs = Dte_Detalle_Pago.objects.filter(
+        dte_id__in=dte_ids, metodo_pago='Nota de Crédito'
+    ).order_by('id')
+
+    pagos_por_dte = {}
+    for p in pagos_qs:
+        pagos_por_dte.setdefault(p.dte_id, []).append(p)
+    ncs_por_dte = {}
+    for n in ncs_qs:
+        ncs_por_dte.setdefault(n.dte_id, []).append(n)
+
+    # === PDF (vertical / portrait) ===
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
+    from io import BytesIO
+    import re as _re
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
+        topMargin=1.5 * cm,
+        bottomMargin=1.5 * cm,
+    )
+
+    styles = getSampleStyleSheet()
+    azul = colors.HexColor('#405189')
+    verde = colors.HexColor('#0ab39c')
+    gris_claro = colors.HexColor('#F8F9FA')
+
+    intro_style = ParagraphStyle(
+        'Intro', parent=styles['Normal'], fontSize=10, leading=13,
+        alignment=TA_JUSTIFY, spaceAfter=12,
+    )
+    proveedor_style = ParagraphStyle(
+        'Prov', parent=styles['Title'], fontSize=14, textColor=azul,
+        alignment=TA_CENTER, spaceAfter=10,
+    )
+    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, leading=10, alignment=1)
+    cell_left = ParagraphStyle('CellL', parent=styles['Normal'], fontSize=8, leading=10, alignment=0)
+    cell_right = ParagraphStyle('CellR', parent=styles['Normal'], fontSize=8, leading=10, alignment=2)
+
+    _re_prefijo_cheque = _re.compile(r'^\s*(cheque|cheq\.?|chq\.?)\s*(n[°º\.]?)?\s*:?\s*', _re.IGNORECASE)
+
+    def limpiar_voucher(v):
+        """Quita prefijos tipo 'Cheque N°' del voucher para no duplicar el header."""
+        if not v:
+            return '-'
+        return _re_prefijo_cheque.sub('', str(v)).strip() or '-'
+
+    def fecha_pago_efectiva(p):
+        """fecha_pago tiene prioridad; si no, cae a fecha_cheque (migración 0153)."""
+        return getattr(p, 'fecha_pago', None) or getattr(p, 'fecha_cheque', None)
+
+    elements = []
+
+    # Cabecera
+    elements.append(Paragraph(
+        "Por medio del presente, le informamos que nuestro compromiso de pago "
+        "ha sido gestionado y está programado para la siguiente fecha:",
+        intro_style
+    ))
+    titulo_proveedor = proveedor_nombre.upper()
+    if proveedor_rut:
+        titulo_proveedor = f"{titulo_proveedor}  —  {proveedor_rut}"
+    elements.append(Paragraph(titulo_proveedor, proveedor_style))
+
+    # Tabla principal (portrait A4 útil ≈ 18 cm)
+    headers = [
+        'FACTURA', 'FECHA EMISIÓN', 'MONTO',
+        'NOTA DE CRÉDITO', 'VALOR N/C',
+        'CHEQUE N°', 'MONTOS', 'FECHA PAGO'
+    ]
+    col_widths = [1.9*cm, 2.0*cm, 2.3*cm, 2.4*cm, 2.3*cm, 2.4*cm, 2.4*cm, 2.3*cm]
+
+    def fmt_fecha(d):
+        if not d:
+            return '-'
+        meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
+                 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+        return f"{d.day:02d}-{meses[d.month - 1]}"
+
+    def fmt_monto(v):
+        try:
+            return f"{int(round(float(v))):,}".replace(',', '.')
+        except (TypeError, ValueError):
+            return '-'
+
+    table_data = [headers]
+    total_factura = 0
+    total_nc = 0
+    total_pago = 0
+
+    for dte in dtes:
+        ncs = ncs_por_dte.get(dte.id, [])
+        pagos = pagos_por_dte.get(dte.id, [])
+
+        ncs_numeros = '<br/>'.join((p.voucher or '-') for p in ncs) if ncs else '-'
+        ncs_montos_total = sum(int(p.monto or 0) for p in ncs)
+        ncs_montos_txt = fmt_monto(ncs_montos_total) if ncs else '-'
+
+        if pagos:
+            cheques_numeros = '<br/>'.join(limpiar_voucher(p.voucher) for p in pagos)
+            pagos_montos = '<br/>'.join(fmt_monto(p.monto) for p in pagos)
+            pagos_fechas = '<br/>'.join(fmt_fecha(fecha_pago_efectiva(p)) for p in pagos)
+            pago_total = sum(int(p.monto or 0) for p in pagos)
+        else:
+            # Sin pagos registrados: estima monto sugerido = monto - NCs
+            cheques_numeros = '-'
+            pago_sugerido = max(int(round(float(dte.monto_con_iva or 0))) - ncs_montos_total, 0)
+            pagos_montos = fmt_monto(pago_sugerido)
+            pagos_fechas = '-'
+            pago_total = pago_sugerido
+
+        row = [
+            Paragraph(str(dte.numero_documento or '-'), cell_style),
+            Paragraph(fmt_fecha(dte.fecha_emision), cell_style),
+            Paragraph(fmt_monto(dte.monto_con_iva), cell_right),
+            Paragraph(ncs_numeros, cell_style),
+            Paragraph(ncs_montos_txt, cell_right),
+            Paragraph(cheques_numeros, cell_style),
+            Paragraph(pagos_montos, cell_right),
+            Paragraph(pagos_fechas, cell_style),
+        ]
+        table_data.append(row)
+
+        total_factura += int(round(float(dte.monto_con_iva or 0)))
+        total_nc += ncs_montos_total
+        total_pago += pago_total
+
+    # Fila de totales
+    total_row = [
+        Paragraph('<b>TOTAL</b>', cell_left),
+        Paragraph('', cell_style),
+        Paragraph(f'<b>{fmt_monto(total_factura)}</b>', cell_right),
+        Paragraph('', cell_style),
+        Paragraph(f'<b>{fmt_monto(total_nc)}</b>', cell_right),
+        Paragraph('', cell_style),
+        Paragraph(f'<b>{fmt_monto(total_pago)}</b>', cell_right),
+        Paragraph('', cell_style),
+    ]
+    table_data.append(total_row)
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), azul),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#B7C4D8')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, gris_claro]),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('BACKGROUND', (0, -1), (-1, -1), verde),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
+    ]))
+    elements.append(table)
+
+    elements.append(Spacer(1, 24))
+    elements.append(Paragraph(
+        "Sin otro particular, le saluda atentamente.",
+        ParagraphStyle('Closing', parent=styles['Normal'], fontSize=10, leading=13, alignment=0)
+    ))
+
+    def footer(canvas, doc_):
+        canvas.saveState()
+        canvas.setFont('Helvetica', 7)
+        canvas.setFillColor(colors.grey)
+        canvas.drawString(
+            1.5*cm, 1*cm,
+            f"Comprobante de pago programado — {proveedor_nombre}  —  "
+            f"Generado {timezone.localdate().strftime('%d/%m/%Y')}"
+        )
+        canvas.drawRightString(A4[0] - 1.5*cm, 1*cm, f"Página {doc_.page}")
+        canvas.restoreState()
+
+    doc.build(elements, onFirstPage=footer, onLaterPages=footer)
+    buffer.seek(0)
+
+    safe_prov = (proveedor_nombre or 'proveedor').replace(' ', '_').replace('/', '-')
+    return buffer.getvalue(), proveedor_nombre, safe_prov
+
+
 def comprobantePagoDTE(request):
     """
-    Genera PDF tipo "Comprobante de Pago Programado" para un conjunto de DTEs
-    (recibidos en ?dte_ids=1,2,3). Todos deben pertenecer al mismo proveedor
-    (emisor) y a la empresa activa en sesión. Para cada factura muestra:
-      FACTURA | FECHA EMISIÓN | MONTO | NOTA DE CRÉDITO | VALOR N/C |
-      CHEQUE N° | MONTOS | FECHA PAGO
+    Genera/descarga el PDF "Comprobante de Pago Programado" para un conjunto de
+    DTEs (recibidos en ?dte_ids=1,2,3). Todos deben pertenecer al mismo proveedor
+    (emisor) y a la empresa activa en sesión. Con ?inline=1 lo sirve embebido
+    (para previsualización en iframe); en caso contrario, como descarga.
     """
     if request.method != 'GET':
         return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
@@ -10731,227 +10974,182 @@ def comprobantePagoDTE(request):
         if not dte_ids:
             return JsonResponse({'success': False, 'error': 'Debe indicar al menos un DTE.'}, status=400)
 
-        dtes = list(
-            Dte.objects.filter(
-                id__in=dte_ids,
-                receptor_id=empresa_id,
-                tipo_transaccion='COMPRA',
-            ).select_related('emisor').order_by('fecha_emision', 'numero_documento')
+        try:
+            pdf_bytes, proveedor_nombre, safe_prov = _construir_pdf_comprobante_pago(empresa_id, dte_ids)
+        except _ComprobanteError as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=e.status)
+
+        response = HttpResponse(content_type='application/pdf')
+        disposition = 'inline' if request.GET.get('inline') in ('1', 'true', 'True') else 'attachment'
+        response['Content-Disposition'] = (
+            f'{disposition}; filename="comprobante_pago_{safe_prov}.pdf"'
+        )
+        response.write(pdf_bytes)
+        return response
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def datos_envio_comprobante(request, dte_id):
+    """
+    Datos para precargar el modal de envío del comprobante de pago: mejor correo
+    disponible del proveedor, asunto/mensaje sugeridos, estado de pago y datos del
+    último envío (para mostrar el indicador "ya enviado").
+    """
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    try:
+        empresa_id = request.session.get('idEmpresaActual')
+        if not empresa_id:
+            return JsonResponse({'success': False, 'error': 'Empresa no identificada en sesión'}, status=403)
+
+        try:
+            dte = Dte.objects.select_related('emisor').get(
+                id=dte_id, receptor_id=empresa_id, tipo_transaccion='COMPRA'
+            )
+        except Dte.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Factura no encontrada'}, status=404)
+
+        emisor = dte.emisor
+        # Mejor correo disponible del proveedor (editable luego en el modal)
+        correo = ''
+        if emisor:
+            for campo in ('email', 'correoIntercambio', 'correoAdministrador', 'correoVendedor'):
+                val = (getattr(emisor, campo, '') or '').strip()
+                if val and '@' in val:
+                    correo = val
+                    break
+
+        proveedor_nombre = (emisor.nombre if emisor else 'Proveedor') or 'Proveedor'
+        empresa_actual = Empresa.objects.filter(id=empresa_id).first()
+        nombre_empresa = empresa_actual.nombre if empresa_actual else ''
+
+        asunto = f'Comprobante de pago — Factura #{dte.numero_documento}'
+        mensaje = (
+            f'Estimados {proveedor_nombre}:\n\n'
+            f'Junto con saludar, adjuntamos el comprobante de pago correspondiente '
+            f'a la factura #{dte.numero_documento}.\n\n'
+            f'Quedamos atentos a cualquier consulta.\n\n'
+            f'Saludos cordiales,\n{nombre_empresa}'
         )
 
+        return JsonResponse({
+            'success': True,
+            'dte_id': dte.id,
+            'numero': dte.numero_documento,
+            'proveedor': proveedor_nombre,
+            'email': correo,
+            'estado_pago': dte.estado_pago,
+            'es_pagado': (dte.estado_pago or '').upper() == 'PAGADO',
+            'asunto': asunto,
+            'mensaje': mensaje,
+            'enviado_en': timezone.localtime(dte.comprobante_enviado_en).strftime('%d/%m/%Y %H:%M') if dte.comprobante_enviado_en else None,
+            'enviado_a': dte.comprobante_enviado_a or None,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def enviar_comprobante_pago(request):
+    """
+    Envía por correo al proveedor el PDF "Comprobante de Pago" de una factura
+    pagada (o varias del mismo proveedor) y registra el envío en el/los DTE
+    (comprobante_enviado_en / comprobante_enviado_a). Reutiliza el generador de
+    PDF y el mailer (EmailMultiAlternatives) ya usados en el proyecto.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    try:
+        data = json.loads(request.body)
+
+        empresa_id = request.session.get('idEmpresaActual')
+        if not empresa_id:
+            return JsonResponse({'success': False, 'error': 'Empresa no identificada en sesión'}, status=403)
+
+        # Acepta dte_id (uno) o dte_ids (lista del mismo proveedor)
+        dte_ids = data.get('dte_ids')
+        if not dte_ids and data.get('dte_id'):
+            dte_ids = [data.get('dte_id')]
+        try:
+            dte_ids = [int(x) for x in (dte_ids or [])]
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': 'Lista de DTEs inválida.'}, status=400)
+        if not dte_ids:
+            return JsonResponse({'success': False, 'error': 'Debe indicar al menos un DTE.'}, status=400)
+
+        email_destino = (data.get('email') or '').strip()
+        asunto = (data.get('asunto') or '').strip()
+        mensaje = (data.get('mensaje') or '').strip()
+
+        if not email_destino:
+            return JsonResponse({'success': False, 'error': 'Indica el correo del proveedor.'}, status=400)
+
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError as _DjangoValidationError
+        try:
+            validate_email(email_destino)
+        except _DjangoValidationError:
+            return JsonResponse({'success': False, 'error': 'El correo indicado no es válido.'}, status=400)
+
+        dtes = list(
+            Dte.objects.filter(
+                id__in=dte_ids, receptor_id=empresa_id, tipo_transaccion='COMPRA'
+            ).select_related('emisor')
+        )
         if not dtes:
             return JsonResponse({'success': False, 'error': 'No se encontraron DTEs válidos.'}, status=404)
 
-        emisores = {d.emisor_id for d in dtes if d.emisor_id}
-        if len(emisores) != 1:
+        # Solo facturas pagadas (regla del comprobante de pago)
+        no_pagados = [str(d.numero_documento) for d in dtes if (d.estado_pago or '').upper() != 'PAGADO']
+        if no_pagados:
             return JsonResponse({
                 'success': False,
-                'error': 'Todas las facturas deben pertenecer al mismo proveedor.'
+                'error': f'Solo se puede enviar el comprobante de facturas pagadas. Pendiente(s): #{", #".join(no_pagados)}'
             }, status=400)
 
-        emisor = dtes[0].emisor
-        proveedor_nombre = (emisor.nombre or '').strip() if emisor else 'PROVEEDOR'
-        proveedor_rut = getattr(emisor, 'rut', '') if emisor else ''
+        # PDF idéntico al de la descarga
+        try:
+            pdf_bytes, proveedor_nombre, safe_prov = _construir_pdf_comprobante_pago(empresa_id, dte_ids)
+        except _ComprobanteError as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=e.status)
 
-        # Pagos (no NC) y NCs por DTE en consultas únicas
-        pagos_qs = Dte_Detalle_Pago.objects.filter(dte_id__in=dte_ids).exclude(
-            metodo_pago='Nota de Crédito'
-        ).order_by('fecha_pago', 'id')
-        ncs_qs = Dte_Detalle_Pago.objects.filter(
-            dte_id__in=dte_ids, metodo_pago='Nota de Crédito'
-        ).order_by('id')
+        if not asunto:
+            asunto = f'Comprobante de pago — {proveedor_nombre}'
+        cuerpo = mensaje or 'Estimados, adjuntamos el comprobante de pago. Saludos cordiales.'
 
-        pagos_por_dte = {}
-        for p in pagos_qs:
-            pagos_por_dte.setdefault(p.dte_id, []).append(p)
-        ncs_por_dte = {}
-        for n in ncs_qs:
-            ncs_por_dte.setdefault(n.dte_id, []).append(n)
-
-        # === PDF (vertical / portrait) ===
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.lib.units import cm
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
-        from io import BytesIO
-        import re as _re
-
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            leftMargin=1.5 * cm,
-            rightMargin=1.5 * cm,
-            topMargin=1.5 * cm,
-            bottomMargin=1.5 * cm,
-        )
-
-        styles = getSampleStyleSheet()
-        azul = colors.HexColor('#405189')
-        verde = colors.HexColor('#0ab39c')
-        gris_claro = colors.HexColor('#F8F9FA')
-
-        intro_style = ParagraphStyle(
-            'Intro', parent=styles['Normal'], fontSize=10, leading=13,
-            alignment=TA_JUSTIFY, spaceAfter=12,
-        )
-        proveedor_style = ParagraphStyle(
-            'Prov', parent=styles['Title'], fontSize=14, textColor=azul,
-            alignment=TA_CENTER, spaceAfter=10,
-        )
-        cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, leading=10, alignment=1)
-        cell_left = ParagraphStyle('CellL', parent=styles['Normal'], fontSize=8, leading=10, alignment=0)
-        cell_right = ParagraphStyle('CellR', parent=styles['Normal'], fontSize=8, leading=10, alignment=2)
-
-        _re_prefijo_cheque = _re.compile(r'^\s*(cheque|cheq\.?|chq\.?)\s*(n[°º\.]?)?\s*:?\s*', _re.IGNORECASE)
-
-        def limpiar_voucher(v):
-            """Quita prefijos tipo 'Cheque N°' del voucher para no duplicar el header."""
-            if not v:
-                return '-'
-            return _re_prefijo_cheque.sub('', str(v)).strip() or '-'
-
-        def fecha_pago_efectiva(p):
-            """fecha_pago tiene prioridad; si no, cae a fecha_cheque (migración 0153)."""
-            return getattr(p, 'fecha_pago', None) or getattr(p, 'fecha_cheque', None)
-
-        elements = []
-
-        # Cabecera
-        elements.append(Paragraph(
-            "Por medio del presente, le informamos que nuestro compromiso de pago "
-            "ha sido gestionado y está programado para la siguiente fecha:",
-            intro_style
-        ))
-        titulo_proveedor = proveedor_nombre.upper()
-        if proveedor_rut:
-            titulo_proveedor = f"{titulo_proveedor}  —  {proveedor_rut}"
-        elements.append(Paragraph(titulo_proveedor, proveedor_style))
-
-        # Tabla principal (portrait A4 útil ≈ 18 cm)
-        headers = [
-            'FACTURA', 'FECHA EMISIÓN', 'MONTO',
-            'NOTA DE CRÉDITO', 'VALOR N/C',
-            'CHEQUE N°', 'MONTOS', 'FECHA PAGO'
-        ]
-        col_widths = [1.9*cm, 2.0*cm, 2.3*cm, 2.4*cm, 2.3*cm, 2.4*cm, 2.4*cm, 2.3*cm]
-
-        def fmt_fecha(d):
-            if not d:
-                return '-'
-            meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
-                     'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-            return f"{d.day:02d}-{meses[d.month - 1]}"
-
-        def fmt_monto(v):
-            try:
-                return f"{int(round(float(v))):,}".replace(',', '.')
-            except (TypeError, ValueError):
-                return '-'
-
-        table_data = [headers]
-        total_factura = 0
-        total_nc = 0
-        total_pago = 0
-
-        for dte in dtes:
-            ncs = ncs_por_dte.get(dte.id, [])
-            pagos = pagos_por_dte.get(dte.id, [])
-
-            ncs_numeros = '<br/>'.join((p.voucher or '-') for p in ncs) if ncs else '-'
-            ncs_montos_total = sum(int(p.monto or 0) for p in ncs)
-            ncs_montos_txt = fmt_monto(ncs_montos_total) if ncs else '-'
-
-            if pagos:
-                cheques_numeros = '<br/>'.join(limpiar_voucher(p.voucher) for p in pagos)
-                pagos_montos = '<br/>'.join(fmt_monto(p.monto) for p in pagos)
-                pagos_fechas = '<br/>'.join(fmt_fecha(fecha_pago_efectiva(p)) for p in pagos)
-                pago_total = sum(int(p.monto or 0) for p in pagos)
-            else:
-                # Sin pagos registrados: estima monto sugerido = monto - NCs
-                cheques_numeros = '-'
-                pago_sugerido = max(int(round(float(dte.monto_con_iva or 0))) - ncs_montos_total, 0)
-                pagos_montos = fmt_monto(pago_sugerido)
-                pagos_fechas = '-'
-                pago_total = pago_sugerido
-
-            row = [
-                Paragraph(str(dte.numero_documento or '-'), cell_style),
-                Paragraph(fmt_fecha(dte.fecha_emision), cell_style),
-                Paragraph(fmt_monto(dte.monto_con_iva), cell_right),
-                Paragraph(ncs_numeros, cell_style),
-                Paragraph(ncs_montos_txt, cell_right),
-                Paragraph(cheques_numeros, cell_style),
-                Paragraph(pagos_montos, cell_right),
-                Paragraph(pagos_fechas, cell_style),
-            ]
-            table_data.append(row)
-
-            total_factura += int(round(float(dte.monto_con_iva or 0)))
-            total_nc += ncs_montos_total
-            total_pago += pago_total
-
-        # Fila de totales
-        total_row = [
-            Paragraph('<b>TOTAL</b>', cell_left),
-            Paragraph('', cell_style),
-            Paragraph(f'<b>{fmt_monto(total_factura)}</b>', cell_right),
-            Paragraph('', cell_style),
-            Paragraph(f'<b>{fmt_monto(total_nc)}</b>', cell_right),
-            Paragraph('', cell_style),
-            Paragraph(f'<b>{fmt_monto(total_pago)}</b>', cell_right),
-            Paragraph('', cell_style),
-        ]
-        table_data.append(total_row)
-
-        table = Table(table_data, colWidths=col_widths, repeatRows=1)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), azul),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#B7C4D8')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, gris_claro]),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            ('BACKGROUND', (0, -1), (-1, -1), verde),
-            ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
-        ]))
-        elements.append(table)
-
-        elements.append(Spacer(1, 24))
-        elements.append(Paragraph(
-            "Sin otro particular, le saluda atentamente.",
-            ParagraphStyle('Closing', parent=styles['Normal'], fontSize=10, leading=13, alignment=0)
-        ))
-
-        def footer(canvas, doc_):
-            canvas.saveState()
-            canvas.setFont('Helvetica', 7)
-            canvas.setFillColor(colors.grey)
-            canvas.drawString(
-                1.5*cm, 1*cm,
-                f"Comprobante de pago programado — {proveedor_nombre}  —  "
-                f"Generado {timezone.localdate().strftime('%d/%m/%Y')}"
+        from django.core.mail import EmailMultiAlternatives
+        from django.conf import settings as _settings
+        try:
+            correo = EmailMultiAlternatives(
+                subject=asunto,
+                body=cuerpo,
+                from_email=_settings.DEFAULT_FROM_EMAIL,
+                to=[email_destino],
             )
-            canvas.drawRightString(A4[0] - 1.5*cm, 1*cm, f"Página {doc_.page}")
-            canvas.restoreState()
+            correo.attach(f'comprobante_pago_{safe_prov}.pdf', pdf_bytes, 'application/pdf')
+            correo.send(fail_silently=False)
+        except Exception as e:
+            import logging as _logging
+            _logging.getLogger('app').error(f'Error enviando comprobante de pago: {e}')
+            return JsonResponse({'success': False, 'error': f'No se pudo enviar el correo: {e}'}, status=500)
 
-        doc.build(elements, onFirstPage=footer, onLaterPages=footer)
-        buffer.seek(0)
+        # Registrar el envío en cada DTE
+        ahora = timezone.now()
+        for d in dtes:
+            d.comprobante_enviado_en = ahora
+            d.comprobante_enviado_a = email_destino[:255]
+        Dte.objects.bulk_update(dtes, ['comprobante_enviado_en', 'comprobante_enviado_a'])
 
-        response = HttpResponse(content_type='application/pdf')
-        safe_prov = (proveedor_nombre or 'proveedor').replace(' ', '_').replace('/', '-')
-        response['Content-Disposition'] = (
-            f'attachment; filename="comprobante_pago_{safe_prov}.pdf"'
-        )
-        response.write(buffer.read())
-        return response
+        return JsonResponse({
+            'success': True,
+            'message': f'Comprobante enviado a {email_destino}',
+            'enviado_en': timezone.localtime(ahora).strftime('%d/%m/%Y %H:%M'),
+            'enviado_a': email_destino,
+        })
 
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
@@ -11887,10 +12085,177 @@ def asociar_nc_existente(request):
                 factura.save()
             
             return JsonResponse({'success': True, 'message': 'Nota de Crédito asociada correctamente'})
-            
+
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+
+
+def asociar_factura_cotizacion(request):
+    """
+    Asocia (anexa) una Factura Electrónica existente a una Cotización o Guía de
+    Despacho (documento base), seteando documento_padre. Es la versión "después
+    de creada la factura" del select 'Documento Base' del alta/edición de DTE, y
+    espeja sus mismas validaciones (crear_dte / editar_dte).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    try:
+        data = json.loads(request.body)
+        factura_id = data.get('factura_id') or data.get('dte_id')
+        documento_base_id = data.get('documento_base_id') or data.get('documento_padre_id')
+
+        if not factura_id or not documento_base_id:
+            return JsonResponse({'success': False, 'error': 'Datos incompletos'}, status=400)
+
+        try:
+            factura = Dte.objects.get(id=factura_id)
+        except Dte.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Factura no encontrada'}, status=404)
+
+        if factura.tipo_documento != 'FACTURA ELECTRONICA':
+            return JsonResponse({'success': False, 'error': 'Solo se puede asociar una Factura Electrónica a una cotización/guía.'}, status=400)
+
+        try:
+            documento_base = Dte.objects.get(id=documento_base_id)
+        except Dte.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Documento base no encontrado.'}, status=404)
+
+        # Mismas reglas que el alta/edición de DTE
+        if documento_base.tipo_documento not in ['COTIZACION', 'GUIA']:
+            return JsonResponse({'success': False, 'error': 'El documento base debe ser una Cotización o Guía de Despacho.'}, status=400)
+
+        # Una cotización/guía sólo puede tener una factura anexada
+        if documento_base.documentos_hijos.filter(
+            tipo_documento='FACTURA ELECTRONICA'
+        ).exclude(id=factura.id).exists():
+            return JsonResponse({'success': False, 'error': 'Este documento ya tiene una factura anexada.'}, status=400)
+
+        factura.documento_padre = documento_base
+        factura.save(update_fields=['documento_padre'])
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Factura #{factura.numero_documento} asociada a {documento_base.tipo_documento} #{documento_base.numero_documento}.'
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def desasociar_factura_cotizacion(request, factura_id):
+    """Quita la asociación de una factura con su cotización/guía (documento_padre)."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    try:
+        try:
+            factura = Dte.objects.get(id=factura_id)
+        except Dte.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Factura no encontrada'}, status=404)
+
+        if not factura.documento_padre_id:
+            return JsonResponse({'success': False, 'error': 'La factura no está asociada a ninguna cotización/guía.'}, status=400)
+
+        factura.documento_padre = None
+        factura.save(update_fields=['documento_padre'])
+        return JsonResponse({'success': True, 'message': 'Asociación con la cotización/guía eliminada.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def obtener_asociaciones_dte(request, dte_id):
+    """
+    Devuelve todas las asociaciones de un DTE para el panel 'Asociaciones':
+      - documento base (cotización/guía) anexado vía documento_padre
+      - notas de crédito anexadas (Dte_Detalle_Pago, metodo='Nota de Crédito')
+      - compensaciones con factura (Dte_Detalle_Pago, metodo='Compensación con Factura')
+    Pensado para que el usuario vea lo asociado y pueda quitarlo/cambiarlo.
+    """
+    if request.method != 'GET':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    try:
+        try:
+            dte = Dte.objects.select_related(
+                'emisor', 'documento_padre', 'documento_padre__emisor'
+            ).get(id=dte_id)
+        except Dte.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'DTE no encontrado'}, status=404)
+
+        # Documento base (cotización / guía) al que esta factura regulariza
+        documento_padre = None
+        if dte.documento_padre:
+            dp = dte.documento_padre
+            documento_padre = {
+                'id': dp.id,
+                'tipo': dp.tipo_documento,
+                'numero': dp.numero_documento,
+                'proveedor': dp.emisor.nombre if dp.emisor else 'N/A',
+                'fecha': dp.fecha_emision.strftime('%Y-%m-%d') if dp.fecha_emision else '',
+                'monto': float(dp.monto_con_iva or 0),
+            }
+
+        # Notas de crédito anexadas (usadas como medio de pago)
+        notas_credito = []
+        pagos_nc = Dte_Detalle_Pago.objects.filter(
+            dte=dte, metodo_pago='Nota de Crédito'
+        ).values('id', 'voucher', 'monto', 'notas', 'fecha_pago')
+        for p in pagos_nc:
+            voucher = p.get('voucher')
+            nc_id = None
+            nc_proveedor = ''
+            # Resolver el id de la NC (Dte) por número + receptor para poder
+            # reutilizar desasociar_nc, que recalcula el estado de pago.
+            if voucher and str(voucher).isdigit():
+                nc_obj = Dte.objects.filter(
+                    numero_documento=int(voucher),
+                    tipo_documento='NOTA DE CREDITO',
+                    receptor_id=dte.receptor_id,
+                ).select_related('emisor').first()
+                if nc_obj:
+                    nc_id = nc_obj.id
+                    nc_proveedor = nc_obj.emisor.nombre if nc_obj.emisor else ''
+            notas_credito.append({
+                'pago_id': p['id'],
+                'nc_id': nc_id,
+                'numero': voucher or '-',
+                'monto': float(p['monto'] or 0),
+                'proveedor': nc_proveedor,
+                'motivo': p.get('notas') or '',
+                'fecha': p['fecha_pago'].strftime('%Y-%m-%d') if p.get('fecha_pago') else '',
+            })
+
+        # Compensaciones con factura (otra factura usada como pago)
+        compensaciones = []
+        pagos_comp = Dte_Detalle_Pago.objects.filter(
+            dte=dte, metodo_pago='Compensación con Factura'
+        ).values('id', 'voucher', 'monto', 'notas', 'fecha_pago')
+        for p in pagos_comp:
+            compensaciones.append({
+                'pago_id': p['id'],
+                'numero': p.get('voucher') or '-',
+                'monto': float(p['monto'] or 0),
+                'motivo': p.get('notas') or '',
+                'fecha': p['fecha_pago'].strftime('%Y-%m-%d') if p.get('fecha_pago') else '',
+            })
+
+        return JsonResponse({
+            'success': True,
+            'dte': {
+                'id': dte.id,
+                'numero': dte.numero_documento,
+                'tipo': dte.tipo_documento,
+                'proveedor': dte.emisor.nombre if dte.emisor else 'N/A',
+                'monto': float(dte.monto_con_iva or 0),
+                'es_factura': dte.tipo_documento == 'FACTURA ELECTRONICA',
+            },
+            'documento_padre': documento_padre,
+            'notas_credito': notas_credito,
+            'compensaciones': compensaciones,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 def guardar_recepcion(request):
     try:

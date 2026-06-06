@@ -190,6 +190,21 @@ class Dte(models.Model):
         help_text="DTE creado manualmente desde Gestión de Documentos (sin productos, solo cabecera + pago)"
     )
 
+    # === COMPROBANTE DE PAGO ENVIADO POR CORREO ===
+    # Se setean cuando se envía el "Comprobante de Pago" al proveedor por correo
+    # desde Gestión de DTEs de Compras (solo facturas pagadas).
+    comprobante_enviado_en = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha/hora del último envío del comprobante de pago al proveedor por correo"
+    )
+    comprobante_enviado_a = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Correo al que se envió el último comprobante de pago"
+    )
+
     # === CAMPOS PARA MODO DE PRECIO EN DESPACHO EXTERNO ===
     TIPO_PRECIO_EXTERNO_CHOICES = [
         ('COSTO', 'Solo Costo'),

@@ -436,6 +436,8 @@ urlpatterns = [
      path('cargarDteCompra/', views.cargarDteCompra, name='cargarDteCompra'),
      path('facturasPendientesPorMes/', views.facturasPendientesPorMes, name='facturasPendientesPorMes'),
      path('comprobantePagoDTE/', views.comprobantePagoDTE, name='comprobantePagoDTE'),
+     path('datos_envio_comprobante/<int:dte_id>/', views.datos_envio_comprobante, name='datos_envio_comprobante'),
+     path('enviar_comprobante_pago/', views.enviar_comprobante_pago, name='enviar_comprobante_pago'),
      path('registrarPagoDTE/', views.registrarPagoDTE, name='registrarPagoDTE'),
      path('obtenerDetallePago/<int:dte_id>/', views.obtenerDetallePago, name='obtenerDetallePago'),
      path('pagosDTE/<int:dte_id>/', views.pagosDTE, name='pagosDTE'),
@@ -462,6 +464,11 @@ urlpatterns = [
      path('obtener_info_asociacion_nc/<int:nc_id>/', views.obtener_info_asociacion_nc, name='obtener_info_asociacion_nc'),
      path('desasociar_nc/<int:nc_id>/', views.desasociar_nc, name='desasociar_nc'),
      path('asociar_nc_existente/', views.asociar_nc_existente, name='asociar_nc_existente'),
+
+     # Asociación Factura <-> Cotización/Guía (documento_padre) y panel de asociaciones
+     path('asociar_factura_cotizacion/', views.asociar_factura_cotizacion, name='asociar_factura_cotizacion'),
+     path('desasociar_factura_cotizacion/<int:factura_id>/', views.desasociar_factura_cotizacion, name='desasociar_factura_cotizacion'),
+     path('obtener_asociaciones_dte/<int:dte_id>/', views.obtener_asociaciones_dte, name='obtener_asociaciones_dte'),
 
      # Compensación factura-contra-factura ("Pagar con Factura")
      path('obtener_facturas_compensar_disponibles/', views_modulo_compras.obtener_facturas_compensar_disponibles, name='obtener_facturas_compensar_disponibles'),
