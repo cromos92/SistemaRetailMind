@@ -829,7 +829,7 @@ def actualizar_precio(request):
         if sincronizar_sucursales:
             from django.db.models import Sum
             
-            # Buscar productos similares en OTRAS sucursales QUE TENGAN STOCK
+            # Buscar productos similares en TODAS las demás sucursales (con o sin stock)
             productos_otras_sucursales = Producto.objects.filter(
                 articulo=producto.articulo,
                 atributo1=producto.atributo1,
@@ -838,26 +838,24 @@ def actualizar_precio(request):
                 sucursal=sucursal_origen  # Excluir sucursal donde se edita
             ).annotate(
                 stock_total=Sum('producto_talla__stock')
-            ).filter(
-                stock_total__gt=0  # Solo productos con stock > 0
             ).select_related('sucursal')
-            
-            print(f"🔍 [EdicionRapida] Buscando productos similares con stock: {productos_otras_sucursales.count()} encontrados")
-            
+
+            print(f"🔍 [EdicionRapida] Buscando productos similares en otras sucursales: {productos_otras_sucursales.count()} encontrados")
+
             for prod_similar in productos_otras_sucursales:
                 precio_anterior_sync = int(prod_similar.precioventa or 0)
-                
-                # Verificar que haya tallas con stock
+
+                # Obtener primera talla (sin requerir stock > 0)
                 primera_talla = Producto_Talla.objects.filter(
-                    producto=prod_similar,
-                    stock__gt=0
+                    producto=prod_similar
                 ).first()
-                
+
                 if not primera_talla:
-                    print(f"   ⏭️ {prod_similar.sucursal.alias}: sin tallas con stock, saltando")
+                    print(f"   ⏭️ {prod_similar.sucursal.alias}: sin tallas definidas, saltando")
                     continue
-                
-                print(f"   📦 {prod_similar.sucursal.alias}: stock={prod_similar.stock_total}, precio_actual=${precio_anterior_sync:,}")
+
+                stock_display = prod_similar.stock_total or 0
+                print(f"   📦 {prod_similar.sucursal.alias}: stock={stock_display}, precio_actual=${precio_anterior_sync:,}")
                 
                 # Solo procesar si hay diferencia de precio
                 if precio_anterior_sync == nuevo_precio:

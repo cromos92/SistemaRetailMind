@@ -3097,6 +3097,20 @@ def registrar_pagos_ticket(request, correlativo):
     if not ticket:
         return JsonResponse({'success': False, 'error': f'Ticket {correlativo} no encontrado'}, status=404)
 
+    # Bloquear reprocesamiento de tickets ya finalizados
+    if ticket.estado in ('PAGADO', 'ANULADO', 'DEVUELTO'):
+        estados_display = {
+            'PAGADO': 'ya fue pagado',
+            'ANULADO': 'está anulado',
+            'DEVUELTO': 'está devuelto',
+        }
+        return JsonResponse({
+            'success': False,
+            'error': f'El ticket #{correlativo} {estados_display.get(ticket.estado, "ya fue procesado")} y no puede volver a procesarse.',
+            'ticket_ya_procesado': True,
+            'estado': ticket.estado,
+        }, status=400)
+
     try:
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:

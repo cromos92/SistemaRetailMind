@@ -3911,6 +3911,12 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
+                const estadosFinalizados = { PAGADO: 'ya fue pagado', ANULADO: 'está anulado', DEVUELTO: 'fue devuelto' };
+                if (data.ticket.estado in estadosFinalizados) {
+                    mostrarNotificacion(`El ticket #${val} ${estadosFinalizados[data.ticket.estado]} y no puede volver a usarse.`, 'error');
+                    if (qs) qs.select();
+                    return;
+                }
                 if (qs) qs.value = '';
                 mostrarVista('wizard');
                 reiniciarWizard();
@@ -9695,9 +9701,14 @@ body {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                const estadosFinalizados = { PAGADO: 'ya fue pagado', ANULADO: 'está anulado', DEVUELTO: 'fue devuelto' };
+                if (data.ticket.estado in estadosFinalizados) {
+                    mostrarNotificacion(`El ticket #${correlativo} ${estadosFinalizados[data.ticket.estado]} y no puede volver a usarse.`, 'error');
+                    return;
+                }
                 mostrarVista('wizard');
                 cargarTicket(data.ticket);
-                
+
                 // Si el ticket tiene cliente, ir directo a pagos (paso 3)
                 // Si no tiene cliente, ir a paso 2 para capturar datos
                 if (data.ticket.cliente && data.ticket.cliente.rut) {
