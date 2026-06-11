@@ -7213,7 +7213,10 @@ def _entero_seguro(valor, default=0):
 
 def _rango_ventas_internet(request):
     hoy = timezone.localdate()
-    inicio_default = hoy.replace(day=1)
+    if request.GET.get('todo_historico') == '1':
+        return None, None, True
+
+    inicio_default = hoy.replace(month=1, day=1)
     try:
         fecha_inicio = datetime.strptime(
             request.GET.get('fecha_inicio') or inicio_default.isoformat(),
@@ -7228,7 +7231,7 @@ def _rango_ventas_internet(request):
 
     if fecha_inicio > fecha_fin:
         raise ValidationError('La fecha de inicio no puede ser posterior a la fecha de fin.')
-    return fecha_inicio, fecha_fin
+    return fecha_inicio, fecha_fin, False
 
 
 def _nombre_usuario(usuario):
@@ -7237,22 +7240,64 @@ def _nombre_usuario(usuario):
     return usuario.get_full_name() or usuario.username
 
 
+def _fecha_hora_ticket(ticket):
+    if ticket.created_at:
+        return timezone.localtime(ticket.created_at)
+    if ticket.fecha:
+        hora = ticket.hora or datetime.min.time()
+        naive = datetime.combine(ticket.fecha, hora)
+        return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
+    return None
+
+
+def _decimal_desde_int(valor):
+    return Decimal(str(valor or 0))
+
+
+def _nombre_plataforma(valor):
+    valor = (valor or '').strip()
+    return valor or 'Sin plataforma'
+
+
+def _linea_producto_nombre(linea):
+    if linea.ProductoTalla and linea.ProductoTalla.producto:
+        producto = linea.ProductoTalla.producto
+        return producto.descripcion or producto.articulo or 'Producto sin nombre'
+    return linea.descripcion_linea or 'Linea manual'
+
+
+def _linea_producto_sku(linea):
+    if linea.ProductoTalla:
+        return str(linea.ProductoTalla.sku or 'Sin SKU')
+    return 'MANUAL'
+
+
 def _construir_reporte_ventas_internet(request, paginar=True):
-    fecha_inicio, fecha_fin = _rango_ventas_internet(request)
+    fecha_inicio, fecha_fin, todo_historico = _rango_ventas_internet(request)
     sucursales_permitidas = obtener_sucursales_usuario(request.user).select_related('empresa')
     sucursal_ids = list(sucursales_permitidas.values_list('id', flat=True))
 
-    queryset = PedidoEcommerce.objects.filter(
-        estado='FACTURADO',
-        fecha_facturacion__date__range=(fecha_inicio, fecha_fin),
+    queryset = Ticket.objects.filter(
+        estado='PAGADO',
         sucursal_id__in=sucursal_ids,
+    ).filter(
+        Q(modulo_origen='ECOMMERCE') | Q(pagos__metodo_pago='VENTA_INTERNET')
     ).select_related(
-        'sucursal__empresa', 'ticket__vendedor', 'facturado_por', 'dte',
-    ).order_by('-fecha_facturacion', '-id')
+        'sucursal__empresa', 'vendedor',
+    ).prefetch_related(
+        'pagos',
+        'ticket_productos__ProductoTalla__producto',
+        'pedidos_ecommerce__dte',
+        'pedidos_ecommerce__facturado_por',
+    ).distinct().order_by('-fecha', '-hora', '-created_at', '-id')
+
+    if not todo_historico:
+        queryset = queryset.filter(fecha__gte=fecha_inicio, fecha__lte=fecha_fin)
 
     empresa_id = request.GET.get('empresa_id', '').strip()
     sucursal_id = request.GET.get('sucursal_id', '').strip()
-    canal = request.GET.get('canal', '').strip().upper()
+    plataforma = (request.GET.get('plataforma') or request.GET.get('canal') or '').strip()
+    origen = request.GET.get('origen', '').strip().upper()
     vendedor_id = request.GET.get('vendedor_id', '').strip()
     busqueda = request.GET.get('q', '').strip()
 
@@ -7263,140 +7308,251 @@ def _construir_reporte_ventas_internet(request, paginar=True):
             queryset = queryset.none()
         else:
             queryset = queryset.filter(sucursal_id=sucursal_id)
-    if canal:
-        queryset = queryset.filter(canal_origen=canal)
+    if plataforma:
+        if plataforma == '__SIN_PLATAFORMA__':
+            queryset = queryset.filter(
+                Q(pagos__metodo_pago='VENTA_INTERNET', pagos__tipo_tarjeta__isnull=True)
+                | Q(pagos__metodo_pago='VENTA_INTERNET', pagos__tipo_tarjeta='')
+            )
+        else:
+            queryset = queryset.filter(pagos__metodo_pago='VENTA_INTERNET', pagos__tipo_tarjeta__iexact=plataforma)
+    if origen == 'ECOMMERCE':
+        queryset = queryset.filter(modulo_origen='ECOMMERCE')
+    elif origen == 'POS':
+        queryset = queryset.exclude(modulo_origen='ECOMMERCE').filter(pagos__metodo_pago='VENTA_INTERNET')
     if vendedor_id:
-        queryset = queryset.filter(ticket__vendedor_id=vendedor_id)
+        queryset = queryset.filter(vendedor_id=vendedor_id)
     if busqueda:
         queryset = queryset.filter(
-            Q(numero_ticket_rm__icontains=busqueda)
-            | Q(numero_pedido_canal__icontains=busqueda)
+            Q(correlativo__icontains=busqueda)
             | Q(cliente_nombre__icontains=busqueda)
-            | Q(cliente_documento__icontains=busqueda)
-        )
+            | Q(cliente_rut__icontains=busqueda)
+            | Q(pagos__voucher__icontains=busqueda)
+            | Q(pagos__tipo_tarjeta__icontains=busqueda)
+            | Q(pedidos_ecommerce__numero_ticket_rm__icontains=busqueda)
+            | Q(pedidos_ecommerce__numero_pedido_canal__icontains=busqueda)
+            | Q(pedidos_ecommerce__correlativo__icontains=busqueda)
+            | Q(pedidos_ecommerce__cliente_nombre__icontains=busqueda)
+            | Q(pedidos_ecommerce__cliente_documento__icontains=busqueda)
+        ).distinct()
 
     empresas = {}
-    canales = defaultdict(lambda: {'pedidos': 0, 'ventas': Decimal('0'), 'unidades': 0})
-    vendedores = defaultdict(lambda: {'pedidos': 0, 'ventas': Decimal('0'), 'unidades': 0})
+    plataformas = defaultdict(lambda: {'tickets': set(), 'ventas': Decimal('0'), 'unidades': 0})
+    origenes = defaultdict(lambda: {'tickets': 0, 'ventas': Decimal('0'), 'unidades': 0})
+    vendedores = defaultdict(lambda: {'tickets': 0, 'ventas': Decimal('0'), 'unidades': 0})
     productos = defaultdict(lambda: {
-        'sku': '', 'producto': '', 'unidades': 0, 'ventas': Decimal('0'),
-        'pedidos': set(), 'canales': set(),
+        'sku': '', 'producto': '', 'unidades': 0, 'venta_internet_asignada': Decimal('0'),
+        'venta_ticket_total': Decimal('0'), 'tickets': set(), 'plataformas': set(), 'origenes': set(),
     })
-    ventas_diarias = defaultdict(lambda: {'pedidos': 0, 'ventas': Decimal('0'), 'unidades': 0})
+    ventas_diarias = defaultdict(lambda: {'tickets': 0, 'ventas': Decimal('0'), 'unidades': 0})
     detalle = []
+    alertas = {
+        'ecommerce_sin_pago_internet': {'count': 0, 'monto': 0, 'tickets': []},
+        'tickets_mixtos': {'count': 0, 'monto_internet': 0, 'tickets': []},
+        'sin_plataforma': {'count': 0, 'monto': 0, 'tickets': []},
+    }
     total_ventas = Decimal('0')
-    total_subtotal = Decimal('0')
-    total_descuentos = Decimal('0')
-    total_envios = Decimal('0')
     total_unidades = 0
+    total_ecommerce = 0
+    total_pos = 0
+    monto_fallback_ecommerce = Decimal('0')
 
-    for pedido in queryset:
-        total_ventas += pedido.total or 0
-        total_subtotal += pedido.subtotal or 0
-        total_descuentos += pedido.descuento or 0
-        total_envios += pedido.costo_envio or 0
+    for ticket in queryset:
+        pagos_internet = [pago for pago in ticket.pagos.all() if pago.metodo_pago == 'VENTA_INTERNET']
+        pedido = next(iter(ticket.pedidos_ecommerce.all()), None)
+        es_ecommerce = ticket.modulo_origen == 'ECOMMERCE' or pedido is not None
+        monto_pagos_internet = sum((pago.monto or 0) for pago in pagos_internet)
 
-        empresa = pedido.sucursal.empresa
+        if monto_pagos_internet <= 0 and not es_ecommerce:
+            continue
+
+        usa_fallback = False
+        if monto_pagos_internet > 0:
+            monto_internet = _decimal_desde_int(monto_pagos_internet)
+        else:
+            monto_internet = _decimal_desde_int(ticket.total)
+            usa_fallback = True
+            monto_fallback_ecommerce += monto_internet
+
+        total_ticket = _decimal_desde_int(ticket.total)
+        proporcion_internet = (monto_internet / total_ticket) if total_ticket > 0 else Decimal('0')
+        proporcion_internet = min(proporcion_internet, Decimal('1'))
+        plataformas_ticket = sorted({
+            _nombre_plataforma(pago.tipo_tarjeta)
+            for pago in pagos_internet
+        })
+        if not plataformas_ticket and pedido:
+            plataformas_ticket = [_nombre_plataforma(pedido.get_canal_origen_display())]
+        if not plataformas_ticket:
+            plataformas_ticket = ['Sin plataforma']
+
+        origen_codigo = 'ECOMMERCE' if es_ecommerce else 'POS'
+        origen_nombre = 'Ecommerce / AllConnected' if es_ecommerce else 'POS Venta Internet'
+        fecha_dt = _fecha_hora_ticket(ticket)
+        fecha_local = fecha_dt.date() if fecha_dt else ticket.fecha
+        fecha_key = fecha_local.isoformat() if fecha_local else ''
+        lineas = list(ticket.ticket_productos.all())
+        unidades_ticket = sum(max(linea.stock or 0, 0) for linea in lineas)
+
+        total_ventas += monto_internet
+        total_unidades += unidades_ticket
+        if es_ecommerce:
+            total_ecommerce += 1
+        else:
+            total_pos += 1
+
+        if usa_fallback:
+            alertas['ecommerce_sin_pago_internet']['count'] += 1
+            alertas['ecommerce_sin_pago_internet']['monto'] += int(monto_internet)
+            if len(alertas['ecommerce_sin_pago_internet']['tickets']) < 20:
+                alertas['ecommerce_sin_pago_internet']['tickets'].append(ticket.correlativo)
+        if monto_pagos_internet > 0 and total_ticket > monto_internet:
+            alertas['tickets_mixtos']['count'] += 1
+            alertas['tickets_mixtos']['monto_internet'] += int(monto_internet)
+            if len(alertas['tickets_mixtos']['tickets']) < 20:
+                alertas['tickets_mixtos']['tickets'].append(ticket.correlativo)
+        if 'Sin plataforma' in plataformas_ticket:
+            alertas['sin_plataforma']['count'] += 1
+            alertas['sin_plataforma']['monto'] += int(monto_internet)
+            if len(alertas['sin_plataforma']['tickets']) < 20:
+                alertas['sin_plataforma']['tickets'].append(ticket.correlativo)
+
+        empresa = ticket.sucursal.empresa
         empresa_data = empresas.setdefault(empresa.id, {
             'id': empresa.id,
             'nombre': empresa.nombre,
             'rut': empresa.rut,
-            'pedidos': 0,
+            'tickets': 0,
             'ventas': Decimal('0'),
             'unidades': 0,
             'sucursales': {},
         })
-        sucursal_data = empresa_data['sucursales'].setdefault(pedido.sucursal_id, {
-            'id': pedido.sucursal_id,
-            'nombre': pedido.sucursal.alias,
-            'pedidos': 0,
+        sucursal_data = empresa_data['sucursales'].setdefault(ticket.sucursal_id, {
+            'id': ticket.sucursal_id,
+            'nombre': ticket.sucursal.alias,
+            'tickets': 0,
             'ventas': Decimal('0'),
             'unidades': 0,
         })
+        empresa_data['tickets'] += 1
+        empresa_data['ventas'] += monto_internet
+        empresa_data['unidades'] += unidades_ticket
+        sucursal_data['tickets'] += 1
+        sucursal_data['ventas'] += monto_internet
+        sucursal_data['unidades'] += unidades_ticket
 
-        vendedor = pedido.ticket.vendedor if pedido.ticket_id and pedido.ticket else None
+        for plataforma_item in plataformas_ticket:
+            plataformas[plataforma_item]['tickets'].add(ticket.id)
+            if pagos_internet:
+                ventas_plataforma = sum(
+                    _decimal_desde_int(pago.monto)
+                    for pago in pagos_internet
+                    if _nombre_plataforma(pago.tipo_tarjeta) == plataforma_item
+                )
+            else:
+                ventas_plataforma = monto_internet
+            plataformas[plataforma_item]['ventas'] += ventas_plataforma
+            plataformas[plataforma_item]['unidades'] += unidades_ticket
+
+        origenes[origen_codigo]['codigo'] = origen_codigo
+        origenes[origen_codigo]['nombre'] = origen_nombre
+        origenes[origen_codigo]['tickets'] += 1
+        origenes[origen_codigo]['ventas'] += monto_internet
+        origenes[origen_codigo]['unidades'] += unidades_ticket
+
+        vendedor = ticket.vendedor
         vendedor_key = str(vendedor.id) if vendedor else 'sin-vendedor'
         vendedor_nombre = str(vendedor) if vendedor else 'Sin vendedor asociado'
-
-        fecha_local = timezone.localtime(pedido.fecha_facturacion).date()
-        fecha_key = fecha_local.isoformat()
-        unidades_pedido = 0
-
-        for item in pedido.items or []:
-            if not isinstance(item, dict):
-                continue
-            cantidad = max(_entero_seguro(item.get('cantidad'), 1), 0)
-            precio = _decimal_seguro(item.get('precio_unitario'))
-            monto_linea = _decimal_seguro(item.get('subtotal'), precio * cantidad)
-            sku = str(item.get('sku') or item.get('sku_rm') or '').strip()
-            nombre = str(
-                item.get('nombre_rm') or item.get('nombre') or item.get('producto') or 'Producto sin nombre'
-            ).strip()
-            producto_key = sku or nombre.lower()
-            producto = productos[producto_key]
-            producto['sku'] = sku or 'Sin SKU'
-            producto['producto'] = nombre
-            producto['unidades'] += cantidad
-            producto['ventas'] += monto_linea
-            producto['pedidos'].add(pedido.id)
-            producto['canales'].add(pedido.canal_origen)
-            unidades_pedido += cantidad
-
-        total_unidades += unidades_pedido
-        empresa_data['pedidos'] += 1
-        empresa_data['ventas'] += pedido.total or 0
-        empresa_data['unidades'] += unidades_pedido
-        sucursal_data['pedidos'] += 1
-        sucursal_data['ventas'] += pedido.total or 0
-        sucursal_data['unidades'] += unidades_pedido
-        canales[pedido.canal_origen]['pedidos'] += 1
-        canales[pedido.canal_origen]['ventas'] += pedido.total or 0
-        canales[pedido.canal_origen]['unidades'] += unidades_pedido
         vendedores[vendedor_key]['id'] = vendedor.id if vendedor else None
         vendedores[vendedor_key]['nombre'] = vendedor_nombre
         vendedores[vendedor_key]['codigo'] = vendedor.codigo_vendedor if vendedor else '-'
-        vendedores[vendedor_key]['pedidos'] += 1
-        vendedores[vendedor_key]['ventas'] += pedido.total or 0
-        vendedores[vendedor_key]['unidades'] += unidades_pedido
-        ventas_diarias[fecha_key]['pedidos'] += 1
-        ventas_diarias[fecha_key]['ventas'] += pedido.total or 0
-        ventas_diarias[fecha_key]['unidades'] += unidades_pedido
+        vendedores[vendedor_key]['tickets'] += 1
+        vendedores[vendedor_key]['ventas'] += monto_internet
+        vendedores[vendedor_key]['unidades'] += unidades_ticket
+
+        if fecha_key:
+            ventas_diarias[fecha_key]['tickets'] += 1
+            ventas_diarias[fecha_key]['ventas'] += monto_internet
+            ventas_diarias[fecha_key]['unidades'] += unidades_ticket
+
+        for linea in lineas:
+            cantidad = max(linea.stock or 0, 0)
+            subtotal_linea = _decimal_desde_int(linea.subtotal)
+            venta_asignada = subtotal_linea * proporcion_internet
+            sku = _linea_producto_sku(linea)
+            nombre = _linea_producto_nombre(linea)
+            producto_key = f'{sku}|{nombre}'
+            producto = productos[producto_key]
+            producto['sku'] = sku
+            producto['producto'] = nombre
+            producto['unidades'] += cantidad
+            producto['venta_internet_asignada'] += venta_asignada
+            producto['venta_ticket_total'] += subtotal_linea
+            producto['tickets'].add(ticket.id)
+            producto['plataformas'].update(plataformas_ticket)
+            producto['origenes'].add(origen_nombre)
+
+        dte = pedido.dte if pedido and pedido.dte_id else None
+        dte_label = ''
+        if dte:
+            dte_label = f'{dte.tipo_documento} #{dte.numero_documento}'
+        elif ticket.folio_dte:
+            dte_label = f'{ticket.tipo_dte or "DTE"} #{ticket.folio_dte}'
+        fecha_venta_str = fecha_dt.strftime('%d/%m/%Y %H:%M') if fecha_dt else ''
+        fecha_venta_iso = fecha_dt.isoformat() if fecha_dt else ''
+        fecha_recepcion = timezone.localtime(pedido.fecha_recepcion).strftime('%d/%m/%Y %H:%M') if pedido and pedido.fecha_recepcion else ''
+        fecha_facturacion = timezone.localtime(pedido.fecha_facturacion).strftime('%d/%m/%Y %H:%M') if pedido and pedido.fecha_facturacion else ''
+        operador = _nombre_usuario(pedido.facturado_por) if pedido else ticket.responsable or 'POS'
 
         detalle.append({
-            'id': pedido.id,
-            'fecha': timezone.localtime(pedido.fecha_facturacion).strftime('%d/%m/%Y %H:%M'),
-            'fecha_iso': pedido.fecha_facturacion.isoformat(),
-            'ticket_rm': pedido.numero_ticket_rm,
-            'pedido_canal': pedido.numero_pedido_canal,
-            'canal': pedido.get_canal_origen_display(),
-            'canal_codigo': pedido.canal_origen,
+            'id': ticket.id,
+            'ticket_id': ticket.id,
+            'correlativo': ticket.correlativo,
+            'fecha': fecha_venta_str,
+            'fecha_venta': fecha_venta_str,
+            'fecha_iso': fecha_venta_iso,
+            'fecha_recepcion': fecha_recepcion,
+            'fecha_facturacion': fecha_facturacion,
+            'origen': origen_nombre,
+            'origen_codigo': origen_codigo,
+            'plataforma': ', '.join(plataformas_ticket),
+            'voucher': ', '.join([pago.voucher for pago in pagos_internet if pago.voucher]) or '-',
+            'pedido_ecommerce_id': pedido.id if pedido else None,
+            'ticket_rm': pedido.numero_ticket_rm if pedido else f'Ticket #{ticket.correlativo}',
+            'numero_ticket_rm': pedido.numero_ticket_rm if pedido else '',
+            'pedido_canal': pedido.numero_pedido_canal if pedido else '',
+            'numero_pedido_canal': pedido.numero_pedido_canal if pedido else '',
+            'dte': dte_label or '-',
             'empresa': empresa.nombre,
-            'sucursal': pedido.sucursal.alias,
-            'cliente': pedido.cliente_nombre,
-            'documento_cliente': pedido.cliente_documento or '-',
+            'sucursal': ticket.sucursal.alias,
+            'cliente': ticket.cliente_nombre or (pedido.cliente_nombre if pedido else ''),
+            'documento_cliente': ticket.cliente_rut or (pedido.cliente_documento if pedido else '') or '-',
             'vendedor': vendedor_nombre,
             'codigo_vendedor': vendedor.codigo_vendedor if vendedor else '-',
-            'operador': _nombre_usuario(pedido.facturado_por),
-            'unidades': unidades_pedido,
-            'subtotal': float(pedido.subtotal or 0),
-            'descuento': float(pedido.descuento or 0),
-            'envio': float(pedido.costo_envio or 0),
-            'total': float(pedido.total or 0),
-            'ticket_id': pedido.ticket_id,
-            'dte_id': pedido.dte_id,
+            'operador': operador,
+            'unidades': unidades_ticket,
+            'monto_internet': float(monto_internet),
+            'total': float(monto_internet),
+            'total_ticket': float(total_ticket),
+            'es_mixto': monto_pagos_internet > 0 and total_ticket > monto_internet,
+            'usa_fallback': usa_fallback,
+            'pos_url': f'/app/pos-dashboard/?ticket={ticket.correlativo}',
+            'ecommerce_url': f'/app/ecommerce/pedidos/{pedido.id}/' if pedido else '',
         })
 
     total_pedidos = len(detalle)
     for empresa in empresas.values():
-        empresa['ticket_promedio'] = float(empresa['ventas'] / empresa['pedidos']) if empresa['pedidos'] else 0
+        empresa['pedidos'] = empresa['tickets']
+        empresa['ticket_promedio'] = float(empresa['ventas'] / empresa['tickets']) if empresa['tickets'] else 0
         empresa['participacion'] = float(empresa['ventas'] / total_ventas * 100) if total_ventas else 0
         empresa['ventas'] = float(empresa['ventas'])
         empresa['sucursales'] = sorted(
             [
                 {
                     **sucursal,
+                    'pedidos': sucursal['tickets'],
                     'ventas': float(sucursal['ventas']),
-                    'ticket_promedio': float(sucursal['ventas'] / sucursal['pedidos']) if sucursal['pedidos'] else 0,
+                    'ticket_promedio': float(sucursal['ventas'] / sucursal['tickets']) if sucursal['tickets'] else 0,
                 }
                 for sucursal in empresa['sucursales'].values()
             ],
@@ -7409,19 +7565,25 @@ def _construir_reporte_ventas_internet(request, paginar=True):
             'sku': item['sku'],
             'producto': item['producto'],
             'unidades': item['unidades'],
-            'ventas': float(item['ventas']),
-            'pedidos': len(item['pedidos']),
-            'canales': ', '.join(sorted(item['canales'])),
-            'precio_promedio': float(item['ventas'] / item['unidades']) if item['unidades'] else 0,
+            'venta_internet_asignada': float(item['venta_internet_asignada']),
+            'venta_ticket_total': float(item['venta_ticket_total']),
+            'ventas': float(item['venta_internet_asignada']),
+            'pedidos': len(item['tickets']),
+            'tickets': len(item['tickets']),
+            'canales': ', '.join(sorted(item['plataformas'])),
+            'plataformas': ', '.join(sorted(item['plataformas'])),
+            'origenes': ', '.join(sorted(item['origenes'])),
+            'precio_promedio': float(item['venta_internet_asignada'] / item['unidades']) if item['unidades'] else 0,
         }
         for item in productos.values()
-    ], key=lambda item: (item['ventas'], item['unidades']), reverse=True)
+    ], key=lambda item: (item['venta_internet_asignada'], item['unidades']), reverse=True)
 
     vendedores_data = sorted([
         {
             **item,
+            'pedidos': item['tickets'],
             'ventas': float(item['ventas']),
-            'ticket_promedio': float(item['ventas'] / item['pedidos']) if item['pedidos'] else 0,
+            'ticket_promedio': float(item['ventas'] / item['tickets']) if item['tickets'] else 0,
         }
         for item in vendedores.values()
     ], key=lambda item: item['ventas'], reverse=True)
@@ -7437,18 +7599,26 @@ def _construir_reporte_ventas_internet(request, paginar=True):
 
     return {
         'success': True,
-        'periodo': {'inicio': fecha_inicio.isoformat(), 'fin': fecha_fin.isoformat()},
+        'periodo': {
+            'inicio': fecha_inicio.isoformat() if fecha_inicio else '',
+            'fin': fecha_fin.isoformat() if fecha_fin else '',
+            'todo_historico': todo_historico,
+            'label': 'Todo historico' if todo_historico else f'{fecha_inicio.isoformat()} al {fecha_fin.isoformat()}',
+        },
         'resumen': {
             'ventas': float(total_ventas),
-            'subtotal': float(total_subtotal),
-            'descuentos': float(total_descuentos),
-            'envios': float(total_envios),
+            'venta_internet': float(total_ventas),
             'pedidos': total_pedidos,
+            'tickets': total_pedidos,
             'unidades': total_unidades,
             'ticket_promedio': float(total_ventas / total_pedidos) if total_pedidos else 0,
             'empresas': len(empresas),
             'sucursales': sum(len(empresa['sucursales']) for empresa in empresas.values()),
             'productos': len(productos_data),
+            'plataformas': len(plataformas),
+            'ecommerce_count': total_ecommerce,
+            'pos_count': total_pos,
+            'monto_fallback_ecommerce': float(monto_fallback_ecommerce),
             'vendedores': len(vendedores_reales),
             'vendedor_unico': len(vendedores_reales) == 1 and pedidos_sin_vendedor == 0,
             'pedidos_sin_vendedor': pedidos_sin_vendedor,
@@ -7456,22 +7626,46 @@ def _construir_reporte_ventas_internet(request, paginar=True):
         'empresas': sorted(empresas.values(), key=lambda item: item['ventas'], reverse=True),
         'canales': sorted([
             {
-                'codigo': codigo,
-                'nombre': dict(PedidoEcommerce._meta.get_field('canal_origen').choices).get(codigo, codigo),
-                'pedidos': item['pedidos'],
+                'codigo': nombre,
+                'nombre': nombre,
+                'pedidos': len(item['tickets']),
+                'tickets': len(item['tickets']),
                 'ventas': float(item['ventas']),
                 'unidades': item['unidades'],
                 'participacion': float(item['ventas'] / total_ventas * 100) if total_ventas else 0,
             }
-            for codigo, item in canales.items()
+            for nombre, item in plataformas.items()
+        ], key=lambda item: item['ventas'], reverse=True),
+        'plataformas': sorted([
+            {
+                'codigo': nombre,
+                'nombre': nombre,
+                'tickets': len(item['tickets']),
+                'ventas': float(item['ventas']),
+                'unidades': item['unidades'],
+                'participacion': float(item['ventas'] / total_ventas * 100) if total_ventas else 0,
+            }
+            for nombre, item in plataformas.items()
+        ], key=lambda item: item['ventas'], reverse=True),
+        'origenes': sorted([
+            {
+                'codigo': item['codigo'],
+                'nombre': item['nombre'],
+                'tickets': item['tickets'],
+                'ventas': float(item['ventas']),
+                'unidades': item['unidades'],
+                'participacion': float(item['ventas'] / total_ventas * 100) if total_ventas else 0,
+            }
+            for item in origenes.values()
         ], key=lambda item: item['ventas'], reverse=True),
         'vendedores': vendedores_data,
         'productos': productos_data,
         'ventas_diarias': [
-            {'fecha': fecha, 'pedidos': item['pedidos'], 'ventas': float(item['ventas']), 'unidades': item['unidades']}
+            {'fecha': fecha, 'pedidos': item['tickets'], 'tickets': item['tickets'], 'ventas': float(item['ventas']), 'unidades': item['unidades']}
             for fecha, item in sorted(ventas_diarias.items())
         ],
         'detalle': list(pagina.object_list) if pagina else detalle,
+        'alertas': alertas,
         'paginacion': {
             'pagina': pagina.number if pagina else 1,
             'paginas': paginator.num_pages if paginar else 1,
@@ -7489,9 +7683,20 @@ def _construir_reporte_ventas_internet(request, paginar=True):
                 {'id': sucursal.id, 'nombre': sucursal.alias, 'empresa_id': sucursal.empresa_id}
                 for sucursal in sucursales_permitidas
             ],
-            'canales': [
-                {'codigo': codigo, 'nombre': nombre}
-                for codigo, nombre in PedidoEcommerce._meta.get_field('canal_origen').choices
+            'canales': [],
+            'plataformas': [
+                {'codigo': item['nombre'], 'nombre': item['nombre']}
+                for item in sorted([
+                    {'nombre': nombre}
+                    for nombre in set(TicketDetallePago.objects.filter(
+                        ticket__sucursal_id__in=sucursal_ids,
+                        metodo_pago='VENTA_INTERNET',
+                    ).exclude(tipo_tarjeta__isnull=True).exclude(tipo_tarjeta='').values_list('tipo_tarjeta', flat=True))
+                ], key=lambda item: item['nombre'].lower())
+            ],
+            'origenes': [
+                {'codigo': 'ECOMMERCE', 'nombre': 'Ecommerce / AllConnected'},
+                {'codigo': 'POS', 'nombre': 'POS Venta Internet'},
             ],
         },
     }
@@ -7531,12 +7736,14 @@ def exportar_reporte_ventas_internet(request):
         resumen.append([])
         resumen.append(['Indicador', 'Valor'])
         indicadores = [
-            ('Venta total', data['resumen']['ventas']),
-            ('Pedidos facturados', data['resumen']['pedidos']),
+            ('Venta internet', data['resumen']['venta_internet']),
+            ('Tickets', data['resumen']['tickets']),
             ('Unidades vendidas', data['resumen']['unidades']),
             ('Ticket promedio', data['resumen']['ticket_promedio']),
-            ('Descuentos', data['resumen']['descuentos']),
-            ('Costo de envios', data['resumen']['envios']),
+            ('Ecommerce / AllConnected', data['resumen']['ecommerce_count']),
+            ('POS Venta Internet', data['resumen']['pos_count']),
+            ('Plataformas', data['resumen']['plataformas']),
+            ('Fallback ecommerce sin pago internet', data['resumen']['monto_fallback_ecommerce']),
             ('Empresas', data['resumen']['empresas']),
             ('Sucursales', data['resumen']['sucursales']),
             ('Vendedores detectados', data['resumen']['vendedores']),
@@ -7545,26 +7752,65 @@ def exportar_reporte_ventas_internet(request):
             resumen.append(indicador)
 
         productos_ws = workbook.create_sheet('Productos')
-        productos_ws.append(['SKU', 'Producto', 'Unidades', 'Venta', 'Pedidos', 'Precio promedio', 'Canales'])
+        productos_ws.append([
+            'SKU', 'Producto', 'Unidades', 'Venta internet asignada', 'Venta ticket total',
+            'Tickets', 'Precio promedio internet', 'Plataformas', 'Origenes',
+        ])
         for producto in data['productos']:
             productos_ws.append([
-                producto['sku'], producto['producto'], producto['unidades'], producto['ventas'],
-                producto['pedidos'], producto['precio_promedio'], producto['canales'],
+                producto['sku'], producto['producto'], producto['unidades'],
+                producto['venta_internet_asignada'], producto['venta_ticket_total'],
+                producto['tickets'], producto['precio_promedio'], producto['plataformas'],
+                producto['origenes'],
+            ])
+
+        plataformas_ws = workbook.create_sheet('Plataformas')
+        plataformas_ws.append(['Plataforma', 'Tickets', 'Unidades', 'Venta', 'Participacion %'])
+        for plataforma in data['plataformas']:
+            plataformas_ws.append([
+                plataforma['nombre'], plataforma['tickets'], plataforma['unidades'],
+                plataforma['ventas'], plataforma['participacion'],
             ])
 
         detalle_ws = workbook.create_sheet('Detalle pedidos')
         detalle_ws.append([
-            'Fecha', 'Ticket RM', 'Pedido canal', 'Canal', 'Empresa', 'Sucursal',
-            'Cliente', 'Vendedor', 'Codigo vendedor', 'Operador', 'Unidades',
-            'Subtotal', 'Descuento', 'Envio', 'Total',
+            'Fecha venta', 'Origen', 'Plataforma', 'Ticket', 'Pedido RM', 'Pedido canal',
+            'DTE/Folio', 'Empresa', 'Sucursal', 'Cliente', 'RUT/Doc', 'Vendedor',
+            'Codigo vendedor', 'Operador', 'Fecha recepcion', 'Fecha facturacion',
+            'Voucher', 'Unidades', 'Monto internet', 'Total ticket', 'Mixto', 'Fallback',
         ])
         for pedido in data['detalle']:
             detalle_ws.append([
-                pedido['fecha'], pedido['ticket_rm'], pedido['pedido_canal'], pedido['canal'],
-                pedido['empresa'], pedido['sucursal'], pedido['cliente'], pedido['vendedor'],
-                pedido['codigo_vendedor'], pedido['operador'], pedido['unidades'], pedido['subtotal'],
-                pedido['descuento'], pedido['envio'], pedido['total'],
+                pedido['fecha_venta'], pedido['origen'], pedido['plataforma'], pedido['correlativo'],
+                pedido['numero_ticket_rm'], pedido['numero_pedido_canal'], pedido['dte'],
+                pedido['empresa'], pedido['sucursal'], pedido['cliente'], pedido['documento_cliente'],
+                pedido['vendedor'], pedido['codigo_vendedor'], pedido['operador'],
+                pedido['fecha_recepcion'], pedido['fecha_facturacion'], pedido['voucher'],
+                pedido['unidades'], pedido['monto_internet'], pedido['total_ticket'],
+                'Si' if pedido['es_mixto'] else 'No',
+                'Si' if pedido['usa_fallback'] else 'No',
             ])
+
+        alertas_ws = workbook.create_sheet('Alertas')
+        alertas_ws.append(['Alerta', 'Cantidad', 'Monto', 'Tickets muestra'])
+        alertas_ws.append([
+            'Ecommerce sin pago VENTA_INTERNET',
+            data['alertas']['ecommerce_sin_pago_internet']['count'],
+            data['alertas']['ecommerce_sin_pago_internet']['monto'],
+            ', '.join(map(str, data['alertas']['ecommerce_sin_pago_internet']['tickets'])),
+        ])
+        alertas_ws.append([
+            'Tickets mixtos',
+            data['alertas']['tickets_mixtos']['count'],
+            data['alertas']['tickets_mixtos']['monto_internet'],
+            ', '.join(map(str, data['alertas']['tickets_mixtos']['tickets'])),
+        ])
+        alertas_ws.append([
+            'Sin plataforma',
+            data['alertas']['sin_plataforma']['count'],
+            data['alertas']['sin_plataforma']['monto'],
+            ', '.join(map(str, data['alertas']['sin_plataforma']['tickets'])),
+        ])
 
         for sheet in workbook.worksheets:
             header_row = 3 if sheet.title == 'Resumen' else 1
