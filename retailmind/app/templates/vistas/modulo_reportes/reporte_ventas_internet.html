@@ -153,6 +153,81 @@
     let chartVentas = null;
     let chartCanales = null;
 
+    function domWrap(nodes) {
+        return {
+            nodes,
+            get length() { return this.nodes.length; },
+            text(value) {
+                if (value === undefined) return this.nodes[0] ? this.nodes[0].textContent : '';
+                this.nodes.forEach(node => { node.textContent = value; });
+                return this;
+            },
+            html(value) {
+                if (value === undefined) return this.nodes[0] ? this.nodes[0].innerHTML : '';
+                this.nodes.forEach(node => { node.innerHTML = value; });
+                return this;
+            },
+            val(value) {
+                if (value === undefined) return this.nodes[0] ? this.nodes[0].value : '';
+                this.nodes.forEach(node => { node.value = value; });
+                return this;
+            },
+            prop(name, value) {
+                this.nodes.forEach(node => { node[name] = value; });
+                return this;
+            },
+            append(value) {
+                this.nodes.forEach(node => { node.insertAdjacentHTML('beforeend', value); });
+                return this;
+            },
+            attr(name, value) {
+                this.nodes.forEach(node => { node.setAttribute(name, value); });
+                return this;
+            },
+            on(eventName, handler) {
+                this.nodes.forEach(node => { node.addEventListener(eventName, handler); });
+                return this;
+            },
+            ready(handler) {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', handler);
+                } else {
+                    handler();
+                }
+                return this;
+            }
+        };
+    }
+
+    function $(selector) {
+        if (selector === document) return domWrap([document]);
+        if (selector instanceof Element || selector === window) return domWrap([selector]);
+        if (typeof selector === 'string' && selector.trim().startsWith('<')) {
+            const template = document.createElement('template');
+            template.innerHTML = selector.trim();
+            return domWrap([template.content.firstElementChild]);
+        }
+        return domWrap(Array.from(document.querySelectorAll(selector)));
+    }
+
+    $.getJSON = function (url) {
+        const callbacks = {done: [], fail: [], always: []};
+        const chain = {
+            done(fn) { callbacks.done.push(fn); return chain; },
+            fail(fn) { callbacks.fail.push(fn); return chain; },
+            always(fn) { callbacks.always.push(fn); return chain; }
+        };
+        fetch(url, {headers: {'Accept': 'application/json'}})
+            .then(async response => {
+                const body = await response.json().catch(() => null);
+                if (!response.ok) throw {responseJSON: body, status: response.status};
+                callbacks.done.forEach(fn => fn(body));
+            })
+            .catch(error => callbacks.fail.forEach(fn => fn(error)))
+            .finally(() => callbacks.always.forEach(fn => fn()));
+        return chain;
+    };
+
     const money = value => '$' + Math.round(Number(value || 0)).toLocaleString('es-CL');
     const number = value => Number(value || 0).toLocaleString('es-CL');
     const esc = value => $('<div>').text(value == null ? '' : value).html();
