@@ -17,6 +17,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
 import re
+from collections import defaultdict
 from decimal import Decimal
 from datetime import datetime, timedelta
 
@@ -27,7 +28,7 @@ from .models import (
     Empresa, Vendedor, LoteProducto, Traspaso, AjusteInventario,
     TicketDetallePago, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
     Categoria, AtributoOpcion, Productos_Atributos,
-    PermisoRol,
+    PermisoRol, PedidoEcommerce,
 )
 from .utils_permisos import (
     obtener_sucursales_usuario,
@@ -7190,6 +7191,401 @@ def exportar_rendimiento_proveedor_excel(request):
         return resp
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+# ========== REPORTE DE VENTAS POR INTERNET ==========
+
+
+def _decimal_seguro(valor, default=Decimal('0')):
+    """Convierte valores de snapshots ecommerce sin romper el reporte."""
+    try:
+        return Decimal(str(valor if valor not in (None, '') else default))
+    except (TypeError, ValueError, ArithmeticError):
+        return default
+
+
+def _entero_seguro(valor, default=0):
+    try:
+        return int(_decimal_seguro(valor, Decimal(default)))
+    except (TypeError, ValueError, ArithmeticError):
+        return default
+
+
+def _rango_ventas_internet(request):
+    hoy = timezone.localdate()
+    inicio_default = hoy.replace(day=1)
+    try:
+        fecha_inicio = datetime.strptime(
+            request.GET.get('fecha_inicio') or inicio_default.isoformat(),
+            '%Y-%m-%d',
+        ).date()
+        fecha_fin = datetime.strptime(
+            request.GET.get('fecha_fin') or hoy.isoformat(),
+            '%Y-%m-%d',
+        ).date()
+    except ValueError as exc:
+        raise ValidationError('Las fechas deben usar el formato YYYY-MM-DD.') from exc
+
+    if fecha_inicio > fecha_fin:
+        raise ValidationError('La fecha de inicio no puede ser posterior a la fecha de fin.')
+    return fecha_inicio, fecha_fin
+
+
+def _nombre_usuario(usuario):
+    if not usuario:
+        return 'Sin operador'
+    return usuario.get_full_name() or usuario.username
+
+
+def _construir_reporte_ventas_internet(request, paginar=True):
+    fecha_inicio, fecha_fin = _rango_ventas_internet(request)
+    sucursales_permitidas = obtener_sucursales_usuario(request.user).select_related('empresa')
+    sucursal_ids = list(sucursales_permitidas.values_list('id', flat=True))
+
+    queryset = PedidoEcommerce.objects.filter(
+        estado='FACTURADO',
+        fecha_facturacion__date__range=(fecha_inicio, fecha_fin),
+        sucursal_id__in=sucursal_ids,
+    ).select_related(
+        'sucursal__empresa', 'ticket__vendedor', 'facturado_por', 'dte',
+    ).order_by('-fecha_facturacion', '-id')
+
+    empresa_id = request.GET.get('empresa_id', '').strip()
+    sucursal_id = request.GET.get('sucursal_id', '').strip()
+    canal = request.GET.get('canal', '').strip().upper()
+    vendedor_id = request.GET.get('vendedor_id', '').strip()
+    busqueda = request.GET.get('q', '').strip()
+
+    if empresa_id:
+        queryset = queryset.filter(sucursal__empresa_id=empresa_id)
+    if sucursal_id:
+        if not str(sucursal_id).isdigit() or int(sucursal_id) not in sucursal_ids:
+            queryset = queryset.none()
+        else:
+            queryset = queryset.filter(sucursal_id=sucursal_id)
+    if canal:
+        queryset = queryset.filter(canal_origen=canal)
+    if vendedor_id:
+        queryset = queryset.filter(ticket__vendedor_id=vendedor_id)
+    if busqueda:
+        queryset = queryset.filter(
+            Q(numero_ticket_rm__icontains=busqueda)
+            | Q(numero_pedido_canal__icontains=busqueda)
+            | Q(cliente_nombre__icontains=busqueda)
+            | Q(cliente_documento__icontains=busqueda)
+        )
+
+    empresas = {}
+    canales = defaultdict(lambda: {'pedidos': 0, 'ventas': Decimal('0'), 'unidades': 0})
+    vendedores = defaultdict(lambda: {'pedidos': 0, 'ventas': Decimal('0'), 'unidades': 0})
+    productos = defaultdict(lambda: {
+        'sku': '', 'producto': '', 'unidades': 0, 'ventas': Decimal('0'),
+        'pedidos': set(), 'canales': set(),
+    })
+    ventas_diarias = defaultdict(lambda: {'pedidos': 0, 'ventas': Decimal('0'), 'unidades': 0})
+    detalle = []
+    total_ventas = Decimal('0')
+    total_subtotal = Decimal('0')
+    total_descuentos = Decimal('0')
+    total_envios = Decimal('0')
+    total_unidades = 0
+
+    for pedido in queryset:
+        total_ventas += pedido.total or 0
+        total_subtotal += pedido.subtotal or 0
+        total_descuentos += pedido.descuento or 0
+        total_envios += pedido.costo_envio or 0
+
+        empresa = pedido.sucursal.empresa
+        empresa_data = empresas.setdefault(empresa.id, {
+            'id': empresa.id,
+            'nombre': empresa.nombre,
+            'rut': empresa.rut,
+            'pedidos': 0,
+            'ventas': Decimal('0'),
+            'unidades': 0,
+            'sucursales': {},
+        })
+        sucursal_data = empresa_data['sucursales'].setdefault(pedido.sucursal_id, {
+            'id': pedido.sucursal_id,
+            'nombre': pedido.sucursal.alias,
+            'pedidos': 0,
+            'ventas': Decimal('0'),
+            'unidades': 0,
+        })
+
+        vendedor = pedido.ticket.vendedor if pedido.ticket_id and pedido.ticket else None
+        vendedor_key = str(vendedor.id) if vendedor else 'sin-vendedor'
+        vendedor_nombre = str(vendedor) if vendedor else 'Sin vendedor asociado'
+
+        fecha_local = timezone.localtime(pedido.fecha_facturacion).date()
+        fecha_key = fecha_local.isoformat()
+        unidades_pedido = 0
+
+        for item in pedido.items or []:
+            if not isinstance(item, dict):
+                continue
+            cantidad = max(_entero_seguro(item.get('cantidad'), 1), 0)
+            precio = _decimal_seguro(item.get('precio_unitario'))
+            monto_linea = _decimal_seguro(item.get('subtotal'), precio * cantidad)
+            sku = str(item.get('sku') or item.get('sku_rm') or '').strip()
+            nombre = str(
+                item.get('nombre_rm') or item.get('nombre') or item.get('producto') or 'Producto sin nombre'
+            ).strip()
+            producto_key = sku or nombre.lower()
+            producto = productos[producto_key]
+            producto['sku'] = sku or 'Sin SKU'
+            producto['producto'] = nombre
+            producto['unidades'] += cantidad
+            producto['ventas'] += monto_linea
+            producto['pedidos'].add(pedido.id)
+            producto['canales'].add(pedido.canal_origen)
+            unidades_pedido += cantidad
+
+        total_unidades += unidades_pedido
+        empresa_data['pedidos'] += 1
+        empresa_data['ventas'] += pedido.total or 0
+        empresa_data['unidades'] += unidades_pedido
+        sucursal_data['pedidos'] += 1
+        sucursal_data['ventas'] += pedido.total or 0
+        sucursal_data['unidades'] += unidades_pedido
+        canales[pedido.canal_origen]['pedidos'] += 1
+        canales[pedido.canal_origen]['ventas'] += pedido.total or 0
+        canales[pedido.canal_origen]['unidades'] += unidades_pedido
+        vendedores[vendedor_key]['id'] = vendedor.id if vendedor else None
+        vendedores[vendedor_key]['nombre'] = vendedor_nombre
+        vendedores[vendedor_key]['codigo'] = vendedor.codigo_vendedor if vendedor else '-'
+        vendedores[vendedor_key]['pedidos'] += 1
+        vendedores[vendedor_key]['ventas'] += pedido.total or 0
+        vendedores[vendedor_key]['unidades'] += unidades_pedido
+        ventas_diarias[fecha_key]['pedidos'] += 1
+        ventas_diarias[fecha_key]['ventas'] += pedido.total or 0
+        ventas_diarias[fecha_key]['unidades'] += unidades_pedido
+
+        detalle.append({
+            'id': pedido.id,
+            'fecha': timezone.localtime(pedido.fecha_facturacion).strftime('%d/%m/%Y %H:%M'),
+            'fecha_iso': pedido.fecha_facturacion.isoformat(),
+            'ticket_rm': pedido.numero_ticket_rm,
+            'pedido_canal': pedido.numero_pedido_canal,
+            'canal': pedido.get_canal_origen_display(),
+            'canal_codigo': pedido.canal_origen,
+            'empresa': empresa.nombre,
+            'sucursal': pedido.sucursal.alias,
+            'cliente': pedido.cliente_nombre,
+            'documento_cliente': pedido.cliente_documento or '-',
+            'vendedor': vendedor_nombre,
+            'codigo_vendedor': vendedor.codigo_vendedor if vendedor else '-',
+            'operador': _nombre_usuario(pedido.facturado_por),
+            'unidades': unidades_pedido,
+            'subtotal': float(pedido.subtotal or 0),
+            'descuento': float(pedido.descuento or 0),
+            'envio': float(pedido.costo_envio or 0),
+            'total': float(pedido.total or 0),
+            'ticket_id': pedido.ticket_id,
+            'dte_id': pedido.dte_id,
+        })
+
+    total_pedidos = len(detalle)
+    for empresa in empresas.values():
+        empresa['ticket_promedio'] = float(empresa['ventas'] / empresa['pedidos']) if empresa['pedidos'] else 0
+        empresa['participacion'] = float(empresa['ventas'] / total_ventas * 100) if total_ventas else 0
+        empresa['ventas'] = float(empresa['ventas'])
+        empresa['sucursales'] = sorted(
+            [
+                {
+                    **sucursal,
+                    'ventas': float(sucursal['ventas']),
+                    'ticket_promedio': float(sucursal['ventas'] / sucursal['pedidos']) if sucursal['pedidos'] else 0,
+                }
+                for sucursal in empresa['sucursales'].values()
+            ],
+            key=lambda item: item['ventas'],
+            reverse=True,
+        )
+
+    productos_data = sorted([
+        {
+            'sku': item['sku'],
+            'producto': item['producto'],
+            'unidades': item['unidades'],
+            'ventas': float(item['ventas']),
+            'pedidos': len(item['pedidos']),
+            'canales': ', '.join(sorted(item['canales'])),
+            'precio_promedio': float(item['ventas'] / item['unidades']) if item['unidades'] else 0,
+        }
+        for item in productos.values()
+    ], key=lambda item: (item['ventas'], item['unidades']), reverse=True)
+
+    vendedores_data = sorted([
+        {
+            **item,
+            'ventas': float(item['ventas']),
+            'ticket_promedio': float(item['ventas'] / item['pedidos']) if item['pedidos'] else 0,
+        }
+        for item in vendedores.values()
+    ], key=lambda item: item['ventas'], reverse=True)
+    vendedores_reales = [item for item in vendedores_data if item['id'] is not None]
+    pedidos_sin_vendedor = vendedores.get('sin-vendedor', {}).get('pedidos', 0)
+
+    paginator = Paginator(detalle, min(max(_entero_seguro(request.GET.get('page_size'), 25), 10), 100))
+    pagina = paginator.get_page(request.GET.get('page', 1)) if paginar else None
+
+    empresas_filtro = {}
+    for sucursal in sucursales_permitidas:
+        empresas_filtro[sucursal.empresa_id] = sucursal.empresa
+
+    return {
+        'success': True,
+        'periodo': {'inicio': fecha_inicio.isoformat(), 'fin': fecha_fin.isoformat()},
+        'resumen': {
+            'ventas': float(total_ventas),
+            'subtotal': float(total_subtotal),
+            'descuentos': float(total_descuentos),
+            'envios': float(total_envios),
+            'pedidos': total_pedidos,
+            'unidades': total_unidades,
+            'ticket_promedio': float(total_ventas / total_pedidos) if total_pedidos else 0,
+            'empresas': len(empresas),
+            'sucursales': sum(len(empresa['sucursales']) for empresa in empresas.values()),
+            'productos': len(productos_data),
+            'vendedores': len(vendedores_reales),
+            'vendedor_unico': len(vendedores_reales) == 1 and pedidos_sin_vendedor == 0,
+            'pedidos_sin_vendedor': pedidos_sin_vendedor,
+        },
+        'empresas': sorted(empresas.values(), key=lambda item: item['ventas'], reverse=True),
+        'canales': sorted([
+            {
+                'codigo': codigo,
+                'nombre': dict(PedidoEcommerce._meta.get_field('canal_origen').choices).get(codigo, codigo),
+                'pedidos': item['pedidos'],
+                'ventas': float(item['ventas']),
+                'unidades': item['unidades'],
+                'participacion': float(item['ventas'] / total_ventas * 100) if total_ventas else 0,
+            }
+            for codigo, item in canales.items()
+        ], key=lambda item: item['ventas'], reverse=True),
+        'vendedores': vendedores_data,
+        'productos': productos_data,
+        'ventas_diarias': [
+            {'fecha': fecha, 'pedidos': item['pedidos'], 'ventas': float(item['ventas']), 'unidades': item['unidades']}
+            for fecha, item in sorted(ventas_diarias.items())
+        ],
+        'detalle': list(pagina.object_list) if pagina else detalle,
+        'paginacion': {
+            'pagina': pagina.number if pagina else 1,
+            'paginas': paginator.num_pages if paginar else 1,
+            'total': paginator.count,
+            'page_size': paginator.per_page,
+            'tiene_anterior': pagina.has_previous() if pagina else False,
+            'tiene_siguiente': pagina.has_next() if pagina else False,
+        },
+        'filtros': {
+            'empresas': [
+                {'id': empresa.id, 'nombre': empresa.nombre}
+                for empresa in sorted(empresas_filtro.values(), key=lambda item: item.nombre.lower())
+            ],
+            'sucursales': [
+                {'id': sucursal.id, 'nombre': sucursal.alias, 'empresa_id': sucursal.empresa_id}
+                for sucursal in sucursales_permitidas
+            ],
+            'canales': [
+                {'codigo': codigo, 'nombre': nombre}
+                for codigo, nombre in PedidoEcommerce._meta.get_field('canal_origen').choices
+            ],
+        },
+    }
+
+
+@login_required
+def ver_reporte_ventas_internet(request):
+    context = obtener_contexto_sucursales(request.user, request)
+    return render(request, 'vistas/modulo_reportes/reporte_ventas_internet.html', context)
+
+
+@require_GET
+@login_required
+def obtener_reporte_ventas_internet(request):
+    try:
+        return JsonResponse(_construir_reporte_ventas_internet(request))
+    except ValidationError as exc:
+        mensaje = exc.messages[0] if exc.messages else str(exc)
+        return JsonResponse({'success': False, 'error': mensaje}, status=400)
+
+
+@require_GET
+@login_required
+def exportar_reporte_ventas_internet(request):
+    try:
+        data = _construir_reporte_ventas_internet(request, paginar=False)
+        import openpyxl
+        from openpyxl.styles import Alignment, Font, PatternFill
+
+        workbook = openpyxl.Workbook()
+        resumen = workbook.active
+        resumen.title = 'Resumen'
+        encabezado = PatternFill('solid', fgColor='405189')
+        fuente_encabezado = Font(color='FFFFFF', bold=True)
+
+        resumen.append(['INFORME VENTAS INTERNET', f"{data['periodo']['inicio']} al {data['periodo']['fin']}"])
+        resumen.append([])
+        resumen.append(['Indicador', 'Valor'])
+        indicadores = [
+            ('Venta total', data['resumen']['ventas']),
+            ('Pedidos facturados', data['resumen']['pedidos']),
+            ('Unidades vendidas', data['resumen']['unidades']),
+            ('Ticket promedio', data['resumen']['ticket_promedio']),
+            ('Descuentos', data['resumen']['descuentos']),
+            ('Costo de envios', data['resumen']['envios']),
+            ('Empresas', data['resumen']['empresas']),
+            ('Sucursales', data['resumen']['sucursales']),
+            ('Vendedores detectados', data['resumen']['vendedores']),
+        ]
+        for indicador in indicadores:
+            resumen.append(indicador)
+
+        productos_ws = workbook.create_sheet('Productos')
+        productos_ws.append(['SKU', 'Producto', 'Unidades', 'Venta', 'Pedidos', 'Precio promedio', 'Canales'])
+        for producto in data['productos']:
+            productos_ws.append([
+                producto['sku'], producto['producto'], producto['unidades'], producto['ventas'],
+                producto['pedidos'], producto['precio_promedio'], producto['canales'],
+            ])
+
+        detalle_ws = workbook.create_sheet('Detalle pedidos')
+        detalle_ws.append([
+            'Fecha', 'Ticket RM', 'Pedido canal', 'Canal', 'Empresa', 'Sucursal',
+            'Cliente', 'Vendedor', 'Codigo vendedor', 'Operador', 'Unidades',
+            'Subtotal', 'Descuento', 'Envio', 'Total',
+        ])
+        for pedido in data['detalle']:
+            detalle_ws.append([
+                pedido['fecha'], pedido['ticket_rm'], pedido['pedido_canal'], pedido['canal'],
+                pedido['empresa'], pedido['sucursal'], pedido['cliente'], pedido['vendedor'],
+                pedido['codigo_vendedor'], pedido['operador'], pedido['unidades'], pedido['subtotal'],
+                pedido['descuento'], pedido['envio'], pedido['total'],
+            ])
+
+        for sheet in workbook.worksheets:
+            header_row = 3 if sheet.title == 'Resumen' else 1
+            for cell in sheet[header_row]:
+                cell.fill = encabezado
+                cell.font = fuente_encabezado
+                cell.alignment = Alignment(horizontal='center')
+            sheet.freeze_panes = f'A{header_row + 1}'
+            for column_cells in sheet.columns:
+                width = min(max(len(str(cell.value or '')) for cell in column_cells) + 2, 45)
+                sheet.column_dimensions[column_cells[0].column_letter].width = width
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = (
+            f"attachment; filename=ventas_internet_{data['periodo']['inicio']}_{data['periodo']['fin']}.xlsx"
+        )
+        workbook.save(response)
+        return response
+    except ValidationError as exc:
+        mensaje = exc.messages[0] if exc.messages else str(exc)
+        return JsonResponse({'success': False, 'error': mensaje}, status=400)
 
 
 # ========== REPORTE VENTAS GLOBALES POR EMPRESA ==========

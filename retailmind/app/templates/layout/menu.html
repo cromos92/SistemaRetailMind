@@ -2436,6 +2436,11 @@
                                                         <i class="ri-shopping-bag-line"></i> Productos Vendidos
                                                     </a>
                                                 </li>
+                                                <li class="nav-item">
+                                                    <a href="{% url 'ver_reporte_ventas_internet' %}" class="nav-link" data-key="t-ventas-internet">
+                                                        <i class="ri-global-line"></i> Ventas Internet
+                                                    </a>
+                                                </li>
                                                 {% endif %}
                                                 {% if user|puede_ver_opcion:'reporte_documentos_emitidos' %}
                                                 <li class="nav-item">
