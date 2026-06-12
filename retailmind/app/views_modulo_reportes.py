@@ -17,6 +17,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
 import re
+import logging
 from collections import defaultdict
 from decimal import Decimal
 from datetime import datetime, timedelta
@@ -28,7 +29,7 @@ from .models import (
     Empresa, Vendedor, LoteProducto, Traspaso, AjusteInventario,
     TicketDetallePago, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
     Categoria, AtributoOpcion, Productos_Atributos,
-    PermisoRol, PedidoEcommerce,
+    PermisoRol, PedidoEcommerce, CANAL_ECOMMERCE_CHOICES,
 )
 from .utils_permisos import (
     obtener_sucursales_usuario,
@@ -37,6 +38,8 @@ from .utils_permisos import (
     usuario_puede_ver_todas_sucursales,
     obtener_contexto_sucursales,
 )
+
+logger = logging.getLogger('app')
 
 
 # ========== REPORTES DE COMPRAS ==========
@@ -570,8 +573,7 @@ def reporte_productos_mas_vendidos(request):
         })
 
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
+        logger.exception("Error al generar reporte de productos")
         return JsonResponse({'success': False, 'error': f'Error al generar reporte de productos: {str(e)}'})
 
 
@@ -761,8 +763,7 @@ def reporte_valoracion_inventario(request):
         })
 
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
+        logger.exception("Error al generar reporte de valoracion de inventario")
         return JsonResponse({'success': False, 'error': f'Error al generar reporte de valoración: {str(e)}'})
 
 
@@ -874,8 +875,7 @@ def reporte_rotacion_inventario(request):
         })
 
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
+        logger.exception("Error al generar reporte de rotacion")
         return JsonResponse({'success': False, 'error': f'Error al generar reporte de rotación: {str(e)}'})
 
 
@@ -1326,8 +1326,7 @@ def obtener_ventas_por_vendedor_reporte(request):
         })
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener ventas por vendedor")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener ventas por vendedor: {str(e)}'
@@ -1742,8 +1741,7 @@ def obtener_comisiones_por_vendedor(request):
             status=400,
         )
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al calcular comisiones de vendedor")
         return JsonResponse(
             {'success': False, 'error': f'Error al calcular comisiones: {e}'},
             status=500,
@@ -2167,8 +2165,7 @@ def exportar_comisiones_vendedor_excel(request):
         )
         return response
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al exportar comisiones de vendedor")
         return JsonResponse(
             {'success': False, 'error': f'Error al exportar comisiones: {e}'},
             status=500,
@@ -2863,8 +2860,7 @@ def obtener_documentos_vendedor_reporte(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener documentos para reporte")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -3858,9 +3854,7 @@ def obtener_reporte_existencias_marca(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"❌ Error en reporte de existencias por marca: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en reporte de existencias por marca")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener reporte: {str(e)}'
@@ -4114,9 +4108,7 @@ def exportar_existencias_marca_excel(request):
         return response
         
     except Exception as e:
-        import traceback
-        print(f"❌ Error al exportar a Excel: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error al exportar reporte de existencias por marca a Excel")
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar: {str(e)}'
@@ -4242,9 +4234,7 @@ def obtener_reporte_existencias_sucursal(request):
         return JsonResponse({'success': True, 'datos': datos_reporte, 'resumen': resumen})
 
     except Exception as e:
-        import traceback
-        print(f"❌ Error en reporte de existencias por sucursal: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en reporte de existencias por sucursal")
         return JsonResponse({'success': False, 'error': f'Error al obtener reporte: {str(e)}'})
 
 
@@ -4373,9 +4363,7 @@ def exportar_existencias_sucursal_excel(request):
         return response
 
     except Exception as e:
-        import traceback
-        print(f"❌ Error al exportar a Excel: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error al exportar existencias por sucursal a Excel")
         return JsonResponse({'success': False, 'error': f'Error al exportar: {str(e)}'})
 
 
@@ -4498,9 +4486,7 @@ def exportar_existencias_sucursal_pdf(request):
         return response
 
     except Exception as e:
-        import traceback
-        print(f"❌ Error al exportar a PDF: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error al exportar existencias por sucursal a PDF")
         return JsonResponse({'success': False, 'error': f'Error al exportar PDF: {str(e)}'})
 
 
@@ -4631,11 +4617,10 @@ def api_reporte_compras(request):
         })
         
     except Exception as e:
-        import traceback
+        logger.exception("Error al generar reporte de compras")
         return JsonResponse({
             'success': False,
             'error': f'Error al generar reporte: {str(e)}',
-            'traceback': traceback.format_exc()
         }, status=500)
 
 
@@ -5573,11 +5558,10 @@ def exportar_reporte_compras_excel(request):
         return response
         
     except Exception as e:
-        import traceback
+        logger.exception("Error al exportar reporte de compras")
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar: {str(e)}',
-            'traceback': traceback.format_exc()
         }, status=500)
 
 
@@ -6122,11 +6106,10 @@ def api_rendimiento_compras(request):
         })
 
     except Exception as e:
-        import traceback
+        logger.exception("Error al generar rendimiento de compras")
         return JsonResponse({
             'success': False,
             'error': str(e),
-            'traceback': traceback.format_exc()
         }, status=500)
 
 
@@ -6410,9 +6393,7 @@ def obtener_reporte_movimientos_sucursal(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"❌ Error en reporte movimientos por sucursal: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en reporte movimientos por sucursal")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener reporte: {str(e)}'
@@ -6711,9 +6692,7 @@ def exportar_movimientos_sucursal_excel(request):
         return response
         
     except Exception as e:
-        import traceback
-        print(f"❌ Error exportando Excel: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error exportando stock inicial restante a Excel")
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar: {str(e)}'
@@ -6916,11 +6895,10 @@ def api_reporte_recepciones_detallado(request):
         })
 
     except Exception as e:
-        import traceback
+        logger.exception("Error al generar reporte de recepciones detallado")
         return JsonResponse({
             'success': False,
             'error': str(e),
-            'traceback': traceback.format_exc(),
         }, status=500)
 
 
@@ -7015,11 +6993,10 @@ def api_reporte_despachos_detallado(request):
         })
 
     except Exception as e:
-        import traceback
+        logger.exception("Error al generar reporte de despachos detallado")
         return JsonResponse({
             'success': False,
             'error': str(e),
-            'traceback': traceback.format_exc(),
         }, status=500)
 
 
@@ -7045,6 +7022,16 @@ def api_reporte_rendimiento_proveedor(request):
         sucursal_id = request.GET.get('sucursal_id')
 
         compras_qs = Compras.objects.filter(estado__in=['ACTIVA', 'COMPLETADA'])
+        dtes_compra_qs = Dte.objects.filter(tipo_transaccion='COMPRA')
+        if fecha_inicio:
+            dtes_compra_qs = dtes_compra_qs.filter(fecha_emision__gte=fecha_inicio)
+        if fecha_fin:
+            dtes_compra_qs = dtes_compra_qs.filter(fecha_emision__lte=fecha_fin)
+        if not fecha_inicio and not fecha_fin:
+            dtes_compra_qs = dtes_compra_qs.filter(fecha_emision__year=anio)
+        if proveedor_id:
+            dtes_compra_qs = dtes_compra_qs.filter(emisor_id=proveedor_id)
+
         # Para vinculaciones retroactivas, fecha_recepcion lleva la fecha real
         # de la compra; para recepciones normales puede ser NULL y usamos `fecha`.
         rec_path = 'compras_producto__compras_producto_talla__productos_recepcionados'
@@ -7075,13 +7062,27 @@ def api_reporte_rendimiento_proveedor(request):
         else:
             compras_qs = compras_qs.filter(id__in=ids_total)
 
-        prov_ids = list(compras_qs.values_list('empresa_id', flat=True).distinct())
+        prov_ids = set(compras_qs.values_list('empresa_id', flat=True).distinct())
+        prov_ids.update(dtes_compra_qs.values_list('emisor_id', flat=True).distinct())
+        prov_ids.discard(None)
         proveedores = Empresa.objects.filter(id__in=prov_ids).order_by('nombre')
 
         results = []
         for prov in proveedores:
             c_ids = list(compras_qs.filter(empresa=prov).values_list('id', flat=True))
-            if not c_ids:
+            dtes_prov = dtes_compra_qs.filter(emisor=prov).annotate(
+                lineas_inventariables=Count(
+                    'dte_productos',
+                    filter=Q(dte_productos__productoTalla__isnull=False),
+                )
+            )
+            dtes_no_inventariables = dtes_prov.filter(lineas_inventariables=0)
+            docs_no_inventariables = dtes_no_inventariables.count()
+            monto_no_inventariable = dtes_no_inventariables.aggregate(
+                total=Sum('monto_con_iva')
+            )['total'] or 0
+
+            if not c_ids and not docs_no_inventariables:
                 continue
 
             cpt_qs = Compras_Producto_Talla.objects.filter(compra_producto__compras_id__in=c_ids)
@@ -7089,6 +7090,21 @@ def api_reporte_rendimiento_proveedor(request):
             inversion = cpt_qs.aggregate(total=Sum(F('compra_producto__costo') * F('stock')))['total'] or 0
 
             recep_qs = Productos_Recepcionados.objects.filter(compra_producto_talla__compra_producto__compras_id__in=c_ids)
+            if fecha_inicio:
+                recep_qs = recep_qs.filter(
+                    Q(fecha_recepcion__date__gte=fecha_inicio) |
+                    (Q(fecha_recepcion__isnull=True) & Q(fecha__gte=fecha_inicio))
+                )
+            if fecha_fin:
+                recep_qs = recep_qs.filter(
+                    Q(fecha_recepcion__date__lte=fecha_fin) |
+                    (Q(fecha_recepcion__isnull=True) & Q(fecha__lte=fecha_fin))
+                )
+            if not fecha_inicio and not fecha_fin:
+                recep_qs = recep_qs.filter(
+                    Q(fecha_recepcion__year=anio) |
+                    (Q(fecha_recepcion__isnull=True) & Q(fecha__year=anio))
+                )
             pares_recepcionados = recep_qs.aggregate(total=Sum('stockArribado'))['total'] or 0
 
             # Vendidos: IDs directos + match por articulo cross-sucursal
@@ -7125,6 +7141,13 @@ def api_reporte_rendimiento_proveedor(request):
                 'pares_vendidos': pares_vendidos, 'pct_recepcion': pct_r, 'pct_venta': pct_v,
                 'inversion_total': inv_f, 'venta_total': venta_total,
                 'margen': round(venta_total - costo_v, 0), 'stock_disponible': pares_recepcionados - pares_vendidos,
+                'pendiente_recepcion': max((pares_comprados or 0) - (pares_recepcionados or 0), 0),
+                'documentos_no_inventariables': docs_no_inventariables,
+                'monto_no_inventariable': float(monto_no_inventariable),
+                'metodologia': (
+                    'Incluye compras por concepto/sin detalle inventariable; se informan como monto no inventariable.'
+                    if docs_no_inventariables else ''
+                ),
             })
 
         results.sort(key=lambda x: x['inversion_total'], reverse=True)
@@ -7137,13 +7160,20 @@ def api_reporte_rendimiento_proveedor(request):
             'total_vendidos': tv, 'pct_recepcion_global': round((tr / tc) * 100, 1) if tc > 0 else 0,
             'pct_venta_global': round((tv / tr) * 100, 1) if tr > 0 else 0,
             'total_inversion': sum(r['inversion_total'] for r in results),
+            'total_monto_no_inventariable': sum(r['monto_no_inventariable'] for r in results),
+            'total_documentos_no_inventariables': sum(r['documentos_no_inventariables'] for r in results),
+            'total_pendiente_recepcion': sum(r['pendiente_recepcion'] for r in results),
             'total_venta': sum(r['venta_total'] for r in results),
             'total_margen': sum(r['margen'] for r in results),
-        }, 'proveedores': results})
+        }, 'proveedores': results, 'metodologia': {
+            'comprados': 'Unidades desde Compras_Producto_Talla de compras activas/completadas.',
+            'recepcionados': 'Unidades desde Productos_Recepcionados en el periodo consultado.',
+            'no_inventariable': 'DTE de compra sin lineas con Producto_Talla se muestra como monto por concepto; no suma pares ni recepcion.',
+        }})
 
     except Exception as e:
-        import traceback
-        return JsonResponse({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}, status=500)
+        logger.exception("Error al generar rendimiento por proveedor")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @require_GET
@@ -7167,7 +7197,8 @@ def exportar_rendimiento_proveedor_excel(request):
         brd = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
         headers = ['Proveedor', 'RUT', 'Comprados', 'Recepcionados', 'Vendidos',
-                    '% Recep', '% Venta', 'Inversion', 'Venta Total', 'Margen', 'Stock Disp.']
+                    '% Recep', '% Venta', 'Inversion inventariable', 'Monto no inventariable',
+                    'Docs no inventariables', 'Venta Total', 'Margen', 'Pend. recepcion', 'Stock Disp.']
         for col, h in enumerate(headers, 1):
             c = ws.cell(row=1, column=col, value=h)
             c.font, c.fill, c.alignment, c.border = hf, hfill, Alignment(horizontal='center'), brd
@@ -7175,7 +7206,8 @@ def exportar_rendimiento_proveedor_excel(request):
         for i, p in enumerate(data['proveedores'], 2):
             vals = [p['proveedor_nombre'], p['proveedor_rut'], p['pares_comprados'], p['pares_recepcionados'],
                     p['pares_vendidos'], p['pct_recepcion'], p['pct_venta'], p['inversion_total'],
-                    p['venta_total'], p['margen'], p['stock_disponible']]
+                    p.get('monto_no_inventariable', 0), p.get('documentos_no_inventariables', 0),
+                    p['venta_total'], p['margen'], p.get('pendiente_recepcion', 0), p['stock_disponible']]
             for col, v in enumerate(vals, 1):
                 c = ws.cell(row=i, column=col, value=v)
                 c.border = brd
@@ -7190,6 +7222,7 @@ def exportar_rendimiento_proveedor_excel(request):
         wb.save(resp)
         return resp
     except Exception as e:
+        logger.exception("Error al exportar rendimiento por proveedor")
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -7259,6 +7292,38 @@ def _nombre_plataforma(valor):
     return valor or 'Sin plataforma'
 
 
+def _codigos_canal_ecommerce(valor):
+    normalizado = (valor or '').strip().upper()
+    if not normalizado:
+        return []
+    codigos = {normalizado}
+    for codigo, nombre in CANAL_ECOMMERCE_CHOICES:
+        if normalizado in {codigo.upper(), nombre.upper()}:
+            codigos.add(codigo)
+    return sorted(codigos)
+
+
+def _normalizar_tipo_boleta(tipo_documento):
+    tipo = (tipo_documento or '').strip().upper().replace('_', ' ')
+    if 'BOLETA' not in tipo:
+        return ''
+    if 'EXENTA' in tipo:
+        return 'Boleta exenta'
+    if 'ELECTRONICA' in tipo:
+        return 'Boleta electronica'
+    if 'PAPEL' in tipo or tipo == 'BOLETA':
+        return 'Boleta papel/manual'
+    return 'Boleta'
+
+
+def _tipo_boleta_emitida(ticket, dte=None):
+    if dte and getattr(dte, 'tipo_documento', None):
+        return _normalizar_tipo_boleta(dte.tipo_documento)
+    if ticket.folio_dte:
+        return _normalizar_tipo_boleta(ticket.tipo_dte)
+    return ''
+
+
 def _linea_producto_nombre(linea):
     if linea.ProductoTalla and linea.ProductoTalla.producto:
         producto = linea.ProductoTalla.producto
@@ -7315,7 +7380,10 @@ def _construir_reporte_ventas_internet(request, paginar=True):
                 | Q(pagos__metodo_pago='VENTA_INTERNET', pagos__tipo_tarjeta='')
             )
         else:
-            queryset = queryset.filter(pagos__metodo_pago='VENTA_INTERNET', pagos__tipo_tarjeta__iexact=plataforma)
+            queryset = queryset.filter(
+                Q(pagos__metodo_pago='VENTA_INTERNET', pagos__tipo_tarjeta__iexact=plataforma)
+                | Q(pedidos_ecommerce__canal_origen__in=_codigos_canal_ecommerce(plataforma))
+            ).distinct()
     if origen == 'ECOMMERCE':
         queryset = queryset.filter(modulo_origen='ECOMMERCE')
     elif origen == 'POS':
@@ -7340,6 +7408,18 @@ def _construir_reporte_ventas_internet(request, paginar=True):
     plataformas = defaultdict(lambda: {'tickets': set(), 'ventas': Decimal('0'), 'unidades': 0})
     origenes = defaultdict(lambda: {'tickets': 0, 'ventas': Decimal('0'), 'unidades': 0})
     vendedores = defaultdict(lambda: {'tickets': 0, 'ventas': Decimal('0'), 'unidades': 0})
+    boletas_empresas = defaultdict(lambda: {
+        'id': None,
+        'empresa': '',
+        'rut': '',
+        'boletas_total': 0,
+        'boleta_electronica': 0,
+        'boleta_papel': 0,
+        'boleta_exenta': 0,
+        'otras_boletas': 0,
+        'tickets': set(),
+        'monto_internet': Decimal('0'),
+    })
     productos = defaultdict(lambda: {
         'sku': '', 'producto': '', 'unidades': 0, 'venta_internet_asignada': Decimal('0'),
         'venta_ticket_total': Decimal('0'), 'tickets': set(), 'plataformas': set(), 'origenes': set(),
@@ -7355,6 +7435,7 @@ def _construir_reporte_ventas_internet(request, paginar=True):
     total_unidades = 0
     total_ecommerce = 0
     total_pos = 0
+    total_boletas = 0
     monto_fallback_ecommerce = Decimal('0')
 
     for ticket in queryset:
@@ -7498,6 +7579,24 @@ def _construir_reporte_ventas_internet(request, paginar=True):
             dte_label = f'{dte.tipo_documento} #{dte.numero_documento}'
         elif ticket.folio_dte:
             dte_label = f'{ticket.tipo_dte or "DTE"} #{ticket.folio_dte}'
+        tipo_boleta = _tipo_boleta_emitida(ticket, dte)
+        if tipo_boleta:
+            total_boletas += 1
+            boleta_empresa = boletas_empresas[empresa.id]
+            boleta_empresa['id'] = empresa.id
+            boleta_empresa['empresa'] = empresa.nombre
+            boleta_empresa['rut'] = empresa.rut
+            boleta_empresa['boletas_total'] += 1
+            boleta_empresa['tickets'].add(ticket.id)
+            boleta_empresa['monto_internet'] += monto_internet
+            if tipo_boleta == 'Boleta electronica':
+                boleta_empresa['boleta_electronica'] += 1
+            elif tipo_boleta == 'Boleta papel/manual':
+                boleta_empresa['boleta_papel'] += 1
+            elif tipo_boleta == 'Boleta exenta':
+                boleta_empresa['boleta_exenta'] += 1
+            else:
+                boleta_empresa['otras_boletas'] += 1
         fecha_venta_str = fecha_dt.strftime('%d/%m/%Y %H:%M') if fecha_dt else ''
         fecha_venta_iso = fecha_dt.isoformat() if fecha_dt else ''
         fecha_recepcion = timezone.localtime(pedido.fecha_recepcion).strftime('%d/%m/%Y %H:%M') if pedido and pedido.fecha_recepcion else ''
@@ -7523,6 +7622,7 @@ def _construir_reporte_ventas_internet(request, paginar=True):
             'pedido_canal': pedido.numero_pedido_canal if pedido else '',
             'numero_pedido_canal': pedido.numero_pedido_canal if pedido else '',
             'dte': dte_label or '-',
+            'tipo_boleta': tipo_boleta,
             'empresa': empresa.nombre,
             'sucursal': ticket.sucursal.alias,
             'cliente': ticket.cliente_nombre or (pedido.cliente_nombre if pedido else ''),
@@ -7588,7 +7688,25 @@ def _construir_reporte_ventas_internet(request, paginar=True):
         for item in vendedores.values()
     ], key=lambda item: item['ventas'], reverse=True)
     vendedores_reales = [item for item in vendedores_data if item['id'] is not None]
-    pedidos_sin_vendedor = vendedores.get('sin-vendedor', {}).get('pedidos', 0)
+    pedidos_sin_vendedor = vendedores.get('sin-vendedor', {}).get('tickets', 0)
+
+    boletas_empresas_data = sorted([
+        {
+            'id': item['id'],
+            'empresa': item['empresa'],
+            'nombre': item['empresa'],
+            'rut': item['rut'],
+            'boletas_total': item['boletas_total'],
+            'boleta_electronica': item['boleta_electronica'],
+            'boleta_papel': item['boleta_papel'],
+            'boleta_exenta': item['boleta_exenta'],
+            'otras_boletas': item['otras_boletas'],
+            'tickets': len(item['tickets']),
+            'monto_internet': float(item['monto_internet']),
+            'participacion': (item['boletas_total'] / total_boletas * 100) if total_boletas else 0,
+        }
+        for item in boletas_empresas.values()
+    ], key=lambda item: (item['boletas_total'], item['monto_internet']), reverse=True)
 
     paginator = Paginator(detalle, min(max(_entero_seguro(request.GET.get('page_size'), 25), 10), 100))
     pagina = paginator.get_page(request.GET.get('page', 1)) if paginar else None
@@ -7596,6 +7714,28 @@ def _construir_reporte_ventas_internet(request, paginar=True):
     empresas_filtro = {}
     for sucursal in sucursales_permitidas:
         empresas_filtro[sucursal.empresa_id] = sucursal.empresa
+    plataformas_filtro = set(
+        TicketDetallePago.objects.filter(
+            ticket__sucursal_id__in=sucursal_ids,
+            metodo_pago='VENTA_INTERNET',
+        )
+        .exclude(tipo_tarjeta__isnull=True)
+        .exclude(tipo_tarjeta='')
+        .values_list('tipo_tarjeta', flat=True)
+    )
+    canal_display = dict(CANAL_ECOMMERCE_CHOICES)
+    canales_ecommerce = PedidoEcommerce.objects.filter(
+        ticket__sucursal_id__in=sucursal_ids,
+    ).exclude(canal_origen__isnull=True).exclude(canal_origen='').values_list('canal_origen', flat=True).distinct()
+    for canal in canales_ecommerce:
+        plataformas_filtro.add(canal_display.get(canal, canal))
+    vendedores_ticket_ids = Ticket.objects.filter(
+        sucursal_id__in=sucursal_ids,
+        vendedor__isnull=False,
+    ).values_list('vendedor_id', flat=True).distinct()
+    vendedores_filtro = Vendedor.objects.filter(
+        Q(sucursales__id__in=sucursal_ids) | Q(id__in=vendedores_ticket_ids)
+    ).distinct().order_by('nombre')
 
     return {
         'success': True,
@@ -7618,6 +7758,8 @@ def _construir_reporte_ventas_internet(request, paginar=True):
             'plataformas': len(plataformas),
             'ecommerce_count': total_ecommerce,
             'pos_count': total_pos,
+            'boletas': total_boletas,
+            'boletas_empresas': len(boletas_empresas_data),
             'monto_fallback_ecommerce': float(monto_fallback_ecommerce),
             'vendedores': len(vendedores_reales),
             'vendedor_unico': len(vendedores_reales) == 1 and pedidos_sin_vendedor == 0,
@@ -7659,6 +7801,7 @@ def _construir_reporte_ventas_internet(request, paginar=True):
             for item in origenes.values()
         ], key=lambda item: item['ventas'], reverse=True),
         'vendedores': vendedores_data,
+        'boletas_empresas': boletas_empresas_data,
         'productos': productos_data,
         'ventas_diarias': [
             {'fecha': fecha, 'pedidos': item['tickets'], 'tickets': item['tickets'], 'ventas': float(item['ventas']), 'unidades': item['unidades']}
@@ -7686,17 +7829,18 @@ def _construir_reporte_ventas_internet(request, paginar=True):
             'canales': [],
             'plataformas': [
                 {'codigo': item['nombre'], 'nombre': item['nombre']}
-                for item in sorted([
-                    {'nombre': nombre}
-                    for nombre in set(TicketDetallePago.objects.filter(
-                        ticket__sucursal_id__in=sucursal_ids,
-                        metodo_pago='VENTA_INTERNET',
-                    ).exclude(tipo_tarjeta__isnull=True).exclude(tipo_tarjeta='').values_list('tipo_tarjeta', flat=True))
-                ], key=lambda item: item['nombre'].lower())
+                for item in sorted(
+                    [{'nombre': nombre} for nombre in plataformas_filtro],
+                    key=lambda item: item['nombre'].lower(),
+                )
             ],
             'origenes': [
                 {'codigo': 'ECOMMERCE', 'nombre': 'Ecommerce / AllConnected'},
                 {'codigo': 'POS', 'nombre': 'POS Venta Internet'},
+            ],
+            'vendedores': [
+                {'id': vendedor.id, 'nombre': str(vendedor), 'codigo': vendedor.codigo_vendedor or '-'}
+                for vendedor in vendedores_filtro
             ],
         },
     }
@@ -7742,6 +7886,7 @@ def exportar_reporte_ventas_internet(request):
             ('Ticket promedio', data['resumen']['ticket_promedio']),
             ('Ecommerce / AllConnected', data['resumen']['ecommerce_count']),
             ('POS Venta Internet', data['resumen']['pos_count']),
+            ('Boletas emitidas', data['resumen']['boletas']),
             ('Plataformas', data['resumen']['plataformas']),
             ('Fallback ecommerce sin pago internet', data['resumen']['monto_fallback_ecommerce']),
             ('Empresas', data['resumen']['empresas']),
@@ -7772,10 +7917,24 @@ def exportar_reporte_ventas_internet(request):
                 plataforma['ventas'], plataforma['participacion'],
             ])
 
+        boletas_ws = workbook.create_sheet('Boletas empresa')
+        boletas_ws.append([
+            'Empresa', 'RUT', 'Boletas total', 'Boleta electronica',
+            'Boleta papel/manual', 'Boleta exenta', 'Otras boletas',
+            'Tickets', 'Monto internet', 'Participacion %',
+        ])
+        for item in data['boletas_empresas']:
+            boletas_ws.append([
+                item['empresa'], item['rut'], item['boletas_total'],
+                item['boleta_electronica'], item['boleta_papel'],
+                item['boleta_exenta'], item['otras_boletas'], item['tickets'],
+                item['monto_internet'], item['participacion'],
+            ])
+
         detalle_ws = workbook.create_sheet('Detalle pedidos')
         detalle_ws.append([
             'Fecha venta', 'Origen', 'Plataforma', 'Ticket', 'Pedido RM', 'Pedido canal',
-            'DTE/Folio', 'Empresa', 'Sucursal', 'Cliente', 'RUT/Doc', 'Vendedor',
+            'DTE/Folio', 'Tipo boleta', 'Empresa', 'Sucursal', 'Cliente', 'RUT/Doc', 'Vendedor',
             'Codigo vendedor', 'Operador', 'Fecha recepcion', 'Fecha facturacion',
             'Voucher', 'Unidades', 'Monto internet', 'Total ticket', 'Mixto', 'Fallback',
         ])
@@ -7783,8 +7942,8 @@ def exportar_reporte_ventas_internet(request):
             detalle_ws.append([
                 pedido['fecha_venta'], pedido['origen'], pedido['plataforma'], pedido['correlativo'],
                 pedido['numero_ticket_rm'], pedido['numero_pedido_canal'], pedido['dte'],
-                pedido['empresa'], pedido['sucursal'], pedido['cliente'], pedido['documento_cliente'],
-                pedido['vendedor'], pedido['codigo_vendedor'], pedido['operador'],
+                pedido['tipo_boleta'], pedido['empresa'], pedido['sucursal'], pedido['cliente'],
+                pedido['documento_cliente'], pedido['vendedor'], pedido['codigo_vendedor'], pedido['operador'],
                 pedido['fecha_recepcion'], pedido['fecha_facturacion'], pedido['voucher'],
                 pedido['unidades'], pedido['monto_internet'], pedido['total_ticket'],
                 'Si' if pedido['es_mixto'] else 'No',
@@ -8031,8 +8190,7 @@ def obtener_ventas_global_por_empresa(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener reporte de ventas sucursal")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -8678,8 +8836,7 @@ def obtener_ventas_comparativo(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener comparativo de ventas")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -9097,8 +9254,7 @@ def obtener_productos_vendidos(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener reporte productos vendidos")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -9142,6 +9298,5 @@ def obtener_atributo_opciones(request):
             'opciones': [{'id': x['id'], 'nombre': x['valor']} for x in qs],
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener opciones de atributo para reportes")
         return JsonResponse({'success': False, 'error': str(e)})

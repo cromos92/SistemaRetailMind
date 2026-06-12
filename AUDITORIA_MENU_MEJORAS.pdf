@@ -1,0 +1,402 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+4 0 obj
+<< /Length 7063 >>
+stream
+BT
+/F2 18.0 Tf 1 0 0 1 42.0 796.0 Tm (Auditoria integral del menu RetailMind) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 779.0 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 772.0 Tm (Fecha: 2026-06-12) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 761.0 Tm (Fuente principal: `retailmind/app/templates/layout/menu.html`) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 750.0 Tm (Alcance: frontend, backend, permisos, rutas, entrega de informacion y viabilidad por opcion) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 739.0 Tm (visible del menu.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 728.0 Tm () Tj
+/F2 14.0 Tf 1 0 0 1 42.0 721.0 Tm (Resumen ejecutivo) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 708.0 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 701.0 Tm (El menu actual contiene 65 entradas crudas extraidas del HTML. Al quitar duplicados condicionales,) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 690.0 Tm (como enlaces directos que se muestran cuando el usuario tiene una sola opcion disponible, quedan) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 679.0 Tm (cerca de 60 opciones funcionales. El mapa historico `MAPA_MENU_SISTEMA.md` esta desactualizado: no) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 668.0 Tm (incluye ecommerce, revision de arqueos/depositos, varios reportes, busqueda por sucursal, tarjeta) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 657.0 Tm (de movimiento, despacho a sucursales, trazabilidad, guias de talla e integraciones ecommerce.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 646.0 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 639.0 Tm (Los mayores problemas transversales son:) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 628.0 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 621.0 Tm (1. Templates excesivamente grandes con CSS/JS inline: `verGestionProductos.html` supera 15k) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 610.0 Tm (lineas, `generacionVentas.html` 12k, `gestionCompras.html` 9.9k,) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 599.0 Tm (`gestion_cambios_devoluciones.html` 9.2k, `gestionDteCompras.html` 6.6k, `recepcion_dte.html` 6.2k) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 588.0 Tm (y `emisionDTE.html` 6.1k.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 577.0 Tm (2. Mezcla de rutas hardcodeadas \(`/app/...`\) y `{% url %}` en menu y templates. Esto dificulta) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 566.0 Tm (renombrar rutas, auditar permisos y detectar enlaces rotos.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 555.0 Tm (3. El filtro `user|puede_ver_opcion` no usa `request.session`, por diseno declarado en) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 544.0 Tm (`permisos_tags.py`; por lo tanto el menu puede mostrar opciones que una sucursal bloquea y el) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 533.0 Tm (usuario termina en bloqueo backend.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 522.0 Tm (4. `Guias de Talla` aparece en el menu sin wrapper de permiso propio. Deberia tener) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 511.0 Tm (`puede_ver_opcion:'ver_guias_talla'` o un codigo de permiso consistente.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 500.0 Tm (5. `Ventas Internet` esta visualmente colgada de `reporte_productos_vendidos`; conviene permiso) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 489.0 Tm (propio \(`reporte_ventas_internet`\) para gobierno y auditoria.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 478.0 Tm (6. Hay muchos `print\(\)` en backend de operacion critica, especialmente ventas, compras, reportes,) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 467.0 Tm (usuarios y empresas. Deben migrarse a `logger`.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 456.0 Tm (7. La informacion se entrega de forma muy dispar entre modulos: algunos tienen KPIs, filtros,) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 445.0 Tm (estados vacios y exportacion; otros son pantallas cortas sin contexto ni resumen.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 434.0 Tm (8. El sistema ya tiene patrones NEXO y modulos \(`module-header`, `kpi-card`, `pagination-) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 423.0 Tm (controls`\), pero no se aplican de forma uniforme.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 412.0 Tm () Tj
+/F2 14.0 Tf 1 0 0 1 42.0 405.0 Tm (Prioridad global sugerida) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 392.0 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 385.0 Tm (| Prioridad | Mejora | Impacto | Viabilidad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 376.4 Tm (|---|---|---:|---:|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 367.8 Tm (| P0 | Corregir permisos visibles del menu: `Guias de Talla`, `Ventas Internet`, y menu) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 359.2 Tm (sensible a sucursal | Alto | Media |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 350.6 Tm (| P0 | Reemplazar prints de flujos criticos POS/DTE/stock por logger | Alto | Alta |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 342.0 Tm (| P1 | Normalizar rutas hardcodeadas a `{% url %}` en menu y templates principales | Alto |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 333.4 Tm (Media |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 324.8 Tm (| P1 | Dividir JS inline de templates gigantes por modulo | Alto | Media |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 316.2 Tm (| P1 | Unificar estados vacios, carga, errores y exportacion en reportes y dashboards | Alto) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 307.6 Tm (| Alta |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 299.0 Tm (| P1 | Agregar resumen operativo por pantalla: ultima actualizacion, filtros activos,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 290.4 Tm (sucursal/empresa y totales | Alto | Alta |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 281.8 Tm (| P2 | Crear componentes reutilizables para filtros, paginacion, KPIs y tablas | Medio |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 273.2 Tm (Media |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 264.6 Tm (| P2 | Revisar performance de consultas con listados amplios y endpoints JSON | Medio |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 256.0 Tm (Media |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 247.4 Tm (| P3 | Actualizar `MAPA_MENU_SISTEMA.md` desde el menu real | Medio | Alta |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 238.8 Tm () Tj
+/F2 14.0 Tf 1 0 0 1 42.0 231.8 Tm (Hallazgos transversales tecnicos) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 218.8 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 211.8 Tm (- `retailmind/app/views.py` sigue siendo monolitico con mas de 32k lineas y 314 funciones. Hay) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 200.8 Tm (  logica aun duplicada o reexportada en archivos por modulo.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 189.8 Tm (- `views_modulo_ventas.py` tiene casi 18k lineas, 632 usos de `JsonResponse` y cerca de 196) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 178.8 Tm (  `print\(\)`. Es el mayor riesgo operativo por mezclar POS, pagos, stock, DTE, cambios,) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 167.8 Tm (  cuadratura y dashboards.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 156.8 Tm (- `views_modulo_reportes.py` tiene mas de 9k lineas y muchos endpoints agregadores; requiere) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 145.8 Tm (  estandarizar filtros, permisos y exportaciones.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 134.8 Tm (- `views_modulo_gestion_precios.py`, `views_modulo_compras.py` y `views_resumen_existencias.py`) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 123.8 Tm (  tambien tienen `print\(\)` o depuracion en flujos que deberian usar logger.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 112.8 Tm (- Hay rutas nuevas en menu que no estan en el mapa historico; si gestion de permisos depende de) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 101.8 Tm (  `OpcionMenu`, conviene tener seed/migracion controlada o comando de auditoria no destructivo) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 90.8 Tm (  para detectar desalineaciones.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 79.8 Tm () Tj
+/F2 14.0 Tf 1 0 0 1 42.0 72.8 Tm (Mejoras por opcion de menu) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 59.8 Tm () Tj
+/F1 8 Tf 1 0 0 1 42.0 23.0 Tm (Auditoria menu RetailMind - pagina 1 de 4) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 8458 >>
+stream
+BT
+/F1 9.2 Tf 1 0 0 1 42.0 796.0 Tm (Leyenda: esfuerzo S/M/L, riesgo Bajo/Medio/Alto, prioridad P0-P3.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 785.0 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 778.0 Tm (Dashboard) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 767.0 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 760.0 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 751.4 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 742.8 Tm (| Dashboard General | Mostrar empresa/sucursal activa, rango de fechas visible, hora de) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 734.2 Tm (ultima actualizacion y acceso rapido a pendientes operativos: DTE, stock critico, arqueos) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 725.6 Tm (abiertos. Unificar `dashboard_home.html`/`dashboard_general.html` si ambos siguen vivos. | M) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 717.0 Tm (/ Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 708.4 Tm (| Dashboard Ventas | Priorizar indicadores accionables: ventas hoy vs meta, tickets) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 699.8 Tm (pendientes de pago/DTE, diferencias de caja y ventas por canal. Agregar estado vacio para) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 691.2 Tm (sucursales sin ventas y exportacion del resumen. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 682.6 Tm (| Dashboard Compras | Convertir KPIs en decisiones: facturas pendientes, recepciones) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 674.0 Tm (incompletas, proveedores con atraso, compras por temporada. Mantener drill-down consistente) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 665.4 Tm (hacia Gestion Compras y DTE Compras. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 656.8 Tm (| Dashboard Existencias - Productos | Resumir stock critico, productos sin precio, productos) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 648.2 Tm (sin guia de talla y articulos excluidos de analitica. Usar los mismos filtros de) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 639.6 Tm (existencias/reportes. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 631.0 Tm (| Dashboard Existencias - FIFO / Lotes | Explicar alertas FIFO con accion directa: lotes) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 622.4 Tm (antiguos, costo promedio, stock negativo o sin lote. Agregar exportacion y fecha de calculo.) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 613.8 Tm (| M / Medio | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 605.2 Tm (| Dashboard Documentos | Separar emitidos, recibidos, rechazados y pendientes Acepta/SII.) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 596.6 Tm (Debe enlazar a Gestion DTE o Recepcion con filtros preaplicados. | S / Bajo | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 588.0 Tm (| Dashboard Despachos | Mostrar cola por estado: pendiente, en transito, recibido,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 579.4 Tm (rechazado. Debe permitir filtrar por origen/destino y saltar a trazabilidad. | M / Medio |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 570.8 Tm (P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 562.2 Tm (| Dashboard Requerimientos | Incluir SLA, antiguedad, tipo, responsable y pendientes) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 553.6 Tm (proveedor. Sin esto es solo tablero descriptivo. | S / Bajo | P2 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 545.0 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 538.0 Tm (Ventas) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 527.0 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 520.0 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 511.4 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 502.8 Tm (| Ticket de Venta | Reducir incertidumbre: mostrar correlativo disponible, sucursal activa,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 494.2 Tm (tipo DTE posible y estado de impresora/QZ antes de vender. Reemplazar prints de debug en) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 485.6 Tm (backend por logger. | M / Medio | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 477.0 Tm (| Cambios y Devoluciones | Convertir el flujo largo en pasos visibles: buscar documento,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 468.4 Tm (validar ventana/reglas, seleccionar productos, autorizar, devolver/generar NC. Agregar) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 459.8 Tm (resumen de impacto en stock y caja antes de confirmar. | L / Alto | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 451.2 Tm (| Generar Venta | Es pantalla POS critica. Mejorar foco teclado/lector, estados) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 442.6 Tm (offline/online, mensajes de stock insuficiente y confirmacion de pagos. Separar JS inline de) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 434.0 Tm (`generacionVentas.html`. | L / Alto | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 425.4 Tm (| Consulta Documentos | Enfatizar trazabilidad de DTE/ticket: estado pago, estado DTE,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 416.8 Tm (vendedor, sucursal, acciones permitidas y razon de acciones deshabilitadas. | M / Medio | P1) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 408.2 Tm (|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 399.6 Tm (| Cuadratura y Arqueo | Guiar cierre paso a paso: ventas teoricas, medios de pago,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 391.0 Tm (depositos, diferencias, aprobacion/reapertura. Marcar datos recalculados vs guardados. | M /) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 382.4 Tm (Medio | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 373.8 Tm (| Revision Arqueos y Depositos | Agregar cola priorizada: diferencias altas, depositos sin) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 365.2 Tm (comprobante, reaperturas, vencidos. Permitir filtros por riesgo y exportacion. | M / Medio |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 356.6 Tm (P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 348.0 Tm (| POS Transbank | Mostrar estado del dispositivo, puerto, ultimo ACK, ultima transaccion,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 339.4 Tm (modo SDK/simple y recuperacion ante falla. Unificar mensajes con `pos-transbank.css`. | M /) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 330.8 Tm (Medio | P0 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 322.2 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 315.2 Tm (Ecommerce) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 304.2 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 297.2 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 288.6 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 280.0 Tm (| Pedidos | Hacer visible el ciclo completo: recibido, SKU matcheado, sucursal sugerida,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 271.4 Tm (facturado, error de stock, cancelado. Agregar filtros por subestado y acciones masivas con) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 262.8 Tm (prevalidacion. | M / Medio | P1 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 254.2 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 247.2 Tm (Documentos) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 236.2 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 229.2 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 220.6 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 212.0 Tm (| Emision DTE | `emisionDTE.html` es muy grande. Separar JS por responsabilidades: receptor,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 203.4 Tm (productos, correlativo, validaciones, TXT Acepta. Mostrar prechequeo de) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 194.8 Tm (correlativo/certificado/sucursal antes de emitir. | L / Alto | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 186.2 Tm (| Emision por Concepto | Estandarizar con Emision DTE: preview de documento, impuestos,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 177.6 Tm (receptor, forma de pago y errores accionables. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 169.0 Tm (| Gestion DTE | Fortalecer tabla: filtros por estado SII/Acepta, tipo, sucursal, vendedor y) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 160.4 Tm (diferencias. Acciones deshabilitadas deben explicar permiso o estado que las bloquea. | M /) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 151.8 Tm (Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 143.2 Tm (| Recepcion Documentos | El flujo es complejo. Separar pendientes, historial, rechazados y) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 134.6 Tm (regularizacion con contadores visibles. Mostrar diferencias por producto y decision) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 126.0 Tm (sugerida. | L / Alto | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 117.4 Tm (| Gestion Cotizaciones | Integrar embudo: borrador, enviada, aceptada, facturada, vencida.) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 108.8 Tm (Mostrar conversion a venta/DTE y bloquear acciones segun estado. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 100.2 Tm (| Gestion Correlativos | Agregar semaforo por tipo DTE/sucursal: disponible, bajo, vencido,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 91.6 Tm (sin CAF. Alertas anticipadas y exportacion son prioritarias. | S / Bajo | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 83.0 Tm (| Gestion Creditos | Simplificar datos de deuda: cupo, saldo, mora, historial de pagos y) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 74.4 Tm (riesgo. Separar cliente/trabajador si ambos conviven historicamente. | M / Medio | P1 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 65.8 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 58.8 Tm (Existencias) Tj
+/F1 8 Tf 1 0 0 1 42.0 23.0 Tm (Auditoria menu RetailMind - pagina 2 de 4) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 8737 >>
+stream
+BT
+/F1 9.0 Tf 1 0 0 1 42.0 796.0 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 789.0 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 780.4 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 771.8 Tm (| Gestion Producto | `verGestionProductos.html` es el mayor template. Dividir JS/CSS, crear) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 763.2 Tm (subflujos: crear producto, editar variacion, precios, stock, guias de talla, exclusion) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 754.6 Tm (analitica. Agregar resumen de calidad de catalogo. | L / Alto | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 746.0 Tm (| Gestion de Precios | Mostrar impacto antes de aplicar: productos afectados, margen) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 737.4 Tm (anterior/nuevo, stock con alerta y sucursales sincronizadas. Agregar bitacora visible. | M /) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 728.8 Tm (Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 720.2 Tm (| Alertas de Precios | Convertir en bandeja de aprobacion: origen del cambio, impacto,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 711.6 Tm (usuario, sucursal, fecha y accion masiva. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 703.0 Tm (| Movimientos Por Sucursal | Mejorar lectura: saldo inicial, entradas, salidas, ajustes,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 694.4 Tm (traspasos y saldo final por periodo. Enlazar a tarjeta de movimiento. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 685.8 Tm (| Gestion de Inventarios | Buen candidato a wizard: configurar, congelar corte, conteo,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 677.2 Tm (diferencias, aprobacion, aplicar ajustes. Mostrar progreso y errores de importacion de) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 668.6 Tm (pistola. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 660.0 Tm (| Impresion Etiquetas Zebra | Mostrar previsualizacion de etiqueta, origen del) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 651.4 Tm (precio/codigo, historial de impresiones y estado de impresora. | M / Medio | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 642.8 Tm (| Buscar Producto Sucursal | Orientarla a consulta rapida: stock por sucursal, precio,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 634.2 Tm (ubicacion, ultima venta, ultimo ingreso y accion para traspaso. | S / Bajo | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 625.6 Tm (| Tarjeta Movimiento Producto | Agregar selector de SKU con autocompletado, exportacion) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 617.0 Tm (clara y explicacion de saldos. Debe ser el detalle oficial desde reportes y movimientos. | S) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 608.4 Tm (/ Bajo | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 599.8 Tm (| Despacho a Sucursales | Hacer visible origen/destino, stock disponible, documento) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 591.2 Tm (generado, recepcion esperada y estado. Integrar con DTE/recepcion. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 582.6 Tm (| Trazabilidad Completa | Mostrar timeline unico por SKU: compra, recepcion, traspaso,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 574.0 Tm (venta, devolucion, ajuste. Debe permitir copiar folios y abrir documentos. | M / Medio | P1) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 565.4 Tm (|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 556.8 Tm (| Modificacion Precios y Costos | Alto riesgo: exigir previsualizacion, permisos explicitos,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 548.2 Tm (motivo obligatorio y bitacora. Mostrar impacto en margen y precio sugerido. | M / Alto | P0) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 539.6 Tm (|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 531.0 Tm (| Guias de Talla | Envolver en permiso de menu. Mostrar marcas sin guia, productos afectados) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 522.4 Tm (y validacion de tallas antes de crear productos. Reutilizar clase NEXO en vez de estilos) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 513.8 Tm (propios aislados. | S / Medio | P0 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 505.2 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 498.2 Tm (Compras) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 487.2 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 480.2 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 471.6 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 463.0 Tm (| Gestion Compras | `gestionCompras.html` combina demasiados flujos. Separar compra,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 454.4 Tm (recepcion, proveedor, tallas, margenes y vinculacion retroactiva. Resaltar pendientes por) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 445.8 Tm (recepcionar y errores de SKU. | L / Alto | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 437.2 Tm (| Gestion Documentos Compras | Mejorar bandeja de DTE: pendiente pago, pagado parcial, NC) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 428.6 Tm (asociadas, incidencias, recepcion asociada. Unificar filtros con reportes de compras. | L /) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 420.0 Tm (Alto | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 411.4 Tm (| Prediccion de Compras | Mostrar confianza, metodo, fecha de calculo y datos usados.) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 402.8 Tm (Convertir sugerencias a acciones: crear orden, exportar, descartar, recalcular. | M / Medio) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 394.2 Tm (| P1 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 385.6 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 378.6 Tm (Requerimientos) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 367.6 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 360.6 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 352.0 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 343.4 Tm (| Requerimientos | Mejorar vista de lista con SLA, responsable, tipo, cliente, ticket) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 334.8 Tm (asociado y proximo paso. Filtros por prioridad y vencimiento. | S / Bajo | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 326.2 Tm (| Crear Requerimiento | Mantener formulario por pasos: cliente/ticket/producto, tipo,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 317.6 Tm (evidencia, proveedor, confirmacion. Validar RUT y adjuntos con mensajes claros. | S / Bajo |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 309.0 Tm (P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 300.4 Tm (| Gestionar Requerimientos | Bandeja de gestion con acciones masivas, respuesta proveedor,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 291.8 Tm (estados y trazabilidad. Debe diferenciar operador vs supervisor. | M / Medio | P2 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 283.2 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 276.2 Tm (Reportes) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 265.2 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 258.2 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 249.6 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 241.0 Tm (| Despachos por Proveedor | Agregar filtros persistentes, totales por proveedor y variacion) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 232.4 Tm (vs periodo anterior. Exportacion debe incluir filtros aplicados. | S / Bajo | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 223.8 Tm (| Reporte de Compras | Mostrar compras, recepciones y pagos por separado para evitar mezclar) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 215.2 Tm (conceptos. Agregar desglose por proveedor, temporada y sucursal. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 206.6 Tm (| Rendimiento por Proveedor | Hacerlo accionable: cumplimiento, atraso, tasa de incidencia,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 198.0 Tm (margen y productos con mejor rotacion. | M / Medio | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 189.4 Tm (| Ventas Sucursal | Estandarizar periodo, comparativo y canal. Incluir ticket promedio,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 180.8 Tm (unidades, margen si disponible y devoluciones. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 172.2 Tm (| Comparativo Ventas | Mostrar comparacion temporal clara: actual vs anterior, variacion) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 163.6 Tm (absoluta y porcentual, top cambios. | S / Bajo | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 155.0 Tm (| Productos Vendidos | Incluir margen, rotacion, devoluciones y stock restante. Permitir) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 146.4 Tm (saltar a tarjeta/trazabilidad. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 137.8 Tm (| Ventas Internet | Crear permiso propio. Separar ecommerce real vs metodo de pago internet;) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 129.2 Tm (el backend ya distingue `ECOMMERCE` y `VENTA_INTERNET`, la UI debe explicarlo. | S / Medio |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 120.6 Tm (P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 112.0 Tm (| Documentos Emitidos | Agregar estado tributario, descarga, TXT, errores y correlativo.) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 103.4 Tm (Filtros por tipo, sucursal y receptor. | S / Bajo | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 94.8 Tm (| Reporte de Existencias | Unificar con resumen/tarjeta: costo, precio, valorizacion, stock) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 86.2 Tm (negativo, sin movimiento. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 77.6 Tm (| Existencias por Marca | Agregar ranking de marcas sin guia de talla, marcas con sobrestock) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 69.0 Tm (y margen promedio. | S / Bajo | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 60.4 Tm (| Existencias por Sucursal | Mostrar diferencias entre sucursales y sugerencias de traspaso.) Tj
+/F1 8 Tf 1 0 0 1 42.0 23.0 Tm (Auditoria menu RetailMind - pagina 3 de 4) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 6774 >>
+stream
+BT
+/F3 7.0 Tf 1 0 0 1 42.0 796.0 Tm (| M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 787.4 Tm (| Resumen Existencias | Debe ser tablero de decisiones: valorizacion, quiebres, sobrestock,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 778.8 Tm (excluidos de analitica, historico disponible. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 770.2 Tm (| Inicial vs Restante | Renombrar a algo mas claro, por ejemplo `Stock inicial vs restante`.) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 761.6 Tm (Mostrar formula y rango usado. | S / Bajo | P2 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 753.0 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 746.0 Tm (Configuracion) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 735.0 Tm () Tj
+/F3 7.0 Tf 1 0 0 1 42.0 728.0 Tm (| Opcion | Mejora recomendada | Viabilidad | Prioridad |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 719.4 Tm (|---|---|---|---|) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 710.8 Tm (| Gestion Usuarios | Mostrar ultima sesion, sucursal activa, asignaciones, estado 2FA/PIN y) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 702.2 Tm (acciones de seguridad. Reemplazar prints por logger. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 693.6 Tm (| Gestion Sucursales | Agregar tablero de configuracion faltante: impresora, Acepta, POS) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 685.0 Tm (Transbank, tipo sucursal, permisos y estado operativo. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 676.4 Tm (| Gestion Empresas | Evitar debug con `print\(\)` en `empresa_management/views.py`. Agregar) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 667.8 Tm (validacion RUT visible, contactos, sucursales y estado de integracion. | M / Medio | P1 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 659.2 Tm (| Gestion Clientes | Mejorar ficha con deuda, ultimas compras, documentos, credito,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 650.6 Tm (ecommerce y requerimientos. | M / Medio | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 642.0 Tm (| Gestion Vendedores | Mostrar comision, sucursales asignadas, ventas del periodo y estado.) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 633.4 Tm (Integrar con reporte de comisiones si aplica. | S / Bajo | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 624.8 Tm (| Gestion Permisos | Alta prioridad funcional: detectar opciones de menu sin `OpcionMenu`,) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 616.2 Tm (permisos sin ruta, rutas sin menu y permisos por sucursal que el menu no refleja. | M /) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 607.6 Tm (Medio | P0 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 599.0 Tm (| Interfaz Prueba Acepta | Clarificar que es entorno de prueba, no operacion real. Mostrar) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 590.4 Tm (entrada, salida, errores, trazas y payload sanitizado. | S / Bajo | P2 |) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 581.8 Tm (| Integraciones Ecommerce | Mostrar estado de credenciales, ultima sincronizacion, errores) Tj
+/F3 7.0 Tf 1 0 0 1 42.0 573.2 Tm (recientes, mappings SKU pendientes y accion de prueba controlada. | S / Bajo | P1 |) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 564.6 Tm () Tj
+/F2 14.0 Tf 1 0 0 1 42.0 557.6 Tm (Backlog recomendado por fases) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 544.6 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 537.6 Tm (Fase 1: control y seguridad operativa) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 526.6 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 519.6 Tm (- Agregar permiso visible para `Guias de Talla`.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 508.6 Tm (- Crear o corregir permiso `reporte_ventas_internet`.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 497.6 Tm (- Auditar que cada entrada del menu exista en `OpcionMenu` y tenga ruta real.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 486.6 Tm (- Sustituir `print\(\)` por `logger = logging.getLogger\('app'\)`, `users` o `empresa_management`.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 475.6 Tm (- Mostrar siempre empresa/sucursal activa en POS, DTE, compras, stock y reportes.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 464.6 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 457.6 Tm (Fase 2: consistencia de informacion) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 446.6 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 439.6 Tm (- Estandarizar encabezados de modulo con titulo, estado, ultima actualizacion y acciones) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 428.6 Tm (  principales.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 417.6 Tm (- Estandarizar filtros activos, estados vacios, loading y mensajes de error.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 406.6 Tm (- Todas las exportaciones deben incluir filtros aplicados y fecha de generacion.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 395.6 Tm (- Agregar enlaces de drill-down entre dashboard, reporte, gestion y trazabilidad.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 384.6 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 377.6 Tm (Fase 3: reduccion de complejidad frontend) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 366.6 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 359.6 Tm (- Extraer JS inline de templates gigantes a archivos en `app/static/js/` por modulo.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 348.6 Tm (- Mantener jQuery/vanilla; no introducir frameworks.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 337.6 Tm (- Reusar clases existentes de NEXO/Velzon y evitar paletas por pantalla.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 326.6 Tm (- Normalizar rutas hardcodeadas a `{% url %}` donde sea posible.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 315.6 Tm () Tj
+/F2 12.0 Tf 1 0 0 1 42.0 308.6 Tm (Fase 4: rendimiento y mantenibilidad backend) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 297.6 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 290.6 Tm (- Separar mas logica de `views.py` y `views_modulo_ventas.py` hacia services por dominio.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 279.6 Tm (- Revisar queries de reportes y listados con `select_related`, `prefetch_related`, paginacion y) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 268.6 Tm (  filtros indexables.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 257.6 Tm (- Crear tests focalizados para permisos de menu, reportes criticos, POS/DTE y stock.) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 246.6 Tm () Tj
+/F2 14.0 Tf 1 0 0 1 42.0 239.6 Tm (Criterios de aceptacion para futuras mejoras) Tj
+/F1 9.0 Tf 1 0 0 1 42.0 226.6 Tm () Tj
+/F1 9.2 Tf 1 0 0 1 42.0 219.6 Tm (- Cada opcion del menu tiene permiso propio, ruta nombrada y template identificado.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 208.6 Tm (- Si una sucursal bloquea una opcion, el menu no debe mostrarla o debe explicar el bloqueo antes) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 197.6 Tm (  de navegar.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 186.6 Tm (- Toda pantalla operativa muestra empresa/sucursal activa, fecha/rango y estado de datos.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 175.6 Tm (- Toda accion destructiva o irreversible tiene previsualizacion, motivo y confirmacion.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 164.6 Tm (- Toda tabla relevante tiene busqueda/filtros, estado vacio, paginacion o limite explicito, y) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 153.6 Tm (  exportacion cuando aporta valor.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 142.6 Tm (- Ningun flujo productivo nuevo usa `print\(\)`; todo va por logger configurado.) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 131.6 Tm (- Las pantallas nuevas o refactorizadas respetan includes, FBV, jQuery/vanilla y design system) Tj
+/F1 9.2 Tf 1 0 0 1 42.0 120.6 Tm (  existente.) Tj
+/F1 8 Tf 1 0 0 1 42.0 23.0 Tm (Auditoria menu RetailMind - pagina 4 de 4) Tj
+ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R 11 0 R] /Count 4 >>
+endobj
+13 0 obj
+<< /Type /Catalog /Pages 12 0 R >>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000000160 00000 n 
+0000000228 00000 n 
+0000007343 00000 n 
+0000007490 00000 n 
+0000016000 00000 n 
+0000016147 00000 n 
+0000024936 00000 n 
+0000025083 00000 n 
+0000031910 00000 n 
+0000032059 00000 n 
+0000032136 00000 n 
+trailer
+<< /Size 14 /Root 13 0 R >>
+startxref
+32187
+%%EOF

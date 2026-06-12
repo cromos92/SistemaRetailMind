@@ -17,11 +17,14 @@ from django.urls import reverse
 import json
 import re
 import csv
+import logging
 from datetime import datetime, timedelta
 
 from .models import Usuario, LogAcceso, SesionActiva, TokenResetPassword
 from app.models import Sucursal, EmpresaUser, Empresa
 import io
+
+logger = logging.getLogger('users')
 
 # Intentar importar Pillow para procesamiento de imágenes
 try:
@@ -170,8 +173,8 @@ def registrar_log_acceso(request, usuario, exito=True):
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
             exito=exito
         )
-    except Exception as e:
-        print(f"Error al registrar log de acceso: {e}")
+    except Exception:
+        logger.exception("Error al registrar log de acceso para usuario_id=%s", getattr(usuario, 'id', None))
 
 # ========== VISTAS PRINCIPALES ==========
 
@@ -703,8 +706,7 @@ def obtener_usuario(request, usuario_id):
             'error': 'Usuario no encontrado'
         }, status=404)
     except Exception as e:
-        import traceback
-        print("Error completo:", traceback.format_exc())
+        logger.exception("Error al obtener detalle de usuario")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -764,8 +766,12 @@ def resetear_password(request, usuario_id):
             enviar_nueva_password(usuario, nueva_password)
             email_enviado = True
             mensaje_email = f"y enviada por correo a {usuario.email}"
-        except Exception as e:
-            print(f"⚠️ Error al enviar email: {str(e)}")
+        except Exception:
+            logger.warning(
+                "No se pudo enviar email de nueva password a usuario_id=%s",
+                usuario.id,
+                exc_info=True,
+            )
             mensaje_email = "(email no configurado)"
         
         return JsonResponse({
@@ -1407,10 +1413,10 @@ Equipo NEXO
         )
         email.attach_alternative(html_message, "text/html")
         email.send(fail_silently=False)
-        print(f"✅ Email de credenciales enviado a {usuario.email}")
-    except Exception as e:
-        print(f"❌ Error enviando correo: {e}")
-        raise e
+        logger.info("Email de credenciales enviado a usuario_id=%s", usuario.id)
+    except Exception:
+        logger.exception("Error enviando correo de credenciales a usuario_id=%s", usuario.id)
+        raise
 
 def enviar_nueva_password(usuario, nueva_password):
     """
@@ -1502,10 +1508,10 @@ Equipo NEXO
         )
         email.attach_alternative(html_message, "text/html")
         email.send(fail_silently=False)
-        print(f"✅ Email de nueva contraseña enviado a {usuario.email}")
-    except Exception as e:
-        print(f"❌ Error enviando correo: {e}")
-        raise e
+        logger.info("Email de nueva password enviado a usuario_id=%s", usuario.id)
+    except Exception:
+        logger.exception("Error enviando correo de nueva password a usuario_id=%s", usuario.id)
+        raise
 
 
 # ========== PERFIL DE USUARIO ==========
@@ -1543,9 +1549,7 @@ def mi_perfil(request):
             'empresa_user': empresa_user
         })
     except Exception as e:
-        print(f"❌ Error en mi_perfil: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en mi_perfil usuario_id=%s", getattr(request.user, 'id', None))
         from django.http import HttpResponse
         return HttpResponse(f"Error: {str(e)}", status=500)
 
@@ -1754,8 +1758,8 @@ def subir_foto_perfil(request):
                 usuario.foto_perfil = foto_procesada
                 usuario.save()
                 
-            except Exception as img_error:
-                print(f"Error procesando imagen con Pillow: {img_error}")
+            except Exception:
+                logger.exception("Error procesando imagen de perfil con Pillow usuario_id=%s", usuario.id)
                 # Si falla el procesamiento, guardar la imagen original
                 usuario.foto_perfil = foto
                 usuario.save()
@@ -1771,8 +1775,7 @@ def subir_foto_perfil(request):
         })
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al subir foto de perfil usuario_id=%s", getattr(request.user, 'id', None))
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -1935,8 +1938,7 @@ def solicitar_cambio_password_email(request):
             'message': f'Se ha enviado un correo a {usuario.email} con instrucciones para cambiar tu contraseña'
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al solicitar reset de password")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -2012,8 +2014,7 @@ def confirmar_cambio_password(request, token):
         })
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al confirmar cambio de password")
         return render(request, 'users/reset_password_error.html', {
             'error': 'Error inesperado',
             'detalle': str(e)
@@ -2115,10 +2116,10 @@ Equipo NEXO
         )
         email.attach_alternative(html_message, "text/html")
         email.send(fail_silently=False)
-        print(f"✅ Email de reset de password enviado a {usuario.email}")
-    except Exception as e:
-        print(f"❌ Error enviando correo de reset: {e}")
-        raise e
+        logger.info("Email de reset de password enviado a usuario_id=%s", usuario.id)
+    except Exception:
+        logger.exception("Error enviando correo de reset a usuario_id=%s", usuario.id)
+        raise
 
 
 # ========== APIS PARA GESTIÓN DE PERMISOS ==========

@@ -43,7 +43,8 @@ from django.contrib.sessions.models import Session
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max, Case, When, Value, IntegerField
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max, Case, When, Value, IntegerField, CharField
+from django.db.models.functions import Cast
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -981,8 +982,7 @@ def confirmar_recepcion_api(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al confirmar recepcion DTE")
         return JsonResponse({
             'success': False,
             'error': f'Error al confirmar recepción: {str(e)}'
@@ -1158,8 +1158,7 @@ def decidir_sobrante_api(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al procesar sobrante de recepcion")
         return JsonResponse({
             'success': False,
             'error': f'Error al procesar sobrante: {str(e)}'
@@ -1235,8 +1234,12 @@ def rechazar_recepcion_api(request):
             dte.referencias = f"{referencias_texto}\n{registro}".strip()
             dte.save()
             
-            print(f"✓ DTE #{dte.numero_documento} - RECHAZADO")
-            print(f"  Motivo: {motivo_rechazo}")
+            logger.info(
+                "DTE rechazado: dte_id=%s numero=%s motivo=%s",
+                dte.id,
+                dte.numero_documento,
+                motivo_rechazo,
+            )
             
             # Notificación al emisor (dentro de la transacción para garantizar creación)
             from .models import NotificacionDTE
@@ -1258,7 +1261,7 @@ def rechazar_recepcion_api(request):
                 productos_problemas=0,
                 detalle_problemas=f"Rechazado por: {usuario}\nMotivo: {motivo_rechazo}"
             )
-            print(f"✓ Notificación de rechazo enviada a {dte.sucursal.alias}")
+            logger.info("Notificacion de rechazo DTE enviada: dte_id=%s sucursal=%s", dte.id, dte.sucursal.alias)
 
         return JsonResponse({
             'success': True,
@@ -1267,8 +1270,7 @@ def rechazar_recepcion_api(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al rechazar recepcion DTE")
         transaction.set_rollback(True)
         return JsonResponse({
             'success': False,
@@ -1373,7 +1375,7 @@ def rehabilitar_dte_rechazado_api(request):
             dte.referencias = f"{referencias_texto}\n{registro}".strip()
             dte.save()
             
-            print(f"✓ DTE #{dte.numero_documento} - REHABILITADO")
+            logger.info("DTE rehabilitado: dte_id=%s numero=%s", dte.id, dte.numero_documento)
             
             # Notificar al receptor que el DTE está disponible nuevamente
             try:
@@ -1390,9 +1392,9 @@ def rehabilitar_dte_rechazado_api(request):
                     productos_problemas=0,
                     detalle_problemas=f"Rehabilitado por: {usuario}"
                 )
-                print(f"✓ Notificación de rehabilitación enviada")
+                logger.info("Notificacion de rehabilitacion enviada: dte_id=%s", dte.id)
             except Exception as e:
-                print(f"⚠ Error al crear notificación: {str(e)}")
+                logger.warning("Error al crear notificacion de rehabilitacion DTE %s: %s", dte.id, e)
 
         return JsonResponse({
             'success': True,
@@ -1400,8 +1402,7 @@ def rehabilitar_dte_rechazado_api(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al rehabilitar DTE")
         transaction.set_rollback(True)
         return JsonResponse({
             'success': False,
@@ -1623,8 +1624,7 @@ def corregir_recepcion_emisor_api(request):
     except Productos_Recepcionados.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Producto de recepción no encontrado.'}, status=404)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al corregir recepcion DTE")
         return JsonResponse({'success': False, 'error': f'Error: {str(e)}'}, status=500)
 
 
@@ -1823,8 +1823,7 @@ def cancelar_dte_traspaso_api(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al cancelar DTE emitido")
         return JsonResponse({
             'success': False,
             'error': f'Error al cancelar DTE: {str(e)}'
@@ -2021,8 +2020,7 @@ def editar_dte_traspaso_api(request):
     except ValueError as ve:
         return JsonResponse({'success': False, 'error': str(ve)}, status=400)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al editar DTE traspaso")
         return JsonResponse({
             'success': False,
             'error': f'Error al editar DTE: {str(e)}'
@@ -2150,8 +2148,7 @@ def emitidos_pendientes_api(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en emitidos_pendientes_api")
         return JsonResponse({'success': False, 'error': f'Error: {e}'}, status=500)
 
 
@@ -2278,8 +2275,7 @@ def emitidos_recepcionados_api(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en emitidos_recepcionados_api")
         return JsonResponse({'success': False, 'error': f'Error: {e}'}, status=500)
 
 
@@ -2943,8 +2939,7 @@ def ajustar_dte_emisor_api(request):
             })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al ajustar DTE emisor")
         return JsonResponse(
             {'success': False, 'error': f'Error al ajustar DTE: {e}'},
             status=500,
@@ -3088,8 +3083,7 @@ def documento_regularizacion(request, recepcion_id):
         return render(request, 'vistas/modulo_compras/documento_regularizacion.html', context)
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al generar documento de regularizacion")
         return JsonResponse({
             'success': False,
             'error': f'Error al generar documento: {str(e)}'
@@ -4120,8 +4114,7 @@ def obtener_solicitudes_recibidas(request):
         })
     
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener solicitudes de regularizacion")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener solicitudes: {str(e)}'
@@ -4176,8 +4169,7 @@ def obtener_solicitud_producto(request, producto_id):
         })
     
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener solicitud de regularizacion")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener solicitud: {str(e)}'
@@ -4307,7 +4299,12 @@ def decidir_solicitud_api(request):
                     'error': 'Decisión no válida'
                 }, status=400)
         
-        print(f"✓ Solicitud #{solicitud.numero_solicitud} - Decisión: {decision} por {usuario}")
+        logger.info(
+            "Solicitud regularizacion decidida: numero=%s decision=%s usuario=%s",
+            solicitud.numero_solicitud,
+            decision,
+            usuario,
+        )
         
         return JsonResponse({
             'success': True,
@@ -4317,8 +4314,7 @@ def decidir_solicitud_api(request):
         })
     
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al procesar decision de solicitud regularizacion")
         transaction.set_rollback(True)
         return JsonResponse({
             'success': False,
@@ -4387,8 +4383,7 @@ def buscar_productos_emisor(request):
         })
     
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al buscar productos para regularizacion")
         return JsonResponse({
             'success': False,
             'error': f'Error al buscar productos: {str(e)}'
@@ -4924,7 +4919,12 @@ def regularizar_producto_api(request):
                 # Notificar al emisor
                 notificar_nueva_solicitud(solicitud)
                 
-                print(f"✓ Solicitud NC #{solicitud.numero_solicitud} creada - {solicitud.sucursal_solicitante.alias} → {solicitud.sucursal_emisora.alias}")
+                logger.info(
+                    "Solicitud NC creada: numero=%s solicitante=%s emisora=%s",
+                    solicitud.numero_solicitud,
+                    solicitud.sucursal_solicitante.alias,
+                    solicitud.sucursal_emisora.alias,
+                )
                 
                 return JsonResponse({
                     'success': True,
@@ -4988,14 +4988,20 @@ def regularizar_producto_api(request):
                     )
                     iva = total_con_iva - total_neto
 
-                    print(f"💰 DEBUG Cálculo NC:")
-                    print(f"   - Cantidad NC: {cantidad_nc}")
-                    print(f"   - Precio unitario NETO (del DTE original): ${precio_unitario}")
-                    print(f"   - Total NETO: ${total_neto}")
-                    print(f"   - IVA (19%): ${iva}")
-                    print(f"   - Total CON IVA: ${total_con_iva}")
-                    print(f"   - DTE original monto_neto: ${dte_original.monto_neto}")
-                    print(f"   - DTE original monto_con_iva: ${dte_original.monto_con_iva}")
+                    logger.debug(
+                        "Calculo NC regularizacion: recepcion_id=%s dte_original=%s cantidad=%s "
+                        "precio_unitario=%s total_neto=%s iva=%s total_con_iva=%s "
+                        "dte_monto_neto=%s dte_monto_con_iva=%s",
+                        recepcion.id,
+                        dte_original.numero_documento,
+                        cantidad_nc,
+                        precio_unitario,
+                        total_neto,
+                        iva,
+                        total_con_iva,
+                        dte_original.monto_neto,
+                        dte_original.monto_con_iva,
+                    )
                     
                     # Obtener correlativo para NC
                     numero_nc = obtener_siguiente_correlativo(dte_original.sucursal, 'NOTA DE CREDITO')
@@ -5046,7 +5052,14 @@ def regularizar_producto_api(request):
                         stock_antes = producto_origen.stock
                         producto_origen.stock += cantidad_nc  # Devolver unidades
                         producto_origen.save()
-                        print(f"  ✓ Stock devuelto a {dte_original.sucursal.alias}: {stock_antes} → {producto_origen.stock} (+{cantidad_nc})")
+                        logger.info(
+                            "Stock devuelto por NC regularizacion: sucursal=%s sku=%s stock_antes=%s stock_despues=%s cantidad=%s",
+                            dte_original.sucursal.alias,
+                            producto_origen.sku,
+                            stock_antes,
+                            producto_origen.stock,
+                            cantidad_nc,
+                        )
                         
                         # Crear movimiento de INGRESO en bodega origen (devolución por NC)
                         Movimientos_Producto.objects.create(
@@ -5064,9 +5077,13 @@ def regularizar_producto_api(request):
                             responsable=usuario,
                             observaciones=f'Devolución de stock por NC #{numero_nc} - DTE original #{dte_original.numero_documento}. {motivo_nc}'
                         )
-                        print(f"  ✓ Movimiento de INGRESO creado en {dte_original.sucursal.alias}")
+                        logger.info(
+                            "Movimiento INGRESO creado por NC regularizacion: numero_nc=%s sucursal=%s",
+                            numero_nc,
+                            dte_original.sucursal.alias,
+                        )
                     else:
-                        print(f"  ⚠️ No se pudo devolver stock: producto_talla no encontrado")
+                        logger.warning("No se pudo devolver stock por NC regularizacion: producto_talla no encontrado recepcion_id=%s", recepcion.id)
                     
                     # Actualizar estado del producto recepcionado
                     recepcion.estado = 'REGULARIZADO'
@@ -5075,7 +5092,12 @@ def regularizar_producto_api(request):
                     recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] REGULARIZADO - NC #{numero_nc} emitida por {cantidad_nc} unidades. Stock devuelto a bodega origen. {motivo_nc}"
                     recepcion.save()
                     
-                    print(f"✓ NC #{numero_nc} generada - DTE original #{dte_original.numero_documento}")
+                    logger.info(
+                        "NC generada por regularizacion: numero_nc=%s dte_original=%s recepcion_id=%s",
+                        numero_nc,
+                        dte_original.numero_documento,
+                        recepcion.id,
+                    )
                     
                     # Generar archivo TXT para Acepta
                     archivo_txt_url = None
@@ -5166,10 +5188,10 @@ def regularizar_producto_api(request):
                             f.write(contenido_txt)
                         
                         archivo_txt_url = f'/media/documentos_electronicos/nc/{nombre_archivo}'
-                        print(f"✅ Archivo TXT generado: {nombre_archivo}")
+                        logger.info("Archivo TXT generado para NC regularizacion: numero_nc=%s archivo=%s", numero_nc, nombre_archivo)
 
                     except Exception as e:
-                        print(f"⚠️ Error al generar TXT: {str(e)}")
+                        logger.warning("Error al generar TXT NC regularizacion numero=%s: %s", numero_nc, e)
 
                     # Cerrar el DTE original si todos sus productos están
                     # regularizados o recepcionados OK.
@@ -5194,8 +5216,7 @@ def regularizar_producto_api(request):
                     })
                     
                 except Exception as e:
-                    import traceback
-                    traceback.print_exc()
+                    logger.exception("Error al generar NC por regularizacion")
                     return JsonResponse({
                         'success': False,
                         'error': f'Error al generar NC: {str(e)}'
@@ -5306,7 +5327,14 @@ def regularizar_producto_api(request):
                         stock_antes_nc = producto_origen.stock
                         producto_origen.stock += cantidad_problema
                         producto_origen.save()
-                        print(f"  ✓ Stock devuelto (NC) a {dte_original.sucursal.alias}: {stock_antes_nc} → {producto_origen.stock} (+{cantidad_problema})")
+                        logger.info(
+                            "Stock devuelto por NC previa a cambio: sucursal=%s sku=%s stock_antes=%s stock_despues=%s cantidad=%s",
+                            dte_original.sucursal.alias,
+                            producto_origen.sku,
+                            stock_antes_nc,
+                            producto_origen.stock,
+                            cantidad_problema,
+                        )
                         
                         # Crear movimiento de INGRESO por la NC
                         Movimientos_Producto.objects.create(
@@ -5396,7 +5424,12 @@ def regularizar_producto_api(request):
                     recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] REGULARIZADO - NC #{numero_nc} + DTE Cambio #{numero_dte_cambio} emitidos. {motivo_envio}"
                     recepcion.save()
                     
-                    print(f"✓ Producto de cambio enviado - NC #{numero_nc}, DTE #{numero_dte_cambio}")
+                    logger.info(
+                        "Producto de cambio enviado: numero_nc=%s numero_dte_cambio=%s recepcion_id=%s",
+                        numero_nc,
+                        numero_dte_cambio,
+                        recepcion.id,
+                    )
 
                     # Cerrar el DTE original si todos sus productos están
                     # regularizados o recepcionados OK.
@@ -5421,8 +5454,7 @@ def regularizar_producto_api(request):
                     })
                     
                 except Exception as e:
-                    import traceback
-                    traceback.print_exc()
+                    logger.exception("Error al enviar producto de cambio")
                     return JsonResponse({
                         'success': False,
                         'error': f'Error al enviar producto de cambio: {str(e)}'
@@ -5565,7 +5597,12 @@ def regularizar_producto_api(request):
                     # Notificar al emisor
                     notificar_nueva_solicitud(solicitud)
                     
-                    print(f"✓ Solicitud #{solicitud.numero_solicitud} creada - {solicitud.sucursal_solicitante.alias} → {solicitud.sucursal_emisora.alias}")
+                    logger.info(
+                        "Solicitud de cambio creada: numero=%s solicitante=%s emisora=%s",
+                        solicitud.numero_solicitud,
+                        solicitud.sucursal_solicitante.alias if solicitud.sucursal_solicitante else None,
+                        solicitud.sucursal_emisora.alias if solicitud.sucursal_emisora else None,
+                    )
                     
                     return JsonResponse({
                         'success': True,
@@ -5621,9 +5658,7 @@ def regularizar_producto_api(request):
         })
         
     except Exception as e:
-        print(f"Error en regularizar_producto_api: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en regularizar_producto_api")
         return JsonResponse({
             'success': False,
             'error': f'Error al regularizar: {str(e)}'
@@ -5750,9 +5785,15 @@ def regularizar_dte_masivo(request):
                 referencias=_construir_referencias_nc_json(dte_original)
             )
 
-            print(f"✅ NC #{numero_nc} creada - DTE original #{dte_original.numero_documento}")
-            print(f"   Total productos: {len(productos_nc)}, Total unidades: {total_unidades}")
-            print(f"   Monto neto: ${monto_neto_total}, Total con IVA: ${total_con_iva}")
+            logger.info(
+                "NC masiva creada: numero_nc=%s dte_original=%s total_productos=%s total_unidades=%s monto_neto=%s total_con_iva=%s",
+                numero_nc,
+                dte_original.numero_documento,
+                len(productos_nc),
+                total_unidades,
+                monto_neto_total,
+                total_con_iva,
+            )
             
             # ============================================
             # AGREGAR TODOS LOS PRODUCTOS A LA NC
@@ -5779,7 +5820,13 @@ def regularizar_dte_masivo(request):
                     stock_antes = producto_origen.stock
                     producto_origen.stock += cantidad
                     producto_origen.save()
-                    print(f"   ✓ Stock devuelto: {producto_origen.sku} +{cantidad} ({stock_antes} → {producto_origen.stock})")
+                    logger.info(
+                        "Stock devuelto por NC masiva: sku=%s cantidad=%s stock_antes=%s stock_despues=%s",
+                        producto_origen.sku,
+                        cantidad,
+                        stock_antes,
+                        producto_origen.stock,
+                    )
                     
                     # Crear movimiento de INGRESO
                     Movimientos_Producto.objects.create(
@@ -5805,7 +5852,11 @@ def regularizar_dte_masivo(request):
                 recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] REGULARIZADO - NC #{numero_nc}. {motivo}"
                 recepcion.save()
             
-            print(f"✅ Regularización completada - {len(productos_nc)} productos procesados")
+            logger.info(
+                "Regularizacion DTE masiva completada: dte_numero=%s productos_procesados=%s",
+                dte_numero,
+                len(productos_nc),
+            )
             
             # ============================================
             # GENERAR ARCHIVO TXT PARA ACEPTA
@@ -5910,13 +5961,11 @@ def regularizar_dte_masivo(request):
                     f.write(contenido_txt)
                 
                 archivo_txt_url = f'/media/documentos_electronicos/nc/{nombre_archivo}'
-                print(f"✅ Archivo TXT generado: {nombre_archivo}")
+                logger.info("Archivo TXT generado para NC masiva: numero_nc=%s archivo=%s", numero_nc, nombre_archivo)
                 
             except Exception as e:
                 error_txt = str(e)
-                print(f"⚠️ Error al generar TXT (NC creada igualmente): {error_txt}")
-                import traceback
-                traceback.print_exc()
+                logger.warning("Error al generar TXT de NC masiva numero=%s: %s", numero_nc, e)
             
             return JsonResponse({
                 'success': True,
@@ -5933,9 +5982,7 @@ def regularizar_dte_masivo(request):
             })
         
     except Exception as e:
-        print(f"Error en regularizar_dte_masivo: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en regularizar_dte_masivo")
         return JsonResponse({
             'success': False,
             'error': f'Error al procesar regularización: {str(e)}'
@@ -6041,7 +6088,14 @@ def anular_regularizacion_dte(request):
                     talla_destino.stock += cantidad_problema
                     talla_destino.save()
                     stock_actualizado += cantidad_problema
-                    print(f"   ✓ Stock agregado en {sucursal_destino.alias}: {producto_origen.sku} +{cantidad_problema} ({stock_antes} → {talla_destino.stock})")
+                    logger.info(
+                        "Stock agregado al anular regularizacion: sucursal=%s sku=%s cantidad=%s stock_antes=%s stock_despues=%s",
+                        sucursal_destino.alias,
+                        producto_origen.sku,
+                        cantidad_problema,
+                        stock_antes,
+                        talla_destino.stock,
+                    )
                     
                     # Crear movimiento de INGRESO en destino
                     Movimientos_Producto.objects.create(
@@ -6075,7 +6129,12 @@ def anular_regularizacion_dte(request):
                     'cantidad': cantidad_problema
                 })
             
-            print(f"✅ Regularización DTE #{dte_numero} anulada - {len(productos_anulados)} productos, {stock_actualizado} unidades")
+            logger.info(
+                "Regularizacion DTE anulada: dte_numero=%s productos=%s unidades=%s",
+                dte_numero,
+                len(productos_anulados),
+                stock_actualizado,
+            )
             
             return JsonResponse({
                 'success': True,
@@ -6085,9 +6144,7 @@ def anular_regularizacion_dte(request):
             })
         
     except Exception as e:
-        print(f"Error en anular_regularizacion_dte: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en anular_regularizacion_dte")
         return JsonResponse({
             'success': False,
             'error': f'Error al anular: {str(e)}'
@@ -6141,8 +6198,7 @@ def obtener_dtes_con_problemas(request):
         }, json_dumps_params={'default': str})
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener DTEs con problemas")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener DTEs con problemas: {str(e)}'
@@ -6253,8 +6309,7 @@ def obtener_detalle_dte_recepcionado(request):
             'error': 'DTE no encontrado'
         }, status=404)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener detalle de DTE recepcionado")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener detalles del DTE: {str(e)}'
@@ -7890,10 +7945,8 @@ def verHome(request):
                 'requiere_atencion': cambios_aprobados > 0,  # Hay cambios aprobados para aplicar
                 'lista': lista_cambios_precio,
             }
-        except Exception as e:
-            print(f"Error obteniendo cambios de precio: {e}")
-            import traceback
-            traceback.print_exc()
+        except Exception:
+            logger.exception("Error obteniendo cambios de precio para dashboard")
             cambios_precio_data = {
                 'total': 0,
                 'aprobados': 0,
@@ -7941,8 +7994,8 @@ def verHome(request):
                 'variacion_maxima': round(variacion_maxima, 2),
                 'requiere_atencion': total_discrepancias > 0
             }
-        except Exception as e:
-            print(f"Error calculando discrepancias: {e}")
+        except Exception:
+            logger.exception("Error calculando discrepancias de precios para dashboard")
             discrepancias_precios = {
                 'total': 0,
                 'criticos': 0,
@@ -7986,10 +8039,8 @@ def verHome(request):
         
         return render(request, 'vistas/dashboard_general.html', context)
         
-    except Exception as e:
-        import traceback
-        print(f"Error en verHome/dashboard_general: {str(e)}")
-        print(traceback.format_exc())
+    except Exception:
+        logger.exception("Error en verHome/dashboard_general")
         # En caso de error, renderizar template vacío con mensaje
         return render(request, 'vistas/dashboard_general.html', {
             'cambios': {'completados': 0, 'pendientes_cobro': 0, 'en_proceso': 0, 'rechazados': 0, 'total_mes': 0, 'monto_mes': 0},
@@ -9574,8 +9625,7 @@ def obtener_dte_compras(request):
 def crearDteCompras(request):
     if request.method == 'POST':
         try:
-            print(f"🆕 DEBUG - Creando DTE, datos recibidos:")
-            print(f"   - Body: {request.body}")
+            logger.debug("Creando DTE de compras: body=%s", request.body)
             data = json.loads(request.body)
             
             empresa_session_id = request.session.get('idEmpresaActual')
@@ -9591,7 +9641,7 @@ def crearDteCompras(request):
 
             empresa_session_id = _parse_int(empresa_session_id)
             sucursal_session_id = _parse_int(sucursal_session_id)
-            print(f"   - Data parseada: {data}")
+            logger.debug("Datos parseados para DTE de compras: %s", data)
 
             # Datos desde sesión
             empresa_session_id = request.session.get('idEmpresaActual')
@@ -9704,13 +9754,14 @@ def crearDteCompras(request):
                 except Sucursal.DoesNotExist:
                     return JsonResponse({'success': False, 'error': 'Sucursal receptora no válida.'})
 
-            # Debug para creación de NC
             if tipo_documento == 'Nota de Crédito':
-                print(f"🆕 DEBUG - Creando Nota de Crédito:")
-                print(f"   - Tipo documento: {tipo_documento}")
-                print(f"   - Número: {numero_documento}")
-                print(f"   - Emisor ID: {receptor_id}")
-                print(f"   - Receptor ID: {empresa_receptora_id}")
+                logger.debug(
+                    "Creando nota de credito de compras: tipo=%s numero=%s emisor_id=%s receptor_id=%s",
+                    tipo_documento,
+                    numero_documento,
+                    receptor_id,
+                    empresa_receptora_id,
+                )
             
             # Crear DTE
             # IMPORTANTE: En un DTE de COMPRAS:
@@ -9739,14 +9790,15 @@ def crearDteCompras(request):
                 documento_padre=documento_padre
             )
             
-            # Debug después de crear
             if tipo_documento == 'Nota de Crédito':
-                print(f"✅ NC creada exitosamente:")
-                print(f"   - ID: {nuevo_dte.id}")
-                print(f"   - Tipo guardado: '{nuevo_dte.tipo_documento}'")
-                print(f"   - Número: {nuevo_dte.numero_documento}")
-                print(f"   - Emisor: {nuevo_dte.emisor}")
-                print(f"   - Receptor: {nuevo_dte.receptor}")
+                logger.info(
+                    "Nota de credito de compras creada: id=%s tipo=%s numero=%s emisor_id=%s receptor_id=%s",
+                    nuevo_dte.id,
+                    nuevo_dte.tipo_documento,
+                    nuevo_dte.numero_documento,
+                    nuevo_dte.emisor_id,
+                    nuevo_dte.receptor_id,
+                )
 
             return JsonResponse({'success': True, 'id': nuevo_dte.id})
 
@@ -13237,11 +13289,14 @@ def eliminar_producto_todas_sucursales(request):
         nombre_producto = producto_ref.articulo
         Producto.objects.filter(id__in=producto_ids).delete()
 
-        print(
-            f"🗑️  Eliminado producto '{nombre_producto}' en "
-            f"{len(productos_hermanos)} sucursal(es). "
-            f"Tallas borradas: {total_tallas}, movimientos: {total_movimientos}, "
-            f"lotes: {total_lotes}, recepciones desenlazadas: {total_recepciones_enlazadas}."
+        logger.info(
+            "Producto eliminado en sucursales: nombre=%s sucursales=%s tallas=%s movimientos=%s lotes=%s recepciones_desenlazadas=%s",
+            nombre_producto,
+            len(productos_hermanos),
+            total_tallas,
+            total_movimientos,
+            total_lotes,
+            total_recepciones_enlazadas,
         )
 
         return JsonResponse({
@@ -13724,9 +13779,7 @@ def agregar_producto_manual_a_compra(request):
     except ValueError as ve:
         return JsonResponse({'success': False, 'error': str(ve)}, status=400)
     except Exception as e:
-        import traceback
-        print(f"❌ Error en agregar_producto_manual_a_compra: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en agregar_producto_manual_a_compra")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
@@ -14147,9 +14200,12 @@ def detalle_producto_para_crear(request, producto_id):
     elif incluir_null:
         filtro_sucursal = Q(sucursal_destino__isnull=True)
 
-    print(
-        f"[detalle_producto_para_crear] producto_id={producto_id} "
-        f"ids={ids_int} incluir_null={incluir_null} filtro={filtro_sucursal}"
+    logger.debug(
+        "Detalle producto para crear: producto_id=%s ids=%s incluir_null=%s filtro=%s",
+        producto_id,
+        ids_int,
+        incluir_null,
+        filtro_sucursal,
     )
 
     # Obtener tallas recepcionadas sin producto_talla aún - AGRUPAR SOLO POR TALLA
@@ -14437,8 +14493,7 @@ def actualizar_atributos_compra_producto(request, producto_id):
             })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al actualizar atributos de compra producto")
         return JsonResponse(
             {'success': False, 'error': f'Error al actualizar atributos: {str(e)}'},
             status=500,
@@ -15240,8 +15295,7 @@ def api_ncs_sin_stock(request):
             'total_paginas': (total + page_size - 1) // page_size if page_size else 1,
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al detectar NC sin stock")
         return JsonResponse({'success': False, 'error': f'Error: {e}'}, status=500)
 
 
@@ -15519,8 +15573,7 @@ def reparar_nc_stock(nc, lineas_solicitadas, usuario, motivo=''):
     except ValueError as ve:
         return 400, {'success': False, 'error': str(ve)}
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al aplicar reparacion de NC historica")
         return 500, {'success': False, 'error': f'Error al aplicar reparación: {e}'}
 
 
@@ -15738,8 +15791,7 @@ def api_crear_skus_destino(request, dte_id):
                     'articulo': producto_origen.articulo,
                 })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al replicar SKUs en destino")
         return JsonResponse({
             'success': False,
             'error': f'Error al replicar SKUs: {e}',
@@ -16052,8 +16104,7 @@ def api_crear_stock_destino_manual(request, dte_id):
             dte.referencias = ((dte.referencias or '') + registro).strip()
             dte.save(update_fields=['estado_dte', 'fecha_recepcion', 'referencias'])
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al crear stock manual en destino")
         return JsonResponse({
             'success': False,
             'error': f'Error al crear stock: {e}',
@@ -16709,8 +16760,7 @@ def api_reparar_traspaso_manual(request, dte_id):
     except Producto_Talla.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Producto_Talla candidato no encontrado.'}, status=404)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al reparar trazabilidad de DTE")
         return JsonResponse({'success': False, 'error': f'Error al reparar DTE: {e}'}, status=500)
 
     return JsonResponse({
@@ -17232,17 +17282,17 @@ def categoria_guardar(request):
  
 def guias_talla_list(request):
     marca_id = request.GET.get('marca')
-    print(f"🔍 Guías de talla - Marca ID: {marca_id}")
+    logger.debug("Guias de talla: marca_id=%s", marca_id)
     
     if marca_id and str(marca_id).isdigit():
         guias = GuiaTalla.objects.filter(marca_id=marca_id)
-        print(f"✅ Filtrando por marca {marca_id}, encontradas: {guias.count()}")
+        logger.debug("Guias de talla filtradas por marca: marca_id=%s total=%s", marca_id, guias.count())
     else:
         guias = GuiaTalla.objects.all()
-        print(f"✅ Mostrando todas las guías, total: {guias.count()}")
+        logger.debug("Guias de talla sin filtro: total=%s", guias.count())
 
     data = [{'id': g.id, 'text': str(g)} for g in guias]
-    print(f"📋 Datos a enviar: {data}")
+    logger.debug("Guias de talla enviadas: total=%s", len(data))
     return JsonResponse(data, safe=False)
 
 
@@ -18080,7 +18130,11 @@ def verificar_producto_existente(request):
             
             if match_marca and match_color and match_genero:
                 producto = prod
-                print(f"✅ Producto encontrado con atributos equivalentes (case-insensitive): {prod.articulo}")
+                logger.debug(
+                    "Producto encontrado con atributos equivalentes: producto_id=%s articulo=%s",
+                    prod.id,
+                    prod.articulo,
+                )
                 break
     
     # 🔍 BUSCAR PRODUCTOS SIMILARES POR SKU (solo en sucursal activa)
@@ -18265,9 +18319,13 @@ def verificar_producto_existente(request):
                 })
             
             if productos_otras_sucursales:
-                print(f"📊 Producto encontrado en {len(productos_otras_sucursales)} sucursales (incluye actual)")
+                logger.debug(
+                    "Producto encontrado en multiples sucursales: producto_id=%s total=%s",
+                    producto.id,
+                    len(productos_otras_sucursales),
+                )
         except Exception as e:
-            print(f"⚠️ Error buscando en otras sucursales: {e}")
+            logger.warning("Error buscando producto en otras sucursales: %s", e)
         # =========================================================
         
         return JsonResponse({
@@ -18287,14 +18345,25 @@ def verificar_producto_existente(request):
         # ========== BUSCAR PRECIOS EN OTRAS SUCURSALES (para producto nuevo) ==========
         productos_otras_sucursales = []
         try:
-            print(f"🔍 Buscando en otras sucursales - Artículo: {articulo}, Marca: {marca}, Color: {color}, Género: {genero}")
+            logger.debug(
+                "Buscando producto en otras sucursales: articulo=%s marca=%s color=%s genero=%s",
+                articulo,
+                marca,
+                color,
+                genero,
+            )
             
             # Obtener IDs de atributos para la búsqueda
             marca_id = buscar_atributo_flexible(marca) if marca else None
             color_id = buscar_atributo_flexible(color) if color else None
             genero_id = buscar_atributo_flexible(genero) if genero else None
             
-            print(f"   IDs encontrados - Marca: {marca_id}, Color: {color_id}, Género: {genero_id}")
+            logger.debug(
+                "Atributos resueltos para busqueda en otras sucursales: marca_id=%s color_id=%s genero_id=%s",
+                marca_id,
+                color_id,
+                genero_id,
+            )
             
             # ✅ BÚSQUEDA MEJORADA: Primero buscar solo por artículo (más flexible)
             if articulo:
@@ -18307,7 +18376,7 @@ def verificar_producto_existente(request):
                 if sucursal_id:
                     otros_productos = otros_productos.exclude(sucursal_id=sucursal_id)
                 
-                print(f"   Productos encontrados solo por artículo: {otros_productos.count()}")
+                logger.debug("Productos encontrados por articulo en otras sucursales: total=%s", otros_productos.count())
                 
                 # Si hay muchos, filtrar por atributos
                 if otros_productos.count() > 10 and (marca_id or color_id):
@@ -18319,7 +18388,7 @@ def verificar_producto_existente(request):
                     if genero_id:
                         filtros_extras &= Q(atributo3_id=genero_id)
                     otros_productos = otros_productos.filter(filtros_extras)
-                    print(f"   Productos después de filtrar por atributos: {otros_productos.count()}")
+                    logger.debug("Productos tras filtrar atributos en otras sucursales: total=%s", otros_productos.count())
                 
                 for op in otros_productos:
                     productos_otras_sucursales.append({
@@ -18334,13 +18403,14 @@ def verificar_producto_existente(request):
                     })
                 
                 if productos_otras_sucursales:
-                    print(f"📊 Producto NO existe localmente, pero encontrado en {len(productos_otras_sucursales)} otras sucursales")
+                    logger.debug(
+                        "Producto no existe localmente pero fue encontrado en otras sucursales: total=%s",
+                        len(productos_otras_sucursales),
+                    )
                 else:
-                    print(f"📭 Producto no encontrado en ninguna otra sucursal")
+                    logger.debug("Producto no encontrado en otras sucursales: articulo=%s", articulo)
         except Exception as e:
-            import traceback
-            print(f"⚠️ Error buscando en otras sucursales: {e}")
-            print(traceback.format_exc())
+            logger.exception("Error buscando producto en otras sucursales")
         # =========================================================
         
         return JsonResponse({
@@ -18396,7 +18466,7 @@ def _build_edel_producto_ref(articulo, producto_local):
             'tallas_detail': [{'talla': t['talla'], 'sku': t['sku'], 'stock': t['stock'] or 0} for t in tallas_qs],
         }
     except Exception as e:
-        print(f"⚠️ Error buscando producto en EDEL: {e}")
+        logger.warning("Error buscando producto en EDEL: %s", e)
         return None
 
 
@@ -18504,20 +18574,21 @@ def crear_producto_desde_recepcion(request):
     )
     producto_compra_id = data.get('producto_compra_id') or None
     
-    # ========== DEBUG: Ver datos recibidos ==========
-    print(f"\n{'='*60}")
-    print(f"📥 DATOS RECIBIDOS EN crear_producto_desde_recepcion:")
-    print(f"   Artículo: {articulo}")
-    print(f"   Atributos: marca={atributo1}, color={atributo2}, genero={atributo3}")
-    print(f"   Categoría: {categoria}")
-    print(f"   Precios: costo={costo}, sobreprecio={sobreprecio}, precioventa={precioventa}")
-    print(f"   producto_compra_id: {producto_compra_id}")
-    print(f"   Sucursal: {sucursal_id}")
-    
-    # Ver tallas recibidas
     tallas_recibidas = [(k, v) for k, v in data.items() if k.startswith('sku_') or k.startswith('stock_')]
-    print(f"   Tallas/SKUs recibidos: {tallas_recibidas}")
-    print(f"{'='*60}\n")
+    logger.debug(
+        "Crear producto desde recepcion: articulo=%s marca=%s color=%s genero=%s categoria=%s costo=%s sobreprecio=%s precioventa=%s producto_compra_id=%s sucursal_id=%s tallas_recibidas=%s",
+        articulo,
+        atributo1,
+        atributo2,
+        atributo3,
+        categoria,
+        costo,
+        sobreprecio,
+        precioventa,
+        producto_compra_id,
+        sucursal_id,
+        tallas_recibidas,
+    )
 
     # ========== NORMALIZACIÓN DE ATRIBUTOS (case-insensitive) ==========
     def buscar_atributo_normalizado(atributo_id, tipo_atributo=None):
@@ -18605,7 +18676,11 @@ def crear_producto_desde_recepcion(request):
             
             if match_attr1 and match_attr2 and match_attr3:
                 producto_existente = prod
-                print(f"✅ Producto encontrado con atributos equivalentes (case-insensitive): {prod.articulo}")
+                logger.debug(
+                    "Producto existente encontrado con atributos equivalentes: producto_id=%s articulo=%s",
+                    prod.id,
+                    prod.articulo,
+                )
                 break
     
     producto_actualizado = False
@@ -18619,9 +18694,17 @@ def crear_producto_desde_recepcion(request):
         precio_anterior = producto.precioventa
         costo_anterior = producto.costo
         
-        print(f"🔍 DEBUG - Producto existente encontrado: {producto.articulo} (ID: {producto.id})")
-        print(f"   Precios BD: costo={producto.costo}, sobreprecio={producto.sobreprecio}, precioventa={producto.precioventa}")
-        print(f"   Precios nuevos: costo={costo}, sobreprecio={sobreprecio}, precioventa={precioventa}")
+        logger.debug(
+            "Producto existente encontrado: producto_id=%s articulo=%s precios_bd=(%s,%s,%s) precios_nuevos=(%s,%s,%s)",
+            producto.id,
+            producto.articulo,
+            producto.costo,
+            producto.sobreprecio,
+            producto.precioventa,
+            costo,
+            sobreprecio,
+            precioventa,
+        )
         
         # Verificar si los precios cambiaron (forzar comparación como int)
         costo_db = int(producto.costo or 0)
@@ -18630,7 +18713,7 @@ def crear_producto_desde_recepcion(request):
         
         if costo_db != costo or sobreprecio_db != sobreprecio or precioventa_db != precioventa:
             precios_cambiaron = True
-            print(f"✅ Precios cambiaron - Actualizando...")
+            logger.debug("Precios cambiaron; actualizando producto_id=%s", producto.id)
             
             # Actualizar precios del producto
             producto.costo = costo
@@ -18639,7 +18722,7 @@ def crear_producto_desde_recepcion(request):
             producto.precioSugerido = precio_sugerido
             producto.descripcion = descripcion  # También actualizar descripción
             producto.save()
-            print(f"✅ Producto guardado con nuevos precios")
+            logger.info("Producto guardado con nuevos precios: producto_id=%s", producto.id)
             
             # Registrar historial de cambio de precio
             try:
@@ -18658,7 +18741,7 @@ def crear_producto_desde_recepcion(request):
                     ip_address=request.META.get('REMOTE_ADDR')
                 )
             except Exception as e:
-                print(f"⚠️ Error registrando historial de precio: {e}")
+                logger.warning("Error registrando historial de precio para producto_id=%s: %s", producto.id, e)
             
             # Actualizar lotes FIFO activos con el nuevo precio
             LoteProducto.objects.filter(
@@ -18672,9 +18755,15 @@ def crear_producto_desde_recepcion(request):
             )
             
             producto_actualizado = True
-            print(f"📝 Producto existente actualizado: {articulo} - Precio: {precio_anterior} → {precioventa}")
+            logger.info(
+                "Producto existente actualizado desde recepcion: producto_id=%s articulo=%s precio_anterior=%s precio_nuevo=%s",
+                producto.id,
+                articulo,
+                precio_anterior,
+                precioventa,
+            )
         else:
-            print(f"📌 Producto existente sin cambios de precio: {articulo}")
+            logger.debug("Producto existente sin cambios de precio: producto_id=%s articulo=%s", producto.id, articulo)
     else:
         # 🆕 PRODUCTO NO EXISTE - Crear nuevo
         producto = Producto.objects.create(
@@ -18693,7 +18782,7 @@ def crear_producto_desde_recepcion(request):
             tipo_talla=tipo_talla,
             guia_talla_id=guia_talla,
         )
-        print(f"🆕 Producto nuevo creado: {articulo}")
+        logger.info("Producto nuevo creado desde recepcion: producto_id=%s articulo=%s", producto.id, articulo)
 
     # =====================================================================
     # 2b. PRE-PROCESO: Redistribuir Compras_Producto_Talla consolidada
@@ -18867,10 +18956,12 @@ def crear_producto_desde_recepcion(request):
             else:
                 cpt_consolidada.save(update_fields=['stock'])
 
-            print(
-                f"🔀 Redistribuido ({sucursal.alias}): {stock_consolidado_sucursal} uds → "
-                f"{len(distribucion_form)} tallas reales. "
-                f"Recepciones pendientes restantes en CPT consolidada: {restantes}."
+            logger.info(
+                "Stock consolidado redistribuido: sucursal=%s unidades=%s tallas=%s recepciones_restantes=%s",
+                sucursal.alias,
+                stock_consolidado_sucursal,
+                len(distribucion_form),
+                restantes,
             )
 
     # 3. Crear o reutilizar variantes (tallas)
@@ -18976,7 +19067,7 @@ def crear_producto_desde_recepcion(request):
                 # ✅ Talla existe - reutilizar (el movimiento sumará stock)
                 pt = pt_existente
                 tallas_existentes += 1
-                print(f"📌 Talla existente reutilizada: '{talla}' coincide con '{pt.talla}' (SKU: {pt.sku})")
+                logger.debug("Talla existente reutilizada: talla=%s talla_bd=%s sku=%s", talla, pt.talla, pt.sku)
             else:
                 # 🆕 Talla nueva - crear con stock=0
                 # Normalizar la talla antes de guardar para consistencia
@@ -18992,9 +19083,9 @@ def crear_producto_desde_recepcion(request):
                     sku_anterior = sku_final
                     sku_final = obtener_siguiente_sku()
                     if sku_anterior:
-                        print(f"⚠️ SKU {sku_anterior} ya existía, usando nuevo: {sku_final}")
+                        logger.warning("SKU ya existia; se genero uno nuevo: sku_anterior=%s sku_nuevo=%s", sku_anterior, sku_final)
                     else:
-                        print(f"🔢 SKU vacío, generando automático: {sku_final}")
+                        logger.debug("SKU vacio; se genero automatico: sku=%s", sku_final)
                 
                 pt = Producto_Talla.objects.create(
                     producto=producto,
@@ -19003,15 +19094,15 @@ def crear_producto_desde_recepcion(request):
                     talla=talla_guardar,
                 )
                 tallas_nuevas += 1
-                print(f"🆕 Talla nueva creada: {talla_guardar} (SKU: {sku_final})")
+                logger.info("Talla nueva creada para producto: producto_id=%s talla=%s sku=%s", producto.id, talla_guardar, sku_final)
             
             tallas.append((pt, stock, talla))
 
     # 4. Registrar movimiento de ingreso y CREAR LOTES FIFO para cada variante
     # IMPORTANTE: Crear un lote por cada DTE diferente para mantener trazabilidad
-    print(f"\n📦 TALLAS A PROCESAR: {len(tallas)}")
+    logger.debug("Tallas a procesar desde recepcion: total=%s", len(tallas))
     for pt, stock, talla in tallas:
-        print(f"   Talla: {talla}, Stock a ingresar: {stock}, PT ID: {pt.id}, Stock actual PT: {pt.stock}")
+        logger.debug("Procesando talla desde recepcion: talla=%s stock=%s producto_talla_id=%s stock_actual=%s", talla, stock, pt.id, pt.stock)
         if producto_compra_id:
             # Usa el mismo criterio por sucursal que se definió al inicio:
             # estricto si el frontend envió sucursal_destino_id, amplio (con
@@ -19042,14 +19133,18 @@ def crear_producto_desde_recepcion(request):
             
             # Convertir a lista para poder iterar múltiples veces
             recepciones_list = list(recepciones)
-            print(f"   🔍 Buscando recepciones para talla '{talla}' con variantes: {variantes_talla}")
-            print(f"      Recepciones encontradas: {len(recepciones_list)}")
+            logger.debug(
+                "Recepciones encontradas para talla: talla=%s variantes=%s total=%s",
+                talla,
+                locals().get('variantes_talla', []),
+                len(recepciones_list),
+            )
             
             if recepciones_list:
                 for recepcion_grupo in recepciones_list:
                     dte_id = recepcion_grupo['dte_id']
                     cantidad_dte = recepcion_grupo['cantidad']
-                    print(f"      ✅ Recepción encontrada: DTE={dte_id}, cantidad={cantidad_dte}")
+                    logger.debug("Recepcion encontrada para movimiento inicial: dte_id=%s cantidad=%s", dte_id, cantidad_dte)
                     
                     dte = None
                     if dte_id:
@@ -19073,10 +19168,10 @@ def crear_producto_desde_recepcion(request):
                         referencia_externa=ref_externa,
                         crear_lote_fifo=True
                     )
-                    print(f"      📝 Movimiento registrado con cantidad: {cantidad_dte}")
+                    logger.debug("Movimiento inicial registrado desde recepcion: producto_talla_id=%s cantidad=%s", pt.id, cantidad_dte)
             else:
                 # Si no hay recepciones pendientes, crear movimiento sin DTE
-                print(f"      ⚠️ No hay recepciones pendientes, usando stock del formulario: {stock}")
+                logger.warning("No hay recepciones pendientes; se usara stock del formulario: producto_talla_id=%s stock=%s", pt.id, stock)
                 registrar_movimiento_producto(
                     producto_talla=pt,
                     concepto='INGRESO_INICIAL',
@@ -19183,12 +19278,10 @@ def crear_producto_desde_recepcion(request):
                         compra_producto_id=row.get('compra_producto_talla__compra_producto_id'),
                         estado='PENDIENTE',
                     )
-    except Exception as e:
+    except Exception:
         # No bloqueamos la creación del producto por un error en la cola
         # de despacho; se loggea para revisar y se continúa.
-        import traceback
-        print(f"⚠️ Error alimentando PendienteDespacho (no crítico): {e}")
-        print(traceback.format_exc())
+        logger.exception("Error alimentando PendienteDespacho")
 
     # ========== 6. SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ==========
     # Sincroniza automáticamente Y crea alertas para que las sucursales revisen el cambio
@@ -19211,18 +19304,27 @@ def crear_producto_desde_recepcion(request):
             stock_total=Sum('producto_talla__stock')
         ).select_related('sucursal')
         
-        print(f"🔍 Buscando productos similares a '{articulo}' en otras sucursales: {productos_similares.count()} encontrados")
+        logger.debug(
+            "Buscando productos similares en otras sucursales: articulo=%s total=%s",
+            articulo,
+            productos_similares.count(),
+        )
         
         if productos_similares.exists():
             for prod_similar in productos_similares:
                 precio_anterior = int(prod_similar.precioventa or 0)
                 stock_sucursal = prod_similar.stock_total or 0
                 
-                print(f"   📦 {prod_similar.sucursal.alias}: stock={stock_sucursal}, precio_actual=${precio_anterior:,}")
+                logger.debug(
+                    "Producto similar para sincronizacion: sucursal=%s stock=%s precio_actual=%s",
+                    prod_similar.sucursal.alias,
+                    stock_sucursal,
+                    precio_anterior,
+                )
                 
                 # Solo procesar si hay diferencia de precio
                 if precio_anterior == precioventa:
-                    print(f"   ⏭️ {prod_similar.sucursal.alias}: mismo precio, saltando")
+                    logger.debug("Producto similar sin cambio de precio: sucursal=%s producto_id=%s", prod_similar.sucursal.alias, prod_similar.id)
                     continue
                 
                 # === SINCRONIZAR PRECIO ===
@@ -19265,7 +19367,7 @@ def crear_producto_desde_recepcion(request):
                     
                     if not primera_talla:
                         # No hay stock, precio actualizado pero sin alerta
-                        print(f"   💤 {prod_similar.sucursal.alias}: Precio actualizado (sin alerta - stock=0)")
+                        logger.info("Precio actualizado sin alerta por stock cero: sucursal=%s producto_id=%s", prod_similar.sucursal.alias, prod_similar.id)
                     
                     if primera_talla:
                         # Determinar prioridad según la diferencia
@@ -19313,21 +19415,35 @@ def crear_producto_desde_recepcion(request):
                             )
                             notificaciones_creadas += 1
                         
-                        print(f"🔔 Alerta creada para {prod_similar.sucursal.alias}: {usuarios_sucursal.count()} usuarios notificados")
+                        logger.info(
+                            "Alerta de cambio de precio creada: sucursal=%s usuarios_notificados=%s cambio_id=%s",
+                            prod_similar.sucursal.alias,
+                            usuarios_sucursal.count(),
+                            cambio.id,
+                        )
                         
                 except Exception as alert_error:
-                    print(f"⚠️ Error creando alerta: {alert_error}")
+                    logger.warning("Error creando alerta de cambio de precio: producto_id=%s error=%s", prod_similar.id, alert_error)
                 
                 productos_sincronizados += 1
                 sucursales_afectadas.append(prod_similar.sucursal.alias)
-                print(f"✅ Precio sincronizado en {prod_similar.sucursal.alias}: ${precio_anterior:,} → ${precioventa:,}")
+                logger.info(
+                    "Precio sincronizado en sucursal: sucursal=%s producto_id=%s precio_anterior=%s precio_nuevo=%s",
+                    prod_similar.sucursal.alias,
+                    prod_similar.id,
+                    precio_anterior,
+                    precioventa,
+                )
         
         if productos_sincronizados > 0:
-            print(f"🔄 {productos_sincronizados} productos sincronizados en {len(sucursales_afectadas)} sucursales. {notificaciones_creadas} notificaciones enviadas")
-    except Exception as e:
-        import traceback
-        print(f"⚠️ Error en sincronización de precios (no crítico): {str(e)}")
-        print(traceback.format_exc())
+            logger.info(
+                "Sincronizacion de precios completada: productos=%s sucursales=%s notificaciones=%s",
+                productos_sincronizados,
+                len(sucursales_afectadas),
+                notificaciones_creadas,
+            )
+    except Exception:
+        logger.exception("Error en sincronizacion de precios")
 
     # Construir mensaje descriptivo
     if producto_actualizado:
@@ -19628,6 +19744,12 @@ def obtener_movimientos_producto(request):
     fecha_fin = request.GET.get('fecha_fin')
     tipo = request.GET.get('tipo')  # INGRESO, EGRESO, etc.
     articulo = request.GET.get('articulo')
+    sku_codigo = (
+        request.GET.get('sku_codigo')
+        or request.GET.get('sku')
+        or request.GET.get('codigo_barra')
+        or ''
+    ).strip()
     responsable = request.GET.get('responsable')
     concepto = request.GET.get('concepto')
     page = int(request.GET.get('page', 1))
@@ -19677,6 +19799,10 @@ def obtener_movimientos_producto(request):
         movimientos = movimientos.filter(tipo_movimiento__iexact=tipo)
     if articulo:
         movimientos = movimientos.filter(ProductoTalla__producto__articulo__icontains=articulo)
+    if sku_codigo:
+        movimientos = movimientos.annotate(
+            sku_text=Cast('ProductoTalla__sku', CharField())
+        ).filter(sku_text__icontains=sku_codigo)
     if responsable:
         movimientos = movimientos.filter(responsable__icontains=responsable)
     if concepto:
@@ -19726,6 +19852,7 @@ def obtener_movimientos_producto(request):
             'genero': genero,
             'talla': m.ProductoTalla.talla,
             'sku': m.ProductoTalla.sku,
+            'codigo_barra': m.ProductoTalla.sku,
             'cantidad': m.cantidad,
             'costo': m.costo,
             'precio': m.precio,
@@ -20042,14 +20169,12 @@ def obtener_proveedores(request):
     Obtiene lista de proveedores para el modal de creación manual
     """
     try:
-        print("🔍 Obteniendo lista de proveedores...")
         proveedores = Empresa.objects.filter(esProveedor=True).values('id', 'nombre').order_by('nombre')
         result = list(proveedores)
-        print(f"✅ Proveedores encontrados: {len(result)}")
-        print(f"📋 Datos: {result}")
+        logger.debug("Proveedores obtenidos para creacion manual: total=%s", len(result))
         return JsonResponse(result, safe=False)
     except Exception as e:
-        print(f"❌ Error obteniendo proveedores: {str(e)}")
+        logger.exception("Error obteniendo proveedores")
         return JsonResponse({'error': str(e)}, status=500)
 
 @require_GET
@@ -20060,15 +20185,15 @@ def obtener_dtes_por_proveedor(request, proveedor_id):
     En compras, el proveedor es el EMISOR de la factura.
     """
     try:
-        print(f"🔍 DTEs por proveedor - Proveedor ID: {proveedor_id}")
+        logger.debug("Consultando DTEs por proveedor: proveedor_id=%s", proveedor_id)
         
         # Verificar si el proveedor existe
         proveedor = Empresa.objects.filter(id=proveedor_id, esProveedor=True).first()
         if not proveedor:
-            print(f"❌ Proveedor no encontrado: {proveedor_id}")
+            logger.warning("Proveedor no encontrado al consultar DTEs: proveedor_id=%s", proveedor_id)
             return JsonResponse({'error': 'Proveedor no encontrado'}, status=404)
         
-        print(f"✅ Proveedor encontrado: {proveedor.nombre}")
+        logger.debug("Proveedor encontrado para DTEs: proveedor_id=%s nombre=%s", proveedor_id, proveedor.nombre)
         
         # En compras, el proveedor es el EMISOR de la factura
         # Buscar DTEs de tipo COMPRA donde el proveedor sea el emisor
@@ -20077,15 +20202,15 @@ def obtener_dtes_por_proveedor(request, proveedor_id):
             tipo_transaccion='COMPRA'
         ).values('id', 'numero_documento', 'fecha_emision', 'estado_pago').order_by('-fecha_emision')[:50]
         
-        print(f"✅ DTEs encontrados: {len(dtes)}")
+        logger.debug("DTEs de compra encontrados para proveedor: proveedor_id=%s total=%s", proveedor_id, len(dtes))
         
         # Si no hay DTEs de compra, buscar cualquier DTE del proveedor
         if len(dtes) == 0:
-            print("⚠️ No hay DTEs de compra, buscando cualquier DTE del proveedor")
+            logger.debug("Sin DTEs de compra; buscando DTEs alternativos del proveedor: proveedor_id=%s", proveedor_id)
             dtes = Dte.objects.filter(
                 Q(emisor_id=proveedor_id) | Q(receptor_id=proveedor_id)
             ).values('id', 'numero_documento', 'fecha_emision', 'estado_pago').order_by('-fecha_emision')[:50]
-            print(f"✅ DTEs alternativos encontrados: {len(dtes)}")
+            logger.debug("DTEs alternativos encontrados para proveedor: proveedor_id=%s total=%s", proveedor_id, len(dtes))
         
         # Formatear fecha para mostrar
         result = []
@@ -20101,12 +20226,10 @@ def obtener_dtes_por_proveedor(request, proveedor_id):
                 'estado_pago': dte['estado_pago'] or ''
             })
         
-        print(f"📋 Datos a enviar: {len(result)} DTEs")
+        logger.debug("DTEs por proveedor preparados: proveedor_id=%s total=%s", proveedor_id, len(result))
         return JsonResponse(result, safe=False)
     except Exception as e:
-        import traceback
-        print(f"❌ Error en obtener_dtes_por_proveedor: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en obtener_dtes_por_proveedor")
         return JsonResponse({'error': str(e)}, status=500)
 
 def crear_producto_manual(request):
@@ -20139,15 +20262,15 @@ def crear_producto_manual(request):
         skus = request.POST.getlist('sku[]')
         guias_talla_manual = request.POST.getlist('guia_talla_manual[]')
         
-        # ✅ DEBUG: Ver qué tallas se reciben
-        print(f"📦 Backend recibió:")
-        print(f"   Proveedor: {proveedor_id}")
-        print(f"   DTE: {dte_id}")
-        print(f"   Artículo: {articulo}")
-        print(f"   Tallas: {tallas}")
-        print(f"   Stocks: {stocks}")
-        print(f"   SKUs: {skus}")
-        print(f"   Total tallas: {len(tallas)}")
+        logger.debug(
+            "Crear producto manual: proveedor_id=%s dte_id=%s articulo=%s tallas=%s stocks=%s skus=%s",
+            proveedor_id,
+            dte_id,
+            articulo,
+            tallas,
+            stocks,
+            skus,
+        )
         
         # Validaciones básicas con mensajes específicos
         campos_faltantes = []
@@ -20243,7 +20366,7 @@ def crear_producto_manual(request):
                         ip_address=request.META.get('REMOTE_ADDR')
                     )
                 except Exception as e:
-                    print(f"⚠️ Error registrando historial de precio: {e}")
+                    logger.warning("Error registrando historial de precio manual para producto_id=%s: %s", producto.id, e)
                 
                 # Actualizar lotes FIFO activos con el nuevo precio
                 LoteProducto.objects.filter(
@@ -20257,9 +20380,15 @@ def crear_producto_manual(request):
                 )
                 
                 producto_actualizado = True
-                print(f"📝 Producto existente actualizado: {articulo} - Precio: {precio_anterior} → {precioventa}")
+                logger.info(
+                    "Producto existente actualizado manualmente: producto_id=%s articulo=%s precio_anterior=%s precio_nuevo=%s",
+                    producto.id,
+                    articulo,
+                    precio_anterior,
+                    precioventa,
+                )
             else:
-                print(f"📌 Producto existente sin cambios de precio: {articulo}")
+                logger.debug("Producto manual existente sin cambios de precio: producto_id=%s articulo=%s", producto.id, articulo)
         else:
             # 🆕 PRODUCTO NO EXISTE - Crear nuevo
             producto = Producto.objects.create(
@@ -20277,7 +20406,7 @@ def crear_producto_manual(request):
                 precioSugerido=precioventa,
                 sucursal=sucursal
             )
-            print(f"🆕 Producto nuevo creado: {articulo}")
+            logger.info("Producto nuevo creado manualmente: producto_id=%s articulo=%s", producto.id, articulo)
         
         # ========== CREAR O REUTILIZAR VARIANTES (TALLAS) ==========
         tallas_creadas = {}
@@ -20296,7 +20425,7 @@ def crear_producto_manual(request):
             # Si la talla ya fue procesada en este loop, sumar el stock
             if talla_limpia in tallas_creadas:
                 tallas_creadas[talla_limpia]['stock'] += stock
-                print(f"⚠️ Talla duplicada en formulario: {talla_limpia}, sumando stock")
+                logger.warning("Talla duplicada en formulario manual; se suma stock: talla=%s stock=%s", talla_limpia, stock)
                 continue
             
             # Verificar si la talla ya existe para este producto
@@ -20306,14 +20435,14 @@ def crear_producto_manual(request):
                 # ✅ Talla existe - reutilizar
                 producto_talla = pt_existente
                 tallas_existentes_count += 1
-                print(f"📌 Talla existente reutilizada: {talla_limpia} (SKU: {pt_existente.sku})")
+                logger.debug("Talla existente reutilizada en producto manual: talla=%s sku=%s", talla_limpia, pt_existente.sku)
             else:
                 # 🆕 Talla nueva - crear con stock=0 (el movimiento sumará)
                 # ✅ VERIFICAR QUE EL SKU NO EXISTA - si existe o está vacío, generar uno nuevo
                 sku_final = sku
                 if not sku or Producto_Talla.objects.filter(sku=sku).exists():
                     if sku and Producto_Talla.objects.filter(sku=sku).exists():
-                        print(f"⚠️ SKU {sku} ya existía, generando nuevo")
+                        logger.warning("SKU manual ya existia; se generara uno nuevo: sku=%s", sku)
                     sku_final = _next_sku()
                     
                 producto_talla = Producto_Talla.objects.create(
@@ -20323,7 +20452,7 @@ def crear_producto_manual(request):
                     sku=sku_final
                 )
                 tallas_nuevas += 1
-                print(f"🆕 Talla nueva creada: {talla_limpia} (SKU: {sku_final})")
+                logger.info("Talla nueva creada en producto manual: producto_id=%s talla=%s sku=%s", producto.id, talla_limpia, sku_final)
             
             tallas_creadas[talla_limpia] = {
                 'producto_talla': producto_talla,
@@ -20352,7 +20481,7 @@ def crear_producto_manual(request):
                     referencia_externa=ref_externa,
                     crear_lote_fifo=True
                 )
-                print(f"📝 Movimiento registrado para talla {talla_nombre}: +{stock}")
+                logger.debug("Movimiento manual registrado: talla=%s stock=%s producto_talla_id=%s", talla_nombre, stock, producto_talla.id)
         
         # ========== REGISTRAR EN COMPRA Y VINCULAR AL DTE ==========
         compra_creada = None
@@ -20371,7 +20500,7 @@ def crear_producto_manual(request):
 
                 if compra_existente:
                     compra_creada = compra_existente
-                    print(f"📌 Reutilizando compra existente: {compra_creada.nombre} (ID: {compra_creada.id})")
+                    logger.debug("Compra existente reutilizada para producto manual: compra_id=%s nombre=%s", compra_creada.id, compra_creada.nombre)
                 else:
                     correlativo_compra = obtener_siguiente_correlativo(sucursal, 'COMPRA')
                     nombre_compra = f"Compra Manual - {proveedor.nombre} - {hoy.strftime('%d/%m/%Y')}"
@@ -20385,7 +20514,7 @@ def crear_producto_manual(request):
                         estado='COMPLETADA',
                         tipo='inicial',
                     )
-                    print(f"🆕 Compra creada: {nombre_compra} (ID: {compra_creada.id})")
+                    logger.info("Compra creada para producto manual: compra_id=%s nombre=%s", compra_creada.id, nombre_compra)
 
                 marca_nombre = atributo1_obj.valor if atributo1_obj else ''
                 color_nombre = atributo2_obj.valor if atributo2_obj else ''
@@ -20404,7 +20533,7 @@ def crear_producto_manual(request):
                     precioSugerido=int(precioventa),
                     sucursal_destino=sucursal,
                 )
-                print(f"🆕 Compra_Producto creado: {articulo} (ID: {compra_producto_creado.id})")
+                logger.info("Compra_Producto creado para producto manual: compra_producto_id=%s articulo=%s", compra_producto_creado.id, articulo)
 
                 for talla_nombre, talla_info in tallas_creadas.items():
                     producto_talla = talla_info['producto_talla']
@@ -20418,7 +20547,7 @@ def crear_producto_manual(request):
                         unidades_recibidas=stock_talla,
                         estado_item='recibido_completo',
                     )
-                    print(f"   📦 CPT creada: talla={talla_nombre}, stock={stock_talla}")
+                    logger.debug("Compra_Producto_Talla creada para producto manual: cpt_id=%s talla=%s stock=%s", cpt.id, talla_nombre, stock_talla)
 
                     dte_prod = Dte_Productos.objects.create(
                         dte=dte,
@@ -20431,7 +20560,7 @@ def crear_producto_manual(request):
                         monto_item=int(costo) * stock_talla,
                         stock=stock_talla,
                     )
-                    print(f"   📄 Dte_Producto creado: {articulo} T{talla_nombre} (ID: {dte_prod.id})")
+                    logger.debug("Dte_Producto creado para producto manual: dte_producto_id=%s articulo=%s talla=%s", dte_prod.id, articulo, talla_nombre)
 
                     if stock_talla > 0:
                         Productos_Recepcionados.objects.create(
@@ -20446,12 +20575,10 @@ def crear_producto_manual(request):
                             recepcionado_por=responsable_nombre,
                             fecha_recepcion=timezone.now(),
                         )
-                        print(f"   ✅ Recepción registrada: talla={talla_nombre}, cantidad={stock_talla}")
+                        logger.debug("Recepcion registrada para producto manual: talla=%s cantidad=%s", talla_nombre, stock_talla)
 
         except Exception as e:
-            import traceback
-            print(f"⚠️ Error vinculando a compra/DTE (no crítico): {e}")
-            print(traceback.format_exc())
+            logger.exception("Error vinculando producto manual a compra/DTE")
             compra_creada = None
         
         # ========== SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ==========
@@ -20475,18 +20602,27 @@ def crear_producto_manual(request):
                 stock_total=Sum('producto_talla__stock')
             ).select_related('sucursal')
             
-            print(f"🔍 [Manual] Buscando productos similares a '{articulo}' en otras sucursales: {productos_similares.count()} encontrados")
+            logger.debug(
+                "Buscando productos similares para sincronizacion manual: articulo=%s total=%s",
+                articulo,
+                productos_similares.count(),
+            )
             
             if productos_similares.exists():
                 for prod_similar in productos_similares:
                     precio_anterior = int(prod_similar.precioventa or 0)
                     stock_sucursal = prod_similar.stock_total or 0
                     
-                    print(f"   📦 {prod_similar.sucursal.alias}: stock={stock_sucursal}, precio_actual=${precio_anterior:,}")
+                    logger.debug(
+                        "Producto similar manual: sucursal=%s stock=%s precio_actual=%s",
+                        prod_similar.sucursal.alias,
+                        stock_sucursal,
+                        precio_anterior,
+                    )
                     
                     # Solo procesar si hay diferencia de precio
                     if precio_anterior == int(precioventa):
-                        print(f"   ⏭️ {prod_similar.sucursal.alias}: mismo precio, saltando")
+                        logger.debug("Producto similar manual sin cambio de precio: sucursal=%s producto_id=%s", prod_similar.sucursal.alias, prod_similar.id)
                         continue
                     
                     # === SINCRONIZAR PRECIO ===
@@ -20528,7 +20664,7 @@ def crear_producto_manual(request):
                         
                         if not primera_talla:
                             # No hay stock, precio actualizado pero sin alerta
-                            print(f"   💤 {prod_similar.sucursal.alias}: Precio actualizado (sin alerta - stock=0)")
+                            logger.info("Precio manual actualizado sin alerta por stock cero: sucursal=%s producto_id=%s", prod_similar.sucursal.alias, prod_similar.id)
                         
                         if primera_talla:
                             # Determinar prioridad según la diferencia
@@ -20576,21 +20712,29 @@ def crear_producto_manual(request):
                                 )
                                 notificaciones_creadas += 1
                             
-                            print(f"🔔 Alerta creada para {prod_similar.sucursal.alias}: {usuarios_sucursal.count()} usuarios notificados")
+                            logger.info(
+                                "Alerta manual de cambio de precio creada: sucursal=%s usuarios_notificados=%s cambio_id=%s",
+                                prod_similar.sucursal.alias,
+                                usuarios_sucursal.count(),
+                                cambio.id,
+                            )
                             
                     except Exception as alert_error:
-                        print(f"⚠️ Error creando alerta: {alert_error}")
+                        logger.warning("Error creando alerta manual de cambio de precio: producto_id=%s error=%s", prod_similar.id, alert_error)
                     
                     productos_sincronizados += 1
                     if prod_similar.sucursal.alias not in sucursales_afectadas:
                         sucursales_afectadas.append(prod_similar.sucursal.alias)
                 
                 if productos_sincronizados > 0:
-                    print(f"🔄 {productos_sincronizados} productos sincronizados en {len(sucursales_afectadas)} sucursales. {notificaciones_creadas} notificaciones enviadas")
-        except Exception as e:
-            import traceback
-            print(f"⚠️ Error en sincronización de precios (no crítico): {str(e)}")
-            print(traceback.format_exc())
+                    logger.info(
+                        "Sincronizacion manual de precios completada: productos=%s sucursales=%s notificaciones=%s",
+                        productos_sincronizados,
+                        len(sucursales_afectadas),
+                        notificaciones_creadas,
+                    )
+        except Exception:
+            logger.exception("Error en sincronizacion manual de precios")
         
         # Construir mensaje descriptivo
         if producto_actualizado:
@@ -20676,9 +20820,15 @@ def actualizar_producto_existente(request):
             
             if precio_cambiado:
                 producto.save()
-                print(f"✅ Producto {producto.id} actualizado - Costo: {producto.costo}, Sobreprecio: {producto.sobreprecio}, PrecioVenta: {producto.precioventa}")
+                logger.info(
+                    "Producto actualizado desde modal existente: producto_id=%s costo=%s sobreprecio=%s precioventa=%s",
+                    producto.id,
+                    producto.costo,
+                    producto.sobreprecio,
+                    producto.precioventa,
+                )
             else:
-                print(f"⚠️ No hubo cambios en precios para producto {producto.id}")
+                logger.debug("No hubo cambios de precios para producto existente: producto_id=%s", producto.id)
         
         # Agregar nuevas tallas si se solicita
         if agregar_tallas:
@@ -20696,7 +20846,7 @@ def actualizar_producto_existente(request):
                 if talla_nombre in tallas_agrupadas:
                     # Talla duplicada: sumar stock
                     tallas_agrupadas[talla_nombre]['stock'] += int(talla_data.get('stock', 0))
-                    print(f"⚠️ Talla duplicada detectada: {talla_nombre}, sumando stock")
+                    logger.warning("Talla duplicada detectada al actualizar producto: talla=%s", talla_nombre)
                 else:
                     # Primera vez que aparece esta talla
                     tallas_agrupadas[talla_nombre] = {
@@ -20705,7 +20855,7 @@ def actualizar_producto_existente(request):
                         'sku': talla_data.get('sku', '')
                     }
             
-            print(f"📊 Tallas recibidas: {len(tallas_nuevas)}, Tallas únicas: {len(tallas_agrupadas)}")
+            logger.debug("Tallas recibidas para actualizar producto: recibidas=%s unicas=%s", len(tallas_nuevas), len(tallas_agrupadas))
             
             # Obtener tallas existentes
             tallas_existentes = set(
@@ -20741,7 +20891,13 @@ def actualizar_producto_existente(request):
                                 referencia_externa=f'Manual-{dte.numero_documento if dte else "N/A"}'
                             )
                             stock_final = producto_talla.stock
-                            print(f"✅ Talla {talla} actualizada: +{stock_adicional} → Total: {stock_final}")
+                            logger.info(
+                                "Talla existente actualizada: producto_talla_id=%s talla=%s stock_adicional=%s stock_final=%s",
+                                producto_talla.id,
+                                talla,
+                                stock_adicional,
+                                stock_final,
+                            )
                             cambios_realizados.append(f'Talla {talla}: Stock actualizado (+{stock_adicional}, total: {stock_final})')
                 else:
                     # Crear nueva talla
@@ -20804,10 +20960,10 @@ def buscar_productos_existentes(request):
     """
     try:
         termino = request.GET.get('q', '').strip()
-        print(f"🔍 Buscando productos con término: '{termino}'")
+        logger.debug("Buscando productos existentes: termino=%s", termino)
         
         if not termino:
-            print("❌ Término de búsqueda vacío")
+            logger.debug("Busqueda de productos existentes sin termino")
             return JsonResponse({'success': False, 'error': 'Término de búsqueda requerido'}, status=400)
         
         # Buscar productos que coincidan con el término
@@ -20821,7 +20977,7 @@ def buscar_productos_existentes(request):
             'atributo3'
         )[:10]  # Limitar a 10 resultados
         
-        print(f"✅ Productos encontrados en DB: {productos.count()}")
+        logger.debug("Productos encontrados en busqueda existente: total=%s", productos.count())
         
         resultados = []
         for producto in productos:
@@ -20838,18 +20994,18 @@ def buscar_productos_existentes(request):
                 'precioventa': float(producto.precioventa)
             }
             resultados.append(resultado)
-            print(f"📦 Producto procesado: {resultado['articulo']}")
+            logger.debug("Producto procesado para busqueda existente: producto_id=%s articulo=%s", producto.id, resultado['articulo'])
         
         response_data = {
             'success': True,
             'productos': resultados
         }
         
-        print(f"📋 Respuesta final: {len(resultados)} productos")
+        logger.debug("Busqueda de productos existentes preparada: total=%s", len(resultados))
         return JsonResponse(response_data)
         
     except Exception as e:
-        print(f"❌ Error en búsqueda de productos: {str(e)}")
+        logger.exception("Error en busqueda de productos existentes")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @require_GET
@@ -20956,7 +21112,7 @@ def tallas_producto(request, producto_id):
         })
         
     except Exception as e:
-        print(f"❌ Error obteniendo tallas del producto {producto_id}: {str(e)}")
+        logger.exception("Error obteniendo tallas del producto %s", producto_id)
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 # ========== FUNCIONES FIFO ==========
@@ -22320,7 +22476,7 @@ def dashboard_compras_estrategico(request):
                 
             except Exception as e:
                 # Si hay error procesando datos reales, usar datos de ejemplo
-                print(f"Error procesando datos reales: {e}")
+                logger.warning("Error procesando datos reales de rendimiento: %s", e)
         
         # Por ahora, siempre usar datos de ejemplo para demostración
         # Datos de ejemplo para demostración
@@ -24450,8 +24606,7 @@ def emitir_dte_concepto(request):
             })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al emitir DTE por concepto")
         return JsonResponse({
             'success': False,
             'error': f'Error al emitir DTE por concepto: {str(e)}'
@@ -25174,13 +25329,16 @@ def obtener_sucursales(request):
         empresa_actual_id = request.session.get('idEmpresaActual')
         filtro_tipo = request.GET.get('filtro_tipo', 'guia_misma_empresa')
         
-        print(f"🔍 DEBUG DESPACHO INTERNO - Usuario: {request.user}")
-        print(f"🔍 DEBUG - Sucursal actual ID: {sucursal_actual_id}")
-        print(f"🔍 DEBUG - Empresa actual ID: {empresa_actual_id}")
-        print(f"🔍 DEBUG - Filtro tipo: {filtro_tipo}")
+        logger.debug(
+            "Despacho interno obtener_sucursales: usuario=%s sucursal_id=%s empresa_id=%s filtro_tipo=%s",
+            request.user,
+            sucursal_actual_id,
+            empresa_actual_id,
+            filtro_tipo,
+        )
         
         if not empresa_actual_id:
-            print("❌ ERROR - No hay empresa actual en sesión")
+            logger.warning("No hay empresa actual en sesion al obtener sucursales")
             return JsonResponse({
                 'success': False,
                 'error': 'No hay empresa actual en la sesión'
@@ -25190,9 +25348,9 @@ def obtener_sucursales(request):
         try:
             empresa_actual_obj = Empresa.objects.get(id=empresa_actual_id)
             rut_empresa_actual = empresa_actual_obj.rut
-            print(f"📋 Empresa actual: {empresa_actual_obj.nombre} (RUT: {rut_empresa_actual})")
+            logger.debug("Empresa actual para despacho: empresa_id=%s rut=%s", empresa_actual_id, rut_empresa_actual)
         except Empresa.DoesNotExist:
-            print(f"❌ ERROR - Empresa ID {empresa_actual_id} no existe")
+            logger.warning("Empresa actual no existe al obtener sucursales: empresa_id=%s", empresa_actual_id)
             return JsonResponse({
                 'success': False,
                 'error': f'Empresa con ID {empresa_actual_id} no encontrada'
@@ -25205,7 +25363,7 @@ def obtener_sucursales(request):
         ).values_list('empresa_id', flat=True)
         
         empresas_usuario_list = list(todas_empresas_usuario)
-        print(f"🔍 DEBUG - Empresas del usuario: {empresas_usuario_list}")
+        logger.debug("Empresas del usuario para despacho: usuario=%s empresas=%s", request.user, empresas_usuario_list)
         
         # ═══════════════════════════════════════════════════════════════
         # APLICAR FILTRO SEGÚN TIPO DE DESPACHO
@@ -25213,13 +25371,13 @@ def obtener_sucursales(request):
         
         if filtro_tipo == 'guia_misma_empresa':
             # GUÍA para sucursales normales (no EDEL/GILD): SOLO misma empresa
-            print(f"📋 GUÍA INTERNA: Solo sucursales de la misma empresa (ID: {empresa_actual_id})")
+            logger.debug("Filtro despacho guia misma empresa: empresa_id=%s", empresa_actual_id)
             empresas_filtro = [empresa_actual_id]
             excluir_mismo_rut = False
             
         elif filtro_tipo == 'guia_todas':
             # GUÍA para EDEL/GILD: TODAS las sucursales de todas las empresas del usuario
-            print(f"📋 GUÍA ESPECIAL (EDEL/GILD): Todas las sucursales de todas las empresas")
+            logger.debug("Filtro despacho guia todas las empresas")
             empresas_filtro = empresas_usuario_list
             excluir_mismo_rut = False
             
@@ -25227,15 +25385,14 @@ def obtener_sucursales(request):
             # FACTURA: Sucursales de OTRAS empresas (diferentes RUT para evitar auto-factura)
             # Se busca en TODAS las empresas del sistema, no solo las asignadas al usuario,
             # para que usuarios con una sola empresa asignada puedan facturar a otras.
-            print(f"📋 FACTURA INTERNA: Solo sucursales de otras empresas")
             todas_las_empresas = list(Empresa.objects.filter(activo=True).values_list('id', flat=True))
-            print(f"🔍 DEBUG - Todas las empresas activas del sistema: {todas_las_empresas}")
+            logger.debug("Filtro despacho factura otras empresas: empresas_activas=%s", todas_las_empresas)
             empresas_filtro = todas_las_empresas
             excluir_mismo_rut = True
             
         else:
             # Valor por defecto: igual que guia_misma_empresa
-            print(f"⚠️ Filtro desconocido '{filtro_tipo}', usando default (misma empresa)")
+            logger.warning("Filtro de despacho desconocido; usando misma empresa: filtro_tipo=%s", filtro_tipo)
             empresas_filtro = [empresa_actual_id]
             excluir_mismo_rut = False
         
@@ -25248,10 +25405,10 @@ def obtener_sucursales(request):
         
         # Si es FACTURA, excluir sucursales del mismo RUT (evitar auto-facturación)
         if excluir_mismo_rut and rut_empresa_actual:
-            print(f"🔍 Aplicando filtro de RUT diferente a: {rut_empresa_actual}")
+            logger.debug("Aplicando filtro RUT distinto para despacho: rut=%s", rut_empresa_actual)
             sucursales_query = sucursales_query.exclude(empresa__rut=rut_empresa_actual)
         
-        print(f"🔍 DEBUG - Sucursales encontradas: {sucursales_query.count()}")
+        logger.debug("Sucursales encontradas para despacho: total=%s", sucursales_query.count())
         
         sucursales_list = []
         for sucursal in sucursales_query:
@@ -25264,7 +25421,6 @@ def obtener_sucursales(request):
                 'empresa_rut': sucursal.empresa.rut
             }
             sucursales_list.append(sucursal_data)
-            print(f"  ✅ {sucursal.alias} | {sucursal.empresa.nombre} (RUT: {sucursal.empresa.rut})")
         
         # Resumen final
         resumen_tipo = {
@@ -25272,15 +25428,16 @@ def obtener_sucursales(request):
             'guia_todas': 'GUÍA ESPECIAL (todas las empresas - EDEL/GILD)',
             'factura_otras_empresas': 'FACTURA (otras empresas)'
         }
-        print(f"📋 RESUMEN {resumen_tipo.get(filtro_tipo, 'DESCONOCIDO')}: {len(sucursales_list)} sucursales")
+        logger.debug(
+            "Resumen sucursales despacho: tipo=%s total=%s",
+            resumen_tipo.get(filtro_tipo, 'DESCONOCIDO'),
+            len(sucursales_list),
+        )
         
         return JsonResponse(sucursales_list, safe=False)
         
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f'Error en obtener_sucursales: {str(e)}', exc_info=True)
-        
+        logger.exception("Error en obtener_sucursales")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener sucursales: {str(e)}'
@@ -25294,9 +25451,7 @@ def emitir_dte(request):
     try:
         data = json.loads(request.body)
         
-        # DEBUG COMPLETO: Mostrar todos los datos recibidos
-        print("🔍 DEBUG COMPLETO - Datos recibidos en emitir_dte:")
-        print(f"📋 Raw data: {data}")
+        logger.debug("Datos recibidos en emitir_dte: %s", data)
         
         # Validar datos requeridos
         metodo_despacho = data.get('metodo_despacho')
@@ -25318,14 +25473,16 @@ def emitir_dte(request):
             except (InvalidOperation, ValueError):
                 porcentaje_custom = None
         
-        # DEBUG: Mostrar cada campo individualmente
-        print(f"📝 metodo_despacho: '{metodo_despacho}' (len: {len(str(metodo_despacho)) if metodo_despacho else 0})")
-        print(f"📝 tipo_documento: '{tipo_documento}' (len: {len(str(tipo_documento)) if tipo_documento else 0})")
-        print(f"📝 receptor_id: '{receptor_id}'")
-        print(f"📝 sucursal_destino_id: '{sucursal_destino_id}'")
-        print(f"📝 fecha_emision: '{fecha_emision}'")
-        print(f"📝 observaciones: '{observaciones}' (len: {len(str(observaciones)) if observaciones else 0})")
-        print(f"📝 detalle_productos: {len(detalle_productos)} items")
+        logger.debug(
+            "Campos emitir_dte: metodo=%s tipo=%s receptor_id=%s sucursal_destino_id=%s fecha=%s observaciones_len=%s items=%s",
+            metodo_despacho,
+            tipo_documento,
+            receptor_id,
+            sucursal_destino_id,
+            fecha_emision,
+            len(str(observaciones)) if observaciones else 0,
+            len(detalle_productos),
+        )
         
         # Validar datos básicos
         if not all([metodo_despacho, tipo_documento, fecha_emision]):
@@ -25378,16 +25535,16 @@ def emitir_dte(request):
             # VALIDACIÓN IMPORTANTE: Verificar que los RUTs sean diferentes SOLO para FACTURAS
             # Para GUÍAS, se permite el mismo RUT (traspasos internos)
             if tipo_documento == 'FACTURA ELECTRONICA' and emisor.rut == receptor.rut:
-                print(f"❌ ERROR - Intento de emisión de FACTURA entre sucursales del mismo RUT: {emisor.rut}")
+                logger.warning("Intento de emitir factura interna con mismo RUT: rut=%s", emisor.rut)
                 return JsonResponse({
                     'success': False,
                     'error': f'No se puede emitir FACTURA entre sucursales de empresas con el mismo RUT ({emisor.rut}). Use GUÍA DE DESPACHO para traspasos internos.'
                 }, status=400)
             
             if emisor.rut != receptor.rut:
-                print(f"✅ Validación RUT OK - Emisor: {emisor.rut}, Receptor: {receptor.rut} (diferentes)")
+                logger.debug("Validacion RUT despacho interno OK: emisor=%s receptor=%s", emisor.rut, receptor.rut)
             else:
-                print(f"✅ GUÍA permitida - Emisor: {emisor.rut}, Receptor: {receptor.rut} (mismo RUT, traspaso interno)")
+                logger.debug("Guia interna permitida con mismo RUT: rut=%s", emisor.rut)
         else:
             # Despacho externo: obtener empresa cliente
             receptor = get_object_or_404(Empresa, id=receptor_id)
@@ -25395,19 +25552,18 @@ def emitir_dte(request):
         # El frontend ya envía los valores correctos del modelo, no necesitamos mapear
         tipo_doc = tipo_documento
         
-        # DEBUG: Verificar tipo de documento
-        print(f"🔍 DEBUG - tipo_documento recibido: '{tipo_documento}' (len: {len(tipo_documento)})")
+        logger.debug("Tipo documento recibido en emitir_dte: tipo=%s", tipo_documento)
         
         # Validar que el tipo de documento sea válido
         tipos_validos = ['FACTURA ELECTRONICA', 'BOLETA ELECTRONICA', 'GUIA', 'NOTA DE PEDIDO', 'NOTA DE CREDITO']
         if tipo_doc not in tipos_validos:
-            print(f"❌ ERROR - Tipo de documento inválido: '{tipo_doc}'")
+            logger.warning("Tipo de documento invalido en emitir_dte: tipo=%s", tipo_doc)
             return JsonResponse({
                 'success': False,
                 'error': f'Tipo de documento inválido: {tipo_doc}. Valores válidos: {tipos_validos}'
             }, status=400)
         
-        print(f"✅ Tipo de documento validado correctamente: {tipo_doc}")
+        logger.debug("Tipo de documento validado en emitir_dte: tipo=%s", tipo_doc)
 
         # Facturas y guías generan TXT Acepta. No permitir que se emita un
         # documento que luego saldrá sin dirección/comuna/ciudad.
@@ -25448,43 +25604,50 @@ def emitir_dte(request):
                 }, status=400)
         
         with transaction.atomic():
-            print(f"🔄 Iniciando transacción atómica...")
+            logger.debug("Iniciando transaccion emitir_dte")
             # Calcular totales
             subtotal_neto = 0
             total_unidades = 0
             
-            print(f"📦 Procesando {len(detalle_productos)} productos...")
+            logger.debug("Procesando productos para emitir_dte: total=%s", len(detalle_productos))
             for idx, item in enumerate(detalle_productos, 1):
                 talla_id = item.get('talla_id')
                 cantidad = int(item.get('cantidad', 0))
                 precio = int(float(item.get('precio', 0)))  # Convertir a int para compatibilidad con IntegerField
                 
-                print(f"  Item {idx}: talla_id={talla_id}, cantidad={cantidad}, precio={precio}")
+                logger.debug("Item emitir_dte: idx=%s talla_id=%s cantidad=%s precio=%s", idx, talla_id, cantidad, precio)
                 
                 # Validar stock disponible en la sucursal de origen
                 talla = get_object_or_404(Producto_Talla, id=talla_id)
                 
-                # DEBUG DETALLADO: Información del producto y stock
-                print(f"    📦 Producto: {talla.producto.articulo} | SKU: {talla.sku} | Talla: {talla.talla}")
-                print(f"    📍 Stock global (campo directo): {talla.stock}")
-                print(f"    📍 Producto.sucursal_id: {talla.producto.sucursal_id}")
-                print(f"    🏢 Sucursal actual (origen): {sucursal.alias} (ID: {sucursal_id})")
-                
                 # Verificar si tiene movimientos
                 tiene_movimientos = talla.movimientos_productos_talla.exists()
-                print(f"    📊 Tiene movimientos registrados: {tiene_movimientos}")
                 
                 # ✅ Usar stock_sucursal() para validar stock específico de la sucursal origen
                 stock_disponible = talla.stock_sucursal(sucursal_id)
-                print(f"    ✅ Stock disponible en sucursal {sucursal.alias}: {stock_disponible}")
+                logger.debug(
+                    "Stock item emitir_dte: producto=%s sku=%s talla=%s stock_global=%s producto_sucursal_id=%s sucursal_origen=%s tiene_movimientos=%s stock_disponible=%s",
+                    talla.producto.articulo,
+                    talla.sku,
+                    talla.talla,
+                    talla.stock,
+                    talla.producto.sucursal_id,
+                    sucursal_id,
+                    tiene_movimientos,
+                    stock_disponible,
+                )
                 
                 if stock_disponible < cantidad:
-                    print(f"❌ ERROR - Stock insuficiente en sucursal {sucursal.alias}")
-                    print(f"    ⚠️ DIAGNÓSTICO:")
-                    print(f"       - Stock global: {talla.stock}")
-                    print(f"       - Stock en sucursal: {stock_disponible}")
-                    print(f"       - Tiene movimientos: {tiene_movimientos}")
-                    print(f"       - Producto.sucursal_id: {talla.producto.sucursal_id} vs Sucursal actual: {sucursal_id}")
+                    logger.warning(
+                        "Stock insuficiente en emitir_dte: sucursal=%s sku=%s solicitado=%s disponible=%s stock_global=%s tiene_movimientos=%s producto_sucursal_id=%s",
+                        sucursal.alias,
+                        talla.sku,
+                        cantidad,
+                        stock_disponible,
+                        talla.stock,
+                        tiene_movimientos,
+                        talla.producto.sucursal_id,
+                    )
                     
                     error_msg = f'Stock insuficiente para {talla.producto.articulo} talla {talla.talla} (SKU: {talla.sku}) en sucursal {sucursal.alias}. Disponible: {stock_disponible}, Solicitado: {cantidad}'
                     
@@ -25499,23 +25662,20 @@ def emitir_dte(request):
                 subtotal_neto += cantidad * precio
                 total_unidades += cantidad
             
-            print(f"✅ Validación de stock OK. Subtotal: {subtotal_neto}, Unidades: {total_unidades}")
+            logger.debug("Validacion de stock OK para emitir_dte: subtotal=%s unidades=%s", subtotal_neto, total_unidades)
             
             # Calcular IVA y total
             subtotal_decimal = Decimal(str(subtotal_neto))
             iva = subtotal_decimal * Decimal('0.19')
             total_con_iva = subtotal_decimal + iva
-            print(f"💰 Cálculos: Neto={subtotal_decimal}, IVA={iva}, Total={total_con_iva}")
+            logger.debug("Calculos emitir_dte: neto=%s iva=%s total=%s", subtotal_decimal, iva, total_con_iva)
             
             # Obtener correlativo oficial de la sucursal para este tipo de DTE
             try:
-                print(f"🔢 Intentando obtener correlativo para {tipo_doc} en sucursal {sucursal.alias}...")
                 numero_documento = obtener_siguiente_correlativo(sucursal, tipo_doc)
-                print(f"✅ Correlativo obtenido: {numero_documento}")
+                logger.debug("Correlativo obtenido para emitir_dte: tipo=%s sucursal=%s numero=%s", tipo_doc, sucursal.alias, numero_documento)
             except Exception as correlativo_error:
-                print(f"❌ ERROR al obtener correlativo: {correlativo_error}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error al obtener correlativo para emitir_dte")
                 return JsonResponse({
                     'success': False,
                     'error': f'No fue posible obtener el correlativo para {tipo_doc}: {correlativo_error}'
@@ -25533,22 +25693,14 @@ def emitir_dte(request):
                 estado_pago = 'PENDIENTE'
                 tipo_transaccion = 'VENTA'
             
-            # DEBUG: Mostrar valores asignados y lógica aplicada
-            print(f"🔍 DEBUG - Lógica aplicada:")
-            print(f"  metodo_despacho: '{metodo_despacho}'")
-            print(f"  tipo_doc: '{tipo_doc}'")
-            print(f"  → estado_dte: '{estado_dte}' (len: {len(estado_dte)})")
-            print(f"  → estado_pago: '{estado_pago}' (len: {len(estado_pago)})")
-            print(f"  → tipo_transaccion: '{tipo_transaccion}' (len: {len(tipo_transaccion)})")
-            
-            # Explicar la lógica aplicada
-            if metodo_despacho == 'interno':
-                if tipo_doc == 'FACTURA ELECTRONICA':
-                    print("  📋 Lógica: Factura interna → VENTA (entre empresas del grupo)")
-                else:
-                    print("  📋 Lógica: Guía interna → TRASPASO (entre sucursales misma empresa)")
-            else:
-                print("  📋 Lógica: Despacho externo → VENTA (a cliente)")
+            logger.debug(
+                "Logica emitir_dte: metodo=%s tipo_doc=%s estado_dte=%s estado_pago=%s tipo_transaccion=%s",
+                metodo_despacho,
+                tipo_doc,
+                estado_dte,
+                estado_pago,
+                tipo_transaccion,
+            )
             
             # Preparar referencias
             referencias_texto = f"Método despacho: {metodo_despacho}"
@@ -25557,11 +25709,16 @@ def emitir_dte(request):
             if observaciones:
                 referencias_texto += f". {observaciones}"
             
-            print(f"📄 Creando DTE con los siguientes parámetros:")
-            print(f"  emisor_id: {emisor.id}, receptor_id: {receptor.id if receptor else 'None'}")
-            print(f"  numero_documento: {numero_documento}, tipo_documento: {tipo_doc}")
-            print(f"  estado_pago: {estado_pago}, estado_dte: {estado_dte}")
-            print(f"  tipo_transaccion: {tipo_transaccion}")
+            logger.debug(
+                "Creando DTE: emisor_id=%s receptor_id=%s numero=%s tipo=%s estado_pago=%s estado_dte=%s tipo_transaccion=%s",
+                emisor.id,
+                receptor.id if receptor else None,
+                numero_documento,
+                tipo_doc,
+                estado_pago,
+                estado_dte,
+                tipo_transaccion,
+            )
             
             # Calcular fecha de vencimiento según forma de pago y días crédito
             from datetime import timedelta
@@ -25572,7 +25729,7 @@ def emitir_dte(request):
                 if es_credito else fecha_emision_date
             )
             dias_credito_final = dias_credito if es_credito else 0
-            print(f"  forma_pago: '{forma_pago_str}', dias_credito: {dias_credito_final}, fecha_vencimiento: {fecha_vencimiento_date}")
+            logger.debug("Pago emitir_dte: forma_pago=%s dias_credito=%s fecha_vencimiento=%s", forma_pago_str, dias_credito_final, fecha_vencimiento_date)
             
             # Crear DTE con todos los campos requeridos
             try:
@@ -25601,11 +25758,9 @@ def emitir_dte(request):
                     if tipo_precio_externo == 'custom_pct' and porcentaje_custom is not None:
                         dte_kwargs['porcentaje_custom'] = porcentaje_custom
                 dte = Dte.objects.create(**dte_kwargs)
-                print(f"✅ DTE creado exitosamente: ID={dte.id}")
+                logger.info("DTE emitido creado: dte_id=%s numero=%s tipo=%s", dte.id, numero_documento, tipo_doc)
             except Exception as e:
-                print(f"❌ ERROR al crear DTE: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error al crear DTE en emitir_dte")
                 return JsonResponse({
                     'success': False,
                     'error': f'Error al crear DTE: {str(e)}'
@@ -25645,7 +25800,13 @@ def emitir_dte(request):
                 costo_unitario = producto.costo
                 sobreprecio_unitario = producto.sobreprecio
                 
-                print(f"  💰 Producto: Costo={costo_unitario}, Sobreprecio={sobreprecio_unitario}, Precio={precio}")
+                logger.debug(
+                    "Detalle producto emitir_dte: producto_id=%s costo=%s sobreprecio=%s precio=%s",
+                    producto.id,
+                    costo_unitario,
+                    sobreprecio_unitario,
+                    precio,
+                )
                 
                 # Crear detalle del DTE
                 Dte_Productos.objects.create(
@@ -25684,8 +25845,12 @@ def emitir_dte(request):
                     
                     # ✅ Actualizar stock legacy para mantener sincronización
                     Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
-                    print(f"✓ Movimiento de egreso creado: {talla.sku} -{cantidad} en sucursal {sucursal.alias}")
-                    print(f"✓ Stock legacy actualizado: campo stock reducido en {cantidad}")
+                    logger.info(
+                        "Movimiento de egreso venta creado: sku=%s cantidad=%s sucursal=%s",
+                        talla.sku,
+                        cantidad,
+                        sucursal.alias,
+                    )
                     
                 else:
                     # DESPACHO INTERNO: Crear movimiento de traspaso (salida en origen)
@@ -25711,10 +25876,13 @@ def emitir_dte(request):
                     
                     # ✅ Actualizar stock legacy para mantener sincronización con movimientos
                     Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
-                    print(f"✓ Movimiento de EGRESO creado: {talla.sku} -{cantidad} desde {sucursal.alias}")
-                    print(f"✓ Stock legacy actualizado: campo stock reducido en {cantidad}")
-                    print(f"  Destino: {sucursal_destino.alias} (pendiente de recepción)")
-                    print(f"  Stock en {sucursal.alias} actualizado en ambos sistemas (movimientos + legacy)")
+                    logger.info(
+                        "Movimiento de egreso traspaso creado: sku=%s cantidad=%s origen=%s destino=%s",
+                        talla.sku,
+                        cantidad,
+                        sucursal.alias,
+                        sucursal_destino.alias,
+                    )
 
             lineas_esperadas = len(detalle_productos)
             lineas_bd = Dte_Productos.objects.filter(dte=dte).count()
@@ -25788,17 +25956,29 @@ def cambiar_empresa(request):
     """
     puede_cambiar = puede_cambiar_sucursal(request.user)
     
-    print(f"🔍 DEBUG - Usuario actual: {request.user}")
-    print(f"🔍 DEBUG - Usuario ID: {request.user.id}")
-    print(f"🔍 DEBUG - Rol: {getattr(request.user, 'rol', 'N/A')} - Puede cambiar: {puede_cambiar}")
+    logger.debug(
+        "Cambiar empresa: usuario=%s usuario_id=%s rol=%s puede_cambiar=%s",
+        request.user,
+        request.user.id,
+        getattr(request.user, 'rol', 'N/A'),
+        puede_cambiar,
+    )
     
     # Primero verificar todos los EmpresaUser del usuario
     todos_empresa_user = EmpresaUser.objects.filter(user=request.user)
-    print(f"🔍 DEBUG - Total EmpresaUser para usuario: {todos_empresa_user.count()}")
+    logger.debug("Total EmpresaUser para usuario: usuario_id=%s total=%s", request.user.id, todos_empresa_user.count())
     
     for eu in todos_empresa_user:
         sucursal_info = f"Sucursal: {eu.sucursal.alias} (ID: {eu.sucursal.id})" if eu.sucursal else "Sucursal: None"
-        print(f"  - EmpresaUser ID: {eu.id}, Empresa: {eu.empresa.nombre} (ID: {eu.empresa.id}), {sucursal_info}, Status: {eu.status}, Active: {eu.active}")
+        logger.debug(
+            "EmpresaUser disponible: id=%s empresa=%s empresa_id=%s %s status=%s active=%s",
+            eu.id,
+            eu.empresa.nombre,
+            eu.empresa.id,
+            sucursal_info,
+            eu.status,
+            eu.active,
+        )
     
     # Obtener solo las empresas que tienen sucursales asignadas al usuario
     empresas_usuario = EmpresaUser.objects.filter(
@@ -25807,12 +25987,12 @@ def cambiar_empresa(request):
         sucursal__isnull=False  # Solo registros que tienen sucursal asignada
     ).select_related('empresa', 'sucursal')
     
-    print(f"🔍 DEBUG - EmpresaUser con sucursales: {empresas_usuario.count()}")
+    logger.debug("EmpresaUser con sucursales: usuario_id=%s total=%s", request.user.id, empresas_usuario.count())
     
     # Organizar por empresa
     empresas_data = {}
     for eu in empresas_usuario:
-        print(f"🔍 DEBUG - Procesando: Empresa {eu.empresa.nombre}, Sucursal {eu.sucursal.alias}")
+        logger.debug("Procesando empresa/sucursal para cambio: empresa=%s sucursal=%s", eu.empresa.nombre, eu.sucursal.alias)
         empresa_id = eu.empresa.id
         if empresa_id not in empresas_data:
             empresas_data[empresa_id] = {
@@ -25831,7 +26011,7 @@ def cambiar_empresa(request):
                 )
         })
     
-    print(f"🔍 DEBUG - Empresas finales organizadas: {len(empresas_data)}")
+    logger.debug("Empresas finales organizadas para cambio: total=%s", len(empresas_data))
     
     # Ordenar empresas y sucursales para una mejor presentación
     empresas_data = dict(
@@ -26951,13 +27131,15 @@ def buscar_productos_bodega_DUPLICADA_NO_USAR(request):
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         empresa_id = request.session.get('idEmpresaActual') or request.session.get('empresaActual')
         
-        print(f"🔍 DEBUG - Búsqueda productos bodega:")
-        print(f"  sucursal_id: {sucursal_id}")
-        print(f"  empresa_id: {empresa_id}")
-        print(f"  search: '{search}'")
-        print(f"  marca_id: '{marca_id}'")
-        print(f"  categoria_id: '{categoria_id}'")
-        print(f"  incluir_sin_stock: {incluir_sin_stock}")
+        logger.debug(
+            "Busqueda productos bodega duplicada: sucursal_id=%s empresa_id=%s search=%s marca_id=%s categoria_id=%s incluir_sin_stock=%s",
+            sucursal_id,
+            empresa_id,
+            search,
+            marca_id,
+            categoria_id,
+            incluir_sin_stock,
+        )
         
         if not sucursal_id:
             return JsonResponse({
@@ -27073,7 +27255,7 @@ def buscar_productos_bodega_DUPLICADA_NO_USAR(request):
         })
         
     except Exception as e:
-        print(f"❌ ERROR en buscar_productos_bodega: {str(e)}")
+        logger.exception("Error en buscar_productos_bodega_DUPLICADA_NO_USAR")
         return JsonResponse({
             'success': False,
             'error': f'Error al buscar productos: {str(e)}'
@@ -29273,8 +29455,7 @@ def detalle_dte(request, dte_id):
     except Dte.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'DTE no encontrado'}, status=404)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener DTE")
         return JsonResponse({'success': False, 'error': f'Error al obtener el DTE: {str(e)}'}, status=500)
 
 
@@ -29775,9 +29956,11 @@ def gestion_correlativos(request):
                     # para no perder datos (ej. migración con consumo real). Se deja el
                     # duplicado visible para que el usuario decida manualmente con el
                     # botón "Eliminar" qué correlativo conservar.
-                    print(
-                        f"Duplicado detectado (no auto-eliminado): ID {correlativo.id}, "
-                        f"Tipo: {tipo_original} coexiste con {tipo_normalizado}"
+                    logger.warning(
+                        "Correlativo duplicado no auto-eliminado: id=%s tipo_original=%s tipo_normalizado=%s",
+                        correlativo.id,
+                        tipo_original,
+                        tipo_normalizado,
                     )
                 else:
                     # No existe, renombrar al tipo normalizado
@@ -29789,7 +29972,7 @@ def gestion_correlativos(request):
                     correlativo.save()
                 except IntegrityError as e:
                     # Si aún así hay error de integridad, eliminar este correlativo
-                    print(f"Error de integridad al guardar correlativo {correlativo.id}: {str(e)}")
+                    logger.warning("Error de integridad al guardar correlativo %s: %s", correlativo.id, e)
                     correlativo.delete()
         
         # Aplicar filtros
@@ -29846,9 +30029,7 @@ def gestion_correlativos(request):
         sucursales = Sucursal.objects.all()
         
         # Mostrar el error pero continuar con la página
-        import traceback
-        print(f"Error en gestion_correlativos: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en gestion_correlativos")
         
         return render(request, 'vistas/modulo_administracion/gestion_correlativos.html', {
             'error': f'Advertencia: {str(e)}. Mostrando datos disponibles.',
@@ -30046,12 +30227,13 @@ def obtener_correlativo(request, correlativo_id):
     try:
         correlativo = get_object_or_404(Correlativo, id=correlativo_id)
         
-        # DEBUG
-        print(f"DEBUG obtener_correlativo ID {correlativo_id}:")
-        print(f"  - Correlativo: {correlativo}")
-        print(f"  - Sucursal ID: {correlativo.sucursal.id}")
-        print(f"  - Sucursal alias: {correlativo.sucursal.alias}")
-        print(f"  - Tipo DTE: {correlativo.tipo_dte}")
+        logger.debug(
+            "Obtener correlativo: id=%s sucursal_id=%s sucursal_alias=%s tipo_dte=%s",
+            correlativo_id,
+            correlativo.sucursal.id,
+            correlativo.sucursal.alias,
+            correlativo.tipo_dte,
+        )
         
         return JsonResponse({
             'success': True,
@@ -30906,9 +31088,7 @@ def obtener_notificaciones_dte(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error en obtener_notificaciones_dte: {str(e)}")
-        traceback.print_exc()
+        logger.exception("Error en obtener_notificaciones_dte")
         return JsonResponse({
             'success': False,
             'error': str(e)

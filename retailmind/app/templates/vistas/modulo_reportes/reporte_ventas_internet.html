@@ -1,0 +1,745 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+.internet-report .module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    border-radius: 16px 16px 0 0;
+}
+.internet-report .report-card {
+    border: 0;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(64, 81, 137, .08);
+}
+.internet-report .kpi-card {
+    border: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all .22s ease;
+    height: 100%;
+}
+.internet-report .kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .12);
+}
+.internet-report .kpi-card .card-body {
+    padding: 12px 14px;
+}
+.internet-report .kpi-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.internet-report .kpi-label {
+    color: #64748b;
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+}
+.internet-report .kpi-value {
+    color: #0f172a;
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.25;
+}
+.internet-report .kpi-detail {
+    color: #64748b;
+    font-size: .72rem;
+}
+.internet-report .filter-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #eef1f6 100%);
+    border: 1px solid rgba(64, 81, 137, .1);
+}
+.internet-report .filtro-label {
+    color: #405189;
+    display: block;
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .03em;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+}
+.internet-report .quick-range {
+    background: #fff;
+    border: 1px solid rgba(64, 81, 137, .22);
+    border-radius: 20px;
+    color: #405189;
+    cursor: pointer;
+    font-size: .74rem;
+    font-weight: 700;
+    padding: 5px 13px;
+    transition: all .18s ease;
+}
+.internet-report .quick-range:hover,
+.internet-report .quick-range.active {
+    background: linear-gradient(135deg, #405189, #0ab39c);
+    border-color: transparent;
+    color: #fff;
+    transform: translateY(-1px);
+}
+.internet-report .section-title {
+    color: #405189;
+    font-size: .85rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+.internet-report .company-row {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+.internet-report .company-header {
+    background: #fff;
+    cursor: pointer;
+    padding: 12px 14px;
+}
+.internet-report .company-header:hover {
+    background: #f8fafc;
+}
+.internet-report .company-body {
+    border-top: 1px solid #e2e8f0;
+    padding: 0 14px 8px;
+}
+.internet-report .badge-platform {
+    background: #e6f0ff;
+    color: #0066ff;
+    border: 1px solid rgba(0, 102, 255, .12);
+}
+.internet-report .badge-origin-ecom {
+    background: #dcfce7;
+    color: #166534;
+}
+.internet-report .badge-origin-pos {
+    background: #e0f2fe;
+    color: #075985;
+}
+.internet-report .badge-warn-soft {
+    background: #fef3c7;
+    color: #92400e;
+}
+.internet-report .table thead th {
+    background: #eef2f9;
+    border-bottom: 2px solid #0ab39c;
+    color: #405189;
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.internet-report .table tbody td {
+    color: #1e293b;
+    font-size: .78rem;
+    vertical-align: middle;
+}
+.internet-report .table tbody tr:hover {
+    background: #f8fafc;
+}
+.internet-report .empty-state {
+    color: #64748b;
+    padding: 34px 12px;
+    text-align: center;
+}
+.internet-report .alert-card {
+    border: 0;
+    border-left: 4px solid #ffb020;
+    border-radius: 10px;
+    background: #fffbeb;
+}
+.internet-report .action-link {
+    border-radius: 18px;
+    font-size: .72rem;
+    padding: 3px 9px;
+}
+.internet-report .scope-strip {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    color: #475569;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 10px 12px;
+}
+.internet-report .scope-strip span {
+    align-items: center;
+    display: inline-flex;
+    font-size: .78rem;
+    gap: 6px;
+}
+.internet-report .scope-strip strong {
+    color: #1e293b;
+}
+@media (max-width: 768px) {
+    .internet-report .module-header {
+        align-items: flex-start;
+    }
+    .internet-report .module-header-actions {
+        width: 100%;
+    }
+    .internet-report .module-header-actions .btn {
+        flex: 1;
+    }
+    .internet-report .kpi-value {
+        font-size: 1rem;
+    }
+}
+</style>
+
+<div class="page-content internet-report">
+    <div class="container-fluid">
+        <div class="card shadow border-0">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="bi bi-globe2"></i></div>
+                    <div class="module-header-info">
+                        <h5>Ventas por Internet</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot"></span>
+                            Ecommerce &amp; POS cobrado online
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <button type="button" class="btn btn-light" id="btnActualizar">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                    </button>
+                    <button type="button" class="btn btn-success" id="btnExportar">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="scope-strip mb-3">
+                    <span><i class="bi bi-building"></i>Empresa: <strong>{{ empresa_activa_nombre|default:"Todas permitidas" }}</strong></span>
+                    <span><i class="bi bi-shop"></i>Sucursal activa: <strong>{{ sucursal_activa_nombre|default:"Todas permitidas" }}</strong></span>
+                    <span><i class="bi bi-clock-history"></i>Actualizado: <strong id="ultimaActualizacion">Sin cargar</strong></span>
+                </div>
+
+                <div class="card report-card filter-card mb-3">
+                    <div class="card-body py-3">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                            <span class="filtro-label mb-0"><i class="bi bi-calendar-range me-1"></i>Rango rapido</span>
+                            <button type="button" class="quick-range" data-range="hoy">Hoy</button>
+                            <button type="button" class="quick-range" data-range="mes">Mes actual</button>
+                            <button type="button" class="quick-range" data-range="30">Ultimos 30 dias</button>
+                            <button type="button" class="quick-range active" data-range="anio">Ano actual</button>
+                            <button type="button" class="quick-range" data-range="historico">Todo historico</button>
+                        </div>
+                        <div class="row g-2 align-items-end">
+                            <input type="hidden" id="todoHistorico" value="0">
+                            <div class="col-md-2">
+                                <label class="filtro-label">Desde</label>
+                                <input type="date" class="form-control form-control-sm" id="fechaInicio">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="filtro-label">Hasta</label>
+                                <input type="date" class="form-control form-control-sm" id="fechaFin">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="filtro-label">Empresa</label>
+                                <select class="form-select form-select-sm" id="empresaId"><option value="">Todas</option></select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="filtro-label">Sucursal</label>
+                                <select class="form-select form-select-sm" id="sucursalId"><option value="">Todas</option></select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="filtro-label">Origen</label>
+                                <select class="form-select form-select-sm" id="origen"><option value="">Todos</option></select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="filtro-label">Plataforma</label>
+                                <select class="form-select form-select-sm" id="plataforma"><option value="">Todas</option></select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="filtro-label">Vendedor</label>
+                                <select class="form-select form-select-sm" id="vendedorId"><option value="">Todos</option></select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="filtro-label">Ticket, pedido o cliente</label>
+                                <input type="search" class="form-control form-control-sm" id="busqueda" placeholder="Ticket, RM, pedido canal, voucher, RUT o cliente">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="filtro-label">Filas</label>
+                                <select class="form-select form-select-sm" id="pageSize">
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-grid">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnConsultar">
+                                    <i class="bi bi-search me-1"></i>Consultar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-lg-2">
+                        <div class="card kpi-card" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-left:4px solid #299cdb;">
+                            <div class="card-body d-flex gap-2 align-items-center">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#299cdb,#1976d2);"><i class="bi bi-cash-stack"></i></div>
+                                <div><div class="kpi-label">Venta internet</div><div class="kpi-value" id="kpiVentas">$0</div><div class="kpi-detail" id="kpiPeriodo">-</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card kpi-card" style="background:linear-gradient(135deg,#fff8e1,#ffecb3);border-left:4px solid #ffbe0b;">
+                            <div class="card-body d-flex gap-2 align-items-center">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#ffbe0b,#f0a500);"><i class="bi bi-receipt"></i></div>
+                                <div><div class="kpi-label">Tickets</div><div class="kpi-value" id="kpiTickets">0</div><div class="kpi-detail" id="kpiTicketPromedio">$0 prom.</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card kpi-card" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);border-left:4px solid #f97316;">
+                            <div class="card-body d-flex gap-2 align-items-center">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#f97316,#ea580c);"><i class="bi bi-receipt-cutoff"></i></div>
+                                <div><div class="kpi-label">Boletas</div><div class="kpi-value" id="kpiBoletas">0</div><div class="kpi-detail" id="kpiBoletasEmpresas">0 empresas</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card kpi-card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-left:4px solid #0ab39c;">
+                            <div class="card-body d-flex gap-2 align-items-center">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#0ab39c,#099885);"><i class="bi bi-box-seam"></i></div>
+                                <div><div class="kpi-label">Unidades</div><div class="kpi-value" id="kpiUnidades">0</div><div class="kpi-detail" id="kpiProductos">0 productos</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card kpi-card" style="background:linear-gradient(135deg,#eef2ff,#c7d2fe);border-left:4px solid #6c5ce7;">
+                            <div class="card-body d-flex gap-2 align-items-center">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#6c5ce7,#8b5cf6);"><i class="bi bi-shop"></i></div>
+                                <div><div class="kpi-label">Plataformas</div><div class="kpi-value" id="kpiPlataformas">0</div><div class="kpi-detail">Paris, Ripley, Shopify...</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card kpi-card" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);border-left:4px solid #16a34a;">
+                            <div class="card-body d-flex gap-2 align-items-center">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#16a34a,#15803d);"><i class="bi bi-cart-check"></i></div>
+                                <div><div class="kpi-label">Ecommerce</div><div class="kpi-value" id="kpiEcommerce">0</div><div class="kpi-detail">AllConnected</div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="card kpi-card" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd);border-left:4px solid #0284c7;">
+                            <div class="card-body d-flex gap-2 align-items-center">
+                                <div class="kpi-icon" style="background:linear-gradient(135deg,#0284c7,#0369a1);"><i class="bi bi-display"></i></div>
+                                <div><div class="kpi-label">POS Internet</div><div class="kpi-value" id="kpiPos">0</div><div class="kpi-detail">Tickets POS</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-8">
+                        <div class="card report-card h-100">
+                            <div class="card-header bg-white"><div class="section-title"><i class="bi bi-graph-up me-1"></i>Venta diaria</div></div>
+                            <div class="card-body"><div id="chartVentas" style="min-height:280px"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card report-card h-100">
+                            <div class="card-header bg-white"><div class="section-title"><i class="bi bi-pie-chart me-1"></i>Plataformas</div></div>
+                            <div class="card-body"><div id="chartPlataformas" style="min-height:280px"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-5">
+                        <div class="card report-card h-100">
+                            <div class="card-header bg-white"><div class="section-title"><i class="bi bi-bar-chart me-1"></i>Boletas por empresa</div></div>
+                            <div class="card-body"><div id="chartBoletasEmpresa" style="min-height:260px"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="card report-card h-100">
+                            <div class="card-header bg-white"><div class="section-title"><i class="bi bi-receipt-cutoff me-1"></i>Cantidad de boletas sacadas</div></div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Empresa</th>
+                                                <th>RUT</th>
+                                                <th class="text-center">Boletas</th>
+                                                <th class="text-center">Electronica</th>
+                                                <th class="text-center">Papel/manual</th>
+                                                <th class="text-end">Monto internet</th>
+                                                <th class="text-end">Part.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tablaBoletasEmpresas"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card report-card">
+                    <div class="card-header bg-white pb-0">
+                        <ul class="nav nav-tabs nav-tabs-custom border-bottom-0" role="tablist">
+                            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabEmpresas"><i class="bi bi-building me-1"></i>Empresa / sucursal</a></li>
+                            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabProductos"><i class="bi bi-bag-check me-1"></i>Productos</a></li>
+                            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPlataformas"><i class="bi bi-shop-window me-1"></i>Plataformas</a></li>
+                            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabVendedores"><i class="bi bi-person-badge me-1"></i>Vendedor</a></li>
+                            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabAlertas"><i class="bi bi-exclamation-triangle me-1"></i>Alertas</a></li>
+                            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabDetalle"><i class="bi bi-list-check me-1"></i>Detalle</a></li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content">
+                            <div class="tab-pane active" id="tabEmpresas"><div id="listaEmpresas"></div></div>
+                            <div class="tab-pane" id="tabProductos">
+                                <div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>#</th><th>SKU</th><th>Producto</th><th class="text-end">Unidades</th><th class="text-end">Venta internet</th><th class="text-end">Venta ticket</th><th class="text-center">Tickets</th><th>Origen</th><th>Plataformas</th></tr></thead><tbody id="tablaProductos"></tbody></table></div>
+                            </div>
+                            <div class="tab-pane" id="tabPlataformas">
+                                <div class="table-responsive"><table class="table table-hover"><thead><tr><th>Plataforma</th><th class="text-center">Tickets</th><th class="text-end">Unidades</th><th class="text-end">Venta</th><th class="text-end">Participacion</th></tr></thead><tbody id="tablaPlataformas"></tbody></table></div>
+                            </div>
+                            <div class="tab-pane" id="tabVendedores">
+                                <div class="table-responsive"><table class="table table-hover"><thead><tr><th>Vendedor</th><th>Codigo</th><th class="text-center">Tickets</th><th class="text-end">Unidades</th><th class="text-end">Venta</th><th class="text-end">Ticket prom.</th></tr></thead><tbody id="tablaVendedores"></tbody></table></div>
+                            </div>
+                            <div class="tab-pane" id="tabAlertas"><div id="contenedorAlertas"></div></div>
+                            <div class="tab-pane" id="tabDetalle">
+                                <div class="table-responsive"><table class="table table-hover"><thead><tr><th>Fecha venta</th><th>Origen</th><th>Referencia</th><th>Plataforma</th><th>Empresa / sucursal</th><th>Cliente</th><th>Auditoria</th><th class="text-end">Unid.</th><th class="text-end">Monto internet</th><th>Acciones</th></tr></thead><tbody id="tablaDetalle"></tbody></table></div>
+                                <div class="pagination-controls d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2">
+                                    <span class="small text-muted" id="infoPagina">0 registros</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" id="btnAnterior"><i class="bi bi-chevron-left"></i></button>
+                                        <span class="btn btn-light disabled" id="paginaActual">1 / 1</span>
+                                        <button class="btn btn-outline-primary" id="btnSiguiente"><i class="bi bi-chevron-right"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const apiUrl = "{% url 'obtener_reporte_ventas_internet' %}";
+    const exportUrl = "{% url 'exportar_reporte_ventas_internet' %}";
+    let pagina = 1;
+    let filtrosCargados = false;
+    let sucursales = [];
+    let chartVentas = null;
+    let chartPlataformas = null;
+    let chartBoletasEmpresa = null;
+
+    const $ = selector => document.querySelector(selector);
+    const $$ = selector => Array.from(document.querySelectorAll(selector));
+    const money = value => '$' + Math.round(Number(value || 0)).toLocaleString('es-CL');
+    const number = value => Number(value || 0).toLocaleString('es-CL');
+    const esc = value => {
+        const div = document.createElement('div');
+        div.textContent = value == null ? '' : value;
+        return div.innerHTML;
+    };
+    const localIso = fecha => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+
+    function setRange(tipo) {
+        const hoy = new Date();
+        let inicio = new Date(hoy);
+        let historico = false;
+        if (tipo === 'mes') inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        if (tipo === '30') inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 29);
+        if (tipo === 'anio') inicio = new Date(hoy.getFullYear(), 0, 1);
+        if (tipo === 'historico') historico = true;
+        $('#todoHistorico').value = historico ? '1' : '0';
+        $('#fechaInicio').disabled = historico;
+        $('#fechaFin').disabled = historico;
+        if (!historico) {
+            $('#fechaInicio').value = localIso(inicio);
+            $('#fechaFin').value = localIso(hoy);
+        }
+        $$('.quick-range').forEach(btn => btn.classList.toggle('active', btn.dataset.range === tipo));
+    }
+
+    function params(incluirPagina) {
+        const data = {
+            fecha_inicio: $('#fechaInicio').value,
+            fecha_fin: $('#fechaFin').value,
+            todo_historico: $('#todoHistorico').value,
+            empresa_id: $('#empresaId').value,
+            sucursal_id: $('#sucursalId').value,
+            origen: $('#origen').value,
+            plataforma: $('#plataforma').value,
+            vendedor_id: $('#vendedorId').value,
+            q: $('#busqueda').value,
+            page_size: $('#pageSize').value
+        };
+        if (incluirPagina) data.page = pagina;
+        return new URLSearchParams(Object.entries(data).filter(([, value]) => value !== '')).toString();
+    }
+
+    async function cargar() {
+        $('#btnConsultar').disabled = true;
+        $('#btnActualizar').disabled = true;
+        try {
+            const response = await fetch(`${apiUrl}?${params(true)}`, {headers: {'Accept': 'application/json'}});
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || 'No fue posible cargar el informe.');
+            if (!filtrosCargados) cargarFiltros(data.filtros);
+            render(data);
+        } catch (error) {
+            mostrarError(error.message || 'Error al consultar ventas internet.');
+        } finally {
+            $('#btnConsultar').disabled = false;
+            $('#btnActualizar').disabled = false;
+        }
+    }
+
+    function cargarFiltros(filtros) {
+        filtrosCargados = true;
+        sucursales = filtros.sucursales || [];
+        (filtros.empresas || []).forEach(item => $('#empresaId').insertAdjacentHTML('beforeend', `<option value="${item.id}">${esc(item.nombre)}</option>`));
+        (filtros.origenes || []).forEach(item => $('#origen').insertAdjacentHTML('beforeend', `<option value="${item.codigo}">${esc(item.nombre)}</option>`));
+        (filtros.plataformas || []).forEach(item => $('#plataforma').insertAdjacentHTML('beforeend', `<option value="${esc(item.codigo)}">${esc(item.nombre)}</option>`));
+        (filtros.vendedores || []).forEach(item => {
+            $('#vendedorId').insertAdjacentHTML('beforeend', `<option value="${item.id}">${esc(item.nombre)} (${esc(item.codigo)})</option>`);
+        });
+        $('#plataforma').insertAdjacentHTML('beforeend', '<option value="__SIN_PLATAFORMA__">Sin plataforma</option>');
+        actualizarSucursales();
+    }
+
+    function actualizarSucursales() {
+        const empresa = $('#empresaId').value;
+        const actual = $('#sucursalId').value;
+        $('#sucursalId').innerHTML = '<option value="">Todas</option>';
+        sucursales
+            .filter(item => !empresa || String(item.empresa_id) === String(empresa))
+            .forEach(item => $('#sucursalId').insertAdjacentHTML('beforeend', `<option value="${item.id}">${esc(item.nombre)}</option>`));
+        if ($(`#sucursalId option[value="${actual}"]`)) $('#sucursalId').value = actual;
+    }
+
+    function render(data) {
+        const r = data.resumen;
+        $('#kpiVentas').textContent = money(r.venta_internet);
+        $('#kpiTickets').textContent = number(r.tickets);
+        $('#kpiTicketPromedio').textContent = `${money(r.ticket_promedio)} prom.`;
+        $('#kpiBoletas').textContent = number(r.boletas);
+        $('#kpiBoletasEmpresas').textContent = `${number(r.boletas_empresas)} empresas`;
+        $('#kpiUnidades').textContent = number(r.unidades);
+        $('#kpiProductos').textContent = `${number(r.productos)} productos`;
+        $('#kpiPlataformas').textContent = number(r.plataformas);
+        $('#kpiEcommerce').textContent = number(r.ecommerce_count);
+        $('#kpiPos').textContent = number(r.pos_count);
+        $('#kpiPeriodo').textContent = data.periodo.label || '-';
+        $('#ultimaActualizacion').textContent = new Date().toLocaleString('es-CL', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        renderEmpresas(data.empresas);
+        renderProductos(data.productos);
+        renderPlataformas(data.plataformas);
+        renderVendedores(data.vendedores);
+        renderBoletasEmpresas(data.boletas_empresas || []);
+        renderAlertas(data.alertas);
+        renderDetalle(data.detalle, data.paginacion);
+        renderGraficos(data);
+    }
+
+    function renderEmpresas(empresas) {
+        if (!empresas.length) {
+            $('#listaEmpresas').innerHTML = '<div class="empty-state">No hay ventas internet para los filtros seleccionados.</div>';
+            return;
+        }
+        $('#listaEmpresas').innerHTML = empresas.map((empresa, index) => `
+            <div class="company-row">
+                <div class="company-header d-flex justify-content-between align-items-center gap-2" data-bs-toggle="collapse" data-bs-target="#empresa-${index}">
+                    <div><strong>${esc(empresa.nombre)}</strong><div class="small text-muted">${esc(empresa.rut)} - ${empresa.sucursales.length} sucursal(es)</div></div>
+                    <div class="text-end"><strong>${money(empresa.ventas)}</strong><div class="small text-muted">${empresa.tickets} tickets - ${empresa.participacion.toFixed(1)}%</div></div>
+                </div>
+                <div class="company-body collapse" id="empresa-${index}">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead><tr><th>Sucursal</th><th class="text-center">Tickets</th><th class="text-end">Unidades</th><th class="text-end">Venta</th><th class="text-end">Ticket prom.</th></tr></thead>
+                            <tbody>${empresa.sucursales.map(sucursal => `<tr><td>${esc(sucursal.nombre)}</td><td class="text-center">${sucursal.tickets}</td><td class="text-end">${number(sucursal.unidades)}</td><td class="text-end fw-semibold">${money(sucursal.ventas)}</td><td class="text-end">${money(sucursal.ticket_promedio)}</td></tr>`).join('')}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>`).join('');
+    }
+
+    function renderProductos(productos) {
+        $('#tablaProductos').innerHTML = productos.length ? productos.map((item, index) => `
+            <tr>
+                <td>${index + 1}</td><td><code>${esc(item.sku)}</code></td><td>${esc(item.producto)}</td>
+                <td class="text-end fw-semibold">${number(item.unidades)}</td>
+                <td class="text-end fw-semibold">${money(item.venta_internet_asignada)}</td>
+                <td class="text-end">${money(item.venta_ticket_total)}</td>
+                <td class="text-center">${item.tickets}</td>
+                <td>${esc(item.origenes)}</td>
+                <td><span class="badge badge-platform">${esc(item.plataformas)}</span></td>
+            </tr>`).join('') : '<tr><td colspan="9" class="empty-state">Sin productos.</td></tr>';
+    }
+
+    function renderPlataformas(plataformas) {
+        $('#tablaPlataformas').innerHTML = plataformas.length ? plataformas.map(item => `
+            <tr>
+                <td><span class="badge badge-platform">${esc(item.nombre)}</span></td>
+                <td class="text-center">${item.tickets}</td>
+                <td class="text-end">${number(item.unidades)}</td>
+                <td class="text-end fw-semibold">${money(item.ventas)}</td>
+                <td class="text-end">${item.participacion.toFixed(1)}%</td>
+            </tr>`).join('') : '<tr><td colspan="5" class="empty-state">Sin plataformas.</td></tr>';
+    }
+
+    function renderVendedores(vendedores) {
+        $('#tablaVendedores').innerHTML = vendedores.length ? vendedores.map(item => `
+            <tr>
+                <td><strong>${esc(item.nombre)}</strong></td><td><code>${esc(item.codigo)}</code></td>
+                <td class="text-center">${item.tickets}</td><td class="text-end">${number(item.unidades)}</td>
+                <td class="text-end fw-semibold">${money(item.ventas)}</td><td class="text-end">${money(item.ticket_promedio)}</td>
+            </tr>`).join('') : '<tr><td colspan="6" class="empty-state">Sin vendedores.</td></tr>';
+    }
+
+    function renderBoletasEmpresas(boletas) {
+        $('#tablaBoletasEmpresas').innerHTML = boletas.length ? boletas.map(item => `
+            <tr>
+                <td><strong>${esc(item.empresa)}</strong></td>
+                <td><code>${esc(item.rut)}</code></td>
+                <td class="text-center fw-semibold">${number(item.boletas_total)}</td>
+                <td class="text-center">${number(item.boleta_electronica)}</td>
+                <td class="text-center">${number(item.boleta_papel)}</td>
+                <td class="text-end fw-semibold">${money(item.monto_internet)}</td>
+                <td class="text-end">${Number(item.participacion || 0).toFixed(1)}%</td>
+            </tr>`).join('') : '<tr><td colspan="7" class="empty-state">Sin boletas emitidas en ventas internet.</td></tr>';
+    }
+
+    function renderAlertas(alertas) {
+        const cards = [
+            ['Ecommerce sin pago VENTA_INTERNET', alertas.ecommerce_sin_pago_internet.count, alertas.ecommerce_sin_pago_internet.monto, alertas.ecommerce_sin_pago_internet.tickets],
+            ['Tickets mixtos', alertas.tickets_mixtos.count, alertas.tickets_mixtos.monto_internet, alertas.tickets_mixtos.tickets],
+            ['Sin plataforma', alertas.sin_plataforma.count, alertas.sin_plataforma.monto, alertas.sin_plataforma.tickets],
+        ];
+        $('#contenedorAlertas').innerHTML = cards.map(([titulo, count, monto, tickets]) => `
+            <div class="card alert-card mb-2">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <div><strong>${esc(titulo)}</strong><div class="small text-muted">Muestra tickets: ${tickets.length ? tickets.map(esc).join(', ') : '-'}</div></div>
+                        <div class="text-end"><div class="fw-bold">${count}</div><div class="small text-muted">${money(monto)}</div></div>
+                    </div>
+                </div>
+            </div>`).join('');
+    }
+
+    function renderDetalle(detalle, p) {
+        $('#tablaDetalle').innerHTML = detalle.length ? detalle.map(item => {
+            const origenClass = item.origen_codigo === 'ECOMMERCE' ? 'badge-origin-ecom' : 'badge-origin-pos';
+            const badges = `${item.es_mixto ? '<span class="badge badge-warn-soft ms-1">Mixto</span>' : ''}${item.usa_fallback ? '<span class="badge badge-warn-soft ms-1">Fallback</span>' : ''}`;
+            return `<tr>
+                <td class="text-nowrap">${esc(item.fecha_venta)}</td>
+                <td><span class="badge ${origenClass}">${esc(item.origen)}</span>${badges}</td>
+                <td><strong>${esc(item.ticket_rm)}</strong><div class="small text-muted">Ticket ${esc(item.correlativo)} - ${esc(item.pedido_canal || '-')}</div><div class="small text-muted">${esc(item.dte)}${item.tipo_boleta ? ` - ${esc(item.tipo_boleta)}` : ''}</div></td>
+                <td><span class="badge badge-platform">${esc(item.plataforma)}</span><div class="small text-muted">${esc(item.voucher)}</div></td>
+                <td>${esc(item.empresa)}<div class="small text-muted">${esc(item.sucursal)}</div></td>
+                <td>${esc(item.cliente)}<div class="small text-muted">${esc(item.documento_cliente)}</div></td>
+                <td><div>Operador: ${esc(item.operador)}</div><div class="small text-muted">Rec: ${esc(item.fecha_recepcion || '-')}</div><div class="small text-muted">Fact: ${esc(item.fecha_facturacion || '-')}</div></td>
+                <td class="text-end">${number(item.unidades)}</td>
+                <td class="text-end fw-semibold">${money(item.monto_internet)}</td>
+                <td class="text-nowrap">
+                    ${item.ecommerce_url ? `<a class="btn btn-outline-success btn-sm action-link" href="${esc(item.ecommerce_url)}"><i class="bi bi-cart-check"></i></a>` : ''}
+                    <a class="btn btn-outline-primary btn-sm action-link" href="${esc(item.pos_url)}"><i class="bi bi-display"></i></a>
+                </td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="10" class="empty-state">Sin ventas internet.</td></tr>';
+        $('#infoPagina').textContent = `${p.total} registros`;
+        $('#paginaActual').textContent = `${p.pagina} / ${p.paginas}`;
+        $('#btnAnterior').disabled = !p.tiene_anterior;
+        $('#btnSiguiente').disabled = !p.tiene_siguiente;
+    }
+
+    function renderGraficos(data) {
+        if (typeof ApexCharts === 'undefined') return;
+        if (chartVentas) chartVentas.destroy();
+        if (chartPlataformas) chartPlataformas.destroy();
+        if (chartBoletasEmpresa) chartBoletasEmpresa.destroy();
+        chartVentas = new ApexCharts($('#chartVentas'), {
+            series: [
+                {name: 'Venta internet', data: data.ventas_diarias.map(item => item.ventas)},
+                {name: 'Tickets', data: data.ventas_diarias.map(item => item.tickets)}
+            ],
+            chart: {type: 'line', height: 280, toolbar: {show: false}},
+            stroke: {width: [3, 2], curve: 'smooth'},
+            xaxis: {categories: data.ventas_diarias.map(item => item.fecha)},
+            yaxis: [{labels: {formatter: value => money(value)}}, {opposite: true, labels: {formatter: value => Math.round(value)}}],
+            colors: ['#0066FF', '#00D4AA'],
+            dataLabels: {enabled: false},
+            tooltip: {shared: true}
+        });
+        chartVentas.render();
+        chartPlataformas = new ApexCharts($('#chartPlataformas'), {
+            series: data.plataformas.map(item => item.ventas),
+            labels: data.plataformas.map(item => item.nombre),
+            chart: {type: 'donut', height: 280},
+            colors: ['#0066FF', '#00D4AA', '#FFB020', '#6C5CE7', '#4FACFE', '#94a3b8'],
+            legend: {position: 'bottom'},
+            dataLabels: {formatter: value => `${value.toFixed(1)}%`},
+            noData: {text: 'Sin ventas'}
+        });
+        chartPlataformas.render();
+        const boletasTop = (data.boletas_empresas || []).slice(0, 10);
+        chartBoletasEmpresa = new ApexCharts($('#chartBoletasEmpresa'), {
+            series: [{name: 'Boletas', data: boletasTop.map(item => item.boletas_total)}],
+            chart: {type: 'bar', height: 260, toolbar: {show: false}},
+            plotOptions: {bar: {horizontal: true, borderRadius: 4}},
+            xaxis: {categories: boletasTop.map(item => item.empresa), labels: {formatter: value => Math.round(value)}},
+            colors: ['#FFB020'],
+            dataLabels: {enabled: true, formatter: value => Math.round(value)},
+            tooltip: {y: {formatter: value => `${Math.round(value)} boletas`}},
+            noData: {text: 'Sin boletas'}
+        });
+        chartBoletasEmpresa.render();
+    }
+
+    function mostrarError(mensaje) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({icon: 'error', title: 'Informe no disponible', text: mensaje});
+        } else {
+            alert(mensaje);
+        }
+    }
+
+    $$('.quick-range').forEach(btn => btn.addEventListener('click', () => { setRange(btn.dataset.range); pagina = 1; cargar(); }));
+    $('#btnConsultar').addEventListener('click', () => { pagina = 1; cargar(); });
+    $('#btnActualizar').addEventListener('click', () => cargar());
+    $('#btnExportar').addEventListener('click', () => { window.location.href = `${exportUrl}?${params(false)}`; });
+    $('#btnAnterior').addEventListener('click', () => { if (pagina > 1) { pagina--; cargar(); } });
+    $('#btnSiguiente').addEventListener('click', () => { pagina++; cargar(); });
+    $('#empresaId').addEventListener('change', actualizarSucursales);
+    $('#busqueda').addEventListener('keydown', event => { if (event.key === 'Enter') { pagina = 1; cargar(); } });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setRange('anio');
+        cargar();
+    });
+})();
+</script>
+
+{% include '../../layout/footer.html' %}

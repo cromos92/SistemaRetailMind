@@ -18,6 +18,7 @@ from django.db import transaction
 import json
 import re
 import csv
+import logging
 from decimal import Decimal
 
 from .models import (
@@ -33,6 +34,8 @@ from .models import (
 # IMPORTANTE: este string debe coincidir EXACTO en todos los lugares que lo filtran
 # (cargarDteCompra, pagosDTE, obtener_resumen_pendientes_anio).
 METODO_COMPENSACION = 'Compensación con Factura'
+
+logger = logging.getLogger('app')
 
 
 # ========== GESTIÓN DE COMPRAS ==========
@@ -286,9 +289,7 @@ def recepcionar_compra(request):
                 'error': 'Datos JSON inválidos'
             })
         except Exception as e:
-            import traceback
-            print(f"❌ Error en recepcionar_compra: {str(e)}")
-            print(traceback.format_exc())
+            logger.exception("Error en recepcionar_compra compra_id=%s", compra_id)
             return JsonResponse({
                 'success': False,
                 'error': f'Error al recepcionar compra: {str(e)}'
@@ -948,7 +949,7 @@ def eliminar_dte(request, dte_id):
                     # Eliminar el DTE
                     dte.delete()
                     
-                print(f"🗑️ DTE #{dte.numero_documento} eliminado forzadamente (ID={dte_id})")
+                logger.warning("DTE de compra eliminado forzadamente: dte_id=%s numero=%s", dte_id, dte.numero_documento)
             else:
                 dte.delete()
             
@@ -1909,10 +1910,13 @@ def importar_proveedores_csv(request):
                             row_dict[headers[i]] = str(value) if value is not None else ''
                     datos.append(row_dict)
         
-        # DEBUG: Mostrar headers leídos
+        # Debug de importación
         if datos and len(datos) > 0:
-            print("🔍 DEBUG - Headers leídos:", list(datos[0].keys()))
-            print("🔍 DEBUG - Primera fila:", datos[0])
+            logger.debug(
+                "Importacion proveedores: headers=%s primera_fila_campos=%s",
+                list(datos[0].keys()),
+                {k: bool(v) for k, v in datos[0].items()},
+            )
         
         # Procesar datos
         proveedores_creados = 0
@@ -1935,9 +1939,13 @@ def importar_proveedores_csv(request):
                     
                     # Si hay algún dato pero falta RUT o nombre, reportar error
                     if not rut or not nombre:
-                        # DEBUG: Mostrar qué se está recibiendo
-                        print(f"❌ DEBUG - Fila {idx} - RUT: '{rut}', Nombre: '{nombre}'")
-                        print(f"   Datos fila: {fila}")
+                        logger.debug(
+                            "Importacion proveedores fila incompleta: fila=%s rut=%s nombre=%s campos=%s",
+                            idx,
+                            rut,
+                            nombre,
+                            {k: bool(v) for k, v in fila.items()},
+                        )
                         # Solo reportar error si hay otros datos en la fila
                         if any(valores_fila):
                             errores.append(f'Fila {idx}: RUT y Nombre son requeridos (RUT="{rut}", Nombre="{nombre}")')
@@ -2326,10 +2334,13 @@ def importar_dtes_csv(request):
                             row_dict[headers[i]] = str(value) if value is not None else ''
                     datos.append(row_dict)
         
-        # DEBUG: Mostrar headers leídos
+        # Debug de importación
         if datos and len(datos) > 0:
-            print("🔍 DEBUG DTEs - Headers leídos:", list(datos[0].keys()))
-            print("🔍 DEBUG DTEs - Primera fila:", datos[0])
+            logger.debug(
+                "Importacion DTE compras: headers=%s primera_fila_campos=%s",
+                list(datos[0].keys()),
+                {k: bool(v) for k, v in datos[0].items()},
+            )
         
         # Procesar DTEs
         dtes_creados = 0
@@ -2401,34 +2412,34 @@ def importar_dtes_csv(request):
                     # Fechas
                     from datetime import datetime, timedelta
                     fecha_emision_str = str(fila.get('fecha_emision', '') or '').strip()
-                    print(f"🔍 Fila {idx} - fecha_emision del CSV: '{fecha_emision_str}'")
+                    logger.debug("Importacion DTE fila=%s fecha_emision_csv=%s", idx, fecha_emision_str)
                     
                     if fecha_emision_str and fecha_emision_str != 'None' and fecha_emision_str != '':
                         # Si viene con hora (formato Excel datetime), extraer solo la fecha
                         if ' ' in fecha_emision_str:
                             fecha_emision_str = fecha_emision_str.split(' ')[0]
-                            print(f"📅 Fecha limpiada (sin hora): '{fecha_emision_str}'")
+                            logger.debug("Importacion DTE fila=%s fecha limpiada=%s", idx, fecha_emision_str)
                         
                         try:
                             # Intentar YYYY-MM-DD
                             fecha_emision = datetime.strptime(fecha_emision_str, '%Y-%m-%d').date()
-                            print(f"✅ Fecha parseada (YYYY-MM-DD): {fecha_emision}")
+                            logger.debug("Importacion DTE fila=%s fecha parseada YYYY-MM-DD=%s", idx, fecha_emision)
                         except:
                             try:
                                 # Intentar DD/MM/YYYY
                                 fecha_emision = datetime.strptime(fecha_emision_str, '%d/%m/%Y').date()
-                                print(f"✅ Fecha parseada (DD/MM/YYYY): {fecha_emision}")
+                                logger.debug("Importacion DTE fila=%s fecha parseada DD/MM/YYYY=%s", idx, fecha_emision)
                             except:
                                 try:
                                     # Intentar DD-MM-YYYY
                                     fecha_emision = datetime.strptime(fecha_emision_str, '%d-%m-%Y').date()
-                                    print(f"✅ Fecha parseada (DD-MM-YYYY): {fecha_emision}")
+                                    logger.debug("Importacion DTE fila=%s fecha parseada DD-MM-YYYY=%s", idx, fecha_emision)
                                 except:
                                     fecha_emision = timezone.localdate()
-                                    print(f"⚠️ Fecha no se pudo parsear, usando hoy: {fecha_emision}")
+                                    logger.warning("Importacion DTE fila=%s fecha invalida; usando hoy=%s", idx, fecha_emision)
                     else:
                         fecha_emision = timezone.localdate()
-                        print(f"⚠️ Sin fecha en CSV, usando hoy: {fecha_emision}")
+                        logger.warning("Importacion DTE fila=%s sin fecha; usando hoy=%s", idx, fecha_emision)
                     
                     dias_credito_str = str(fila.get('dias_credito', '30') or '30').strip()
                     dias_credito = int(dias_credito_str) if dias_credito_str and dias_credito_str.isdigit() else 30
@@ -2467,7 +2478,12 @@ def importar_dtes_csv(request):
                             dte_existente.referencias = referencias
                             dte_existente.save()
                             dtes_actualizados += 1
-                            print(f"🔄 DTE actualizado: ID={dte_existente.id}, Número={dte_existente.numero_documento}, Fecha={fecha_emision}")
+                            logger.info(
+                                "DTE compra actualizado por importacion: dte_id=%s numero=%s fecha=%s",
+                                dte_existente.id,
+                                dte_existente.numero_documento,
+                                fecha_emision,
+                            )
                             continue
                         else:
                             # Modo solo_crear: omitir duplicados
@@ -2500,14 +2516,26 @@ def importar_dtes_csv(request):
                     )
                     
                     dtes_creados += 1
-                    print(f"✅ DTE creado: ID={dte.id}, Número={dte.numero_documento}, Emisor={emisor.nombre}, Receptor={receptor_id}")
+                    logger.info(
+                        "DTE compra creado por importacion: dte_id=%s numero=%s emisor_id=%s receptor_id=%s",
+                        dte.id,
+                        dte.numero_documento,
+                        emisor.id,
+                        receptor_id,
+                    )
                     
                 except Exception as e:
                     errores.append(f'Fila {idx}: {str(e)}')
-                    print(f"❌ Error en fila {idx}: {str(e)}")
+                    logger.warning("Error en fila de importacion DTE compras: fila=%s error=%s", idx, e)
                     continue
         
-        print(f"📊 Resumen importación DTEs: {dtes_creados} creados, {dtes_actualizados} actualizados, {dtes_omitidos} omitidos, {len(errores)} errores")
+        logger.info(
+            "Resumen importacion DTE compras: creados=%s actualizados=%s omitidos=%s errores=%s",
+            dtes_creados,
+            dtes_actualizados,
+            dtes_omitidos,
+            len(errores),
+        )
         
         # Preparar mensaje
         mensaje = []

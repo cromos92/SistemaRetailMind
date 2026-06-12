@@ -22,6 +22,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
 import re
+import logging
 from datetime import datetime, timedelta
 
 # Importar funciones necesarias desde views.py
@@ -71,6 +72,8 @@ from .models import (
 
 
 # ========== GESTIÓN DE VENDEDORES ==========
+
+logger = logging.getLogger('app')
 
 @login_required
 def gestion_vendedores(request):
@@ -269,7 +272,7 @@ def editar_vendedor(request):
     """Editar vendedor existente"""
     try:
         data = json.loads(request.body)
-        print("📝 guardar_cliente_pos - datos recibidos:", data)
+        logger.debug("editar_vendedor datos recibidos: %s", data)
         vendedor_id = data.get('id')
         
         if not vendedor_id:
@@ -490,22 +493,32 @@ def ticket_venta(request):
     tiene_correlativo = False
     correlativo_info = None
     
-    # DEBUG: Imprimir información de sesión
-    print(f"🔍 DEBUG ticket_venta:")
-    print(f"  - idSucursalActual: {request.session.get('idSucursalActual')}")
-    print(f"  - sucursalActual: {request.session.get('sucursalActual')}")
-    print(f"  - sucursal_actual_id final: {sucursal_actual_id}")
-    print(f"  - sucursal_actual objeto: {sucursal_actual}")
+    logger.debug(
+        "ticket_venta session context: idSucursalActual=%s sucursalActual=%s sucursal_actual_id=%s sucursal_actual=%s",
+        request.session.get('idSucursalActual'),
+        request.session.get('sucursalActual'),
+        sucursal_actual_id,
+        sucursal_actual,
+    )
     
     if sucursal_actual:
-        print(f"  - Buscando correlativo TICKET para sucursal: {sucursal_actual.alias} (ID: {sucursal_actual.id})")
+        logger.debug(
+            "Buscando correlativo TICKET para sucursal=%s id=%s",
+            sucursal_actual.alias,
+            sucursal_actual.id,
+        )
         try:
             correlativo = Correlativo.objects.get(
                 sucursal=sucursal_actual,
                 tipo_dte='TICKET'
             )
-            print(f"  - ✅ Correlativo encontrado: ID={correlativo.id}, inicio={correlativo.inicio}, termino={correlativo.termino}")
-            print(f"  - puede_emitir()={correlativo.puede_emitir()}")
+            logger.debug(
+                "Correlativo TICKET encontrado: id=%s inicio=%s termino=%s puede_emitir=%s",
+                correlativo.id,
+                correlativo.inicio,
+                correlativo.termino,
+                correlativo.puede_emitir(),
+            )
             
             tiene_correlativo = correlativo.puede_emitir()
             correlativo_info = {
@@ -515,11 +528,18 @@ def ticket_venta(request):
                 'estado': correlativo.estado
             }
         except Correlativo.DoesNotExist:
-            print(f"  - ❌ Correlativo NO encontrado para TICKET")
+            logger.warning(
+                "Correlativo TICKET no encontrado para sucursal_id=%s",
+                sucursal_actual.id,
+            )
             tiene_correlativo = False
             correlativo_info = None
     else:
-        print(f"  - ⚠️ No hay sucursal_actual definida")
+        logger.warning(
+            "ticket_venta sin sucursal actual: user_id=%s sucursal_actual_id=%s",
+            request.user.id,
+            sucursal_actual_id,
+        )
     
     # Obtener vendedores de la sucursal actual (solo activos)
     if sucursal_actual:
@@ -1981,9 +2001,9 @@ def guardar_o_actualizar_cliente(datos_cliente, usuario=None):
         
         return cliente
         
-    except Exception as e:
+    except Exception:
         # Si hay error, no detener el proceso de venta
-        print(f"Error al guardar cliente: {str(e)}")
+        logger.exception("Error al guardar cliente desde venta")
         return None
 
 
@@ -2309,9 +2329,12 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     # para diagnosticar flujos mal cerrados).
     ticket_total_guardado = int(ticket.total or 0)
     if ticket_total_guardado != total_real_lineas and total_real_lineas > 0:
-        print(
-            f"⚠️ Desfase ticket.total (${ticket_total_guardado:,}) vs suma de líneas "
-            f"(${total_real_lineas:,}). Usando suma de líneas como autoritativo."
+        logger.warning(
+            "Desfase ticket.total vs suma de lineas. ticket_id=%s, total_guardado=%s, "
+            "total_lineas=%s. Usando suma de lineas como autoritativo.",
+            ticket.id,
+            ticket_total_guardado,
+            total_real_lineas,
         )
         # Reconciliar también en DB para que el resto del flujo (resumen, cuadratura) use el valor correcto.
         ticket.total = total_real_lineas
@@ -2443,7 +2466,13 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     ticket.dte_fecha_generacion = timezone.now()
     ticket.save()
     
-    print(f"✓ DTE generado: {dte.tipo_documento} #{dte.numero_documento} | {movimientos_ticket.count()} movimientos actualizados")
+    logger.info(
+        "DTE generado: ticket_id=%s, tipo=%s, numero=%s, movimientos_actualizados=%s",
+        ticket.id,
+        dte.tipo_documento,
+        dte.numero_documento,
+        movimientos_ticket.count(),
+    )
     
     # ✅ Generar archivo TXT para Acepta (solo para documentos electrónicos, no para BOLETA PAPEL)
     archivo_txt_data = None
@@ -2506,7 +2535,10 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             productos_txt = []
             
             if es_ticket_cambio:
-                print(f"🔄 Generando TXT para TICKET DE CAMBIO - Productos con precio $0, solo diferencia")
+                logger.debug(
+                    "Generando TXT para ticket de cambio: ticket_id=%s, productos con precio 0 y diferencia",
+                    ticket.id,
+                )
                 
                 # Para tickets de cambio: mostrar productos con precio $0
                 for tp in ticket.ticket_productos.all():
@@ -2567,9 +2599,13 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                                 if sku_rel.producto_talla:
                                     # Usar la descripción del item de la cotización
                                     descripciones_cotizacion[sku_rel.producto_talla.sku] = item.descripcion
-                        print(f"📋 Descripciones de cotización cargadas: {len(descripciones_cotizacion)} productos")
-                    except Exception as e:
-                        print(f"⚠️ Error al cargar descripciones de cotización: {e}")
+                        logger.debug(
+                            "Descripciones de cotizacion cargadas para TXT: ticket_id=%s, productos=%s",
+                            ticket.id,
+                            len(descripciones_cotizacion),
+                        )
+                    except Exception:
+                        logger.exception("Error al cargar descripciones de cotizacion para TXT ticket_id=%s", ticket.id)
                 
                 for tp in ticket.ticket_productos.all():
                     if tp.ProductoTalla is None:
@@ -2583,7 +2619,12 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                         # ✅ PRIORIDAD: 1) Descripción de cotización, 2) Descripción del producto, 3) Artículo
                         if sku in descripciones_cotizacion and descripciones_cotizacion[sku]:
                             nombre_producto = descripciones_cotizacion[sku]
-                            print(f"  📄 SKU {sku}: usando descripción de cotización: {nombre_producto[:40]}")
+                            logger.debug(
+                                "TXT ticket_id=%s sku=%s usando descripcion de cotizacion: %s",
+                                ticket.id,
+                                sku,
+                                nombre_producto[:40],
+                            )
                         elif producto and producto.descripcion:
                             nombre_producto = producto.descripcion
                         else:
@@ -2738,10 +2779,13 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                     'tpo_valor': '$',
                     'valor_dr': valor_dr,
                 }]
-                print(
-                    f"TXT {'Boleta' if es_boleta else 'Factura'}: Descuento "
-                    f"${descuento_efectivo:,} IVA-incl → valor_dr={valor_dr:,} "
-                    f"({'IVA-incl' if es_boleta else 'neto'}) como DscRcgGlobal."
+                logger.debug(
+                    "TXT %s con descuento global: ticket_id=%s, descuento_efectivo=%s, valor_dr=%s, tipo_valor=%s",
+                    'Boleta' if es_boleta else 'Factura',
+                    ticket.id,
+                    descuento_efectivo,
+                    valor_dr,
+                    'IVA-incl' if es_boleta else 'neto',
                 )
                 # monto_total ya es correcto (int(total) = ticket.total = monto
                 # descontado IVA-inclusive). NO se sobreescribe aquí.
@@ -2756,7 +2800,12 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                 'nombre_archivo': nombre_archivo
             }
             
-            print(f"✓ Archivo TXT generado: {nombre_archivo}")
+            logger.info(
+                "Archivo TXT generado: ticket_id=%s, dte_numero=%s, archivo=%s",
+                ticket.id,
+                dte.numero_documento,
+                nombre_archivo,
+            )
             
         except Exception as e:
             # Antes este error se tragaba en silencio (solo print): el TXT no se
@@ -2765,8 +2814,7 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             # se loguea con stacktrace + contexto de sucursal y se expone el
             # motivo en `dte._txt_error` para mostrarlo en el resultado. La boleta
             # se sigue emitiendo (el TXT de Acepta es un export aparte).
-            import logging
-            logging.getLogger('app').error(
+            logger.error(
                 'Error al generar TXT DTE %s | sucursal_facturacion=%s | tipo=%s: %s',
                 getattr(dte, 'numero_documento', '?'),
                 getattr(ticket, 'sucursal_id', None),
@@ -2784,7 +2832,7 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
 @require_http_methods(["POST"])
 def registrar_pagos_ticket(request, correlativo):
     """Registrar pagos para un ticket en POS"""
-    print(f"🔍🔍🔍 DEBUG: ===== INICIO registrar_pagos_ticket - Ticket #{correlativo} =====")
+    logger.debug("Inicio registrar_pagos_ticket ticket=%s", correlativo)
     
     sucursal_id = (
         request.session.get('idSucursalActual')
@@ -2804,7 +2852,7 @@ def registrar_pagos_ticket(request, correlativo):
     productos_ya_creados_desde_cotizacion = False  # Bandera para evitar duplicar productos
     
     if es_cotizacion:
-        print(f"📋 Detectada cotización: {correlativo}")
+        logger.info("registrar_pagos_ticket detecto cotizacion correlativo=%s", correlativo)
         try:
             payload_check = json.loads(request.body or '{}')
             cotizacion_id = payload_check.get('cotizacion_id')
@@ -2899,7 +2947,11 @@ def registrar_pagos_ticket(request, correlativo):
             
             if productos_sin_stock:
                 detalle = ', '.join([f"SKU {p['sku']}: {p['stock_disponible']}/{p['cantidad_requerida']}" for p in productos_sin_stock])
-                print(f"❌ Stock insuficiente: {detalle}")
+                logger.warning(
+                    "Stock insuficiente al facturar cotizacion=%s detalle=%s",
+                    cotizacion_obj.numero_cotizacion,
+                    detalle,
+                )
                 return JsonResponse({
                     'success': False,
                     'error': f'Stock insuficiente para facturar. {detalle}',
@@ -2907,10 +2959,18 @@ def registrar_pagos_ticket(request, correlativo):
                     'productos_sin_stock': productos_sin_stock
                 }, status=400)
             
-            print(f"✅ Stock validado correctamente")
+            logger.debug(
+                "Stock validado para cotizacion=%s productos=%s",
+                cotizacion_obj.numero_cotizacion,
+                len(productos_cotizacion),
+            )
             
             # Crear ticket desde la cotización
-            print(f"🔄 Creando ticket desde cotización {cotizacion_obj.numero_cotizacion}")
+            logger.info(
+                "Creando ticket desde cotizacion=%s sucursal_id=%s",
+                cotizacion_obj.numero_cotizacion,
+                sucursal_id,
+            )
             
             # Obtener siguiente correlativo para ticket
             nuevo_correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
@@ -2985,7 +3045,12 @@ def registrar_pagos_ticket(request, correlativo):
                         es_pendiente_despacho=True,
                         cotizacion_detalle_id=prod_data.get('cotizacion_item_id'),
                     )
-                    print(f"  📋 Ítem pendiente de despacho agregado: {prod_data.get('articulo')} x{cantidad}")
+                    logger.debug(
+                        "Item pendiente de despacho agregado a ticket=%s articulo=%s cantidad=%s",
+                        ticket.correlativo,
+                        prod_data.get('articulo'),
+                        cantidad,
+                    )
                     continue
                 
                 # ✅ PRIMERO: Intentar obtener por producto_talla_id (más preciso)
@@ -3008,7 +3073,12 @@ def registrar_pagos_ticket(request, correlativo):
                         sku_display = sku
                 
                 if not producto_talla:
-                    print(f"⚠️ ProductoTalla no encontrado para ID {producto_talla_id} / SKU {sku_display}")
+                    logger.warning(
+                        "ProductoTalla no encontrado al crear ticket desde cotizacion=%s producto_talla_id=%s sku=%s",
+                        cotizacion_obj.numero_cotizacion,
+                        producto_talla_id,
+                        sku_display,
+                    )
                     continue
                 
                 cantidad = int(prod_data.get('cantidad', 1))
@@ -3026,7 +3096,13 @@ def registrar_pagos_ticket(request, correlativo):
                     subtotal=subtotal_prod,
                     porcentaje_descuento=0
                 )
-                print(f"  ✅ Producto agregado: SKU {producto_talla.sku} (ID: {producto_talla.id}) x{cantidad}")
+                logger.debug(
+                    "Producto agregado a ticket=%s sku=%s producto_talla_id=%s cantidad=%s",
+                    ticket.correlativo,
+                    producto_talla.sku,
+                    producto_talla.id,
+                    cantidad,
+                )
             
             # ✅ NUEVO: Actualizar datos de la Empresa si el usuario completó campos faltantes
             empresa_cliente = cotizacion_obj.cliente
@@ -3066,20 +3142,31 @@ def registrar_pagos_ticket(request, correlativo):
             
             if empresa_actualizada:
                 empresa_cliente.save()
-                print(f"✅ Empresa {empresa_cliente.rut} actualizada con campos: {', '.join(campos_actualizados)}")
+                logger.info(
+                    "Empresa cliente actualizada desde cotizacion=%s rut=%s campos=%s",
+                    cotizacion_obj.numero_cotizacion,
+                    empresa_cliente.rut,
+                    ', '.join(campos_actualizados),
+                )
             
             # Actualizar correlativo para el resto del proceso
             correlativo = nuevo_correlativo
             # Marcar que los productos ya fueron creados (evitar duplicados)
             productos_ya_creados_desde_cotizacion = True
-            print(f"✅ Ticket #{correlativo} creado desde cotización {cotizacion_obj.numero_cotizacion}")
+            logger.info(
+                "Ticket creado desde cotizacion ticket=%s cotizacion=%s",
+                correlativo,
+                cotizacion_obj.numero_cotizacion,
+            )
             
         except json.JSONDecodeError:
             return JsonResponse({'success': False, 'error': 'Formato JSON inválido'}, status=400)
         except Exception as e:
-            print(f"❌ Error creando ticket desde cotización: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(
+                "Error creando ticket desde cotizacion correlativo=%s sucursal_id=%s",
+                correlativo,
+                sucursal_id,
+            )
             return JsonResponse({'success': False, 'error': f'Error al procesar cotización: {str(e)}'}, status=500)
     
     # =========================================================================
@@ -3170,9 +3257,11 @@ def registrar_pagos_ticket(request, correlativo):
                     observaciones=ref_data.get('observaciones', '')
                 )
             except Exception as e:
-                import traceback
-                print(f"⚠️ Error al crear referencia: {e}")
-                print(f"⚠️ Traceback: {traceback.format_exc()}")
+                logger.exception(
+                    "Error al crear referencia para ticket=%s data=%s",
+                    ticket.correlativo,
+                    ref_data,
+                )
                 continue
 
     nuevo_estado = payload.get('estado')
@@ -3184,7 +3273,12 @@ def registrar_pagos_ticket(request, correlativo):
         pagos_payload = payload.get('pagos', [])
         total_pagado = sum(int(p.get('monto', 0)) for p in pagos_payload if p.get('monto'))
         if total_pagado >= ticket.total:
-            print(f"✅ Cotización con pagos completos (${total_pagado:,} >= ${ticket.total:,}), marcando ticket como PAGADO")
+            logger.info(
+                "Cotizacion con pagos completos ticket=%s total_pagado=%s total_ticket=%s",
+                ticket.correlativo,
+                total_pagado,
+                ticket.total,
+            )
             ticket.estado = 'PAGADO'
 
     metodo_principal = payload.get('metodo_pago_principal')
@@ -3216,11 +3310,15 @@ def registrar_pagos_ticket(request, correlativo):
     # IMPORTANTE: Si es cambio/devolución, NO se permiten cambios en los productos
     productos_payload = payload.get('productos', [])
     if ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
-        print(f"⏭️ Saltando procesamiento de productos (ticket de cambio/devolución — productos bloqueados)")
+        logger.debug("Saltando productos para ticket de cambio/devolucion ticket=%s", ticket.correlativo)
     elif productos_ya_creados_desde_cotizacion:
-        print(f"⏭️ Saltando procesamiento de productos (ya creados desde cotización)")
+        logger.debug("Saltando productos ya creados desde cotizacion ticket=%s", ticket.correlativo)
     elif productos_payload and isinstance(productos_payload, list):
-        print(f"📦 Procesando {len(productos_payload)} líneas del payload")
+        logger.debug(
+            "Procesando productos payload ticket=%s lineas=%s",
+            ticket.correlativo,
+            len(productos_payload),
+        )
 
         from collections import defaultdict
 
@@ -3250,7 +3348,13 @@ def registrar_pagos_ticket(request, correlativo):
                 if pt:
                     stock_real = pt.stock_sucursal(ticket.sucursal_id)
                     if cant_payload > stock_real:
-                        print(f"  ❌ Stock insuficiente total SKU {sku_val}: solicitado={cant_payload}, disponible={stock_real}")
+                        logger.warning(
+                            "Stock insuficiente total ticket=%s sku=%s solicitado=%s disponible=%s",
+                            ticket.correlativo,
+                            sku_val,
+                            cant_payload,
+                            stock_real,
+                        )
                         return JsonResponse({
                             'success': False,
                             'error': f'Stock insuficiente para SKU {sku_val} ({pt.producto.articulo}). '
@@ -3294,9 +3398,28 @@ def registrar_pagos_ticket(request, correlativo):
                 )
                 if algo_cambio:
                     if precio_unitario != precio_original_payload:
-                        print(f"  📝 Actualizando línea #{tp_match.id} SKU {sku}: cant={tp_match.stock}→{cantidad}, precio={tp_match.precio}→{precio_unitario} (original: {precio_original_payload})")
+                        logger.debug(
+                            "Actualizando linea ticket=%s linea_id=%s sku=%s cantidad=%s->%s precio=%s->%s precio_original=%s",
+                            ticket.correlativo,
+                            tp_match.id,
+                            sku,
+                            tp_match.stock,
+                            cantidad,
+                            tp_match.precio,
+                            precio_unitario,
+                            precio_original_payload,
+                        )
                     else:
-                        print(f"  📝 Actualizando línea #{tp_match.id} SKU {sku}: cant={tp_match.stock}→{cantidad}, dcto={tp_match.descuento_unitario}→{descuento_unitario}")
+                        logger.debug(
+                            "Actualizando linea ticket=%s linea_id=%s sku=%s cantidad=%s->%s descuento=%s->%s",
+                            ticket.correlativo,
+                            tp_match.id,
+                            sku,
+                            tp_match.stock,
+                            cantidad,
+                            tp_match.descuento_unitario,
+                            descuento_unitario,
+                        )
                     tp_match.stock = cantidad
                     tp_match.precio = precio_unitario
                     tp_match.precio_original = precio_original_payload
@@ -3313,7 +3436,14 @@ def registrar_pagos_ticket(request, correlativo):
                     producto_talla = Producto_Talla.objects.filter(sku=sku).first()
 
                 if producto_talla:
-                    print(f"  ➕ Creando nueva línea SKU {sku}: cantidad={cantidad}, precio={precio_unitario}, precio_original={precio_original_payload}")
+                    logger.debug(
+                        "Creando nueva linea ticket=%s sku=%s cantidad=%s precio=%s precio_original=%s",
+                        ticket.correlativo,
+                        sku,
+                        cantidad,
+                        precio_unitario,
+                        precio_original_payload,
+                    )
                     tp_nuevo = Ticket_Productos.objects.create(
                         idTicket=ticket,
                         ProductoTalla=producto_talla,
@@ -3326,13 +3456,22 @@ def registrar_pagos_ticket(request, correlativo):
                     )
                     ids_existentes_usados.add(tp_nuevo.id)
                 else:
-                    print(f"  ⚠️ ProductoTalla no encontrado para SKU {sku}")
+                    logger.warning(
+                        "ProductoTalla no encontrado al procesar payload ticket=%s sku=%s",
+                        ticket.correlativo,
+                        sku,
+                    )
 
         # Eliminar líneas huérfanas (existían en DB pero ya no están en el payload)
         for sku_list in existentes_por_sku.values():
             for tp_orphan in sku_list:
                 if tp_orphan.id not in ids_existentes_usados:
-                    print(f"  🗑️ Eliminando línea huérfana #{tp_orphan.id} SKU {tp_orphan.ProductoTalla.sku}")
+                    logger.debug(
+                        "Eliminando linea huerfana ticket=%s linea_id=%s sku=%s",
+                        ticket.correlativo,
+                        tp_orphan.id,
+                        tp_orphan.ProductoTalla.sku,
+                    )
                     tp_orphan.delete()
 
         # Recalcular totales del ticket — authoritative server-side calc
@@ -3344,7 +3483,13 @@ def registrar_pagos_ticket(request, correlativo):
         for tp in todas_lineas:
             correcto = (tp.precio - (tp.descuento_unitario or 0)) * tp.stock
             if tp.subtotal != correcto:
-                print(f"  🔧 Corrigiendo subtotal SKU {tp.ProductoTalla.sku if tp.ProductoTalla else '?'}: {tp.subtotal} → {correcto}")
+                logger.debug(
+                    "Corrigiendo subtotal ticket=%s sku=%s subtotal=%s correcto=%s",
+                    ticket.correlativo,
+                    tp.ProductoTalla.sku if tp.ProductoTalla else '?',
+                    tp.subtotal,
+                    correcto,
+                )
                 tp.subtotal = correcto
                 tp.save(update_fields=['subtotal'])
 
@@ -3364,7 +3509,13 @@ def registrar_pagos_ticket(request, correlativo):
         ticket.total = nuevo_subtotal_neto
         if hasattr(ticket, 'subTotal'):
             ticket.subTotal = nuevo_subtotal_bruto
-        print(f"  💰 Nuevo total del ticket: ${ticket.total:,} (subtotal bruto: ${nuevo_subtotal_bruto:,}, descuento: ${ticket.descuento or 0:,})")
+        logger.debug(
+            "Nuevo total ticket=%s total=%s subtotal_bruto=%s descuento=%s",
+            ticket.correlativo,
+            ticket.total,
+            nuevo_subtotal_bruto,
+            ticket.descuento or 0,
+        )
 
     pagos = payload.get('pagos') or []
     ids_existentes = list(ticket.pagos.values_list('id', flat=True))
@@ -3433,24 +3584,46 @@ def registrar_pagos_ticket(request, correlativo):
     # Si el ticket se acaba de pagar, consumir stock FIFO y crear movimientos
     # ⚠️ IMPORTANTE: NO descontar stock si el ticket viene de CAMBIO_DEVOLUCION
     # porque el stock ya se ajustó al aprobar el cambio
-    print(f"🔍 DEBUG PAGO: Ticket #{ticket.correlativo}, modulo_origen='{ticket.modulo_origen}', ticket_se_pago={ticket_se_pago}")
+    logger.debug(
+        "Estado pago ticket=%s modulo_origen=%s ticket_se_pago=%s",
+        ticket.correlativo,
+        ticket.modulo_origen,
+        ticket_se_pago,
+    )
     
     if ticket_se_pago and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
-        print(f"🔍 DEBUG: Iniciando descuento de stock para ticket #{ticket.correlativo}")
+        logger.debug("Iniciando descuento de stock ticket=%s", ticket.correlativo)
         for tp in ticket.ticket_productos.all():
             # Saltar ítems sin ProductoTalla (pendientes de despacho)
             if tp.ProductoTalla is None:
-                print(f"⏭️ Ítem manual sin stock: {tp.descripcion_linea} x{tp.stock} — sin descuento")
+                logger.debug(
+                    "Item manual sin stock ticket=%s descripcion=%s cantidad=%s",
+                    ticket.correlativo,
+                    tp.descripcion_linea,
+                    tp.stock,
+                )
                 continue
 
             # Usar stock_sucursal para obtener el stock real de la sucursal
             stock_antes = tp.ProductoTalla.stock_sucursal(ticket.sucursal_id)
-            print(f"🔍 DEBUG: SKU {tp.ProductoTalla.sku} - Stock ANTES: {stock_antes}, A descontar: {tp.stock}")
+            logger.debug(
+                "Descuento stock ticket=%s sku=%s stock_antes=%s cantidad=%s",
+                ticket.correlativo,
+                tp.ProductoTalla.sku,
+                stock_antes,
+                tp.stock,
+            )
             
             # Verificar que hay stock disponible en la sucursal
             if stock_antes < tp.stock:
                 error_msg = f'Stock insuficiente para SKU {tp.ProductoTalla.sku}. Disponible: {stock_antes}, Requerido: {tp.stock}'
-                print(f"❌ {error_msg}")
+                logger.warning(
+                    "Stock insuficiente al pagar ticket=%s sku=%s disponible=%s requerido=%s",
+                    ticket.correlativo,
+                    tp.ProductoTalla.sku,
+                    stock_antes,
+                    tp.stock,
+                )
                 # Revertir estado del ticket a PENDIENTE
                 ticket.estado = 'PENDIENTE'
                 ticket.save()
@@ -3479,20 +3652,39 @@ def registrar_pagos_ticket(request, correlativo):
                 # Recargar para ver el stock actualizado
                 tp.ProductoTalla.refresh_from_db()
                 stock_despues = tp.ProductoTalla.stock
-                print(f"✓ Stock consumido FIFO: SKU {tp.ProductoTalla.sku} - Stock ANTES: {stock_antes}, Stock DESPUÉS: {stock_despues}, Diferencia: {stock_antes - stock_despues}")
+                logger.info(
+                    "Stock consumido FIFO ticket=%s sku=%s stock_antes=%s stock_despues=%s diferencia=%s",
+                    ticket.correlativo,
+                    tp.ProductoTalla.sku,
+                    stock_antes,
+                    stock_despues,
+                    stock_antes - stock_despues,
+                )
                 
             except Exception as e:
-                print(f"❌ Error FIFO para {tp.ProductoTalla.sku}: {str(e)}")
-                print(f"🔍 Verificando stock después del error FIFO...")
+                logger.exception(
+                    "Error FIFO ticket=%s sku=%s",
+                    ticket.correlativo,
+                    tp.ProductoTalla.sku,
+                )
                 
                 # Recargar stock para verificar si FIFO ya lo descontó
                 tp.ProductoTalla.refresh_from_db()
                 stock_despues_error = tp.ProductoTalla.stock
-                print(f"🔍 Stock después del error: {stock_despues_error}")
+                logger.debug(
+                    "Stock despues de error FIFO ticket=%s sku=%s stock=%s",
+                    ticket.correlativo,
+                    tp.ProductoTalla.sku,
+                    stock_despues_error,
+                )
                 
                 # ⚠️ CRÍTICO: Solo descontar manualmente si FIFO NO descontó
                 if stock_despues_error == stock_antes:
-                    print(f"✓ FIFO no descontó, procediendo con descuento manual")
+                    logger.warning(
+                        "FIFO no desconto; procediendo con descuento manual ticket=%s sku=%s",
+                        ticket.correlativo,
+                        tp.ProductoTalla.sku,
+                    )
                     # Crear movimiento manual si falla FIFO
                     # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
                     referencia = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
@@ -3515,9 +3707,22 @@ def registrar_pagos_ticket(request, correlativo):
                     # Actualizar stock manualmente
                     tp.ProductoTalla.stock -= tp.stock
                     tp.ProductoTalla.save()
-                    print(f"⚠ Stock consumido manualmente: {tp.ProductoTalla.sku} -{tp.stock} (Stock: {stock_antes} → {tp.ProductoTalla.stock})")
+                    logger.warning(
+                        "Stock consumido manualmente ticket=%s sku=%s cantidad=%s stock_antes=%s stock_despues=%s",
+                        ticket.correlativo,
+                        tp.ProductoTalla.sku,
+                        tp.stock,
+                        stock_antes,
+                        tp.ProductoTalla.stock,
+                    )
                 else:
-                    print(f"⚠️ ADVERTENCIA: FIFO ya descontó parcialmente. Stock: {stock_antes} → {stock_despues_error}")
+                    logger.warning(
+                        "FIFO ya desconto parcialmente ticket=%s sku=%s stock_antes=%s stock_despues=%s",
+                        ticket.correlativo,
+                        tp.ProductoTalla.sku,
+                        stock_antes,
+                        stock_despues_error,
+                    )
                     # No descontar de nuevo, solo crear movimiento de registro
                     # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
                     referencia = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
@@ -3537,9 +3742,16 @@ def registrar_pagos_ticket(request, correlativo):
                         fecha=timezone.localdate(),
                         hora=timezone.localtime().time()
                     )
-                    print(f"✓ Movimiento de registro creado sin descuento adicional")
+                    logger.info(
+                        "Movimiento de registro creado sin descuento adicional ticket=%s sku=%s",
+                        ticket.correlativo,
+                        tp.ProductoTalla.sku,
+                    )
     elif ticket_se_pago and ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
-        print(f"ℹ️  TICKET DE CAMBIO/DEVOLUCIÓN #{ticket.correlativo}: Stock ya fue ajustado al aprobar el cambio. No se descuenta nuevamente.")
+        logger.info(
+            "Ticket cambio/devolucion pagado sin descuento adicional ticket=%s",
+            ticket.correlativo,
+        )
         
         # Auto-completar el CambioDevolucion asociado
         cambio_asociado = CambioDevolucion.objects.filter(
@@ -3573,7 +3785,11 @@ def registrar_pagos_ticket(request, correlativo):
                     'monto_pagado': float(ticket.total),
                 }
             )
-            print(f"✅ CambioDevolucion #{cambio_asociado.numero_operacion} completado automáticamente (era {estado_anterior_cd})")
+            logger.info(
+                "CambioDevolucion completado automaticamente numero=%s estado_anterior=%s",
+                cambio_asociado.numero_operacion,
+                estado_anterior_cd,
+            )
     
     # Guardar o actualizar cliente en la base de datos si tiene datos
     if datos_cliente and datos_cliente.get('rut') and datos_cliente.get('nombre'):
@@ -3585,33 +3801,57 @@ def registrar_pagos_ticket(request, correlativo):
     
     if tipo_documento_seleccionado in ['BOLETA_ELECTRONICA', 'BOLETA_PAPEL', 'FACTURA_ELECTRONICA'] and ticket.estado == 'PAGADO':
         try:
-            print(f"🔍 DEBUG: Generando DTE para ticket #{ticket.correlativo}")
+            logger.debug("Generando DTE para ticket=%s", ticket.correlativo)
             
             # ✅ CRÍTICO: Refrescar el ticket desde la BD para tener los pagos actualizados
             ticket.refresh_from_db()
             
             # Verificar pagos ANTES de generar DTE
             pagos_count = ticket.pagos.count()
-            print(f"🔍 DEBUG: Ticket tiene {pagos_count} pago(s) registrado(s)")
+            logger.debug(
+                "Ticket pagos registrados ticket=%s pagos_count=%s",
+                ticket.correlativo,
+                pagos_count,
+            )
             for pago in ticket.pagos.all():
-                print(f"  - {pago.metodo_pago}: ${pago.monto:,}")
+                logger.debug(
+                    "Pago ticket=%s metodo=%s monto=%s",
+                    ticket.correlativo,
+                    pago.metodo_pago,
+                    pago.monto,
+                )
             
             # Verificar stock ANTES de generar DTE
             for tp in ticket.ticket_productos.all():
                 if tp.ProductoTalla is None:
                     continue
-                print(f"🔍 DEBUG PRE-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
+                logger.debug(
+                    "Pre-DTE stock ticket=%s sku=%s stock=%s",
+                    ticket.correlativo,
+                    tp.ProductoTalla.sku,
+                    tp.ProductoTalla.stock,
+                )
             
             # ✅ Pasar cotizacion_obj para usar sus descripciones en el TXT
             dte_generado = generar_dte_desde_ticket(ticket, tipo_documento_seleccionado, request.user, cotizacion=cotizacion_obj)
-            print(f"✓ DTE generado: {dte_generado.tipo_documento} #{dte_generado.numero_documento}")
+            logger.info(
+                "DTE generado desde ticket=%s tipo=%s numero=%s",
+                ticket.correlativo,
+                dte_generado.tipo_documento,
+                dte_generado.numero_documento,
+            )
             
             # Verificar stock DESPUÉS de generar DTE
             for tp in ticket.ticket_productos.all():
                 if tp.ProductoTalla is None:
                     continue
                 tp.ProductoTalla.refresh_from_db()
-                print(f"🔍 DEBUG POST-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
+                logger.debug(
+                    "Post-DTE stock ticket=%s sku=%s stock=%s",
+                    ticket.correlativo,
+                    tp.ProductoTalla.sku,
+                    tp.ProductoTalla.stock,
+                )
             
             # =========================================================================
             # NUEVO: Marcar cotización como facturada si viene de una cotización
@@ -3633,13 +3873,20 @@ def registrar_pagos_ticket(request, correlativo):
                         descripcion=f'Cotización facturada desde POS. Documento: {numero_documento_completo}. Ticket: #{ticket.correlativo}',
                         ip_address=request.META.get('REMOTE_ADDR', '')
                     )
-                    print(f"✅ Cotización {cotizacion_obj.numero_cotizacion} marcada como facturada")
+                    logger.info(
+                        "Cotizacion marcada como facturada numero=%s factura=%s",
+                        cotizacion_obj.numero_cotizacion,
+                        ticket.folio_dte,
+                    )
                 except Exception as cot_error:
-                    print(f"⚠️ Error al marcar cotización como facturada: {str(cot_error)}")
+                    logger.exception(
+                        "Error al marcar cotizacion como facturada numero=%s",
+                        cotizacion_obj.numero_cotizacion,
+                    )
                 
         except Exception as e:
             # No fallar el pago si hay error en DTE, solo registrar
-            print(f"⚠ Error al generar DTE: {str(e)}")
+            logger.exception("Error al generar DTE desde ticket=%s", ticket.correlativo)
 
     response_data = {
         'success': True, 
@@ -3665,7 +3912,7 @@ def registrar_pagos_ticket(request, correlativo):
             'numero_factura': cotizacion_obj.numero_factura
         }
     
-    print(f"🔍🔍🔍 DEBUG: ===== FIN registrar_pagos_ticket - Ticket #{correlativo} =====")
+    logger.debug("Fin registrar_pagos_ticket ticket=%s", correlativo)
     return JsonResponse(response_data)
 
 
@@ -4460,8 +4707,7 @@ def exportar_documentos_ventas_excel(request):
         return response
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al exportar documentos de ventas")
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar documentos: {str(e)}'
@@ -7551,11 +7797,14 @@ def guardar_cuadratura_completa(request):
         # Recargar para obtener valores actualizados
         arqueo.refresh_from_db()
         
-        print(f"✅ Arqueo creado ID={arqueo.id}:")
-        print(f"   - Efectivo teórico: {arqueo.total_efectivo_teorico}")
-        print(f"   - Efectivo físico: {arqueo.total_efectivo_fisico}")
-        print(f"   - Cierre POS: {arqueo.cierre_pos_fisico}")
-        print(f"   - Transbank teórico: {arqueo.total_transbank_teorico}")
+        logger.info(
+            "Arqueo creado id=%s efectivo_teorico=%s efectivo_fisico=%s cierre_pos=%s transbank_teorico=%s",
+            arqueo.id,
+            arqueo.total_efectivo_teorico,
+            arqueo.total_efectivo_fisico,
+            arqueo.cierre_pos_fisico,
+            arqueo.total_transbank_teorico,
+        )
         
         # === CREAR DEPÓSITOS BANCARIOS ===
         depositos_creados = []
@@ -7577,7 +7826,11 @@ def guardar_cuadratura_completa(request):
                     'banco': deposito.get_banco_display()
                 })
             except Exception as e:
-                print(f"Error al crear depósito: {e}")
+                logger.exception(
+                    "Error al crear deposito para arqueo_id=%s datos=%s",
+                    arqueo.id,
+                    dep,
+                )
                 continue
         
         log_accion_caja(request, 'GUARDAR_CONTEO', arqueo)
@@ -7592,9 +7845,11 @@ def guardar_cuadratura_completa(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error al guardar cuadratura: {e}")
-        print(traceback.format_exc())
+        logger.exception(
+            "Error al guardar cuadratura user_id=%s sucursal_id=%s",
+            request.user.id,
+            request.session.get('idSucursalActual') or request.session.get('sucursalActual'),
+        )
         return JsonResponse({
             'success': False,
             'error': f'Error al guardar cuadratura: {str(e)}'
@@ -7642,8 +7897,8 @@ def verificar_cuadratura_existente(request):
                 'existe': False
             })
             
-    except Exception as e:
-        print(f"Error al verificar cuadratura: {e}")
+    except Exception:
+        logger.exception("Error al verificar cuadratura existente")
         return JsonResponse({
             'existe': False
         })
@@ -7691,9 +7946,7 @@ def eliminar_cuadratura(request, arqueo_id):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error al eliminar cuadratura: {e}")
-        print(traceback.format_exc())
+        logger.exception("Error al eliminar cuadratura %s", arqueo_id)
         return JsonResponse({
             'success': False,
             'error': f'Error al eliminar: {str(e)}'
@@ -8089,10 +8342,13 @@ def obtener_detalle_arqueo(request, arqueo_id):
             } for obs in arqueo.bitacora.all()[:20]],
         }
         
-        print(f"✅ Detalle de arqueo #{arqueo_id} - Valores RECALCULADOS en tiempo real")
-        print(f"   Efectivo teórico RECALCULADO: ${total_efectivo_teorico}")
-        print(f"   Transbank teórico RECALCULADO: ${total_transbank_teorico}")
-        print(f"   Venta total RECALCULADA: ${venta_total}")
+        logger.debug(
+            "Detalle de arqueo %s recalculado: efectivo_teorico=%s, transbank_teorico=%s, venta_total=%s",
+            arqueo_id,
+            total_efectivo_teorico,
+            total_transbank_teorico,
+            venta_total,
+        )
         
         return JsonResponse({
             'success': True,
@@ -8100,9 +8356,7 @@ def obtener_detalle_arqueo(request, arqueo_id):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error al obtener detalle de arqueo: {e}")
-        print(traceback.format_exc())
+        logger.exception("Error al obtener detalle de arqueo %s", arqueo_id)
         return JsonResponse({
             'success': False,
             'error': f'Error: {str(e)}'
@@ -8170,14 +8424,20 @@ def agregar_deposito_arqueo(request):
         
         arqueo.save()
         
-        print(f"✅ Depósito agregado al arqueo {arqueo_id}: ${monto}")
-        print(f"   Total depósitos: ${total_depositos}")
-        print(f"   Efectivo físico contado: ${arqueo.total_efectivo_fisico}")
-        print(f"   Efectivo en caja (después de depósitos): ${efectivo_en_caja}")
-        print(f"   Efectivo teórico: ${arqueo.total_efectivo_teorico}")
-        print(f"   Diferencia efectivo REAL: ${diferencia_efectivo_real}")
-        print(f"   Diferencia total REAL: ${diferencia_total_real}")
-        print(f"   Nuevo estado: {arqueo.estado}")
+        logger.info(
+            "Deposito agregado al arqueo %s: monto=%s, total_depositos=%s, efectivo_fisico=%s, "
+            "efectivo_en_caja=%s, efectivo_teorico=%s, diferencia_efectivo_real=%s, "
+            "diferencia_total_real=%s, estado=%s",
+            arqueo_id,
+            monto,
+            total_depositos,
+            arqueo.total_efectivo_fisico,
+            efectivo_en_caja,
+            arqueo.total_efectivo_teorico,
+            diferencia_efectivo_real,
+            diferencia_total_real,
+            arqueo.estado,
+        )
         
         return JsonResponse({
             'success': True,
@@ -8202,9 +8462,7 @@ def agregar_deposito_arqueo(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error al agregar depósito: {e}")
-        print(traceback.format_exc())
+        logger.exception("Error al agregar deposito al arqueo")
         return JsonResponse({
             'success': False,
             'error': f'Error: {str(e)}'
@@ -8269,12 +8527,18 @@ def eliminar_deposito_bancario(request):
         
         arqueo.save()
         
-        print(f"✅ Depósito {deposito_id} eliminado del arqueo {arqueo.id}: ${monto_eliminado}")
-        print(f"   Total depósitos restantes: ${total_depositos}")
-        print(f"   Efectivo en caja (después de depósitos): ${efectivo_en_caja}")
-        print(f"   Diferencia efectivo REAL: ${diferencia_efectivo_real}")
-        print(f"   Diferencia total REAL: ${diferencia_total_real}")
-        print(f"   Nuevo estado: {arqueo.estado}")
+        logger.info(
+            "Deposito %s eliminado del arqueo %s: monto=%s, total_depositos=%s, "
+            "efectivo_en_caja=%s, diferencia_efectivo_real=%s, diferencia_total_real=%s, estado=%s",
+            deposito_id,
+            arqueo.id,
+            monto_eliminado,
+            total_depositos,
+            efectivo_en_caja,
+            diferencia_efectivo_real,
+            diferencia_total_real,
+            arqueo.estado,
+        )
         
         return JsonResponse({
             'success': True,
@@ -8293,9 +8557,7 @@ def eliminar_deposito_bancario(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error al eliminar depósito: {e}")
-        print(traceback.format_exc())
+        logger.exception("Error al eliminar deposito %s", deposito_id)
         return JsonResponse({
             'success': False,
             'error': f'Error: {str(e)}'
@@ -8395,8 +8657,7 @@ def declarar_deposito(request):
         })
 
     except Exception as e:
-        import traceback
-        print(f"Error declarar_deposito: {e}\n{traceback.format_exc()}")
+        logger.exception("Error al declarar deposito")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -8460,8 +8721,7 @@ def finalizar_declaracion(request):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
     except Exception as e:
-        import traceback
-        print(f"Error finalizar_declaracion: {e}\n{traceback.format_exc()}")
+        logger.exception("Error al finalizar declaracion de depositos")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -8571,8 +8831,7 @@ def confirmar_deposito(request, deposito_id):
         })
 
     except Exception as e:
-        import traceback
-        print(f"Error confirmar_deposito: {e}\n{traceback.format_exc()}")
+        logger.exception("Error al confirmar deposito %s", deposito_id)
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -8619,8 +8878,7 @@ def obtener_depositos_pendientes(request):
         return JsonResponse({'success': True, 'depositos': depositos, 'total': len(depositos)})
 
     except Exception as e:
-        import traceback
-        print(f"Error obtener_depositos_pendientes: {e}\n{traceback.format_exc()}")
+        logger.exception("Error al obtener depositos pendientes")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -8769,8 +9027,7 @@ def crear_deposito_multidia(request):
         })
 
     except Exception as e:
-        import traceback
-        print(f"Error crear_deposito_multidia: {e}\n{traceback.format_exc()}")
+        logger.exception("Error al crear deposito multidia")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -8829,20 +9086,37 @@ def editar_cuadratura(request, arqueo_id):
         )
         
         data = json.loads(request.body)
-        print(f"📝 Editando arqueo {arqueo_id}. Datos recibidos: {data}")
-        print(f"📊 Valores ANTES: Efectivo físico={arqueo.total_efectivo_fisico}, Cierre POS={arqueo.cierre_pos_fisico}")
+        logger.debug(
+            "Editando arqueo %s. Datos recibidos=%s. Valores antes: efectivo_fisico=%s, cierre_pos=%s",
+            arqueo_id,
+            data,
+            arqueo.total_efectivo_fisico,
+            arqueo.cierre_pos_fisico,
+        )
         
         # Actualizar efectivo físico
         if 'efectivo_real' in data:
             arqueo.total_efectivo_fisico = data['efectivo_real']
             arqueo.diferencia_efectivo = arqueo.total_efectivo_fisico - arqueo.total_efectivo_teorico
-            print(f"✅ Efectivo actualizado: Físico={arqueo.total_efectivo_fisico}, Teórico={arqueo.total_efectivo_teorico}, Diferencia={arqueo.diferencia_efectivo}")
+            logger.debug(
+                "Efectivo actualizado en arqueo %s: fisico=%s, teorico=%s, diferencia=%s",
+                arqueo_id,
+                arqueo.total_efectivo_fisico,
+                arqueo.total_efectivo_teorico,
+                arqueo.diferencia_efectivo,
+            )
         
         # Actualizar cierre POS
         if 'cierre_pos' in data:
             arqueo.cierre_pos_fisico = data['cierre_pos']
             arqueo.diferencia_transbank = arqueo.cierre_pos_fisico - arqueo.total_transbank_teorico
-            print(f"✅ Cierre POS actualizado: Físico={arqueo.cierre_pos_fisico}, Teórico={arqueo.total_transbank_teorico}, Diferencia={arqueo.diferencia_transbank}")
+            logger.debug(
+                "Cierre POS actualizado en arqueo %s: fisico=%s, teorico=%s, diferencia=%s",
+                arqueo_id,
+                arqueo.cierre_pos_fisico,
+                arqueo.total_transbank_teorico,
+                arqueo.diferencia_transbank,
+            )
         
         if 'numero_lote' in data:
             arqueo.numero_lote_pos = data['numero_lote']
@@ -8889,12 +9163,16 @@ def editar_cuadratura(request, arqueo_id):
         # Recargar el objeto para verificar
         arqueo.refresh_from_db()
         
-        print(f"💾 Arqueo guardado con update(). Valores DESPUÉS:")
-        print(f"   - Efectivo físico: {arqueo.total_efectivo_fisico}")
-        print(f"   - Cierre POS: {arqueo.cierre_pos_fisico}")
-        print(f"   - Diferencia efectivo: {arqueo.diferencia_efectivo}")
-        print(f"   - Diferencia Transbank: {arqueo.diferencia_transbank}")
-        print(f"   - Estado: {arqueo.estado}")
+        logger.info(
+            "Arqueo %s actualizado: efectivo_fisico=%s, cierre_pos=%s, diferencia_efectivo=%s, "
+            "diferencia_transbank=%s, estado=%s",
+            arqueo_id,
+            arqueo.total_efectivo_fisico,
+            arqueo.cierre_pos_fisico,
+            arqueo.diferencia_efectivo,
+            arqueo.diferencia_transbank,
+            arqueo.estado,
+        )
         
         return JsonResponse({
             'success': True,
@@ -8902,9 +9180,7 @@ def editar_cuadratura(request, arqueo_id):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error al editar cuadratura: {e}")
-        print(traceback.format_exc())
+        logger.exception("Error al editar cuadratura %s", arqueo_id)
         return JsonResponse({
             'success': False,
             'error': f'Error: {str(e)}'
@@ -9208,9 +9484,7 @@ def obtener_transacciones_dia(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error al obtener transacciones del día: {e}")
-        print(traceback.format_exc())
+        logger.exception("Error al obtener transacciones del dia")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener transacciones: {str(e)}'
@@ -9529,7 +9803,12 @@ def corregir_arqueos_express(request):
                 )
                 corregidos += 1
                 log_accion_caja(request, 'CORREGIR_EXPRESS', arqueo)
-                print(f"✅ Corregido arqueo ID {arqueo.id}: Físico {0} -> {arqueo.total_efectivo_teorico}")
+                logger.info(
+                    "Arqueo express corregido: arqueo_id=%s, efectivo_fisico_anterior=%s, efectivo_fisico_nuevo=%s",
+                    arqueo.id,
+                    0,
+                    arqueo.total_efectivo_teorico,
+                )
         
         return JsonResponse({
             'success': True,
@@ -9764,7 +10043,12 @@ def guardar_conteo_fisico(request):
             arqueo.total_efectivo_fisico = monto_total
             arqueo.diferencia_efectivo = monto_total - arqueo.total_efectivo_teorico
             
-            print(f"💰 Modo Express: Total físico = {monto_total}, Diferencia = {arqueo.diferencia_efectivo}")
+            logger.debug(
+                "Conteo de arqueo %s en modo express: total_fisico=%s, diferencia=%s",
+                arqueo.id,
+                monto_total,
+                arqueo.diferencia_efectivo,
+            )
             
         else:
             # Modo Detallado: usar denominaciones
@@ -9781,7 +10065,7 @@ def guardar_conteo_fisico(request):
             arqueo.monedas_5 = int(data.get('monedas_5', 0))
             arqueo.monedas_1 = int(data.get('monedas_1', 0))
             
-            print(f"📊 Modo Detallado: Calculando desde denominaciones")
+            logger.debug("Conteo de arqueo %s en modo detallado desde denominaciones", arqueo.id)
 
         arqueo.timestamp_conteo_fisico = timezone.now()
         arqueo.modo_conteo = 'EXPRESS' if modo_express else 'DETALLADO'
@@ -9803,9 +10087,17 @@ def guardar_conteo_fisico(request):
         diferencia_credito = cierre_credito - arqueo.total_tarjeta_credito_teorico
         diferencia_transbank = cierre_pos_total - arqueo.total_transbank_teorico
         
-        print(f"💳 Transbank - Débito: {cierre_debito} (teórico: {arqueo.total_tarjeta_debito_teorico})")
-        print(f"💳 Transbank - Crédito: {cierre_credito} (teórico: {arqueo.total_tarjeta_credito_teorico})")
-        print(f"💳 Transbank - Total: {cierre_pos_total} (teórico: {arqueo.total_transbank_teorico})")
+        logger.debug(
+            "Conteo Transbank arqueo %s: debito=%s teorico_debito=%s, credito=%s teorico_credito=%s, "
+            "total=%s teorico_total=%s",
+            arqueo.id,
+            cierre_debito,
+            arqueo.total_tarjeta_debito_teorico,
+            cierre_credito,
+            arqueo.total_tarjeta_credito_teorico,
+            cierre_pos_total,
+            arqueo.total_transbank_teorico,
+        )
         
         # Guardar según el modo
         if modo_express:
@@ -9836,7 +10128,12 @@ def guardar_conteo_fisico(request):
                 diferencia_credito=diferencia_credito,
                 diferencia_transbank=diferencia_transbank
             )
-            print(f"💾 Guardado en modo Express - Total físico: {arqueo.total_efectivo_fisico}, Diferencia: {arqueo.diferencia_efectivo}")
+            logger.info(
+                "Conteo guardado en modo express: arqueo_id=%s, total_fisico=%s, diferencia=%s",
+                arqueo.id,
+                arqueo.total_efectivo_fisico,
+                arqueo.diferencia_efectivo,
+            )
         else:
             # En modo detallado, save() calculará automáticamente el total físico y diferencia
             # Pero primero guardamos los valores de Transbank
@@ -9848,7 +10145,11 @@ def guardar_conteo_fisico(request):
             arqueo.diferencia_credito = diferencia_credito
             arqueo.diferencia_transbank = diferencia_transbank
             arqueo.save()
-            print(f"💾 Guardado en modo Detallado - Total físico calculado: {arqueo.total_efectivo_fisico}")
+            logger.info(
+                "Conteo guardado en modo detallado: arqueo_id=%s, total_fisico=%s",
+                arqueo.id,
+                arqueo.total_efectivo_fisico,
+            )
         
         # Recargar el objeto para obtener los valores actualizados
         arqueo.refresh_from_db()
@@ -9907,18 +10208,21 @@ def cerrar_arqueo(request):
                 'error': 'Este arqueo ya está cerrado'
             })
         
-        # Agregar logs para debug
-        print(f"🔒 Intentando cerrar arqueo ID: {arqueo_id}")
-        print(f"📊 Estado actual: {arqueo.estado}")
-        print(f"💰 Diferencia: {arqueo.diferencia_efectivo}")
-        print(f"📝 Observaciones diferencia: '{arqueo.observaciones_diferencia}'")
-        print(f"⚠️ Requiere supervisión: {arqueo.requiere_supervision}")
+        logger.debug(
+            "Intentando cerrar arqueo %s: estado=%s, diferencia=%s, observaciones_diferencia=%s, "
+            "requiere_supervision=%s",
+            arqueo_id,
+            arqueo.estado,
+            arqueo.diferencia_efectivo,
+            arqueo.observaciones_diferencia,
+            arqueo.requiere_supervision,
+        )
         
         # Validar observaciones SOLO si hay diferencias significativas (mayor a $500)
         diferencia_absoluta = abs(arqueo.diferencia_efectivo)
         
         if diferencia_absoluta == 0:
-            print("✅ Arqueo perfecto - Sin diferencias")
+            logger.debug("Arqueo %s sin diferencias", arqueo_id)
         elif diferencia_absoluta > 500:
             obs = (arqueo.observaciones_diferencia or '').strip()
             if len(obs) < 20 or len(set(obs.split())) < 3:
@@ -9927,7 +10231,11 @@ def cerrar_arqueo(request):
                     'error': f'Debe agregar observaciones detalladas (mínimo 20 caracteres y 3 palabras distintas) para diferencias mayores a $500 (actual: ${diferencia_absoluta:,})'
                 })
         else:
-            print(f"ℹ️ Diferencia menor - No requiere observaciones obligatorias: ${diferencia_absoluta}")
+            logger.debug(
+                "Arqueo %s con diferencia menor sin observacion obligatoria: diferencia_absoluta=%s",
+                arqueo_id,
+                diferencia_absoluta,
+            )
         
         # Cerrar arqueo
         fecha_cierre = timezone.now()
@@ -9948,7 +10256,7 @@ def cerrar_arqueo(request):
         # Recargar para obtener valores actualizados
         arqueo.refresh_from_db()
         
-        print(f"✅ Arqueo cerrado exitosamente - Estado final: {arqueo.estado}")
+        logger.info("Arqueo %s cerrado exitosamente: estado_final=%s", arqueo_id, arqueo.estado)
 
         log_accion_caja(request, 'CERRAR_ARQUEO', arqueo)
 
@@ -10360,7 +10668,12 @@ def registrar_comprobante_supervisor(request):
             fecha_verificacion=timezone.now()
         )
         
-        print(f"💰 Comprobante bancario registrado - Arqueo {arqueo_id}, Monto: ${monto:,}, Banco: {banco}")
+        logger.info(
+            "Comprobante bancario registrado: arqueo_id=%s, monto=%s, banco=%s",
+            arqueo_id,
+            monto,
+            banco,
+        )
         
         return JsonResponse({
             'success': True,
@@ -11078,8 +11391,7 @@ def recalcular_teoricos_arqueo(request, arqueo_id):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al recalcular arqueo desde dashboard")
         return JsonResponse({
             'success': False,
             'error': f'Error al recalcular: {str(e)}'
@@ -13434,8 +13746,7 @@ def revertir_cambio_devolucion(request):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al revertir cambio/devolucion")
         return JsonResponse({'success': False, 'error': f'Error al revertir cambio: {str(e)}'})
 
 
@@ -14046,39 +14357,45 @@ def aprobar_cambio_generar_ticket(request):
                         'error': f'Stock insuficiente para {producto_talla.producto.articulo} - Talla {producto_talla.talla}. Disponible: {stock_disponible}'
                     })
         
-        print(f"🚀 Iniciando transacción atómica para aprobar cambio #{cambio.id}")
+        logger.info("Iniciando transaccion atomica para aprobar cambio %s", cambio.id)
         
         with transaction.atomic():
             # Aprobar el cambio (solo si no está ya aprobado)
             if cambio.estado == 'SOLICITADO':
-                print(f"1️⃣ Aprobando cambio...")
+                logger.debug("Aprobando cambio %s", cambio.id)
                 cambio.aprobar_cambio(request.user, observaciones)
-                print(f"   ✅ Cambio aprobado, estado: {cambio.estado}")
+                logger.info("Cambio %s aprobado: estado=%s", cambio.id, cambio.estado)
             else:
-                print(f"1️⃣ Cambio ya en estado {cambio.estado}, continuando ejecución...")
+                logger.debug("Cambio %s ya estaba en estado %s; continuando ejecucion", cambio.id, cambio.estado)
             
             # GENERAR TICKET DE VENTA
             # Obtener correlativo usando la función centralizada
             sucursal = get_object_or_404(Sucursal, id=sucursal_id)
             
-            print(f"2️⃣ Obteniendo correlativo para sucursal {sucursal.alias}...")
+            logger.debug("Obteniendo correlativo para sucursal %s", sucursal.alias)
             try:
                 nuevo_correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
-                print(f"   ✅ Correlativo obtenido: #{nuevo_correlativo}")
             except Exception as e:
-                print(f"   ❌ Error al obtener correlativo: {str(e)}")
+                logger.exception("Error al obtener correlativo para sucursal %s", sucursal.id)
                 raise  # Re-lanzar para hacer rollback
+            logger.debug("Correlativo obtenido para cambio %s: ticket=%s", cambio.id, nuevo_correlativo)
             
             # Calcular totales
             total_devuelto = cambio.monto_original
             total_nuevo = cambio.monto_nuevo
             diferencia = total_nuevo - total_devuelto
             
-            print(f"3️⃣ Creando ticket #{nuevo_correlativo}...")
-            print(f"   Sucursal: {sucursal.alias}")
-            print(f"   Vendedor: {vendedor_obj.nombre}")
-            print(f"   Total: ${abs(diferencia)}")
-            print(f"   Diferencia: ${diferencia} ({'a cobrar' if diferencia > 0 else 'a devolver'})")
+            logger.debug(
+                "Creando ticket para cambio %s: correlativo=%s, sucursal=%s, vendedor=%s, "
+                "total=%s, diferencia=%s, tipo_diferencia=%s",
+                cambio.id,
+                nuevo_correlativo,
+                sucursal.alias,
+                vendedor_obj.nombre,
+                abs(diferencia),
+                diferencia,
+                'a cobrar' if diferencia > 0 else 'a devolver',
+            )
             
             try:
                 # Determinar estado según la diferencia
@@ -14122,16 +14439,22 @@ def aprobar_cambio_generar_ticket(request):
                                   f'✅ SIN DIFERENCIA - CAMBIO DIRECTO\n\n') +
                                  (observaciones if observaciones else '')
                 )
-                print(f"   ✅ Ticket creado con ID: {ticket.id}, Correlativo: {ticket.correlativo}")
+                logger.info(
+                    "Ticket creado para cambio %s: ticket_id=%s, correlativo=%s",
+                    cambio.id,
+                    ticket.id,
+                    ticket.correlativo,
+                )
             except Exception as e:
-                print(f"   ❌ Error al crear ticket: {str(e)}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error al crear ticket para cambio %s", cambio.id)
                 raise  # Re-lanzar para hacer rollback
             
             # Agregar productos al ticket usando el modelo Ticket_Productos
-            print(f"4️⃣ Agregando productos al ticket...")
-            print(f"   Detalles del cambio: {cambio.detalles.count()}")
+            logger.debug(
+                "Agregando productos al ticket de cambio %s: detalles=%s",
+                cambio.id,
+                cambio.detalles.count(),
+            )
             
             try:
                 # ✅ CORREGIDO: Agrupar productos para evitar duplicados
@@ -14179,7 +14502,12 @@ def aprobar_cambio_generar_ticket(request):
                 
                 # CREAR REGISTROS DE PRODUCTOS DEVUELTOS
                 for pt_id, data in productos_devueltos_agrupados.items():
-                    print(f"   → Devuelto: {data['producto'].producto.articulo} x{data['cantidad']}")
+                    logger.debug(
+                        "Producto devuelto en cambio %s: producto=%s, cantidad=%s",
+                        cambio.id,
+                        data['producto'].producto.articulo,
+                        data['cantidad'],
+                    )
                     Ticket_Productos.objects.create(
                         idTicket=ticket,
                         ProductoTalla=data['producto'],
@@ -14192,7 +14520,12 @@ def aprobar_cambio_generar_ticket(request):
                 
                 # CREAR REGISTROS DE PRODUCTOS NUEVOS
                 for pt_id, data in productos_nuevos_agrupados.items():
-                    print(f"   → Nuevo: {data['producto'].producto.articulo} x{data['cantidad']}")
+                    logger.debug(
+                        "Producto nuevo en cambio %s: producto=%s, cantidad=%s",
+                        cambio.id,
+                        data['producto'].producto.articulo,
+                        data['cantidad'],
+                    )
                     Ticket_Productos.objects.create(
                         idTicket=ticket,
                         ProductoTalla=data['producto'],
@@ -14204,15 +14537,18 @@ def aprobar_cambio_generar_ticket(request):
                     )
                 
                 total_productos = len(productos_devueltos_agrupados) + len(productos_nuevos_agrupados)
-                print(f"   ✅ {total_productos} productos agregados al ticket (agrupados de {cambio.detalles.count()} detalles)")
+                logger.info(
+                    "Productos agregados al ticket de cambio %s: total_productos=%s, detalles=%s",
+                    cambio.id,
+                    total_productos,
+                    cambio.detalles.count(),
+                )
             except Exception as e:
-                print(f"   ❌ Error al agregar productos: {str(e)}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error al agregar productos al ticket de cambio %s", cambio.id)
                 raise
             
             # EJECUTAR MOVIMIENTOS DE INVENTARIO AUTOMÁTICAMENTE
-            print(f"5️⃣ Ejecutando movimientos de inventario...")
+            logger.debug("Ejecutando movimientos de inventario para cambio %s", cambio.id)
             
             try:
                 # 1. ENTRADA: Productos devueltos vuelven al inventario (SOLO SI ESTÁN APTOS)
@@ -14238,7 +14574,12 @@ def aprobar_cambio_generar_ticket(request):
                             estado='COMPLETADO',
                             observaciones=f'Devolución - Cambio #{cambio.numero_operacion}. Condición: {item.get_condicion_producto_display()}. APTO PARA VENTA.'
                         )
-                        print(f"   ✅ INGRESO: {producto_talla_devuelto.sku} +{item.cantidad_original} (APTO)")
+                        logger.debug(
+                            "Ingreso por devolucion apta: cambio=%s, sku=%s, cantidad=%s",
+                            cambio.id,
+                            producto_talla_devuelto.sku,
+                            item.cantidad_original,
+                        )
                     else:
                         # Producto NO APTO - Solo registrar sin sumar stock
                         Movimientos_Producto.objects.create(
@@ -14253,7 +14594,11 @@ def aprobar_cambio_generar_ticket(request):
                             estado='COMPLETADO',
                             observaciones=f'Devolución NO APTA - Cambio #{cambio.numero_operacion}. Condición: {item.get_condicion_producto_display()}. NO SE SUMA AL INVENTARIO.'
                         )
-                        print(f"   ⚠️ NO APTO: {producto_talla_devuelto.sku} (sin movimiento de stock)")
+                        logger.debug(
+                            "Devolucion no apta sin ingreso de stock: cambio=%s, sku=%s",
+                            cambio.id,
+                            producto_talla_devuelto.sku,
+                        )
                 
                 # 2. SALIDA: Productos nuevos entregados al cliente (FIFO)
                 for item in cambio.detalles.all():
@@ -14268,7 +14613,12 @@ def aprobar_cambio_generar_ticket(request):
                                 referencia_externa=cambio.numero_operacion
                             )
                         except Exception as e_fifo:
-                            print(f"   ⚠️ FIFO falló para {item.producto_nuevo.sku}, usando decremento directo: {e_fifo}")
+                            logger.warning(
+                                "FIFO fallo para cambio %s sku=%s; usando decremento directo: %s",
+                                cambio.id,
+                                item.producto_nuevo.sku,
+                                e_fifo,
+                            )
                             item.producto_nuevo.stock -= item.cantidad_nueva
                             item.producto_nuevo.save()
                             Movimientos_Producto.objects.create(
@@ -14285,15 +14635,13 @@ def aprobar_cambio_generar_ticket(request):
                                 observaciones=f'Entrega - Cambio #{cambio.numero_operacion}. Fallback sin FIFO.'
                             )
                 
-                print(f"   ✅ Movimientos de inventario ejecutados")
+                logger.info("Movimientos de inventario ejecutados para cambio %s", cambio.id)
             except Exception as e:
-                print(f"   ❌ Error en movimientos de inventario: {str(e)}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error en movimientos de inventario para cambio %s", cambio.id)
                 raise
             
             # Vincular ticket nuevo al cambio
-            print(f"6️⃣ Vinculando ticket al cambio...")
+            logger.debug("Vinculando ticket %s al cambio %s", ticket.id, cambio.id)
             cambio.ticket_nuevo = ticket
             estado_anterior_cambio = cambio.estado
 
@@ -14311,10 +14659,10 @@ def aprobar_cambio_generar_ticket(request):
                 cambio.fecha_completado = timezone.now()
 
             cambio.save()
-            print(f"   ✅ Cambio actualizado: Estado={cambio.estado}, Ticket nuevo ID={ticket.id}")
+            logger.info("Cambio %s actualizado: estado=%s, ticket_nuevo_id=%s", cambio.id, cambio.estado, ticket.id)
             
             # Crear historial
-            print(f"7️⃣ Creando historial...")
+            logger.debug("Creando historial para cambio %s", cambio.id)
             accion_historial = 'APROBADO_Y_EJECUTADO'
             if cambio.estado == 'EJECUTADO_COBRO_PENDIENTE':
                 accion_historial = 'EJECUTADO_COBRO_PENDIENTE'
@@ -14337,18 +14685,17 @@ def aprobar_cambio_generar_ticket(request):
                     'fecha_aprobacion': timezone.now().isoformat()
                 }
             )
-            print(f"   ✅ Historial creado")
-            
-            print(f"")
-            print(f"{'='*60}")
-            print(f"✅ OPERACIÓN EJECUTADA EXITOSAMENTE")
-            print(f"{'='*60}")
-            print(f"   Ticket generado: #{nuevo_correlativo} (ID: {ticket.id})")
-            print(f"   Cambio: #{cambio.numero_operacion} (Estado: {cambio.estado})")
-            print(f"   Inventario: Actualizado")
-            if cambio.estado != 'COMPLETADO':
-                print(f"   Pendiente: {'Cobro' if diferencia > 0 else 'Devolución'} de ${abs(int(diferencia)):,}")
-            print(f"{'='*60}")
+            logger.info(
+                "Cambio ejecutado exitosamente: cambio=%s, numero_operacion=%s, estado=%s, "
+                "ticket_correlativo=%s, ticket_id=%s, pendiente_tipo=%s, pendiente_monto=%s",
+                cambio.id,
+                cambio.numero_operacion,
+                cambio.estado,
+                nuevo_correlativo,
+                ticket.id,
+                ('Cobro' if diferencia > 0 else 'Devolucion') if cambio.estado != 'COMPLETADO' else '',
+                abs(int(diferencia)) if cambio.estado != 'COMPLETADO' else 0,
+            )
         
         # Construir datos del ticket para impresión
         ticket_data = construir_ticket_data(ticket)
@@ -14384,9 +14731,7 @@ def aprobar_cambio_generar_ticket(request):
             'error': 'Datos JSON inválidos'
         })
     except Exception as e:
-        import traceback
-        print(f"Error al aprobar cambio y generar ticket: {e}")
-        print(traceback.format_exc())
+        logger.exception("Error al aprobar cambio y generar ticket")
         return JsonResponse({
             'success': False,
             'error': f'Error: {str(e)}'
@@ -14433,7 +14778,7 @@ def validar_codigo_vendedor(request):
             'error': 'Datos JSON inválidos'
         })
     except Exception as e:
-        print(f"Error al validar vendedor: {e}")
+        logger.exception("Error al validar vendedor para cambio/devolucion")
         return JsonResponse({
             'success': False,
             'error': f'Error: {str(e)}'
@@ -14490,9 +14835,7 @@ def obtener_codigo_autorizacion_actual(request):
         })
         
     except Exception as e:
-        print(f"Error al obtener código de autorización: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener codigo de autorizacion")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener código: {str(e)}'
@@ -14562,8 +14905,8 @@ def validar_codigo_autorizacion(request):
                     'supervisor_nombre': supervisor.get_full_name() if supervisor else None
                 }
             )
-        except Exception as e:
-            print(f"Error al registrar autorización: {e}")
+        except Exception:
+            logger.exception("Error al registrar intento de autorizacion")
         
         if not es_valido:
             return JsonResponse({
@@ -14590,9 +14933,7 @@ def validar_codigo_autorizacion(request):
             'error': 'Datos JSON inválidos'
         })
     except Exception as e:
-        print(f"Error al validar código de autorización: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al validar codigo de autorizacion")
         return JsonResponse({
             'success': False,
             'error': f'Error al validar código: {str(e)}'
@@ -14693,7 +15034,12 @@ def completar_cambio_devolucion(request):
                     detalle.producto_original.ProductoTalla.stock += detalle.cantidad_original
                     detalle.producto_original.ProductoTalla.save()
                     
-                    print(f"✓ Devuelto stock: {detalle.producto_original.ProductoTalla.sku} +{detalle.cantidad_original}")
+                    logger.debug(
+                        "Stock devuelto por cambio %s: sku=%s, cantidad=%s",
+                        cambio.numero_operacion,
+                        detalle.producto_original.ProductoTalla.sku,
+                        detalle.cantidad_original,
+                    )
                 else:
                     # Producto no apto: registrar solo para auditoría sin devolver stock
                     Movimientos_Producto.objects.create(
@@ -14708,7 +15054,11 @@ def completar_cambio_devolucion(request):
                         referencia_externa=cambio.numero_operacion,
                         ticket=cambio.ticket_original
                     )
-                    print(f"⚠ Producto no apto (no devuelve stock): {detalle.producto_original.ProductoTalla.sku}")
+                    logger.debug(
+                        "Producto no apto no devuelve stock en cambio %s: sku=%s",
+                        cambio.numero_operacion,
+                        detalle.producto_original.ProductoTalla.sku,
+                    )
                 
                 # 2. DESCONTAR stock del producto nuevo (EGRESO con FIFO)
                 if detalle.producto_nuevo:
@@ -14726,7 +15076,12 @@ def completar_cambio_devolucion(request):
                             observaciones=f'Cambio {cambio.numero_operacion} - Nuevo producto para ticket #{cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else "N/A"}',
                             referencia_externa=cambio.numero_operacion
                         )
-                        print(f"✓ Consumido stock FIFO: {detalle.producto_nuevo.sku} -{detalle.cantidad_nueva}")
+                        logger.debug(
+                            "Stock FIFO consumido por cambio %s: sku=%s, cantidad=%s",
+                            cambio.numero_operacion,
+                            detalle.producto_nuevo.sku,
+                            detalle.cantidad_nueva,
+                        )
                     except Exception as e:
                         raise ValidationError(f'Error al consumir stock FIFO: {str(e)}')
             
@@ -15188,7 +15543,7 @@ def buscar_documento_cambio(request):
                             month = int(fecha_str[2:4])
                             day = int(fecha_str[4:6])
                             fecha_extraida = f"{year}-{month:02d}-{day:02d}"
-                            print(f"  📅 Fecha extraída del código: {fecha_extraida}")
+                            logger.debug("Fecha extraida del codigo de cambio: %s", fecha_extraida)
                         except:
                             pass
                 elif len(partes) == 2:
@@ -15203,7 +15558,7 @@ def buscar_documento_cambio(request):
             # Si se extrajo fecha del código y no se proporcionó fecha_compra, usarla
             if fecha_extraida and not fecha_compra:
                 fecha_compra = fecha_extraida
-                print(f"  📅 Usando fecha extraída del código de cambio: {fecha_compra}")
+                logger.debug("Usando fecha extraida del codigo de cambio: %s", fecha_compra)
             
             # Buscar el ticket original
             ticket_query = Ticket.objects.select_related(
@@ -15255,7 +15610,12 @@ def buscar_documento_cambio(request):
                 ).order_by('-fecha_ejecucion', '-fecha_completado').first()
 
                 if cambio_siguiente and cambio_siguiente.ticket_nuevo:
-                    print(f"🔄 Ticket #{ticket_actual.correlativo} → Siguiente: #{cambio_siguiente.ticket_nuevo.correlativo} (estado: {cambio_siguiente.estado})")
+                    logger.debug(
+                        "Redirigiendo ticket de cambio %s al ticket siguiente %s: estado=%s",
+                        ticket_actual.correlativo,
+                        cambio_siguiente.ticket_nuevo.correlativo,
+                        cambio_siguiente.estado,
+                    )
                     ticket_actual = cambio_siguiente.ticket_nuevo
                 else:
                     break
@@ -15357,11 +15717,7 @@ def buscar_documento_cambio(request):
             return buscar_ticket_para_cambio_original(request, numero, fecha_compra, sucursal_id)
         
     except Exception as e:
-        import traceback
-        print(f"❌ ERROR en buscar_documento_cambio:")
-        print(f"   Mensaje: {str(e)}")
-        print(f"   Traceback completo:")
-        traceback.print_exc()
+        logger.exception("Error en buscar_documento_cambio")
         return JsonResponse({
             'success': False,
             'error': f'Error al buscar documento: {str(e)}'
@@ -16471,8 +16827,7 @@ def obtener_analisis_fraude_cambios(request):
             },
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener analisis de fraude")
         return JsonResponse({'success': False, 'error': f'Error al obtener análisis de fraude: {str(e)}'}, status=500)
 
 
@@ -16506,8 +16861,7 @@ def obtener_analisis_cambios_avanzado(request):
         analisis['success'] = True
         return JsonResponse(analisis)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener analisis avanzado de cambios")
         return JsonResponse({'success': False, 'error': f'Error: {str(e)}'}, status=500)
 
 
@@ -16577,8 +16931,7 @@ def listar_autorizaciones_cross_branch(request):
             'pendientes_revision': pendientes,
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al listar autorizaciones cross-branch")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
@@ -16654,8 +17007,7 @@ def obtener_cola_revision_gerencial(request):
 
         return JsonResponse({'success': True, 'items': items, 'total_pendientes': qs.count()})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al obtener cola de revision gerencial")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
@@ -16822,8 +17174,7 @@ def exportar_cambios_devoluciones(request):
             return response
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al exportar cambios/devoluciones")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 

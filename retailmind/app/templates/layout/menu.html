@@ -1,5 +1,68 @@
 {% load static %}
 {% load permisos_tags %}
+{# Permisos de menu con contexto de sucursal activa #}
+{% puede_ver_opcion_tag 'buscar_productos_sucursal' as permiso_buscar_productos_sucursal %}
+{% puede_ver_opcion_tag 'cambios_devoluciones' as permiso_cambios_devoluciones %}
+{% puede_ver_opcion_tag 'crear_requerimiento' as permiso_crear_requerimiento %}
+{% puede_ver_opcion_tag 'cuadratura_caja' as permiso_cuadratura_caja %}
+{% puede_ver_opcion_tag 'dashboard_compras_estrategico' as permiso_dashboard_compras_estrategico %}
+{% puede_ver_opcion_tag 'dashboard_despachos' as permiso_dashboard_despachos %}
+{% puede_ver_opcion_tag 'dashboard_documentos' as permiso_dashboard_documentos %}
+{% puede_ver_opcion_tag 'dashboard_fifo' as permiso_dashboard_fifo %}
+{% puede_ver_opcion_tag 'dashboard_general' as permiso_dashboard_general %}
+{% puede_ver_opcion_tag 'dashboard_productos' as permiso_dashboard_productos %}
+{% puede_ver_opcion_tag 'dashboard_requerimientos' as permiso_dashboard_requerimientos %}
+{% puede_ver_opcion_tag 'dashboard_ventas' as permiso_dashboard_ventas %}
+{% puede_ver_opcion_tag 'despacho_sucursales' as permiso_despacho_sucursales %}
+{% puede_ver_opcion_tag 'ecommerce_pedidos_todos' as permiso_ecommerce_pedidos_todos %}
+{% puede_ver_opcion_tag 'edicion_rapida_precios' as permiso_edicion_rapida_precios %}
+{% puede_ver_opcion_tag 'emision_dte' as permiso_emision_dte %}
+{% puede_ver_opcion_tag 'gestion_clientes' as permiso_gestion_clientes %}
+{% puede_ver_opcion_tag 'gestion_compras' as permiso_gestion_compras %}
+{% puede_ver_opcion_tag 'gestion_correlativos' as permiso_gestion_correlativos %}
+{% puede_ver_opcion_tag 'gestion_cotizaciones' as permiso_gestion_cotizaciones %}
+{% puede_ver_opcion_tag 'gestion_creditos' as permiso_gestion_creditos %}
+{% puede_ver_opcion_tag 'gestion_documentos_ventas' as permiso_gestion_documentos_ventas %}
+{% puede_ver_opcion_tag 'gestion_dte' as permiso_gestion_dte %}
+{% puede_ver_opcion_tag 'gestion_dte_compras' as permiso_gestion_dte_compras %}
+{% puede_ver_opcion_tag 'gestion_empresas' as permiso_gestion_empresas %}
+{% puede_ver_opcion_tag 'gestion_etiquetas_zebra' as permiso_gestion_etiquetas_zebra %}
+{% puede_ver_opcion_tag 'gestion_inventarios' as permiso_gestion_inventarios %}
+{% puede_ver_opcion_tag 'gestion_permisos' as permiso_gestion_permisos %}
+{% puede_ver_opcion_tag 'gestion_producto' as permiso_gestion_producto %}
+{% puede_ver_opcion_tag 'gestion_sucursales' as permiso_gestion_sucursales %}
+{% puede_ver_opcion_tag 'gestion_usuarios' as permiso_gestion_usuarios %}
+{% puede_ver_opcion_tag 'gestion_vendedores' as permiso_gestion_vendedores %}
+{% puede_ver_opcion_tag 'gestionar_requerimientos' as permiso_gestionar_requerimientos %}
+{% puede_ver_opcion_tag 'integraciones_ecommerce' as permiso_integraciones_ecommerce %}
+{% puede_ver_opcion_tag 'interfaz_acepta' as permiso_interfaz_acepta %}
+{% puede_ver_opcion_tag 'lista_requerimientos' as permiso_lista_requerimientos %}
+{% puede_ver_opcion_tag 'modificacion_precios_costos' as permiso_modificacion_precios_costos %}
+{% puede_ver_opcion_tag 'movimientos_producto' as permiso_movimientos_producto %}
+{% puede_ver_opcion_tag 'pos_dashboard' as permiso_pos_dashboard %}
+{% puede_ver_opcion_tag 'pos_transbank' as permiso_pos_transbank %}
+{% puede_ver_opcion_tag 'prediccion_compras' as permiso_prediccion_compras %}
+{% puede_ver_opcion_tag 'recepcion_dte' as permiso_recepcion_dte %}
+{% puede_ver_opcion_tag 'reporte_compras' as permiso_reporte_compras %}
+{% puede_ver_opcion_tag 'reporte_despachos_proveedor' as permiso_reporte_despachos_proveedor %}
+{% puede_ver_opcion_tag 'reporte_documentos_emitidos' as permiso_reporte_documentos_emitidos %}
+{% puede_ver_opcion_tag 'reporte_existencias' as permiso_reporte_existencias %}
+{% puede_ver_opcion_tag 'reporte_existencias_marca' as permiso_reporte_existencias_marca %}
+{% puede_ver_opcion_tag 'reporte_existencias_sucursal' as permiso_reporte_existencias_sucursal %}
+{% puede_ver_opcion_tag 'reporte_movimientos_sucursal' as permiso_reporte_movimientos_sucursal %}
+{% puede_ver_opcion_tag 'reporte_productos_vendidos' as permiso_reporte_productos_vendidos %}
+{% puede_ver_opcion_tag 'reporte_rendimiento_proveedor' as permiso_reporte_rendimiento_proveedor %}
+{% puede_ver_opcion_tag 'reporte_ventas_comparativo' as permiso_reporte_ventas_comparativo %}
+{% puede_ver_opcion_tag 'reporte_ventas_internet' as permiso_reporte_ventas_internet %}
+{% puede_ver_opcion_tag 'reporte_ventas_sucursal' as permiso_reporte_ventas_sucursal %}
+{% puede_ver_opcion_tag 'resumen_existencias' as permiso_resumen_existencias %}
+{% puede_ver_opcion_tag 'revisar_cambios_precios' as permiso_revisar_cambios_precios %}
+{% puede_ver_opcion_tag 'revision_arqueos' as permiso_revision_arqueos %}
+{% puede_ver_opcion_tag 'tarjeta_movimiento_producto' as permiso_tarjeta_movimiento_producto %}
+{% puede_ver_opcion_tag 'ticket_venta' as permiso_ticket_venta %}
+{% puede_ver_opcion_tag 'trazabilidad_producto' as permiso_trazabilidad_producto %}
+{% puede_ver_opcion_tag 'ver_guias_talla' as permiso_ver_guias_talla %}
+
 
 <body{% if pos_kiosk %} class="pos-kiosk{% if pos_kiosk_strict %} pos-kiosk-strict{% endif %}"{% endif %}{% if pos_kiosk_strict and request.GET.no_cursor %} data-cursor-hidden="1"{% endif %}>
 {% if pos_kiosk_strict %}
@@ -558,7 +621,7 @@
                         </style>
                         {% endif %}
 
-                        {% if user|puede_ver_opcion:'recepcion_dte' or user|puede_ver_opcion:'revisar_cambios_precios' %}
+                        {% if permiso_recepcion_dte or permiso_revisar_cambios_precios %}
                         <div class="dropdown topbar-head-dropdown ms-1 header-item" id="notificationDropdown">
                             <button type="button"
                                 class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle shadow-none"
@@ -590,7 +653,7 @@
                                     <div class="px-2 pt-2">
                                         <ul class="nav nav-tabs dropdown-tabs nav-tabs-custom" data-dropdown-tabs="true"
                                             id="notificationItemsTab" role="tablist">
-                                            {% if user|puede_ver_opcion:'recepcion_dte' %}
+                                            {% if permiso_recepcion_dte %}
                                             <li class="nav-item waves-effect waves-light">
                                                 <a class="nav-link" data-bs-toggle="tab" href="#dtes-noti-tab"
                                                     role="tab" aria-selected="false" onclick="cargarNotificacionesDTE()">
@@ -599,7 +662,7 @@
                                                 </a>
                                             </li>
                                             {% endif %}
-                                            {% if user|puede_ver_opcion:'recepcion_dte' %}
+                                            {% if permiso_recepcion_dte %}
                                             <li class="nav-item waves-effect waves-light">
                                                 <a class="nav-link" data-bs-toggle="tab" href="#regularizar-noti-tab"
                                                     role="tab" aria-selected="false" onclick="cargarNotificacionesRegularizar()">
@@ -608,7 +671,7 @@
                                                 </a>
                                             </li>
                                             {% endif %}
-                                            {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
+                                            {% if permiso_revisar_cambios_precios %}
                                             <li class="nav-item waves-effect waves-light">
                                                 <a class="nav-link active" data-bs-toggle="tab" href="#precios-noti-tab"
                                                     role="tab" aria-selected="true">
@@ -623,7 +686,7 @@
 
                                 <div class="tab-content position-relative" id="notificationItemsTabContent">
                                     <!-- Tab de DTEs Recibidos Pendientes -->
-                                    {% if user|puede_ver_opcion:'recepcion_dte' %}
+                                    {% if permiso_recepcion_dte %}
                                     <div class="tab-pane fade py-2 ps-2" id="dtes-noti-tab" role="tabpanel">
                                         <div data-simplebar style="max-height: 300px;" class="pe-2" id="dtes-container">
                                             <!-- Loader -->
@@ -664,7 +727,7 @@
                                     {% endif %}
 
                                     <!-- Tab de DTEs Pendientes de Regularizar (SOY EMISOR) -->
-                                    {% if user|puede_ver_opcion:'recepcion_dte' %}
+                                    {% if permiso_recepcion_dte %}
                                     <div class="tab-pane fade py-2 ps-2" id="regularizar-noti-tab" role="tabpanel">
                                         <div data-simplebar style="max-height: 300px;" class="pe-2" id="regularizar-container">
                                             <!-- Loader -->
@@ -691,7 +754,7 @@
                                         </div>
 
                                         <div class="my-3 text-center view-all">
-                                            <a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente"
+                                            <a href="{% url 'recepcion_dte' %}?vista=regularizar&tab=pendiente"
                                                 class="btn btn-soft-success waves-effect waves-light">
                                                 <i class="ri-tools-line me-1"></i>
                                                 Ir a Recepción / Regularizar
@@ -702,7 +765,7 @@
                                     {% endif %}
 
                                     <!-- Tab de Notificaciones de Precios -->
-                                    {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
+                                    {% if permiso_revisar_cambios_precios %}
                                     <div class="tab-pane fade show active py-2 ps-2" id="precios-noti-tab" role="tabpanel">
                                         <!-- Contador de alertas sin leer (sin botones de eliminación — gestionar desde revisar-pendientes) -->
                                         <div id="notif-actions" class="d-flex align-items-center px-2 pb-2 border-bottom mb-2" style="display: none !important;">
@@ -824,15 +887,15 @@
                         }
 
                         document.addEventListener('DOMContentLoaded', function() {
-                            {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
+                            {% if permiso_revisar_cambios_precios %}
                             actualizarBadgeNotificaciones();
                             setInterval(actualizarBadgeNotificaciones, 60000);
                             {% endif %}
-                            {% if user|puede_ver_opcion:'recepcion_dte' %}
+                            {% if permiso_recepcion_dte %}
                             actualizarBadgeDTEs();
                             setInterval(actualizarBadgeDTEs, 60000);
                             {% endif %}
-                            {% if user|puede_ver_opcion:'recepcion_dte' %}
+                            {% if permiso_recepcion_dte %}
                             actualizarBadgeRegularizar();
                             actualizarBadgeCorrecciones();
                             setInterval(actualizarBadgeRegularizar, 60000);
@@ -887,7 +950,7 @@
                                 
                                 if (data.success && data.dtes && data.dtes.length > 0) {
                                     list.innerHTML = data.dtes.map(dte => `
-                                        <a href="/app/recepcion-dte/?dte_id=${dte.id}" class="text-reset notification-item d-block dropdown-item position-relative" id="dte-notif-${dte.id}">
+                                        <a href="{% url 'recepcion_dte' %}?dte_id=${dte.id}" class="text-reset notification-item d-block dropdown-item position-relative" id="dte-notif-${dte.id}">
                                             <div class="d-flex">
                                                 <div class="avatar-xs me-3 flex-shrink-0">
                                                     <span class="avatar-title ${dte.urgente ? 'bg-soft-danger text-danger' : 'bg-soft-warning text-warning'} rounded-circle fs-16">
@@ -1389,23 +1452,23 @@
 
                         // Inicializar badges al cargar la página y refrescar cada 90s
                         document.addEventListener('DOMContentLoaded', function() {
-                            {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
+                            {% if permiso_revisar_cambios_precios %}
                             actualizarBadgeNotificaciones();
                             {% endif %}
-                            {% if user|puede_ver_opcion:'recepcion_dte' %}
+                            {% if permiso_recepcion_dte %}
                             actualizarBadgeDTEs();
                             {% endif %}
-                            {% if user|puede_ver_opcion:'recepcion_dte' %}
+                            {% if permiso_recepcion_dte %}
                             actualizarBadgeRegularizar();
                             {% endif %}
                             setInterval(function() {
-                                {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
+                                {% if permiso_revisar_cambios_precios %}
                                 actualizarBadgeNotificaciones();
                                 {% endif %}
-                                {% if user|puede_ver_opcion:'recepcion_dte' %}
+                                {% if permiso_recepcion_dte %}
                                 actualizarBadgeDTEs();
                                 {% endif %}
-                                {% if user|puede_ver_opcion:'recepcion_dte' %}
+                                {% if permiso_recepcion_dte %}
                                 actualizarBadgeRegularizar();
                                 {% endif %}
                             }, 90000);
@@ -1916,7 +1979,7 @@
                     <ul class="navbar-nav" id="navbar-nav">
                         <!-- ========== MÓDULO DASHBOARD ========== -->
                         {% contar_opciones_disponibles user 'dashboard' as total_dashboard %}
-                        {% if total_dashboard == 1 and user|puede_ver_opcion:'dashboard_general' %}
+                        {% if total_dashboard == 1 and permiso_dashboard_general %}
                         <li class="nav-item">
                             <a href="{% url 'verHome' %}" class="nav-link menu-link">
                                 <i class="ri-dashboard-3-line"></i> <span>Dashboard</span>
@@ -1930,28 +1993,28 @@
                             </a>
                             <div class="menu-dropdown collapse" id="dashboards" style="">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'dashboard_general' %}
+                                    {% if permiso_dashboard_general %}
                                     <li class="nav-item">
                                         <a href="{% url 'verHome' %}" class="nav-link" data-key="t-dashboard-general">
                                             <i class="ri-dashboard-3-line"></i> Dashboard General
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_ventas' %}
+                                    {% if permiso_dashboard_ventas %}
                                     <li class="nav-item">
                                         <a href="{% url 'dashboard_ventas_mejorado' %}" class="nav-link" data-key="t-dashboard-ventas">
                                             <i class="ri-line-chart-line"></i> Dashboard Ventas
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_compras_estrategico' %}
+                                    {% if permiso_dashboard_compras_estrategico %}
                                     <li class="nav-item">
-                                        <a href="/app/verDashboardComprasMejorado/" class="nav-link" data-key="t-dashboard-compras">
+                                        <a href="{% url 'verDashboardComprasMejorado' %}" class="nav-link" data-key="t-dashboard-compras">
                                             <i class="ri-shopping-bag-line"></i> Dashboard Compras
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_productos' or user|puede_ver_opcion:'dashboard_fifo' %}
+                                    {% if permiso_dashboard_productos or permiso_dashboard_fifo %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#dashboardExistencias" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="dashboardExistencias">
@@ -1959,16 +2022,16 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="dashboardExistencias">
                                             <ul class="nav nav-sm flex-column">
-                                                {% if user|puede_ver_opcion:'dashboard_productos' %}
+                                                {% if permiso_dashboard_productos %}
                                                 <li class="nav-item">
-                                                    <a href="/app/dashboard_productos_mejorado/" class="nav-link">
+                                                    <a href="{% url 'dashboard_productos_mejorado' %}" class="nav-link">
                                                         <i class="bi bi-box-seam"></i> Productos
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'dashboard_fifo' %}
+                                                {% if permiso_dashboard_fifo %}
                                                 <li class="nav-item">
-                                                    <a href="/app/dashboard_fifo/" class="nav-link">
+                                                    <a href="{% url 'dashboard_fifo' %}" class="nav-link">
                                                         <i class="bi bi-arrow-repeat"></i> FIFO / Lotes
                                                     </a>
                                                 </li>
@@ -1977,23 +2040,23 @@
                                         </div>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_documentos' %}
+                                    {% if permiso_dashboard_documentos %}
                                     <li class="nav-item">
-                                        <a href="/app/dashboard-documentos/" class="nav-link" data-key="t-dashboard-documentos">
+                                        <a href="{% url 'dashboard_documentos' %}" class="nav-link" data-key="t-dashboard-documentos">
                                             <i class="ri-file-list-line"></i> Dashboard Documentos
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_despachos' %}
+                                    {% if permiso_dashboard_despachos %}
                                     <li class="nav-item">
-                                        <a href="/app/dashboard-despachos/" class="nav-link" data-key="t-dashboard-despachos">
+                                        <a href="{% url 'dashboard_despachos' %}" class="nav-link" data-key="t-dashboard-despachos">
                                             <i class="ri-truck-line"></i> Dashboard Despachos
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'dashboard_requerimientos' %}
+                                    {% if permiso_dashboard_requerimientos %}
                                     <li class="nav-item">
-                                        <a href="/app/dashboard-requerimientos/" class="nav-link" data-key="t-dashboard-requerimientos">
+                                        <a href="{% url 'dashboard_requerimientos' %}" class="nav-link" data-key="t-dashboard-requerimientos">
                                             <i class="ri-customer-service-2-line"></i> Dashboard Requerimientos
                                         </a>
                                     </li>
@@ -2004,7 +2067,7 @@
                         {% endif %}
                         <!-- ========== MÓDULO VENTAS ========== -->
                         {% contar_opciones_disponibles user 'ventas' as total_ventas %}
-                        {% if total_ventas == 1 and user|puede_ver_opcion:'pos_dashboard' %}
+                        {% if total_ventas == 1 and permiso_pos_dashboard %}
                         <li class="nav-item">
                             <a href="{% url 'pos_dashboard' %}" class="nav-link menu-link">
                                 <i class="ri-dashboard-3-line"></i> <span>Generar Venta</span>
@@ -2018,49 +2081,49 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloVentas" style="">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'ticket_venta' %}
+                                    {% if permiso_ticket_venta %}
                                     <li class="nav-item">
                                         <a href="{% url 'ticket_venta' %}" class="nav-link" data-key="t-ticket-venta">
                                             <i class="mdi mdi-receipt"></i> Ticket de Venta
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'cambios_devoluciones' %}
+                                    {% if permiso_cambios_devoluciones %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_cambios_devoluciones' %}" class="nav-link" data-key="t-cambios-devoluciones">
                                             <i class="ri-exchange-line"></i> Cambios y Devoluciones
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'pos_dashboard' %}
+                                    {% if permiso_pos_dashboard %}
                                     <li class="nav-item">
                                         <a href="{% url 'pos_dashboard' %}" class="nav-link" data-key="t-generar-venta">
                                             <i class="ri-dashboard-3-line"></i> Generar Venta
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_documentos_ventas' %}
+                                    {% if permiso_gestion_documentos_ventas %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_ventas_documentos' %}" class="nav-link" data-key="t-consulta-documentos">
                                             <i class="ri-file-search-line"></i> Consulta Documentos
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'cuadratura_caja' %}
+                                    {% if permiso_cuadratura_caja %}
                                     <li class="nav-item">
                                         <a href="{% url 'cuadratura_caja' %}" class="nav-link" data-key="t-cuadratura-caja">
                                             <i class="ri-calculator-line"></i> Cuadratura y Arqueo
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'revision_arqueos' %}
+                                    {% if permiso_revision_arqueos %}
                                     <li class="nav-item">
                                         <a href="{% url 'revision_arqueos' %}" class="nav-link" data-key="t-revision-arqueos">
                                             <i class="ri-shield-check-line"></i> Revisión Arqueos y Depósitos
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'pos_transbank' %}
+                                    {% if permiso_pos_transbank %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_transbank_pos_sdk' %}" class="nav-link" data-key="t-transbank">
                                             <i class="ri-bank-card-line"></i> POS Transbank (SDK Oficial)
@@ -2086,7 +2149,7 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloEcommerce">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'ecommerce_pedidos_todos' %}
+                                    {% if permiso_ecommerce_pedidos_todos %}
                                     <li class="nav-item">
                                         <a href="{% url 'pedidos_ecommerce_list' %}" class="nav-link" data-key="t-pedidos-ecommerce">
                                             <i class="bi bi-cart-check"></i> Pedidos
@@ -2111,49 +2174,49 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloDocumentos" style="">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'emision_dte' %}
+                                    {% if permiso_emision_dte %}
                                     <li class="nav-item">
-                                        <a href="/app/emisionDTE/" class="nav-link" data-key="t-chartjs">
+                                        <a href="{% url 'emision_dte' %}" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-file-earmark-plus"></i> Emisión DTE
                                         </a>
                                     </li>
                                     <li class="nav-item">
-                                        <a href="/app/emisionDTEConcepto/" class="nav-link" data-key="t-emision-concepto">
+                                        <a href="{% url 'emision_dte_concepto' %}" class="nav-link" data-key="t-emision-concepto">
                                             <i class="bi bi-file-earmark-text"></i> Emisión por Concepto
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_dte' %}
+                                    {% if permiso_gestion_dte %}
                                     <li class="nav-item">
-                                        <a href="/app/documentos/gestion-dte/" class="nav-link" data-key="t-gestion-dte">
+                                        <a href="{% url 'gestion_dte' %}" class="nav-link" data-key="t-gestion-dte">
                                             <i class="bi bi-file-earmark-text"></i> Gestión DTE
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'recepcion_dte' %}
+                                    {% if permiso_recepcion_dte %}
                                     <li class="nav-item">
-                                        <a href="/app/recepcion-dte/" class="nav-link" data-key="t-recepcion-dte">
+                                        <a href="{% url 'recepcion_dte' %}" class="nav-link" data-key="t-recepcion-dte">
                                             <i class="bi bi-box-arrow-in-down"></i> Recepción Documentos
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_cotizaciones' %}
+                                    {% if permiso_gestion_cotizaciones %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_cotizaciones' %}" class="nav-link" data-key="t-cotizaciones">
                                             <i class="ri-file-text-line"></i> Gestión Cotizaciones
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_correlativos' %}
+                                    {% if permiso_gestion_correlativos %}
                                     <li class="nav-item">
-                                        <a href="/app/documentos/gestion-correlativos/" class="nav-link" data-key="t-gestion-correlativos">
+                                        <a href="{% url 'gestion_correlativos' %}" class="nav-link" data-key="t-gestion-correlativos">
                                             <i class="ri-file-list-3-line"></i> Gestión Correlativos
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_creditos' %}
+                                    {% if permiso_gestion_creditos %}
                                     <li class="nav-item">
-                                        <a href="/app/documentos/gestion-creditos/" class="nav-link" data-key="t-gestion-creditos">
+                                        <a href="{% url 'gestion_creditos_documentos' %}" class="nav-link" data-key="t-gestion-creditos">
                                             <i class="ri-bank-card-line"></i> Gestión Créditos
                                         </a>
                                     </li>
@@ -2166,21 +2229,21 @@
                         {% contar_opciones_disponibles user 'existencias' as total_existencias %}
                         {% if total_existencias == 1 %}
                         <!-- Solo 1 opción: link directo sin dropdown -->
-                        {% if user|puede_ver_opcion:'gestion_producto' %}
+                        {% if permiso_gestion_producto %}
                         <li class="nav-item">
-                            <a href="/app/verGestionProducto/" class="nav-link menu-link">
+                            <a href="{% url 'verGestionProducto' %}" class="nav-link menu-link">
                                 <i class="ri-archive-line"></i> <span>Gestión Producto</span>
                             </a>
                         </li>
-                        {% elif user|puede_ver_opcion:'buscar_productos_sucursal' %}
+                        {% elif permiso_buscar_productos_sucursal %}
                         <li class="nav-item">
                             <a href="{% url 'buscar_productos_sucursal' %}" class="nav-link menu-link">
                                 <i class="ri-search-line"></i> <span>Buscar Producto</span>
                             </a>
                         </li>
-                        {% elif user|puede_ver_opcion:'movimientos_producto' %}
+                        {% elif permiso_movimientos_producto %}
                         <li class="nav-item">
-                            <a href="/app/verMovimientosProducto/" class="nav-link menu-link">
+                            <a href="{% url 'verMovimientosProducto' %}" class="nav-link menu-link">
                                 <i class="ri-arrow-left-right-line"></i> <span>Movimientos Producto</span>
                             </a>
                         </li>
@@ -2193,88 +2256,90 @@
                             </a>
                             <div class="menu-dropdown collapse" id="sidebarCharts" style="">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'gestion_producto' %}
+                                    {% if permiso_gestion_producto %}
                                     <li class="nav-item">
-                                        <a href="/app/verGestionProducto/" class="nav-link" data-key="t-chartjs">
+                                        <a href="{% url 'verGestionProducto' %}" class="nav-link" data-key="t-chartjs">
                                             <i class="ri-archive-line"></i> Gestión Producto
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'edicion_rapida_precios' %}
+                                    {% if permiso_edicion_rapida_precios %}
                                     <li class="nav-item">
                                         <a href="{% url 'edicion_rapida_precios' %}" class="nav-link" data-key="t-edicion-rapida">
                                             <i class="ri-price-tag-3-line"></i> Gestión de Precios
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
+                                    {% if permiso_revisar_cambios_precios %}
                                     <li class="nav-item">
                                         <a href="{% url 'revisar_cambios_precios' %}" class="nav-link" data-key="t-revisar-precios">
                                             <i class="ri-notification-badge-line"></i> Alertas de Precios
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'movimientos_producto' %}
+                                    {% if permiso_movimientos_producto %}
                                     <li class="nav-item">
-                                        <a href="/app/verMovimientosProducto/" class="nav-link" data-key="t-echarts">
+                                        <a href="{% url 'verMovimientosProducto' %}" class="nav-link" data-key="t-echarts">
                                             <i class="ri-arrow-left-right-line"></i> Movimientos Por Sucursal
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_inventarios' %}
+                                    {% if permiso_gestion_inventarios %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_inventarios' %}" class="nav-link" data-key="t-gestion-inventarios">
                                             <i class="ri-clipboard-line"></i> Gestión de Inventarios
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_etiquetas_zebra' %}
+                                    {% if permiso_gestion_etiquetas_zebra %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_etiquetas_zebra' %}" class="nav-link" data-key="t-etiquetas-zebra">
                                             <i class="ri-printer-line"></i> Impresión Etiquetas Zebra
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'buscar_productos_sucursal' %}
+                                    {% if permiso_buscar_productos_sucursal %}
                                     <li class="nav-item">
                                         <a href="{% url 'buscar_productos_sucursal' %}" class="nav-link" data-key="t-buscar-productos">
                                             <i class="ri-search-line"></i> Buscar Producto Sucursal
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'tarjeta_movimiento_producto' %}
+                                    {% if permiso_tarjeta_movimiento_producto %}
                                     <li class="nav-item">
                                         <a href="{% url 'tarjeta_movimiento_producto' %}" class="nav-link" data-key="t-tarjeta-movimiento">
                                             <i class="ri-file-list-3-line"></i> Tarjeta Movimiento Producto
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'despacho_sucursales' %}
+                                    {% if permiso_despacho_sucursales %}
                                     <li class="nav-item">
                                         <a href="{% url 'despacho_todas_sucursales' %}" class="nav-link" data-key="t-despacho-sucursales">
                                             <i class="ri-truck-line"></i> Despacho a Sucursales
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'trazabilidad_producto' %}
+                                    {% if permiso_trazabilidad_producto %}
                                     <li class="nav-item">
                                         <a href="{% url 'trazabilidad_producto' %}" class="nav-link" data-key="t-trazabilidad-producto">
                                             <i class="ri-route-line"></i> Trazabilidad Completa
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'modificacion_precios_costos' %}
+                                    {% if permiso_modificacion_precios_costos %}
                                     <li class="nav-item">
                                         <a href="{% url 'modificacion_precios_costos' %}" class="nav-link" data-key="t-mod-precios-costos">
                                             <i class="ri-money-dollar-circle-line"></i> Modificación Precios y Costos
                                         </a>
                                     </li>
                                     {% endif %}
+                                    {% if permiso_ver_guias_talla or permiso_gestion_producto %}
                                     <li class="nav-item">
                                         <a href="{% url 'ver_guias_talla' %}" class="nav-link" data-key="t-guias-talla">
                                             <i class="ri-ruler-line"></i> Guías de Talla
                                         </a>
                                     </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
@@ -2289,23 +2354,23 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloCompras">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'gestion_compras' %}
+                                    {% if permiso_gestion_compras %}
                                     <li class="nav-item">
-                                        <a href="/app/verGestionCompras/" class="nav-link" data-key="t-chartjs">
+                                        <a href="{% url 'verGestionCompras' %}" class="nav-link" data-key="t-chartjs">
                                             <i class="ri-shopping-cart-2-line"></i> Gestión Compras
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_dte_compras' %}
+                                    {% if permiso_gestion_dte_compras %}
                                     <li class="nav-item">
-                                        <a href="/app/verGestionDteCompras/" class="nav-link" data-key="t-echarts">
+                                        <a href="{% url 'verGestionDteCompras' %}" class="nav-link" data-key="t-echarts">
                                             <i class="ri-file-list-2-line"></i> Gestión Documentos Compras
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'prediccion_compras' %}
+                                    {% if permiso_prediccion_compras %}
                                     <li class="nav-item">
-                                        <a href="/app/prediccion/" class="nav-link" data-key="t-prediccion-compras">
+                                        <a href="{% url 'dashboard_prediccion' %}" class="nav-link" data-key="t-prediccion-compras">
                                             <i class="ri-line-chart-line"></i> Predicción de Compras
                                         </a>
                                     </li>
@@ -2317,13 +2382,13 @@
                         <!-- ========== MÓDULO REQUERIMIENTOS ========== -->
                         {% contar_opciones_disponibles user 'requerimientos' as total_requerimientos %}
                         {% if total_requerimientos == 1 %}
-                        {% if user|puede_ver_opcion:'lista_requerimientos' %}
+                        {% if permiso_lista_requerimientos %}
                         <li class="nav-item">
                             <a href="{% url 'modulo_requerimientos' %}" class="nav-link menu-link">
                                 <i class="ri-list-check"></i> <span>Requerimientos</span>
                             </a>
                         </li>
-                        {% elif user|puede_ver_opcion:'crear_requerimiento' %}
+                        {% elif permiso_crear_requerimiento %}
                         <li class="nav-item">
                             <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link menu-link">
                                 <i class="ri-add-circle-line"></i> <span>Crear Requerimiento</span>
@@ -2338,21 +2403,21 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloRequerimientos">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'lista_requerimientos' %}
+                                    {% if permiso_lista_requerimientos %}
                                     <li class="nav-item">
                                         <a href="{% url 'modulo_requerimientos' %}" class="nav-link" data-key="t-lista-requerimientos">
                                             <i class="ri-list-check"></i> Requerimientos
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'crear_requerimiento' %}
+                                    {% if permiso_crear_requerimiento %}
                                     <li class="nav-item">
                                         <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link" data-key="t-crear-requerimiento">
                                             <i class="ri-add-circle-line"></i> Crear Requerimiento
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestionar_requerimientos' %}
+                                    {% if permiso_gestionar_requerimientos %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestionar_requerimientos_vista' %}" class="nav-link" data-key="t-gestionar-requerimientos">
                                             <i class="ri-settings-3-line"></i> Gestionar Requerimientos
@@ -2374,7 +2439,7 @@
                             <div class="menu-dropdown collapse" id="moduloReportes">
                                 <ul class="nav nav-sm flex-column">
                                     <!-- Sección: Reportes Compras -->
-                                    {% if user|puede_ver_opcion:'reporte_despachos_proveedor' or user|puede_ver_opcion:'reporte_compras' or user|puede_ver_opcion:'reporte_rendimiento_proveedor' %}
+                                    {% if permiso_reporte_despachos_proveedor or permiso_reporte_compras or permiso_reporte_rendimiento_proveedor %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesCompras" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesCompras">
@@ -2382,23 +2447,23 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="reportesCompras">
                                             <ul class="nav nav-sm flex-column">
-                                                {% if user|puede_ver_opcion:'reporte_despachos_proveedor' %}
+                                                {% if permiso_reporte_despachos_proveedor %}
                                                 <li class="nav-item">
-                                                    <a href="/app/verReporteDespachosProveedor/" class="nav-link" data-key="t-chartjs">
+                                                    <a href="{% url 'verReporteDespachosProveedor' %}" class="nav-link" data-key="t-chartjs">
                                                         <i class="bi bi-truck"></i> Despachos por Proveedor
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'reporte_compras' %}
+                                                {% if permiso_reporte_compras %}
                                                 <li class="nav-item">
-                                                    <a href="/app/reportes/compras/" class="nav-link" data-key="t-reporte-compras">
+                                                    <a href="{% url 'ver_reporte_compras' %}" class="nav-link" data-key="t-reporte-compras">
                                                         <i class="bi bi-bag"></i> Reporte de Compras
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'reporte_rendimiento_proveedor' %}
+                                                {% if permiso_reporte_rendimiento_proveedor %}
                                                 <li class="nav-item">
-                                                    <a href="/app/reportes/rendimiento-proveedor/" class="nav-link" data-key="t-rendimiento-proveedor">
+                                                    <a href="{% url 'ver_reporte_rendimiento_proveedor' %}" class="nav-link" data-key="t-rendimiento-proveedor">
                                                         <i class="bi bi-people"></i> Rendimiento por Proveedor
                                                     </a>
                                                 </li>
@@ -2408,7 +2473,7 @@
                                     </li>
                                     {% endif %}
                                     <!-- Sección: Reportes Ventas -->
-                                    {% if user|puede_ver_opcion:'reporte_ventas_sucursal' or user|puede_ver_opcion:'reporte_ventas_comparativo' or user|puede_ver_opcion:'reporte_productos_vendidos' or user|puede_ver_opcion:'reporte_documentos_emitidos' %}
+                                    {% if permiso_reporte_ventas_sucursal or permiso_reporte_ventas_comparativo or permiso_reporte_productos_vendidos or permiso_reporte_ventas_internet or permiso_reporte_documentos_emitidos %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesVentas" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesVentas">
@@ -2416,35 +2481,37 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="reportesVentas">
                                             <ul class="nav nav-sm flex-column">
-                                                {% if user|puede_ver_opcion:'reporte_ventas_sucursal' %}
+                                                {% if permiso_reporte_ventas_sucursal %}
                                                 <li class="nav-item">
-                                                    <a href="/app/reportes/ventas-sucursal/" class="nav-link" data-key="t-ventas-sucursal">
+                                                    <a href="{% url 'ver_reporte_ventas_sucursal' %}" class="nav-link" data-key="t-ventas-sucursal">
                                                         <i class="ri-store-2-line"></i> Ventas Sucursal
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'reporte_ventas_comparativo' %}
+                                                {% if permiso_reporte_ventas_comparativo %}
                                                 <li class="nav-item">
-                                                    <a href="/app/reportes/ventas-comparativo/" class="nav-link" data-key="t-ventas-comparativo">
+                                                    <a href="{% url 'ver_reporte_ventas_comparativo' %}" class="nav-link" data-key="t-ventas-comparativo">
                                                         <i class="ri-bar-chart-2-line"></i> Comparativo Ventas
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'reporte_productos_vendidos' %}
+                                                {% if permiso_reporte_productos_vendidos %}
                                                 <li class="nav-item">
-                                                    <a href="/app/reportes/productos-vendidos/" class="nav-link" data-key="t-productos-vendidos">
+                                                    <a href="{% url 'ver_reporte_productos_vendidos' %}" class="nav-link" data-key="t-productos-vendidos">
                                                         <i class="ri-shopping-bag-line"></i> Productos Vendidos
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if permiso_reporte_ventas_internet or permiso_reporte_productos_vendidos %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_ventas_internet' %}" class="nav-link" data-key="t-ventas-internet">
-                                                        <i class="ri-global-line"></i> Ventas Internet
+                                                        <i class="bi bi-globe2"></i> Ventas Internet
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'reporte_documentos_emitidos' %}
+                                                {% if permiso_reporte_documentos_emitidos %}
                                                 <li class="nav-item">
-                                                    <a href="/app/reportes/documentos-emitidos/" class="nav-link" data-key="t-documentos-emitidos">
+                                                    <a href="{% url 'ver_documentos_emitidos' %}" class="nav-link" data-key="t-documentos-emitidos">
                                                         <i class="ri-file-list-3-line"></i> Documentos Emitidos
                                                     </a>
                                                 </li>
@@ -2454,7 +2521,7 @@
                                     </li>
                                     {% endif %}
                                     <!-- Sección: Reportes Existencias -->
-                                    {% if user|puede_ver_opcion:'reporte_existencias' or user|puede_ver_opcion:'reporte_existencias_marca' or user|puede_ver_opcion:'reporte_existencias_sucursal' %}
+                                    {% if permiso_reporte_existencias or permiso_reporte_existencias_marca or permiso_reporte_existencias_sucursal %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesExistencias" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesExistencias">
@@ -2462,35 +2529,35 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="reportesExistencias">
                                             <ul class="nav nav-sm flex-column">
-                                                {% if user|puede_ver_opcion:'reporte_existencias' %}
+                                                {% if permiso_reporte_existencias %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias' %}" class="nav-link" data-key="t-reporte-existencias">
                                                         <i class="ri-file-list-3-line"></i> Reporte de Existencias
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'reporte_existencias_marca' %}
+                                                {% if permiso_reporte_existencias_marca %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias_marca' %}" class="nav-link" data-key="t-reporte-existencias-marca">
                                                         <i class="ri-price-tag-3-line"></i> Existencias por Marca
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'reporte_existencias_sucursal' %}
+                                                {% if permiso_reporte_existencias_sucursal %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias_sucursal' %}" class="nav-link" data-key="t-reporte-existencias-sucursal">
                                                         <i class="ri-store-2-line"></i> Existencias por Sucursal
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'resumen_existencias' %}
+                                                {% if permiso_resumen_existencias %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_resumen_existencias' %}" class="nav-link" data-key="t-resumen-existencias">
                                                         <i class="ri-pie-chart-line"></i> Resumen Existencias
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if user|puede_ver_opcion:'reporte_movimientos_sucursal' %}
+                                                {% if permiso_reporte_movimientos_sucursal %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_movimientos_sucursal' %}" class="nav-link" data-key="t-movimientos-sucursal">
                                                         <i class="ri-exchange-line"></i> Inicial vs Restante
@@ -2516,58 +2583,58 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloConfiguracion">
                                 <ul class="nav nav-sm flex-column">
-                                    {% if user|puede_ver_opcion:'gestion_usuarios' %}
+                                    {% if permiso_gestion_usuarios %}
                                     <li class="nav-item">
-                                        <a href="/app/gestion_usuarios/" class="nav-link" data-key="t-chartjs">
+                                        <a href="{% url 'gestion_usuarios' %}" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-people-fill"></i> Gestion Usuarios
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_sucursales' %}
+                                    {% if permiso_gestion_sucursales %}
                                     <li class="nav-item">
-                                        <a href="/app/gestion-sucursales/" class="nav-link" data-key="t-gestion-sucursales">
+                                        <a href="{% url 'gestion_sucursales' %}" class="nav-link" data-key="t-gestion-sucursales">
                                             <i class="bi bi-building"></i> Gestión Sucursales
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_empresas' %}
+                                    {% if permiso_gestion_empresas %}
                                     <li class="nav-item">
-                                        <a href="/empresa_management/lista_empresas/" class="nav-link" data-key="t-chartjs">
+                                        <a href="{% url 'empresa_management:lista_empresas' %}" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-building-fill"></i> Gestion Empresas
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_clientes' %}
+                                    {% if permiso_gestion_clientes %}
                                     <li class="nav-item">
-                                        <a href="/empresa_management/lista_clientes/" class="nav-link" data-key="t-chartjs">
+                                        <a href="{% url 'empresa_management:lista_clientes' %}" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-person-badge-fill"></i> Gestion Clientes
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_vendedores' %}
+                                    {% if permiso_gestion_vendedores %}
                                     <li class="nav-item">
-                                        <a href="/app/gestion_vendedores/" class="nav-link" data-key="t-chartjs">
+                                        <a href="{% url 'gestion_vendedores' %}" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-people"></i> Gestion Vendedores
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'gestion_permisos' %}
+                                    {% if permiso_gestion_permisos %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_permisos' %}" class="nav-link" data-key="t-gestion-permisos">
                                             <i class="bi bi-shield-lock"></i> Gestion Permisos
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'interfaz_acepta' %}
+                                    {% if permiso_interfaz_acepta %}
                                     <li class="nav-item">
-                                        <a href="/app/configuracion/interfaz-prueba-acepta/" class="nav-link" data-key="t-interfaz-acepta">
+                                        <a href="{% url 'interfaz_prueba_acepta' %}" class="nav-link" data-key="t-interfaz-acepta">
                                             <i class="ri-file-text-line"></i> Interfaz Prueba Acepta
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if user|puede_ver_opcion:'integraciones_ecommerce' %}
+                                    {% if permiso_integraciones_ecommerce %}
                                     <li class="nav-item">
-                                        <a href="/app/configuracion/integraciones-ecommerce/" class="nav-link" data-key="t-integraciones-ecommerce">
+                                        <a href="{% url 'integraciones_ecommerce' %}" class="nav-link" data-key="t-integraciones-ecommerce">
                                             <i class="ri-image-line"></i> Integraciones Ecommerce
                                         </a>
                                     </li>

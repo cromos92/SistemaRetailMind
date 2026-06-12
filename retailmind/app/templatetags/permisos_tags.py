@@ -10,7 +10,7 @@ from app.utils_permisos import puede_cambiar_sucursal as _puede_cambiar_sucursal
 register = template.Library()
 
 
-def _opciones_ids_usuario(user, modulo=None, padre=None):
+def _opciones_ids_usuario(user, modulo=None, padre=None, sucursal_id=None):
     """
     Helper: retorna IDs de OpcionMenu que un usuario puede ver,
     considerando PermisoUsuario overrides + PermisoRol.
@@ -24,6 +24,13 @@ def _opciones_ids_usuario(user, modulo=None, padre=None):
         filtro_opcion &= Q(padre__isnull=True)
 
     todas_opciones = OpcionMenu.objects.filter(filtro_opcion)
+
+    if sucursal_id:
+        return {
+            opcion.id
+            for opcion in todas_opciones
+            if PermisoRol.tiene_permiso(user, opcion.codigo, 'puede_ver', sucursal_id=sucursal_id)
+        }
 
     # IDs con puede_ver=True por rol
     ids_por_rol = set(PermisoRol.objects.filter(
@@ -181,7 +188,8 @@ def mostrar_modulo(context, modulo_codigo):
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
         
         if user and user.is_authenticated:
-            opciones_ids = _opciones_ids_usuario(user, modulo=modulo, padre=None)
+            sucursal_id = request.session.get('idSucursalActual') if request else None
+            opciones_ids = _opciones_ids_usuario(user, modulo=modulo, padre=None, sucursal_id=sucursal_id)
             opciones = modulo.opciones.filter(
                 id__in=opciones_ids,
                 activo=True,
@@ -222,8 +230,9 @@ def obtener_modulos_usuario(context):
     if not user or not user.is_authenticated:
         return []
     
-    # Obtener módulos con al menos una opción visible (rol + usuario overrides)
-    opciones_ids = _opciones_ids_usuario(user)
+    # Obtener módulos con al menos una opción visible (rol + usuario overrides + sucursal)
+    sucursal_id = request.session.get('idSucursalActual') if request else None
+    opciones_ids = _opciones_ids_usuario(user, sucursal_id=sucursal_id)
     modulos_ids = OpcionMenu.objects.filter(
         id__in=opciones_ids,
         modulo__activo=True
@@ -252,7 +261,8 @@ def obtener_opciones_modulo(context, modulo_codigo):
     try:
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
         
-        opciones_ids = _opciones_ids_usuario(user, modulo=modulo)
+        sucursal_id = request.session.get('idSucursalActual') if request else None
+        opciones_ids = _opciones_ids_usuario(user, modulo=modulo, sucursal_id=sucursal_id)
         return OpcionMenu.objects.filter(
             id__in=opciones_ids,
             activo=True
@@ -344,7 +354,8 @@ def obtener_subopciones(context, opcion_codigo):
     try:
         opcion_padre = OpcionMenu.objects.get(codigo=opcion_codigo, activo=True)
         
-        subopciones_ids = _opciones_ids_usuario(user, padre=opcion_padre)
+        sucursal_id = request.session.get('idSucursalActual') if request else None
+        subopciones_ids = _opciones_ids_usuario(user, padre=opcion_padre, sucursal_id=sucursal_id)
         return OpcionMenu.objects.filter(
             id__in=subopciones_ids,
             activo=True
@@ -353,8 +364,8 @@ def obtener_subopciones(context, opcion_codigo):
         return []
 
 
-@register.simple_tag
-def contar_opciones_disponibles(user, modulo_codigo):
+@register.simple_tag(takes_context=True)
+def contar_opciones_disponibles(context, user, modulo_codigo):
     """
     Cuenta cuántas opciones tiene disponibles un usuario en un módulo
     Útil para saber si mostrar o no un módulo completo
@@ -370,8 +381,8 @@ def contar_opciones_disponibles(user, modulo_codigo):
     
     try:
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
-        
-        return len(_opciones_ids_usuario(user, modulo=modulo))
+        request = context.get('request')
+        sucursal_id = request.session.get('idSucursalActual') if request else None
+        return len(_opciones_ids_usuario(user, modulo=modulo, sucursal_id=sucursal_id))
     except ModuloSistema.DoesNotExist:
         return 0
-

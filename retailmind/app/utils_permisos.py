@@ -272,5 +272,7 @@ def obtener_contexto_sucursales(usuario, request):
     return {
         'sucursal_activa_id': sucursal_activa_id,
         'sucursal_activa_nombre': sucursal_activa_nombre,
+        'empresa_activa_id': request.session.get('idEmpresaActual'),
+        'empresa_activa_nombre': request.session.get('nombreEmpresaActual', ''),
         'puede_ver_todas_sucursales': puede_ver_todas,
     }

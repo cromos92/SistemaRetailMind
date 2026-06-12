@@ -20,6 +20,7 @@ from django.core.files.storage import default_storage
 from django.template.loader import render_to_string
 import json
 import re
+import logging
 from decimal import Decimal
 from datetime import datetime, timedelta
 
@@ -29,6 +30,8 @@ from .models import (
     TipoFotoRequerimiento, MAX_FOTOS_POR_TIPO,
     Ticket, Dte, Dte_Productos
 )
+
+logger = logging.getLogger('app')
 
 
 # ========== SISTEMA DE PERMISOS ==========
@@ -801,7 +804,7 @@ def enviar_a_proveedor(request, requerimiento_id):
                     try:
                         email.attach_file(foto.imagen.path)
                     except Exception as e:
-                        print(f"Error al adjuntar foto: {e}")
+                        logger.warning("Error al adjuntar foto de requerimiento %s: %s", requerimiento.id, e)
             
             # Enviar
             email.send(fail_silently=False)

@@ -13,6 +13,7 @@ from django.conf import settings
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 import json
+import logging
 from io import BytesIO
 
 # ReportLab para generación de PDF
@@ -28,6 +29,8 @@ from .models import (
     Historial_Cotizacion, Empresa, Sucursal, Producto_Talla, Vendedor,
     Movimientos_Producto,
 )
+
+logger = logging.getLogger('app')
 
 
 # ==================== VISTAS PRINCIPALES ====================
@@ -233,7 +236,7 @@ def listar_cotizaciones(request):
         })
         
     except Exception as e:
-        print(f"Error en listar_cotizaciones: {str(e)}")
+        logger.exception("Error en listar_cotizaciones")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -259,7 +262,7 @@ def detalle_cotizacion(request, cotizacion_id):
         
         # Serializar items
         items_data = []
-        print(f"📋 Cargando detalle de cotización {cotizacion.numero_cotizacion}")
+        logger.debug("Cargando detalle de cotizacion %s", cotizacion.numero_cotizacion)
         
         for item in cotizacion.items.all().order_by('numero_linea'):
             # Obtener TODOS los SKUs asociados del nuevo modelo
@@ -285,7 +288,12 @@ def detalle_cotizacion(request, cotizacion_id):
                         'cantidad': sku_rel.cantidad  # Cantidad de este SKU específico
                     })
             
-            print(f"  📦 Item {item.numero_linea}: {len(skus_asociados)} SKUs encontrados")
+            logger.debug(
+                "Detalle cotizacion %s item=%s skus=%s",
+                cotizacion.numero_cotizacion,
+                item.numero_linea,
+                len(skus_asociados),
+            )
             
             # Para compatibilidad, producto_data será el primer SKU (si existe)
             producto_data = skus_asociados[0] if skus_asociados else None
@@ -313,7 +321,12 @@ def detalle_cotizacion(request, cotizacion_id):
                 skus_asociados = [producto_data]
             
             if producto_data:
-                print(f"    ✅ SKUs: {[s['sku'] for s in skus_asociados]}")
+                logger.debug(
+                    "Detalle cotizacion %s item=%s sku_list=%s",
+                    cotizacion.numero_cotizacion,
+                    item.numero_linea,
+                    [s['sku'] for s in skus_asociados],
+                )
 
             items_data.append({
                 'id': item.id,
@@ -370,7 +383,7 @@ def detalle_cotizacion(request, cotizacion_id):
         })
         
     except Exception as e:
-        print(f"Error en detalle_cotizacion: {str(e)}")
+        logger.exception("Error en detalle_cotizacion")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -433,12 +446,18 @@ def crear_cotizacion(request):
         
         # Crear items
         items_data = data.get('items', [])
-        print(f"📦 Creando {len(items_data)} items para cotización {numero_cotizacion}")
+        logger.debug("Creando items para cotizacion %s: total_items=%s", numero_cotizacion, len(items_data))
         
         for idx, item_data in enumerate(items_data, start=1):
             # Obtener SKUs asociados si existen
             skus = item_data.get('skus', [])
-            print(f"  📋 Item {idx}: {item_data.get('descripcion', '')[:30]}... - {len(skus)} SKUs")
+            logger.debug(
+                "Creando item de cotizacion %s: item=%s descripcion=%s skus=%s",
+                numero_cotizacion,
+                idx,
+                item_data.get('descripcion', '')[:30],
+                len(skus),
+            )
             
             # Determinar si tiene productos asociados
             tiene_skus = skus and len(skus) > 0
@@ -473,7 +492,12 @@ def crear_cotizacion(request):
                             costo_unitario=Decimal(str(sku_data.get('costo', 0))),
                             precio_unitario=Decimal(str(item_data['precio_unitario'])),
                         )
-                        print(f"    ✅ SKU guardado: {sku_data.get('sku')} x{sku_data.get('cantidad')}")
+                        logger.debug(
+                            "SKU guardado en cotizacion %s: sku=%s cantidad=%s",
+                            numero_cotizacion,
+                            sku_data.get('sku'),
+                            sku_data.get('cantidad'),
+                        )
         
         # Recalcular totales
         cotizacion.calcular_totales()
@@ -495,7 +519,7 @@ def crear_cotizacion(request):
         })
         
     except Exception as e:
-        print(f"Error en crear_cotizacion: {str(e)}")
+        logger.exception("Error en crear_cotizacion")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -527,7 +551,7 @@ def editar_cotizacion(request, cotizacion_id):
                 'error': 'Solo se pueden editar cotizaciones vigentes'
             })
 
-        print(f"📝 Editando cotización {cotizacion.numero_cotizacion}")
+        logger.debug("Editando cotizacion %s", cotizacion.numero_cotizacion)
 
         # Actualizar datos generales
         cotizacion.descripcion = data.get('descripcion', cotizacion.descripcion)
@@ -543,7 +567,7 @@ def editar_cotizacion(request, cotizacion_id):
         # Actualizar items si se envían
         items_data = data.get('items', [])
         if items_data:
-            print(f"📦 Actualizando {len(items_data)} items")
+            logger.debug("Actualizando items de cotizacion %s: total_items=%s", cotizacion.numero_cotizacion, len(items_data))
             
             # Eliminar items anteriores (esto también elimina los SKUs por cascade)
             cotizacion.items.all().delete()
@@ -552,7 +576,13 @@ def editar_cotizacion(request, cotizacion_id):
             for idx, item_data in enumerate(items_data, start=1):
                 # Obtener SKUs asociados si existen
                 skus = item_data.get('skus', [])
-                print(f"  📋 Item {idx}: {item_data.get('descripcion', '')[:30]}... - {len(skus)} SKUs")
+                logger.debug(
+                    "Actualizando item de cotizacion %s: item=%s descripcion=%s skus=%s",
+                    cotizacion.numero_cotizacion,
+                    idx,
+                    item_data.get('descripcion', '')[:30],
+                    len(skus),
+                )
 
                 # Determinar si tiene productos asociados
                 tiene_skus = skus and len(skus) > 0
@@ -561,7 +591,7 @@ def editar_cotizacion(request, cotizacion_id):
                 if not tiene_skus:
                     # Es un producto pendiente (sin SKU asociado)
                     nombre_producto_pendiente = item_data.get('descripcion', '')[:255]
-                    print(f"    ⚠️ Producto manual/pendiente")
+                    logger.debug("Item manual o pendiente en cotizacion %s item=%s", cotizacion.numero_cotizacion, idx)
 
                 # Crear el detalle del item
                 detalle = Cotizacion_Empresa_Detalle.objects.create(
@@ -588,7 +618,12 @@ def editar_cotizacion(request, cotizacion_id):
                                 costo_unitario=Decimal(str(sku_data.get('costo', 0))),
                                 precio_unitario=Decimal(str(item_data['precio_unitario'])),
                             )
-                            print(f"    ✅ SKU guardado: {sku_data.get('sku')} x{sku_data.get('cantidad')}")
+                            logger.debug(
+                                "SKU guardado al editar cotizacion %s: sku=%s cantidad=%s",
+                                cotizacion.numero_cotizacion,
+                                sku_data.get('sku'),
+                                sku_data.get('cantidad'),
+                            )
 
             # Recalcular totales
             cotizacion.calcular_totales()
@@ -602,7 +637,7 @@ def editar_cotizacion(request, cotizacion_id):
             ip_address=get_client_ip(request)
         )
 
-        print(f"✅ Cotización {cotizacion.numero_cotizacion} actualizada exitosamente")
+        logger.info("Cotizacion actualizada exitosamente: numero=%s", cotizacion.numero_cotizacion)
 
         return JsonResponse({
             'success': True,
@@ -610,9 +645,7 @@ def editar_cotizacion(request, cotizacion_id):
         })
 
     except Exception as e:
-        print(f"❌ Error en editar_cotizacion: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en editar_cotizacion")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -667,7 +700,7 @@ def anular_cotizacion(request):
         })
         
     except Exception as e:
-        print(f"Error en anular_cotizacion: {str(e)}")
+        logger.exception("Error en anular_cotizacion")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -753,7 +786,7 @@ def convertir_cotizacion_factura(request):
         })
 
     except Exception as e:
-        print(f"Error en convertir_cotizacion_factura: {str(e)}")
+        logger.exception("Error en convertir_cotizacion_factura")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -787,7 +820,7 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
                 'error': 'Solo se pueden facturar cotizaciones vigentes'
             })
         
-        print(f"🔄 Cargando cotización {cotizacion.numero_cotizacion} como ticket para POS")
+        logger.debug("Cargando cotizacion como ticket POS: numero=%s", cotizacion.numero_cotizacion)
         
         # Obtener datos del cliente (Empresa)
         cliente = cotizacion.cliente
@@ -961,7 +994,13 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
                 f"'{item['descripcion']}' (x{item['cantidad']}) — pendiente de SKU/despacho diferido"
             )
 
-        print(f"✅ Cotización cargada: {len(productos)} productos con SKU, {len(items_pendientes)} pendientes, total ${totales['total']:,.0f}")
+        logger.info(
+            "Cotizacion cargada como ticket POS: numero=%s productos=%s pendientes=%s total=%s",
+            cotizacion.numero_cotizacion,
+            len(productos),
+            len(items_pendientes),
+            totales['total'],
+        )
         
         return JsonResponse({
             'success': True,
@@ -974,9 +1013,7 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
         })
         
     except Exception as e:
-        print(f"❌ Error en cargar_cotizacion_como_ticket: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en cargar_cotizacion_como_ticket")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -1140,8 +1177,7 @@ def asignar_sku_pendiente(request):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al asignar SKU a detalle de cotizacion")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
@@ -1159,7 +1195,12 @@ def buscar_productos_cotizacion(request):
         filtro_stock = request.GET.get('stock', 'todos')  # 'todos', 'con_stock', 'sin_stock'
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
 
-        print(f"🔍 Búsqueda de productos - Query: '{query}', Stock: {filtro_stock}, Sucursal: {sucursal_id}")
+        logger.debug(
+            "Busqueda productos cotizacion: query=%s filtro_stock=%s sucursal_id=%s",
+            query,
+            filtro_stock,
+            sucursal_id,
+        )
 
         if not query or len(query) < 2:
             return JsonResponse({
@@ -1224,7 +1265,13 @@ def buscar_productos_cotizacion(request):
         offset = (pagina - 1) * por_pagina
         productos_paginados = productos_con_stock[offset:offset + por_pagina]
 
-        print(f"✅ Productos encontrados: {total_productos} | Página {pagina}/{total_paginas} | Sucursal: {sucursal_id}")
+        logger.debug(
+            "Productos cotizacion encontrados: total=%s pagina=%s total_paginas=%s sucursal_id=%s",
+            total_productos,
+            pagina,
+            total_paginas,
+            sucursal_id,
+        )
         
         # Serializar
         productos_data = []
@@ -1295,7 +1342,15 @@ def buscar_productos_cotizacion(request):
             }
             
             productos_data.append(producto_info)
-            print(f"📦 {producto_info['nombre']} | SKU:{producto_info['sku']} | Stock:{stock} | Costo:${costo} | PV:${precio_venta} | Margen:{margen_porcentaje}%")
+            logger.debug(
+                "Producto cotizacion listado: nombre=%s sku=%s stock=%s costo=%s precio_venta=%s margen=%s",
+                producto_info['nombre'],
+                producto_info['sku'],
+                stock,
+                costo,
+                precio_venta,
+                margen_porcentaje,
+            )
         
         return JsonResponse({
             'success': True,
@@ -1311,9 +1366,7 @@ def buscar_productos_cotizacion(request):
         })
         
     except Exception as e:
-        print(f"❌ Error en buscar_productos_cotizacion: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en buscar_productos_cotizacion")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -1401,7 +1454,7 @@ def actualizar_email_cliente(request):
         })
         
     except Exception as e:
-        print(f"Error en actualizar_email_cliente: {str(e)}")
+        logger.exception("Error en actualizar_email_cliente")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -1467,7 +1520,7 @@ def crear_cliente_cotizacion(request):
         })
         
     except Exception as e:
-        print(f"Error en crear_cliente_cotizacion: {str(e)}")
+        logger.exception("Error en crear_cliente_cotizacion")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -1735,9 +1788,7 @@ def cotizacion_pdf(request, cotizacion_id):
         return response
         
     except Exception as e:
-        print(f"Error generando PDF: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error generando PDF de cotizacion")
         return HttpResponse(f"Error generando PDF: {str(e)}", status=500)
 
 
@@ -1993,7 +2044,7 @@ Los precios incluyen IVA.
                 ip_address=get_client_ip(request)
             )
             
-            print(f"✅ Cotización {cotizacion.numero_cotizacion} enviada a {email_destino}")
+            logger.info("Cotizacion enviada por correo: numero=%s destino=%s", cotizacion.numero_cotizacion, email_destino)
             
             return JsonResponse({
                 'success': True,
@@ -2001,20 +2052,15 @@ Los precios incluyen IVA.
             })
             
         except Exception as mail_error:
-            print(f"❌ Error enviando correo: {str(mail_error)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error enviando correo de cotizacion numero=%s", cotizacion.numero_cotizacion)
             return JsonResponse({
                 'success': False,
                 'error': f'Error al enviar el correo: {str(mail_error)}'
             }, status=500)
         
     except Exception as e:
-        print(f"❌ Error en enviar_cotizacion_correo: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error en enviar_cotizacion_correo")
         return JsonResponse({
             'success': False,
             'error': str(e)
         }, status=500)
-

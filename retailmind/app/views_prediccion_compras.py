@@ -17,7 +17,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .models import (
     Producto, Producto_Talla, Empresa, EmpresaUser, Sucursal,
 )
-from .models.compras import Compras_Producto_Talla
+from .models.compras import Compras_Producto, Compras_Producto_Talla
 from .models.predicciones import (
     ConfiguracionPrediccion,
     ClasificacionABC,
@@ -100,6 +100,10 @@ def api_prediccion_resumen(request):
     sugerencias = SugerenciaCompra.objects.filter(
         q_prod_sug, aprobada=False,
         articulo_talle__producto__excluir_de_analitica=False,
+    ).select_related(
+        'articulo_talle__producto',
+        'articulo_talle__producto__categoria',
+        'articulo_talle__producto__atributo1',
     )
 
     vel_criticas = alertas_vel.filter(urgencia='CRITICA').count()
@@ -110,6 +114,56 @@ def api_prediccion_resumen(request):
     total_a_pedir = sugerencias.aggregate(
         total=Sum('unidades_a_pedir'))['total'] or 0
     total_sugerencias = sugerencias.count()
+
+    plan_proveedores = {}
+    plan_origenes = {}
+    productos_plan = set()
+    talles_plan = set()
+    costo_estimado = Decimal('0')
+    sugerencias_urgentes = 0
+    for sugerencia in sugerencias:
+        unidades = sugerencia.unidades_a_pedir or 0
+        if unidades <= 0:
+            continue
+        pt = sugerencia.articulo_talle
+        producto = pt.producto
+        productos_plan.add(producto.id)
+        talles_plan.add(pt.id)
+        costo_unitario = Decimal(str(producto.costo or 0))
+        costo_estimado += costo_unitario * unidades
+        plan_origenes[sugerencia.origen] = plan_origenes.get(sugerencia.origen, 0) + unidades
+        if sugerencia.origen in {'alerta_velocidad', 'alerta_quiebre'}:
+            sugerencias_urgentes += 1
+
+        proveedor = Compras_Producto.objects.filter(
+            nombre=producto.articulo,
+        ).select_related('compras__empresa').order_by('-fecha').first()
+        empresa = proveedor.compras.empresa if proveedor else None
+        proveedor_id = empresa.id if empresa else None
+        proveedor_nombre = empresa.nombre if empresa else 'Sin proveedor asignado'
+        bucket = plan_proveedores.setdefault(proveedor_id or 'sin-proveedor', {
+            'proveedor_id': proveedor_id,
+            'proveedor': proveedor_nombre,
+            'unidades': 0,
+            'costo_estimado': Decimal('0'),
+            'items': 0,
+        })
+        bucket['unidades'] += unidades
+        bucket['costo_estimado'] += costo_unitario * unidades
+        bucket['items'] += 1
+
+    plan_proveedores_data = sorted(
+        [
+            {
+                **item,
+                'costo_estimado': float(item['costo_estimado']),
+                'participacion': round(item['unidades'] / total_a_pedir * 100, 1) if total_a_pedir else 0,
+            }
+            for item in plan_proveedores.values()
+        ],
+        key=lambda item: item['unidades'],
+        reverse=True,
+    )
 
     q_abc_suc = _q_sucursal_productos(suc, es_cd, prefix='articulo__')
     abc_dist = ClasificacionABC.objects.filter(
@@ -156,6 +210,12 @@ def api_prediccion_resumen(request):
         'sugerencias': {
             'total': total_sugerencias,
             'unidades_a_pedir': total_a_pedir,
+            'productos': len(productos_plan),
+            'talles': len(talles_plan),
+            'costo_estimado': float(costo_estimado),
+            'urgentes': sugerencias_urgentes,
+            'por_origen': plan_origenes,
+            'proveedores': plan_proveedores_data[:8],
         },
         'clasificacion_abc': {d['clasificacion_abc']: d['count'] for d in abc_dist},
         'clasificacion_xyz': {d['clasificacion_xyz']: d['count'] for d in xyz_dist},

@@ -1,207 +1,161 @@
-# MAPA DE MENÚ - SISTEMA RETAILMIND (NEXO)
+# Mapa de menu - Sistema RetailMind NEXO
 
-> Documento para rutear y revisar cada vista del sistema en orden.
-> Permiso requerido entre paréntesis. Ruta URL al final de cada línea.
+Fecha de actualizacion: 2026-06-12
 
----
+Documento operativo para revisar rutas, permisos y vistas del menu principal. El menu usa permisos calculados con `puede_ver_opcion_tag`, sensible a la sucursal activa.
 
-## 1. DASHBOARD
+## Convenciones
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 1.1 | Dashboard General | `dashboard_general` | `/app/home/` | [ ] |
-| 1.2 | Dashboard Ventas | `dashboard_ventas` | `/app/ventas/dashboard-mejorado/` | [ ] |
-| 1.3 | Dashboard Compras | `dashboard_compras_estrategico` | `/app/verDashboardComprasMejorado/` | [ ] |
-| 1.4 | **Dashboard Existencias** (sub-menú) | | | |
-| 1.4.1 | --- Productos | `dashboard_productos` | `/app/dashboard_productos_mejorado/` | [ ] |
-| 1.4.2 | --- FIFO / Lotes | `dashboard_fifo` | `/app/dashboard_fifo/` | [ ] |
-| 1.5 | Dashboard Documentos | *(sin permiso)* | `/app/dashboard-documentos/` | [ ] |
-| 1.7 | Dashboard Requerimientos | *(sin permiso)* | `/app/dashboard-requerimientos/` | [ ] |
+- `Permiso`: codigo esperado en `OpcionMenu.codigo`.
+- `Ruta`: URL visible en `menu.html`. Cuando existe `{% url %}`, se deja el nombre de ruta entre llaves.
+- `Estado`: `OK` si existe en el menu actual; `Auditar` si conviene revisar ruta hardcodeada, duplicidad o nombre funcional.
+- Este archivo no crea permisos ni rutas. Para validar contra BD use `python manage.py auditar_menu_permisos`.
 
----
+## 1. Dashboard
 
-## 2. MÓDULO VENTAS
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 1.1 | Dashboard General | `dashboard_general` | `{% url 'verHome' %}` | OK |
+| 1.2 | Dashboard Ventas | `dashboard_ventas` | `{% url 'dashboard_ventas_mejorado' %}` | OK |
+| 1.3 | Dashboard Compras | `dashboard_compras_estrategico` | `{% url 'verDashboardComprasMejorado' %}` | OK |
+| 1.4 | Dashboard Existencias - Productos | `dashboard_productos` | `{% url 'dashboard_productos_mejorado' %}` | OK |
+| 1.5 | Dashboard Existencias - FIFO / Lotes | `dashboard_fifo` | `{% url 'dashboard_fifo' %}` | OK |
+| 1.6 | Dashboard Documentos | `dashboard_documentos` | `{% url 'dashboard_documentos' %}` | OK |
+| 1.7 | Dashboard Despachos | `dashboard_despachos` | `{% url 'dashboard_despachos' %}` | OK |
+| 1.8 | Dashboard Requerimientos | `dashboard_requerimientos` | `{% url 'dashboard_requerimientos' %}` | OK |
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 2.1 | Ticket de Venta | `ticket_venta` | `/app/ticket-venta/` | [ ] |
-| 2.2 | Cambios y Devoluciones | `cambios_devoluciones` | `/app/ventas/cambios-devoluciones/` | [ ] |
-| 2.3 | Generar Venta (POS Dashboard) | `pos_dashboard` | `/app/pos-dashboard/` | [ ] |
-| 2.4 | Consulta Documentos | `gestion_documentos_ventas` | `/app/ventas/documentos/` | [ ] |
-| 2.5 | Cuadratura y Arqueo | `cuadratura_caja` | `/app/ventas/cuadratura-caja/` | [ ] |
-| 2.6 | POS Transbank (SDK Oficial) | `pos_transbank` | `/app/pos/transbank/` | [ ] |
+## 2. Ventas
 
----
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 2.1 | Acceso POS Dashboard | `pos_dashboard` | `{% url 'pos_dashboard' %}` | OK |
+| 2.2 | Ticket de Venta | `ticket_venta` | `{% url 'ticket_venta' %}` | OK |
+| 2.3 | Cambios y Devoluciones | `cambios_devoluciones` | `{% url 'gestion_cambios_devoluciones' %}` | OK |
+| 2.4 | Generar Venta | `pos_dashboard` | `{% url 'pos_dashboard' %}` | OK |
+| 2.5 | Consulta Documentos | `gestion_documentos_ventas` | `{% url 'gestion_ventas_documentos' %}` | OK |
+| 2.6 | Cuadratura y Arqueo | `cuadratura_caja` | `{% url 'cuadratura_caja' %}` | OK |
+| 2.7 | Revision Arqueos y Depositos | `revision_arqueos` | `{% url 'revision_arqueos' %}` | OK |
+| 2.8 | POS Transbank | `pos_transbank` | `{% url 'gestion_transbank_pos_sdk' %}` | OK |
 
-## 3. MÓDULO DOCUMENTOS
+## 3. Ecommerce
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 3.1 | Emisión DTE | `emision_dte` | `/app/emisionDTE/` | [ ] |
-| 3.2 | Gestión DTE | `gestion_dte` | `/app/documentos/gestion-dte/` | [ ] |
-| 3.3 | Recepción Documentos | `recepcion_dte` | `/app/recepcion-dte/` | [ ] |
-| 3.4 | Regularizar Recepciones | `regularizar_recepciones` | `/app/regularizar-recepciones/` | [ ] |
-| 3.5 | Gestión Cotizaciones | `gestion_cotizaciones` | `/app/cotizaciones/` | [ ] |
-| 3.6 | Gestión Correlativos | `gestion_correlativos` | `/app/documentos/gestion-correlativos/` | [ ] |
-| 3.7 | Gestión Créditos | `gestion_creditos` | `/app/documentos/gestion-creditos/` | [ ] |
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 3.1 | Pedidos Ecommerce | `ecommerce_pedidos_todos` | `{% url 'pedidos_ecommerce_list' %}` | OK |
 
----
+## 4. Documentos
 
-## 4. MÓDULO EXISTENCIAS
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 4.1 | Emision DTE | `emision_dte` | `{% url 'emision_dte' %}` | OK |
+| 4.2 | Emision por Concepto | `emision_dte` | `{% url 'emision_dte_concepto' %}` | OK |
+| 4.3 | Gestion DTE | `gestion_dte` | `{% url 'gestion_dte' %}` | OK |
+| 4.4 | Recepcion Documentos | `recepcion_dte` | `{% url 'recepcion_dte' %}` | OK |
+| 4.5 | Gestion Cotizaciones | `gestion_cotizaciones` | `{% url 'gestion_cotizaciones' %}` | OK |
+| 4.6 | Gestion Correlativos | `gestion_correlativos` | `{% url 'gestion_correlativos' %}` | OK |
+| 4.7 | Gestion Creditos | `gestion_creditos` | `{% url 'gestion_creditos_documentos' %}` | OK |
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 4.1 | Gestión Producto | `gestion_producto` | `/app/verGestionProducto/` | [ ] |
-| 4.2 | Gestión de Precios | `edicion_rapida_precios` | `/app/gestion-precios/edicion-rapida/` | [ ] |
-| 4.3 | Alertas de Precios | `revisar_cambios_precios` | `/app/gestion-precios/revisar-pendientes/` | [ ] |
-| 4.4 | Movimientos Por Sucursal | `movimientos_producto` | `/app/verMovimientosProducto/` | [ ] |
-| 4.5 | Gestión de Inventarios | `gestion_inventarios` | `/app/gestion-inventarios/` | [ ] |
-| 4.6 | Impresión Etiquetas Zebra | `gestion_etiquetas_zebra` | `/app/etiquetas/` | [ ] |
+## 5. Existencias
 
----
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 5.1 | Acceso Gestion Producto | `gestion_producto` | `{% url 'verGestionProducto' %}` | OK |
+| 5.2 | Acceso Buscar Producto Sucursal | `buscar_productos_sucursal` | `{% url 'buscar_productos_sucursal' %}` | OK |
+| 5.3 | Acceso Movimientos Producto | `movimientos_producto` | `{% url 'verMovimientosProducto' %}` | OK |
+| 5.4 | Gestion Producto | `gestion_producto` | `{% url 'verGestionProducto' %}` | OK |
+| 5.5 | Gestion de Precios | `edicion_rapida_precios` | `{% url 'edicion_rapida_precios' %}` | OK |
+| 5.6 | Alertas de Precios | `revisar_cambios_precios` | `{% url 'revisar_cambios_precios' %}` | OK |
+| 5.7 | Movimientos Por Sucursal | `movimientos_producto` | `{% url 'verMovimientosProducto' %}` | OK |
+| 5.8 | Gestion de Inventarios | `gestion_inventarios` | `{% url 'gestion_inventarios' %}` | OK |
+| 5.9 | Impresion Etiquetas Zebra | `gestion_etiquetas_zebra` | `{% url 'gestion_etiquetas_zebra' %}` | OK |
+| 5.10 | Buscar Producto Sucursal | `buscar_productos_sucursal` | `{% url 'buscar_productos_sucursal' %}` | OK |
+| 5.11 | Tarjeta Movimiento Producto | `tarjeta_movimiento_producto` | `{% url 'tarjeta_movimiento_producto' %}` | OK |
+| 5.12 | Despacho a Sucursales | `despacho_sucursales` | `{% url 'despacho_todas_sucursales' %}` | OK |
+| 5.13 | Trazabilidad Completa | `trazabilidad_producto` | `{% url 'trazabilidad_producto' %}` | OK |
+| 5.14 | Modificacion Precios y Costos | `modificacion_precios_costos` | `{% url 'modificacion_precios_costos' %}` | OK |
+| 5.15 | Guias de Talla | `ver_guias_talla` | `{% url 'ver_guias_talla' %}` | OK |
 
-## 5. MÓDULO COMPRAS
+## 6. Compras
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 5.1 | Gestión Compras | `gestion_compras` | `/app/verGestionCompras/` | [ ] |
-| 5.2 | Gestión Documentos Compras | `gestion_dte_compras` | `/app/verGestionDteCompras/` | [ ] |
-| 5.3 | Predicción de Compras | `prediccion_compras` | `/app/prediccion/` | [ ] |
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 6.1 | Gestion Compras | `gestion_compras` | `{% url 'verGestionCompras' %}` | OK |
+| 6.2 | Gestion Documentos Compras | `gestion_dte_compras` | `{% url 'verGestionDteCompras' %}` | OK |
+| 6.3 | Prediccion de Compras | `prediccion_compras` | `{% url 'dashboard_prediccion' %}` | OK |
 
----
+## 7. Requerimientos
 
-## 6. MÓDULO REQUERIMIENTOS
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 7.1 | Acceso Requerimientos | `lista_requerimientos` | `{% url 'modulo_requerimientos' %}` | OK |
+| 7.2 | Acceso Crear Requerimiento | `crear_requerimiento` | `{% url 'crear_requerimiento_vista' %}` | OK |
+| 7.3 | Requerimientos | `lista_requerimientos` | `{% url 'modulo_requerimientos' %}` | OK |
+| 7.4 | Crear Requerimiento | `crear_requerimiento` | `{% url 'crear_requerimiento_vista' %}` | OK |
+| 7.5 | Gestionar Requerimientos | `gestionar_requerimientos` | `{% url 'gestionar_requerimientos_vista' %}` | OK |
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 6.1 | Requerimientos | `lista_requerimientos` | `/app/requerimientos/` | [ ] |
+## 8. Reportes
 
----
+### 8A. Compras
 
-## 7. MÓDULO REPORTES
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 8.1 | Despachos por Proveedor | `reporte_despachos_proveedor` | `{% url 'verReporteDespachosProveedor' %}` | OK |
+| 8.2 | Reporte de Compras | `reporte_compras` | `{% url 'ver_reporte_compras' %}` | OK |
+| 8.3 | Rendimiento por Proveedor | `reporte_rendimiento_proveedor` | `{% url 'ver_reporte_rendimiento_proveedor' %}` | OK |
 
-### 7A. Reportes Compras
+### 8B. Ventas
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 7.1 | Despachos por Proveedor | `reporte_despachos_proveedor` | `/app/verReporteDespachosProveedor/` | [ ] |
-| 7.2 | Reporte de Compras | `reporte_compras` | `/app/reportes/compras/` | [ ] |
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 8.4 | Ventas Sucursal | `reporte_ventas_sucursal` | `{% url 'ver_reporte_ventas_sucursal' %}` | OK |
+| 8.5 | Comparativo Ventas | `reporte_ventas_comparativo` | `{% url 'ver_reporte_ventas_comparativo' %}` | OK |
+| 8.6 | Productos Vendidos | `reporte_productos_vendidos` | `{% url 'ver_reporte_productos_vendidos' %}` | OK |
+| 8.7 | Ventas Internet | `reporte_ventas_internet` | `{% url 'ver_reporte_ventas_internet' %}` | OK |
+| 8.8 | Documentos Emitidos | `reporte_documentos_emitidos` | `{% url 'ver_documentos_emitidos' %}` | OK |
 
-### 7B. Reportes Ventas
+### 8C. Existencias
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 7.3 | Ventas Sucursal | `reporte_ventas_sucursal` | `/app/reportes/ventas-sucursal/` | [ ] |
-| 7.4 | Documentos Emitidos | `reporte_documentos_emitidos` | `/app/reportes/documentos-emitidos/` | [ ] |
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 8.9 | Reporte de Existencias | `reporte_existencias` | `{% url 'ver_reporte_existencias' %}` | OK |
+| 8.10 | Existencias por Marca | `reporte_existencias_marca` | `{% url 'ver_reporte_existencias_marca' %}` | OK |
+| 8.11 | Existencias por Sucursal | `reporte_existencias_sucursal` | `{% url 'ver_reporte_existencias_sucursal' %}` | OK |
+| 8.12 | Resumen Existencias | `resumen_existencias` | `{% url 'ver_resumen_existencias' %}` | OK |
+| 8.13 | Inicial vs Restante | `reporte_movimientos_sucursal` | `{% url 'ver_reporte_movimientos_sucursal' %}` | OK |
 
-### 7C. Reportes Existencias
+## 9. Configuracion
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 7.5 | Reporte de Existencias | `reporte_existencias` | `/app/reportes/existencias/` | [ ] |
-| 7.6 | Existencias por Marca | `reporte_existencias_marca` | `/app/reportes/existencias-marca/` | [ ] |
-| 7.7 | Existencias por Sucursal | `reporte_existencias_sucursal` | `/app/reportes/existencias-sucursal/` | [ ] |
-| 7.8 | Resumen Existencias | `resumen_existencias` | `/app/reportes/resumen-existencias/` | [ ] |
-| 7.9 | Inicial vs Restante | `reporte_movimientos_sucursal` | `/app/reportes/movimientos-sucursal/` | [ ] |
+| # | Opcion | Permiso | Ruta | Estado |
+|---|---|---|---|---|
+| 9.1 | Gestion Usuarios | `gestion_usuarios` | `{% url 'gestion_usuarios' %}` | OK |
+| 9.2 | Gestion Sucursales | `gestion_sucursales` | `{% url 'gestion_sucursales' %}` | OK |
+| 9.3 | Gestion Empresas | `gestion_empresas` | `{% url 'empresa_management:lista_empresas' %}` | OK |
+| 9.4 | Gestion Clientes | `gestion_clientes` | `{% url 'empresa_management:lista_clientes' %}` | OK |
+| 9.5 | Gestion Vendedores | `gestion_vendedores` | `{% url 'gestion_vendedores' %}` | OK |
+| 9.6 | Gestion Permisos | `gestion_permisos` | `{% url 'gestion_permisos' %}` | OK |
+| 9.7 | Interfaz Prueba Acepta | `interfaz_acepta` | `{% url 'interfaz_prueba_acepta' %}` | OK |
+| 9.8 | Integraciones Ecommerce | `integraciones_ecommerce` | `{% url 'integraciones_ecommerce' %}` | OK |
 
----
+## Resumen
 
-## 8. CONFIGURACIÓN
+| Modulo | Entradas |
+|---|---:|
+| Dashboard | 8 |
+| Ventas | 8 |
+| Ecommerce | 1 |
+| Documentos | 7 |
+| Existencias | 15 |
+| Compras | 3 |
+| Requerimientos | 5 |
+| Reportes | 13 |
+| Configuracion | 8 |
+| Total bruto del menu | 68 |
 
-| # | Opción del Menú | Permiso | URL | Revisado |
-|---|-----------------|---------|-----|----------|
-| 8.1 | Gestión Usuarios | `gestion_usuarios` | `/app/gestion_usuarios/` | [ ] |
-| 8.2 | Gestión Sucursales | `gestion_sucursales` | `/app/gestion-sucursales/` | [ ] |
-| 8.3 | Gestión Empresas | `gestion_empresas` | `/empresa_management/lista_empresas/` | [ ] |
-| 8.4 | Gestión Clientes | `gestion_clientes` | `/empresa_management/lista_clientes/` | [ ] |
-| 8.5 | Gestión Vendedores | `gestion_vendedores` | `/app/gestion_vendedores/` | [ ] |
-| 8.6 | Gestión Permisos | `gestion_permisos` | `/app/permisos/gestion/` | [ ] |
-| 8.7 | Interfaz Prueba Acepta | `interfaz_acepta` | `/app/configuracion/interfaz-prueba-acepta/` | [ ] |
+El total bruto incluye accesos directos duplicados que apuntan a la misma pantalla, por ejemplo `pos_dashboard`, `gestion_producto`, `buscar_productos_sucursal`, `movimientos_producto`, `lista_requerimientos` y `crear_requerimiento`.
 
----
+## Pendientes tecnicos de este mapa
 
-## RESUMEN TOTAL
-
-| Módulo | Opciones de menú |
-|--------|-----------------|
-| 1. Dashboard | 9 |
-| 2. Ventas | 6 |
-| 3. Documentos | 7 |
-| 4. Existencias | 6 |
-| 5. Compras | 3 |
-| 6. Requerimientos | 1 |
-| 7. Reportes | 9 |
-| 8. Configuración | 7 |
-| **TOTAL** | **48 vistas** |
-
----
-
-## ORDEN SUGERIDO PARA RUTEAR
-
-```
-FASE 1 - CONFIGURACIÓN BASE (para que todo lo demás funcione)
-  8.3  Gestión Empresas
-  8.2  Gestión Sucursales
-  8.1  Gestión Usuarios
-  8.6  Gestión Permisos
-  8.5  Gestión Vendedores
-  8.4  Gestión Clientes
-
-FASE 2 - EXISTENCIAS (catálogo de productos)
-  4.1  Gestión Producto
-  4.4  Movimientos Por Sucursal
-  4.2  Gestión de Precios
-  4.3  Alertas de Precios
-  4.5  Gestión de Inventarios
-  4.6  Impresión Etiquetas Zebra
-
-FASE 3 - COMPRAS (ingreso de mercadería)
-  5.1  Gestión Compras
-  5.2  Gestión Documentos Compras
-  5.3  Predicción de Compras
-
-FASE 4 - DOCUMENTOS (emisión y recepción)
-  3.6  Gestión Correlativos
-  3.1  Emisión DTE
-  3.2  Gestión DTE
-  3.3  Recepción Documentos
-  3.4  Regularizar Recepciones
-  3.5  Gestión Cotizaciones
-  3.7  Gestión Créditos
-
-FASE 5 - VENTAS (operación diaria)
-  2.1  Ticket de Venta
-  2.3  Generar Venta (POS)
-  2.6  POS Transbank
-  2.4  Consulta Documentos
-  2.2  Cambios y Devoluciones
-  2.5  Cuadratura y Arqueo
-
-FASE 6 - REPORTES (análisis)
-  7.1  Despachos por Proveedor
-  7.2  Reporte de Compras
-  7.3  Ventas Sucursal
-  7.4  Documentos Emitidos
-  7.5  Reporte de Existencias
-  7.6  Existencias por Marca
-  7.7  Existencias por Sucursal
-  7.8  Resumen Existencias
-  7.9  Inicial vs Restante
-
-FASE 7 - REQUERIMIENTOS
-  6.1  Requerimientos
-
-FASE 8 - DASHBOARDS (visualización)
-  1.1  Dashboard General
-  1.2  Dashboard Ventas
-  1.3  Dashboard Compras
-  1.4  Dashboard Existencias (Productos + FIFO)
-  1.5  Dashboard Documentos
-  1.6  Dashboard Caja
-  1.7  Dashboard Requerimientos
-  1.8  Dashboard CRM
-  1.9  Dashboard Integral
-
-FASE 9 - EXTRA
-  8.7  Interfaz Prueba Acepta
-```
+- Normalizar rutas hardcodeadas a `{% url %}` por fases, priorizando pantallas criticas: DTE, compras, productos, reportes y configuracion.
+- Mantener `inicializar_permisos` y `auditar_menu_permisos` sincronizados con este mapa.
+- Revisar si accesos directos y entradas de submenu duplicadas deben compartir permiso o separarse por intencion.
+- Ejecutar `python manage.py auditar_menu_permisos --strict` en un entorno con Django instalado y base local disponible.

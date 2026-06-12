@@ -704,16 +704,12 @@
                                     </select>
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-6">
-                                    <label class="form-label">Concepto</label>
-                                    <input type="text" class="form-control" id="filtroConcepto" placeholder="Buscar...">
-                                </div>
-                                <div class="col-lg-2 col-md-4 col-6">
                                     <label class="form-label">Artículo</label>
                                     <input type="text" class="form-control" id="filtroArticulo" placeholder="Buscar...">
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-6">
-                                    <label class="form-label">Responsable</label>
-                                    <input type="text" class="form-control" id="filtroResponsable" placeholder="Buscar...">
+                                    <label class="form-label">SKU / Código de barra</label>
+                                    <input type="text" class="form-control" id="filtroSkuCodigo" placeholder="Escanear o buscar...">
                                 </div>
                             </div>
                         </div>
@@ -1021,9 +1017,8 @@ function cargarMovimientos(page = 1) {
     const fecha_inicio = $('#filtroFechaInicio').val();
     const fecha_fin = $('#filtroFechaFin').val();
     const tipo = $('#filtroTipo').val();
-    const concepto = $('#filtroConcepto').val();
     const articulo = $('#filtroArticulo').val();
-    const responsable = $('#filtroResponsable').val();
+    const sku_codigo = $('#filtroSkuCodigo').val();
     
     // Mostrar loading
     $('#tbodyMovimientos').html(`
@@ -1046,9 +1041,8 @@ function cargarMovimientos(page = 1) {
             fecha_inicio: fecha_inicio,
             fecha_fin: fecha_fin,
             tipo: tipo,
-            concepto: concepto,
             articulo: articulo,
-            responsable: responsable
+            sku_codigo: sku_codigo
         },
         success: function (response) {
             if (!response.success) {
@@ -1522,6 +1516,12 @@ $(document).ready(function() {
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaFinKardexAgrupado'), options);
     
     // ✅ OPTIMIZACIÓN: Cargar datos iniciales (ahora con fechas por defecto)
+    const urlParamsMovimientos = new URLSearchParams(window.location.search);
+    const skuCodigoInicial = urlParamsMovimientos.get('sku_codigo') || urlParamsMovimientos.get('sku') || urlParamsMovimientos.get('codigo_barra');
+    if (skuCodigoInicial) {
+        $('#filtroSkuCodigo').val(skuCodigoInicial);
+    }
+
     cargarMovimientos();
     cargarProductosKardex();
     cargarProductosKardexAgrupado();
@@ -1547,7 +1547,7 @@ $(document).ready(function() {
         });
     });
     
-    $('#filtroConcepto, #filtroArticulo, #filtroResponsable').on('input', function() {
+    $('#filtroArticulo, #filtroSkuCodigo').on('input', function() {
         clearTimeout(window.timeoutFiltros);
         window.timeoutFiltros = setTimeout(() => {
             currentPageMovimientos = 1;

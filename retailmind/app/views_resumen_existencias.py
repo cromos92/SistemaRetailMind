@@ -14,8 +14,11 @@ from django.db.models import Sum, Q, F, Value, IntegerField
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 import json
+import logging
 
 from .models import Sucursal, Producto, Producto_Talla, Movimientos_Producto, Categoria, EmpresaUser
+
+logger = logging.getLogger('app')
 
 
 @login_required
@@ -482,10 +485,13 @@ def obtener_resumen_existencias(request):
             })
 
         fecha_info = f"al {fecha_corte.strftime('%d/%m/%Y')}" if es_historico else "actual"
-        print(f"📊 Resumen generado para {len(resumen_sucursales)} sucursales ({fecha_info})")
-        print(f"📈 Total general de pares: {total_general['pares']}")
-        if excluir_ids:
-            print(f"🚫 Artículos excluidos por filtro de sesión: {len(excluir_ids)}")
+        logger.info(
+            "Resumen existencias generado: sucursales=%s, fecha=%s, total_pares=%s, excluidos=%s",
+            len(resumen_sucursales),
+            fecha_info,
+            total_general['pares'],
+            len(excluir_ids),
+        )
 
         return JsonResponse({
             'success': True,
@@ -499,9 +505,7 @@ def obtener_resumen_existencias(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"❌ Error en resumen de existencias: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en resumen de existencias")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener resumen: {str(e)}'
@@ -645,9 +649,7 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
         })
 
     except Exception as e:
-        import traceback
-        print(f"❌ Error en resumen por categoría: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en resumen de existencias por categoria")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener resumen por categoría: {str(e)}'
@@ -900,9 +902,7 @@ def exportar_resumen_existencias_excel(request):
         return response
         
     except Exception as e:
-        import traceback
-        print(f"❌ Error al exportar a Excel: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error al exportar resumen de existencias a Excel")
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar: {str(e)}'
@@ -1293,9 +1293,7 @@ def exportar_resumen_existencias_pdf(request):
         return response
 
     except Exception as e:
-        import traceback
-        print(f"❌ Error al exportar a PDF: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error al exportar resumen de existencias a PDF")
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar PDF: {str(e)}',
@@ -1435,9 +1433,7 @@ def listar_articulos_para_excluir(request):
             'limite': 50,
         })
     except Exception as e:
-        import traceback
-        print(f"❌ Error en listar_articulos_para_excluir: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en listar_articulos_para_excluir")
         return JsonResponse({
             'success': False,
             'error': str(e),

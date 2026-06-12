@@ -27,6 +27,7 @@ class Command(BaseCommand):
         # Crear permisos por defecto para cada rol
         # Nota: is_superuser de Django tiene acceso total autom?ticamente
         self.crear_permisos_administrador()
+        self.crear_permisos_administracion()
         self.crear_permisos_jefe_local()
         self.crear_permisos_cajero()
         self.crear_permisos_vendedor()
@@ -179,6 +180,7 @@ class Command(BaseCommand):
             ('despacho_sucursales', 'Despacho a Sucursales', 'despacho_todas_sucursales', None, 'ri-truck-line', 9),
             ('trazabilidad_producto', 'Trazabilidad Completa', 'trazabilidad_producto', None, 'ri-route-line', 10),
             ('modificacion_precios_costos', 'Modificaci?n Precios y Costos', 'modificacion_precios_costos', None, 'ri-money-dollar-circle-line', 11),
+            ('ver_guias_talla', 'Guias de Talla', 'ver_guias_talla', None, 'ri-ruler-line', 12),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -279,11 +281,12 @@ class Command(BaseCommand):
             ('reporte_ventas_sucursal', 'Ventas por Sucursal', None, '/app/reportes/ventas-sucursal/', 'ri-store-2-line', 1),
             ('reporte_ventas_comparativo', 'Comparativo de Ventas', None, '/app/reportes/ventas-comparativo/', 'ri-bar-chart-2-line', 2),
             ('reporte_productos_vendidos', 'Productos Vendidos', None, '/app/reportes/productos-vendidos/', 'ri-shopping-bag-line', 3),
-            ('reporte_documentos_emitidos', 'Documentos Emitidos', None, '/app/reportes/documentos-emitidos/', 'ri-file-list-3-line', 4),
+            ('reporte_ventas_internet', 'Ventas Internet', 'ver_reporte_ventas_internet', None, 'ri-global-line', 4),
+            ('reporte_documentos_emitidos', 'Documentos Emitidos', None, '/app/reportes/documentos-emitidos/', 'ri-file-list-3-line', 5),
             # Permiso granular embebido dentro del reporte ventas-sucursal:
             # controla la visibilidad del botón "Comisiones" y los endpoints
             # `obtener_comisiones_por_vendedor` / `exportar_comisiones_vendedor_excel`.
-            ('reporte_comisiones_vendedor', 'Reporte Comisiones por Vendedor', None, None, 'ri-percent-line', 5),
+            ('reporte_comisiones_vendedor', 'Reporte Comisiones por Vendedor', None, None, 'ri-percent-line', 6),
             # Reportes Existencias
             ('reporte_existencias', 'Reporte de Existencias', 'ver_reporte_existencias', None, 'ri-file-list-3-line', 3),
             ('reporte_existencias_marca', 'Existencias por Marca', 'ver_reporte_existencias_marca', None, 'ri-price-tag-3-line', 4),
@@ -331,6 +334,7 @@ class Command(BaseCommand):
             ('gestion_vendedores', 'Gesti?n Vendedores', None, '/app/gestion_vendedores/', 'bi-people', 5),
             ('gestion_permisos', 'Gesti?n Permisos', 'gestion_permisos', None, 'bi-shield-lock', 6),
             ('interfaz_acepta', 'Interfaz Prueba Acepta', None, '/app/configuracion/interfaz-prueba-acepta/', 'ri-file-text-line', 7),
+            ('integraciones_ecommerce', 'Integraciones Ecommerce', 'integraciones_ecommerce', None, 'ri-image-line', 8),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -434,6 +438,27 @@ class Command(BaseCommand):
         
         self.stdout.write(f'   >> {opciones.count()} permisos creados para Administrador')
 
+    def crear_permisos_administracion(self):
+        """Crear permisos para el rol Administracion."""
+        self.stdout.write('[ADMINISTRACION] Creando permisos para Administracion...')
+
+        opciones = OpcionMenu.objects.all()
+        for opcion in opciones:
+            PermisoRol.objects.get_or_create(
+                rol='administracion',
+                opcion_menu=opcion,
+                defaults={
+                    'puede_ver': True,
+                    'puede_crear': True,
+                    'puede_editar': True,
+                    'puede_eliminar': False,
+                    'puede_exportar': True,
+                    'puede_aprobar': True,
+                }
+            )
+
+        self.stdout.write(f'   >> {opciones.count()} permisos creados para Administracion')
+
     def crear_permisos_jefe_local(self):
         """Crear permisos para el rol Jefe Local"""
         self.stdout.write('[JEFE] Creando permisos para Jefe Local...')
@@ -454,7 +479,7 @@ class Command(BaseCommand):
             'gestion_producto', 'edicion_rapida_precios', 'revisar_cambios_precios', 'movimientos_producto',
             'gestion_inventarios', 'gestion_etiquetas_zebra', 'buscar_productos_sucursal',
             'tarjeta_movimiento_producto', 'despacho_sucursales', 'trazabilidad_producto',
-            'modificacion_precios_costos',
+            'modificacion_precios_costos', 'ver_guias_talla',
             # Compras
             'gestion_compras', 'gestion_dte_compras', 'prediccion_compras',
             # Ecommerce
@@ -462,7 +487,7 @@ class Command(BaseCommand):
             # Requerimientos
             'lista_requerimientos', 'crear_requerimiento', 'gestionar_requerimientos',
             # Reportes
-            'reporte_ventas_sucursal', 'reporte_ventas_comparativo', 'reporte_productos_vendidos', 'reporte_documentos_emitidos', 'reporte_existencias',
+            'reporte_ventas_sucursal', 'reporte_ventas_comparativo', 'reporte_productos_vendidos', 'reporte_ventas_internet', 'reporte_documentos_emitidos', 'reporte_existencias',
             'reporte_existencias_marca', 'reporte_existencias_sucursal', 'reporte_despachos_proveedor',
             'resumen_existencias', 'reporte_movimientos_sucursal', 'reporte_compras',
             'reporte_rendimiento_proveedor',

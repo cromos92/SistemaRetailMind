@@ -12,11 +12,14 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 import json
 import csv
+import logging
 from datetime import datetime, timedelta
 
 from app.models import (
     Empresa, Sucursal, ContactoEmpresa, LogEmpresa,
 )
+
+logger = logging.getLogger('empresa_management')
 
 # Utilidad interna para sanitizar valores de campos CharField
 def _clean_char_field(value):
@@ -189,7 +192,12 @@ def buscar_empresa_ajax(request):
         
         if empresas:
             empresa = empresas[0]  # Tomar la primera coincidencia
-            print(f"🔍 Empresa encontrada: {empresa.id} - {empresa.rut} - {empresa.giro}")
+            logger.debug(
+                "Empresa encontrada en busqueda ajax: empresa_id=%s, rut=%s, giro=%s",
+                empresa.id,
+                empresa.rut,
+                empresa.giro,
+            )
             
             return JsonResponse({
                 'success': True,
@@ -261,19 +269,19 @@ def listar_sucursales(request, empresa_id):
 @require_http_methods(["POST"])
 def crear_sucursal(request, empresa_id):
     """Crear nueva sucursal para una empresa"""
-    print(f"🚀 INICIO crear_sucursal - empresa_id: {empresa_id}")
+    logger.debug("Inicio crear_sucursal: empresa_id=%s", empresa_id)
     try:
-        print(f"📋 Buscando empresa con ID: {empresa_id}")
         empresa = get_object_or_404(Empresa, id=empresa_id)
-        print(f"✅ Empresa encontrada: {empresa.nombre}")
-        
-        # Debug: imprimir información de la request
-        print(f"📡 Content-Type: {request.content_type}")
-        print(f"📡 Request body: {request.body}")
-        
-        print(f"🔄 Parseando JSON...")
+
+        logger.debug(
+            "Solicitud crear_sucursal: empresa_id=%s, content_type=%s, body_bytes=%s",
+            empresa_id,
+            request.content_type,
+            len(request.body or b''),
+        )
+
         data = json.loads(request.body)
-        print(f"✅ JSON parseado: {data}")
+        logger.debug("JSON crear_sucursal parseado: empresa_id=%s, campos=%s", empresa_id, sorted(data.keys()))
         
         # Validaciones
         alias = data.get('alias', '').strip()
@@ -331,15 +339,13 @@ def crear_sucursal(request, empresa_id):
         })
         
     except json.JSONDecodeError as e:
-        print(f"Error JSON: {str(e)}")
+        logger.warning("JSON invalido al crear sucursal empresa_id=%s: %s", empresa_id, e)
         return JsonResponse({
             'success': False,
             'error': f'Datos JSON inválidos: {str(e)}'
         })
     except Exception as e:
-        print(f"Error general: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error general al crear sucursal empresa_id=%s", empresa_id)
         return JsonResponse({
             'success': False,
             'error': f'Error al crear sucursal: {str(e)}'
@@ -965,8 +971,7 @@ def importar_empresas_con_sucursales(request):
         })
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error al importar empresas")
         return JsonResponse({
             'success': False,
             'error': f'Error al importar: {str(e)}'
@@ -1204,4 +1209,4 @@ def obtener_empresa(request, empresa_id):
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener empresa: {str(e)}'
-        }, status=500) 
+        }, status=500)

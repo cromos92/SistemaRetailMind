@@ -10,6 +10,7 @@ from django.db.models import Sum, Count, Q, Avg, F, Min, Max
 from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
+import logging
 
 from .models import (
     Ticket, Ticket_Productos, Dte, Dte_Productos, Producto, Producto_Talla,
@@ -19,6 +20,8 @@ from .models import (
     PermisoRol, OpcionMenu, ModuloSistema,
     ArqueoCaja, DepositoBancario, CambioPrecioPendiente,
 )
+
+logger = logging.getLogger('app')
 
 
 @login_required
@@ -88,8 +91,8 @@ def bienvenida(request):
                     'icono': modulo.icono or 'ri-apps-line',
                     'opciones': items,
                 })
-    except Exception as e:
-        print(f"Error obteniendo opciones: {e}")
+    except Exception:
+        logger.exception("Error obteniendo opciones de bienvenida usuario_id=%s", request.user.id)
 
     ACCESOS_DESTACADOS_POR_ROL = {
         'administrador': [
@@ -237,9 +240,7 @@ def dashboard_home(request):
         return render(request, 'vistas/dashboard_home.html', context)
         
     except Exception as e:
-        import traceback
-        print(f"Error en dashboard_home: {str(e)}")
-        traceback.print_exc()
+        logger.exception("Error en dashboard_home usuario_id=%s", request.user.id)
         
         # Retornar contexto mínimo en caso de error
         return render(request, 'vistas/dashboard_home.html', {
@@ -399,14 +400,17 @@ def calcular_kpis_stock(sucursal_id, empresa_id):
     total_vendido = ventas_mes_query.aggregate(total=Sum('stock'))['total'] or 0
     rotacion = round((total_vendido / total_stock) * 100, 1) if total_stock > 0 else 0
     
-    # Log para debug
-    print(f"📊 KPIs Stock - Sucursal: {sucursal_id}")
-    print(f"   Total SKUs: {total_skus:,}")
-    print(f"   Con Stock: {skus_con_stock:,}")
-    print(f"   Sin Stock: {sin_stock_count:,}")
-    print(f"   Crítico: {stock_critico_count:,}")
-    print(f"   Total Unidades: {total_stock:,}")
-    print(f"   Valor Inventario: ${valor_inventario_total:,.0f}")
+    logger.debug(
+        "KPIs stock dashboard: sucursal_id=%s total_skus=%s con_stock=%s sin_stock=%s "
+        "stock_critico=%s total_unidades=%s valor_inventario=%s",
+        sucursal_id,
+        total_skus,
+        skus_con_stock,
+        sin_stock_count,
+        stock_critico_count,
+        total_stock,
+        valor_inventario_total,
+    )
     
     return {
         'total_skus': total_skus,

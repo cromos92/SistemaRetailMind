@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.db import transaction
 from decimal import Decimal
 import json
+import logging
 from datetime import datetime, timedelta
 
 from .models import (
@@ -21,6 +22,8 @@ from .models import (
     CambioPrecioPendiente, NotificacionCambioPrecio, HistorialCambioPrecio,
     ParametroGlobal, EmpresaUser
 )
+
+logger = logging.getLogger('app')
 
 
 # ========== VISTAS PRINCIPALES ==========
@@ -62,13 +65,13 @@ def edicion_rapida_precios_view(request):
                 request.session['alias'] = empresa_user.sucursal.alias
                 request.session['nombreEmpresaActual'] = empresa_user.empresa.razon_social
                 sucursal_id = empresa_user.sucursal.id
-                print(f"✅ Sesión inicializada - Sucursal: {sucursal_id}")
+                logger.info("Sesion de precios inicializada: usuario_id=%s, sucursal_id=%s", request.user.id, sucursal_id)
             else:
                 # Redirigir a selección de sucursal
                 messages.error(request, 'Por favor selecciona una sucursal para continuar')
                 return redirect('seleccionar_empresa_sucursal')
         except Exception as e:
-            print(f"❌ Error al obtener sucursal: {str(e)}")
+            logger.exception("Error al obtener sucursal para edicion rapida de precios usuario_id=%s", request.user.id)
             messages.error(request, f'Error al obtener sucursal: {str(e)}')
             return redirect('verHome')
     
@@ -211,17 +214,19 @@ def buscar_productos(request):
         antiguedad = request.GET.get('antiguedad')
         anio = request.GET.get('anio')
         
-        # 🔍 LOGGING PARA DEBUG
-        print(f"🔍 DEBUG BÚSQUEDA PRODUCTOS:")
-        print(f"  - search: '{search}'")
-        print(f"  - sucursal_id (GET param): {request.GET.get('sucursal')}")
-        print(f"  - sucursal_id (SESSION): {request.session.get('idSucursalActual')}")
-        print(f"  - sucursal_id (FINAL): {sucursal_id}")
-        print(f"  - usuario: {request.user.username}")
+        logger.debug(
+            "Busqueda productos precios: search=%s, sucursal_get=%s, sucursal_session=%s, "
+            "sucursal_final=%s, usuario=%s",
+            search,
+            request.GET.get('sucursal'),
+            request.session.get('idSucursalActual'),
+            sucursal_id,
+            request.user.username,
+        )
         
         # 🚨 VALIDAR QUE HAYA SUCURSAL (OBLIGATORIO)
         if not sucursal_id:
-            print(f"❌ ERROR: No hay sucursal en sesión ni en parámetros GET")
+            logger.warning("Busqueda productos precios sin sucursal activa usuario=%s", request.user.username)
             return JsonResponse({
                 'success': False,
                 'error': 'No hay sucursal activa en la sesión. Por favor, selecciona una sucursal.',
@@ -265,8 +270,8 @@ def buscar_productos(request):
         
         # Filtro por sucursal (OBLIGATORIO - ya validado arriba)
         queryset = queryset.filter(sucursal_id=sucursal_id)
-        print(f"✅ Filtrando por sucursal_id={sucursal_id}")
-        print(f"📊 Total productos en queryset después de filtros iniciales: {queryset.count()}")
+        total_queryset_inicial = queryset.count()
+        logger.debug("Busqueda productos precios filtrada por sucursal_id=%s total_inicial=%s", sucursal_id, total_queryset_inicial)
         
         # Preparar datos para respuesta
         productos_data = []
@@ -285,7 +290,7 @@ def buscar_productos(request):
             tallas = producto.producto_talla.all()
             
             if not tallas.exists():
-                print(f"  ⏭️  Excluido: {producto.articulo} (sin tallas)")
+                logger.debug("Producto excluido de precios sin tallas: producto_id=%s articulo=%s", producto.id, producto.articulo)
                 productos_excluidos['sin_tallas'] += 1
                 continue
             
@@ -318,13 +323,18 @@ def buscar_productos(request):
             # Si no hay lotes pero hay stock, usar el costo del producto
             if cantidad_total == 0 and stock_total == 0:
                 # Solo excluir si NO tiene stock ni lotes
-                print(f"  ⏭️  Excluido: {producto.articulo} (sin stock ni lotes)")
+                logger.debug("Producto excluido de precios sin stock ni lotes: producto_id=%s articulo=%s", producto.id, producto.articulo)
                 productos_excluidos['sin_stock_ni_lotes'] += 1
                 continue
             
             # Filtro por stock mínimo
             if stock_min and stock_total < int(stock_min):
-                print(f"  ⏭️  Excluido: {producto.articulo} (stock {stock_total} < mínimo {stock_min})")
+                logger.debug(
+                    "Producto excluido de precios por stock minimo: producto_id=%s stock=%s stock_min=%s",
+                    producto.id,
+                    stock_total,
+                    stock_min,
+                )
                 productos_excluidos['stock_minimo'] += 1
                 continue
             
@@ -340,11 +350,21 @@ def buscar_productos(request):
             
             # Aplicar filtros de precio
             if precio_min and precio_venta < float(precio_min):
-                print(f"  ⏭️  Excluido: {producto.articulo} (precio {precio_venta} < mínimo {precio_min})")
+                logger.debug(
+                    "Producto excluido de precios por precio minimo: producto_id=%s precio=%s precio_min=%s",
+                    producto.id,
+                    precio_venta,
+                    precio_min,
+                )
                 productos_excluidos['precio'] += 1
                 continue
             if precio_max and precio_venta > float(precio_max):
-                print(f"  ⏭️  Excluido: {producto.articulo} (precio {precio_venta} > máximo {precio_max})")
+                logger.debug(
+                    "Producto excluido de precios por precio maximo: producto_id=%s precio=%s precio_max=%s",
+                    producto.id,
+                    precio_venta,
+                    precio_max,
+                )
                 productos_excluidos['precio'] += 1
                 continue
             
@@ -353,7 +373,12 @@ def buscar_productos(request):
             
             # Aplicar filtro de margen
             if margen_min and margen < float(margen_min):
-                print(f"  ⏭️  Excluido: {producto.articulo} (margen {margen:.2f}% < mínimo {margen_min}%)")
+                logger.debug(
+                    "Producto excluido de precios por margen minimo: producto_id=%s margen=%.2f margen_min=%s",
+                    producto.id,
+                    margen,
+                    margen_min,
+                )
                 productos_excluidos['margen'] += 1
                 continue
             
@@ -365,22 +390,42 @@ def buscar_productos(request):
             # Aplicar filtro de antigüedad
             if antiguedad:
                 if antiguedad == 'nuevo' and dias_inventario >= 180:
-                    print(f"  ⏭️  Excluido: {producto.articulo} (antigüedad {dias_inventario} días, filtro: nuevo)")
+                    logger.debug(
+                        "Producto excluido de precios por antiguedad: producto_id=%s dias=%s filtro=%s",
+                        producto.id,
+                        dias_inventario,
+                        antiguedad,
+                    )
                     productos_excluidos['antiguedad'] += 1
                     continue
                 elif antiguedad == 'medio' and (dias_inventario < 180 or dias_inventario >= 365):
-                    print(f"  ⏭️  Excluido: {producto.articulo} (antigüedad {dias_inventario} días, filtro: medio)")
+                    logger.debug(
+                        "Producto excluido de precios por antiguedad: producto_id=%s dias=%s filtro=%s",
+                        producto.id,
+                        dias_inventario,
+                        antiguedad,
+                    )
                     productos_excluidos['antiguedad'] += 1
                     continue
                 elif antiguedad == 'antiguo' and dias_inventario < 365:
-                    print(f"  ⏭️  Excluido: {producto.articulo} (antigüedad {dias_inventario} días, filtro: antiguo)")
+                    logger.debug(
+                        "Producto excluido de precios por antiguedad: producto_id=%s dias=%s filtro=%s",
+                        producto.id,
+                        dias_inventario,
+                        antiguedad,
+                    )
                     productos_excluidos['antiguedad'] += 1
                     continue
             
             # Aplicar filtro de año
             if anio and fecha_ingreso_mas_antiguo:
                 if fecha_ingreso_mas_antiguo.year != int(anio):
-                    print(f"  ⏭️  Excluido: {producto.articulo} (año {fecha_ingreso_mas_antiguo.year} != filtro {anio})")
+                    logger.debug(
+                        "Producto excluido de precios por anio: producto_id=%s anio_producto=%s anio_filtro=%s",
+                        producto.id,
+                        fecha_ingreso_mas_antiguo.year,
+                        anio,
+                    )
                     productos_excluidos['anio'] += 1
                     continue
             
@@ -439,7 +484,14 @@ def buscar_productos(request):
             sucursales_count = len(sucursales_lista)
             
             # Agregar a resultados
-            print(f"  ✅ Incluido: {producto.articulo} (stock: {stock_total}, lotes: {cantidad_total}, margen: {margen:.2f}%)")
+            logger.debug(
+                "Producto incluido en busqueda precios: producto_id=%s articulo=%s stock=%s lotes=%s margen=%.2f",
+                producto.id,
+                producto.articulo,
+                stock_total,
+                cantidad_total,
+                margen,
+            )
             
             productos_data.append({
                 'id': producto.id,  # ID del producto (no de la talla)
@@ -483,15 +535,15 @@ def buscar_productos(request):
         
         # Resumen de logging
         total_excluidos = sum(productos_excluidos.values())
-        print(f"\n📊 RESUMEN DE BÚSQUEDA:")
-        print(f"  ✅ Productos incluidos: {len(productos_data)}")
-        print(f"  ❌ Productos excluidos: {total_excluidos}")
-        if total_excluidos > 0:
-            print(f"     Razones de exclusión:")
-            for razon, cantidad in productos_excluidos.items():
-                if cantidad > 0:
-                    print(f"       - {razon}: {cantidad}")
-        print(f"  📄 Retornando página {page_obj.number} de {paginator.num_pages}")
+        logger.info(
+            "Busqueda productos precios completada: sucursal_id=%s incluidos=%s excluidos=%s razones=%s pagina=%s total_paginas=%s",
+            sucursal_id,
+            len(productos_data),
+            total_excluidos,
+            {razon: cantidad for razon, cantidad in productos_excluidos.items() if cantidad > 0},
+            page_obj.number,
+            paginator.num_pages,
+        )
         
         return JsonResponse({
             'success': True,
@@ -840,7 +892,11 @@ def actualizar_precio(request):
                 stock_total=Sum('producto_talla__stock')
             ).select_related('sucursal')
 
-            print(f"🔍 [EdicionRapida] Buscando productos similares en otras sucursales: {productos_otras_sucursales.count()} encontrados")
+            logger.debug(
+                "Edicion rapida precios buscando similares en otras sucursales: producto_id=%s encontrados=%s",
+                producto.id,
+                productos_otras_sucursales.count(),
+            )
 
             for prod_similar in productos_otras_sucursales:
                 precio_anterior_sync = int(prod_similar.precioventa or 0)
@@ -851,15 +907,30 @@ def actualizar_precio(request):
                 ).first()
 
                 if not primera_talla:
-                    print(f"   ⏭️ {prod_similar.sucursal.alias}: sin tallas definidas, saltando")
+                    logger.debug(
+                        "Precio similar omitido sin tallas: producto_id=%s sucursal=%s",
+                        prod_similar.id,
+                        prod_similar.sucursal.alias,
+                    )
                     continue
 
                 stock_display = prod_similar.stock_total or 0
-                print(f"   📦 {prod_similar.sucursal.alias}: stock={stock_display}, precio_actual=${precio_anterior_sync:,}")
+                logger.debug(
+                    "Precio similar evaluado: producto_id=%s sucursal=%s stock=%s precio_actual=%s",
+                    prod_similar.id,
+                    prod_similar.sucursal.alias,
+                    stock_display,
+                    precio_anterior_sync,
+                )
                 
                 # Solo procesar si hay diferencia de precio
                 if precio_anterior_sync == nuevo_precio:
-                    print(f"   ⏭️ {prod_similar.sucursal.alias}: mismo precio, saltando")
+                    logger.debug(
+                        "Precio similar omitido sin diferencia: producto_id=%s sucursal=%s precio=%s",
+                        prod_similar.id,
+                        prod_similar.sucursal.alias,
+                        precio_anterior_sync,
+                    )
                     continue
                 
                 # === 1. SINCRONIZAR PRECIO ===
@@ -980,10 +1051,24 @@ def actualizar_precio(request):
                 if not supera_umbral:
                     productos_sincronizados += 1
                 sucursales_notificadas += 1
-                print(f"✅ {'Pendiente revisión' if supera_umbral else 'Precio sincronizado'} en {prod_similar.sucursal.alias}: ${precio_anterior_sync:,} → ${nuevo_precio:,}. {usuarios_sucursal.count()} notificaciones")
+                logger.info(
+                    "Precio %s en sucursal similar: producto_id=%s sucursal=%s precio_anterior=%s "
+                    "precio_nuevo=%s notificaciones=%s",
+                    'pendiente_revision' if supera_umbral else 'sincronizado',
+                    prod_similar.id,
+                    prod_similar.sucursal.alias,
+                    precio_anterior_sync,
+                    nuevo_precio,
+                    usuarios_sucursal.count(),
+                )
             
             if productos_sincronizados > 0:
-                print(f"🔄 {productos_sincronizados} productos sincronizados. {notificaciones_creadas} notificaciones enviadas")
+                logger.info(
+                    "Sincronizacion de precios completada: producto_origen_id=%s sincronizados=%s notificaciones=%s",
+                    producto.id,
+                    productos_sincronizados,
+                    notificaciones_creadas,
+                )
         
         return JsonResponse({
             'success': True,
@@ -1503,7 +1588,7 @@ def obtener_historial_ediciones_recientes(request):
         search_term = request.GET.get('search', '').strip()
         limit = min(int(request.GET.get('limit', 20)), 100)  # Máximo 100 resultados
         
-        print(f"📋 [Historial] Sucursal actual: {sucursal_id}, búsqueda: '{search_term}', límite: {limit}")
+        logger.debug("Historial precios solicitado: sucursal_id=%s search=%s limit=%s", sucursal_id, search_term, limit)
         
         # Obtener cambios de precio
         query = HistorialCambioPrecio.objects.select_related(
@@ -1527,7 +1612,7 @@ def obtener_historial_ediciones_recientes(request):
         
         historial = query[:limit]
         
-        print(f"📋 [Historial] Registros encontrados: {len(historial)}")
+        logger.debug("Historial precios registros encontrados: total=%s", len(historial))
         
         historial_data = []
         for cambio in historial:
@@ -1556,9 +1641,7 @@ def obtener_historial_ediciones_recientes(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"❌ [Historial] Error: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error al obtener historial de precios")
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener historial: {str(e)}'
@@ -1958,9 +2041,7 @@ def listar_cambios_pendientes(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error en listar_cambios_pendientes: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en listar_cambios_pendientes")
         return JsonResponse({
             'success': False,
             'error': f'Error al listar cambios: {str(e)}'
@@ -2007,9 +2088,7 @@ def eliminar_cambios_aplicados(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error en eliminar_cambios_aplicados: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en eliminar_cambios_aplicados")
         return JsonResponse({
             'success': False,
             'error': f'Error al eliminar: {str(e)}'
@@ -2546,9 +2625,7 @@ def detectar_discrepancias_precios(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error en detectar_discrepancias_precios: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en detectar_discrepancias_precios")
         return JsonResponse({
             'success': False,
             'error': f'Error al detectar discrepancias: {str(e)}'
@@ -2633,9 +2710,7 @@ def regularizar_precio_sucursales(request):
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error en regularizar_precio_sucursales: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error en regularizar_precio_sucursales")
         return JsonResponse({
             'success': False,
             'error': f'Error al regularizar: {str(e)}'

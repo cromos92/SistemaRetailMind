@@ -63,8 +63,8 @@
                             <small class="text-white opacity-75">Comprados - Recepcionados - Vendidos a Publico</small>
                         </div>
                         <div class="d-flex gap-2">
-                            <a href="/app/verGestionCompras/" class="btn btn-light btn-sm"><i class="bi bi-cart me-1"></i>Compras</a>
-                            <a href="/app/reportes/compras/" class="btn btn-light btn-sm"><i class="bi bi-graph-up me-1"></i>Reporte Compras</a>
+                            <a href="{% url 'verGestionCompras' %}" class="btn btn-light btn-sm"><i class="bi bi-cart me-1"></i>Compras</a>
+                            <a href="{% url 'ver_reporte_compras' %}" class="btn btn-light btn-sm"><i class="bi bi-graph-up me-1"></i>Reporte Compras</a>
                             <button class="btn btn-light btn-sm" id="btnExportar"><i class="bi bi-download me-1"></i>Excel</button>
                         </div>
                     </div>
@@ -112,8 +112,11 @@
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-success" id="kpiPctRecep">-</div><div class="rp-kpi-label">% Recepcion</div></div></div>
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-info" id="kpiPctVenta">-</div><div class="rp-kpi-label">% Venta</div></div></div>
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiInversion">-</div><div class="rp-kpi-label">Inversion</div></div></div>
+                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-warning" id="kpiNoInv">-</div><div class="rp-kpi-label">Concepto/Sin recep.</div></div></div>
                         <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-success" id="kpiMargen">-</div><div class="rp-kpi-label">Margen</div></div></div>
                     </div>
+
+                    <div class="alert alert-info py-2 small" id="metodologiaBox" style="display:none;"></div>
 
                     <!-- Loader -->
                     <div class="rp-loader" id="rpLoader" style="display:none;">
@@ -140,13 +143,15 @@
                                     <th class="text-center">% Recep.</th>
                                     <th class="text-center">% Venta</th>
                                     <th class="text-end">Inversion</th>
+                                    <th class="text-end">No inventariable</th>
                                     <th class="text-end">Venta</th>
                                     <th class="text-end">Margen</th>
+                                    <th class="text-center">Pend. recep.</th>
                                     <th class="text-center">Stock Disp.</th>
                                 </tr>
                             </thead>
                             <tbody id="tbodyRendimiento">
-                                <tr><td colspan="10" class="text-center text-muted py-4">Selecciona filtros y haz click en Aplicar</td></tr>
+                                <tr><td colspan="12" class="text-center text-muted py-4">Selecciona filtros y haz click en Aplicar</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -217,12 +222,12 @@ function fmtMoney(n) { return '$' + fmt(n); }
 
 function cargarDatos() {
     $('#rpLoader').show();
-    $('#tbodyRendimiento').html('<tr><td colspan="10" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td></tr>');
+    $('#tbodyRendimiento').html('<tr><td colspan="12" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td></tr>');
 
     $.get('/app/api/reporte-rendimiento-proveedor/?' + buildParams(), function(res) {
         $('#rpLoader').hide();
         if (!res.success) {
-            $('#tbodyRendimiento').html(`<tr><td colspan="10" class="text-center text-danger py-4">${res.error || 'Error'}</td></tr>`);
+            $('#tbodyRendimiento').html(`<tr><td colspan="12" class="text-center text-danger py-4">${res.error || 'Error'}</td></tr>`);
             return;
         }
 
@@ -235,13 +240,22 @@ function cargarDatos() {
         $('#kpiPctRecep').text(k.pct_recepcion_global + '%');
         $('#kpiPctVenta').text(k.pct_venta_global + '%');
         $('#kpiInversion').text(fmtMoney(k.total_inversion));
+        $('#kpiNoInv').text(fmtMoney(k.total_monto_no_inventariable || 0));
         $('#kpiMargen').text(fmtMoney(k.total_margen));
+        if ((k.total_documentos_no_inventariables || 0) > 0 || res.metodologia) {
+            $('#metodologiaBox').show().html(
+                `<strong>${k.total_documentos_no_inventariables || 0}</strong> documento(s) de compra sin detalle inventariable por <strong>${fmtMoney(k.total_monto_no_inventariable || 0)}</strong>. ` +
+                'Se informan como compra por concepto/sin recepcion y no suman pares comprados, recepcionados ni vendidos.'
+            );
+        } else {
+            $('#metodologiaBox').hide().empty();
+        }
 
         // Tabla
         const tbody = $('#tbodyRendimiento');
         tbody.empty();
         if (res.proveedores.length === 0) {
-            tbody.html('<tr><td colspan="10" class="text-center text-muted py-4">Sin datos para los filtros seleccionados</td></tr>');
+            tbody.html('<tr><td colspan="12" class="text-center text-muted py-4">Sin datos para los filtros seleccionados</td></tr>');
         } else {
             res.proveedores.forEach(p => {
                 const barRecep = `<div class="d-flex align-items-center gap-1"><span class="fw-bold" style="min-width:35px;">${p.pct_recepcion}%</span><div class="rp-bar flex-grow-1"><div class="rp-bar-fill" style="width:${Math.min(p.pct_recepcion, 100)}%;background:${p.pct_recepcion >= 90 ? '#0ab39c' : p.pct_recepcion >= 50 ? '#f7b84b' : '#f06548'};"></div></div></div>`;
@@ -256,8 +270,10 @@ function cargarDatos() {
                     <td>${barRecep}</td>
                     <td>${barVenta}</td>
                     <td class="text-end">${fmtMoney(p.inversion_total)}</td>
+                    <td class="text-end">${fmtMoney(p.monto_no_inventariable || 0)}${(p.documentos_no_inventariables || 0) ? `<br><small class="text-muted">${p.documentos_no_inventariables} doc.</small>` : ''}</td>
                     <td class="text-end">${fmtMoney(p.venta_total)}</td>
                     <td class="text-end ${margenClass} fw-bold">${fmtMoney(p.margen)}</td>
+                    <td class="text-center"><span class="badge ${p.pendiente_recepcion > 0 ? 'bg-warning text-dark' : 'bg-success'}">${fmt(p.pendiente_recepcion || 0)}</span></td>
                     <td class="text-center"><span class="badge ${p.stock_disponible > 0 ? 'bg-info' : 'bg-secondary'}">${fmt(p.stock_disponible)}</span></td>
                 </tr>`);
             });
@@ -268,7 +284,7 @@ function cargarDatos() {
 
     }).fail(function() {
         $('#rpLoader').hide();
-        $('#tbodyRendimiento').html('<tr><td colspan="10" class="text-center text-danger py-4">Error de conexion</td></tr>');
+        $('#tbodyRendimiento').html('<tr><td colspan="12" class="text-center text-danger py-4">Error de conexion</td></tr>');
     });
 }
 

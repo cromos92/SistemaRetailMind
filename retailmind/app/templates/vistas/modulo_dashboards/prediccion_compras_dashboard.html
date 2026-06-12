@@ -494,6 +494,32 @@
                 <span id="datosHistoricosTexto"></span>
             </div>
 
+            <div class="nexo-card" id="planCompraCard" style="padding:18px 20px;margin-bottom:20px;">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                    <div>
+                        <div class="section-title" style="margin-bottom:6px;">
+                            <i class="ri-shopping-bag-3-line"></i> Plan de compra sugerido
+                        </div>
+                        <p class="text-muted small mb-0">
+                            Resume las sugerencias pendientes y descuenta stock actual + unidades en transito.
+                        </p>
+                    </div>
+                    <button class="nexo-btn nexo-btn-accent" onclick="document.querySelector('[data-tab=tabSugerencias]').click()">
+                        <i class="ri-list-check-2"></i> Ver detalle
+                    </button>
+                </div>
+                <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:16px 0;">
+                    <div class="kpi-card" style="padding:14px;"><div class="kpi-value" id="planUnidades">-</div><div class="kpi-label">Unidades a comprar</div></div>
+                    <div class="kpi-card" style="padding:14px;"><div class="kpi-value" id="planCosto">-</div><div class="kpi-label">Costo estimado</div></div>
+                    <div class="kpi-card" style="padding:14px;"><div class="kpi-value" id="planProductos">-</div><div class="kpi-label">Productos</div></div>
+                    <div class="kpi-card" style="padding:14px;"><div class="kpi-value" id="planTalles">-</div><div class="kpi-label">Talles/SKU</div></div>
+                    <div class="kpi-card" style="padding:14px;"><div class="kpi-value" id="planUrgentes">-</div><div class="kpi-label">Lineas urgentes</div></div>
+                </div>
+                <div id="planProveedores" class="table-scroll" style="max-height:220px;">
+                    <div class="empty-state"><i class="ri-loader-4-line"></i>Cargando plan...</div>
+                </div>
+            </div>
+
             <!-- ========== TABS ========== -->
             <div class="nexo-card">
                 <div class="pred-tabs">
@@ -746,6 +772,10 @@ let chartTendencia = null, chartPrecision = null, chartComparativa = null, chart
 function esc(str) {
     if (str === null || str === undefined) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function money(value) {
+    return '$' + Math.round(Number(value || 0)).toLocaleString('es-CL');
 }
 
 function toast(msg, type = 'success') {
@@ -1155,6 +1185,7 @@ async function cargarResumen() {
     document.getElementById('countSugerencias').textContent= d.sugerencias.total||0;
     document.getElementById('countABC').textContent        = (d.clasificacion_abc.A||0)+(d.clasificacion_abc.B||0)+(d.clasificacion_abc.C||0);
     renderCharts(d.clasificacion_abc, d.clasificacion_xyz);
+    renderPlanCompra(d.sugerencias || {});
 
     if (d.datos_historicos && d.datos_historicos.ventas_totales > 0) {
         const h = d.datos_historicos;
@@ -1168,6 +1199,34 @@ async function cargarResumen() {
         document.getElementById('datosHistoricosTexto').innerHTML = txt;
         bar.style.display = 'flex';
     }
+}
+
+function renderPlanCompra(s) {
+    document.getElementById('planUnidades').textContent = (s.unidades_a_pedir || 0).toLocaleString();
+    document.getElementById('planCosto').textContent = money(s.costo_estimado || 0);
+    document.getElementById('planProductos').textContent = (s.productos || 0).toLocaleString();
+    document.getElementById('planTalles').textContent = (s.talles || 0).toLocaleString();
+    document.getElementById('planUrgentes').textContent = (s.urgentes || 0).toLocaleString();
+
+    const proveedores = s.proveedores || [];
+    const el = document.getElementById('planProveedores');
+    if (!proveedores.length) {
+        el.innerHTML = '<div class="empty-state"><i class="ri-inbox-line"></i>Sin unidades sugeridas para comprar.</div>';
+        return;
+    }
+    let html = `<table class="nexo-table"><thead><tr>
+        <th>Proveedor</th><th>Items</th><th>Unidades</th><th>Costo estimado</th><th>Part.</th>
+    </tr></thead><tbody>`;
+    proveedores.forEach(p => {
+        html += `<tr>
+            <td><strong>${esc(p.proveedor)}</strong></td>
+            <td>${(p.items || 0).toLocaleString()}</td>
+            <td><strong style="color:var(--nexo-primary)">${(p.unidades || 0).toLocaleString()}</strong></td>
+            <td>${money(p.costo_estimado || 0)}</td>
+            <td>${Number(p.participacion || 0).toFixed(1)}%</td>
+        </tr>`;
+    });
+    el.innerHTML = html + '</tbody></table>';
 }
 
 function renderCharts(abc, xyz) {
