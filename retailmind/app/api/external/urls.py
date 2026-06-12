@@ -11,6 +11,7 @@ from .views import (
     PreciosActualesView,
     NovedadesView,
     MovimientosVentasView,
+    VentasView,
 )
 
 urlpatterns = [
@@ -27,5 +28,7 @@ urlpatterns = [
     # Movimientos de venta (líneas de DTE) — reemplaza la API legacy de
     # HoldingTebes consumida por la pantalla de devoluciones de AllConnected.
     path('movimientos-ventas/', MovimientosVentasView.as_view(), name='external-movimientos-ventas'),
+    # Documentos de venta a nivel documento (conciliación diaria AllConnected)
+    path('ventas/', VentasView.as_view(), name='external-ventas'),
     path('health/', HealthCheckExternalView.as_view(), name='external-health'),
 ]

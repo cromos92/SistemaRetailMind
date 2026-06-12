@@ -1290,3 +1290,279 @@ class MovimientosVentasView(APIView):
             'resumen_por_bodega': resumen_bodega,
             'movimientos': movimientos,
         })
+
+
+# ──────────────────────────────────────────────
+# Endpoint 11 — Ventas / documentos emitidos por día (conciliación AllConnected)
+# GET /api/ventas/?rut_empresa=XXXXXXXX-X&fecha=YYYY-MM-DD
+# ──────────────────────────────────────────────
+
+class VentasView(APIView):
+    """
+    Documentos de venta emitidos (a nivel documento, no línea) para que
+    AllConnected concilie diariamente sus pedidos impresos contra las
+    boletas realmente emitidas, distinguiendo la vía de facturación:
+
+      origen = "ecommerce"  → el DTE nació de un PedidoEcommerce
+                              (módulo /app/ecommerce/pedidos/)
+      origen = "pos"        → emisión manual (POS dashboard / venta público)
+
+    Query params:
+      rut_empresa    (obligatorio)
+      fecha          YYYY-MM-DD — boletas emitidas ese día
+      fecha_desde /
+      fecha_hasta    alternativa a `fecha` para rangos (máx 31 días)
+                     * uno de los dos modos de fecha es obligatorio,
+                       salvo que se entregue `referencia`
+      origen         (opcional) 'ecommerce' | 'pos'
+      referencia     (opcional) busca por referencia de pedido AllConnected:
+                     numero_pedido_canal, folio de despacho (correlativo),
+                     numero_ticket_rm o numero_pedido_origen
+      tipo_documento (opcional) BOLETA_ELECTRONICA / BOLETA_PAPEL /
+                     FACTURA_ELECTRONICA / FACTURA_EXENTA
+      page / page_size  paginación (default 100, máx 500)
+
+    Cada entrada de `data`:
+      numero_documento, tipo_documento, fecha_emision (ISO con TZ Chile),
+      monto_total, origen, numero_ticket_rm, referencia_externa
+      (numero_pedido_canal), folio_despacho (correlativo AllConnected
+      impreso, ej. RE30005376), canal_origen, anulada, nota_credito,
+      sucursal (alias), sucursal_nombre, usuario_emisor.
+
+    Los documentos ANULADOS se incluyen (anulada=true) — la conciliación
+    necesita verlos. Solo se excluyen descartados y RECHAZADOS.
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    # Tipos de documento de venta que se listan (las NC no son filas:
+    # aparecen en el campo `nota_credito` del documento afectado).
+    _TIPOS_VENTA = [
+        'BOLETA ELECTRONICA',
+        'BOLETA PAPEL',
+        'FACTURA ELECTRONICA',
+        'FACTURA EXENTA',
+    ]
+
+    PAGE_SIZE_DEFAULT = 100
+    PAGE_SIZE_MAX = 500
+
+    @staticmethod
+    def _norm_tipo(tipo: str) -> str:
+        return (tipo or '').replace(' ', '_')
+
+    def get(self, request):
+        from datetime import datetime, timedelta, time as dt_time
+
+        from django.db.models import Q
+
+        from app.models import PedidoEcommerce
+
+        rut         = request.query_params.get('rut_empresa', '').strip()
+        fecha       = request.query_params.get('fecha', '').strip()
+        fecha_desde = request.query_params.get('fecha_desde', '').strip()
+        fecha_hasta = request.query_params.get('fecha_hasta', '').strip()
+        origen_filt = request.query_params.get('origen', '').strip().lower()
+        referencia  = request.query_params.get('referencia', '').strip()
+        tipo_filt   = request.query_params.get('tipo_documento', '').strip().upper()
+
+        def _error(msg):
+            return Response(
+                {'status': False, 'success': False, 'data': [], 'total': 0, 'error': msg},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not rut:
+            return _error('El parámetro rut_empresa es obligatorio.')
+
+        if origen_filt and origen_filt not in ('ecommerce', 'pos'):
+            return _error("origen debe ser 'ecommerce' o 'pos'.")
+
+        if tipo_filt and self._norm_tipo(tipo_filt) not in [
+            self._norm_tipo(t) for t in self._TIPOS_VENTA
+        ]:
+            return _error(
+                'tipo_documento inválido. Opciones: '
+                + ', '.join(self._norm_tipo(t) for t in self._TIPOS_VENTA)
+            )
+
+        try:
+            page = max(1, int(request.query_params.get('page', 1) or 1))
+            page_size = int(request.query_params.get('page_size', self.PAGE_SIZE_DEFAULT)
+                            or self.PAGE_SIZE_DEFAULT)
+        except ValueError:
+            return _error('page y page_size deben ser enteros.')
+        page_size = min(max(1, page_size), self.PAGE_SIZE_MAX)
+
+        # --- Resolución del rango de fechas ---
+        d_from = d_to = None
+        if fecha:
+            fecha_desde = fecha_hasta = fecha
+        elif fecha_desde and not fecha_hasta:
+            fecha_hasta = fecha_desde
+
+        if fecha_desde:
+            try:
+                d_from = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+                d_to = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+            except ValueError:
+                return _error('Formato de fecha inválido. Usa YYYY-MM-DD.')
+            if d_to < d_from:
+                return _error('fecha_hasta debe ser >= fecha_desde.')
+            if (d_to - d_from) > timedelta(days=31):
+                return _error('Rango máximo 31 días.')
+        elif not referencia:
+            return _error('Indica fecha=YYYY-MM-DD o fecha_desde/fecha_hasta (o una referencia).')
+
+        # --- Query base de documentos de venta ---
+        dtes_qs = (
+            Dte.objects
+            .filter(
+                emisor__rut=rut,
+                tipo_documento__in=self._TIPOS_VENTA,
+                tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
+                descartado=False,
+                es_nota_credito=False,
+            )
+            .exclude(estado_dte='RECHAZADO')
+            .select_related('sucursal', 'vendedor')
+        )
+        if d_from:
+            dtes_qs = dtes_qs.filter(fecha_emision__gte=d_from, fecha_emision__lte=d_to)
+        if tipo_filt:
+            dtes_qs = dtes_qs.filter(
+                tipo_documento=self._norm_tipo(tipo_filt).replace('_', ' '),
+            )
+
+        if referencia:
+            # La referencia identifica un pedido de AllConnected → solo puede
+            # resolver documentos emitidos por la vía ecommerce.
+            dte_ids_ref = list(
+                PedidoEcommerce.objects
+                .filter(dte__isnull=False)
+                .filter(
+                    Q(numero_pedido_canal__iexact=referencia)
+                    | Q(correlativo__iexact=referencia)
+                    | Q(numero_ticket_rm__iexact=referencia)
+                    | Q(numero_pedido_origen__iexact=referencia)
+                )
+                .values_list('dte_id', flat=True)
+            )
+            dtes_qs = dtes_qs.filter(id__in=dte_ids_ref)
+
+        dtes = list(dtes_qs.order_by('fecha_emision', 'hora', 'id'))
+        dte_ids = [d.id for d in dtes]
+
+        # --- Mapa DTE → pedido ecommerce (origen + referencias AllConnected) ---
+        pedido_map = {}
+        if dte_ids:
+            pedidos = (
+                PedidoEcommerce.objects
+                .filter(dte_id__in=dte_ids)
+                .values(
+                    'dte_id', 'numero_ticket_rm', 'numero_pedido_canal',
+                    'numero_pedido_origen', 'correlativo', 'canal_origen',
+                )
+            )
+            pedido_map = {p['dte_id']: p for p in pedidos}
+
+        # --- Mapa DTE → ticket (modulo_origen + referencia manual del cajero) ---
+        # Ticket no tiene FK a Dte: comparten (sucursal, folio) cuando
+        # dte_generado=True (mismo criterio que MovimientosVentasView).
+        ticket_map = {}
+        if dte_ids:
+            folios = [d.numero_documento for d in dtes if d.numero_documento]
+            tickets = Ticket.objects.filter(
+                folio_dte__in=folios, dte_generado=True,
+            ).values('sucursal_id', 'folio_dte', 'modulo_origen', 'referencia_folio')
+            t_map = {(t['sucursal_id'], t['folio_dte']): t for t in tickets}
+            for d in dtes:
+                t = t_map.get((d.sucursal_id, d.numero_documento))
+                if t:
+                    ticket_map[d.id] = t
+
+        # --- Mapa DTE → nota de crédito que lo afecta ---
+        nc_map = {}
+        if dte_ids:
+            ncs = (
+                Dte.objects
+                .filter(documento_afectado_id__in=dte_ids, descartado=False)
+                .filter(Q(es_nota_credito=True) | Q(tipo_documento='NOTA DE CREDITO'))
+                .exclude(estado_dte='RECHAZADO')
+                .order_by('fecha_emision', 'id')
+                .values('documento_afectado_id', 'numero_documento')
+            )
+            for nc in ncs:
+                # Si hay más de una NC, se reporta la primera emitida.
+                nc_map.setdefault(nc['documento_afectado_id'], nc['numero_documento'])
+
+        # --- Serialización ---
+        tz = timezone.get_current_timezone()
+        data = []
+        for d in dtes:
+            pedido = pedido_map.get(d.id)
+            ticket = ticket_map.get(d.id)
+
+            es_ecommerce = bool(pedido) or (
+                ticket is not None and ticket['modulo_origen'] == 'ECOMMERCE'
+            )
+            origen = 'ecommerce' if es_ecommerce else 'pos'
+            if origen_filt and origen != origen_filt:
+                continue
+
+            nc_folio = nc_map.get(d.id)
+            anulada = bool(nc_folio) or d.estado_dte in ('ANULADO', 'CANCELADO')
+
+            fecha_dt = timezone.make_aware(
+                datetime.combine(d.fecha_emision, d.hora or dt_time.min), tz,
+            )
+
+            referencia_externa = None
+            if pedido:
+                referencia_externa = pedido['numero_pedido_canal'] or None
+            elif ticket and ticket['referencia_folio']:
+                # Vía POS: folio tipeado por el cajero al emitir (si existe).
+                referencia_externa = ticket['referencia_folio']
+
+            data.append({
+                'numero_documento': str(d.numero_documento),
+                'tipo_documento': self._norm_tipo(d.tipo_documento),
+                'fecha_emision': fecha_dt.isoformat(),
+                'monto_total': int(d.monto_con_iva or 0),
+                'origen': origen,
+                'numero_ticket_rm': pedido['numero_ticket_rm'] if pedido else None,
+                'referencia_externa': referencia_externa,
+                'folio_despacho': (pedido['correlativo'] or None) if pedido else None,
+                'canal_origen': pedido['canal_origen'] if pedido else None,
+                'anulada': anulada,
+                'nota_credito': str(nc_folio) if nc_folio else None,
+                'sucursal': d.sucursal.alias if d.sucursal else None,
+                'sucursal_nombre': d.sucursal.nombre if d.sucursal else None,
+                'usuario_emisor': d.responsable or (
+                    d.vendedor.nombre if d.vendedor else None
+                ),
+            })
+
+        total = len(data)
+        inicio = (page - 1) * page_size
+        data_page = data[inicio:inicio + page_size]
+
+        logger.info(
+            f"[external/ventas] rut={rut} {fecha_desde or 'ref'}→{fecha_hasta or 'ref'} "
+            f"origen={origen_filt or '*'} referencia={referencia or '-'} "
+            f"→ {total} documentos (page {page})"
+        )
+
+        return Response({
+            'status': True,
+            'success': True,
+            'rut_empresa': rut,
+            'fecha': fecha or None,
+            'fecha_desde': fecha_desde or None,
+            'fecha_hasta': fecha_hasta or None,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'data': data_page,
+            'error': None,
+        })

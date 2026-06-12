@@ -116,6 +116,28 @@ def notificar_stock_a_allconnected(sender, instance, created, **kwargs):
         )
 
 
+@receiver(post_save, sender=Dte)
+def notificar_factura_a_allconnected(sender, instance, created, **kwargs):
+    """
+    Webhook de facturación hacia AllConnected: notifica boletas/facturas de
+    venta emitidas y NC que las anulan, para su conciliación en tiempo real.
+    Deshabilitado salvo que .env tenga ALLCONNECTED_WEBHOOK_FACTURA_ENABLED=true
+    (protege los commands de migración legacy que crean Dte masivamente).
+    El POST va en thread daemon con reintentos — no bloquea la caja.
+    """
+    if not created:
+        return
+    try:
+        from .factura_notifier import programar_notificacion_factura
+        programar_notificacion_factura(instance)
+    except Exception:
+        # Nunca romper la emisión por un fallo de notificación
+        logger.exception(
+            "Error programando webhook factura para DTE #%s",
+            getattr(instance, 'numero_documento', '?'),
+        )
+
+
 @receiver(post_save, sender=Movimientos_Producto)
 def registrar_ingreso_stock(sender, instance, created, **kwargs):
     """Registra primer ingreso de temporada en StockInicialTemporada."""
