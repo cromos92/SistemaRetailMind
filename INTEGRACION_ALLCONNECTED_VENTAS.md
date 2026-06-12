@@ -30,7 +30,7 @@ Responde al requerimiento "API de consulta de ventas/boletas (conciliación diar
 | `fecha` | `YYYY-MM-DD` | ✅* | Documentos emitidos ese día (zona America/Santiago) |
 | `fecha_desde` / `fecha_hasta` | `YYYY-MM-DD` | ✅* | Alternativa a `fecha` para rangos. Máx 31 días. Si falta `fecha_hasta`, se usa `fecha_desde` |
 | `origen` | string | ❌ | `ecommerce` \| `pos` |
-| `referencia` | string | ❌ | Busca por **cualquier** identificador del pedido AllConnected: `numero_pedido_canal`, folio de despacho impreso (`RE30005376`), `numero_ticket_rm` (`RM-XXXXXXXX`) o `numero_pedido_origen` (`MP-000123`). Match exacto case-insensitive. **Si se entrega `referencia`, la fecha pasa a ser opcional** (busca en todo el histórico — cubre el caso "boleta descubierta semanas después") |
+| `referencia` | string | ❌ | Busca por **cualquier** identificador del pedido AllConnected: `numero_pedido_canal`, folio de despacho impreso (`RE30005376`), `numero_ticket_rm` (`RM-XXXXXXXX`), `numero_pedido_origen` (`MP-000123`) o el **voucher del pago "Venta por Internet"** (boletas POS/migradas: ahí va el N° de pedido del marketplace). Match exacto case-insensitive. **Si se entrega `referencia`, la fecha pasa a ser opcional** (busca en todo el histórico — cubre el caso "boleta descubierta semanas después") |
 | `tipo_documento` | string | ❌ | `BOLETA_ELECTRONICA` \| `BOLETA_PAPEL` \| `FACTURA_ELECTRONICA` \| `FACTURA_EXENTA` |
 | `page` / `page_size` | int | ❌ | Paginación. Default 100, máx 500 |
 
@@ -97,11 +97,13 @@ Respuesta vacía: `{"status": true, "success": true, "total": 0, "data": [], ...
 | `tipo_documento` | Normalizado con underscore: `BOLETA_ELECTRONICA`, `BOLETA_PAPEL`, `FACTURA_ELECTRONICA`, `FACTURA_EXENTA`. Las notas de crédito **no aparecen como filas**: van en el campo `nota_credito` del documento afectado |
 | `fecha_emision` | ISO 8601 con offset de Chile (`-04:00`/`-03:00` según DST). Si RM no registró hora, viene `T00:00:00` |
 | `monto_total` | Entero CLP, con IVA |
-| `origen` | `"ecommerce"` si el documento nació de un pedido del módulo `/app/ecommerce/pedidos/` (vínculo directo por FK en BD — confiable, no heurístico). `"pos"` para toda emisión manual |
-| `numero_ticket_rm` | El `RM-XXXXXXXX` que RM devolvió al ingestar el pedido. Solo vía ecommerce; `null` en POS |
-| `referencia_externa` | Vía ecommerce: el `numero_pedido_canal` que AllConnected envió al ingestar. Vía POS: el folio que el cajero haya tipeado como referencia al emitir, si existe (ver sección 4); si no, `null` |
+| `origen` | `"ecommerce"` = venta por INTERNET, por cualquiera de 3 señales: (1) el documento nació de un pedido del módulo `/app/ecommerce/pedidos/` (FK en BD), (2) el Ticket tiene módulo ECOMMERCE, o (3) el documento tiene un pago "Venta por Internet" — esto cubre las boletas internet emitidas a mano por el POS dashboard (vendedor 1000) y toda la data histórica migrada de Laravel, que no tienen señales 1 ni 2. `"pos"` = venta presencial en tienda. La vía de facturación queda en `via_emision` |
+| `via_emision` | `"ecommerce"` (facturada desde el módulo de pedidos) o `"pos"` (emitida a mano). Es la semántica que `origen` tenía antes |
+| `plataforma_pago` | Plataforma del pago internet (`Paris`, `Falabella`, `Mercado Pago`, …); `null` si el documento no tiene pago internet |
+| `numero_ticket_rm` | El `RM-XXXXXXXX` que RM devolvió al ingestar el pedido. Solo cuando hay PedidoEcommerce; `null` en boletas POS/migradas |
+| `referencia_externa` | Vía ecommerce: el `numero_pedido_canal` que AllConnected envió al ingestar. Vía POS: el folio que el cajero haya tipeado como referencia al emitir, o el `voucher` del pago "Venta por Internet" (el POS lo exige al emitir: ahí va el N° de pedido del marketplace); si no, `null` |
 | `folio_despacho` | **Campo extra respecto del spec original**: el folio correlativo que AllConnected imprime en la hoja del pedido (ej. `RE30005376`). RM ya lo recibe en los re-pulls del pedido, así que para la vía ecommerce la conciliación por folio impreso es **exacta y sin cambios en el POS**. `null` si el pedido aún no se imprimía al momento del último pull, o en vía POS |
-| `canal_origen` | Marketplace del pedido: `SHOPIFY`, `PARIS`, `RIPLEY`, `WALMART`, `OTRO`. `null` en POS |
+| `canal_origen` | Marketplace del pedido: `SHOPIFY`, `PARIS`, `RIPLEY`, `WALMART`, `OTRO`. Si no hay PedidoEcommerce se deriva de `plataforma_pago` (Paris→PARIS, …; plataformas sin canal AllConnected, como Falabella, → `OTRO`). `null` en venta presencial |
 | `anulada` | `true` si el documento está en estado ANULADO/CANCELADO en RM **o** tiene una nota de crédito vinculada |
 | `nota_credito` | Folio (string) de la NC que afecta al documento; `null` si no tiene. Si hubiera más de una NC se reporta la primera emitida |
 | `sucursal` / `sucursal_nombre` | Alias corto (el mismo que entrega `/api/sucursales/`) y nombre legible |

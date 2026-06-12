@@ -102,8 +102,16 @@ def _es_documento_venta(dte) -> bool:
 
 
 def _serializar_documento(dte, evento: str, nc_folio=None) -> dict:
-    """Construye el payload del webhook para un documento de venta."""
-    from app.models import PedidoEcommerce, Ticket
+    """Construye el payload del webhook para un documento de venta.
+
+    `origen` usa la MISMA definición de venta internet que GET /api/ventas/
+    (VentasView) y el Reporte de Ventas Internet: pedido ecommerce, ticket
+    con modulo_origen='ECOMMERCE', o pago "Venta por Internet" (boletas
+    emitidas a mano por el POS / data migrada de Laravel).
+    """
+    from app.models import PedidoEcommerce, Ticket, TicketDetallePago
+    from app.models.dte import Dte_Detalle_Pago
+    from app.utils_ventas import canal_desde_plataforma_pago, es_metodo_pago_internet
 
     pedido = (
         PedidoEcommerce.objects
@@ -123,19 +131,48 @@ def _serializar_documento(dte, evento: str, nc_folio=None) -> dict:
                 sucursal_id=dte.sucursal_id,
                 dte_generado=True,
             )
-            .values('modulo_origen', 'referencia_folio')
+            .values('id', 'modulo_origen', 'referencia_folio')
             .first()
         )
 
-    es_ecommerce = bool(pedido) or (
+    # Pago "Venta por Internet": primero el detalle del DTE; respaldo en el
+    # pago del Ticket (cubre detalle no copiado o editado tras emitir).
+    pago_net = None
+    for p in (
+        Dte_Detalle_Pago.objects
+        .filter(dte_id=dte.id)
+        .values('metodo_pago', 'tipo_tarjeta', 'voucher')
+    ):
+        if es_metodo_pago_internet(p['metodo_pago']):
+            pago_net = p
+            break
+    if pago_net is None and ticket:
+        pago_net = (
+            TicketDetallePago.objects
+            .filter(ticket_id=ticket['id'], metodo_pago='VENTA_INTERNET')
+            .values('tipo_tarjeta', 'voucher')
+            .first()
+        )
+
+    via_ecommerce = bool(pedido) or (
         ticket is not None and ticket['modulo_origen'] == 'ECOMMERCE'
     )
+    es_ecommerce = via_ecommerce or pago_net is not None
 
     referencia_externa = None
     if pedido:
         referencia_externa = pedido['numero_pedido_canal'] or None
     elif ticket and ticket['referencia_folio']:
         referencia_externa = ticket['referencia_folio']
+    elif pago_net and (pago_net.get('voucher') or '').strip():
+        # Boleta POS: el voucher del pago internet guarda el N° de pedido
+        # del marketplace.
+        referencia_externa = pago_net['voucher'].strip()
+
+    plataforma_pago = (pago_net.get('tipo_tarjeta') or '').strip() if pago_net else ''
+    canal_origen = pedido['canal_origen'] if pedido else None
+    if not canal_origen and plataforma_pago:
+        canal_origen = canal_desde_plataforma_pago(plataforma_pago)
 
     fecha_dt = timezone.make_aware(
         datetime.combine(dte.fecha_emision, dte.hora or dt_time.min),
@@ -150,10 +187,12 @@ def _serializar_documento(dte, evento: str, nc_folio=None) -> dict:
         'fecha_emision': fecha_dt.isoformat(),
         'monto_total': int(dte.monto_con_iva or 0),
         'origen': 'ecommerce' if es_ecommerce else 'pos',
+        'via_emision': 'ecommerce' if via_ecommerce else 'pos',
+        'plataforma_pago': plataforma_pago or None,
         'numero_ticket_rm': pedido['numero_ticket_rm'] if pedido else None,
         'referencia_externa': referencia_externa,
         'folio_despacho': (pedido['correlativo'] or None) if pedido else None,
-        'canal_origen': pedido['canal_origen'] if pedido else None,
+        'canal_origen': canal_origen,
         'nota_credito': str(nc_folio) if nc_folio else None,
         'sucursal': dte.sucursal.alias if dte.sucursal_id else None,
         'usuario_emisor': dte.responsable or None,

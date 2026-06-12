@@ -43,6 +43,50 @@ def obtener_nombre_metodo_pago(codigo: str | None) -> str:
     return NOMBRES_METODOS_PAGO.get(codigo, codigo)
 
 
+# ========== VENTA POR INTERNET ==========
+
+def es_metodo_pago_internet(metodo: str | None) -> bool:
+    """True si el método de pago marca una venta por internet.
+
+    En BD conviven el código ('VENTA_INTERNET') y variantes legibles
+    ('Venta por Internet' cuando un flujo copió el pago al DTE con
+    get_metodo_pago_display(); 'Venta Internet' en data migrada de Laravel),
+    según el flujo que creó el registro. Se normalizan todas.
+    """
+    normalizado = (metodo or '').strip().upper().replace(' POR ', ' ').replace(' ', '_')
+    return normalizado == 'VENTA_INTERNET'
+
+
+# Plataforma del pago internet (TicketDetallePago / Dte_Detalle_Pago.tipo_tarjeta,
+# texto libre: 'Paris', 'Ripley', 'Falabella', 'Mercado Pago'…) → código de canal
+# del contrato con AllConnected (CANAL_ECOMMERCE_CHOICES). Incluye alias y errores
+# frecuentes; plataformas sin canal mapeado caen a 'OTRO'.
+PLATAFORMA_PAGO_A_CANAL = {
+    'PARIS': 'PARIS',
+    'RIPLEY': 'RIPLEY',
+    'WALMART': 'WALMART',
+    'WALLMART': 'WALMART',
+    'LIDER': 'WALMART',
+    'SHOPIFY': 'SHOPIFY',
+}
+
+
+def canal_desde_plataforma_pago(plataforma: str | None) -> str | None:
+    """Mapea la plataforma del pago internet a un código de canal ecommerce.
+
+    Devuelve None si la plataforma viene vacía; 'OTRO' si no hay mapeo
+    (Falabella, Mercado Pago, etc. — son venta internet pero no un canal
+    que AllConnected administre).
+    """
+    clave = (
+        (plataforma or '').strip().upper()
+        .replace(' ', '').replace('-', '').replace('_', '').replace('.', '')
+    )
+    if not clave:
+        return None
+    return PLATAFORMA_PAGO_A_CANAL.get(clave, 'OTRO')
+
+
 # ========== SUCURSAL ACTIVA ==========
 
 def get_sucursal_id(request):

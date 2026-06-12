@@ -880,10 +880,27 @@ def pedido_ecommerce_detalle(request, pedido_id):
                 try:
                     ticket = Ticket.objects.get(id=ticket_id, sucursal=pedido.sucursal)
                     pedido.ticket = ticket
+                    # Vincular también el DTE emitido desde ese ticket (mismo
+                    # join sucursal+folio que usa la API de conciliación). Sin
+                    # esto la boleta no cruza con el pedido en GET /api/ventas/
+                    # ni en el webhook de facturación (queda sin numero_ticket_rm
+                    # ni folio_despacho).
+                    if not pedido.dte_id and ticket.dte_generado and ticket.folio_dte:
+                        pedido.dte = (
+                            Dte.objects
+                            .filter(
+                                sucursal=ticket.sucursal,
+                                numero_documento=ticket.folio_dte,
+                                es_nota_credito=False,
+                                descartado=False,
+                            )
+                            .order_by('-id')
+                            .first()
+                        )
                     pedido.estado = 'FACTURADO'
                     pedido.fecha_facturacion = timezone.now()
                     pedido.facturado_por = request.user
-                    pedido.save(update_fields=['ticket', 'estado', 'fecha_facturacion', 'facturado_por'])
+                    pedido.save(update_fields=['ticket', 'dte', 'estado', 'fecha_facturacion', 'facturado_por'])
                     messages.success(request, f'Pedido {pedido.numero_ticket_rm} vinculado al Ticket #{ticket_id}.')
                 except Ticket.DoesNotExist:
                     messages.error(request, 'Ticket no encontrado en la sucursal del pedido.')

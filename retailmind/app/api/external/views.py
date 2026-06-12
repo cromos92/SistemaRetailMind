@@ -27,8 +27,9 @@ from rest_framework.permissions import AllowAny
 from django.utils import timezone
 
 from app.models import Producto_Talla, Producto, GuiaTalla, GuiaTallaItem, Sucursal
-from app.models.dte import Dte, Dte_Productos
-from app.models.ventas import Ticket
+from app.models.dte import Dte, Dte_Detalle_Pago, Dte_Productos
+from app.models.ventas import Ticket, TicketDetallePago
+from app.utils_ventas import canal_desde_plataforma_pago, es_metodo_pago_internet
 
 from .authentication import ApiKeyAuthentication, ApiKeyPermission
 from .serializers import ProductoExternalSerializer, agrupar_por_producto
@@ -1301,11 +1302,24 @@ class VentasView(APIView):
     """
     Documentos de venta emitidos (a nivel documento, no línea) para que
     AllConnected concilie diariamente sus pedidos impresos contra las
-    boletas realmente emitidas, distinguiendo la vía de facturación:
+    boletas realmente emitidas, distinguiendo venta internet vs presencial:
 
-      origen = "ecommerce"  → el DTE nació de un PedidoEcommerce
-                              (módulo /app/ecommerce/pedidos/)
-      origen = "pos"        → emisión manual (POS dashboard / venta público)
+      origen = "ecommerce"  → venta por INTERNET, por cualquiera de 3 señales
+                              (misma definición que el Reporte de Ventas
+                              Internet en views_modulo_reportes):
+                                1. el DTE nació de un PedidoEcommerce
+                                   (módulo /app/ecommerce/pedidos/), o
+                                2. el Ticket tiene modulo_origen='ECOMMERCE', o
+                                3. el documento tiene un pago "Venta por
+                                   Internet" (boletas emitidas a mano por el
+                                   POS dashboard con vendedor 1000, y TODA la
+                                   data histórica importada de Laravel, que no
+                                   tiene PedidoEcommerce ni Ticket ECOMMERCE).
+      origen = "pos"        → venta presencial en tienda.
+
+    El campo `via_emision` ('ecommerce' | 'pos') conserva la señal anterior
+    (por qué módulo se facturó), y `plataforma_pago` trae la plataforma del
+    pago internet ('Paris', 'Falabella', …) cuando existe.
 
     Query params:
       rut_empresa    (obligatorio)
@@ -1324,9 +1338,11 @@ class VentasView(APIView):
 
     Cada entrada de `data`:
       numero_documento, tipo_documento, fecha_emision (ISO con TZ Chile),
-      monto_total, origen, numero_ticket_rm, referencia_externa
-      (numero_pedido_canal), folio_despacho (correlativo AllConnected
-      impreso, ej. RE30005376), canal_origen, anulada, nota_credito,
+      monto_total, origen, via_emision, plataforma_pago, numero_ticket_rm,
+      referencia_externa (numero_pedido_canal; en boletas POS/migradas cae al
+      voucher del pago internet = N° de pedido del marketplace), folio_despacho
+      (correlativo AllConnected impreso, ej. RE30005376), canal_origen (del
+      pedido, o derivado de la plataforma del pago), anulada, nota_credito,
       sucursal (alias), sucursal_nombre, usuario_emisor.
 
     Los documentos ANULADOS se incluyen (anulada=true) — la conciliación
@@ -1435,9 +1451,12 @@ class VentasView(APIView):
             )
 
         if referencia:
-            # La referencia identifica un pedido de AllConnected → solo puede
-            # resolver documentos emitidos por la vía ecommerce.
-            dte_ids_ref = list(
+            # La referencia identifica un pedido de AllConnected. Resuelve por
+            # la vía ecommerce (PedidoEcommerce) o por el voucher del pago
+            # "Venta por Internet" (boletas POS/migradas: ahí queda el N° de
+            # pedido del marketplace — ver _crear_pago_ecommerce y el input
+            # obligatorio de voucher en el POS).
+            dte_ids_ref = set(
                 PedidoEcommerce.objects
                 .filter(dte__isnull=False)
                 .filter(
@@ -1446,6 +1465,11 @@ class VentasView(APIView):
                     | Q(numero_ticket_rm__iexact=referencia)
                     | Q(numero_pedido_origen__iexact=referencia)
                 )
+                .values_list('dte_id', flat=True)
+            )
+            dte_ids_ref.update(
+                Dte_Detalle_Pago.objects
+                .filter(voucher__iexact=referencia)
                 .values_list('dte_id', flat=True)
             )
             dtes_qs = dtes_qs.filter(id__in=dte_ids_ref)
@@ -1474,12 +1498,42 @@ class VentasView(APIView):
             folios = [d.numero_documento for d in dtes if d.numero_documento]
             tickets = Ticket.objects.filter(
                 folio_dte__in=folios, dte_generado=True,
-            ).values('sucursal_id', 'folio_dte', 'modulo_origen', 'referencia_folio')
+            ).values('id', 'sucursal_id', 'folio_dte', 'modulo_origen', 'referencia_folio')
             t_map = {(t['sucursal_id'], t['folio_dte']): t for t in tickets}
             for d in dtes:
                 t = t_map.get((d.sucursal_id, d.numero_documento))
                 if t:
                     ticket_map[d.id] = t
+
+        # --- Mapa DTE → pago "Venta por Internet" (vía POS / data migrada) ---
+        # Las boletas internet emitidas a mano por el POS dashboard (vendedor
+        # 1000) y toda la data histórica importada de Laravel NO tienen
+        # PedidoEcommerce ni Ticket con modulo_origen='ECOMMERCE': su única
+        # marca es el método de pago VENTA_INTERNET, con la plataforma en
+        # tipo_tarjeta ('Paris', 'Falabella', …) y el N° de pedido del
+        # marketplace en voucher. Misma definición de "venta internet" que el
+        # reporte de views_modulo_reportes._construir_reporte_ventas_internet.
+        pago_net_por_dte = {}
+        if dte_ids:
+            for p in (
+                Dte_Detalle_Pago.objects
+                .filter(dte_id__in=dte_ids)
+                .values('dte_id', 'metodo_pago', 'tipo_tarjeta', 'voucher')
+            ):
+                if es_metodo_pago_internet(p['metodo_pago']):
+                    pago_net_por_dte.setdefault(p['dte_id'], p)
+
+        # Respaldo por Ticket: cubre DTEs cuyo detalle de pago no se copió o
+        # se editó después de emitir (el pago del ticket es la fuente).
+        pago_net_por_ticket = {}
+        ticket_ids = [t['id'] for t in ticket_map.values()]
+        if ticket_ids:
+            for p in (
+                TicketDetallePago.objects
+                .filter(ticket_id__in=ticket_ids, metodo_pago='VENTA_INTERNET')
+                .values('ticket_id', 'tipo_tarjeta', 'voucher')
+            ):
+                pago_net_por_ticket.setdefault(p['ticket_id'], p)
 
         # --- Mapa DTE → nota de crédito que lo afecta ---
         nc_map = {}
@@ -1502,10 +1556,17 @@ class VentasView(APIView):
         for d in dtes:
             pedido = pedido_map.get(d.id)
             ticket = ticket_map.get(d.id)
+            pago_net = pago_net_por_dte.get(d.id) or (
+                pago_net_por_ticket.get(ticket['id']) if ticket else None
+            )
 
-            es_ecommerce = bool(pedido) or (
+            # Vía de emisión: facturado desde el módulo ecommerce vs a mano.
+            via_ecommerce = bool(pedido) or (
                 ticket is not None and ticket['modulo_origen'] == 'ECOMMERCE'
             )
+            # origen = venta internet por CUALQUIERA de las 3 señales (pedido
+            # ecommerce, ticket ECOMMERCE, o pago "Venta por Internet").
+            es_ecommerce = via_ecommerce or pago_net is not None
             origen = 'ecommerce' if es_ecommerce else 'pos'
             if origen_filt and origen != origen_filt:
                 continue
@@ -1523,6 +1584,15 @@ class VentasView(APIView):
             elif ticket and ticket['referencia_folio']:
                 # Vía POS: folio tipeado por el cajero al emitir (si existe).
                 referencia_externa = ticket['referencia_folio']
+            elif pago_net and (pago_net.get('voucher') or '').strip():
+                # Boleta POS/migrada: el voucher del pago internet guarda el
+                # N° de pedido del marketplace.
+                referencia_externa = pago_net['voucher'].strip()
+
+            plataforma_pago = (pago_net.get('tipo_tarjeta') or '').strip() if pago_net else ''
+            canal_origen = pedido['canal_origen'] if pedido else None
+            if not canal_origen and plataforma_pago:
+                canal_origen = canal_desde_plataforma_pago(plataforma_pago)
 
             data.append({
                 'numero_documento': str(d.numero_documento),
@@ -1530,10 +1600,12 @@ class VentasView(APIView):
                 'fecha_emision': fecha_dt.isoformat(),
                 'monto_total': int(d.monto_con_iva or 0),
                 'origen': origen,
+                'via_emision': 'ecommerce' if via_ecommerce else 'pos',
+                'plataforma_pago': plataforma_pago or None,
                 'numero_ticket_rm': pedido['numero_ticket_rm'] if pedido else None,
                 'referencia_externa': referencia_externa,
                 'folio_despacho': (pedido['correlativo'] or None) if pedido else None,
-                'canal_origen': pedido['canal_origen'] if pedido else None,
+                'canal_origen': canal_origen,
                 'anulada': anulada,
                 'nota_credito': str(nc_folio) if nc_folio else None,
                 'sucursal': d.sucursal.alias if d.sucursal else None,
