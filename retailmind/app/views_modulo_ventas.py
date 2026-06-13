@@ -3685,6 +3685,39 @@ def registrar_pagos_ticket(request, correlativo):
                         ticket.correlativo,
                         tp.ProductoTalla.sku,
                     )
+                    # Antes de bajar el stock plano, consumir los lotes FIFO que SÍ
+                    # existan (parcial). consumir_stock_fifo es todo-o-nada: si no
+                    # hay lotes para cubrir TODA la cantidad no baja ninguno, y el
+                    # descuento manual de stock dejaba los lotes intactos →
+                    # desincronización (saldo_lotes > stock). Consumir lo que haya
+                    # mantiene los lotes alineados; el resto cae al stock plano.
+                    # (Si no hay lotes, devuelve consumido=0 y se comporta como antes.)
+                    # _consumir_lotes_fifo_ajuste usa select_for_update(), que exige
+                    # transacción: esta vista corre sin atomic (ver nota en la línea
+                    # del comentario "sin transaction.atomic anidado"), así que la
+                    # abrimos aquí, acotada al descuento de lotes de esta talla.
+                    from .views_edicion_productos import _consumir_lotes_fifo_ajuste
+                    try:
+                        with transaction.atomic():
+                            _lotes_bajados, _consumido_lotes = _consumir_lotes_fifo_ajuste(
+                                tp.ProductoTalla, tp.stock
+                            )
+                        if _consumido_lotes:
+                            logger.info(
+                                "Lotes FIFO bajados parcialmente en fallback ticket=%s sku=%s consumido_lotes=%s/%s",
+                                ticket.correlativo,
+                                tp.ProductoTalla.sku,
+                                _consumido_lotes,
+                                tp.stock,
+                            )
+                    except Exception:
+                        # No bloquear la venta si el ajuste de lotes falla; el
+                        # descuento de stock plano (abajo) sigue siendo la verdad.
+                        logger.exception(
+                            "No se pudieron bajar lotes FIFO parciales en fallback ticket=%s sku=%s",
+                            ticket.correlativo,
+                            tp.ProductoTalla.sku,
+                        )
                     # Crear movimiento manual si falla FIFO
                     # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
                     referencia = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
